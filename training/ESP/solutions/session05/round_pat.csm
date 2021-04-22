@@ -1,0 +1,34 @@
+# round_pat
+# written by John Dannenhoffer
+
+# default design parameters
+DESPMTR   Rplate     4.5000   # radius    of plate
+DESPMTR   thick      0.2000   # thickness of plate
+DESPMTR   space      2.0000   # distance between hole centers
+DESPMTR   Rhole      0.8000   # radius of holes
+
+# make sure holes do not intersect with each other
+ASSERT    ifpos(space-Rhole,1,0)  1
+
+# overall plate
+CYLINDER 0 0 -thick/2 0 0 +thick/2 Rplate
+
+# pattern for holes
+SET nr int(Rplate/space)
+
+PATBEG iy 1+2*nr
+   PATBEG ix 1+2*nr
+
+      SET xc "(ix-nr-1)*space + (iy-nr-1)*space*cosd(60)"
+      SET yc                   "(iy-nr-1)*space*sind(60)"
+      SET r  hypot(xc,yc)+Rhole
+
+      # mask hole if not within circle
+      IFTHEN r LT Rplate-0.001
+         CYLINDER xc yc -thick xc yc +thick Rhole
+         SUBTRACT
+      ENDIF
+   PATEND
+PATEND
+
+END

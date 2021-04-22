@@ -1,0 +1,8 @@
+LIBRARY awaveAIM
+EXPORTS
+aimInitialize
+aimCleanup
+aimInputs
+aimPreAnalysis
+aimOutputs
+aimCalcOutput

@@ -1,0 +1,56 @@
+
+
+     FRICTION - Skin Friction and Form Drag Program
+     W.H. Mason, Department of Aerospace and Ocean Engineering
+     Virginia Tech, Blacksburg, VA 24061 email:whmason@vt.edu
+     version:   Jan. 28, 2006
+
+     CASE TITLE:CAPS Generated Friction Input File                          
+
+     SREF =   107.63910  MODEL SCALE =  1.000  NO. OF COMPONENTS = 5
+     input mode =  0  (mode=0: input M,h;  mode=1: input M, Re/L)
+
+    COMPONENT TITLE    SWET (FT2)  REFL(FT)   TC  ICODE FRM FCTR FTRANS
+    Wing                110.3898    4.236   0.142   0   1.4240   0.1000
+    Wing                110.5710    4.236   0.142   0   1.4240   0.1000
+    VTail                20.6041    3.177   0.120   0   1.3451   0.1000
+    HTail                30.9061    2.382   0.120   0   1.3451   0.1000
+    Fuse                132.5746   20.375   0.164   1   1.1310   0.1000
+
+       TOTAL SWET =     405.0455
+
+     REYNOLDS NO./FT =0.145E+07   Altitude =  29527.56   XME =  0.500
+
+       COMPONENT        RN        CF     CF*SWET   CF*SWET*FF   CDCOMP
+    Wing             0.614E+07  0.00282  0.31086     0.44267   0.00411
+    Wing             0.614E+07  0.00282  0.31137     0.44340   0.00412
+    VTail            0.460E+07  0.00297  0.06121     0.08234   0.00076
+    HTail            0.345E+07  0.00314  0.09700     0.13049   0.00121
+    Fuse             0.295E+08  0.00215  0.28519     0.32255   0.00300
+                                   SUM = 1.06563     1.42145   0.01321
+
+    FRICTION DRAG: CDF = 0.00990           FORM DRAG: CDFORM = 0.00331
+
+
+     REYNOLDS NO./FT =0.112E+07   Altitude =  59711.29   XME =  1.500
+
+       COMPONENT        RN        CF     CF*SWET   CF*SWET*FF   CDCOMP
+    Wing             0.474E+07  0.00262  0.28955     0.41233   0.00383
+    Wing             0.474E+07  0.00262  0.29002     0.41301   0.00384
+    VTail            0.355E+07  0.00278  0.05720     0.07695   0.00071
+    HTail            0.267E+07  0.00294  0.09096     0.12236   0.00114
+    Fuse             0.228E+08  0.00197  0.26147     0.29573   0.00275
+                                   SUM = 0.98922     1.32037   0.01227
+
+    FRICTION DRAG: CDF = 0.00919           FORM DRAG: CDFORM = 0.00308
+
+
+     SUMMARY
+
+      J    XME     Altitude      RE/FT       CDF     CDFORM   CDF+CDFORM
+      1   0.500   0.295E+05    0.145E+07   0.00990   0.00331   0.01321
+      2   1.500   0.597E+05    0.112E+07   0.00919   0.00308   0.01227
+
+     END OF CASE
+
+

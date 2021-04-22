@@ -1,0 +1,228 @@
+# viewAstros.udc
+# written by John Dannenhoffer
+
+# used Bodys
+#    WingOml
+#    WingWaffle
+# used variables
+
+INTERFACE . ALL
+
+SET structAIMs $nastranAIM;astrosAIM;mystranAIM;egadsTessAIM
+
+# wing structure
+IFTHEN    COMP:Wing EQ 1
+
+    # create the internals
+    RESTORE   WingOml
+    RESTORE   WingWaffle
+    INTERSECT
+
+    # create the skin
+    RESTORE   WingOml
+    RESTORE   WingWaffle
+    SUBTRACT
+    EXTRACT   0
+
+    # combine internals and skin
+    UNION
+    IFTHEN VIEW:BoxStructure EQ 1
+        # Mark Faces near leadingEdge and trailingEdge
+        # so that they are not part of wing box
+        UDPRIM    editAttr  filename  <<
+            FACE ADJ2EDGE tagType=leadingEdge
+            SET           capsIgnore=true
+    
+            FACE HAS      tagType=trailingEdge
+            SET           capsIgnore=true
+    
+            FACE ADJ2FACE tagType=trailingEdge
+            ANDNOT HAS    tagType=rib
+            ANDNOT HAS    tagType=tip
+            SET           capsIgnore=true
+    
+            FACE ADJ2EDGE tagType=trailingEdge
+            SET           capsIgnore=true
+>>
+
+        # Identify the capsGroups for FEA properties
+        UDPRIM    editAttr  filename  <<
+            FACE HAS        tagComp=leftWing
+            ANDNOT ADJ2EDGE tagType=leadingEdge
+            ANDNOT ADJ2EDGE tagType=trailingEdge
+            ANDNOT ADJ2FACE tagType=trailingEdge
+            SET             capsGroup=leftWingSkin
+    
+            FACE HAS        tagComp=riteWing
+            ANDNOT ADJ2EDGE tagType=leadingEdge
+            ANDNOT ADJ2EDGE tagType=trailingEdge
+            ANDNOT ADJ2FACE tagType=trailingEdge
+            SET             capsGroup=riteWingSkin
+    
+            FACE HAS        tagType=rib
+            SET             capsGroup=wingRib
+
+            FACE HAS        tagType=tip
+            SET             capsGroup=wingRib
+  
+            FACE HAS        tagType=spar tagIndex=1
+            SET             capsGroup=wingSpar1
+
+            FACE HAS        tagType=spar tagIndex=2
+            SET             capsGroup=wingSpar2
+>>
+
+    ELSE
+
+        # Identify the capsGroups for FEA properties
+        UDPRIM    editAttr  filename  <<
+            FACE HAS        tagComp=leftWing
+            SET             capsGroup=leftWingSkin
+    
+            FACE HAS        tagComp=riteWing
+            SET             capsGroup=riteWingSkin
+    
+            FACE HAS        tagType=tip
+            SET             capsGroup=wingRib
+    
+            FACE HAS        tagType=trailingEdge
+            SET             capsGroup=wingTE
+    
+            FACE HAS        tagType=rib
+            SET             capsGroup=wingRib
+
+            FACE HAS        tagType=spar tagIndex=1
+            SET             capsGroup=wingSpar1
+
+            FACE HAS        tagType=spar tagIndex=2
+            SET             capsGroup=wingSpar2
+>>
+    ENDIF
+
+    # Set up for possible data transfer to other analyses
+    UDPRIM    editAttr  filename  <<
+        FACE HAS      tagType=upper
+        SET           capsBound=upperWing
+
+        FACE HAS      tagType=lower
+        SET           capsBound=lowerWing
+
+        FACE HAS      tagType=tip tagIndex=1
+        SET           capsBound=leftTip
+
+        FACE HAS      tagType=tip tagIndex=2
+        SET           capsBound=riteTip
+>>
+
+    # Define the point(s) at which point loads can be applied
+    UDPRIM    editAttr  filename  <<
+        NODE ADJ2FACE tagComp=leftWing tagType=tip
+        AND  ADJ2FACE tagType=lower
+        AND  ADJ2FACE tagType=spar tagIndex=1
+        SET           capsLoad=leftPointLoad
+
+        NODE ADJ2FACE tagComp=riteWing tagType=tip
+        AND  ADJ2FACE tagType=lower
+        AND  ADJ2FACE tagType=spar tagIndex=1
+        SET           capsLoad=ritePointLoad
+>>
+
+    # Tag the leading edge with capsGroup for mesh manipulation
+    SELECT    EDGE  $tagType  $leadingEdge
+    DIMENSION leadingEdges 1 @sellist.size 0
+    SET       leadingEdges @sellist
+    PATBEG    i   leadingEdges.size
+        SELECT    EDGE   leadingEdges[i]
+            ATTRIBUTE capsGroup  $leadingEdge
+    PATEND
+
+    # Identify faces adjacent to the leading edge
+    UDPRIM    editAttr  filename  <<
+        FACE ADJ2EDGE tagComp=leftWing
+        SET           tagTemp=leadingEdgeFace
+>>
+
+    # Identify the edges on the root rib forward of the first spar
+    UDPRIM    editAttr  filename  <<
+        EDGE ADJ2FACE tagTemp=leadingEdgeFace
+        AND  ADJ2FACE tagComp=rootWing
+        SET           capsGroup=rootLeadingEdge
+>>
+
+    IFTHEN VIEW:ClampedStructure EQ 1
+        # Constrainted applied to FACE/EDGE/NODE of root rib
+        UDPRIM    editAttr  filename  <<
+            FACE HAS      tagComp=rootWing
+            SET           capsConstraint=rootConstraint
+       
+            EDGE ADJ2FACE tagComp=rootWing
+            SET  capsConstraint=rootConstraint
+    
+            NODE ADJ2FACE tagComp=rootWing
+            SET  capsConstraint=rootConstraint
+>>
+    ENDIF
+    
+    IFTHEN VIEW:SupportStructure EQ 1
+        # Connections to support on FACE/EDGE/NODE of root rib
+        UDPRIM    editAttr  filename  <<
+            FACE HAS      tagComp=rootWing
+            SET           capsConnectLink=ribRoot
+       
+            EDGE ADJ2FACE tagComp=rootWing
+            SET  capsConnectLink=ribRoot
+    
+            NODE ADJ2FACE tagComp=rootWing
+            SET  capsConnectLink=ribRoot
+>>
+    ENDIF
+
+    # Identify faces for csystem
+    UDPRIM    editAttr  filename  <<
+        FACE HAS      tagComp=leftWing tagType=upper
+        AND  ADJ2EDGE tagType=leadingEdge
+        AND  ADJ2FACE tagComp=riteWing
+        SET           tagCsys=leftWing
+
+        FACE HAS      tagComp=riteWing tagType=upper
+        AND  ADJ2EDGE tagType=leadingEdge
+        AND  ADJ2FACE tagComp=leftWing
+        SET           tagCsys=riteWing
+>>
+
+    # Extract the face numbers taged for Csystems
+    SELECT    FACE  $tagCsys  $leftWing
+    SET       leftWingSkinCsys @sellist
+    
+    SELECT    FACE  $tagCsys  $riteWing
+    SET       riteWingSkinCsys @sellist
+
+    STORE     WingStruct
+    
+    # Apply the Csystems
+    # Name matches capsGroup that uses the Csystem
+    RESTORE   WingStruct         #iface;ubar0;vbar0;du2;dv2
+        CSYSTEM   leftWingSkin   leftWingSkinCsys;0;0;0;1
+        CSYSTEM   riteWingSkin   riteWingSkinCsys;0;0;0;1
+    STORE     WingStruct
+ENDIF
+
+RESTORE       WingStruct
+SELECT body
+    ATTRIBUTE capsAIM           structAIMs
+    ATTRIBUTE capsMeshLength    wing:mac
+    ATTRIBUTE capsDiscipline    $Structure
+    ATTRIBUTE _name             $WingStructure
+
+IFTHEN VIEW:SupportStructure EQ 1
+    # Point Connecting to ribRoot to apply boundary conditions
+    POINT  wing:xroot+wing:chordr/4 wing:yroot wing:zroot
+        ATTRIBUTE capsConnect       $ribRoot
+        ATTRIBUTE capsGroup         $ribSupport
+        ATTRIBUTE capsConstraint    $ribRootPoint
+        ATTRIBUTE capsDiscipline    $Structure
+        ATTRIBUTE capsAIM           structAIMs
+        ATTRIBUTE _name             $Support
+ENDIF
+
+END

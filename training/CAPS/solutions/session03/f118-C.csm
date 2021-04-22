@@ -1,0 +1,113 @@
+# F-118C Boxster
+
+# wing design parameters
+DESPMTR   wing:area        4240    # area
+DESPMTR   wing:aspect      9.00    # aspect ratio
+DESPMTR   wing:thick       0.10    # thickness ratio
+DESPMTR   wing:xroot       54.0    # xloc at root LE
+DESPMTR   wing:zroot       -5.0    # zloc at root LE
+
+# horizontal tail design parameters
+DESPMTR   htail:area       1210    # htail area
+DESPMTR   htail:aspect     4.15    # htail aspect ratio
+DESPMTR   htail:thick      0.08    # htail thickness
+DESPMTR   htail:xroot       145    # xloc of root LE
+DESPMTR   htail:zroot         5    # zloc of root LE
+
+# vertical tail design parameters
+DESPMTR   vtail:area        610    # vtail area
+DESPMTR   vtail:aspect     1.80    # vtail aspect ratio
+DESPMTR   vtail:thick      0.08    # vtail thickness
+DESPMTR   vtail:xroot       150    # xloc of root LE
+DESPMTR   vtail:zroot         9    # zloc of root LE
+
+# fuselage design parameters
+DESPMTR   fuse:length       180    # fuselage length
+DESPMTR   fuse:width         20    # width  of fuselage
+DESPMTR   fuse:height        20    # height of mid fuselage
+
+#------------------------------------------------
+# set available output parameters
+OUTPMTR  wing:wet
+OUTPMTR  wing:volume
+
+OUTPMTR  htail:wet
+OUTPMTR  htail:volume
+
+OUTPMTR  vtail:wet
+OUTPMTR  vtail:volume
+
+OUTPMTR  fuse:wet
+OUTPMTR  fuse:volume
+
+#================================================
+# Wing
+SET       wing:span      sqrt(wing:aspect*wing:area)
+SET       wing:chord     wing:area/wing:span
+
+BOX  wing:xroot  -wing:span/2  wing:zroot   wing:chord  wing:span  wing:chord*wing:thick
+    ATTRIBUTE capsGroup  $wing:faces
+SELECT body
+    ATTRIBUTE capsAIM    $masstranAIM;astrosAIM
+    ATTRIBUTE capsIntent $wing
+    ATTRIBUTE _name      $Wing
+
+SET  wing:wet    @area
+SET  wing:volume @volume
+
+#================================================
+# Htail
+SET       htail:span      sqrt(htail:aspect*htail:area)
+SET       htail:chord     htail:area/htail:span
+
+BOX  htail:xroot  -htail:span/2  htail:zroot   htail:chord  htail:span  htail:chord*htail:thick
+    ATTRIBUTE capsGroup  $htail:faces
+SELECT body
+    ATTRIBUTE capsAIM    $masstranAIM;astrosAIM
+    ATTRIBUTE capsIntent $htail;tail
+    ATTRIBUTE _name      $Htail
+
+SET  htail:wet    @area
+SET  htail:volume @volume
+
+#================================================
+# Vtail
+SET       vtail:span      sqrt(vtail:aspect*vtail:area)
+SET       vtail:chord     vtail:area/vtail:span
+
+BOX  vtail:xroot  0  vtail:zroot   vtail:chord  vtail:chord*vtail:thick  vtail:span
+    ATTRIBUTE capsGroup  $vtail:faces
+SELECT body
+    ATTRIBUTE capsAIM    $masstranAIM;astrosAIM
+    ATTRIBUTE capsIntent $vtail;tail
+    ATTRIBUTE _name      $Vtail
+
+SET  vtail:wet    @area
+SET  vtail:volume @volume
+
+#================================================
+# fuselage
+
+BOX  0  -fuse:width/2  -fuse:height/2   fuse:length  fuse:width  fuse:height
+SELECT face 1
+    ATTRIBUTE capsGroup  $fuse:nose
+SELECT face 2
+    ATTRIBUTE capsGroup  $fuse:tail
+SELECT face 3
+    ATTRIBUTE capsGroup  $fuse:side
+SELECT face 4
+    ATTRIBUTE capsGroup  $fuse:side
+SELECT face 5
+    ATTRIBUTE capsGroup  $fuse:bottom  # Modifed bottom face
+SELECT face 6
+    ATTRIBUTE capsGroup  $fuse:top     # Modified top face
+SELECT body 
+    ATTRIBUTE capsAIM    $masstranAIM;astrosAIM
+    ATTRIBUTE capsIntent $fuse
+    ATTRIBUTE _name      $Fuselage
+
+# fuse:wet and fuse:volume not set
+
+#================================================
+
+END

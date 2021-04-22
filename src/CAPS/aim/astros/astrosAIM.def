@@ -1,0 +1,17 @@
+LIBRARY astrosAIM
+EXPORTS
+aimInitialize
+aimInputs
+aimData
+aimPreAnalysis
+aimOutputs
+aimCalcOutput
+aimFreeDiscr
+aimDiscr
+aimCleanup
+aimLocateElement
+aimTransfer
+aimInterpolation
+aimInterpolateBar
+aimIntegration
+aimIntegrateBar

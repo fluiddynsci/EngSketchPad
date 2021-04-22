@@ -1,0 +1,15 @@
+# reflectCone
+# written by John Dannenhoffer
+
+# normal direction for mirror
+DIMENSION normal  1  3
+SET       normal  "1; 0; 0;"
+
+# base cone
+CONE      0  0  0  5  0  0  2
+
+# duplicate, mirror, and union
+UDPARG    $/mirrorDup  norm  normal
+UDPRIM    $/mirrorDup  dist  1
+
+END

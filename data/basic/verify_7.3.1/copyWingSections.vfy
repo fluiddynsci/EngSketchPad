@@ -1,0 +1,49 @@
+#======================================#
+# automatically generated verification #
+# OpenCSM  1.15      OpenCASCADE 7.3.1 #
+#======================================#
+select    body 14
+   assert         3      @itype       0  1
+   assert         9      @nnode       0  1
+   assert        15      @nedge       0  1
+   assert         8      @nface       0  1
+   assert   1.08330e+00  @volume  -.001  1
+   assert   2.07403e+01  @area    -.001  1
+   assert   1.22061e+00  @xcg     -.001  1
+   assert   1.60892e-01  @ycg     -.001  1
+   assert   0.00000e+00  @zcg     0.001  1
+
+select    body 15
+   assert         2      @itype       0  1
+   assert         3      @nnode       0  1
+   assert         3      @nedge       0  1
+   assert         1      @nface       0  1
+   assert   0.00000e+00  @volume  0.001  1
+   assert   7.73489e-02  @area    -.001  1
+   assert   1.97438e+00  @xcg     -.001  1
+   assert   3.15200e-01  @ycg     -.001  1
+   assert  -3.87298e+00  @zcg     -.001  1
+
+select    body 16
+   assert         2      @itype       0  1
+   assert         3      @nnode       0  1
+   assert         3      @nedge       0  1
+   assert         1      @nface       0  1
+   assert   0.00000e+00  @volume  0.001  1
+   assert   2.14858e-01  @area    -.001  1
+   assert   6.77675e-01  @xcg     -.001  1
+   assert   5.02475e-02  @ycg     -.001  1
+   assert   0.00000e+00  @zcg     0.001  1
+
+select    body 17
+   assert         2      @itype       0  1
+   assert         3      @nnode       0  1
+   assert         3      @nedge       0  1
+   assert         1      @nface       0  1
+   assert   0.00000e+00  @volume  0.001  1
+   assert   7.73489e-02  @area    -.001  1
+   assert   1.97438e+00  @xcg     -.001  1
+   assert   3.15200e-01  @ycg     -.001  1
+   assert   3.87298e+00  @zcg     -.001  1
+
+end

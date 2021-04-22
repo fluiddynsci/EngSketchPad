@@ -1,0 +1,20 @@
+# fuselage
+# written by
+
+# fuselage design Parameters
+CFGPMTR                      fuselage:numXsect 6
+DIMENSION fuselage:xloc      fuselage:numXsect 1 1
+DIMENSION fuselage:zloc      fuselage:numXsect 1 1
+DIMENSION fuselage:width     fuselage:numXsect 1 1
+DIMENSION fuselage:height    fuselage:numXsect 1 1
+DIMENSION fuselage:power     fuselage:numXsect 1 1
+DIMENSION fuselage:noselist  2                 4 1
+
+DESPMTR   fuselage:xloc      "0;  1.0;  4.0;  8.0;  12.0;  16.0;"
+DESPMTR   fuselage:zloc      "0;  0.1;  0.4;  0.4;   0.3;   0.2;"
+DESPMTR   fuselage:width     "0;  1.0;  1.6;  1.6;   1.0;   0.8;"
+DESPMTR   fuselage:height    "0;  1.0;  2.0;  2.0;   1.2;   0.4;"
+DESPMTR   fuselage:power     "2;    2;    3;    3      3;     3;"
+DESPMTR   fuselage:noselist  "0.2; 0; 1; 0;\
+                              0.1; 0; 0; 1;"
+

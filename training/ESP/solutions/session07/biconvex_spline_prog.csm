@@ -1,0 +1,7 @@
+# biconvex_spline (programmed)
+# written by John Dannenhoffer
+
+DESPMTR   chord     2.00000
+DESPMTR   thick     0.10000
+
+# too much math to do by hand --- use interactive Sketcher

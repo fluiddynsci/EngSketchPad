@@ -1,0 +1,16 @@
+#======================================#
+# automatically generated verification #
+# OpenCSM  1.15      OpenCASCADE 7.3.1 #
+#======================================#
+select    body 27
+   assert         3      @itype       0  1
+   assert        48      @nnode       0  1
+   assert        72      @nedge       0  1
+   assert        26      @nface       0  1
+   assert   2.30000e+02  @volume  -.001  1
+   assert   2.82000e+02  @area    -.001  1
+   assert   4.63043e+00  @xcg     -.001  1
+   assert   3.00000e+00  @ycg     -.001  1
+   assert   2.50000e+00  @zcg     -.001  1
+
+end

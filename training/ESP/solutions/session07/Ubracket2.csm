@@ -1,0 +1,42 @@
+# ../data/training/session02/Ubracket2.csm written by ocsmSave (v1.08)
+
+# Design Parameters:
+despmtr   length       4.00000
+despmtr   height       3.00000
+despmtr   thick       0.50000
+despmtr   slot       2.00000
+
+# Local Variables:
+
+# Global attributes:
+
+# Branches:
+skbeg     0   0   0   1
+   skvar     xy  -0.003977;0.006134;0.000000;2.511093;-0.129571;0.000000;2.827738;1.688879;0.000000;1.941131;1.887913;0.000000;1.561156;0.829412;0.000000;0.484562;0.983212;0.000000;0.186010;1.779349;0.000000;-0.736785;1.643644;0.000000;
+   skcon     X   1   -1  0
+   skcon     Y   1   -1  0
+   skcon     H   1   2  0
+   skcon     V   2   3  0
+   skcon     V   4   5  0
+   skcon     H   5   6  0
+   skcon     V   6   7  0
+   skcon     V   8   1  0
+   skcon     L   1   2  length
+   skcon     L   8   1  height
+   skcon     L   2   3  height
+   skcon     L   6   7  height-thick
+   skcon     H   3   4  0
+   skcon     H   7   8  0
+   skcon     L   3   4  ::L[7]
+   skcon     L   5   6  slot
+   linseg    ::x[2]   ::y[2]   0
+   linseg    ::x[3]   ::y[3]   0
+   linseg    ::x[4]   ::y[4]   0
+   linseg    ::x[5]   ::y[5]   0
+   linseg    ::x[6]   ::y[6]   0
+   linseg    ::x[7]   ::y[7]   0
+   linseg    ::x[8]   ::y[8]   0
+   linseg    ::x[1]   ::y[1]   0
+skend     0
+
+end

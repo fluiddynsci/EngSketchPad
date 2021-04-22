@@ -1,0 +1,261 @@
+# viewAvl.udc
+# written by John Dannenhoffer
+
+# used Bodys
+#    WingOml
+#    HtailOml       (optional)
+#    VtailOml       (optional)
+# used variables
+#    wing:area
+#    wing:aspect
+#    wing:span
+#    wing:hinge     (optional)
+#    htail:hinge    (optional)
+#    vtail:hinge    (optional)
+
+INTERFACE . ALL
+
+SET vlmAIMs   $avlAIM;$astrosAIM;nastranAIM;egadsTessAIM
+
+# spanwise cuts for wing
+IFTHEN    COMP:Wing EQ 1
+
+    # get the bounding coordinates of the OML
+    RESTORE   WingOml
+    SET       xmin     @xmin-1
+    SET       xmax     @xmax+1
+    SET       ymin     @ymin+0.001
+    SET       ymax     @ymax-0.001
+    SET       zmin     @zmin-1
+    SET       zmax     @zmax+1
+    STORE     .
+
+    SET       WingVlmNcut  3
+
+    # create a group of arfoil sections
+    # the order of the sections does not matter 
+    # as they are sorted in the AIM
+    MARK
+        # make left tip, root, rite tip
+        PATBEG    icut  WingVlmNcut
+            SET       y  ymin+(ymax-ymin)*(icut-1)/(WingVlmNcut-1)
+            BOX       xmin  y  zmin  xmax-xmin  0  zmax-zmin
+            RESTORE   WingOml
+            INTERSECT
+                ATTRIBUTE capsAIM            vlmAIMs
+                ATTRIBUTE capsReferenceArea  wing:area
+                ATTRIBUTE capsReferenceSpan  wing:span
+                ATTRIBUTE capsReferenceChord wing:mac
+                ATTRIBUTE capsReferenceX     wing:xroot+wing:mac/4
+                ATTRIBUTE capsGroup          $Wing
+                ATTRIBUTE capsDiscipline     $Aerodynamic
+                ATTRIBUTE _name             !$Wing_+icut
+            SELECT FACE 1
+                ATTRIBUTE capsGroup          $Wing
+                ATTRIBUTE _bcolor            $yellow
+        PATEND
+       
+        # create a section at the wing break
+        IFTHEN ifnan(wing:ybreak,1,0) EQ 0
+           PATBEG    icut  2
+              SET       y  wing:ybreak*(2*icut-3)
+              BOX       xmin  y  zmin  xmax-xmin  0  zmax-zmin
+              RESTORE   WingOml
+              INTERSECT
+                 ATTRIBUTE capsAIM   vlmAIMs
+                 ATTRIBUTE capsGroup $Wing
+                 ATTRIBUTE _name    !$Wing_+(WingVlmNcut+icut)
+              SELECT FACE 1
+                 ATTRIBUTE capsGroup $Wing
+                 ATTRIBUTE _bcolor   $yellow
+           PATEND
+        ENDIF
+
+        IFTHEN    makeWingHinge EQ 1
+            # beginning and end of each hinge
+            PATBEG    ihinge  wing:hinge.nrow
+                RESTORE   WingHinge  ihinge
+                SELECT    EDGE  1
+                SET       ybeg     @ymin
+                SET       yend     @ymax
+                GETATTR   tagComp  $tagComp
+                GETATTR   tagType  $tagType
+                GETATTR   tagIndex $tagIndex
+                GETATTR   deflect  $deflect
+                GETATTR   xoverc1  $xoverc1
+                GETATTR   xoverc2  $xoverc2
+    
+                BOX       xmin  ybeg  zmin  xmax-xmin  0  zmax-zmin
+                RESTORE   WingOml
+                INTERSECT
+                    ATTRIBUTE capsAIM                           vlmAIMs
+                    ATTRIBUTE capsGroup                         $Wing
+                    ATTRIBUTE capsDiscipline                    $Aerodynamic
+                    ATTRIBUTE _name                            !$WingControl_+ihinge+$_1
+                    ATTRIBUTE !$vlmControl_WingControl+tagIndex xoverc1
+                SELECT FACE 1
+                    ATTRIBUTE _color                            $red
+                    ATTRIBUTE _bcolor                           $red
+    
+                BOX       xmin  yend  zmin  xmax-xmin  0  zmax-zmin
+                RESTORE   WingOml
+                INTERSECT
+                    ATTRIBUTE capsAIM                           vlmAIMs
+                    ATTRIBUTE capsGroup                         $Wing
+                    ATTRIBUTE capsDiscipline                    $Aerodynamic
+                    ATTRIBUTE _name                            !$WingControl_+ihinge+$_2
+                    ATTRIBUTE !$vlmControl_WingControl+tagIndex xoverc2
+                SELECT FACE 1
+                    ATTRIBUTE _color                            $red
+                    ATTRIBUTE _bcolor                           $red
+            PATEND
+        ENDIF
+    GROUP
+ENDIF
+
+# spanwise cuts for htail
+IFTHEN    COMP:Htail EQ 1
+
+    # get the bounding coordinates of the OML
+    RESTORE   HtailOml
+    SET       xmin     @xmin-1
+    SET       xmax     @xmax+1
+    SET       ymin     @ymin+0.001
+    SET       ymax     @ymax-0.001
+    SET       zmin     @zmin-1
+    SET       zmax     @zmax+1
+    STORE     .
+
+    SET       HtailVlmNcut  3
+
+    MARK
+        # make left tip, root, rite tip
+        PATBEG    icut  HtailVlmNcut
+            SET       y  ymin+(ymax-ymin)*(icut-1)/(HtailVlmNcut-1)
+            BOX       xmin  y  zmin  xmax-xmin  0  zmax-zmin
+            RESTORE   HtailOml
+            INTERSECT
+                ATTRIBUTE capsAIM        vlmAIMs
+                ATTRIBUTE capsGroup      $Htail
+                ATTRIBUTE capsDiscipline $Aerodynamic
+                ATTRIBUTE _name         !$Htail_+icut
+            SELECT FACE 1
+                ATTRIBUTE _bcolor   $yellow
+        PATEND
+
+        IFTHEN    makeHtailHinge EQ 1
+            # beginning and end of each hinge
+            PATBEG    ihinge  htail:hinge.nrow
+                RESTORE   HtailHinge  ihinge
+                SELECT    EDGE  1
+                SET       ybeg     @ymin
+                SET       yend     @ymax
+                GETATTR   tagComp  $tagComp
+                GETATTR   tagType  $tagType
+                GETATTR   tagIndex $tagIndex
+                GETATTR   deflect  $deflect
+                GETATTR   xoverc1  $xoverc1
+                GETATTR   xoverc2  $xoverc2
+            
+                BOX       xmin  ybeg  zmin  xmax-xmin  0  zmax-zmin
+                RESTORE   HtailOml
+                INTERSECT
+                    ATTRIBUTE capsAIM                            vlmAIMs
+                    ATTRIBUTE capsGroup                          $Htail
+                    ATTRIBUTE capsDiscipline                     $Aerodynamic
+                    ATTRIBUTE _name                             !$HtailControl_+ihinge+$_1
+                    ATTRIBUTE !$vlmControl_HtailControl+tagIndex xoverc1
+                SELECT FACE 1
+                    ATTRIBUTE _color                             $red
+                    ATTRIBUTE _bcolor                            $red
+            
+                BOX       xmin  yend  zmin  xmax-xmin  0  zmax-zmin
+                RESTORE   HtailOml
+                INTERSECT
+                    ATTRIBUTE capsAIM                            vlmAIMs
+                    ATTRIBUTE capsGroup                          $Htail
+                    ATTRIBUTE capsDiscipline                     $Aerodynamic
+                    ATTRIBUTE _name                             !$HtailControl_+ihinge+$_2
+                    ATTRIBUTE !$vlmControl_HtailControl+tagIndex xoverc2
+                SELECT FACE 1
+                    ATTRIBUTE _color                             $red
+                    ATTRIBUTE _bcolor                            $red
+            PATEND
+        ENDIF
+    GROUP
+ENDIF
+
+
+# spanwise cuts for vtail
+IFTHEN    COMP:Vtail EQ 1
+
+    # get the bounding coordinates of the OML
+    RESTORE   VtailOml
+    SET       xmin     @xmin-1
+    SET       xmax     @xmax+1
+    SET       ymin     @ymin-1
+    SET       ymax     @ymax+1
+    SET       zmin     @zmin+0.0015
+    SET       zmax     @zmax-0.0015
+    STORE     .
+
+    SET       VtailVlmNcut  2
+
+    MARK
+        # make root and tip
+        PATBEG    icut  VtailVlmNcut
+            SET       z  zmin+(zmax-zmin)*(icut-1)/(VtailVlmNcut-1)
+            BOX       xmin  ymin  z  xmax-xmin  ymax-ymin  0
+            RESTORE   VtailOml
+            INTERSECT
+                #ATTRIBUTE capsAIM       vlmAIMs
+                ATTRIBUTE capsGroup      $Vtail
+                ATTRIBUTE capsDiscipline $Aerodynamic
+                ATTRIBUTE _name         !$Vtail_+icut
+            SELECT FACE 1
+                ATTRIBUTE _bcolor   $yellow
+        PATEND
+
+        IFTHEN     makeVtailHinge EQ 1
+            # beginning and end of each hinge
+            PATBEG    ihinge  vtail:hinge.nrow
+                RESTORE   VtailHinge  ihinge
+                SELECT    EDGE  1
+                SET       zbeg     @zmin
+                SET       zend     @zmax
+                GETATTR   tagComp  $tagComp
+                GETATTR   tagType  $tagType
+                GETATTR   tagIndex $tagIndex
+                GETATTR   deflect  $deflect
+                GETATTR   xoverc1  $xoverc1
+                GETATTR   xoverc2  $xoverc2
+            
+                BOX       xmin  ymin  zbeg  xmax-xmin  ymax-ymin  0
+                RESTORE   VtailOml
+                INTERSECT
+                    ATTRIBUTE capsAIM                            vlmAIMs
+                    ATTRIBUTE capsGroup                          $Vtail
+                    ATTRIBUTE capsDiscipline                     $Aerodynamic
+                    ATTRIBUTE _name                             !$VtailControl_+ihinge+$_1
+                    ATTRIBUTE !$vlmControl_VtailControl+tagIndex xoverc1
+                SELECT FACE 1
+                    ATTRIBUTE _color                             $red
+                    ATTRIBUTE _bcolor                            $red
+            
+                BOX       xmin  ymin  zend  xmax-xmin  ymax-ymin  0
+                RESTORE   VtailOml
+                INTERSECT
+                    ATTRIBUTE capsAIM                            vlmAIMs
+                    ATTRIBUTE capsGroup                          $Vtail
+                    ATTRIBUTE capsDiscipline                     $Aerodynamic
+                    ATTRIBUTE _name                             !$VtailControl_+ihinge+$_2
+                    ATTRIBUTE !$vlmControl_VtailControl+tagIndex xoverc2
+                SELECT FACE 1
+                    ATTRIBUTE _color                             $red
+                    ATTRIBUTE _bcolor                            $red
+            PATEND
+        ENDIF
+    GROUP
+ENDIF
+  
+END

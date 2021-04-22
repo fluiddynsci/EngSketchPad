@@ -1,0 +1,19 @@
+# wing
+# written by
+
+# design parameters
+DESPMTR   Xroot     0.00      # X-coordinte of root leading edge
+DESPMTR   Yroot     0.00      # Y-coordinte of root leading edge
+DESPMTR   Zroot     0.00      # Z-coordinte of root leading edge
+DESPMTR   croot     2.00      # chord of root
+DESPMTR   troot     0.12      # thickness/chord of root
+DESPMTR   mroot     0.04      # camber/chord of root
+DESPMTR   aroot     7.50      # angle of attack of root (deg)
+DESPMTR   Xtip      0.50      # X-coordinte of tip leading edge
+DESPMTR   Ytip      0.25      # Y-coordinte of tip leading edge
+DESPMTR   Ztip      8.00      # Z-coordinte of tip leading edge
+DESPMTR   ctip      1.75      # chord of tip
+DESPMTR   ttip      0.08      # thickness/chord of tip
+DESPMTR   mtip      0.04      # camber/chord of tip
+DESPMTR   atip     -5.00      # angle of attack of tip (deg)
+

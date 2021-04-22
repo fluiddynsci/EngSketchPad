@@ -1,0 +1,21 @@
+# rect_pat
+# written by John Dannenhoffer
+
+DESPMTR   nx        3
+DESPMTR   ny        2
+DESPMTR   rad       0.30
+DESPMTR   space     1.00
+
+# base plate (big enough to contain all holes)
+BOX       0.00   0.00  -0.10   space*nx+1   space*ny+1   0.20
+
+# 2D array of holes (with given spacing)
+PATBEG ix nx
+   PATBEG iy ny
+      CYLINDER   ix*space  iy*space  -0.20 \
+                 ix*space  iy*space  +0.20   rad
+      SUBTRACT
+   PATEND
+PATEND
+
+END

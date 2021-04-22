@@ -1,0 +1,7 @@
+# NACA design paramters
+DESPMTR   thick     0.12      #frac of local chord
+DESPMTR   camber    0.00      #frac of local chord
+
+# Construct the airfoil
+UDPRIM  naca   Thickness thick   Camber  camber
+    ATTRIBUTE capsAIM $xfoilAIM;tsfoilAIM

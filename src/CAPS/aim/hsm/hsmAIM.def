@@ -1,0 +1,9 @@
+LIBRARY hsmAIM
+EXPORTS
+aimInitialize
+aimCleanup
+aimInputs
+aimData
+aimPreAnalysis
+aimOutputs
+aimCalcOutput

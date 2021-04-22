@@ -1,0 +1,498 @@
+# viewCFDViscous.udc
+# written by John Dannenhoffer
+
+# used Bodys
+#    FuseOml
+#    WingOml
+#    WingHinge i
+#    HtailOml
+#    HtailHinge i
+#    VtailOml
+#    VtailHinge i
+# used variables
+#    wing:area
+#    wing:span
+#    MESH:SIZE
+
+INTERFACE . ALL
+
+SET cfdAIMs $tetgenAIM;aflr3AIM;aflr4AIM;pointwiseAIM;su2AIM;fun3dAIM
+
+SET AFLR4_Cmp_Fuse     1
+SET AFLR4_Cmp_Wing     2
+SET AFLR4_Cmp_Htail    3
+SET AFLR4_Cmp_Vtail    4
+SET AFLR4_Cmp_Pod      5
+SET AFLR4_Cmp_Farfield 6
+
+# default to coarse grid (if not specified)
+IFTHEN    ifnan(MESH:SIZE,1,0) EQ 1
+    SET   MESH:SIZE   1
+ENDIF
+
+# Track the total bounding box of all active components
+SET   ffxmin   1e3
+SET   ffxmax  -1e3
+SET   ffymin   1e3
+SET   ffymax  -1e3
+SET   ffzmin   1e3
+SET   ffzmax  -1e3
+
+# fuselage
+IFTHEN    makeFuseOml EQ 1
+    RESTORE   FuseOml
+    SET    ymin        @ymin
+    SET    ymax        @ymax
+    SET    zmin        @zmin
+    SET    zmax        @zmax
+
+    UDPRIM  $/ffbox
+
+    STORE     .
+    RESTORE   FuseOml
+        ATTRIBUTE capsGroup    $Fuselage
+        ATTRIBUTE AFLR4_Cmp_ID AFLR4_Cmp_Fuse
+    SELECT body
+        ATTRIBUTE capsAIM      cfdAIMs
+        ATTRIBUTE _name        $Fuselage
+    STORE     FuseOml_CFD 0 1
+ENDIF
+
+# wing with controls deflected
+IFTHEN    makeWingOml EQ 1
+    RESTORE   WingOml
+        ATTRIBUTE .qParams     $off
+        ATTRIBUTE _color       $green
+    STORE     WingOml_CFD 0 1
+    SET       xmax   @xmax
+    SET       zmin   @zmin
+    SET       zmax   @zmax
+
+    UDPRIM  $/ffbox
+
+    # Set up for possible data transfer to other analyses
+    UDPRIM    editAttr  filename  <<
+        FACE HAS      tagType=upper
+        SET           capsBound=upperWing
+
+        FACE HAS      tagType=lower
+        SET           capsBound=lowerWing
+
+        FACE HAS      tagType=tip tagIndex=1
+        SET           capsBound=leftTip
+
+        FACE HAS      tagType=tip tagIndex=2
+        SET           capsBound=riteTip
+>>
+
+    # create the control surface deflections
+    IFTHEN    makeWingHinge EQ 1
+        PATBEG    ihinge 9999
+            RESTORE  WingHinge ihinge
+            SELECT   EDGE 1
+                GETATTR  deflect  $deflect
+                GETATTR  ds       $gap
+        
+            EVALUATE edge @nbody 1 $beg
+            SET      xbeg  @edata[2]
+            SET      ybeg  @edata[3]
+            SET      zbeg  @edata[4]
+        
+            EVALUATE edge @nbody 1 $end
+            SET      xend  @edata[2]
+            SET      yend  @edata[3]
+            SET      zend  @edata[4]
+        
+            IFTHEN    ybeg LT yend
+                SET     swap  xbeg
+                SET     xbeg  xend
+                SET     xend  swap
+        
+                SET     swap  ybeg
+                SET     ybeg  yend
+                SET     yend  swap
+        
+                SET     swap  zbeg
+                SET     zbeg  zend
+                SET     zend  swap
+            ENDIF
+        
+            STORE    .
+        
+            SKBEG      xmax+1  yend   zmin-1
+                LINSEG xend    yend   zmin-1
+                LINSEG xbeg    ybeg   zmin-1
+                LINSEG xmax+1  ybeg   zmin-1
+                LINSEG xmax+1  yend   zmin-1
+            SKEND
+            EXTRUDE  0  0  zmax-zmin+2
+            SET      saveNbody @nbody
+            INTERSECT
+                ATTRIBUTE tagComp   $wingControl
+                ATTRIBUTE compIndex  !val2str(ihinge,0)
+            UDPARG    $$/gen_rot  xbeg  xbeg   ybeg  ybeg   zbeg  zbeg
+            UDPARG    $$/gen_rot  xend  xend   yend  yend   zend  zend
+            UDPRIM    $$/gen_rot  rotang  -deflect
+        
+            STORE    WingControl ihinge
+        
+            RESTORE   WingOml_CFD
+            SET       L      hypot(yend-ybeg,xend-xbeg)
+            SET       Xbeg   xbeg+ds*(L+xend-xbeg)/(yend-ybeg)
+            SET       Ybeg   ybeg+ds
+            SET       Xend   xend+ds*(L-xend+xbeg)/(yend-ybeg)
+            SET       Yend   yend-ds
+        
+            SKBEG      xmax+1+ds  Yend   zmin-1
+                LINSEG Xend       Yend   zmin-1
+                LINSEG Xbeg       Ybeg   zmin-1
+                LINSEG xmax+1+ds  Ybeg   zmin-1
+                LINSEG xmax+1+ds  Yend   zmin-1
+            SKEND
+            EXTRUDE  0  0  zmax-zmin+2
+            SUBTRACT
+                
+            STORE     WingOml_CFD  0  1
+        PATEND
+        CATBEG $name_not_found
+        CATEND
+    ENDIF
+
+    # put capsGroup and AFR4_Cmp_ID on the faces
+    SELECT face
+        ATTRIBUTE capsGroup    $Wing
+        ATTRIBUTE AFLR4_Cmp_ID AFLR4_Cmp_Wing
+
+    IFTHEN    makeFuseOml EQ 1
+        UNION
+    ELSE
+        STORE  WingOml_CFD
+    ENDIF
+ENDIF
+
+# horizontal tail with controls deflected
+IFTHEN    makeHtailOml EQ 1
+    SET       htail:span    sqrt(htail:aspect*htail:area)
+    RESTORE   HtailOml
+        ATTRIBUTE _color    $blue
+    STORE     HtailOml_CFD 0 1
+    SET       xmax   @xmax
+    SET       zmin   @zmin
+    SET       zmax   @zmax
+
+    UDPRIM  $/ffbox
+
+    IFTHEN     makeHtailHinge EQ 1
+        PATBEG    ihinge 9999
+            RESTORE  HtailHinge ihinge
+	    SELECT   EDGE 1
+                GETATTR  deflect  $deflect
+	        GETATTR  ds       $gap
+        
+            EVALUATE edge @nbody 1 $beg
+            SET      xbeg  @edata[2]
+            SET      ybeg  @edata[3]
+            SET      zbeg  @edata[4]
+        
+            EVALUATE edge @nbody 1 $end
+            SET      xend  @edata[2]
+            SET      yend  @edata[3]
+            SET      zend  @edata[4]
+        
+            IFTHEN    ybeg LT yend
+                SET     swap  xbeg
+                SET     xbeg  xend
+                SET     xend  swap
+        
+                SET     swap  ybeg
+                SET     ybeg  yend
+                SET     yend  swap
+        
+                SET     swap  zbeg
+                SET     zbeg  zend
+                SET     zend  swap
+            ENDIF
+        
+            STORE    .
+        
+            SKBEG      xmax+1  yend   zmin-1
+                LINSEG xend    yend   zmin-1
+                LINSEG xbeg    ybeg   zmin-1
+                LINSEG xmax+1  ybeg   zmin-1
+                LINSEG xmax+1  yend   zmin-1
+            SKEND
+            EXTRUDE  0  0  zmax-zmin+2
+            SET      saveNbody @nbody
+            INTERSECT
+                ATTRIBUTE tagComp   $htailControl
+                ATTRIBUTE compIndex  !val2str(ihinge,0)
+            UDPARG    $$/gen_rot  xbeg  xbeg   ybeg  ybeg   zbeg  zbeg
+            UDPARG    $$/gen_rot  xend  xend   yend  yend   zend  zend
+            UDPRIM    $$/gen_rot  rotang  -deflect
+        
+            STORE     HtailControl ihinge
+        
+            RESTORE   HtailOml_CFD
+            SET       L      hypot(yend-ybeg,xend-xbeg)
+            SET       Xbeg   xbeg+ds*(L+xend-xbeg)/(yend-ybeg)
+            SET       Ybeg   ybeg+ds
+            SET       Xend   xend+ds*(L-xend+xbeg)/(yend-ybeg)
+            SET       Yend   yend-ds
+        
+            SKBEG      xmax+1+ds  Yend   zmin-1
+                LINSEG Xend       Yend   zmin-1
+                LINSEG Xbeg       Ybeg   zmin-1
+                LINSEG xmax+1+ds  Ybeg   zmin-1
+                LINSEG xmax+1+ds  Yend   zmin-1
+            SKEND
+            EXTRUDE  0  0  zmax-zmin+2
+            SUBTRACT
+
+            STORE     HtailOml_CFD  0  1
+        PATEND
+        CATBEG $name_not_found
+        CATEND
+    ENDIF
+
+    # put capsGroup and AFR4_Cmp_ID on the faces
+    SELECT face
+        ATTRIBUTE capsGroup    $Htail
+        ATTRIBUTE AFLR4_Cmp_ID AFLR4_Cmp_Htail
+
+    IFTHEN    makeFuseOml EQ 1
+        UNION
+    ELSE
+        STORE  HtailOml_CFD
+    ENDIF
+ENDIF
+
+# vertical tail with controls deflected
+IFTHEN    makeVtailOml EQ 1
+    SET       vtail:span    sqrt(vtail:aspect*vtail:area)
+    RESTORE   VtailOml
+        ATTRIBUTE _color    $cyan
+    STORE     VtailOml_CFD 0 1
+    SET       xmax   @xmax
+    SET       ymin   @ymin
+    SET       ymax   @ymax
+
+    UDPRIM  $/ffbox
+    
+    IFTHEN     makeVtailHinge EQ 1
+        PATBEG    ihinge 9999
+            RESTORE  VtailHinge ihinge
+            SELECT   EDGE 1
+                GETATTR  deflect  $deflect
+	        GETATTR  ds       $gap
+        
+            EVALUATE edge @nbody 1 $beg
+            SET      xbeg  @edata[2]
+            SET      ybeg  @edata[3]
+            SET      zbeg  @edata[4]
+        
+            EVALUATE edge @nbody 1 $end
+            SET      xend  @edata[2]
+            SET      yend  @edata[3]
+            SET      zend  @edata[4]
+        
+            IFTHEN    zbeg LT zend
+                SET     swap  xbeg
+                SET     xbeg  xend
+                SET     xend  swap
+        
+                SET     swap  ybeg
+                SET     ybeg  yend
+                SET     yend  swap
+        
+                SET     swap  zbeg
+                SET     zbeg  zend
+                SET     zend  swap
+            ENDIF
+        
+            STORE    .
+        
+            SKBEG      xmax+1  ymin-1  zend
+                LINSEG xend    ymin-1  zend
+                LINSEG xbeg    ymin-1  zbeg
+                LINSEG xmax+1  ymin-1  zbeg
+                LINSEG xmax+1  ymin-1  zend
+            SKEND
+            EXTRUDE  0  ymax-ymin+2  0
+            SET      saveNbody @nbody
+            INTERSECT
+                ATTRIBUTE tagComp   $vtailControl
+                ATTRIBUTE compIndex  !val2str(ihinge,0)
+            UDPARG    $$/gen_rot  xbeg  xbeg   ybeg  ybeg   zbeg  zbeg
+            UDPARG    $$/gen_rot  xend  xend   yend  yend   zend  zend
+            UDPRIM    $$/gen_rot  rotang  -deflect
+        
+            STORE     VtailControl ihinge
+        
+            RESTORE   VtailOml_CFD
+            SET       L      hypot(zend-zbeg,xend-xbeg)
+            SET       Xbeg   xbeg+ds*(L+xend-xbeg)/(zend-zbeg)
+            SET       Zbeg   zbeg+ds
+            SET       Xend   xend+ds*(L-xend+xbeg)/(zend-zbeg)
+            SET       Zend   zend-ds
+        
+            SKBEG      xmax+1+ds  ymin-1  Zend
+                LINSEG Xend       ymin-1  Zend
+                LINSEG Xbeg       ymin-1  Zbeg
+                LINSEG xmax+1+ds  ymin-1  Zbeg
+                LINSEG xmax+1+ds  ymin-1  Zend
+            SKEND
+            EXTRUDE  0  ymax-ymin+2  0
+            SUBTRACT
+            
+            STORE    VtailOml_CFD  0  1
+        PATEND
+        CATBEG $name_not_found
+        CATEND
+    ENDIF
+
+    # put capsGroup and AFR4_Cmp_ID on the faces
+    SELECT face
+        ATTRIBUTE capsGroup    $Vtail
+        ATTRIBUTE AFLR4_Cmp_ID AFLR4_Cmp_Vtail
+
+    IFTHEN    makeFuseOml EQ 1
+        UNION
+    ELSE
+        STORE VtailOml_CFD
+    ENDIF
+ENDIF
+
+IFTHEN    makeFuseOml EQ 1
+    STORE     AllOml_CFD
+ENDIF
+
+# make pylons and pods
+IFTHEN    makePylonOml EQ 1 AND makePodOml EQ 1
+    IFTHEN    makeFuseOml EQ 1
+        RESTORE   AllOml_CFD
+    ELSE
+        RESTORE   WingOml_CFD
+    ENDIF
+    RESTORE   PylonLeftOml
+        ATTRIBUTE capsGroup    $Pylon
+        ATTRIBUTE AFLR4_Cmp_ID AFLR4_Cmp_Pod
+    UNION     0        "pylon:x2+pylon:length/2; pod:y; pod:z+0.1; 0; 0; 1"
+
+    RESTORE   PylonRiteOml
+        ATTRIBUTE capsGroup    $Pylon
+        ATTRIBUTE AFLR4_Cmp_ID AFLR4_Cmp_Pod
+    UNION     0        "pylon:x2+pylon:length/2; -pod:y; pod:z+0.1; 0; 0; 1"
+
+    RESTORE   PodLeftOml
+        ATTRIBUTE capsGroup    $Pod
+        ATTRIBUTE AFLR4_Cmp_ID AFLR4_Cmp_Pod
+        ATTRIBUTE _color       $red
+    UNION     0        "pylon:xle+pylon:length/2; pylon:yle; pylon:zle; 0; 0; -1"
+
+    RESTORE   PodRiteOml
+        ATTRIBUTE capsGroup    $Pod
+        ATTRIBUTE AFLR4_Cmp_ID AFLR4_Cmp_Pod
+        ATTRIBUTE _color       $red
+    UNION     0        "pylon:xle+pylon:length/2; pylon:yle; pylon:zle; 0; 0; -1"
+    IFTHEN    makeFuseOml EQ 1
+        STORE   AllOml_CFD
+    ELSE
+        STORE   WingOml_CFD
+    ENDIF
+ENDIF
+
+# put attributes on OML and leave it on the stack
+IFTHEN    makeFuseOml EQ 1
+    RESTORE   AllOml_CFD
+    SELECT body
+        ATTRIBUTE capsAIM    cfdAIMs
+        ATTRIBUTE _name      $Airplane
+ELSE
+    IFTHEN    makeWingOml EQ 1
+        RESTORE  WingOml_CFD
+        SELECT body
+            ATTRIBUTE capsAIM     cfdAIMs
+            ATTRIBUTE _name       $Wing
+    ENDIF
+    IFTHEN    makeHtailOml EQ 1
+        RESTORE  HtailOml_CFD
+        SELECT body
+            ATTRIBUTE capsAIM     cfdAIMs
+            ATTRIBUTE _name       $Htail
+    ENDIF
+    IFTHEN    makeVtailOml EQ 1
+        RESTORE VtailOml_CFD
+        SELECT body
+            ATTRIBUTE capsAIM     cfdAIMs
+            ATTRIBUTE _name       $Vtail
+    ENDIF
+    IFTHEN    makePylonOml EQ 0 AND makePodOml EQ 1
+        RESTORE   PodLeftOml
+            ATTRIBUTE capsGroup    $Pod
+            ATTRIBUTE AFLR4_Cmp_ID AFLR4_Cmp_Pod
+            ATTRIBUTE _color       $red
+        SELECT body
+            ATTRIBUTE capsAIM      cfdAIMs
+        
+        RESTORE   PodRiteOml
+            ATTRIBUTE capsGroup    $Pod
+            ATTRIBUTE AFLR4_Cmp_ID AFLR4_Cmp_Pod
+            ATTRIBUTE _color       $red
+        SELECT body
+            ATTRIBUTE capsAIM      cfdAIMs
+    ENDIF
+ENDIF
+
+# show control surfaces
+IFTHEN    makeWingHinge EQ 1
+    PATBEG    ihinge 9999
+        RESTORE                WingControl  ihinge
+            ATTRIBUTE capsGroup $Control
+        SELECT body
+            ATTRIBUTE capsAIM   cfdAIMs
+            ATTRIBUTE _name     $WingControl_+ihinge
+    PATEND
+    CATBEG $name_not_found
+    CATEND
+ENDIF
+
+IFTHEN     makeHtailHinge EQ 1
+    PATBEG    ihinge 9999
+        RESTORE                HtailControl  ihinge
+            ATTRIBUTE capsGroup $Control
+        SELECT body
+            ATTRIBUTE capsAIM   cfdAIMs
+            ATTRIBUTE _name     $HtailControl_+ihinge
+    PATEND
+    CATBEG $name_not_found
+    CATEND
+ENDIF
+
+IFTHEN     makeVtailHinge EQ 1
+    PATBEG    ihinge 9999
+        RESTORE                VtailControl  ihinge
+            ATTRIBUTE capsGroup $Control
+        SELECT body
+            ATTRIBUTE capsAIM   cfdAIMs
+            ATTRIBUTE _name     $VtailControl_+ihinge
+    PATEND
+    CATBEG $name_not_found
+    CATEND
+ENDIF
+
+# create farfield box
+SET       size  20*max(ffxmax-ffxmin,ffymax-ffymin)
+BOX       (ffxmin+ffxmax-size)/2  (ffymin+ffymax-size)/2  (ffzmin+ffzmax-size)/2  size  size  size
+    ATTRIBUTE capsGroup          $Farfield
+    ATTRIBUTE AFLR4_Cmp_ID       AFLR4_Cmp_Farfield
+    ATTRIBUTE capsReferenceArea  wing:area
+    ATTRIBUTE capsReferenceSpan  wing:span
+    ATTRIBUTE capsReferenceChord wing:mac
+    ATTRIBUTE capsReferenceX     wing:xroot+wing:mac/4.0
+    ATTRIBUTE capsMeshLength     wing:mac
+    ATTRIBUTE _name              $Farfield
+SELECT body
+    ATTRIBUTE capsAIM     cfdAIMs
+
+
+END

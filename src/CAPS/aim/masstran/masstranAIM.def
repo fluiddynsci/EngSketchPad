@@ -1,0 +1,8 @@
+LIBRARY masstranAIM
+EXPORTS
+aimInitialize
+aimCleanup
+aimInputs
+aimPreAnalysis
+aimOutputs
+aimCalcOutput

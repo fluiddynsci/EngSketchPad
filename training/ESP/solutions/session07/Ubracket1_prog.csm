@@ -1,0 +1,19 @@
+# Ubracket1 (programmed)
+# written by John Dannenhoffer
+
+DESPMTR   length    4.00000
+DESPMTR   height    3.00000
+DESPMTR   thick     0.50000
+
+SKBEG     0.0          0.0       0.0
+   LINSEG length       0.0       0.0
+   LINSEG length       height    0.0
+   LINSEG length-thick height    0.0
+   LINSEG length-thick thick     0.0
+   LINSEG thick        thick     0.0
+   LINSEG thick        height    0.0
+   LINSEG 0.0          height    0.0
+   LINSEG 0.0          0.0       0.0
+SKEND
+
+END

@@ -1,0 +1,51 @@
+# ../data/training/session02/swivelBase.csm written by ocsmSave (v1.08)
+
+# Design Parameters:
+despmtr   thick      15.00000
+
+# Local Variables:
+
+# Global attributes:
+
+# Branches:
+skbeg     0   -30   0   1
+   skvar     xy  -0.143784;-29.727512;29.998705;58.713541;-32.634047;0.000000;73.972848;-8.291820;-2.755068;100.494976;-5.748602;0.000000;98.678392;46.569021;19.999137;73.972848;50.565506;0.000000;54.717056;57.468525;-2.755068;11.845671;49.838872;0.000000;
+   skcon     X   1   -1  0
+   skcon     Y   1   -1  0
+   skcon     H   1   2  0
+   skcon     H   3   4  0
+   skcon     H   5   6  0
+   skcon     T   1   -1  0
+   skcon     T   8   -1  0
+   skcon     T   6   -1  0
+   skcon     T   3   -1  0
+   skcon     T   4   -1  0
+   skcon     T   5   -1  0
+   skcon     R   4   5  20
+   skcon     R   8   1  30
+   skcon     R   6   7  -15
+   skcon     R   2   3  -15
+   skcon     L   7   8  60
+   skcon     H   7   8  0
+   skcon     L   1   2  60
+   skcon     X   4   5  96
+   skcon     Y   4   5  30
+   linseg    ::x[2]   ::y[2]   0
+   arc       ::x[3]   ::y[3]   0   ::d[3]   xy
+   linseg    ::x[4]   ::y[4]   0
+   arc       ::x[5]   ::y[5]   0   ::d[5]   xy
+   linseg    ::x[6]   ::y[6]   0
+   arc       ::x[7]   ::y[7]   0   ::d[7]   xy
+   linseg    ::x[8]   ::y[8]   0
+   arc       ::x[1]   ::y[1]   0   ::d[1]   xy
+skend     0
+extrude   0   0   thick
+cylinder  0   0   -1.2*thick   0   0   1.2*thick   10
+subtract  none   1   0
+chamfer   5   0
+cylinder  96   0   -1.2*thick   96   0   1.2*thick   10
+subtract  none   1   0
+cylinder  48   0   -1.2*thick   48   0   1.2*thick   5
+subtract  none   1   0
+
+end

@@ -1,0 +1,11 @@
+
+
+INTERFACE . ALL
+
+SET       ffxmin     min(ffxmin,@xmin)
+SET       ffxmax     max(ffxmax,@xmax)
+SET       ffymin     min(ffymin,@ymin)
+SET       ffymax     max(ffymax,@ymax)
+SET       ffzmin     min(ffzmin,@zmin)
+SET       ffzmax     max(ffzmax,@zmax)
+

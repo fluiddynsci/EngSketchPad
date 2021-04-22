@@ -1,0 +1,24 @@
+# Ubracket
+# written by John Dannenhoffer
+
+# design parameters
+DESPMTR   Length    4.00      # length
+DESPMTR   Height    3.00      # height
+DESPMTR   Depth     2.50      # depth
+DESPMTR   Dslot     2.00      # depth of slot
+DESPMTR   Wslot     2.00      # width of slot
+DESPMTR   Dhole     1.00      # diameter of hole
+
+# bracket shape
+SET       thick  (Length-Wslot)/2
+
+BOX       0      0             0  Length          Height  Depth
+BOX       thick  Height-Dslot  0  Length-2*thick  Height  Depth
+SUBTRACT
+
+# hole
+CYLINDER  Length/2    Height-Dhole  Depth/2  \
+          3*Length/2  Height-Dhole  Depth/2  Dhole/2
+SUBTRACT
+
+END

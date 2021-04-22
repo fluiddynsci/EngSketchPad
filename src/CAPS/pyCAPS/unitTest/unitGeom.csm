@@ -1,0 +1,142 @@
+# CSM file example of two wings with an outer bounding box 
+              
+# Design Parameters:
+## [despmtrs]
+CFGPMTR   series            8412
+CFGPMTR   series2           0020
+DESPMTR   area[1,1]         40.00000
+DESPMTR   aspect[1,1]       5.00000
+DESPMTR   taper[1,1]        0.50000
+DESPMTR   twist[1,1]        15.00000
+DESPMTR   lesweep[1,1]      30.00000
+DESPMTR   dihedral[1,1]     1.00000
+## [despmtrs]
+
+# Output Parameters:
+## [outpmtrs]
+OUTPMTR  span
+OUTPMTR  dummyRow
+OUTPMTR  dummyCol
+OUTPMTR  dummyMat
+OUTPMTR  cmean
+## [outpmtrs]
+
+# Specify Euler equations
+## [capsIntent]
+ATTRIBUTE capsIntent $CFD #CFD Analysis
+ATTRIBUTE capsAIM    $fun3dAIM;su2AIM;egadsTessAIM;aflr4AIM;tetgenAIM;aflr3AIM #CFD Analysis
+## [capsIntent]
+
+
+## [capsAttributes]
+# Set reference values
+ATTRIBUTE capsReferenceArea     area
+ATTRIBUTE capsReferenceChord    sqrt(area/aspect)
+ATTRIBUTE capsReferenceSpan     sqrt(area/aspect)*aspect
+## [capsAttributes]
+
+# Dummy variables for testing 
+DIMENSION despMat  3 2 1
+DESPMTR   despMat  "11;12;\
+                    13;14;\
+                    15;16;"
+
+DIMENSION dummyRow  3 1 0
+DIMENSION dummyCol  1 3 0
+DIMENSION dummyMat  3 2 0
+
+SET dummyRow    "1;2;3;"
+SET dummyCol    "3;2;1;"
+SET dummyMat    "1;2;\
+                 3;4;\
+                 5;6;"
+                                  
+# Branches:
+## [local]
+SET       cmean     sqrt(area/aspect)
+SET       span      cmean*aspect
+SET       sspan     span/2
+SET       croot     2*cmean/(1+taper)
+SET       ctip      croot*taper
+SET       xtip      sspan*tand(lesweep)
+SET       ytip      sspan*tand(dihedral)
+SET       ybot      -0.1*croot
+SET       ytop      +0.2*croot+ytip
+SET       extend    0.02*cmean
+## [local]
+
+## [createWing]
+MARK
+   UDPRIM    naca   Series   series
+      SCALE     croot
+   UDPRIM    naca   Series   series2
+      SCALE     ctip
+      ROTATEZ   -twist   0   0
+      TRANSLATE xtip   ytip   -sspan
+RULE      0
+## [createWing]
+
+
+## [mirror]
+# Store half of wing 
+STORE     HalfWing 0 0
+
+# Restore the half wing 
+RESTORE   HalfWing 0
+
+# Restore and mirror the half wing
+RESTORE   HalfWing 0
+    MIRROR    0   0   1   0
+## [mirror]
+
+## [join]
+# Combine halfs into a whole
+JOIN     0
+## [join]
+
+## [orient]
+# Get body into a typical aero-system 
+ROTATEX 90 0 0
+## [orient]
+
+## [attribute]
+# Store the wing 
+STORE     Wing 0 0
+
+MARK
+
+# Wing 1 - Restore
+RESTORE   Wing 0
+    ATTRIBUTE _name $Wing1
+    ATTRIBUTE capsGroup $Wing1
+    ATTRIBUTE .tParam    "5.0; 5.0/15; 35"
+                             #iface;ubar0;vbar0;du2;dv2
+    CSYSTEM   leftWingSkin   5;0;0;0;1
+    CSYSTEM   riteWingSkin   1;0;0;0;1
+## [attribute]
+
+##[secondWing]
+# Wing 2 -  Restore and scale, translate
+RESTORE   Wing 0
+    ATTRIBUTE _name $Wing2
+    ATTRIBUTE capsGroup $Wing2
+    ATTRIBUTE .tParam    "5.0; 5.0/15; 35"
+    
+    SCALE     0.4
+    TRANSLATE 10   0   0
+##[secondWing]
+
+# Create a bounding box as a farfied 
+## [farfield]
+SPHERE    0   0   0   80
+    ATTRIBUTE _name $Farfield
+    ATTRIBUTE capsGroup $Farfield
+    ATTRIBUTE .tParam    "50; 50/15; 35"
+## [farfield]
+
+# Dump out an egads file to test reading parameters
+DUMP unitGeom.egads 0 1
+
+## [closeCSM]
+END
+## [closeCSM]

@@ -1,0 +1,9 @@
+LIBRARY aflr3AIM
+EXPORTS
+aimInitialize
+aimCleanup
+aimData
+aimInputs
+aimPreAnalysis
+aimOutputs
+aimCalcOutput

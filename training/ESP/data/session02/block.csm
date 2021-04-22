@@ -1,0 +1,20 @@
+# block
+# written by
+
+DESPMTR   Length    4.0
+DESPMTR   Height    2.0
+DESPMTR   Depth     2.0
+DESPMTR   Rhole     0.4
+DESPMTR   Nhole     2
+DESPMTR   Xpole     2.0
+DESPMTR   Ypole     2.0
+DESPMTR   Rpole     0.5
+DESPMTR   XangDeg    0.
+DESPMTR   YangDeg    0.
+DESPMTR   ZangDeg   30.
+DESPMTR   Dx        1.0
+DESPMTR   Dy        0.0
+DESPMTR   Dz        0.0
+DESPMTR   Scale     1.5
+DESPMTR   Dist      0.5
+

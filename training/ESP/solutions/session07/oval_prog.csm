@@ -1,0 +1,14 @@
+# oval (programmed)
+# written by John Dannenhoffer
+
+DESPMTR   rad       0.50000
+
+SKBEG        0.0    0.0  0.0
+   LINSEG    rad    0.0  0.0
+   CIRARC  2*rad    rad  0.0   rad  2*rad  0.0
+   LINSEG   -rad  2*rad  0.0
+   CIRARC -2*rad    rad  0.0  -rad    0.0  0.0
+   LINSEG    0.0    0.0  0.0
+SKEND
+
+END

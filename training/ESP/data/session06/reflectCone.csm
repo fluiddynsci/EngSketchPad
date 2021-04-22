@@ -1,0 +1,12 @@
+# reflectCone
+# written by John Dannenhoffer
+
+DIMENSION normal  1  3
+SET       normal  "1; 0; 0;"
+
+CONE      0  0  0  5  0  0  2
+
+UDPARG    $/mirrorDup  norm  normal
+UDPRIM    $/mirrorDup  dist  1
+
+end

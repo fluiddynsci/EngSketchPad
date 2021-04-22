@@ -1,0 +1,106 @@
+# viewOmlStructure.udc
+# written by Marshall Galbraith
+
+# used Bodys
+#    WingOml
+# used variables
+#    wing:dxnom     (default=1)
+
+INTERFACE . ALL
+
+# wing OML structure
+IFTHEN    makeWingOml EQ 1
+
+    # attribute the wing
+    RESTORE   WingOml
+
+    # put upper and lower skins into capsBounds
+    UDPRIM    editAttr  filename <<
+        FACE HAS      tagType=upper
+        SET           capsBound=upperWing
+
+        FACE HAS      tagType=lower
+        SET           capsBound=lowerWing
+>>
+
+    SELECT    EDGE  $tagType  $root
+    DIMENSION rootEdges 1 @sellist.size 0
+    SET       rootEdges @sellist
+    PATBEG    i   rootEdges.size
+        SELECT  EDGE   rootEdges[i]
+            ATTRIBUTE capsConstraint $pointConstraint1
+    PATEND
+
+    # mark nodes at tips and leadinge edge with possible point loads
+    UDPRIM    editAttr  filename  <<
+        NODE ADJ2FACE tagType=tip
+        AND  ADJ2EDGE tagType=leadingEdge
+        SET           capsLoad=TipLEPoint
+>>
+
+    # The bounds need to be present for a fluid structure interaction
+    STORE     WingOmlStruct
+
+    # attributes
+    RESTORE   WingOmlStruct
+        ATTRIBUTE capsGroup  $wingSkin
+    SELECT body
+        ATTRIBUTE capsAIM    $masstranAIM;astrosAIM
+        ATTRIBUTE capsIntent $wing
+        ATTRIBUTE _name      $WingOmlStruct
+ENDIF
+
+# htail OML structure
+IFTHEN    makeHtailOml EQ 1
+
+    # attribute the htail
+    RESTORE   HtailOml
+
+    # The bounds need to be present for a fluid structure interaction
+    STORE     HtailOmlStruct
+
+    # attributes
+    RESTORE   HtailOmlStruct
+        ATTRIBUTE capsGroup  $htailSkin
+    SELECT body
+        ATTRIBUTE capsAIM    $masstranAIM;astrosAIM
+        ATTRIBUTE capsIntent $htail;tail
+        ATTRIBUTE _name      $HtailOmlStruct
+ENDIF
+
+
+# vtail OML structure
+IFTHEN    makeVtailOml EQ 1
+
+    # attribute the vtail
+    RESTORE   VtailOml
+
+    # The bounds need to be present for a fluid structure interaction
+    STORE     VtailOmlStruct
+
+    # attributes
+    RESTORE   VtailOmlStruct
+        ATTRIBUTE capsGroup  $vtailSkin
+    SELECT body
+        ATTRIBUTE capsAIM    $masstranAIM;astrosAIM
+        ATTRIBUTE capsIntent $vtail;tail
+        ATTRIBUTE _name      $VtailOmlStruct
+ENDIF
+
+# fuselage OML structure
+IFTHEN    makeFuseOml EQ 1
+
+    # attribute the vtail
+    RESTORE   FuseOml
+
+    # The bounds need to be present for a fluid structure interaction
+    STORE     FuseOmlStruct
+
+    # attributes
+    RESTORE   FuseOmlStruct
+        ATTRIBUTE capsGroup  $fuseSkin
+    SELECT body
+        ATTRIBUTE capsAIM    $masstranAIM;astrosAIM
+        ATTRIBUTE capsIntent $fuse
+        ATTRIBUTE _name      $FuseOmlStruct
+ENDIF

@@ -1,0 +1,92 @@
+# F-118A Boxster
+
+# wing design parameters
+DESPMTR   wing:area        4240    # area
+DESPMTR   wing:aspect      9.00    # aspect ratio
+DESPMTR   wing:thick       0.10    # thickness ratio
+DESPMTR   wing:xroot       54.0    # xloc at root LE
+DESPMTR   wing:zroot       -5.0    # zloc at root LE
+
+# horizontal tail design parameters
+DESPMTR   htail:area       1210    # htail area
+DESPMTR   htail:aspect     4.15    # htail aspect ratio
+DESPMTR   htail:thick      0.08    # htail thickness
+DESPMTR   htail:xroot       145    # xloc of root LE
+DESPMTR   htail:zroot         5    # zloc of root LE
+
+# vertical tail design parameters
+DESPMTR   vtail:area        610    # vtail area
+DESPMTR   vtail:aspect     1.80    # vtail aspect ratio
+DESPMTR   vtail:thick      0.08    # vtail thickness
+DESPMTR   vtail:xroot       150    # xloc of root LE
+DESPMTR   vtail:zroot         9    # zloc of root LE
+
+# fuselage design parameters
+DESPMTR   fuse:length       180    # fuselage length
+DESPMTR   fuse:width         20    # width  of fuselage
+DESPMTR   fuse:height        20    # height of mid fuselage
+
+#------------------------------------------------
+# set available output parameters
+OUTPMTR  wing:wet
+OUTPMTR  wing:volume
+OUTPMTR  wing:span
+
+OUTPMTR  htail:wet
+OUTPMTR  htail:volume
+
+OUTPMTR  vtail:wet
+OUTPMTR  vtail:volume
+
+OUTPMTR  fuse:wet
+OUTPMTR  fuse:volume
+
+#================================================
+# Wing
+SET       wing:span      sqrt(wing:aspect*wing:area)
+SET       wing:chord     wing:area/wing:span
+
+BOX  wing:xroot  -wing:span/2  wing:zroot   wing:chord  wing:span  wing:chord*wing:thick
+SELECT body
+    ATTRIBUTE _name   $Wing
+
+SET  wing:wet    @area
+SET  wing:volume @volume
+
+#================================================
+# Htail
+SET       htail:span      sqrt(htail:aspect*htail:area)
+SET       htail:chord     htail:area/htail:span
+
+BOX  htail:xroot  -htail:span/2  htail:zroot   htail:chord  htail:span  htail:chord*htail:thick
+SELECT body 
+    ATTRIBUTE _name   $Htail
+
+SET  htail:wet    @area
+SET  htail:volume @volume
+
+#================================================
+# Vtail
+SET       vtail:span      sqrt(vtail:aspect*vtail:area)
+SET       vtail:chord     vtail:area/vtail:span
+
+BOX  vtail:xroot  0  vtail:zroot   vtail:chord  vtail:chord*vtail:thick  vtail:span
+SELECT body 
+    ATTRIBUTE _name   $Vtail
+
+SET  vtail:wet    @area
+SET  vtail:volume @volume
+
+#================================================
+# fuselage
+
+BOX  0  -fuse:width/2  -fuse:height/2   fuse:length  fuse:width  fuse:height
+SELECT body 
+    ATTRIBUTE _name   $Fuselage
+
+SET  fuse:wet    @area
+SET  fuse:volume @volume
+
+#================================================
+
+END

@@ -1,0 +1,40 @@
+#	Makefile for c version of pyCAPS scripts
+
+#	IDIR     directory for include    files
+#	LDIR     directory for library    files
+#	ODIR     directory for object     files
+#	TDIR     directory for executable files (actually the test directory)
+
+IDIR  = $(ESP_ROOT)\include
+
+!include $(IDIR)\$(ESP_ARCH).$(MSVC)
+
+LDIR  = $(ESP_ROOT)\lib
+
+!IFDEF ESP_BLOC
+ODIR  = $(ESP_BLOC)\obj
+TDIR  = $(ESP_BLOC)\test
+!ELSE
+ODIR  = .
+TDIR  = $(ESP_ROOT)\bin
+!ENDIF
+
+# default target(s)
+default:	$(TDIR)\template_avl.exe
+
+# template_avl
+$(TDIR)\template_avl.exe:	$(ODIR)\template_avl.obj $(LDIR)\caps.lib
+	cl /Fe$(TDIR)\template_avl.exe $(ODIR)\template_avl.obj $(LIBPTH) \
+		caps.lib egads.lib
+
+$(ODIR)\template_avl.obj:	template_avl.c $(IDIR)\caps.h
+	cl /c $(COPTS) $(DEFINE) -I$(IDIR) template_avl.c \
+		/Fo$(ODIR)\template_avl.obj
+
+# clean .obj file(s)
+clean:
+	-del $(ODIR)\template_avl.obj
+
+# clean .obj and .exe files
+cleanall:	clean
+	-del $(TDIR)\template_avl.exe

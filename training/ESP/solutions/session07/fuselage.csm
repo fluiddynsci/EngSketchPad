@@ -1,0 +1,58 @@
+# ../data/training/session02/fuselage.csm written by ocsmSave (v1.08)
+
+# Design Parameters:
+despmtr   width       5.00000
+despmtr   h_upper       2.00000
+despmtr   h_lower       1.00000
+despmtr   a_upper      10.00000
+despmtr   a_lower       5.00000
+
+# Local Variables:
+
+# Global attributes:
+
+# Branches:
+skbeg     0   0   0   1
+   skvar     xy  -0.001331;0.006019;0.000000;0.827277;-0.103420;0.000000;0.928898;-0.689699;0.000000;1.569896;-0.799137;0.000000;2.320333;-0.861674;0.000000;2.218711;-0.103420;0.000000;2.953514;0.006019;0.000000;2.953514;0.006019;0.000000;2.218711;0.428139;0.000000;2.085821;0.928430;0.000000;1.569896;1.076954;0.000000;0.975800;1.155125;0.000000;0.827277;0.428139;0.000000;
+   skcon     X   1   -1  0
+   skcon     Y   1   -1  0
+   skcon     V   2   3  0
+   skcon     H   4   5  0
+   skcon     V   5   6  0
+   skcon     V   9   10  0
+   skcon     H   10   11  0
+   skcon     H   11   12  0
+   skcon     V   12   13  0
+   skcon     H   3   4  0
+   skcon     X   3   -1  width/4
+   skcon     Y   3   -1  -h_lower
+   skcon     X   4   -1  width/2
+   skcon     X   5   -1  3*width/4
+   skcon     X   7   -1  width
+   skcon     Y   7   -1  0
+   skcon     Z   7   -2  0
+   skcon     Z   8   -3  0
+   skcon     X   12   -1  width/4
+   skcon     Y   12   -1  h_upper
+   skcon     X   11   -1  width/2
+   skcon     X   10   -1  3*width/4
+   skcon     Y   2   -1  -width/4*tand(a_lower)
+   skcon     D   2   6  0
+   skcon     Y   13   -1  width/4*tand(a_upper)
+   skcon     D   13   9  0
+   bezier    ::x[2]   ::y[2]   0
+   bezier    ::x[3]   ::y[3]   0
+   bezier    ::x[4]   ::y[4]   0
+   bezier    ::x[5]   ::y[5]   0
+   bezier    ::x[6]   ::y[6]   0
+   bezier    ::x[7]   ::y[7]   0
+   linseg    ::x[8]   ::y[8]   0
+   bezier    ::x[9]   ::y[9]   0
+   bezier    ::x[10]   ::y[10]   0
+   bezier    ::x[11]   ::y[11]   0
+   bezier    ::x[12]   ::y[12]   0
+   bezier    ::x[13]   ::y[13]   0
+   bezier    ::x[1]   ::y[1]   0
+skend     0
+
+end

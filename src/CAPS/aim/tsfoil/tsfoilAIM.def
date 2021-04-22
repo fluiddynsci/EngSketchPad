@@ -1,0 +1,8 @@
+LIBRARY tsfoilAIM
+EXPORTS
+aimInitialize
+aimCleanup
+aimInputs
+aimPreAnalysis
+aimOutputs
+aimCalcOutput

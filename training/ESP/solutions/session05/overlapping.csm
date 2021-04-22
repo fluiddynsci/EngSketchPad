@@ -1,0 +1,47 @@
+# overlapping
+# written by John Dannenhoffer
+
+# Body 1
+BOX       0   0   0   1   2   2
+STORE     body  1
+
+# Body 2
+BOX       2   0   0   1   2   2
+STORE     body  2
+
+# Body 3
+BOX       4   0   0   1   2   2
+STORE     body  3
+
+# Body 4
+CYLINDER  0   1   1   3   1   1   0.5
+STORE     body  4
+
+# determine which or Bodys 1, 2, 3 intersect Body 4
+PATBEG       ibody  3
+   SET       !$overlap+ibody  1
+   RESTORE   body  ibody
+   RESTORE   body  4
+   INTERSECT
+
+   CATBEG    $did_not_create_body
+      SET    !$overlap+ibody  0
+   CATEND
+
+   STORE     ...
+PATEND
+
+# show Bodys
+RESTORE    body  1
+ATTRIBUTE  _name  $Body1
+
+RESTORE    body  2
+ATTRIBUTE  _name  $Body2
+
+RESTORE    body  3
+ATTRIBUTE  _name  $Body3
+
+RESTORE    body  4
+ATTRIBUTE  _name  $Body4
+
+END

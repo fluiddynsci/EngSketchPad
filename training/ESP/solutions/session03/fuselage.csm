@@ -1,0 +1,129 @@
+# fuselageAlone
+# written by John Dannenhoffer
+
+# fuselage design Parameters
+CFGPMTR                      fuselage:numXsect 6
+DIMENSION fuselage:xloc      fuselage:numXsect 1 1
+DIMENSION fuselage:zloc      fuselage:numXsect 1 1
+DIMENSION fuselage:width     fuselage:numXsect 1 1
+DIMENSION fuselage:height    fuselage:numXsect 1 1
+DIMENSION fuselage:power     fuselage:numXsect 1 1
+DIMENSION fuselage:noselist  2                 4 1
+
+DESPMTR   fuselage:xloc      "0;  1.0;  4.0;  8.0;  12.0;  16.0;"
+DESPMTR   fuselage:zloc      "0;  0.1;  0.4;  0.4;   0.3;   0.2;"
+DESPMTR   fuselage:width     "0;  1.0;  1.6;  1.6;   1.0;   0.8;"
+DESPMTR   fuselage:height    "0;  1.0;  2.0;  2.0;   1.2;   0.4;"
+DESPMTR   fuselage:power     "2;    2;    3;    3      3;     3;"
+DESPMTR   fuselage:noselist  "0.2; 0; 1; 0;\
+                              0.1; 0; 0; 1;"
+
+CFGPMTR   buildStruct        0   # set to 1 to build structure
+
+# build fuselage OML
+MARK
+
+   # sharp or rounded nose
+   SET isect 1
+   IFTHEN fuselage:width[isect] eq 0 and fuselage:height[isect] eq 0
+      POINT  fuselage:xloc[isect] 0 fuselage:zloc[isect]
+
+   # blunt nose
+   ELSE
+      UDPRIM supell rx fuselage:width[isect]/2 \
+                    ry fuselage:height[isect]/2 \
+                    n  fuselage:power[isect]
+      ROTATEY 90 0 0
+      TRANSLATE fuselage:xloc[isect] 0 fuselage:zloc[isect]
+   ENDIF
+
+   # intermediate sections
+   PATBEG jsect fuselage:numXsect-2
+      SET isect jsect+1
+
+      UDPRIM supell rx fuselage:width[isect]/2 ry fuselage:height[isect]/2 n fuselage:power[isect]
+      ROTATEY 90 0 0
+      TRANSLATE fuselage:xloc[isect] 0 fuselage:zloc[isect]
+   PATEND
+
+   # sharp or rounded tail
+   SET isect fuselage:numXsect
+   IFTHEN fuselage:width[isect] eq 0 and fuselage:height[isect] eq 0
+      POINT  fuselage:xloc[isect] 0 fuselage:zloc[isect]
+
+   # blunt tail
+   ELSE
+      UDPRIM supell rx fuselage:width[isect]/2 ry fuselage:height[isect]/2 n fuselage:power[isect]
+      ROTATEY 90 0 0
+      TRANSLATE fuselage:xloc[isect] 0 fuselage:zloc[isect]
+   ENDIF
+
+# blend the sections into the fuselage
+BLEND fuselage:noselist
+
+# optionally build the structure
+IFTHEN    buildStruct EQ 1
+
+   # get the fuselage bounding box
+   SET  xmin  @xmin
+   SET  xmax  @xmax
+   SET  ymin  @ymin
+   SET  ymax  @ymax
+   SET  zmin  @zmin
+   SET  zmax  @zmax
+
+   # store OML for later use
+   STORE   fuseOML
+
+   # create a waffle that is "1" bigger than the OML
+   UDPRIM  waffle  depth  zmax-zmin+2  filename <<
+
+       # symmetry plane
+       POINT A AT xmin-1 0
+       POINT B AT xmax+1 0
+       LINE  . A  B      tagType=symmetry
+
+       # make the bulkheads
+       PATBEG ibulk xmax-xmin-1
+          POINT C AT ibulk+1/2 ymin-1
+          POINT D AT x@C       ymax+1
+          LINE  . C  D         tagType=bulkhead  tagIndex=!val2str(ibulk,0)
+       PATEND
+>>
+
+   # translate the waffle down and store it
+   TRANSLATE 0  0  zmin-1
+   STORE   fuseWaffle
+
+   # trim the waffle to the fuselage
+   RESTORE  fuseOML
+   RESTORE  fuseWaffle
+   INTERSECT
+
+   # alternate the bulkhead colors red/blue/red/...
+   SET       color  $red
+   PATBEG    ibulk  99
+      SELECT FACE   $tagType  $bulkhead  $tagIndex  val2str(ibulk,0)
+         ATTRIBUTE  _color  color
+
+      IFTHEN color EQ $red
+         SET color    $blue
+      ELSE
+         SET color    $red
+      ENDIF
+   PATEND
+
+   # this will get called when we run out of bulkheads
+   CATBEG  $face_not_found
+   CATEND
+
+   # make the bulkhead/symmetry Edges white
+   UDPRIM    editAttr  filename <<
+      EDGE  ADJ2FACE  tagType=bulkhead
+      AND   ADJ2FACE  tagType=symmetry
+      SET             _color=white
+>>
+
+ENDIF
+
+END

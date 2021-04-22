@@ -1,0 +1,8 @@
+LIBRARY xfoilAIM
+EXPORTS
+aimInitialize
+aimCleanup
+aimInputs
+aimPreAnalysis
+aimOutputs
+aimCalcOutput

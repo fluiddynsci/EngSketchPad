@@ -1,0 +1,760 @@
+# transport
+# written by John Dannenhoffer
+
+# define the views
+CFGPMTR   VIEW:Concept          1
+CFGPMTR   VIEW:VLM              0
+CFGPMTR   VIEW:CFDInviscid      0
+CFGPMTR   VIEW:CFDViscous       0
+CFGPMTR   VIEW:OmlStructure     0
+CFGPMTR   VIEW:ClampedStructure 0
+CFGPMTR   VIEW:SupportStructure 0
+CFGPMTR   VIEW:BoxStructure     0
+
+# define components to be used
+CFGPMTR   COMP:Wing           1
+CFGPMTR   COMP:Fuse           1
+CFGPMTR   COMP:Htail          1
+CFGPMTR   COMP:Vtail          1
+CFGPMTR   COMP:Pylon          0
+CFGPMTR   COMP:Pod            0
+CFGPMTR   COMP:Control        0
+
+# design paramaters
+
+# CG location used to drive design parametres, not the actual CG
+DIMENSION CG:ref  3 1 1
+DESPMTR   CG:ref  "90; 0; 0"
+
+# fuselage
+DIMENSION fuse:noselist  2 4 1
+DIMENSION fuse:taillist  2 4 1
+
+DESPMTR   fuse:noselist  "2.5; 0; 1; 0;\  # spanwise nose radius
+                          2.5; 0; 0; 1"   # vertical nose radius
+DESPMTR   fuse:taillist  "0.0; 0; 1; 0;\
+                          0.0; 0; 0; 1"
+DESPMTR   fuse:fwdLength     28    # length of forward fuselage
+DESPMTR   fuse:noseHeight    -2    # zloc of center of nose
+
+DESPMTR   fuse:midWidth      20    # width  of mid fuselage
+DESPMTR   fuse:midHeight     20    # height of mid fuselage
+DESPMTR   fuse:power          2    # super-ellipse power of mid and aft fuselage
+CFGPMTR   fuse:aftnSec        3    # number of sectins in the aft portion
+DESPMTR   fuse:aftLength     44    # length of aft fuselage
+DESPMTR   fuse:aftWidth       1    # width  of aft fuselage
+DESPMTR   fuse:aftHeight      3    # height of aft fuselage
+DESPMTR   fuse:aftCenter    8.5    # zloc   of aft fuselage
+DESPMTR   fuse:aftTailExt     5    # lengt of fuselage aft of htail/vtail
+
+# wing
+DESPMTR   wing:area        4240    # area
+DESPMTR   wing:aspect      9.00    # aspect ratio
+DESPMTR   wing:taperi      0.48    # inboard  taper ratio
+DESPMTR   wing:tapero      0.23    # outboard taper ratio
+DESPMTR   wing:sweep       35.0    # leading edge sweep
+DESPMTR   wing:dihedral     7.0    # dihedral
+DESPMTR   wing:break       0.37    # inboard/outboard
+DESPMTR   wing:alphar      -1.0    # setting angle   at root
+DESPMTR   wing:thickr      0.10    # thickness ratio at root
+DESPMTR   wing:camberr     0.08    # camber    ratio at root
+DESPMTR   wing:alphab      -3.0    # setting angle   at break
+DESPMTR   wing:thickb      0.15    # thickness ratio at break
+DESPMTR   wing:camberb     0.04    # camber    ratio at break
+DESPMTR   wing:alphat      -8.0    # setting angle   at tip
+DESPMTR   wing:thickt      0.08    # thickness ratio at tip
+DESPMTR   wing:cambert     0.01    # camber    ratio at tip
+DESPMTR   wing:xroot       54.0    # xloc at root LE
+DESPMTR   wing:zroot       -5.0    # zloc at root LE
+
+# wing hinge lines
+DIMENSION wing:hinge        6 9 1 # ymin                  ymax
+#                           theta   x/c   y/span  z/t     x/c   y/span z/t    gap   grp
+DESPMTR   wing:hinge       "-10.0;  0.75; -0.98;  0.50;   0.75; -0.70; 0.50;  0.25; 1;  \ left aileron
+                            +10.0;  0.75; -0.69;  0.00;   0.75; -0.43; 0.00;  0.25; 2;  \ left oflap
+                            +15.0;  0.85; -0.33;  0.00;   0.90; -0.14; 0.00;  0.25; 3;  \ left iflap
+                            +15.0;  0.90;  0.14;  0.00;   0.85;  0.33; 0.00;  0.25; 3;  \ rite iflap
+                            +10.0;  0.75;  0.43;  0.00;   0.75;  0.69; 0.00;  0.25; 2;  \ rite oflap
+                            +10.0;  0.75;  0.70;  0.50;   0.75;  0.98; 0.50;  0.25; 4"  # rite aileron
+
+# wing structure
+DESPMTR   wing:spar1       0.20    # fraction of chord for LE spar
+DESPMTR   wing:spar2       0.70    # fraction of chord for TE spar
+
+CFGPMTR   wing:nrib1          1    # number of internal ribs in region 1
+CFGPMTR   wing:nrib2          5    # number of internal ribs in region 1
+CFGPMTR   wing:nrib3         12    # number of internal ribs in region 1
+
+DESPMTR   wing:dxnom        2.0    # nominal .bdf element side length
+
+# horizontal tail
+DESPMTR   htail:aspect     2.15    # htail aspect ratio
+DESPMTR   htail:taper      0.33    # htail taper ratio
+DESPMTR   htail:sweep        40    # htail sweep
+DESPMTR   htail:dihedral     12    # htail dihedral
+DESPMTR   htail:thick      0.08    # htail thickness ratio
+DESPMTR   htail:vc         0.45    # htail volume coefficient
+DESPMTR   htail:xac         155    # htail xloc of aerodynamic center
+DESPMTR   htail:fac         0.3    # fraction of root coord for aerodynamic center
+DESPMTR   htail:zroot         5    # zloc of root LE
+
+# htail hinge lines
+DIMENSION htail:hinge       2 9 1 # ymin                  ymax
+#                           theta   x/c   y/span  z/t     x/c   y/span z/t    gap   grp
+DESPMTR   htail:hinge      "  5.0;  0.60; -0.95;  0.50;   0.60; -0.20;  0.50;  0.50; 1;  \ left elevator
+                              5.0;  0.60;  0.20;  0.50;   0.60;  0.95;  0.50;  0.50; 1"  # rite elevator
+
+# vertical tail
+DESPMTR   vtail:aspect     1.80    # vtail aspect ratio
+DESPMTR   vtail:taper      0.28    # vtail taper ratio
+DESPMTR   vtail:sweep        45    # vtail sweep
+DESPMTR   vtail:thick      0.08    # vtail thickness
+DESPMTR   vtail:vc         0.04    # vtail volume coefficient
+DESPMTR   vtail:xac         160    # vtail xloc of aerodynamic center
+DESPMTR   vtail:fac         0.3    # fraction of root coord for aerodynamic center
+DESPMTR   vtail:zroot         9    # zloc of root LE
+
+# vtail hinge lines
+DIMENSION vtail:hinge       1 9 1 # ymin                  ymax
+#                           theta   x/c   y/span  z/t     x/c   y/span z/t    gap   grp
+DESPMTR   vtail:hinge      "  0.0;  0.60;  0.50;  0.35;   0.60;  0.50;  0.97;  0.50; 1"  # rudder
+
+# pylon
+DESPMTR   pylon:dxwing     3.00    # x offset from leading edge of wing
+DESPMTR   pylon:dxpod      1.00    # x offset from leading edge of pod
+DESPMTR   pylon:length     9.50    # length of pylon
+DESPMTR   pylon:thick      0.10    # thickness ratio of pylon
+
+# pod
+DESPMTR   pod:yb           0.30    # semispan location of pod
+DESPMTR   pod:dxnose      -10.0    # x offset of nose from wing leading edge
+DESPMTR   pod:dznose       -7.5    # z offset of nose from wing leading edge
+DESPMTR   pod:length      30.00    # length of pod
+DESPMTR   pod:diameter     8.00    # diameter of pod
+DESPMTR   pod:thick        0.07    # thickness ratio of pod airfoil
+DESPMTR   pod:camber       0.02    # camber ratio of pod airfoil
+
+# Define length units of the geometry
+ATTRIBUTE capsLength       $ft
+
+# output parameters available to CAPS
+OUTPMTR   wing:mac       # wing mean aerodynamic coord
+OUTPMTR   wing:wet       # wing wetted area
+OUTPMTR   htail:area     # horizontal tail area
+OUTPMTR   htail:wet      # horizontal tail wetted area
+OUTPMTR   vtail:wet      # vertical tail wetted area
+
+
+# convert VIEW:* variables into make* variables
+UDPRIM    $/capsHeader
+
+# compute wing critical locations / dimensions
+SET       wing:span      sqrt(wing:aspect*wing:area)
+SET       wing:yroot     0
+SET       wing:ytip     -wing:span/2
+SET       wing:xtip      wing:xroot-wing:ytip*tand(wing:sweep)
+SET       wing:ztip      wing:zroot-wing:ytip*tand(wing:dihedral)
+SET       wing:ybreak    wing:ytip*wing:break
+SET       wing:xbreak    wing:xroot-wing:ybreak*tand(wing:sweep)
+SET       wing:zbreak    wing:zroot-wing:ybreak*tand(wing:dihedral)
+SET       wing:chordr    wing:area/((wing:yroot-wing:ybreak)*(wing:taperi+1)+(wing:ybreak-wing:ytip)*wing:taperi*(wing:tapero+1))
+SET       wing:chordb    wing:chordr*wing:taperi
+SET       wing:chordt    wing:chordb*wing:tapero
+SET       wing:mac       sqrt(wing:area/wing:aspect)
+
+POINT CG:ref[1,1]  CG:ref[2,1]  CG:ref[3,1]
+    ATTRIBUTE _name $CG:ref
+
+# make wing OML
+IFTHEN    makeWingOml EQ 1
+    # lay out left wing
+    MARK
+        # root
+        UDPRIM    naca      thickness  wing:thickr   camber  wing:camberr   sharpte  SHARP_TE
+        SCALE     wing:chordr
+        ROTATEX   90  0  0
+        ROTATEY   wing:alphar  0  0
+        TRANSLATE wing:xroot   wing:yroot   wing:zroot
+
+        UDPRIM    naca      camber  wing:camberb   thickness  wing:thickb   sharpte  SHARP_TE
+        SCALE     wing:chordb
+        ROTATEX   90  0  0
+        ROTATEY   wing:alphab  0  0
+        TRANSLATE wing:xbreak       wing:ybreak    wing:zbreak
+
+        # left tip
+        UDPRIM    naca      thickness  wing:thickt   camber  wing:cambert   sharpte  SHARP_TE
+        SCALE     wing:chordt
+        ROTATEX   90  0  0
+        ROTATEY   wing:alphat  0           0
+        TRANSLATE wing:xtip    wing:ytip   wing:ztip
+    RULE
+        ATTRIBUTE tagComp  $leftWing
+    SET       ruledBody @nbody
+
+    SELECT    FACE ruledBody  1
+        ATTRIBUTE tagType  $root
+    SELECT    FACE ruledBody  2
+        ATTRIBUTE tagType  $tip
+        ATTRIBUTE tagIndex $1
+    SELECT    FACE ruledBody  3
+        ATTRIBUTE tagType  $upper
+    SELECT    FACE ruledBody  4
+        ATTRIBUTE tagType  $upper
+    SELECT    FACE ruledBody  5
+        ATTRIBUTE tagType  $lower
+    SELECT    FACE ruledBody  6
+        ATTRIBUTE tagType  $lower
+    SELECT    EDGE ruledBody 3 ruledBody 5 1
+        ATTRIBUTE tagType  $leadingEdge
+    SELECT    EDGE ruledBody 4 ruledBody 6 1
+        ATTRIBUTE tagType  $leadingEdge
+    IFTHEN    SHARP_TE EQ 0
+        SELECT    FACE ruledBody 7
+            ATTRIBUTE tagType  $trailingEdge
+        SELECT    FACE ruledBody 8
+            ATTRIBUTE tagType  $trailingEdge
+    ELSE
+        SELECT    EDGE  ruledBody 3 ruledBody 5 2
+            ATTRIBUTE tagType  $trailingEdge
+        SELECT    EDGE  ruledBody 4 ruledBody 6 2
+            ATTRIBUTE tagType  $trailingEdge
+    ENDIF
+
+    # right wing too
+    STORE     LeftWing 0 1
+    RESTORE   LeftWing
+        ATTRIBUTE tagComp $riteWing
+        SELECT    FACE  $tagType $tip
+        ATTRIBUTE tagIndex $2
+        SELECT    EDGE  $tagType $leadingEdge
+        IFTHEN    @iedge GT 0
+            SELECT EDGE  $tagType $leadingEdge
+                ATTRIBUTE tagComp $riteWing
+        ENDIF
+        IFTHEN    SHARP_TE EQ 1
+        SELECT    EDGE  $tagType $trailingEdge
+        IFTHEN    @iedge GT 0
+            SELECT EDGE  $tagType $trailingEdge
+                ATTRIBUTE tagComp $riteWing
+        ENDIF
+        ENDIF
+    MIRROR    0   1  0
+    JOIN
+
+    SELECT    EDGE  ruledBody 3 ruledBody 3 1
+        ATTRIBUTE tagType  $root
+    SELECT    EDGE  ruledBody 5 ruledBody 5 1
+        ATTRIBUTE tagType  $root
+
+    STORE     WingOml
+    RESTORE   WingOml
+    # save the wetted area of the wing
+    SET       wing:wet     @area
+
+    STORE     WingOml
+ENDIF
+
+# make wing hinge lines
+IFTHEN    makeWingOml EQ 1  AND  makeWingHinge EQ 1
+    PATBEG    ihinge  wing:hinge.nrow
+        SET       y_ibd   wing:hinge[ihinge,3]*(-wing:ytip)
+        BOX       -1000  y_ibd  -1000  2000  0  2000
+        RESTORE   WingOml
+        INTERSECT
+        SET       x_ibd   @xmin+wing:hinge[ihinge,2]*(@xmax-@xmin)
+        STORE     .
+        BOX       x_ibd  y_ibd  -1000  0  0  2000
+        RESTORE   WingOml
+        INTERSECT
+        SET       z_ibd   @zmin+wing:hinge[ihinge,4]*(@zmax-@zmin)
+        STORE     .
+
+        SET       y_obd   wing:hinge[ihinge,6]*(-wing:ytip)
+        BOX       -1000  y_obd  -1000  2000  0  2000
+        RESTORE   WingOml
+        INTERSECT
+        SET       x_obd   @xmin+wing:hinge[ihinge,5]*(@xmax-@xmin)
+        STORE     .
+        BOX       x_obd  y_obd  -1000  0  0  2000
+        RESTORE   WingOml
+        INTERSECT
+        SET       z_obd   @zmin+wing:hinge[ihinge,7]*(@zmax-@zmin)
+        STORE     .
+
+        SKBEG      x_ibd  y_ibd  z_ibd
+            LINSEG x_obd  y_obd  z_obd
+        SKEND
+        SELECT    EDGE 1
+            ATTRIBUTE tagComp  $wing
+            ATTRIBUTE tagType  $hinge
+            ATTRIBUTE tagIndex !val2str(wing:hinge[ihinge,9],0)
+            ATTRIBUTE deflect   wing:hinge[ihinge,1]
+            ATTRIBUTE xoverc1   wing:hinge[ihinge,2]
+            ATTRIBUTE xoverc2   wing:hinge[ihinge,5]
+            ATTRIBUTE gap       wing:hinge[ihinge,8]
+            ATTRIBUTE compIndex !val2str(ihinge,0)
+         SELECT BODY
+            ATTRIBUTE _name     $WingHinge_+ihinge
+        STORE   WingHinge ihinge
+    PATEND
+ENDIF
+
+# make wing waffle
+IFTHEN    makeWingWaffle EQ 1
+   SET        yA            0
+   SET        xA            wing:xroot
+   SET        yB            -wing:ytip
+   SET        xB            wing:xtip
+   SET        yC            0
+   SET        xC            wing:xroot+wing:chordr
+   SET        yD            -wing:ybreak
+   SET        xD            wing:xbreak+wing:chordb
+   SET        yE            -wing:ytip
+   SET        xE            wing:xtip+wing:chordt
+
+   RESTORE    WingOml
+   SET        zmin          @zmin-0.1
+   SET        zmax          @zmax+0.1
+   STORE      .
+
+   UDPRIM     waffle        depth zmax-zmin  filename <<
+
+       # construction lines for wing outline
+       CPOINT A   AT  xA  yA
+       CPOINT B   AT  xB  yB
+       CPOINT C   AT  xC  yC
+       CPOINT D   AT  xD  yD
+       CPOINT E   AT  xE  yE
+
+       CLINE  AB      A   B
+       CLINE  CD      C   D
+       CLINE  DE      D   E
+       CLINE  AC      A   C
+       CLINE  BE      B   E
+
+       # construction lines for fuselage side and wing break
+       CPOINT F   ON  AB  YLOC  y@D
+       CPOINT K   ON  AB  YLOC  fuse:midWidth/2
+       CPOINT L   ON  CD  YLOC  fuse:midWidth/2
+
+       CLINE  FD      F   D
+
+       # construction lines for spars
+       CPOINT G   ON  FD   FRAC  wing:spar1
+       CPOINT H   ON  BE   FRAC  wing:spar1
+       CPOINT I   ON  FD   FRAC  wing:spar2
+       CPOINT J   ON  BE   FRAC  wing:spar2
+
+       CLINE  GH      G   H
+       CLINE  IJ      I   J
+
+       # wing joint
+       CLINE  KL      K   L
+
+       # spars
+       POINT  M   ON  GH  XSECT  KL
+       LINE   MH      M   H  tagType=spar  tagIndex=1
+
+       POINT  N   ON  IJ  XSECT  KL
+       LINE   NJ      N   J  tagType=spar  tagIndex=2
+
+       POINT  O   ON  KL  XLOC   x@I
+       LINE   OI      O   I  tagType=spar  tagIndex=3
+
+       # wing box
+       LINE   MO      M   O  tagType=rib
+
+       POINT  P   ON  AC  XLOC   x@M
+       LINE   PM      P   M  tagType=spar  tagIndex=1
+
+       POINT  Q   ON  AC  XLOC   x@N
+       LINE   QN      Q   N  tagType=spar  tagIndex=2
+
+       POINT  R   ON  AC  XLOC   x@O
+       LINE   RO      R   O  tagType=spar  tagIndex=3
+
+       # wing tip
+       LINE   HJ      H   J  tagType=tip
+
+       # ribs in region 1
+       PATBEG  iIi  wing:nrib1
+           POINT  X   AT  x@M+(x@N-x@M)*iIi/(wing:nrib1+1) y@M+(y@N-y@M)*iIi/(wing:nrib1+1)
+           POINT  Y   ON  MH  PERP   X
+           LINE   .       X   Y   tagType=rib   tagIndex=!val2str(iIi,0)
+       PATEND
+
+       # rib from point N
+       CPOINT X   AT      x@N    y@N
+       POINT  Y   ON  MH  PERP   X
+       LINE   .       X   Y      tagType=rib   tagIndex=!val2str(wing:nrib1+1,0)
+
+       # ribs in region 2
+       PATBEG  iIi  wing:nrib2
+           POINT  X  AT x@N+(x@I-x@N)*iIi/(wing:nrib2+1)  y@N+(y@I-y@N)*iIi/(wing:nrib2+1)
+           POINT  Y   ON  MH  PERP   X
+           LINE   .       Y   X      tagType=rib   tagIndex=!val2str(wing:nrib1+2+iIi,0)
+           POINT  Z   ON  OI  PERP   X
+           LINE   .       X   Z      tagType=rib   tagIndex=!val2str(wing:nrib1+2+iIi,0)   tagExtra=rear
+       PATEND
+
+       # rib from point I
+       CPOINT X   AT      x@I    y@I
+       POINT  Y   ON  MH  PERP   X
+       LINE   .       X   Y      tagType=rib   tagIndex=!val2str(wing:nrib1+wing:nrib2+2,0)
+
+       # ribs in region 3
+       PATBEG  iIi  wing:nrib3
+           POINT  X  AT x@I+(x@J-x@I)*iIi/(wing:nrib3+1)  y@I+(y@J-y@I)*iIi/(wing:nrib3+1)
+           POINT  Y   ON  MH  PERP   X
+           LINE   .       Y   X   tagType=rib   tagIndex=!val2str(wing:nrib1+wing:nrib2+2+iIi,0)
+       PATEND
+>>
+    TRANSLATE  0  0  zmin
+    STORE     WingWaffle
+    RESTORE   WingWaffle
+        ATTRIBUTE  tagComp  $riteWing
+    RESTORE   WingWaffle
+        ATTRIBUTE  tagComp  $leftWing
+    MIRROR    0  1  0  0
+    JOIN
+
+    STORE     WingWaffle
+ENDIF
+
+# compute horizontal tail critical locations / dimensions
+SET       htail:L        htail:xac-CG:ref
+SET       htail:area     htail:vc*wing:area*wing:mac/htail:L
+SET       htail:span     sqrt(htail:area*htail:aspect)
+SET       htail:chordr   2*htail:area/htail:span/(1+htail:taper)
+SET       htail:chordt   htail:chordr*htail:taper
+SET       htail:xroot    htail:xac-htail:chordr*htail:fac
+SET       htail:xtip     htail:xroot+htail:span*tand(htail:sweep)
+SET       htail:ytip     -htail:span
+SET       htail:ztip     htail:zroot+htail:span*tand(htail:dihedral)
+
+# make horizontal tail
+IFTHEN    makeHtailOml EQ 1
+
+    # lay out left horizontal tail
+    MARK
+        UDPRIM    naca   thickness  htail:thick   sharpte  SHARP_TE
+        ROTATEX   90     0  0
+        SCALE     htail:chordr
+        TRANSLATE htail:xroot  0  htail:zroot
+
+        UDPRIM    naca   thickness  htail:thick   sharpte  SHARP_TE
+        ROTATEX   90     0  0
+        SCALE     htail:chordt
+        TRANSLATE htail:xtip   htail:ytip  htail:ztip
+    RULE
+        ATTRIBUTE tagComp  $leftHtail
+        SELECT    FACE      @nbody 1
+        ATTRIBUTE tagType  $root
+        SELECT    FACE      @nbody 2
+        ATTRIBUTE tagType  $tip
+        SELECT    FACE      @nbody 3
+        ATTRIBUTE tagType  $upper
+        SELECT    FACE      @nbody 4
+        ATTRIBUTE tagType  $lower
+        SELECT    EDGE      @nbody 3 @nbody 4
+        ATTRIBUTE tagType  $leadingEdge
+        IFTHEN    SHARP_TE EQ 0
+            SELECT    FACE      @nbody 5
+            ATTRIBUTE tagType  $trailingEdge
+        ELSE
+            SELECT    EDGE      @nbody 3 @nbody 4 2
+            ATTRIBUTE tagType  $trailingEdge
+        ENDIF
+
+
+    # right htail too
+    STORE     LeftHtail 0 1
+    RESTORE   LeftHtail
+        ATTRIBUTE tagComp  $riteHtail
+        SELECT    EDGE  $tagType $leadingEdge
+        IFTHEN    @iedge GT 0
+            SELECT EDGE  $tagType $leadingEdge
+                ATTRIBUTE tagComp $riteWing
+        ENDIF
+        IFTHEN    SHARP_TE EQ 1
+        SELECT    EDGE  $tagType $trailingEdge
+        IFTHEN    @iedge GT 0
+            SELECT EDGE  $tagType $trailingEdge
+                ATTRIBUTE tagComp $riteWing
+        ENDIF
+        ENDIF
+    MIRROR    0  1  0
+    JOIN
+
+    # save the wetted area of the htail
+    SET       htail:wet     @area
+
+    STORE     HtailOml
+ENDIF
+
+# make horizontal tail hinge lines
+IFTHEN    makeHtailOml EQ 1  AND  makeHtailHinge EQ 1
+    PATBEG    ihinge  htail:hinge.nrow
+        SET       y_ibd   htail:hinge[ihinge,3]*(-htail:ytip)
+        BOX       -1000 y_ibd -1000 2000 0 2000
+        RESTORE   HtailOml
+        INTERSECT
+        SET       x_ibd   @xmin+htail:hinge[ihinge,2]*(@xmax-@xmin)
+        STORE     .
+        BOX       x_ibd  y_ibd  -1000  0  0  2000
+        RESTORE   HtailOml
+        INTERSECT
+        SET       z_ibd   @zmin+htail:hinge[ihinge,4]*(@zmax-@zmin)
+        STORE     .
+
+        SET       y_obd   htail:hinge[ihinge,6]*(-htail:ytip)
+        BOX       -1000 y_obd -1000 2000 0 2000
+        RESTORE   HtailOml
+        INTERSECT
+        SET       x_obd   @xmin+htail:hinge[ihinge,5]*(@xmax-@xmin)
+        STORE     .
+        BOX       x_obd  y_obd  -1000  0  0  2000
+        RESTORE   HtailOml
+        INTERSECT
+        SET       z_obd   @zmin+htail:hinge[ihinge,4]*(@zmax-@zmin)
+        STORE     .
+
+        SKBEG      x_ibd  y_ibd  z_ibd
+            LINSEG x_obd  y_obd  z_obd
+        SKEND
+        SELECT    EDGE 1
+            ATTRIBUTE tagComp  $htail
+            ATTRIBUTE tagType  $hinge
+            ATTRIBUTE tagIndex !val2str(htail:hinge[ihinge,9],0)
+            ATTRIBUTE deflect   htail:hinge[ihinge,1]
+            ATTRIBUTE xoverc1   htail:hinge[ihinge,2]
+            ATTRIBUTE xoverc2   htail:hinge[ihinge,5]
+            ATTRIBUTE gap       htail:hinge[ihinge,8]
+         SELECT BODY
+            ATTRIBUTE _name     $HtailHinge_+ihinge
+        STORE    HtailHinge ihinge
+    PATEND
+ENDIF
+
+# compute vertical tail critical locations / dimensions
+SET       vtail:L        vtail:xac-CG:ref
+SET       vtail:area     vtail:vc*wing:area*wing:span/vtail:L
+SET       vtail:span     sqrt(vtail:area*vtail:aspect)
+SET       vtail:chordr   2*vtail:area/vtail:span/(1+vtail:taper)
+SET       vtail:chordt   vtail:chordr*vtail:taper
+SET       vtail:xroot    vtail:xac-vtail:chordr*vtail:fac
+SET       vtail:xtip     vtail:xroot+vtail:span*tand(vtail:sweep)
+SET       vtail:ztip     vtail:zroot+vtail:span
+
+# make vertical tail
+IFTHEN    makeVtailOml EQ 1
+
+    # lay out vertical tail
+    MARK
+        UDPRIM    naca    thickness  vtail:thick   sharpte  SHARP_TE
+        SCALE     vtail:chordr
+        TRANSLATE vtail:xroot   0   vtail:zroot
+
+        UDPRIM    naca    thickness  vtail:thick   sharpte  SHARP_TE
+        SCALE     vtail:chordt
+        TRANSLATE vtail:xtip    0   vtail:ztip
+    RULE
+        ATTRIBUTE tagComp  $vtail
+        SELECT    FACE      @nbody 1
+        ATTRIBUTE tagType  $root
+        SELECT    FACE      @nbody 2
+        ATTRIBUTE tagType  $tip
+        SELECT    FACE      @nbody 3
+        ATTRIBUTE tagType  $rite
+        SELECT    FACE      @nbody 4
+        ATTRIBUTE tagType  $left
+        SELECT    EDGE      @nbody 3 @nbody 4
+        ATTRIBUTE tagType  $leadingEdge
+        IFTHEN    SHARP_TE EQ 0
+            SELECT    FACE      @nbody 5
+            ATTRIBUTE tagType  $trailingEdge
+        ELSE
+            SELECT    EDGE      @nbody 3 @nbody 4 2
+            ATTRIBUTE tagType  $trailingEdge
+        ENDIF
+
+    STORE    VtailOml
+    RESTORE  VtailOml
+    # save the wetted area of the htail
+    SET       vtail:wet     @area
+
+    STORE     VtailOml
+ENDIF
+
+# make vertical tail hinge lines
+IFTHEN    makeVtailOml EQ 1  AND  makeVtailHinge EQ 1
+    PATBEG    ihinge  vtail:hinge.nrow
+        SET       z_ibd   vtail:hinge[ihinge,4]*(vtail:ztip)
+        BOX       -1000 -1000 z_ibd 2000 2000 0
+        RESTORE   VtailOml
+        INTERSECT
+        SET       x_ibd   @xmin+vtail:hinge[ihinge,2]*(@xmax-@xmin)
+        STORE     .
+        BOX       x_ibd  -1000  z_ibd  0  2000  0
+        RESTORE   VtailOml
+        INTERSECT
+        SET       y_ibd  @ymin+vtail:hinge[ihinge,4]*(@ymax-@ymin)
+        STORE     .
+
+        SET       z_obd   vtail:hinge[ihinge,7]*(vtail:ztip)
+        BOX       -1000 -1000 z_obd 2000 2000 0
+        RESTORE   VtailOml
+        INTERSECT
+        SET       x_obd   @xmin+vtail:hinge[ihinge,5]*(@xmax-@xmin)
+        STORE     .
+        BOX       x_obd  -1000  z_obd  0  2000  0
+        RESTORE   VtailOml
+        INTERSECT
+        SET       y_obd  @ymin+vtail:hinge[ihinge,4]*(@ymax-@ymin)
+        STORE     .
+
+        SKBEG      x_ibd  y_ibd  z_ibd
+            LINSEG x_obd  y_obd  z_obd
+        SKEND
+        SELECT    EDGE 1
+            ATTRIBUTE tagComp  $vtail
+            ATTRIBUTE tagType  $hinge
+            ATTRIBUTE tagIndex !val2str(vtail:hinge[ihinge,9],0)
+            ATTRIBUTE deflect   vtail:hinge[ihinge,1]
+            ATTRIBUTE xoverc1   vtail:hinge[ihinge,2]
+            ATTRIBUTE xoverc2   vtail:hinge[ihinge,5]
+            ATTRIBUTE gap       vtail:hinge[ihinge,8]
+         SELECT BODY
+            ATTRIBUTE _name     $VtailHinge_+ihinge
+        STORE    VtailHinge ihinge
+    PATEND
+ENDIF
+
+
+# compute fuselage critical locations / dimensions
+IFTHEN    makeFuseOml EQ 1
+
+    # total length driven by the location of the htail/vtail
+    SET       fuse:Length     max(htail:xroot+htail:chordr,vtail:xroot+vtail:chordr)+fuse:aftTailExt
+    SET       fuse:midLength  fuse:Length-(fuse:fwdLength+fuse:aftLength)
+
+    SET       x1              fuse:noselist[1,1]
+    SET       z1              fuse:noseHeight
+    SET       r1              fuse:noselist[2,1]
+
+    SET       x2              fuse:fwdLength/2
+    SET       z2              fuse:noseHeight/2
+    SET       r2              (fuse:midHeight+fuse:midWidth)/8+r1
+
+    # build fuselage
+    MARK
+        # starting point of the nose
+        SKBEG  0 0 z1
+        SKEND
+
+        UDPRIM    supell    rx  r1   ry  r1   n  2
+        ROTATEY   90-atan2(z2-z1,x2-x1)*180/pi(1) 0 0
+        TRANSLATE x1  0  z1
+
+        # forward break
+        UDPRIM    supell    rx  r2   ry  r2   n  2
+        ROTATEY   90-atan2(z2-z1,x2-x1)*180/pi(1) 0 0
+        TRANSLATE x2  0  z2
+
+        # mid section
+        UDPRIM    supell  rx  fuse:midHeight/2   ry  fuse:midWidth/2   n  fuse:power
+        ROTATEY   90 0 0
+        TRANSLATE fuse:fwdLength 0 0
+        
+        STORE fuseMid1 0 1 # duplicate the section which make it C1
+        RESTORE fuseMid1
+       
+        UDPRIM    supell  rx  fuse:midHeight/2   ry  fuse:midWidth/2   n  fuse:power
+        ROTATEY   90 0 0
+        TRANSLATE fuse:fwdLength+fuse:midLength 0 0
+       
+        STORE fuseMid2 0 1 # triple the section to make it C0
+        RESTORE fuseMid2
+        RESTORE fuseMid2
+ 
+        # tail section
+        UDPRIM    supell  rx  fuse:aftHeight/2   ry  fuse:aftWidth/2   n  fuse:power
+        ROTATEY   90 0 0
+        TRANSLATE fuse:Length 0 fuse:aftCenter
+       
+    BLEND  fuse:noselist fuse:taillist
+        ATTRIBUTE tagComp  $fuselage
+
+    STORE     FuseOml
+ENDIF
+   
+# set up for pylons and pods
+IFTHEN    makePylonOml EQ 1  OR  makePodOml EQ 1
+    # compute pod and pylon critical locations / dimensions
+    SET       pylon:yle      pod:yb*wing:ytip
+    SET       pylon:xle      wing:xroot-pylon:yle*tand(wing:sweep)
+    SET       pylon:zle      wing:zroot-pylon:yle*tand(wing:dihedral)
+
+    SET       pod:y          pylon:yle
+    SET       pod:x          pylon:xle+pod:dxnose
+    SET       pod:z          pylon:zle+pod:dznose
+
+    SET       pylon:x1       pylon:xle+pylon:dxwing
+    SET       pylon:x2       pod:x+pylon:dxpod
+ENDIF
+
+# make pylons
+IFTHEN    makePylonOml EQ 1
+    UDPRIM    naca     thickness  pylon:thick   sharpte  SHARP_TE   sharpte  SHARP_TE
+    SCALE     pylon:length
+    TRANSLATE pod:x+pylon:dxpod  pod:y  pod:z
+    EXTRUDE   2*(pylon:x1-pylon:x2) 0        2*(pylon:zle-pod:z)
+        ATTRIBUTE tagComp  $leftPylon
+        ATTRIBUTE _name    $leftPylon
+    STORE     PylonLeftOml
+
+    RESTORE   PylonLeftOml
+        ATTRIBUTE tagComp  $ritePylon
+        ATTRIBUTE _name    $ritePylon
+    MIRROR    0  1  0
+    STORE     PylonRiteOml
+ENDIF
+
+# make pods
+IFTHEN    makePodOml EQ 1
+    # add pods to pylons with revolve
+ 
+    # top side
+    UDPRIM    naca   thickness pod:thick camber pod:camber   sharpte  SHARP_TE
+    SCALE     pod:length
+    TRANSLATE 0  pod:diameter/2  0
+    REVOLVE   0  0  0    1  0  0    180
+
+    # bottom side
+    UDPRIM    naca   thickness pod:thick camber pod:camber   sharpte  SHARP_TE
+    SCALE     pod:length
+    TRANSLATE 0  pod:diameter/2  0
+    REVOLVE   0  0  0   -1  0  0    180
+
+    JOIN
+       ATTRIBUTE tagComp  $leftPod
+    SELECT body
+       ATTRIBUTE _name    $leftPod
+    # Rotate the pod so joints are top and bottom
+    ROTATEX   90         0          0
+    TRANSLATE pod:x      pod:y      pod:z
+
+    STORE     PodLeftOml
+    RESTORE   PodLeftOml
+        ATTRIBUTE tagComp  $ritePod
+    SELECT body
+        ATTRIBUTE _name    $ritePod
+    MIRROR    0  1  0
+    STORE     PodRiteOml
+ENDIF
+
+# now generate the needed views
+UDPRIM    $/capsViews
+
+END

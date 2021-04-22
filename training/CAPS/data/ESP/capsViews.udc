@@ -1,0 +1,36 @@
+# capsViews.udc
+# written by John Dannenhoffer
+
+INTERFACE . ALL
+
+IFTHEN       VIEW:Concept NE 0
+    UDPRIM  $/viewConcept
+ENDIF
+
+IFTHEN       VIEW:VLM NE 0
+    UDPRIM  $/viewVLM
+ENDIF
+
+IFTHEN       VIEW:CFDInviscid NE 0
+    UDPRIM  $/viewCFDInviscid
+ENDIF
+
+IFTHEN       VIEW:CFDViscous NE 0
+    UDPRIM  $/viewCFDViscous
+ENDIF
+
+IFTHEN       VIEW:ClampedStructure NE 0 OR VIEW:SupportStructure NE 0 
+    UDPRIM  $/viewStructure
+ENDIF
+
+IFTHEN       VIEW:OmlStructure NE 0
+    UDPRIM  $/viewOmlStructure
+ENDIF
+
+# uncomment below to use same outer box so that views remain unchanged
+#point -10000 -10000 -10000
+#    attribute _name $hideThis1
+#point +10000 +10000 +10000
+#    attribute _name $hideThis2
+
+END

@@ -1,0 +1,14 @@
+# biconvex_arcs (programmed)
+# written by John Dannenhoffer
+
+DESPMTR   chord     2.00000
+DESPMTR   thick     0.10000
+
+SET       rad       radius(0,0,thick,chord,0)
+
+SKBEG     0.0       0.0    0.0
+   CIRARC chord/2  -thick  0.0  chord  0.0  0.0
+   CIRARC chord/2   thick  0.0  0.0    0.0  0.0
+SKEND
+
+END

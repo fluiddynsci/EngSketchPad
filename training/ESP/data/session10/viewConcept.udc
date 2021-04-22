@@ -1,0 +1,77 @@
+# viewConcept.udc
+# written by John Dannenhoffer
+
+# used Bodys
+#    FuseOml
+#    WingOml
+#    WingHinge i
+#    WingWaffle
+#    HtailOml
+#    HtailHinge i
+#    VtailOml
+#    VtailHinge i
+#    PylonOml
+#    PodOml
+# used variables
+
+INTERFACE . ALL
+
+# fuselage
+IFTHEN    COMP:Fuse EQ 1
+    RESTORE              FuseOml
+        ATTRIBUTE _name $FuseOml
+        ATTRIBUTE .qParams  $off  # Turn off quad meshing on the fuselage
+ENDIF
+
+# wing (with waffles and hinges)
+IFTHEN    COMP:Wing EQ 1
+    RESTORE              WingOml
+        ATTRIBUTE _name $WingOml
+
+    RESTORE              WingWaffle
+        ATTRIBUTE _name $WingWaffle
+    CATBEG $name_not_found
+    CATEND
+
+    PATBEG  ihinge  9999
+        RESTORE              WingHinge  ihinge
+    PATEND
+    CATBEG $name_not_found
+    CATEND
+ENDIF
+
+# horizontal tail (with hinges)
+IFTHEN    COMP:Htail EQ 1
+    RESTORE              HtailOml
+        ATTRIBUTE _name $HtailOml
+
+    PATBEG  ihinge  9999
+        RESTORE              HtailHinge  ihinge
+    PATEND
+    CATBEG $name_not_found
+    CATEND
+ENDIF
+
+# vertical tail (with hinges)
+IFTHEN    COMP:Vtail EQ 1
+    RESTORE              VtailOml
+        ATTRIBUTE _name $VtailOml
+
+    PATBEG  ihinge  9999
+        RESTORE              VtailHinge  ihinge
+    PATEND
+    CATBEG $name_not_found
+    CATEND
+ENDIF
+
+IFTHEN    COMP:Pylon EQ 1
+    RESTORE   PylonLeftOml
+    RESTORE   PylonRiteOml
+ENDIF
+
+IFTHEN    COMP:Pod EQ 1
+    RESTORE   PodLeftOml
+    RESTORE   PodRiteOml
+ENDIF
+
+END

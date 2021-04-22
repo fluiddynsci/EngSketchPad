@@ -1,0 +1,14 @@
+# mirrorDup
+# written by John Dannenhoffer
+
+INTERFACE norm  in  0
+INTERFACE dist  in  0
+
+ASSERT    ifpos(norm.max-norm.min,1,0)  1
+
+STORE     mirrorDupTemp  0  1
+RESTORE   mirrorDupTemp  0
+MIRROR    norm[1]  norm[2]  norm[3]  dist
+UNION
+
+END

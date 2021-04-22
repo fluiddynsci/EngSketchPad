@@ -1,0 +1,42 @@
+# block
+# written by John Dannenhoffer
+
+DESPMTR   Length    4.0
+DESPMTR   Height    2.0
+DESPMTR   Depth     2.0
+DESPMTR   Rhole     0.4
+DESPMTR   Nhole     2
+DESPMTR   Xpole     2.0
+DESPMTR   Ypole     2.0
+DESPMTR   Rpole     0.5
+DESPMTR   XangDeg    0.
+DESPMTR   YangDeg    0.
+DESPMTR   ZangDeg   30.
+DESPMTR   Dx        1.0
+DESPMTR   Dy        0.0
+DESPMTR   Dz        0.0
+DESPMTR   Scale     1.5
+DESPMTR   Dist      0.5
+
+# base block
+BOX       0.0       -Height/2 0.0       Length    Height    Depth
+
+# post
+CYLINDER  Xpole     0.0       Depth/2   Xpole     Ypole     Depth/2   Rpole
+UNION
+
+# Nhole holes
+PATBEG    ihole     Nhole
+   SET       xhole  Length*ihole/(Nhole+1)
+   CYLINDER  xhole  0.0       0.0       xhole     0.0       Depth     Rhole
+   SUBTRACT
+PATEND
+
+# transformations
+ROTATEX   XangDeg   0.0       0.0
+ROTATEY   YangDeg   0.0       0.0
+ROTATEZ   ZangDeg   0.0       0.0
+TRANSLATE Dx        Dy        Dz
+SCALE     Scale
+
+END

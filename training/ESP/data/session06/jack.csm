@@ -1,0 +1,21 @@
+# jack
+# written by John Dannenhoffer
+
+UDPARG  $/dumbbell  Lbar   5.0
+UDPARG  $/dumbbell  Dball  1.0
+UDPRIM  $/dumbbell  Dbar   0.2
+SET     foo @@vol
+STORE   dumbbell 0 1
+
+RESTORE dumbbell
+ROTATEY 90  0  0
+UNION
+
+RESTORE dumbbell
+ROTATEZ 90  0  0
+UNION
+
+# show that vol was a local variable in .udc
+ASSERT  ifnan(vol,1,0)  1
+
+end

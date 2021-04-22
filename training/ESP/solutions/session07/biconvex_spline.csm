@@ -1,0 +1,41 @@
+# ../data/training/session02/biconvex_spline.csm written by ocsmSave (v1.08)
+
+# Design Parameters:
+
+# Local Variables:
+
+# Global attributes:
+
+# Branches:
+skbeg     0   0   0   1
+   skvar     xy  0.000000;0.000000;0.000000;0.795000;-0.295000;0.000000;1.745000;-0.375000;0.000000;2.835000;-0.505000;0.000000;3.515000;0.005000;0.000000;3.515000;0.005000;0.000000;2.775000;0.485000;0.000000;1.645000;0.485000;0.000000;0.645000;0.635000;0.000000;
+   skcon     X   1   -1  0
+   skcon     Y   1   -1  0
+   skcon     Z   5   -2  0
+   skcon     Z   6   -3  0
+   skcon     X   2   -1  .255
+   skcon     Y   2   -1  -.075
+   skcon     X   3   -1  .5
+   skcon     Y   3   -1  -.1
+   skcon     X   4   -1  .745
+   skcon     Y   4   -1  -.075
+   skcon     X   5   -1  1
+   skcon     Y   5   -1  0
+   skcon     X   7   -1  .745
+   skcon     Y   7   -1  .075
+   skcon     X   8   -1  .5
+   skcon     Y   8   -1  .1
+   skcon     X   9   -1  .255
+   skcon     Y   9   -1  .075
+   spline    ::x[2]   ::y[2]   0
+   spline    ::x[3]   ::y[3]   0
+   spline    ::x[4]   ::y[4]   0
+   spline    ::x[5]   ::y[5]   0
+   linseg    ::x[6]   ::y[6]   0
+   spline    ::x[7]   ::y[7]   0
+   spline    ::x[8]   ::y[8]   0
+   spline    ::x[9]   ::y[9]   0
+   spline    ::x[1]   ::y[1]   0
+skend     0
+
+end

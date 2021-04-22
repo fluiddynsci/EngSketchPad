@@ -1,0 +1,48 @@
+#
+IDIR  = $(ESP_ROOT)\include
+!include $(IDIR)\$(ESP_ARCH).$(MSVC)
+SDIR  = $(MAKEDIR)
+LDIR  = $(ESP_ROOT)\lib
+!IFDEF ESP_BLOC
+ODIR  = $(ESP_BLOC)\obj
+!ELSE
+ODIR  = .
+!ENDIF
+
+OBJS  =	meshUtils.obj cfdUtils.obj miscUtils.obj feaUtils.obj vlmUtils.obj nastranUtils.obj tecplotUtils.obj
+OBJSP =	vlmSpanSpace.obj
+
+!IFDEF ESP_BLOC
+default:	start $(LDIR)\utils.lib end
+!ELSE
+default:	$(LDIR)\utils.lib
+!ENDIF
+
+start:
+	cd $(ODIR)
+	xcopy $(SDIR)\*.c     /Q /Y
+	xcopy $(SDIR)\*.cpp   /Q /Y
+	xcopy $(SDIR)\*.h     /Q /Y
+
+$(LDIR)\utils.lib:	$(OBJS) $(OBJSP)
+	-del $(LDIR)\utils.lib
+	lib /out:$(LDIR)\utils.lib $(OBJS) $(OBJSP)
+
+$(OBJS):	$(OBJS:.obj=.c)
+	cl /c $(COPTS) $(DEFINE) /I..\include /I$(IDIR) /I. $*.c
+
+$(OBJSP):	$(OBJSP:.obj=.cpp)
+	cl /c $(CPPOPT) $(DEFINE) /I..\include /I$(IDIR) /I. $*.cpp
+
+end:
+	-del *.c *.cpp *.h
+	cd $(SDIR)
+
+clean:
+	cd $(ODIR)
+	-del $(OBJS)
+	-del $(OBJSP)
+	cd $(SDIR)
+
+cleanall:	clean
+	-del $(LDIR)\utils.lib

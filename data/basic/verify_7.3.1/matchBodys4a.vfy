@@ -1,0 +1,32 @@
+# check matching (OCC 7.3.1 only)
+ASSERT    @@nnodes    2
+ASSERT    @@nedges    2
+ASSERT    @@nfaces    1
+
+#======================================#
+# automatically generated verification #
+# OpenCSM  1.16      OpenCASCADE 7.3.1 #
+#======================================#
+select    body 13
+   assert         3      @itype       0  1
+   assert         6      @nnode       0  1
+   assert         8      @nedge       0  1
+   assert         5      @nface       0  1
+   assert   1.25664e+01  @volume  -.001  1
+   assert   3.14159e+01  @area    -.001  1
+   assert   0.00000e+00  @xcg     0.001  1
+   assert   1.93885e-08  @ycg     0.001  1
+   assert   0.00000e+00  @zcg     0.001  1
+
+select    body 14
+   assert         3      @itype       0  1
+   assert         4      @nnode       0  1
+   assert         6      @nedge       0  1
+   assert         4      @nface       0  1
+   assert   1.59617e+00  @volume  -.001  1
+   assert   8.08785e+00  @area    -.001  1
+   assert   1.98358e+00  @xcg     -.001  1
+   assert  -4.50698e-08  @ycg     0.001  1
+   assert   0.00000e+00  @zcg     0.001  1
+
+end

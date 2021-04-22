@@ -1,0 +1,24 @@
+# mirrorDup
+# written by John Dannenhoffer
+
+INTERFACE norm  in  0       # normal direction
+INTERFACE dist  in  0       # distance from origin
+
+# make sure norm points away from origin
+ASSERT    ifpos(norm.max-norm.min,1,0)  1
+
+# find an index for which mirrorDupTemp does not exist
+PATBEG    index  100
+   RESTORE   mirrorDupTemp  index-1
+   STORE     .
+PATEND
+
+# now that we found an empty index, use it
+CATBEG    $name_not_found
+   STORE     mirrorDupTemp  index-1  1
+   RESTORE   mirrorDupTemp  index-1
+   MIRROR    norm[1]  norm[2]  norm[3]  dist
+   UNION
+CATEND
+
+END

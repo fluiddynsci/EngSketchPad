@@ -1,0 +1,22 @@
+# dumbbell
+# written by John Dannenhoffer
+
+INTERFACE Lbar     in  0    # length of bar
+INTERFACE Dbar     in  0    # diameter of bar
+INTERFACE Dball    in  0    # diameter of balls
+INTERFACE vol      out 0    # volume
+
+ASSERT    ifpos(Lbar,1,0)   1
+ASSERT    ifpos(Dbar,1,0)   1
+ASSERT    ifpos(Dball,1,0)  1
+SET       Lhalf    "Lbar / 2"
+
+CYLINDER  -Lhalf  0  0  +Lhalf  0  0  Dbar
+SPHERE    -Lhalf  0  0   Dball
+UNION
+SPHERE    +Lhalf  0  0   Dball
+UNION
+
+SET       vol    @volume
+
+END
