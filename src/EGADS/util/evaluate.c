@@ -2542,9 +2542,9 @@ EG_invEvaGeomLimits(const egObject *geomx, /*@null@*/ const double *limits,
     b = (result[0]-xyz[0])*(result[0]-xyz[0]) +
         (result[1]-xyz[1])*(result[1]-xyz[1]) +
         (result[2]-xyz[2])*(result[2]-xyz[2]);
-    if (b > a+toler) {
-      printf(" EGADS Info: %d NearestOnC diverge %le vs %le\n",
-             geom->mtype, sqrt(a), sqrt(b));
+    if (b > a) {
+      /*printf(" EGADS Info: %d NearestOnC diverge %le vs %le\n",
+             geom->mtype, sqrt(a), sqrt(b));*/
       *param    = tx;
       result[0] = data[0];
       result[1] = data[1];
