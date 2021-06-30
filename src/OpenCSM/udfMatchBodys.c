@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -73,6 +73,8 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     double data[18], xyz1[4], xyz2[4];
     ego    *enode1, *enode2, eref, *echilds;
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(emodel=%llx)\n", (long long)emodel);
     printf("toler(0) = %f\n", TOLER(0));
@@ -98,7 +100,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     /* check that Model was input that contains two Bodys */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -122,32 +124,25 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("toler(%d) = %f\n", numUdp, TOLER(numUdp));
 #endif
 
     status = EG_getContext(emodel, &context);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     /* get a list of the Nodes in each Body */
     status = EG_getBodyTopos(ebodys[0], NULL, NODE, &nnode1, &enode1);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
     status = EG_getBodyTopos(ebodys[1], NULL, NODE, &nnode2, &enode2);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
     /* make an array to hold the possible Node matches */
-    list1 = (int *) malloc(nnode1*sizeof(int));
-    list2 = (int *) malloc(nnode2*sizeof(int));
-    if (list1 == NULL || list2 == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(list1, int, nnode1);
+    MALLOC(list2, int, nnode2);
 
     /* find Node matches */
     nmatch = 0;
@@ -155,12 +150,12 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     for (inode1 = 0; inode1 < nnode1; inode1++) {
         status = EG_getTopology(enode1[inode1], &eref, &oclass, &mtype,
                                 xyz1, &nchild, &echilds, &senses);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         for (inode2 = 0; inode2 < nnode2; inode2++) {
             status = EG_getTopology(enode2[inode2], &eref, &oclass, &mtype,
                                     xyz2, &nchild, &echilds, &senses);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getTopology);
 
             if (fabs(xyz1[0]-xyz2[0]) < TOLER(0) &&
                 fabs(xyz1[1]-xyz2[1]) < TOLER(0) &&
@@ -181,28 +176,26 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
         status = EG_attributeAdd(ebodys[0], "_nodeMatches_", ATTRINT,
                                  nmatch, list1, NULL, NULL);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_attributeAdd);
     
         status = EG_attributeAdd(ebodys[1], "_nodeMatches_", ATTRINT,
                                  nmatch, list2, NULL, NULL);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_attributeAdd);
     }
     
-    if (list1 != NULL) {free(list1);  list1 = NULL;}
-    if (list2 != NULL) {free(list2);  list2 = NULL;}
+    FREE(list1);
+    FREE(list2);
 
     /* find the Edge matches */
     if (nmatch > 0) {
         status = EG_matchBodyEdges(ebodys[0], ebodys[1], TOLER(0), &nmatch, &matches);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_matchBodyEdges);
 
         if (nmatch > 0) {
-            list1 = (int *) malloc(nmatch*sizeof(int));
-            list2 = (int *) malloc(nmatch*sizeof(int));
-            if (list1 == NULL || list2 == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
+            if (matches == NULL) goto cleanup;    // needed for splint
+            
+            MALLOC(list1, int, nmatch);
+            MALLOC(list2, int, nmatch);
 
             for (i = 0; i < nmatch; i++) {
                 list1[i] = matches[2*i  ];
@@ -213,30 +206,29 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
             status = EG_attributeAdd(ebodys[0], "_edgeMatches_", ATTRINT,
                                      nmatch, list1, NULL, NULL);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_attributeAdd);
     
             status = EG_attributeAdd(ebodys[1], "_edgeMatches_", ATTRINT,
                                      nmatch, list2, NULL, NULL);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_attributeAdd);
 
             EG_free(matches);
-            if (list1 != NULL) {free(list1);  list1 = NULL;}
-            if (list2 != NULL) {free(list2);  list2 = NULL;}
+            FREE(list1);
+            FREE(list2);
         }
     }
 
     /* find the Face matches */
     if (nmatch > 0) {
         status = EG_matchBodyFaces(ebodys[0], ebodys[1], TOLER(0), &nmatch, &matches);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_matchBodyFaces);
 
         if (nmatch > 0) {
-            list1 = (int *) malloc(nmatch*sizeof(int));
-            list2 = (int *) malloc(nmatch*sizeof(int));
-            if (list1 == NULL || list2 == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
+            if (matches == NULL) goto cleanup;    // needed for splint
+
+            printf("nmatch=%d\n", nmatch);
+            MALLOC(list1, int, nmatch);
+            MALLOC(list2, int, nmatch);
 
             for (i = 0; i < nmatch; i++) {
                 list1[i] = matches[2*i  ];
@@ -247,15 +239,15 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
             status = EG_attributeAdd(ebodys[0], "_faceMatches_", ATTRINT,
                                      nmatch, list1, NULL, NULL);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_attributeAdd);
     
             status = EG_attributeAdd(ebodys[1], "_faceMatches_", ATTRINT,
                                      nmatch, list2, NULL, NULL);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_attributeAdd);
 
             EG_free(matches);
-            if (list1 != NULL) {free(list1);  list1 = NULL;}
-            if (list2 != NULL) {free(list2);  list2 = NULL;}
+            FREE(list1);
+            FREE(list2);
         }
     }
 
@@ -278,8 +270,8 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 #endif
 
 cleanup:
-    if (list1 != NULL) free(list1);
-    if (list2 != NULL) free(list2);
+    FREE(list1);
+    FREE(list2);
 
     if (status != EGADS_SUCCESS) {
         *string = udpErrorStr(status);

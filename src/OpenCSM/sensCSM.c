@@ -1,7 +1,7 @@
 /*
  ************************************************************************
  *                                                                      *
- * sensCSM.c -- test configuration and tessellation sensitivities       *
+ * sensCSM.c -- test geometric and tessellation sensitivities           *
  *                                                                      *
  *              Written by John Dannenhoffer @ Syracuse University      *
  *                                                                      *
@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -85,17 +85,17 @@ static char      casename[255];        /* name of case */
 static char      pmtrname[255];        /* name of single design Parameter */
 static void      *modl;                /* pointer to MODL */
 
-static int       addData  = 0;         /* =1 to write .csen or .tsen file */
-static int       config   = 0;         /* =1 for configuration sensitivites */
+static int       addVerify= 0;         /* =1 to write .gsen or .tsen file */
+static int       geom     = 0;         /* =1 for geometric sensitivites */
 static double    dtime    = 0;         /* dtime for perturbation */
 static int       outLevel = 1;         /* default output level */
-static int       tessel   = 0;         /* =1 for tessellation sensitivities */
+static int       tess     = 0;         /* =1 for tessellation sensitivities */
 static int       showAll  = 0;         /* =1 to show all velocities */
 static double    errlist  = 1.0e-4;    /* maximum error to list */
 static int       maxlist  = 10;        /* maximum number of errors to list */
 
-static clock_t   config_time;          /* total CPU time associated with ocsmGetVel */
-static clock_t   tessel_time;          /* total CPU time associated with ocsmGetTessVel */
+static clock_t   geom_time;            /* total CPU time associated with ocsmGetVel */
+static clock_t   tess_time;            /* total CPU time associated with ocsmGetTessVel */
 
 /***********************************************************************/
 /*                                                                     */
@@ -104,8 +104,8 @@ static clock_t   tessel_time;          /* total CPU time associated with ocsmGet
 /***********************************************************************/
 
 /* declarations for high-level routines defined below */
-static int checkConfigSens(int ipmtr, int irow, int icol, int *ntotal, int *nsuppress, double *errmax);
-static int checkTesselSens(int ipmtr, int irow, int icol, int *ntotal, int *nsuppress, double *errmax);
+static int checkGeomSens(int ipmtr, int irow, int icol, int *ntotal, int *nsuppress, double *errmax);
+static int checkTessSens(int ipmtr, int irow, int icol, int *ntotal, int *nsuppress, double *errmax);
 
 
 /***********************************************************************/
@@ -119,11 +119,11 @@ main(int       argc,                    /* (in)  number of arguments */
      char      *argv[])                 /* (in)  array of arguments */
 {
 
-    int       status, status2, i, nbody;
+    int       status, fileStatus, status2, i, nbody;
     int       imajor, iminor, builtTo, showUsage=0;
     int       ipmtr, irow, icol, iirow, iicol, ntotal, nsuppress=0, nerror=0;
     int       onlyrow=-1, onlycol=-1;
-    double    errmax, error, errmaxConf=0, errmaxTess=0, dtime_in=0;
+    double    errmax, error, errmaxGeom=0, errmaxTess=0, dtime_in=0;
     char      basename[MAX_FILENAME_LEN], dirname[MAX_FILENAME_LEN];
     char      filename[MAX_FILENAME_LEN], pname[  MAX_FILENAME_LEN];
     char      *beg, *mid, *end;
@@ -137,6 +137,8 @@ main(int       argc,                    /* (in)  number of arguments */
 
     /* --------------------------------------------------------------- */
 
+    fileStatus = EXIT_SUCCESS;
+
     /* get the flags and casename from the command line */
     casename[0] = '\0';
     pmtrname[0] = '\0';
@@ -144,10 +146,10 @@ main(int       argc,                    /* (in)  number of arguments */
     for (i = 1; i < argc; i++) {
         if        (strcmp(argv[i], "--") == 0) {
             /* ignore (needed for gdb) */
-        } else if (strcmp(argv[i], "-addData") == 0) {
-            addData = 1;
-        } else if (strcmp(argv[i], "-config") == 0) {
-            config = 1;
+        } else if (strcmp(argv[i], "-addVerify") == 0) {
+            addVerify = 1;
+        } else if (strcmp(argv[i], "-geom") == 0) {
+            geom = 1;
         } else if (strcmp(argv[i], "-despmtr") == 0) {
             if (i < argc-1) {
                 strcpy(pmtrname, argv[++i]);
@@ -177,8 +179,8 @@ main(int       argc,                    /* (in)  number of arguments */
             }
         } else if (strcmp(argv[i], "-showAll") == 0) {
             showAll = 1;
-        } else if (strcmp(argv[i], "-tessel") == 0) {
-            tessel = 1;
+        } else if (strcmp(argv[i], "-tess") == 0) {
+            tess = 1;
         } else if (strcmp(argv[i], "--version") == 0 ||
                    strcmp(argv[i], "-version" ) == 0 ||
                    strcmp(argv[i], "-v"       ) == 0   ) {
@@ -201,21 +203,21 @@ main(int       argc,                    /* (in)  number of arguments */
     if (showUsage) {
         SPRINT2(0, "sensCSM version %2d.%02d\n", imajor, iminor);
         SPRINT0(0, "proper usage: 'sensCSM [casename[.csm]] [options...]");
-        SPRINT0(0, "   where [options...] = -addData");
-        SPRINT0(0, "                        -config");
+        SPRINT0(0, "   where [options...] = -addVerify");
         SPRINT0(0, "                        -despmtr pmtrname");
         SPRINT0(0, "                        -dtime dtime");
+        SPRINT0(0, "                        -geom");
         SPRINT0(0, "                        -help  -or-  -h");
         SPRINT0(0, "                        -outLevel X");
         SPRINT0(0, "                        -showAll");
-        SPRINT0(0, "                        -tessel");
+        SPRINT0(0, "                        -tess");
         SPRINT0(0, "STOPPING...\a");
         return EXIT_FAILURE;
     }
 
-    /* if neither config or tessel are set, raise an error */
-    if (config ==0 && tessel == 0) {
-        SPRINT0(0, "ERROR:: either -config or -tessel must be set");
+    /* if neither geom or tess are set, raise an error */
+    if (geom ==0 && tess == 0) {
+        SPRINT0(0, "ERROR:: either -geom or -tess must be set");
         SPRINT0(0, "STOPPING...\a");
         return EXIT_FAILURE;
     }
@@ -223,14 +225,16 @@ main(int       argc,                    /* (in)  number of arguments */
     /* set the dtime as either the default or the user's specification */
     if (dtime_in > 0) {
         dtime = dtime_in;
-    } else if (config == 1) {
+    } else if (geom == 1) {
         dtime = 1.0e-6;
-    } else if (tessel == 1) {
+    } else if (tess == 1) {
         dtime = 1.0e-3;
     }
 
     /* break pmtrname into name, iirow, and iicol */
     /* if pmtrname contains a subscript, estract it now */
+    SPLINT_CHECK_FOR_NULL(pmtrname);
+
     if (strlen(pmtrname) > 0 && strchr(pmtrname, '[') != NULL) {
         beg = strchr(pmtrname, '[');
         mid = strchr(pmtrname, ',');
@@ -257,20 +261,20 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program sensCSM                     *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2020         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2021         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************\n");
 
     SPRINT1(1, "    casename   = %s", casename  );
-    SPRINT1(1, "    addData    = %d", addData   );
-    SPRINT1(1, "    config     = %d", config    );
+    SPRINT1(1, "    addVerify  = %d", addVerify );
     SPRINT1(1, "    despmtr    = %s", pmtrname  );
+    SPRINT1(1, "    geom       = %d", geom      );
     SPRINT1(1, "    onlyrow    = %d", onlyrow   );
     SPRINT1(1, "    onlycol    = %d", onlycol   );
     SPRINT1(1, "    dtime      = %f", dtime     );
     SPRINT1(1, "    outLevel   = %d", outLevel  );
     SPRINT1(1, "    showAll    = %d", showAll   );
-    SPRINT1(1, "    tessel     = %d", tessel    );
+    SPRINT1(1, "    tess       = %d", tess      );
     SPRINT0(1, " ");
 
     /* set OCSMs output level */
@@ -303,19 +307,19 @@ main(int       argc,                    /* (in)  number of arguments */
     /* print out the global Attributes, Parameters, and Branches */
     SPRINT0(1, "External Parameter(s):");
     if (outLevel > 0) {
-        status = ocsmPrintPmtrs(modl, stdout);
+        status = ocsmPrintPmtrs(modl, "");
         CHECK_STATUS(ocsmPrintPmtrs);
     }
 
     SPRINT0(1, "Branch(es):");
     if (outLevel > 0) {
-        status = ocsmPrintBrchs(modl, stdout);
+        status = ocsmPrintBrchs(modl, "");
         CHECK_STATUS(ocsmPrintBrchs);
     }
 
     SPRINT0(1, "Global Attribute(s):");
     if (outLevel > 0) {
-        status = ocsmPrintAttrs(modl, stdout);
+        status = ocsmPrintAttrs(modl, "");
         CHECK_STATUS(ocsmPrintAttrs);
     }
 
@@ -329,14 +333,16 @@ main(int       argc,                    /* (in)  number of arguments */
     /* print out the Bodys */
     SPRINT0(1, "Body(s):");
     if (outLevel > 0) {
-        status = ocsmPrintBodys(modl, stdout);
+        status = ocsmPrintBodys(modl, "");
         CHECK_STATUS(ocsmPrintBodys);
     }
 
-    /* open the .csen or .tsen file */
+    /* open the .gsen or .tsen file */
     EG_revision(&imajor, &iminor, &OCC_ver);
 
     /* get basename and dirname */
+    SPLINT_CHECK_FOR_NULL(casename);
+
     i = strlen(casename) - 1;
     while (i >= 0) {
         if (casename[i] == '/' || casename[i] == '\\') {
@@ -359,31 +365,41 @@ main(int       argc,                    /* (in)  number of arguments */
     basename[i-4] = '\0';
 
     /* create the full filename */
-    if (config) {
-        snprintf(filename, MAX_FILENAME_LEN-1, "%s%cverify_%s%c%s.csen", dirname, SLASH, &(OCC_ver[strlen(OCC_ver)-5]), SLASH, basename);
-        if (addData) {
+    if (geom) {
+        snprintf(filename, MAX_FILENAME_LEN-1, "%s%cverify_%s%c%s.gsen", dirname, SLASH, &(OCC_ver[strlen(OCC_ver)-5]), SLASH, basename);
+        if (addVerify) {
             fp_data = fopen(filename, "w");
         } else {
             fp_data = fopen(filename, "r");
+        }
+
+        if (fp_data == NULL) {
+            SPRINT0(0, "ERROR:: geom error with .gsen file");
+            fileStatus = EXIT_FAILURE;
         }
     } else {
         snprintf(filename, MAX_FILENAME_LEN-1, "%s%cverify_%s%c%s.tsen", dirname, SLASH, &(OCC_ver[strlen(OCC_ver)-5]), SLASH, basename);
-        if (addData) {
+        if (addVerify) {
             fp_data = fopen(filename, "w");
         } else {
             fp_data = fopen(filename, "r");
         }
+
+        if (fp_data == NULL) {
+            SPRINT0(0, "ERROR:: tess error with .tsen file");
+            fileStatus = EXIT_FAILURE;
+        }
     }
 
-    /* check configuration and tessellation sensitivities */
+    /* check geometric and tessellation sensitivities */
     ntotal     = 0;              // total number of errors exceeding tolerance
-    errmaxConf = 0;              // maximum error (configuration)
+    errmaxGeom = 0;              // maximum error (geometric)
     errmaxTess = 0;              // maximum error (tessellation)
     nerror     = 0;              // number of sensitivites whose error has increased
 
     /* loop through all design Parameters */
     for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
-        if (MODL->pmtr[ipmtr].type != OCSM_EXTERNAL) continue;
+        if (MODL->pmtr[ipmtr].type != OCSM_DESPMTR) continue;
 
         if (strlen(pmtrname) > 0 &&
             strcmp(pmtrname, MODL->pmtr[ipmtr].name) != 0) continue;
@@ -396,57 +412,71 @@ main(int       argc,                    /* (in)  number of arguments */
                     icol = onlycol;
                 }
 
-                if (config) {
+                if (geom) {
                     errmax = EPS20;
-                    status = checkConfigSens(ipmtr, irow, icol, &ntotal, &nsuppress, &errmax);
+                    status = checkGeomSens(ipmtr, irow, icol, &ntotal, &nsuppress, &errmax);
+                    if (status != SUCCESS) {
+                        SPRINT1(0, "ERROR:: geom error detected in checkGeomSens (status=%d)", status);
+                        fileStatus = EXIT_FAILURE;
+                    }
                     CHECK_STATUS(check_status);
 
-                    if (addData) {
-                        fprintf(fp_data, "%-32s %5d %5d %12.5e\n", MODL->pmtr[ipmtr].name, irow, icol, errmax);
+                    if (addVerify) {
+                        if (fp_data != NULL) {
+                            fprintf(fp_data, "%-32s %5d %5d %12.5e\n", MODL->pmtr[ipmtr].name, irow, icol, errmax);
+                        }
 
-                        SPRINT4(1, "INFO:: config error for %32s[%d,%d] is%12.5e being written to file",
+                        SPRINT4(1, "INFO:: geom error for %32s[%d,%d] is%12.5e being written to file",
                                 MODL->pmtr[ipmtr].name, irow, icol, errmax);
                     } else if (fp_data != NULL) {
                         fscanf(fp_data, "%s %d %d %lf", pname, &iirow, &iicol, &error);
 
                         if (strcmp(MODL->pmtr[ipmtr].name, pname) != 0 || irow != iirow || icol != iicol) {
-                            SPRINT0(0, "ERROR:: .csen file does not match case");
+                            SPRINT0(0, "ERROR:: .gsen file does not match case");
+                            fileStatus = EXIT_FAILURE;
                         } else if (errmax < ACCEPTABLE_ERROR) {
                         } else if (errmax > error*5.0) {
-                            SPRINT5(0, "ERROR:: config error for %32s[%d,%d] increased from %12.5e to %12.5e",
+                            SPRINT5(0, "ERROR:: geom error for %32s[%d,%d] increased from %12.5e to %12.5e",
                                     MODL->pmtr[ipmtr].name, irow, icol, error, errmax);
                             nerror++;
                         } else if (errmax < error/5.0) {
-                    SPRINT5(1, "INFO:: config error for %32s[%d,%d] decreased from %12.5e to %12.5e",
+                            SPRINT5(1, "INFO:: geom error for %32s[%d,%d] decreased from %12.5e to %12.5e",
                             MODL->pmtr[ipmtr].name, irow, icol, error, errmax);
                         }
                     }
 
-                    if (errmax > errmaxConf) errmaxConf = errmax;
+                    if (errmax > errmaxGeom) errmaxGeom = errmax;
                 }
 
-                if (tessel) {
+                if (tess) {
                     errmax = EPS20;
-                    status = checkTesselSens(ipmtr, irow, icol, &ntotal, &nsuppress, &errmax);
-                    CHECK_STATUS(checkTesselSens);
+                    status = checkTessSens(ipmtr, irow, icol, &ntotal, &nsuppress, &errmax);
+                    if (status != SUCCESS) {
+                        SPRINT1(0, "ERROR:: tess error detected in checkGeomigSens (status=%d)", status);
+                        fileStatus = EXIT_FAILURE;
+                    }
+                    CHECK_STATUS(checkTessSens);
 
-                    if (addData) {
-                        fprintf(fp_data, "%-32s %5d %5d %12.5e\n", MODL->pmtr[ipmtr].name, irow, icol, errmax);
+                    if (addVerify) {
+                        if (fp_data != NULL) {
+                            fprintf(fp_data, "%-32s %5d %5d %12.5e\n", MODL->pmtr[ipmtr].name, irow, icol, errmax);
+                        }
 
-                        SPRINT4(1, "INFO:: tessel error for %32s[%d,%d] is%12.5e being written to file",
+                        SPRINT4(1, "INFO:: tess error for %32s[%d,%d] is%12.5e being written to file",
                                 MODL->pmtr[ipmtr].name, irow, icol, errmax);
                     } else if (fp_data != NULL) {
                         fscanf(fp_data, "%s %d %d %lf", pname, &iirow, &iicol, &error);
 
                         if (strcmp(MODL->pmtr[ipmtr].name, pname) != 0 || irow != iirow || icol != iicol) {
                             SPRINT0(0, "ERROR:: .tsen file does not match case");
+                            fileStatus = EXIT_FAILURE;
                         } else if (errmax < ACCEPTABLE_ERROR) {
                         } else if (errmax > error*5.0) {
-                            SPRINT5(0, "ERROR:: tessel error for %32s[%d,%d] increased from %12.5e to %12.5e",
+                            SPRINT5(0, "ERROR:: tess error for %32s[%d,%d] increased from %12.5e to %12.5e",
                                     MODL->pmtr[ipmtr].name, irow, icol, error, errmax);
                             nerror++;
                         } else if (errmax < error/5.0) {
-                            SPRINT5(0, "INFO:: tessel error for %32s[%d,%d] decreased from %12.5e to %12.5e",
+                            SPRINT5(0, "INFO:: tess error for %32s[%d,%d] decreased from %12.5e to %12.5e",
                                     MODL->pmtr[ipmtr].name, irow, icol, error, errmax);
                         }
                     }
@@ -476,7 +506,7 @@ cleanup:
     SPRINT2(1, "--> ocsmFree() -> status=%d (%s)",
             status2, ocsmGetText(status2));
 
-    /* remove tmp files (if they exist) and clean up the udp storage */
+    /* clean up the udp storage */
     status2 = ocsmFree(NULL);
     SPRINT2(1, "--> ocsmFree(NULL) -> status=%d (%s)",
             status2, ocsmGetText(status2));
@@ -495,33 +525,36 @@ cleanup:
     }
 
     /* report total CPU times */
-    if (config) {
+    if (geom) {
         SPRINT1(0, "\nTotal CPU time in ocsmGetVel     -> %10.3f sec",
-                (double)(config_time)/(double)(CLOCKS_PER_SEC));
+                (double)(geom_time)/(double)(CLOCKS_PER_SEC));
     }
-    if (tessel) {
+    if (tess) {
         SPRINT1(0, "\nTotal CPU time in ocsmGetTessVel -> %10.3f sec",
-                (double)(tessel_time)/(double)(CLOCKS_PER_SEC));
+                (double)(tess_time)/(double)(CLOCKS_PER_SEC));
     }
 
     /* report final statistics */
     if (status == SUCCESS) {
-        if (config) {
-            SPRINT3(0, "\nSensitivity checks complete with %8d tnotal errors (max config err=%12.4e) with %d suppressions",
-                    ntotal, errmaxConf+1.0e-20, nsuppress);
+        if (geom) {
+            SPRINT3(0, "\nSensitivity checks complete with %8d total errors (max geom err=%12.4e) with %d suppressions",
+                    ntotal, errmaxGeom+1.0e-20, nsuppress);
         }
-        if (tessel) {
-            SPRINT3(0, "\nSensitivity checks complete with %8d total errors (max tessel err=%12.4e) with %d suppressions",
+        if (tess) {
+            SPRINT3(0, "\nSensitivity checks complete with %8d total errors (max tess err=%12.4e) with %d suppressions",
                     ntotal, errmaxTess+1.0e-20, nsuppress);
         }
+    } else if (status == EXIT_FAILURE) {
+        SPRINT0(0, "\nSensitivity checks not complete because \"EXIT_FAILURE\" was detected");
     } else {
         SPRINT1(0, "\nSensitivity checks not complete because error \"%s\" was detected",
                 ocsmGetText(status));
     }
 
     /* these statements are in case we used an error return to go to cleanup */
-    if (status < 0) status = EXIT_FAILURE;
-    if (nerror > 0) status = EXIT_FAILURE;
+    if (fileStatus == EXIT_FAILURE) status = EXIT_FAILURE;
+    if (status     < 0            ) status = EXIT_FAILURE;
+    if (nerror     > 0            ) status = EXIT_FAILURE;
 
     return status;
 }
@@ -529,7 +562,7 @@ cleanup:
 
 /***********************************************************************/
 /*                                                                     */
-/*   checkConfigSens - check configuration sensitivities               */
+/*   checkGeomSens - check geometric sensitivities                     */
 /*                                                                     */
 /*                     this is done be comparing analytic results      */
 /*                     with those computed via finite differenced      */
@@ -537,12 +570,12 @@ cleanup:
 /***********************************************************************/
 
 static int
-checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
-                int    irow,            /* (in)  row    index (bias-1) */
-                int    icol,            /* (in)  column index (bias-1) */
-                int    *ntotal,         /* (out) total number of points beyond toler */
-                int    *nsuppress,      /* (out) number of suppressions */
-                double *errmax)         /* (out) maximum error */
+checkGeomSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
+              int    irow,              /* (in)  row    index (bias-1) */
+              int    icol,              /* (in)  column index (bias-1) */
+              int    *ntotal,           /* (out) total number of points beyond toler */
+              int    *nsuppress,        /* (out) number of suppressions */
+              double *errmax)           /* (out) maximum error */
 {
     int       status = SUCCESS;
 
@@ -559,17 +592,17 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
 
     modl_T    *MODL = (modl_T *)modl;
 
-    ROUTINE(checkConfigSens);
+    ROUTINE(checkGeomSens);
 
     /* --------------------------------------------------------------- */
 
     SPRINT0(0, "\n*********************************************************");
     if (MODL->pmtr[ipmtr].nrow == 1 &&
         MODL->pmtr[ipmtr].ncol == 1   ) {
-        SPRINT1(0, "Starting configuration sensitivity wrt \"%s\"",
+        SPRINT1(0, "Starting geometric sensitivity wrt \"%s\"",
                 MODL->pmtr[ipmtr].name);
     } else {
-        SPRINT3(0, "Starting configuration sensitivity wrt \"%s[%d,%d]\"",
+        SPRINT3(0, "Starting geometric sensitivity wrt \"%s[%d,%d]\"",
                 MODL->pmtr[ipmtr].name, irow, icol);
     }
     SPRINT0(0, "*********************************************************\n");
@@ -589,22 +622,18 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
     status   = ocsmBuild(MODL, 0, &builtTo, &ntemp, NULL);
     CHECK_STATUS(ocsmBuild);
 
-    /* perform configuration sensitivity checks for each Body on the stack */
+    /* perform geometric sensitivity checks for each Body on the stack */
     for (ibody = 1; ibody <= MODL->nbody; ibody++) {
         if (MODL->body[ibody].onstack != 1) continue;
 
-        assert(MODL->body[ibody].nnode > 0);
-        assert(MODL->body[ibody].nedge > 0);
-        assert(MODL->body[ibody].nface > 0);
-
-        /* analytic configuration sensitivities (if possible) */
+        /* analytic geometric sensitivities (if possible) */
         SPRINT1(0, "Computing analytic sensitivities (if possible) for ibody=%d",
                 ibody);
 
         status = ocsmSetDtime(MODL, 0);
         CHECK_STATUS(ocsmSetDtime);
 
-        /* save analytic configuration sensitivity of each Face */
+        /* save analytic geometric sensitivity of each Face */
         MALLOC(face_anal, double*, MODL->body[ibody].nface+1);
         for (iface = 0; iface <= MODL->body[ibody].nface; iface++) {
             face_anal[iface] = NULL;
@@ -628,7 +657,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             status = ocsmGetVel(MODL, ibody, OCSM_FACE, iface, npnt_tess, NULL, face_anal[iface]);
             CHECK_STATUS(ocsmGetVel);
             new_time = clock();
-            config_time += (new_time - old_time);
+            geom_time += (new_time - old_time);
 
             for (ixyz = 0; ixyz < 3*npnt_tess; ixyz++) {
                 if (face_anal[iface][ixyz] != face_anal[iface][ixyz]) {
@@ -637,7 +666,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             }
         }
 
-        /* save analytic configuration sensitivity of each Edge */
+        /* save analytic geometric sensitivity of each Edge */
         MALLOC(edge_anal, double*, MODL->body[ibody].nedge+1);
         for (iedge = 0; iedge <= MODL->body[ibody].nedge; iedge++) {
             edge_anal[iedge] = NULL;
@@ -660,7 +689,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             status = ocsmGetVel(MODL, ibody, OCSM_EDGE, iedge, npnt_tess, NULL, edge_anal[iedge]);
             CHECK_STATUS(ocsmGetVel);
             new_time = clock();
-            config_time += (new_time - old_time);
+            geom_time += (new_time - old_time);
 
             for (ixyz = 0; ixyz < 3*npnt_tess; ixyz++) {
                 if (edge_anal[iedge][ixyz] != edge_anal[iedge][ixyz]) {
@@ -669,7 +698,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             }
         }
 
-        /* save analytic configuration sensitivity of each Node */
+        /* save analytic geometric sensitivity of each Node */
         MALLOC(node_anal, double*, MODL->body[ibody].nnode+1);
         for (inode = 0; inode <= MODL->body[ibody].nnode; inode++) {
             node_anal[inode] = NULL;
@@ -684,7 +713,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             status = ocsmGetVel(MODL, ibody, OCSM_NODE, inode, npnt_tess, NULL, node_anal[inode]);
             CHECK_STATUS(ocsmGetVel);
             new_time = clock();
-            config_time += (new_time - old_time);
+            geom_time += (new_time - old_time);
 
             for (ixyz = 0; ixyz < 3; ixyz++) {
                 if (node_anal[inode][ixyz] != node_anal[inode][ixyz]) {
@@ -701,14 +730,14 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             goto cleanup;
         }
 
-        /* finite difference configuration sensitivities */
+        /* finite difference geometric sensitivities */
         SPRINT1(0, "Computing finite difference sensitivities for ibody=%d",
                 ibody);
 
         status = ocsmSetDtime(MODL, dtime);
         CHECK_STATUS(ocsmSetDtime);
 
-        /* save finite difference configuration sensitivity of each Face */
+        /* save finite difference geometric sensitivity of each Face */
         MALLOC(face_fdif, double*, MODL->body[ibody].nface+1);
         for (iface = 0; iface <= MODL->body[ibody].nface; iface++) {
             face_fdif[iface] = NULL;
@@ -732,7 +761,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             }
         }
 
-        /* save finite difference configuration sensitivity of each Edge */
+        /* save finite difference geometric sensitivity of each Edge */
         MALLOC(edge_fdif, double*, MODL->body[ibody].nedge+1);
         for (iedge = 0; iedge <= MODL->body[ibody].nedge; iedge++) {
             edge_fdif[iedge] = NULL;
@@ -755,7 +784,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             }
         }
 
-        /* save finite difference configuration sensitivity of each Node */
+        /* save finite difference geometric sensitivity of each Node */
         MALLOC(node_fdif, double*, MODL->body[ibody].nnode+1);
         for (inode = 0; inode <= MODL->body[ibody].nnode; inode++) {
             node_fdif[inode] = NULL;
@@ -779,17 +808,17 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
         status = ocsmSetDtime(MODL, 0);
         CHECK_STATUS(ocsmSetDtime);
 
-        /* compare configuration sensitivities */
+        /* compare geometric sensitivities */
         node_errmax = 0;
         edge_errmax = 0;
         face_errmax = 0;
 
         if (MODL->pmtr[ipmtr].nrow == 1 &&
             MODL->pmtr[ipmtr].ncol == 1   ) {
-            SPRINT2(0, "\nComparing configuration sensitivities wrt \"%s\" for ibody=%d",
+            SPRINT2(0, "\nComparing geometric sensitivities wrt \"%s\" for ibody=%d",
                     MODL->pmtr[ipmtr].name, ibody);
         } else {
-            SPRINT4(0, "\nComparing configuration sensitivities wrt \"%s[%d,%d]\" for ibody=%d",
+            SPRINT4(0, "\nComparing geometric sensitivities wrt \"%s[%d,%d]\" for ibody=%d",
                     MODL->pmtr[ipmtr].name, irow, icol, ibody);
         }
 
@@ -844,7 +873,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
         }
 #endif
 
-        /* compare configuration sensitivities for each Face */
+        /* compare geometric sensitivities for interior points in each Face */
         nerror = 0;
         for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
             status = EG_getTessFace(MODL->body[ibody].etess, iface,
@@ -869,6 +898,8 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
 #ifndef __clang_analyzer__
             nerror2 = 0;
             for (ipnt = 0; ipnt < npnt_tess; ipnt++) {
+                if (ptype[ipnt] >= 0) continue;
+
                 for (i = 0; i < 3; i++) {
                     face_err = face_anal[iface][3*ipnt+i] - face_fdif[iface][3*ipnt+i];
                     if (status == EGADS_NOTFOUND && fabs(face_err) > face_errmax) {
@@ -898,7 +929,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
         SPRINT3(0, "    d(Face)/d(%s) check complete with %8d total errors (errmax=%12.4e)",
                 MODL->pmtr[ipmtr].name, nerror, face_errmax);
 
-        /* compare configuration sensitivities for each Edge */
+        /* compare geometric sensitivities for interior points in each Edge */
         nerror = 0;
         for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
             status = EG_getTessEdge(MODL->body[ibody].etess, iedge,
@@ -921,7 +952,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
 
 #ifndef __clang_analyzer__
             nerror2 = 0;
-            for (ipnt = 0; ipnt < npnt_tess; ipnt++) {
+            for (ipnt = 1; ipnt < npnt_tess-1; ipnt++) {
                 for (i = 0; i < 3; i++) {
                     edge_err = edge_anal[iedge][3*ipnt+i] - edge_fdif[iedge][3*ipnt+i];
                     if (status == EGADS_NOTFOUND && fabs(edge_err) > edge_errmax) {
@@ -952,7 +983,7 @@ checkConfigSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
         SPRINT3(0, "    d(Edge)/d(%s) check complete with %8d total errors (errmax=%12.4e)",
                 MODL->pmtr[ipmtr].name, nerror, edge_errmax);
 
-        /* compare configuration sensitivities for each Node */
+        /* compare geometric sensitivities for each Node */
         nerror = 0;
         for (inode = 1; inode <= MODL->body[ibody].nnode; inode++) {
             npnt_tess = 1;
@@ -1063,7 +1094,7 @@ cleanup:
 
 /***********************************************************************/
 /*                                                                     */
-/*   checkTesselSens - check tessellation sensitivities                */
+/*   checkTessSens - check tessellation sensitivities                  */
 /*                                                                     */
 /*                     this is done by computing the distance of each  */
 /*                     tessellation point plus its sensitivity from    */
@@ -1072,34 +1103,33 @@ cleanup:
 /***********************************************************************/
 
 static int
-checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
-                int    irow,            /* (in)  row    index (bias-1) */
-                int    icol,            /* (in)  column index (bias-1) */
-                int    *ntotal,         /* (out) ntotal number of points beyond toler */
-                int    *nsuppress,      /* (out) number of suppressions */
-                double *errmax)         /* (out) maximum error */
+checkTessSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
+              int    irow,              /* (in)  row    index (bias-1) */
+              int    icol,              /* (in)  column index (bias-1) */
+              int    *ntotal,           /* (out) ntotal number of points beyond toler */
+              int    *nsuppress,        /* (out) number of suppressions */
+              double *errmax)           /* (out) maximum error */
 {
     int       status = SUCCESS;
 
     int       ibody, atype, alen, nbody, builtTo, nbad;
-    int       nerror=0, nerror2, inode, iedge, iface, ipnt, itri, iseg, ixyz, ip0, ip1, ip2;
+    int       nerror=0, nerror2, inode, jnode, iedge, jedge, iface, jface, ipnt, itri, ixyz;
     int       npnt_tess, ntri_tess, oclass, mtype, nchild, *senses;
-    CINT      *ptype, *pindx, *tris, *tric, *tempIlist;
-    double    data[18], old_value, old_dot, scaled_dtime, uv_clos[2], xyz_clos[18], dist;
+    CINT      *ptype, *pindx, *tris, *tric, *tempIlist, *nMap, *eMap, *fMap;
+    double    data[18], old_value, old_dot, scaled_dtime, uv_clos[2], xyz_clos[18], dist, val, *Dist=NULL;
     double    face_errmax, edge_errmax, node_errmax;
-    double    xa, ya, za, xb, yb, zb, areax1, areay1, areaz1, areax2, areay2, areaz2, dot;
     double    **face_ptrb=NULL, **edge_ptrb=NULL, **node_ptrb=NULL;
     CDOUBLE   *tempRlist, *xyz, *uv, *t, *dxyz;
     CCHAR     *tempClist;
-    ego       eref, *echilds;
+    ego       eref, *echilds, eNewBody=NULL;
     clock_t   old_time, new_time;
-    FILE      *fp_badtri=NULL;
+    FILE      *fp_badtri=NULL, *fp_logdist=NULL;
     void      *ptrb;
 
     modl_T    *MODL = (modl_T *)modl;
     modl_T    *PTRB = NULL;
 
-    ROUTINE(checkTesselSens);
+    ROUTINE(checkTessSens);
 
     /* --------------------------------------------------------------- */
 
@@ -1121,6 +1151,17 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
     if (fp_badtri != NULL) {
         fprintf(fp_badtri, "xxxxx   -2 badTriangles\n");
         nbad = 0;
+    }
+
+    /* start the logdist file if we are only looking at one DESPMTR */
+    if (strlen(pmtrname) > 0) {
+        SPRINT0(0, "\n*****************************************");
+        SPRINT0(0, "logdist.plot file is being generated");
+        SPRINT0(0, "    color scheme: blue=1e-12 (or smaller)");
+        SPRINT0(0, "                  red =1e-03 (or larger)");
+        SPRINT0(0, "*****************************************\n");
+        
+        fp_logdist = fopen("logdist.plot", "w");
     }
 
     /* set the velocity */
@@ -1158,7 +1199,7 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
     nbody  = 0;
     status = ocsmBuild(ptrb, 0, &builtTo, &nbody, NULL);
     if (status != SUCCESS) {
-        SPRINT0(1, "ERROR:: tessel error: perturbed configuration could not be built");
+        SPRINT0(1, "ERROR:: tess error: perturbed configuration could not be built");
         SPRINT0(1, "        tessellation sensitivity checks skipped for all Bodys");
         nerror++;
         status = SUCCESS;
@@ -1176,23 +1217,19 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
     for (ibody = 1; ibody <= MODL->nbody; ibody++) {
         if (MODL->body[ibody].onstack != 1) continue;
 
-        assert(MODL->body[ibody].nnode > 0);
-        assert(MODL->body[ibody].nedge > 0);
-        assert(MODL->body[ibody].nface > 0);
-
         /* make sure perturbed and base models have the same number of Nodes, Edges, and Faces */
         if        (MODL->body[ibody].nface != PTRB->body[ibody].nface) {
-            SPRINT3(1, "ERROR:: tessel error: perturbed Body %d has different .nface (%d vs %d)",
+            SPRINT3(1, "ERROR:: tess error: perturbed Body %d has different .nface (%d vs %d)",
                     ibody, MODL->body[ibody].nface, PTRB->body[ibody].nface);
             SPRINT0(1, "        tessellation sensitivity checks skipped for this Body");
             continue;
         } else if (MODL->body[ibody].nedge != PTRB->body[ibody].nedge) {
-            SPRINT3(1, "ERROR:: tessel error: perturbed Body %d has different .nedge (%d vs %d)",
+            SPRINT3(1, "ERROR:: tess error: perturbed Body %d has different .nedge (%d vs %d)",
                     ibody, MODL->body[ibody].nedge, PTRB->body[ibody].nedge);
             SPRINT0(1, "        tessellation sensitivity checks skipped for this Body");
             continue;
         } else if (MODL->body[ibody].nnode != PTRB->body[ibody].nnode) {
-            SPRINT3(1, "ERROR:: tessel error: perturbed Body %d has different .nnode (%d vs %d)",
+            SPRINT3(1, "ERROR:: tess error: perturbed Body %d has different .nnode (%d vs %d)",
                     ibody, MODL->body[ibody].nnode, PTRB->body[ibody].nnode);
             SPRINT0(1, "        tessellation sensitivity checks skipped for this Body");
             continue;
@@ -1205,13 +1242,46 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
         status = ocsmSetDtime(MODL, 0);
         CHECK_STATUS(ocsmSetDtime);
 
+        /* determine if there is a mapping between the MODL and the PTRB */
+        if (MODL->body[ibody].nface > 0) {
+            status = EG_mapBody(MODL->body[ibody].ebody, PTRB->body[ibody].ebody, "_faceID", &eNewBody);
+            CHECK_STATUS(EG_mapBody);
+
+            if (eNewBody == NULL) {
+                nMap = NULL;
+                eMap = NULL;
+                fMap = NULL;
+            } else {
+                status = EG_attributeRet(eNewBody, ".nMap",
+                                         &atype, &alen, &nMap, &tempRlist, &tempClist);
+                if (status != EGADS_SUCCESS) {
+                    nMap = NULL;
+                }
+
+                status = EG_attributeRet(eNewBody, ".eMap",
+                                         &atype, &alen, &eMap, &tempRlist, &tempClist);
+                if (status != EGADS_SUCCESS) {
+                    eMap = NULL;
+                }
+
+                status = EG_attributeRet(eNewBody, ".fMap",
+                                     &atype, &alen, &fMap, &tempRlist, &tempClist);
+                if (status != EGADS_SUCCESS) {
+                    fMap = NULL;
+                }
+            }
+        } else {
+            nMap = NULL;
+            eMap = NULL;
+            fMap = NULL;
+        }
+
         /* save perturbed points (which are the base plus their sensitivities) for each Face */
         MALLOC(face_ptrb, double*, MODL->body[ibody].nface+1);
         for (iface = 0; iface <= MODL->body[ibody].nface; iface++) {
             face_ptrb[iface] = NULL;
         }
 
-        nerror = 0;
         for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
             status = EG_getTessFace(MODL->body[ibody].etess, iface,
                                     &npnt_tess, &xyz, &uv, &ptype, &pindx,
@@ -1228,7 +1298,7 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             status = ocsmGetTessVel(MODL, ibody, OCSM_FACE, iface, &dxyz);
             CHECK_STATUS(ocsmGetTessVel);
             new_time = clock();
-            tessel_time += (new_time - old_time);
+            tess_time += (new_time - old_time);
 
             MALLOC(face_ptrb[iface], double, 3*npnt_tess);
 
@@ -1240,8 +1310,6 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
                 }
             }
 
-            /* make sure that all perturbed triangle have approximately the same
-               normal as the original triangles */
             status = EG_attributeRet(MODL->body[ibody].face[iface].eface, "_sensCheck",
                                      &atype, &alen, &tempIlist, &tempRlist, &tempClist);
             if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "skip") == 0) {
@@ -1252,61 +1320,7 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
                 (*nsuppress)++;
                 continue;
             }
-
-            for (itri = 0; itri < ntri_tess; itri++) {
-                ip0 = tris[3*itri  ] - 1;
-                ip1 = tris[3*itri+1] - 1;
-                ip2 = tris[3*itri+2] - 1;
-
-                xa = xyz[3*ip1  ] - xyz[3*ip0  ];
-                ya = xyz[3*ip1+1] - xyz[3*ip0+1];
-                za = xyz[3*ip1+2] - xyz[3*ip0+2];
-
-                xb = xyz[3*ip2  ] - xyz[3*ip0  ];
-                yb = xyz[3*ip2+1] - xyz[3*ip0+1];
-                zb = xyz[3*ip2+2] - xyz[3*ip0+2];
-
-                areax1 = ya * zb - za * yb;
-                areay1 = za * xb - xa * zb;
-                areaz1 = xa * yb - ya * xb;
-
-                xa = face_ptrb[iface][3*ip1  ] - face_ptrb[iface][3*ip0  ];
-                ya = face_ptrb[iface][3*ip1+1] - face_ptrb[iface][3*ip0+1];
-                za = face_ptrb[iface][3*ip1+2] - face_ptrb[iface][3*ip0+2];
-
-                xb = face_ptrb[iface][3*ip2  ] - face_ptrb[iface][3*ip0  ];
-                yb = face_ptrb[iface][3*ip2+1] - face_ptrb[iface][3*ip0+1];
-                zb = face_ptrb[iface][3*ip2+2] - face_ptrb[iface][3*ip0+2];
-
-                areax2 = ya * zb - za * yb;
-                areay2 = za * xb - xa * zb;
-                areaz2 = xa * yb - ya * xb;
-
-                dot = areax1 * areax2 + areay1 * areay2 + areaz1 * areaz2;
-                if (dot < 0) {
-                    SPRINT4(0, "ERROR:: tessel error: wrong Face area for ibody=%d, iface=%d, itri=%d, dot=%12.5e",
-                            ibody, iface, itri, dot);
-                    SPRINT3(0, "               orig=%13.8f %13.8f %13.8f", xyz[3*ip0], xyz[3*ip0+1], xyz[3*ip0+2]);
-                    SPRINT3(0, "                    %13.8f %13.8f %13.8f", xyz[3*ip1], xyz[3*ip1+1], xyz[3*ip1+2]);
-                    SPRINT3(0, "                    %13.8f %13.8f %13.8f", xyz[3*ip2], xyz[3*ip2+1], xyz[3*ip2+2]);
-                    SPRINT3(0, "               ptrb=%13.8f %13.8f %13.8f", face_ptrb[iface][3*ip0], face_ptrb[iface][3*ip0+1], face_ptrb[iface][3*ip0+2]);
-                    SPRINT3(0, "                    %13.8f %13.8f %13.8f", face_ptrb[iface][3*ip1], face_ptrb[iface][3*ip1+1], face_ptrb[iface][3*ip1+2]);
-                    SPRINT3(0, "                    %13.8f %13.8f %13.8f", face_ptrb[iface][3*ip2], face_ptrb[iface][3*ip2+1], face_ptrb[iface][3*ip2+2]);
-                    SPRINT3(0, "          area_orig=%13.8f %13.8f %13.8f", areax1, areay1, areaz1);
-                    SPRINT3(0, "          area_ptrb=%13.8f %13.8f %13.8f", areax2, areay2, areaz2);
-                    nerror++;
-
-                    if (fp_badtri != NULL) {
-                        fprintf(fp_badtri, "%12.6f %12.6f %12.6f  %12.6f %12.6f %12.6f  %12.6f %12.6f %12.6f\n",
-                                face_ptrb[iface][3*ip0], face_ptrb[iface][3*ip0+1], face_ptrb[iface][3*ip0+2],
-                                face_ptrb[iface][3*ip1], face_ptrb[iface][3*ip1+1], face_ptrb[iface][3*ip1+2],
-                                face_ptrb[iface][3*ip2], face_ptrb[iface][3*ip2+1], face_ptrb[iface][3*ip2+2]);
-                        nbad++;
-                    }
-                }
-            }
         }
-        SPRINT1(1, "Triangle area checks found %d errors", nerror);
 
         /* save perturbed points (which are the base plus their sensitivities) for each Edge */
         MALLOC(edge_ptrb, double*, MODL->body[ibody].nedge+1);
@@ -1314,7 +1328,6 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             edge_ptrb[iedge] = NULL;
         }
 
-        nerror = 0;
         for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
             status = EG_getTessEdge(MODL->body[ibody].etess, iedge,
                                     &npnt_tess, &xyz, &uv);
@@ -1330,7 +1343,7 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             status = ocsmGetTessVel(MODL, ibody, OCSM_EDGE, iedge, &dxyz);
             CHECK_STATUS(ocsmGetTessVel);
             new_time = clock();
-            tessel_time += (new_time - old_time);
+            tess_time += (new_time - old_time);
 
             MALLOC(edge_ptrb[iedge], double, 3*npnt_tess);
 
@@ -1352,33 +1365,7 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
                 (*nsuppress)++;
                 continue;
             }
-
-            /* make sure that all perturbed edge segments have approximately the same
-               directon as the original segments */
-            for (iseg = 0; iseg < npnt_tess-1; iseg++) {
-                ip0 = iseg;
-                ip1 = iseg + 1;
-
-                xa = xyz[3*ip1  ] - xyz[3*ip0  ];
-                ya = xyz[3*ip1+1] - xyz[3*ip0+1];
-                za = xyz[3*ip1+2] - xyz[3*ip0+2];
-
-                xb = edge_ptrb[iedge][3*ip1  ] - edge_ptrb[iedge][3*ip0  ];
-                yb = edge_ptrb[iedge][3*ip1+1] - edge_ptrb[iedge][3*ip0+1];
-                zb = edge_ptrb[iedge][3*ip1+2] - edge_ptrb[iedge][3*ip0+2];
-
-                dot = xa * xb + ya * yb + za * zb;
-                if (dot < 0) {
-                    SPRINT4(0, "ERROR:: tessel error: wrong Segment direction for ibody=%d, iedge=%d, iseg=%d, dot=%12.5e",
-                            ibody, iedge, iseg, dot);
-                    SPRINT3(0, "              near=%13.8f %13.8f %13.8f", xyz[3*ip0], xyz[3*ip0+1], xyz[3*ip0+2]);
-                    SPRINT3(0, "         dirn_orig=%13.8f %13.8f %13.8f", xa, ya, za);
-                    SPRINT3(0, "         dirn_ptrb=%13.8f %13.8f %13.8f", xb, yb, zb);
-                    nerror++;
-                }
-            }
         }
-        SPRINT1(1, "Segment direction checks found %d errors", nerror);
 
         /* save perturbed points (which are the base plus their sensitivities) for each Node */
         MALLOC(node_ptrb, double*, MODL->body[ibody].nnode+1);
@@ -1395,7 +1382,7 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             status = ocsmGetTessVel(MODL, ibody, OCSM_NODE, inode, &dxyz);
             CHECK_STATUS(ocsmGetTessVel);
             new_time = clock();
-            tessel_time += (new_time - old_time);
+            tess_time += (new_time - old_time);
 
             MALLOC(node_ptrb[inode], double, 3);
 
@@ -1422,6 +1409,27 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
         /* check how far each perturbed Face point is from the perturbed configuration */
         nerror = 0;
         for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
+            status = EG_getTessFace(MODL->body[ibody].etess, iface,
+                                    &npnt_tess, &xyz, &uv, &ptype, &pindx,
+                                    &ntri_tess, &tris, &tric);
+            CHECK_STATUS(EG_getTessFace);
+
+            if (npnt_tess <= 0) {
+                SPRINT3(0, "ERROR:: EG_getTessFace -> status=%d (%s), npnt_tess=%d",
+                        status, ocsmGetText(status), npnt_tess);
+                status = EXIT_FAILURE;
+                goto cleanup;
+            }
+
+            /* find the equivalent Face in PTRB */
+#ifndef __clang_analyzer__
+            if (fMap == NULL) {
+                jface = iface;
+            } else {
+                jface = fMap[iface-1];
+            }
+#endif
+
             status = EG_attributeRet(MODL->body[ibody].face[iface].eface, "_sensCheck",
                                      &atype, &alen, &tempIlist, &tempRlist, &tempClist);
             if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "skip") == 0) {
@@ -1433,26 +1441,34 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
                                     &ntri_tess, &tris, &tric);
             CHECK_STATUS(EG_getTessFace);
 
+            MALLOC(Dist, double, npnt_tess);
+
 #ifndef __clang_analyzer__
             nerror2 = 0;
             for (ipnt = 0; ipnt < npnt_tess; ipnt++) {
+                if (ptype[ipnt] >= 0) continue;
+
                 uv_clos[ 0] = uv[2*ipnt  ];
                 uv_clos[ 1] = uv[2*ipnt+1];
-                status = EG_invEvaluateGuess(PTRB->body[ibody].face[iface].eface,
+                status = EG_invEvaluateGuess(PTRB->body[ibody].face[jface].eface,
                                              &(face_ptrb[iface][3*ipnt]), uv_clos, xyz_clos);
                 CHECK_STATUS(EG_invEvaluateGuess);
 
-                dist = sqrt((face_ptrb[iface][3*ipnt  ] - xyz_clos[0]) * (face_ptrb[iface][3*ipnt  ] - xyz_clos[0])
-                          + (face_ptrb[iface][3*ipnt+1] - xyz_clos[1]) * (face_ptrb[iface][3*ipnt+1] - xyz_clos[1])
-                          + (face_ptrb[iface][3*ipnt+2] - xyz_clos[2]) * (face_ptrb[iface][3*ipnt+2] - xyz_clos[2]));
+                Dist[ipnt] = sqrt((face_ptrb[iface][3*ipnt  ] - xyz_clos[0]) * (face_ptrb[iface][3*ipnt  ] - xyz_clos[0])
+                                + (face_ptrb[iface][3*ipnt+1] - xyz_clos[1]) * (face_ptrb[iface][3*ipnt+1] - xyz_clos[1])
+                                + (face_ptrb[iface][3*ipnt+2] - xyz_clos[2]) * (face_ptrb[iface][3*ipnt+2] - xyz_clos[2]));
+                if (Dist[ipnt] != Dist[ipnt]) {
+                    printf("Dist[%d] = nan\n", ipnt);
+                    Dist[ipnt] = 1e+99;
+                }
 
-                if (dist > face_errmax) face_errmax = dist;
-                if (dist > errlist) {
+                if (Dist[ipnt] > face_errmax) face_errmax = Dist[ipnt];
+                if (Dist[ipnt] > errlist) {
                     if (nerror2 < maxlist) {
-                        SPRINT12(0, "iface=%4d, ipnt=%4d: anal=%13.8f %13.8f %13.8f, ptrb=%13.8f %13.8f %13.8f, dist=%13.8f (at %13.8f %13.8f %13.8f)",
+                        SPRINT12(0, "iface=%4d, ipnt=%4d: anal=%13.8f %13.8f %13.8f, clos=%13.8f %13.8f %13.8f, dist=%13.8f (at %13.8f %13.8f %13.8f)",
                                  iface, ipnt,
                                  face_ptrb[iface][3*ipnt], face_ptrb[iface][3*ipnt+1], face_ptrb[iface][3*ipnt+2],
-                                 xyz_clos[             0], xyz_clos[               1], xyz_clos[               2], dist,
+                                 xyz_clos[             0], xyz_clos[               1], xyz_clos[               2], Dist[ipnt],
                                  xyz[             3*ipnt], xyz[             3*ipnt+1], xyz[             3*ipnt+2]);
                     } else if (nerror2 == maxlist) {
                         SPRINT0(0, "...too many errors to list");
@@ -1464,6 +1480,30 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             }
             FREE(face_ptrb[iface]);
 #endif
+
+            /* add the distances to this Face to the logdist file */
+            /*     -1 (red)   corresponds to Dist < 1e-12 */
+            /*     +1 (blue)  corresponds to Dist > 1e-03 */
+
+            if (fp_logdist != NULL) {
+                fprintf(fp_logdist, "%5d%5d Body_%d_%d\n", ntri_tess, -3, ibody, iface);
+
+                for (itri = 0; itri < ntri_tess; itri++) {
+                    ipnt = tris[3*itri  ] - 1;
+                    val  = MIN((7.5 + log10(MAX(Dist[ipnt], 1e-12))) / 4.5, 1);
+                    fprintf(fp_logdist, "%15.8f %15.8f %15.8f %15.8f ",  xyz[3*ipnt], xyz[3*ipnt+1], xyz[3*ipnt+2], val);
+                    
+                    ipnt = tris[3*itri+1] - 1;
+                    val  = MIN((7.5 + log10(MAX(Dist[ipnt], 1e-12))) / 4.5, 1);
+                    fprintf(fp_logdist, "%15.8f %15.8f %15.8f %15.8f ",  xyz[3*ipnt], xyz[3*ipnt+1], xyz[3*ipnt+2], val);
+                    
+                    ipnt = tris[3*itri+2] - 1;
+                    val  = MIN((7.5 + log10(MAX(Dist[ipnt], 1e-12))) / 4.5, 1);
+                    fprintf(fp_logdist, "%15.8f %15.8f %15.8f %15.8f\n", xyz[3*ipnt], xyz[3*ipnt+1], xyz[3*ipnt+2], val);
+                }
+            }
+
+            FREE(Dist);
         }
         (*errmax) = MAX((*errmax), face_errmax);
         SPRINT3(0, "    d(Face)/d(%s) check complete with %8d total errors (errmax=%12.4e)",
@@ -1472,9 +1512,20 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
         /* check how far each perturbed Edge point is from the perturbed configuration */
         nerror = 0;
         for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
+
+            /* find the equivalent Edge in PTRB */
+#ifndef __clang_analyzer__
+            if (eMap == NULL) {
+                jedge = iedge;
+            } else {
+                jedge = eMap[iedge-1];
+            }
+#endif
+
             status = EG_attributeRet(MODL->body[ibody].edge[iedge].eedge, "_sensCheck",
                                      &atype, &alen, &tempIlist, &tempRlist, &tempClist);
             if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "skip") == 0) {
+                FREE(edge_ptrb[iedge]);
                 continue;
             }
 
@@ -1483,6 +1534,7 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
             CHECK_STATUS(EG_getTopology);
 
             if (mtype == DEGENERATE) {
+                FREE(edge_ptrb[iedge]);
                 continue;
             }
 
@@ -1492,9 +1544,9 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
 
 #ifndef __clang_analyzer__
             nerror2 = 0;
-            for (ipnt = 0; ipnt < npnt_tess; ipnt++) {
+            for (ipnt = 1; ipnt < npnt_tess-1; ipnt++) {
                 uv_clos[ 0] = t[ipnt];
-                status = EG_invEvaluateGuess(PTRB->body[ibody].edge[iedge].eedge,
+                status = EG_invEvaluateGuess(PTRB->body[ibody].edge[jedge].eedge,
                                              &(edge_ptrb[iedge][3*ipnt]), uv_clos, xyz_clos);
                 CHECK_STATUS(EG_invEvaluateGuess);
 
@@ -1505,7 +1557,7 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
                 if (dist > edge_errmax) edge_errmax = dist;
                 if (dist > errlist) {
                     if (nerror2 < maxlist) {
-                        SPRINT12(0, "iedge=%4d, ipnt=%4d: anal=%13.8f %13.8f %13.8f, ptrb=%13.8f %13.8f %13.8f, dist=%13.8f (at %13.8f %13.8f %13.8f)",
+                        SPRINT12(0, "iedge=%4d, ipnt=%4d: anal=%13.8f %13.8f %13.8f, clos=%13.8f %13.8f %13.8f, dist=%13.8f (at %13.8f %13.8f %13.8f)",
                                  iedge, ipnt,
                                  edge_ptrb[iedge][3*ipnt], edge_ptrb[iedge][3*ipnt+1], edge_ptrb[iedge][3*ipnt+2],
                                  xyz_clos[             0], xyz_clos[               1], xyz_clos[               2], dist,
@@ -1528,12 +1580,22 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
         /* check how far each perturbed Node point is from the perturbed configuration */
         nerror = 0;
         for (inode = 1; inode <= MODL->body[ibody].nnode; inode++) {
+
+            /* find the equivalent Node in PTRB */
 #ifndef __clang_analyzer__
-            status = EG_getTopology(PTRB->body[ibody].node[inode].enode, &eref,
+            if (nMap == NULL) {
+                jnode = inode;
+            } else {
+                jnode = nMap[inode-1];
+            }
+#endif
+
+#ifndef __clang_analyzer__
+            status = EG_getTopology(PTRB->body[ibody].node[jnode].enode, &eref,
                                     &oclass, &mtype, data, &nchild, &echilds, &senses);
             CHECK_STATUS(EG_getTopology);
 
-            status = EG_getTopology(PTRB->body[ibody].node[inode].enode, &eref,
+            status = EG_getTopology(PTRB->body[ibody].node[jnode].enode, &eref,
                                     &oclass, &mtype, xyz_clos, &nchild, &echilds, &senses);
             CHECK_STATUS(EG_getTopology);
 
@@ -1543,7 +1605,7 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
 
             if (dist > node_errmax) node_errmax = dist;
             if (dist > errlist) {
-                SPRINT11(0, "inode=%4d:            anal=%13.8f %13.8f %13.8f, ptrb=%13.8f %13.8f %13.8f, dist=%13.8f (at %13.8f %13.8f %13.8f)",
+                SPRINT11(0, "inode=%4d:            anal=%13.8f %13.8f %13.8f, clos=%13.8f %13.8f %13.8f, dist=%13.8f (at %13.8f %13.8f %13.8f)",
                          inode,
                          node_ptrb[inode][0], node_ptrb[inode][1], node_ptrb[inode][2],
                          data[            0], data[            1], data[            2], dist,
@@ -1561,12 +1623,22 @@ checkTesselSens(int    ipmtr,           /* (in)  Parameter index (bias-1) */
         FREE(face_ptrb);
         FREE(edge_ptrb);
         FREE(node_ptrb);
+
+        if (eNewBody != NULL) {
+            status = EG_deleteObject(eNewBody);
+            CHECK_STATUS(EG_deleteObject);
+        }
     }
 
 cleanup:
     if (fp_badtri != NULL) {
         fprintf(fp_badtri, "    0    0 end (of %d triangles)\n", nbad);
         fclose(fp_badtri);
+    }
+
+    if (fp_logdist != NULL) {
+        fprintf(fp_logdist, "    0    0 end\n");
+        fclose(fp_logdist);
     }
 
     /* these FREEs only get used if an error was encountered above */
@@ -1597,6 +1669,7 @@ cleanup:
     FREE(face_ptrb);
     FREE(edge_ptrb);
     FREE(node_ptrb);
+    FREE(Dist);
 
     return status;
 }

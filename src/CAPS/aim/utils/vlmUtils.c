@@ -1,3 +1,5 @@
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
 // Vortex lattice analysis related utility functions - Written by Dr. Ryan Durscher AFRL/RQVC
 
 #include <string.h>
@@ -328,11 +330,12 @@ int get_vlmSurface(int numTuple,
             }
 
             /*! \page vlmSurface
+             * \if ( AVL )
              * <ul>
              * <li> <B>yMirror = False</B> </li> <br>
              *  Mirror surface about the y-direction.
              * </ul>
-             *
+             * \endif
              */
             keyWord = "yMirror";
             status = search_jsonDictionary( surfaceTuple[i].value, keyWord, &keyValue);
@@ -343,6 +346,26 @@ int get_vlmSurface(int numTuple,
 
                 EG_free(keyValue); keyValue = NULL;
             }
+
+            /*! \page vlmSurface
+             * \if ( ASTROS )
+             * <ul>
+             * <li> <B>surfaceType = "Wing"</B> </li> <br>
+             *  Type of aerodynamic surface being described: "Wing", "Canard", "Tail".
+             * </ul>
+             *  \endif
+             */
+            keyWord = "surfaceType";
+            status = search_jsonDictionary( surfaceTuple[i].value, keyWord, &keyValue);
+            if (status == CAPS_SUCCESS) {
+
+                (*vlmSurface)[i].surfaceType = string_removeQuotation(keyValue);
+
+                EG_free(keyValue); keyValue = NULL;
+            } else {
+                (*vlmSurface)[i].surfaceType = EG_strdup("Wing");
+            }
+
         } else {
 
             /*! \page vlmSurface
@@ -686,6 +709,7 @@ int initiate_vlmSectionStruct(vlmSectionStruct *section) {
 
     section->Nspan = 0;
     section->Sspace = 0.0;
+    section->Sset = (int)false;
 
     section->numControl = 0;
     section->vlmControl = NULL;
@@ -723,6 +747,10 @@ int destroy_vlmSectionStruct(vlmSectionStruct *section) {
     section->normal[0] = 0.0;
     section->normal[1] = 0.0;
     section->normal[2] = 0.0;
+
+    section->Nspan = 0;
+    section->Sspace = 0.0;
+    section->Sset = (int)false;
 
     if (section->vlmControl != NULL) {
 
@@ -766,6 +794,8 @@ int initiate_vlmSurfaceStruct(vlmSurfaceStruct  *surface) {
     surface->numSection = 0;
     surface->vlmSection = NULL;
 
+    surface->surfaceType = NULL;
+
     return CAPS_SUCCESS;
 }
 
@@ -804,18 +834,21 @@ int destroy_vlmSurfaceStruct(vlmSurfaceStruct  *surface) {
             if (status != CAPS_SUCCESS) printf("destroy_vlmSectionStruct status = %d", status);
         }
 
-        if (surface->vlmSection != NULL) EG_free(surface->vlmSection);
+        EG_free(surface->vlmSection);
     }
 
     surface->vlmSection = NULL;
     surface->numSection = 0;
+
+    EG_free(surface->surfaceType);
+    surface->surfaceType = NULL;
 
     return CAPS_SUCCESS;
 }
 
 // Populate vlmSurface-section control surfaces from geometry attributes, modify control properties based on
 // incoming vlmControl structures
-int get_ControlSurface(ego bodies[],
+int get_ControlSurface(/*@unused@*/ ego bodies[],
                        int numControl,
                        vlmControlStruct vlmControl[],
                        vlmSurfaceStruct *vlmSurface) {
@@ -855,7 +888,6 @@ int get_ControlSurface(ego bodies[],
                                      &ints,
                                      &reals, &string);
 
-
             if (status != EGADS_SUCCESS) continue;
             if (atype  != ATTRREAL)      continue;
 
@@ -890,22 +922,15 @@ int get_ControlSurface(ego bodies[],
             //printf("AttrName = %s\n", attrName);
 
             vlmSurface->vlmSection[section].numControl += 1;
-
-            index = vlmSurface->vlmSection[section].numControl-1; // Make copy to shorten the following lines of code
-
-            if (vlmSurface->vlmSection[section].numControl == 1) {
-                vlmSurface->vlmSection[section].vlmControl = (vlmControlStruct *) EG_alloc(vlmSurface->vlmSection[section].numControl*sizeof(vlmControlStruct));
-
-            } else {
-
-                vlmSurface->vlmSection[section].vlmControl = (vlmControlStruct *) EG_reall(vlmSurface->vlmSection[section].vlmControl,
-                        vlmSurface->vlmSection[section].numControl*sizeof(vlmControlStruct));
-            }
-
+            vlmSurface->vlmSection[section].vlmControl = (vlmControlStruct *)
+                           EG_reall(vlmSurface->vlmSection[section].vlmControl,
+                                    vlmSurface->vlmSection[section].numControl*sizeof(vlmControlStruct));
             if (vlmSurface->vlmSection[section].vlmControl == NULL) {
               status = EGADS_MALLOC;
               goto cleanup;
             }
+
+            index = vlmSurface->vlmSection[section].numControl-1; // Make copy to shorten the following lines of code
 
             status = initiate_vlmControlStruct(&vlmSurface->vlmSection[section].vlmControl[index]);
             if (status != CAPS_SUCCESS) return status;
@@ -1103,6 +1128,7 @@ int copy_vlmSectionStruct(vlmSectionStruct *sectionIn, vlmSectionStruct *section
 
     sectionOut->Nspan = sectionIn->Nspan;   // number of spanwise vortices (elements)
     sectionOut->Sspace = sectionIn->Sspace; // spanwise point distribution
+    sectionOut->Sset = sectionIn->Sset;
 
     sectionOut->numControl = sectionIn->numControl;
 
@@ -1198,6 +1224,10 @@ int copy_vlmSurfaceStruct(vlmSurfaceStruct *surfaceIn, vlmSurfaceStruct *surface
         }
     }
 
+    if (surfaceIn->surfaceType != NULL) {
+        surfaceOut->surfaceType = EG_strdup(surfaceIn->surfaceType);
+    }
+
     return CAPS_SUCCESS;
 }
 
@@ -1248,7 +1278,7 @@ cleanup:
 static
 int vlm_findTrailingEdge(int numNode, ego *nodes,
                          int numEdge, ego *edges,
-                         int nodeIndexLE,
+            /*@unused@*/ int nodeIndexLE,
                          double *secnorm,
                          ego *teObj,
                          int *teClass,
@@ -1320,8 +1350,6 @@ int vlm_findTrailingEdge(int numNode, ego *nodes,
         vec1[0] = result[3+0];
         vec1[1] = result[3+1];
         vec1[2] = result[3+2];
-
-        norm = sqrt(dot_DoubleVal(vec1,vec1));
 
         // cross it to get the 'normal' to the edge (i.e. in the airfoil section PLANE)
         cross_DoubleVal(vec1,secnorm,normEdge);
@@ -1585,6 +1613,7 @@ int finalize_vlmSectionStruct(vlmSectionStruct *vlmSection)
     numEdgeMinusDegenrate = 0;
     for (i = 0; i < numEdge; i++) {
         status = EG_getInfo(edges[i], &oclass, &mtype, &ref, &prev, &next);
+        if (status != EGADS_SUCCESS) goto cleanup;
         if (mtype == DEGENERATE) continue;
         numEdgeMinusDegenrate += 1;
     }
@@ -1816,7 +1845,7 @@ cleanup:
 // will be ignored.
 int vlm_getSections(int numBody,
                     ego bodies[],
-                    const char *disciplineFilter,
+                    /*@null@*/ const char *disciplineFilter,
                     mapAttrToIndexStruct attrMap,
                     vlmSystemEnum sys,
                     int numSurface,
@@ -1911,6 +1940,7 @@ int vlm_getSections(int numBody,
             status = retrieve_doubleAttrOptional(bodies[body], "vlmSspace", &Sspace);
             if (status == EGADS_ATTRERR) goto cleanup;
             (*vlmSurface)[surf].vlmSection[section].Sspace = Sspace;
+            (*vlmSurface)[surf].vlmSection[section].Sset = (int)(status == CAPS_SUCCESS);
 
             // Get the section normal
             status = vlm_secNormal(bodies[body],
@@ -2214,6 +2244,7 @@ int vlm_secEdgePoints(int numPoint,
             for (i = 0; i < numEdge; i++) {
                 if ( teObj == edges[i] ) continue; // don't count the trailing edge
                 status = EG_getTopology(edges[i], &ref, &oclass, &mtype, trange, &numChildren, &children, &sens);
+                if (status != EGADS_SUCCESS) goto cleanup;
                 if (mtype == DEGENERATE) continue;
                 if (numEdgePoint[i] > numEdgePoint[j]) j = i;
             }
@@ -2224,6 +2255,7 @@ int vlm_secEdgePoints(int numPoint,
             for (i = 0; i < numEdge; i++) {
                 if ( teObj == edges[i] ) continue; // don't count the trailing edge
                 status = EG_getTopology(edges[i], &ref, &oclass, &mtype, trange, &numChildren, &children, &sens);
+                if (status != EGADS_SUCCESS) goto cleanup;
                 if (mtype == DEGENERATE) continue;
                 if (numEdgePoint[i] < numEdgePoint[j]) j = i;
             }
@@ -2249,7 +2281,8 @@ cleanup:
 // Retrieve edge ordering such that the loop starts at the trailing edge NODE
 // with the teObj last if it is an EDGE
 static
-int vlm_secOrderEdges(int numNode, ego *nodes,
+int vlm_secOrderEdges(
+         /*@unused@*/ int numNode, ego *nodes,
                       int numEdge, ego *edges,
                       ego body, ego teObj,
                       int **edgeLoopOrderOut,
@@ -2695,6 +2728,52 @@ void spacer( int N, double pspace, double scale, double x[]) {
   x[0]   = 0.;
   x[N-1] = scale;
 }
+// Use Newton solve to refine the t-value
+static int _refineT(double x1, double xCoord, double scale, double chord, 
+                    ego edge, double xdot[], double result[], double xyzLE[], 
+                    double *t) {
+
+    int status;
+
+    int tries;
+    double tempT, x_t, residual, deltaT;
+
+    while( fabs(x1 - xCoord) > 1e-7*scale ) {
+
+        x_t = (xdot[0]*result[3]+xdot[1]*result[4]+xdot[2]*result[5])/chord;
+
+        residual = x1 - xCoord;
+        deltaT = residual / x_t;
+
+        tries = 0;
+        do {
+
+            tempT = *t - deltaT;
+
+            status = EG_evaluate(edge, &tempT, result);
+            if (status != EGADS_SUCCESS) return status;
+
+            result[0] -= xyzLE[0];
+            result[1] -= xyzLE[1];
+            result[2] -= xyzLE[2];
+
+            x1 = (xdot[0]*result[0]+xdot[1]*result[1]+xdot[2]*result[2])/chord;
+
+            deltaT /= 2;
+
+            if (tries++ > 20) {
+                PRINT_ERROR("Newton solve did not converge.\n"
+                            "There is likely something wrong with the geometry of the airfoil.");
+                return CAPS_BADVALUE;
+            }
+
+        } while ( fabs(x1 - xCoord) > fabs(residual) );
+
+        *t = tempT;
+    }
+
+    return CAPS_SUCCESS;
+}
 
 // Get the airfoil cross-section given a vlmSectionStruct
 // where y-upper and y-lower correspond to the x-value
@@ -2723,7 +2802,7 @@ int vlm_getSectionCoordX(vlmSectionStruct *vlmSection,
     ego *nodes = NULL, *edges = NULL, nodeTE = NULL, nodeLE;
 
     int sense = 0;
-    double t, trange[4], result[18], params[3], x_t, scale;
+    double t, trange[4], result[18], params[3], scale;
 
     //EGADS returns
     int oclass, mtype, *sens = NULL, numChildren;
@@ -2878,20 +2957,9 @@ int vlm_getSectionCoordX(vlmSectionStruct *vlmSection,
 
             x1 = (xdot[0]*result[0]+xdot[1]*result[1]+xdot[2]*result[2])/chord;
             // use Newton solve to refine the t-value
-            while( fabs(x1 - xCoord[ipnt]) > 1e-7*scale ) {
-                x_t = (xdot[0]*result[3]+xdot[1]*result[4]+xdot[2]*result[5])/chord;
-
-                t -= (x1 - xCoord[ipnt])/x_t;
-
-                status = EG_evaluate(edges[edgeIndex], &t, result);
-                if (status != EGADS_SUCCESS) goto cleanup;
-
-                result[0] -= xyzLE[0];
-                result[1] -= xyzLE[1];
-                result[2] -= xyzLE[2];
-
-                x1 = (xdot[0]*result[0]+xdot[1]*result[1]+xdot[2]*result[2])/chord;
-            }
+            status = _refineT(x1, xCoord[ipnt], scale, chord, 
+                              edges[edgeIndex], xdot, result, xyzLE, &t);
+            if (status != CAPS_SUCCESS) goto cleanup;
 
             yUpper[ipnt] = (ydot[0]*result[0]+ydot[1]*result[1]+ydot[2]*result[2])/chord;
         }
@@ -2941,20 +3009,9 @@ int vlm_getSectionCoordX(vlmSectionStruct *vlmSection,
 
             x1 = (xdot[0]*result[0]+xdot[1]*result[1]+xdot[2]*result[2])/chord;
             // use Newton solve to refine the t-value
-            while( fabs(x1 - xCoord[ipnt]) > 1e-7*scale ) {
-                x_t = (xdot[0]*result[3]+xdot[1]*result[4]+xdot[2]*result[5])/chord;
-
-                t -= (x1 - xCoord[ipnt])/x_t;
-
-                status = EG_evaluate(edges[edgeIndex], &t, result);
-                if (status != EGADS_SUCCESS) goto cleanup;
-
-                result[0] -= xyzLE[0];
-                result[1] -= xyzLE[1];
-                result[2] -= xyzLE[2];
-
-                x1 = (xdot[0]*result[0]+xdot[1]*result[1]+xdot[2]*result[2])/chord;
-            }
+            status = _refineT(x1, xCoord[ipnt], scale, chord, 
+                              edges[edgeIndex], xdot, result, xyzLE, &t);
+            if (status != CAPS_SUCCESS) goto cleanup;
 
             yLower[ipnt] = (ydot[0]*result[0]+ydot[1]*result[1]+ydot[2]*result[2])/chord;
         }
@@ -3004,6 +3061,56 @@ cleanup:
     EG_free(edgeLoopOrder);
 
     EG_deleteObject(tess);
+
+    return status;
+}
+
+// Get the camber line for a set of x coordinates
+int vlm_getSectionCamberLine(vlmSectionStruct *vlmSection,
+                            double Cspace,       // Chordwise spacing (see spacer)
+                            int normalize,       // Normalize by chord (true/false)
+                            int numPoint,        // Number of points in airfoil
+                            double **xCoordOut,  // [numPoint] increasing x values
+                            double **yCamberOut) // [numPoint] camber line y values
+{
+
+    int i, status;
+    double *xCoord = NULL, *yUpper = NULL, *yLower = NULL, *yCamber = NULL;
+
+    status = vlm_getSectionCoordX(vlmSection,
+                                  Cspace, // Cosine distribution
+                                  normalize, numPoint,
+                                  &xCoord, &yUpper, &yLower);
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    yCamber = EG_alloc(numPoint * sizeof(double));
+    if (yCamber == NULL) {
+        status = EGADS_MALLOC;
+        goto cleanup;
+    }
+
+    for (i = 0; i < numPoint; i++) {
+        yCamber[i] = (yUpper[i] + yLower[i]) / 2;
+    }
+
+    status = CAPS_SUCCESS;
+
+cleanup:
+
+    if (status != CAPS_SUCCESS) {
+        printf("Error: Premature exit in vlm_getSectionCamberLine, status = %d\n", status);
+        EG_free(xCoord);
+        if (yCamber != NULL) {
+            EG_free(yCamber);
+        }
+    }
+    else {
+        *xCoordOut = xCoord;
+        *yCamberOut = yCamber;
+    }
+
+    EG_free(yUpper);
+    EG_free(yLower);
 
     return status;
 }

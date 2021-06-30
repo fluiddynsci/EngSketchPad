@@ -24,14 +24,18 @@ $(ODIR)/tsfoilAIM.o: tsfoilAIM.c $(IDIR)/capsTypes.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils \
 		tsfoilAIM.c -o $(ODIR)/tsfoilAIM.o
 
+lint:
+	$(LINT) -I../../include -I$(IDIR) -I../utils $(wildcard *.c) -exportlocal -nestcomment -evalorder -retvalother
+
 clean:
 	-rm $(ODIR)/tsfoilAIM.o
 
 cleanall:	clean
 	-rm $(LDIR)/tsfoilAIM.so
 
-dox:
-	(cd doc; doxygen tsfoilAIM_dox.cfg; cd latex; make; mv refman.pdf TSFOILAIM.pdf)
+dox: doc/html/index.html
+doc/html/index.html: $(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
+	(cd doc; doxygen tsfoilAIM_dox.cfg; cd latex; make; mv refman.pdf tsfoilAIM.pdf)
 
 doxclean:
 	(cd doc; rm -f INPUT; rm -rf html latex; rm -f tsfoilAIM.tag)

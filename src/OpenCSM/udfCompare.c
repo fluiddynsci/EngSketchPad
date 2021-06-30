@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -108,6 +108,8 @@ udpExecute(ego  emodel,                 /* (in)  input model */
                        1e+0, 2e+0, 5e+0,
                        1e+1};
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(emodel=%llx)\n", (long long)emodel);
     printf("tessfile(0) = %s\n", TESSFILE(0));
@@ -142,7 +144,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     /* check that Model was input that contains one Body */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -155,14 +157,11 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     }
 
     status = EG_getContext(emodel, &context);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("tessfile(%d) = %s\n", numUdp, TESSFILE(numUdp));
@@ -174,7 +173,8 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     /* make a copy of the Body (so that it does not get removed
        when OpenCSM deletes emodel) */
     status = EG_copyObject(ebodys[0], NULL, ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_copyObject);
+    if (*ebody == NULL) goto cleanup;   // needed for splint
 
     /* open tessellation file */
     fp_tess = fopen(TESSFILE(numUdp), "r");
@@ -211,20 +211,15 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
     /* make an array of the Face ego and bounding boxes */
     status = EG_getBodyTopos(*ebody, NULL, FACE, &nface, &efaces);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
-    faces = (face_TT *) malloc(nface*sizeof(face_TT));
-    if (faces == NULL) {
-        printf(" udpExecute: malloc error\n");
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(faces, face_TT, nface);
 
     for (iface = 0; iface < nface; iface++) {
         faces[iface].eface = efaces[iface];
 
         status = EG_getBoundingBox(efaces[iface], &(faces[iface].xmin));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getBoundingBox);
     }
 
     EG_free(efaces);
@@ -246,7 +241,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
         /* find closest location in Brep */
         dbest = 1e6;
         status = pointToBrepDist(xyz_in, nface, faces, &dbest, &ifbest, uvbest);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(pointToBrepDist);
 
         distmax = MAX(distmax,  dbest);
         distavg =     distavg + dbest;
@@ -255,11 +250,11 @@ udpExecute(ego  emodel,                 /* (in)  input model */
         
         /* evaluate position in Brep */
         status = EG_evaluate(faces[ifbest].eface, uvbest, xyz_out);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_evaluate);
 
         /* add to histogram */
         status = addToHistogram(dbest, nhist, dhist, hist);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addToHistogram);
 
         /* add to PLOTFILE (if it exists) */
         if (fp_plot != NULL && dbest > TOLER(numUdp)) {
@@ -279,7 +274,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
             /* find closest location in Brep */
             dbest = 1e6;
             status = pointToBrepDist(xyz_in, nface, faces, &dbest, &ifbest, uvbest);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(pointToBrepDist);
 
             distmax = MAX(distmax,  dbest);
             distavg =     distavg + dbest;
@@ -288,11 +283,11 @@ udpExecute(ego  emodel,                 /* (in)  input model */
         
             /* evaluate position in Brep */
             status = EG_evaluate(faces[ifbest].eface, uvbest, xyz_out);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             /* add to histogram */
             status = addToHistogram(dbest, nhist, dhist, hist);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(addToHistogram);
             
             /* add to PLOTFILE (if it exists) */
             if (fp_plot != NULL && dbest > TOLER(numUdp)) {
@@ -313,7 +308,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
             /* find closest location in Brep */
             dbest = 1e6;
             status = pointToBrepDist(xyz_in, nface, faces, &dbest, &ifbest, uvbest);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(pointToBrepDist);
 
             distmax = MAX(distmax,  dbest);
             distavg =     distavg + dbest;
@@ -322,11 +317,11 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
             /* evaluate position in Brep */
             status = EG_evaluate(faces[ifbest].eface, uvbest, xyz_out);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             /* add to histogram */
             status = addToHistogram(dbest, nhist, dhist, hist);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(addToHistogram);
             
             /* add to PLOTFILE (if it exists) */
             if (fp_plot != NULL && dbest > TOLER(numUdp)) {
@@ -464,7 +459,7 @@ pointToBrepDist(double  xyz[],          /* (in)  point to check */
         /* do inverse evaluation */
         status = EG_invEvaluate(faces[iface].eface,
                                 xyz, uv_out, xyz_out);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         /* compute distance */
         dtest = sqrt((xyz_out[0]-xyz[0]) * (xyz_out[0]-xyz[0])

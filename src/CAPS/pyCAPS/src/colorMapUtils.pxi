@@ -1,7 +1,7 @@
 #
 # Written by Dr. Ryan Durscher AFRL/RQVC
 # 
-# This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3793.
+# This software has been cleared for public release on 27 Oct. 2020, case number 88ABW-2020-3328.
 
 # Return a list color map array based on the input mapName, default = "blues". 
 # Note name should be in all lowercase
@@ -2090,7 +2090,7 @@ cdef object getColorMap(object mapName, int numContour, int reverseMap):
         colorMap = default
     
     
-    length = len(colorMap)/3 # All these maps should have 255 columns 
+    length = int(len(colorMap)/3) # All these maps should have 255 columns 
     
     # Do we need to reverse/invert the colorMap 
     if reverseMap == True:
@@ -2120,7 +2120,7 @@ cdef object getColorMap(object mapName, int numContour, int reverseMap):
         
         contourMap = [colorMap[0], colorMap[1], colorMap[2]] # First color
 
-        index = length/(numContour -1) -1
+        index = int(length/(numContour -1)) -1
         
         if index == 1:
             return colorMap

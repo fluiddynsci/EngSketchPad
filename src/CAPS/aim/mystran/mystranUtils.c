@@ -1,6 +1,9 @@
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
 #include <string.h>
 #include "capsTypes.h" // Bring in CAPS types
 
+#include "aimUtil.h"
 #include "miscUtils.h" //Bring in misc. utility functions
 #include "mystranUtils.h" // Bring in mystran utility header
 
@@ -8,9 +11,10 @@
 #define strcasecmp  stricmp
 #endif
 
-// Read data from Mystran OUTPUT4 file and load it into a capsvalue
-int mystran_readOutput4Data(FILE *fp, const char *keyword, capsValue *val) {
 
+// Read data from Mystran OUTPUT4 file and load it into a capsvalue
+int mystran_readOutput4Data(FILE *fp, const char *keyword, capsValue *val)
+{
     int matrix, i; // Indexing
 
     int sint = sizeof(int), sdouble = sizeof(double); // Size of variables
@@ -168,10 +172,10 @@ int mystran_readOutput4Data(FILE *fp, const char *keyword, capsValue *val) {
     }
     */
 
-    if (found == (int) true) {
+    if ((found == (int) true) && (valueMatrix != NULL)) {
         // Copy valueMatrixs in capsvalueMatrix structure
-        val->nrow = numRow;
-        val->ncol  = numCol;
+        val->nrow   = numRow;
+        val->ncol   = numCol;
         val->length = val->nrow*val->ncol;
         if (val->length == 1) val->dim = Scalar;
         else if (val->nrow == 1 || val->ncol == 1) val->dim = Vector;
@@ -205,8 +209,9 @@ int mystran_readOutput4Data(FILE *fp, const char *keyword, capsValue *val) {
 
 // Read data from a Mystran F06 file and load it into a dataMatrix[numEigenVector][numGridPoint*8]
 // where variables are Grid Id, Coord Id, T1, T2, T3, R1, R2, R3
-int mystran_readF06EigenVector(FILE *fp, int *numEigenVector, int *numGridPoint, double ***dataMatrix) {
-
+int mystran_readF06EigenVector(FILE *fp, int *numEigenVector, int *numGridPoint,
+                               double ***dataMatrix)
+{
     int status; // Function return
 
     int i, j, eigenValue; // Indexing
@@ -233,25 +238,26 @@ int mystran_readF06EigenVector(FILE *fp, int *numEigenVector, int *numGridPoint,
 
         // Get line from file
         status = getline(&line, &linecap, fp);
-        if (status < 0) break;
+        if ((status < 0) || (line == NULL)) break;
 
         // See how many Eigen-Values we have
-        if (strncmp(numEigenLine, line,strlen(numEigenLine)) == 0) {
+        if (strncmp(numEigenLine, line, strlen(numEigenLine)) == 0) {
             sscanf(&line[strlen(numEigenLine)], "%d", numEigenVector);
 
             // Build begin Eigen-Value string
-            beginEigenLine = (char *) EG_alloc((strlen(outputEigenLine)+2)*sizeof(char));
+            beginEigenLine = (char *) EG_alloc((strlen(outputEigenLine)+2)*
+                                               sizeof(char));
             if (beginEigenLine == NULL) {
                 if (line != NULL) EG_free(line);
                 return EGADS_MALLOC;
             }
 
-            sprintf(beginEigenLine,"%s%d",outputEigenLine, 1);
+            sprintf(beginEigenLine, "%s%d", outputEigenLine, 1);
             beginEigenLine[strlen(outputEigenLine)+1] = '\0';
         }
 
         // Once we know how many Eigen-Values we have, we need to determine how many grid points exist
-        if (*numEigenVector > 0) {
+        if ((*numEigenVector > 0) && (beginEigenLine != NULL)) {
 
             // Look for start of Eigen-Vector 1
             if (strncmp(beginEigenLine, line, strlen(beginEigenLine)) == 0) {
@@ -275,7 +281,8 @@ int mystran_readF06EigenVector(FILE *fp, int *numEigenVector, int *numGridPoint,
     }
 
     printf("\tNumber of Eigen-Vectors = %d\n", *numEigenVector);
-    printf("\tNumber of Grid Points = %d for each Eigen-Vector\n", *numGridPoint);
+    printf("\tNumber of Grid Points = %d for each Eigen-Vector\n",
+           *numGridPoint);
 
     // Free begin Eigen-Value string
     if (beginEigenLine != NULL) EG_free(beginEigenLine);
@@ -301,7 +308,8 @@ int mystran_readF06EigenVector(FILE *fp, int *numEigenVector, int *numGridPoint,
 
     for (i = 0; i < *numEigenVector; i++) {
 
-        (*dataMatrix)[i] = (double *) EG_alloc(*numGridPoint*numVariable*sizeof(double));
+        (*dataMatrix)[i] = (double *) EG_alloc(*numGridPoint*numVariable*
+                                               sizeof(double));
 
         if ((*dataMatrix)[i] == NULL) { // If allocation failed ....
             for (j = 0; j < i; j++) {
@@ -327,7 +335,8 @@ int mystran_readF06EigenVector(FILE *fp, int *numEigenVector, int *numGridPoint,
 
         if (beginEigenLine == NULL) {
             // Build begin Eigen-Value string
-            beginEigenLine = (char *) EG_alloc((strlen(outputEigenLine)+intLength+1)*sizeof(char));
+            beginEigenLine = (char *) EG_alloc((strlen(outputEigenLine)+
+                                                intLength+1)*sizeof(char));
             if (beginEigenLine == NULL) {
                 if (line != NULL) EG_free(line);
                 return EGADS_MALLOC;
@@ -339,7 +348,7 @@ int mystran_readF06EigenVector(FILE *fp, int *numEigenVector, int *numGridPoint,
 
         // Get line from file
         status = getline(&line, &linecap, fp);
-        if (status < 0) break;
+        if ((status < 0) || (line == NULL)) break;
 
         // Look for start of Eigen-Vector
         if (strncmp(beginEigenLine, line, strlen(beginEigenLine)) == 0) {
@@ -374,8 +383,9 @@ int mystran_readF06EigenVector(FILE *fp, int *numEigenVector, int *numGridPoint,
 
 // Read data from a Mystran F06 file and load it into a dataMatrix[numGridPoint][8]
 // where variables are Grid Id, Coord Id, T1, T2, T3, R1, R2, R3
-int mystran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint, double ***dataMatrix) {
-
+int mystran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint,
+                                double ***dataMatrix)
+{
     int status; // Function return
 
     int i, j; // Indexing
@@ -401,7 +411,8 @@ int mystran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint, doub
     else if (subcaseId >= 10) intLength = 2;
     else intLength = 1;
 
-    beginSubcaseLine = (char *) EG_alloc((strlen(outputSubcaseLine)+intLength+1)*sizeof(char));
+    beginSubcaseLine = (char *) EG_alloc((strlen(outputSubcaseLine)+intLength+1)*
+                                         sizeof(char));
     if (beginSubcaseLine == NULL) return EGADS_MALLOC;
 
     sprintf(beginSubcaseLine,"%s%d",outputSubcaseLine, subcaseId);
@@ -412,7 +423,7 @@ int mystran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint, doub
 
         // Get line from file
         status = getline(&line, &linecap, fp);
-        if (status < 0) break;
+        if ((status < 0) || (line == NULL)) break;
 
         // Look for start of subcaseId
         if (strncmp(beginSubcaseLine, line, strlen(beginSubcaseLine)) == 0) {
@@ -450,7 +461,10 @@ int mystran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint, doub
     if (*dataMatrix != NULL) EG_free(*dataMatrix);
 
     *dataMatrix = (double **) EG_alloc(*numGridPoint *sizeof(double *));
-    if (*dataMatrix == NULL) return EGADS_MALLOC; // If allocation failed ....
+    if (*dataMatrix == NULL) {
+        if (beginSubcaseLine != NULL) EG_free(beginSubcaseLine);
+        return EGADS_MALLOC; // If allocation failed ....
+    }
 
     for (i = 0; i < *numGridPoint; i++) {
 
@@ -463,13 +477,14 @@ int mystran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint, doub
             }
 
             if ((*dataMatrix) != NULL) EG_free((*dataMatrix));
-
+            if (beginSubcaseLine != NULL) EG_free(beginSubcaseLine);
             return EGADS_MALLOC;
         }
     }
 
     // Loop through the file again and pull out data
     while (getline(&line, &linecap, fp) >= 0) {
+        if (line == NULL) continue;
 
         // Look for start of Eigen-Vector
         if (strncmp(beginSubcaseLine, line, strlen(beginSubcaseLine)) == 0) {
@@ -500,7 +515,8 @@ int mystran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint, doub
     if (line != NULL) EG_free(line);
 
     if (numDataRead/numVariable != *numGridPoint) {
-        printf("Failed to read %d grid points. Only found %d.\n", *numGridPoint, numDataRead/numVariable);
+        printf("Failed to read %d grid points. Only found %d.\n",
+               *numGridPoint, numDataRead/numVariable);
         return CAPS_IOERR;
     }
 

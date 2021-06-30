@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -27,7 +27,7 @@
  *     MA  02110-1301  USA
  */
 
-#define NUMUDPARGS 8
+#define NUMUDPARGS 9
 #include "udpUtilities.h"
 
 /* shorthands for accessing argument values and velocities */
@@ -35,16 +35,17 @@
 #define NCP(     IUDP)    ((int    *) (udps[IUDP].arg[1].val))[0]
 #define ORDERED( IUDP)    ((int    *) (udps[IUDP].arg[2].val))[0]
 #define PERIODIC(IUDP)    ((int    *) (udps[IUDP].arg[3].val))[0]
-#define XFORM(   IUDP,I)  ((double *) (udps[IUDP].arg[4].val))[I]
-#define NPNT(    IUDP)    ((int    *) (udps[IUDP].arg[5].val))[0]
-#define RMS(     IUDP)    ((double *) (udps[IUDP].arg[6].val))[0]
-#define XYZ(     IUDP,I)  ((double *) (udps[IUDP].arg[7].val))[I]
+#define SPLIT(   IUDP,I)  ((int    *) (udps[IUDP].arg[4].val))[I]
+#define XFORM(   IUDP,I)  ((double *) (udps[IUDP].arg[5].val))[I]
+#define NPNT(    IUDP)    ((int    *) (udps[IUDP].arg[6].val))[0]
+#define RMS(     IUDP)    ((double *) (udps[IUDP].arg[7].val))[0]
+#define XYZ(     IUDP,I)  ((double *) (udps[IUDP].arg[8].val))[I]
 
 /* data about possible arguments */
-static char  *argNames[NUMUDPARGS] = {"filename", "ncp",   "ordered", "periodic", "xform",  "npnt",   "rms",     "xyz", };
-static int    argTypes[NUMUDPARGS] = {ATTRSTRING, ATTRINT, ATTRINT,   ATTRINT,    ATTRREAL, -ATTRINT, -ATTRREAL, 0,     };
-static int    argIdefs[NUMUDPARGS] = {0,          0,       1,         0,          0,        0,        0,         0,     };
-static double argDdefs[NUMUDPARGS] = {0.,         0.,      1.,        0.,         0.,       0.,       0.,        0.,    };
+static char  *argNames[NUMUDPARGS] = {"filename", "ncp",   "ordered", "periodic", "split", "xform",  "npnt",   "rms",     "xyz", };
+static int    argTypes[NUMUDPARGS] = {ATTRFILE,   ATTRINT, ATTRINT,   ATTRINT,    ATTRINT, ATTRREAL, -ATTRINT, -ATTRREAL, 0,     };
+static int    argIdefs[NUMUDPARGS] = {0,          0,       1,         0,          0,       0,        0,        0,         0,     };
+static double argDdefs[NUMUDPARGS] = {0.,         0.,      1.,        0.,         0.,      0.,       0.,       0.,        0.,    };
 
 /* get utility routines: udpErrorStr, udpInitialize, udpReset, udpSet,
                          udpGet, udpVel, udpClean, udpMesh */
@@ -64,7 +65,6 @@ static double argDdefs[NUMUDPARGS] = {0.,         0.,      1.,        0.,       
 
 #define           MIN(A,B)        (((A) < (B)) ? (A) : (B))
 #define           MAX(A,B)        (((A) > (B)) ? (A) : (B))
-#define           SQR(A)          ((A) * (A))
 #define           EPS06           1.0e-6
 #define           HUGEQ           1.0e+20
 
@@ -84,6 +84,8 @@ static double L2norm(double f[], int n);
 static int    plotCurve(int npnt, ego ecurve);
 #endif
 
+static void *realloc_temp=NULL;              /* used by RALLOC macro */
+
 
 /*
  ************************************************************************
@@ -102,13 +104,16 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     int     status = EGADS_SUCCESS;
 
     int     *senses=NULL;
-    int     ipnt, jpnt, npnt, iedge, nedge, nument, idum;
+    int     ipnt, jpnt, mpnt, npnt, iedge, nedge, nument, idum, i, ieof;
     int     bitflag, wraparound, periodic;
     double  xin, yin, zin, rms, range[4], norm[3], range_save;
     double  data[18], uv_out[2], xyz_out[3], *cpdata=NULL;
-    FILE    *fp;
+    char    *message=NULL, *filename, *token;
+    FILE    *fp=NULL;
     ego     ecurve, eloop, eface, enew;
     ego     *enodes=NULL, *eedges=NULL;
+
+    ROUTINE(udpExecute);
 
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
@@ -116,6 +121,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     printf("ncp(     0) = %d\n", NCP(     0));
     printf("ordered( 0) = %d\n", ORDERED( 0));
     printf("periodic(0) = %d\n", PERIODIC(0));
+    printf("split(   0) = %d",   SPLIT(   0,0));
+    for (i = 1; i < udps[0].arg[4].size; i++) {
+        printf(" %d", SPLIT(0,i));
+    }
+    printf("\n");
 #endif
 
     /* default return values */
@@ -123,44 +133,47 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     *nMesh  = 0;
     *string = NULL;
 
+    MALLOC(message, char, 100);
+    message[0] = '\0';
+
     /* check arguments */
     if (strlen(FILENAME(0)) == 0) {
-        printf(" udpExecute: filename must not be null\n");
+        snprintf(message, 100, "filename must not be null\n");
         status  = EGADS_NODATA;
         goto cleanup;
 
     } else if (udps[0].arg[1].size > 1) {
-        printf(" udpExecute: ncp should be a scalar\n");
+        snprintf(message, 100, "ncp should be a scalar\n");
         status = EGADS_RANGERR;
         goto cleanup;
 
     } else if (NCP(0) < 3) {
-        printf(" udpExecute: ncp = %d < 3\n", NCP(0));
+        snprintf(message, 100, "ncp = %d < 3\n", NCP(0));
         status = EGADS_RANGERR;
         goto cleanup;
 
     } else if (udps[0].arg[2].size > 1) {
-        printf(" udpExecute: ordered should be a scalar\n");
+        snprintf(message, 100, "ordered should be a scalar\n");
         status = EGADS_RANGERR;
         goto cleanup;
 
     } else if (ORDERED(0) != 0 && ORDERED(0) != 1) {
-        printf(" udpExecute: ordered should be 0 or 1\n");
+        snprintf(message, 100, "ordered should be 0 or 1\n");
         status = EGADS_RANGERR;
         goto cleanup;
 
     } else if (udps[0].arg[3].size > 1) {
-        printf(" udpExecute: periodic should be a scalar\n");
+        snprintf(message, 100, "periodic should be a scalar\n");
         status = EGADS_RANGERR;
         goto cleanup;
 
     } else if (PERIODIC(0) != 0 && PERIODIC(0) != 1) {
-        printf(" udpExecute: periodic should be 0 or 1\n");
+        snprintf(message, 100, "periodic should be 0 or 1\n");
         status = EGADS_RANGERR;
         goto cleanup;
 
-    } else if (udps[0].arg[4].size != 1 && udps[0].arg[4].size != 12) {
-        printf(" udpExecute: xform should have 1 or 12 elements\n");
+    } else if (udps[0].arg[5].size != 1 && udps[0].arg[5].size != 12) {
+        snprintf(message, 100, "xform should have 1 or 12 elements\n");
         status = EGADS_RANGERR;
         goto cleanup;
 
@@ -168,55 +181,76 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("filename(%d) = %s\n", numUdp, FILENAME(numUdp));
     printf("ncp(     %d) = %d\n", numUdp, NCP(     numUdp));
     printf("ordered( %d) = %d\n", numUdp, ORDERED( numUdp));
-    printf("periodic(%d0 = %d\n", numUdp, PERIODIC(numUdp));
+    printf("periodic(%d) = %d\n", numUdp, PERIODIC(numUdp));
+    printf("split(   %d) = %d",   numUdp, SPLIT(   numUdp,0));
+    for (i = 1; i < udps[0].arg[4].size; i++) {
+        printf(" %d", SPLIT(numUdp,i));
+    }
+    printf("\n");
 #endif
 
-    /* open the file */
-    fp = fopen(FILENAME(0), "r");
-    if (fp == NULL) {
-        printf(" udpExecute: \"%s\" is not found\n", FILENAME(0));
-        status = EGADS_NOTFOUND;
+    /* open the file or stream */
+    filename = FILENAME(numUdp);
+
+    if (strncmp(filename, "<<\n", 3) == 0) {
+        token = strtok(filename, " \t\n");
+        if (token == NULL) {
+            ieof = 1;
+        } else {
+            ieof = 0;
+        }
+    } else {
+        fp = fopen(filename, "r");
+        if (fp == NULL) {
+            snprintf(message, 100, "could not open file \"%s\"", filename);
+            status = EGADS_NOTFOUND;
+            goto cleanup;
+        }
+
+        ieof = feof(fp);
+    }
+    if (ieof == 1) {
+        snprintf(message, 100, "premature enf-of-file found");
+        status = EGADS_NODATA;
         goto cleanup;
     }
 
-    /* determine the number of points in the file */
-    npnt = 0;
-    while (1) {
-        nument = fscanf(fp, "%lf %lf %lf\n", &xin, &yin, &zin);
-        if (nument != 3) break;
-        npnt++;
-    }
-#ifdef DEBUG
-    printf("npnt=%d\n", npnt);
-#endif
-
-    /* save the number of points in the file and allocate sufficient space*/
-    NPNT(numUdp) = npnt;
-    udps[numUdp].arg[7].val = (double *) EG_reall(udps[numUdp].arg[7].val, 3*npnt*sizeof(double));
-    if (udps[numUdp].arg[7].val == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    mpnt = 100;
+    RALLOC(udps[numUdp].arg[8].val, double, 3*mpnt);
 
     /* fill the table of points by re-reading the file */
-    rewind(fp);
-
     npnt  = 0;
     nedge = 1;
     while (1) {
-        nument = fscanf(fp, "%lf %lf %lf\n", &xin, &yin, &zin);
-        if (nument != 3) break;
+        if (npnt >= mpnt-1) {
+            mpnt += 100;
+            RALLOC(udps[numUdp].arg[8].val, double, 3*mpnt);
+        }
 
-        if (udps[numUdp].arg[4].size == 1) {
+        if (fp != NULL) {
+            nument = fscanf(fp, "%lf %lf %lf\n", &xin, &yin, &zin);
+            if (nument != 3) break;
+        } else {
+            token = strtok(NULL, " \t\n");
+            if (token == NULL) break;
+            xin = strtod(token, NULL);
+
+            token = strtok(NULL, " \t\n");
+            if (token == NULL) break;
+            yin = strtod(token, NULL);
+
+            token = strtok(NULL, " \t\n");
+            if (token == NULL) break;
+            zin = strtod(token, NULL);
+        }
+
+        if (udps[numUdp].arg[5].size == 1) {
             XYZ(numUdp,3*npnt  ) = xin;
             XYZ(numUdp,3*npnt+1) = yin;
             XYZ(numUdp,3*npnt+2) = zin;
@@ -233,12 +267,25 @@ udpExecute(ego  context,                /* (in)  EGADS context */
             fabs(XYZ(numUdp,3*npnt-4)-XYZ(numUdp,3*npnt-1)) < EPS06   ) {
             nedge++;
         }
+
+        for (i = 0; i < udps[0].arg[4].size; i++) {
+            if (npnt == SPLIT(0,i)+i) {
+                XYZ(numUdp,3*npnt  ) = XYZ(numUdp,3*npnt-3);
+                XYZ(numUdp,3*npnt+1) = XYZ(numUdp,3*npnt-2);
+                XYZ(numUdp,3*npnt+2) = XYZ(numUdp,3*npnt-1);
+
+                npnt++;
+                nedge++;
+            }
+        }
     }
 #ifdef DEBUG
     printf("nedge=%d\n", nedge);
 #endif
 
-    fclose(fp);
+    if (fp != NULL) {
+        fclose(fp);
+    }
 
     /* cannot have a wraparound geometry that only has one Edge */
     if (fabs(XYZ(numUdp,3*npnt-3)-XYZ(numUdp,0)) < EPS06 &&
@@ -253,50 +300,45 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 #endif
 
     if (wraparound == 1 && nedge == 1) {
-        printf(" udpExecute: wraparound geometry with only one Edge\n");
+        snprintf(message, 100, "wraparound geometry with only one Edge\n");
         status = EGADS_DEGEN;
         goto cleanup;
     }
 
     /* fit a Bspline to the data */
     bitflag = ORDERED(numUdp) + 2 * PERIODIC(numUdp);
-    status = EG_fitBspline(context, npnt, bitflag, udps[numUdp].arg[7].val,
+    status = EG_fitBspline(context, npnt, bitflag, udps[numUdp].arg[8].val,
                            NCP(numUdp), &ecurve, &rms);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_fitBspline);
 
 #ifdef GRAFIC
     /* plot the fit */
     status = plotCurve(npnt, ecurve);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(plotCurve);
 #endif
 
     /* get storage of the Nodes and Edges */
-    enodes = (ego *) malloc((nedge+1)*sizeof(ego));
-    eedges = (ego *) malloc((nedge  )*sizeof(ego));
-    senses = (int *) malloc((nedge  )*sizeof(int));
-
-    if (enodes == NULL || eedges == NULL || senses == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(enodes, ego, (nedge+1));
+    MALLOC(eedges, ego, (nedge  ));
+    MALLOC(senses, int, (nedge  ));
 
     /* make the Nodes and the Edges */
     status = EG_getRange(ecurve, range, &idum);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getRange);
 
     range_save = range[1];
 
     status = EG_evaluate(ecurve, &(range[0]), data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_evaluate);
 
     status = EG_makeTopology(context, NULL, NODE, 0, data, 0, NULL, NULL, &(enodes[0]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_evaluate(ecurve, &(range[1]), data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_evaluate);
 
     status = EG_makeTopology(context, NULL, NODE, 0, data, 0, NULL, NULL, &(enodes[nedge]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     jpnt = 1;
     for (iedge = 0; iedge < nedge-1; iedge++) {
@@ -306,16 +348,16 @@ udpExecute(ego  context,                /* (in)  EGADS context */
                 fabs(XYZ(numUdp,3*ipnt+2)-XYZ(numUdp,3*ipnt-1)) < EPS06   ) {
 
                 status = EG_invEvaluate(ecurve, &(XYZ(numUdp,3*ipnt)), uv_out, xyz_out);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_invEvaluate);
 
                 range[1] = uv_out[0];
 
                 status = EG_makeTopology(context, NULL, NODE, 0, xyz_out, 0, NULL, NULL, &(enodes[iedge+1]));
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_makeTopology);
 
                 status = EG_makeTopology(context, ecurve, EDGE, TWONODE,
                                          range, 2, &(enodes[iedge]), NULL, &(eedges[iedge]));
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_makeTopology);
 
                 senses[iedge] = SFORWARD;
 
@@ -329,9 +371,17 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     range[1] = range_save;
 
+    /* re-use first Node if wrap-around */
+    if (wraparound == 1) {
+        status = EG_deleteObject(enodes[nedge]);
+        CHECK_STATUS(EG_deleteObject);
+
+        enodes[nedge] = enodes[0];
+    }
+
     status = EG_makeTopology(context, ecurve, EDGE, TWONODE,
                              range, 2, &(enodes[nedge-1]), NULL, &(eedges[nedge-1]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     senses[nedge-1] = SFORWARD;
 
@@ -339,18 +389,18 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     if (wraparound == 0) {
         status = EG_makeTopology(context, NULL, LOOP, OPEN,
                                  NULL, nedge, eedges, senses, &eloop);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
     } else {
         status = EG_makeTopology(context, NULL, LOOP, CLOSED,
                                  NULL, nedge, eedges, senses, &eloop);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
     }
 
     /* make a WireBody or a FaceBody */
     if (wraparound == 0) {
         status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                                  NULL, 1, &eloop, NULL, ebody);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
     } else {
 
         /* make Face from the loop */
@@ -360,19 +410,19 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         if (status != EGADS_SUCCESS) {
             status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                                      NULL, 1, &eloop, NULL, ebody);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_makeTopology);
 
         } else {
 
             /* find the direction of the Face normal */
             status = EG_getRange(eface, range, &periodic);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getRange);
 
             range[0] = (range[0] + range[1]) / 2;
             range[1] = (range[2] + range[3]) / 2;
 
             status = EG_evaluate(eface, range, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             norm[0] = data[4] * data[8] - data[5] * data[7];
             norm[1] = data[5] * data[6] - data[3] * data[8];
@@ -381,7 +431,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
             /* if the normal is not positive, flip the Face */
             if (norm[2] < 0) {
                 status = EG_flipObject(eface, &enew);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_flipObject);
+
                 eface = enew;
             }
 
@@ -389,7 +440,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
             senses[0] = SFORWARD;
             status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                                      NULL, 1, &eface, senses, ebody);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_makeTopology);
         }
     }
 
@@ -406,8 +457,14 @@ cleanup:
     if (eedges != NULL) free(eedges);
     if (senses != NULL) free(senses);
 
-    if (status != EGADS_SUCCESS) {
+    if (strlen(message) > 0) {
+        *string = message;
+        printf("%s\n", message);
+    } else if (status != EGADS_SUCCESS) {
+        FREE(message);
         *string = udpErrorStr(status);
+    } else {
+        FREE(message);
     }
 
     return status;
@@ -471,6 +528,8 @@ EG_fitBspline(ego    context,           /* (in)  EGADS context */
     int    nknot, ndata, idata, j, header[4];
     double *cpdata=NULL;
 
+    ROUTINE(EG_fitBspline);
+
     /* --------------------------------------------------------------- */
 
     /* default returns */
@@ -501,12 +560,7 @@ EG_fitBspline(ego    context,           /* (in)  EGADS context */
     header[2] = ncp;          // number of control points
     header[3] = nknot;        // number of knots
 
-    cpdata = (double *) malloc(ndata*sizeof(double));
-    if (cpdata == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
-
+    MALLOC(cpdata, double, ndata);
     ndata = 0;
 
     /* knot vector */
@@ -538,7 +592,7 @@ EG_fitBspline(ego    context,           /* (in)  EGADS context */
     /* perform the fitting (which updates the interior control points) */
     status = fit1dCloud(npnt, bitflag, xyz,
                         ncp,  &(cpdata[ndata]), rms);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(fit1dCloud);
 
     /* make the geometry */
     status = EG_makeGeometry(context, CURVE, BSPLINE, NULL,
@@ -624,29 +678,21 @@ fit1dCloud(int    m,                    /* (in)  number of points in cloud */
     }
 
     /* allocate all temporary arrays */
-    XYZcopy = (double *) malloc(3*m*sizeof(double));
-    dXYZdP  = (double *) malloc(  n*sizeof(double));
-    cpnew   = (double *) malloc(3*n*sizeof(double));
+    MALLOC(XYZcopy, double, 3*m);
+    MALLOC(dXYZdP,  double,   n);
+    MALLOC(cpnew,   double, 3*n);
 
-    beta    = (double *) malloc(nvar*sizeof(double));
-    delta   = (double *) malloc(nvar*sizeof(double));
-    betanew = (double *) malloc(nvar*sizeof(double));
+    MALLOC(beta,    double, nvar);
+    MALLOC(delta,   double, nvar);
+    MALLOC(betanew, double, nvar);
 
-    f       = (double *) malloc(nobj*sizeof(double));
-    fnew    = (double *) malloc(nobj*sizeof(double));
+    MALLOC(f,       double, nobj);
+    MALLOC(fnew,    double, nobj);
 
-    aa      = (double *) malloc(m    *sizeof(double));
-    bb      = (double *) malloc(m *np*sizeof(double));
-    cc      = (double *) malloc(np*np*sizeof(double));
-    rhs     = (double *) malloc(nvar *sizeof(double));
-
-    if (XYZcopy == NULL ||dXYZdP == NULL || cpnew == NULL ||
-        beta    == NULL || delta == NULL || betanew == NULL ||
-        f       == NULL || fnew  == NULL ||
-        aa      == NULL || bb    == NULL || cc == NULL || rhs == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(aa,      double, m    );
+    MALLOC(bb,      double, m *np);
+    MALLOC(cc,      double, np*np);
+    MALLOC(rhs,     double, nvar );
 
 #define AA(I)       aa[(I)]
 #define BB(I,J)     bb[(J)+np*(I)]
@@ -724,12 +770,12 @@ fit1dCloud(int    m,                    /* (in)  number of points in cloud */
            last control points */
         dmax = 0;
         for (k = 1; k < m-1; k++) {
-            dist1 = pow(XYZcopy[3*k  ]-cp[0], 2)
-                  + pow(XYZcopy[3*k+1]-cp[1], 2)
-                  + pow(XYZcopy[3*k+2]-cp[2], 2);
-            dist2 = pow(XYZcopy[3*k  ]-cp[3*n-3], 2)
-                  + pow(XYZcopy[3*k+1]-cp[3*n-2], 2)
-                  + pow(XYZcopy[3*k+2]-cp[3*n-1], 2);
+            dist1 = SQR(XYZcopy[3*k  ]-cp[    0])
+                  + SQR(XYZcopy[3*k+1]-cp[    1])
+                  + SQR(XYZcopy[3*k+2]-cp[    2]);
+            dist2 = SQR(XYZcopy[3*k  ]-cp[3*n-3])
+                  + SQR(XYZcopy[3*k+1]-cp[3*n-2])
+                  + SQR(XYZcopy[3*k+2]-cp[3*n-1]);
             dist  = MIN(dist1, dist2);
 
             if (dist > dmax) {
@@ -774,9 +820,9 @@ fit1dCloud(int    m,                    /* (in)  number of points in cloud */
                    / ((xe-xb) * (xe-xb) + (ye-yb) * (ye-yb) + (ze-zb) * (ze-zb));
                 tt = MIN(MAX(0, tt), 1);
 
-                dd = pow((1-tt) * xb + tt * xe - xx, 2)
-                   + pow((1-tt) * yb + tt * ye - yy, 2)
-                   + pow((1-tt) * zb + tt * ze - zz, 2);
+                dd = SQR((1-tt) * xb + tt * xe - xx)
+                   + SQR((1-tt) * yb + tt * ye - yy)
+                   + SQR((1-tt) * zb + tt * ze - zz);
 
                 if (dd < dmin) {
                     dmin    = dd;
@@ -881,13 +927,8 @@ fit1dCloud(int    m,                    /* (in)  number of points in cloud */
         /* set up sparse-matrix arrays */
         count = m + 2 * m * np + np * np + 1;
 
-        MMd = (double *) malloc(count*sizeof(double));
-        MMi = (int    *) malloc(count*sizeof(int   ));
-
-        if (MMd == NULL || MMi == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        MALLOC(MMd, double, count);
+        MALLOC(MMi, int,    count);
 
         /* store diagonal values (multiplied by (1+lambda)) */
         for (k = 0; k < m; k++) {
@@ -1287,19 +1328,12 @@ solveSparse(double SAv[],               /* (in)  sparse array values */
 
     n = SAi[0] - 1;
 
-    p  = (double *) malloc(n*sizeof(double));
-    pp = (double *) malloc(n*sizeof(double));
-    r  = (double *) malloc(n*sizeof(double));
-    rr = (double *) malloc(n*sizeof(double));
-    z  = (double *) malloc(n*sizeof(double));
-    zz = (double *) malloc(n*sizeof(double));
-
-    if (p == NULL || pp == NULL ||
-        r == NULL || rr == NULL ||
-        z == NULL || zz == NULL   ) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(p,  double, n);
+    MALLOC(pp, double, n);
+    MALLOC(r,  double, n);
+    MALLOC(rr, double, n);
+    MALLOC(z,  double, n);
+    MALLOC(zz, double, n);
 
     /* make sure none of the diagonals are very small */
     for (i = 0; i < n; i++) {
@@ -1525,16 +1559,13 @@ plotCurve(int    npnt,                  /* (in)  number of points in cloud */
     double *tempRlist;
     ego    eref;
 
+    ROUTINE(plotCurve);
+
     /* --------------------------------------------------------------- */
 
-    xplot = (float*) malloc((npnt+1000+ncp)*sizeof(float));
-    yplot = (float*) malloc((npnt+1000+ncp)*sizeof(float));
-    zplot = (float*) malloc((npnt+1000+ncp)*sizeof(float));
-
-    if (xplot == NULL || yplot == NULL || zplot == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(xplot, float, (npnt+1000+ncp));
+    MALLOC(yplot, float, (npnt+1000+ncp));
+    MALLOC(zplot, float, (npnt+1000+ncp));
 
     xmin = XYZ(numUdp,0);
     xmax = XYZ(numUdp,0);
@@ -1565,14 +1596,14 @@ plotCurve(int    npnt,                  /* (in)  number of points in cloud */
 
     /* build plot arrays for fit */
     status = EG_getRange(ecurve, trange, &periodic);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getRange);
 
     for (ipnt = 0; ipnt < 1000; ipnt++) {
         frac = (double)(ipnt) / (double)(1000-1);
         tt   = (1-frac) * trange[0] + frac * trange[1];
 
         status = EG_evaluate(ecurve, &tt, data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_evaluate);
 
         xplot[nplot] = data[0];
         yplot[nplot] = data[1];
@@ -1587,7 +1618,8 @@ plotCurve(int    npnt,                  /* (in)  number of points in cloud */
 
     /* build plot arrays for control points */
     status = EG_getGeometry(ecurve, &oclass, &mtype, &eref, &tempIlist, &tempRlist);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getGeometry);
+
     if (oclass != CURVE        ) goto cleanup;
     if (mtype  != BSPLINE      ) goto cleanup;
 

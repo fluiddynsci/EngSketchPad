@@ -10,9 +10,9 @@
 #endif
 
 // the minimum version of AFLR2 API that aflr2AIM is designed for
-const int AFLR2_MIN_VERSION[3] = { 9,13,3 };
+const int AFLR2_MIN_VERSION[3] = { 9,13,17 };
 
-int main  (int argc, char *argv[])
+int main(/*@unused@*/ int argc, /*@unused@*/ char *argv[])
 {
   CHAR_133 Compile_Date;
   CHAR_133 Compile_OS;

@@ -1,19 +1,19 @@
 #
-# allow for clang static analyzer
-CCSAV = $(CC)
-CXSAV = $(CXX)
 include ../include/$(ESP_ARCH)
-ifneq (,$(findstring analyzer,$(CCSAV)))
-CC     = $(CCSAV)
-CXX    = $(CXSAV)
-endif
-
 LDIR  = $(ESP_ROOT)/lib
 IDIR  = $(ESP_ROOT)/include
 ifdef ESP_BLOC
 ODIR  = $(ESP_BLOC)/obj
 else
 ODIR  = .
+endif
+
+# allow for clang static analyzer
+ifneq (,$(findstring analyzer,$(CC)))
+DEFINE += -DDEBUG
+endif
+ifneq (,$(findstring intercept,$(CC)))
+DEFINE += -DDEBUG
 endif
 
 VPATH = $(ODIR)
@@ -59,27 +59,27 @@ $(LDIR)/libegadslitestatic.a:	$(OBJS) liteTess.o liteTris.o liteQuads.o \
 
 $(OBJS): %.o:	%.c ../include/egadsErrors.h ../src/egadsInternals.h \
 		../include/egadsTypes.h liteClasses.h liteDevice.h
-	$(CC) -c $(COPTS) $(DEFANL) $(DEFINE) -I../include -I. -I../src $< \
+	$(CC) -c $(COPTS) $(DEFINE) -I../include -I. -I../src $< \
 		-o $(ODIR)/$@
 
 liteTess.o:	../include/egadsErrors.h ../src/egadsInternals.h \
                 ../include/egadsTypes.h liteClasses.h ../src/egadsTess.c
-	$(CC) -c $(COPTS) $(DEFANL) $(DEFINE) -DLITE -I../include -I. -I../src \
+	$(CC) -c $(COPTS) $(DEFINE) -DLITE -I../include -I. -I../src \
                 ../src/egadsTess.c -o $(ODIR)/liteTess.o
 
 liteTris.o:	../include/egadsErrors.h ../src/egadsInternals.h \
                 ../include/egadsTypes.h liteClasses.h ../src/egadsTris.c
-	$(CC) -c $(COPTS) $(DEFANL) $(DEFINE) -DLITE -I../include -I. -I../src \
+	$(CC) -c $(COPTS) $(DEFINE) -DLITE -I../include -I. -I../src \
                 ../src/egadsTris.c -o $(ODIR)/liteTris.o
 
 liteQuads.o:	../include/egadsErrors.h ../src/egadsInternals.h \
                 ../include/egadsTypes.h liteClasses.h ../src/egadsQuads.c
-	$(CC) -c $(COPTS) $(DEFANL) $(DEFINE) -I../include -I. -I../src \
+	$(CC) -c $(COPTS) $(DEFINE) -I../include -I. -I../src \
                 ../src/egadsQuads.c -o $(ODIR)/liteQuads.o
 
 liteTessInp.o:	../include/egadsErrors.h ../src/egadsInternals.h \
                 ../include/egadsTypes.h liteClasses.h ../src/egadsTessInp.c
-	$(CC) -c $(COPTS) $(DEFANL) $(DEFINE) -DLITE -I../include -I. -I../src \
+	$(CC) -c $(COPTS) $(DEFINE) -DLITE -I../include -I. -I../src \
                 -I../util ../src/egadsTessInp.c -o $(ODIR)/liteTessInp.o
 
 emp.o:		../util/emp.c
@@ -101,6 +101,14 @@ liteRegQuads.o:	../util/regQuads.c ../util/regQuads.h
 egadsRobust.o:	../src/egadsRobust.c
 	$(CC) -c $(COPTS) $(DEFINE) ../src/egadsRobust.c \
 		-o $(ODIR)/egadsRobust.o
+
+# Static analysis
+SCANDIR=/tmp/scanEGADSlite
+SCANEXCLUDE=
+include ../include/STANALYZER.make
+
+lint:
+	$(LINT) -I$(IDIR) -DLITE -I../src -I. liteAttrs.c liteGeom.c liteMemory.c liteBase.c liteImport.c liteString.c liteTest.c liteTopo.c ../util/evaluate.c ../util/rational.c ../util/regQuads.c -evalorder -exportlocal -shiftimplementation -aliasunique -retvalother -uniondef -formatcode
 
 clean:
 	-(cd $(ODIR); rm $(OBJS) liteTess.o liteTris.o liteQuads.o liteTessInp.o evaLite.o ratLite.o liteRegQuads.o )

@@ -1,10 +1,6 @@
-## [importPrint]
-from __future__ import print_function
-## [importPrint]
-
 ## [import]
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -22,34 +18,30 @@ parser.add_argument('-noAnalysis', action='store_true', default = False, help = 
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-## [initateProblem]
-# Initialize pyCAPS object
-myProblem = capsProblem()
-## [initateProblem]
-
+workDir = os.path.join(str(args.workDir[0]), "NastranCompositeWing_Freq")
 
 ## [geometry]
 # Load CSM file
 geometryScript = os.path.join("..","csmData","compositeWing.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 ## [geometry]
 
 ## [loadAIM]
 # Load nastran aim
-nastranAIM = myProblem.loadAIM(aim = "nastranAIM",
-                                 altName = "nastran",
-                               analysisDir = os.path.join(str(args.workDir[0]), "NastranCompositeWing_Freq"),
-                               capsIntent = "STRUCTURE")
+nastranAIM = myProblem.analysis.create(aim = "nastranAIM",
+                                       name = "nastran")
 ## [loadAIM]
 
 ## [setInputs]
 # Set project name so a mesh file is generated
 projectName = "nastran_CompositeWing"
-nastranAIM.setAnalysisVal("Proj_Name", projectName)
-nastranAIM.setAnalysisVal("Edge_Point_Max", 40)
-nastranAIM.setAnalysisVal("File_Format", "Small")
-nastranAIM.setAnalysisVal("Mesh_File_Format", "Large")
-nastranAIM.setAnalysisVal("Analysis_Type", "Modal");
+nastranAIM.input.Proj_Name        = projectName
+nastranAIM.input.Edge_Point_Max   = 40
+nastranAIM.input.File_Format      = "Small"
+nastranAIM.input.Mesh_File_Format = "Large"
+nastranAIM.input.Analysis_Type    = "Modal"
 ## [setInputs]
 
 ## [defineMaterials]
@@ -71,8 +63,8 @@ Graphite_epoxy = {"materialType"        : "Orthotropic",
                   "shearAllow"          : 19.0e-3,
                   "allowType"           : 1}
 
-nastranAIM.setAnalysisVal("Material", [("Aluminum", Aluminum),
-                                       ("Graphite_epoxy", Graphite_epoxy)])
+nastranAIM.input.Material = {"Aluminum": Aluminum,
+                             "Graphite_epoxy": Graphite_epoxy}
 ## [defineMaterials]
 
 ## [defineProperties]
@@ -92,15 +84,15 @@ composite  = {"propertyType"           : "Composite",
               "symmetricLaminate"      : True,
               "compositeFailureTheory" : "STRN" }
 
-#nastranAIM.setAnalysisVal("Property", ("wing", aluminum))
-nastranAIM.setAnalysisVal("Property", ("wing", composite))
+#nastranAIM.input.Property = {"wing": aluminum}
+nastranAIM.input.Property = {"wing": composite}
 ## [defineProperties]
 
 ## [defineConstraints]
 constraint = {"groupName" : "root",
               "dofConstraint" : 123456}
 
-nastranAIM.setAnalysisVal("Constraint", ("root", constraint))
+nastranAIM.input.Constraint = {"root": constraint}
 ## [defineConstraints]
 
 ## [defineAnalysis]
@@ -110,7 +102,7 @@ eigen = { "extractionMethod"     : "MGIV",#"Lanczos",
           "numDesiredEigenvalue" : 10,
           "eigenNormaliztion"    : "MASS"}
 
-nastranAIM.setAnalysisVal("Analysis", ("EigenAnalysis", eigen))
+nastranAIM.input.Analysis = {"EigenAnalysis": eigen}
 ## [defineAnalysis]
 
 ## [preAnalysis]
@@ -138,14 +130,7 @@ nastranAIM.postAnalysis()
 
 # Get Eigen-frequencies
 print ("\nGetting results for natural frequencies.....")
-natrualFreq = myProblem.analysis["nastran"].getAnalysisOutVal("EigenFrequency")
+natrualFreq = myProblem.analysis["nastran"].output.EigenFrequency
 
-mode = 1
-for i in natrualFreq:
+for mode, i in enumerate(natrualFreq):
     print ("Natural freq (Mode {:d}) = ".format(mode) + '{:.5f} '.format(i) + "(Hz)")
-    mode += 1
-
-## [close]
-# Close CAPS
-myProblem.closeCAPS()
-## [close]

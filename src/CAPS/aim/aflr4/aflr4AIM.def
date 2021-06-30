@@ -2,8 +2,9 @@ LIBRARY aflr4AIM
 EXPORTS
 aimInitialize
 aimCleanup
-aimData
 aimInputs
 aimPreAnalysis
+aimExecute
+aimPostAnalysis
 aimOutputs
 aimCalcOutput

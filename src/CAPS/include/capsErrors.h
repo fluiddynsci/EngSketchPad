@@ -5,7 +5,7 @@
  *
  *             Error Code Header
  *
- *      Copyright 2014-2020, Massachusetts Institute of Technology
+ *      Copyright 2014-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -52,5 +52,8 @@
 #define CAPS_BADINIT      -338
 #define CAPS_NOTNEEDED    -339
 #define CAPS_NOSENSITVTY  -340
+#define CAPS_NOBODIES     -341
+#define CAPS_JOURNAL      -342
+#define CAPS_JOURNALERR   -343
 
 #endif

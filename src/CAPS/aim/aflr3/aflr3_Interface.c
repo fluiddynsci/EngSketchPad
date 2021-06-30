@@ -1,6 +1,6 @@
 //
 // Written by Dr. Ryan Durscher AFRL/RQVC
-// This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3794.
+// Place clearance statement here.
 //
 // AFLR3 interface functions - Modified from functions provided with
 // AFLR3_LIB source (aflr3.c) written by David L. Marcum
@@ -8,6 +8,7 @@
 
 #ifdef WIN32
 #define strcasecmp stricmp
+#define strncasecmp _strnicmp
 #define strtok_r   strtok_s
 #endif
 
@@ -17,6 +18,8 @@
 #include "meshUtils.h"     // Collection of helper functions for meshing
 #include "miscUtils.h"
 #include "egads.h"
+
+#define _ENABLE_BL_
 
 #include "AFLR3_LIB.h" // AFLR3_API Library include
 
@@ -55,6 +58,9 @@
 #include "ice2/ICE2_LIB_INC.h"
  */
 #endif
+
+#include "aflr3_Interface.h"
+
 
 int aflr3_to_MeshStruct( INT_ Number_of_Nodes,
                          INT_ Number_of_Surf_Trias,
@@ -116,19 +122,28 @@ int aflr3_to_MeshStruct( INT_ Number_of_Nodes,
     // Allocation
 
     // Nodes - allocate
-    genUnstrMesh->node = (meshNodeStruct *) EG_alloc(genUnstrMesh->numNode*sizeof(meshNodeStruct));
+    genUnstrMesh->node = (meshNodeStruct *)
+                         EG_alloc(genUnstrMesh->numNode*sizeof(meshNodeStruct));
     if (genUnstrMesh->node == NULL) {
 #if !defined(_MSC_VER) || (_MSC_VER >= 1800)
-      printf("Failed to allocate %d meshNodeStruct (%zu bytes)\n", genUnstrMesh->numNode, genUnstrMesh->numNode*sizeof(meshNodeStruct));
+/*@-formatcode@*/
+      printf("Failed to allocate %d meshNodeStruct (%zu bytes)\n",
+             genUnstrMesh->numNode, genUnstrMesh->numNode*sizeof(meshNodeStruct));
+/*@+formatcode@*/
 #endif
       return EGADS_MALLOC;
     }
 
     // Elements - allocate
-    genUnstrMesh->element = (meshElementStruct *) EG_alloc(genUnstrMesh->numElement*sizeof(meshElementStruct));
+    genUnstrMesh->element = (meshElementStruct *)
+                   EG_alloc(genUnstrMesh->numElement*sizeof(meshElementStruct));
     if (genUnstrMesh->element == NULL) {
 #if !defined(_MSC_VER) || (_MSC_VER >= 1800)
-        printf("Failed to allocate %d meshElementStruct (%zu bytes)\n", genUnstrMesh->numElement, genUnstrMesh->numElement*sizeof(meshElementStruct));
+/*@-formatcode@*/
+        printf("Failed to allocate %d meshElementStruct (%zu bytes)\n",
+               genUnstrMesh->numElement,
+               genUnstrMesh->numElement*sizeof(meshElementStruct));
+/*@+formatcode@*/
 #endif
         EG_free(genUnstrMesh->node);
         genUnstrMesh->node = NULL;
@@ -138,12 +153,13 @@ int aflr3_to_MeshStruct( INT_ Number_of_Nodes,
     // Initialize
     for (i = 0; i < genUnstrMesh->numNode; i++) {
         status = initiate_meshNodeStruct(&genUnstrMesh->node[i], analysisType);
-        if (status != CAPS_SUCCESS) return status;
+        if (status != CAPS_SUCCESS) goto cleanup;
     }
 
     for (i = 0; i < genUnstrMesh->numElement; i++ ) {
-        status = initiate_meshElementStruct(&genUnstrMesh->element[i], analysisType);
-        if (status != CAPS_SUCCESS) return status;
+        status = initiate_meshElementStruct(&genUnstrMesh->element[i],
+                                            analysisType);
+        if (status != CAPS_SUCCESS) goto cleanup;
     }
 
     // Nodes - set
@@ -161,8 +177,9 @@ int aflr3_to_MeshStruct( INT_ Number_of_Nodes,
     // Start of element index
     elementIndex = 0;
 
-    // Elements -Set triangles
-    if (Number_of_Surf_Trias > 0) genUnstrMesh->meshQuickRef.startIndexTriangle = elementIndex;
+    // Elements-Set triangles
+    if (Number_of_Surf_Trias > 0)
+        genUnstrMesh->meshQuickRef.startIndexTriangle = elementIndex;
 
     numPoint = 0;
     for (i = 0; i < Number_of_Surf_Trias; i++) {
@@ -173,44 +190,49 @@ int aflr3_to_MeshStruct( INT_ Number_of_Nodes,
         genUnstrMesh->element[elementIndex].markerID = Surf_ID_Flag[i+1];
 
         status = mesh_allocMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
-        if (status != CAPS_SUCCESS) return status;
+        if (status != CAPS_SUCCESS) goto cleanup;
 
         if (i == 0) { // Only need this once
             numPoint = mesh_numMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
         }
 
         for (j = 0; j < numPoint; j++ ) {
-            genUnstrMesh->element[elementIndex].connectivity[j] = Surf_Tria_Connectivity[i+1][j];
+            genUnstrMesh->element[elementIndex].connectivity[j] =
+                Surf_Tria_Connectivity[i+1][j];
         }
 
         elementIndex += 1;
     }
 
     // Elements -Set quadrilateral
-    if (Number_of_Surf_Quads > 0) genUnstrMesh->meshQuickRef.startIndexQuadrilateral = elementIndex;
+    if (Number_of_Surf_Quads > 0)
+        genUnstrMesh->meshQuickRef.startIndexQuadrilateral = elementIndex;
 
     for (i = 0; i < Number_of_Surf_Quads; i++) {
 
         genUnstrMesh->element[elementIndex].elementType = Quadrilateral;
         genUnstrMesh->element[elementIndex].elementID   = elementIndex+1;
-        genUnstrMesh->element[elementIndex].markerID = Surf_ID_Flag[Number_of_Surf_Trias+i+1];
+        genUnstrMesh->element[elementIndex].markerID    =
+            Surf_ID_Flag[Number_of_Surf_Trias+i+1];
 
         status = mesh_allocMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
-        if (status != CAPS_SUCCESS) return status;
+        if (status != CAPS_SUCCESS) goto cleanup;
 
         if (i == 0) { // Only need this once
             numPoint = mesh_numMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
         }
 
         for (j = 0; j < numPoint; j++ ) {
-            genUnstrMesh->element[elementIndex].connectivity[j] = Surf_Quad_Connectivity[i+1][j];
+            genUnstrMesh->element[elementIndex].connectivity[j] =
+                Surf_Quad_Connectivity[i+1][j];
         }
 
         elementIndex += 1;
     }
 
     // Elements -Set Tetrahedral
-    if (Number_of_Vol_Tets > 0) genUnstrMesh->meshQuickRef.startIndexTetrahedral = elementIndex;
+    if (Number_of_Vol_Tets > 0)
+        genUnstrMesh->meshQuickRef.startIndexTetrahedral = elementIndex;
 
     for (i = 0; i < Number_of_Vol_Tets; i++) {
 
@@ -219,21 +241,23 @@ int aflr3_to_MeshStruct( INT_ Number_of_Nodes,
         genUnstrMesh->element[elementIndex].markerID    = defaultVolID;
 
         status = mesh_allocMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
-        if (status != CAPS_SUCCESS) return status;
+        if (status != CAPS_SUCCESS) goto cleanup;
 
         if (i == 0) { // Only need this once
             numPoint = mesh_numMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
         }
 
         for (j = 0; j < numPoint; j++ ) {
-            genUnstrMesh->element[elementIndex].connectivity[j] = Vol_Tet_Connectivity[i+1][j];
+            genUnstrMesh->element[elementIndex].connectivity[j] =
+                Vol_Tet_Connectivity[i+1][j];
         }
 
         elementIndex += 1;
     }
 
     // Elements -Set Pyramid
-    if (Number_of_Vol_Pents_5 > 0) genUnstrMesh->meshQuickRef.startIndexPyramid = elementIndex;
+    if (Number_of_Vol_Pents_5 > 0)
+        genUnstrMesh->meshQuickRef.startIndexPyramid = elementIndex;
 
     for (i = 0; i < Number_of_Vol_Pents_5; i++) {
 
@@ -242,21 +266,23 @@ int aflr3_to_MeshStruct( INT_ Number_of_Nodes,
         genUnstrMesh->element[elementIndex].markerID    = defaultVolID;
 
         status = mesh_allocMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
-        if (status != CAPS_SUCCESS) return status;
+        if (status != CAPS_SUCCESS) goto cleanup;
 
         if (i == 0) { // Only need this once
             numPoint = mesh_numMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
         }
 
         for (j = 0; j < numPoint; j++ ) {
-            genUnstrMesh->element[elementIndex].connectivity[j] = Vol_Pent_5_Connectivity[i+1][j];
+            genUnstrMesh->element[elementIndex].connectivity[j] =
+                Vol_Pent_5_Connectivity[i+1][j];
         }
 
         elementIndex += 1;
     }
 
     // Elements -Set Prism
-    if (Number_of_Vol_Pents_6 > 0) genUnstrMesh->meshQuickRef.startIndexPrism = elementIndex;
+    if (Number_of_Vol_Pents_6 > 0)
+        genUnstrMesh->meshQuickRef.startIndexPrism = elementIndex;
 
     for (i = 0; i < Number_of_Vol_Pents_6; i++) {
 
@@ -265,21 +291,23 @@ int aflr3_to_MeshStruct( INT_ Number_of_Nodes,
         genUnstrMesh->element[elementIndex].markerID    = defaultVolID;
 
         status = mesh_allocMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
-        if (status != CAPS_SUCCESS) return status;
+        if (status != CAPS_SUCCESS) goto cleanup;
 
         if (i == 0) { // Only need this once
             numPoint = mesh_numMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
         }
 
         for (j = 0; j < numPoint; j++ ) {
-            genUnstrMesh->element[elementIndex].connectivity[j] = Vol_Pent_6_Connectivity[i+1][j];
+            genUnstrMesh->element[elementIndex].connectivity[j] =
+                Vol_Pent_6_Connectivity[i+1][j];
         }
 
         elementIndex += 1;
     }
 
     // Elements -Set Hexa
-    if (Number_of_Vol_Hexs > 0) genUnstrMesh->meshQuickRef.startIndexHexahedral = elementIndex;
+    if (Number_of_Vol_Hexs > 0)
+        genUnstrMesh->meshQuickRef.startIndexHexahedral = elementIndex;
 
     for (i = 0; i < Number_of_Vol_Hexs; i++) {
 
@@ -288,38 +316,46 @@ int aflr3_to_MeshStruct( INT_ Number_of_Nodes,
         genUnstrMesh->element[elementIndex].markerID    = defaultVolID;
 
         status = mesh_allocMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
-        if (status != CAPS_SUCCESS) return status;
+        if (status != CAPS_SUCCESS) goto cleanup;
 
         if (i == 0) { // Only need this once
             numPoint = mesh_numMeshElementConnectivity(&genUnstrMesh->element[elementIndex]);
         }
 
         for (j = 0; j < numPoint; j++ ) {
-            genUnstrMesh->element[elementIndex].connectivity[j] = Vol_Hex_Connectivity[i+1][j];
+            genUnstrMesh->element[elementIndex].connectivity[j] =
+                Vol_Hex_Connectivity[i+1][j];
         }
 
         elementIndex += 1;
     }
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Premature exit in aflr3_to_MeshStruct status = %d\n", status);
 
-        return status;
+cleanup:
+    if (status != CAPS_SUCCESS)
+        printf("Premature exit in aflr3_to_MeshStruct status = %d\n", status);
+
+    return status;
 }
 
-int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
+
+int aflr3_Volume_Mesh (/*@unused@*/ void *aimInfo, capsValue *aimInputs,
                        meshInputStruct meshInput,
-                       meshStruct *surfaceMesh,
                        int createBL,
                        int blFlag[],
                        double blSpacing[],
                        double blThickness[],
+                       double capsMeshLength,
+                       int numMeshProp,
+                       meshSizingStruct *meshProp,
+                       meshStruct *surfaceMesh,
                        meshStruct *volumeMesh)
 {
-    int i, triIndex = 1, quadIndex = 1; // Indexing
+    int i, d, triIndex = 1, quadIndex = 1; // Indexing
+
+    int propIndex, pointIndex[4] = {-1,-1,-1,-1};
 
     // Command line variables
     int  prog_argc   = 1;    // Number of arguments
@@ -327,6 +363,7 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
     char *meshInputString = NULL;
     char *rest = NULL, *token = NULL;
 
+    INT_ bcType;
     INT_ nbl, nbldiff;
 
     // Declare AFLR3 grid generation variables.
@@ -458,7 +495,7 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
 
     // Set and register program parameter functions.
 
-    ug_set_prog_param_n_dim (3);
+    ug_set_prog_param_code (3);
 
     ug_set_prog_param_function1 (ug_initialize_aflr_param);
     ug_set_prog_param_function1 (ug_gq_initialize_param); // optional
@@ -470,7 +507,7 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
     // Register routines for BL mode
 
 #ifdef _ENABLE_BL_
-    aflr3_register_anbl3 (anbl3_grid_generator, anbl3_initialize_param, anbl3_reset_ibcibf);
+    aflr3_register_anbl3(anbl3_grid_generator, anbl3_initialize_param);
 #endif
 
     // Register external routines for evaluation of the distribution function,
@@ -511,6 +548,37 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
     status = ug_add_new_arg (&prog_argv, (char*)"allocate_and_initialize_argv");
     if (status != CAPS_SUCCESS) goto cleanup;
 
+
+    // Set other command options
+    if (createBL == (int) true) {
+        status = ug_add_flag_arg ((char*)"mbl=1", &prog_argc, &prog_argv);
+        if (status != 0) goto cleanup;
+
+        if (aimInputs[BL_Max_Layers-1].nullVal == NotNull) {
+          nbl = aimInputs[BL_Max_Layers-1].vals.integer;
+          status = ug_add_flag_arg ("nbl", &prog_argc, &prog_argv); if (status != 0) goto cleanup;
+          status = ug_add_int_arg (  nbl , &prog_argc, &prog_argv); if (status != 0) goto cleanup;
+        }
+
+        if (aimInputs[BL_Max_Layer_Diff-1].nullVal == NotNull) {
+          nbldiff = aimInputs[BL_Max_Layer_Diff-1].vals.integer;
+          status = ug_add_flag_arg ("nbldiff", &prog_argc, &prog_argv); if (status != 0) goto cleanup;
+          status = ug_add_int_arg (  nbldiff , &prog_argc, &prog_argv); if (status != 0) goto cleanup;
+        }
+
+        status = ug_add_flag_arg ((char*)"mblelc=1", &prog_argc, &prog_argv);
+        if (status != 0) goto cleanup;
+
+    } else {
+        status = ug_add_flag_arg ((char*)"mbl=0", &prog_argc, &prog_argv);
+        if (status != 0) goto cleanup;
+    }
+
+    status = ug_add_flag_arg ((char*)"mrecm=3" , &prog_argc, &prog_argv);
+    if (status != 0) goto cleanup;
+    status = ug_add_flag_arg ((char*)"mrecqm=3", &prog_argc, &prog_argv);
+    if (status != 0) goto cleanup;
+
     // Parse input string
     if (meshInput.aflr3Input.meshInputString != NULL) {
 
@@ -519,37 +587,11 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
             status = ug_add_flag_arg (token, &prog_argc, &prog_argv);
             if (status != 0) {
                 printf("Error: Failed to parse input string: %s\n", token);
-                printf("Complete input string: %s\n", meshInputString);
+                if (meshInputString != NULL)
+                    printf("Complete input string: %s\n", meshInputString);
                 goto cleanup;
             }
         }
-
-    } else {
-
-        // Set other command options
-        if (createBL == (int) true) {
-            status = ug_add_flag_arg ((char*)"mbl=1", &prog_argc, &prog_argv);
-
-            if (aimInputs[aim_getIndex(aimInfo, "BL_Max_Layers", ANALYSISIN)-1].nullVal == NotNull) {
-              nbl = aimInputs[aim_getIndex(aimInfo, "BL_Max_Layers", ANALYSISIN)-1].vals.integer;
-              status = ug_add_flag_arg ("nbl", &prog_argc, &prog_argv);
-              status = ug_add_int_arg (  nbl , &prog_argc, &prog_argv);
-            }
-
-            if (aimInputs[aim_getIndex(aimInfo, "BL_Max_Layer_Diff", ANALYSISIN)-1].nullVal == NotNull) {
-              nbldiff = aimInputs[aim_getIndex(aimInfo, "BL_Max_Layer_Diff", ANALYSISIN)-1].vals.integer;
-              status = ug_add_flag_arg ("nbldiff", &prog_argc, &prog_argv);
-              status = ug_add_int_arg (  nbldiff , &prog_argc, &prog_argv);
-            }
-
-        } else {
-            status = ug_add_flag_arg ((char*)"mbl=0", &prog_argc, &prog_argv);
-        }
-        if (status != 0) goto cleanup;
-
-        status = ug_add_flag_arg ((char*)"mrecm=3" , &prog_argc, &prog_argv); if (status != 0) goto cleanup;
-        status = ug_add_flag_arg ((char*)"mrecqm=3", &prog_argc, &prog_argv); if (status != 0) goto cleanup;
-        status = ug_add_flag_arg ((char*)"mblelc=1", &prog_argc, &prog_argv); if (status != 0) goto cleanup;
     }
 
     //printf("Number of args = %d\n",prog_argc);
@@ -561,13 +603,13 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
 
     // check that all the inputs
 
-    status = ug_check_prog_param (prog_argv, prog_argc, Message_Flag);
+    status = ug_check_prog_param(prog_argv, prog_argc, Message_Flag);
     if (status != 0) goto cleanup; // Add error code
 
     // Start memory and file status monitors and create TMP file directory.
     // This is optional and not required for implementation.
 
-    if (status == 0) ug_startup (prog_argc, prog_argv);
+    if (status == 0) (void) ug_startup(prog_argc, prog_argv);
 
     // Set program parameter functions.
     // This is optional and not required for implementation.
@@ -835,44 +877,57 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
                                 &BL_Thickness);
     if (status != EGADS_SUCCESS) goto cleanup;
 
-    for (i = 1; i <= Number_of_Nodes; i++){
-        Coordinates[i][0] = surfaceMesh->node[i-1].xyz[0] ;
-        Coordinates[i][1] = surfaceMesh->node[i-1].xyz[1] ;
-        Coordinates[i][2] = surfaceMesh->node[i-1].xyz[2] ;
-    }
+    if (Coordinates != NULL)
+        for (i = 1; i <= Number_of_Nodes; i++){
+            Coordinates[i][0] = surfaceMesh->node[i-1].xyz[0] ;
+            Coordinates[i][1] = surfaceMesh->node[i-1].xyz[1] ;
+            Coordinates[i][2] = surfaceMesh->node[i-1].xyz[2] ;
+        }
 
     for (i = 0; i < surfaceMesh->numElement; i++) {
 
         // Tri connectivity
-        if (surfaceMesh->element[i].elementType == Triangle) {
-            Surf_Tria_Connectivity[triIndex][0] = surfaceMesh->element[i].connectivity[0];
-            Surf_Tria_Connectivity[triIndex][1] = surfaceMesh->element[i].connectivity[1];
-            Surf_Tria_Connectivity[triIndex][2] = surfaceMesh->element[i].connectivity[2];
+        if (Surf_Tria_Connectivity != NULL)
+            if (surfaceMesh->element[i].elementType == Triangle) {
+                Surf_Tria_Connectivity[triIndex][0] =
+                                        surfaceMesh->element[i].connectivity[0];
+                Surf_Tria_Connectivity[triIndex][1] =
+                                        surfaceMesh->element[i].connectivity[1];
+                Surf_Tria_Connectivity[triIndex][2] =
+                                        surfaceMesh->element[i].connectivity[2];
 
-            triIndex += 1;
-        }
+                triIndex += 1;
+            }
 
         // Quad connectivity
-        if (surfaceMesh->element[i].elementType == Quadrilateral) {
-            Surf_Quad_Connectivity[quadIndex][0] = surfaceMesh->element[i].connectivity[0];
-            Surf_Quad_Connectivity[quadIndex][1] = surfaceMesh->element[i].connectivity[1];
-            Surf_Quad_Connectivity[quadIndex][2] = surfaceMesh->element[i].connectivity[2];
-            Surf_Quad_Connectivity[quadIndex][3] = surfaceMesh->element[i].connectivity[3];
+        if (Surf_Quad_Connectivity != NULL)
+            if (surfaceMesh->element[i].elementType == Quadrilateral) {
+                Surf_Quad_Connectivity[quadIndex][0] =
+                                        surfaceMesh->element[i].connectivity[0];
+                Surf_Quad_Connectivity[quadIndex][1] =
+                                        surfaceMesh->element[i].connectivity[1];
+                Surf_Quad_Connectivity[quadIndex][2] =
+                                        surfaceMesh->element[i].connectivity[2];
+                Surf_Quad_Connectivity[quadIndex][3] =
+                                        surfaceMesh->element[i].connectivity[3];
 
-            quadIndex += 1;
+                quadIndex += 1;
+            }
         }
-    }
 
     // BC flag index for Triangles
     triIndex = 1;
     for (i = 0; i < surfaceMesh->numElement; i++) {
 
         if (surfaceMesh->element[i].elementType != Triangle) continue;
-        Surf_ID_Flag[triIndex] = surfaceMesh->element[i].markerID;
+        if (Surf_ID_Flag != NULL)
+            Surf_ID_Flag[triIndex] = surfaceMesh->element[i].markerID;
 
-        Surf_Grid_BC_Flag[triIndex] = blFlag[i];
+        if (Surf_Grid_BC_Flag != NULL)
+            Surf_Grid_BC_Flag[triIndex] = blFlag[i];
 
-        Surf_Reconnection_Flag[triIndex] = 0;
+        if (Surf_Reconnection_Flag != NULL)
+            Surf_Reconnection_Flag[triIndex] = 7; // Do not allow swapping on the surface triangles
 
         triIndex += 1;
     }
@@ -882,23 +937,124 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
     for (i = 0; i < surfaceMesh->numElement; i++) {
 
         if (surfaceMesh->element[i].elementType != Quadrilateral) continue;
-        Surf_ID_Flag[quadIndex] = surfaceMesh->element[i].markerID;
+        if (Surf_ID_Flag != NULL)
+            Surf_ID_Flag[quadIndex] = surfaceMesh->element[i].markerID;
 
-        Surf_Grid_BC_Flag[quadIndex] = blFlag[i];
+        if (Surf_Grid_BC_Flag != NULL)
+            Surf_Grid_BC_Flag[quadIndex] = blFlag[i];
 
-        Surf_Reconnection_Flag[quadIndex] = 0;
+        if (Surf_Reconnection_Flag != NULL)
+            Surf_Reconnection_Flag[quadIndex] = 7; // Do not allow swapping on the surface triangles
 
         quadIndex += 1;
     }
 
     // BL desired thickness at each node
-    if (M_BL_Thickness != 0 ) {
-        for (i = 1; i <=Number_of_Nodes; i++) BL_Thickness[i] = blThickness[i-1];
+    if ((M_BL_Thickness != 0) && (BL_Thickness != NULL)) {
+        for (i = 1; i <= Number_of_Nodes; i++) BL_Thickness[i] = blThickness[i-1];
     }
 
     // BL desired initial wall spacing at each node
-    if (M_Initial_Normal_Spacing != 0) {
-        for (i = 1; i <=Number_of_Nodes; i++) Initial_Normal_Spacing[i] = blSpacing[i-1];
+    if ((M_Initial_Normal_Spacing != 0) && (Initial_Normal_Spacing != NULL)) {
+        for (i = 1; i <= Number_of_Nodes; i++) Initial_Normal_Spacing[i] = blSpacing[i-1];
+    }
+
+    // Loop through Elements and see if marker match
+    for (i = 0; i < surfaceMesh->numElement; i++) {
+
+        // Loop through meshing properties and see if boundaryLayerThickness and boundaryLayerSpacing have been specified
+        for (propIndex = 0; propIndex < numMeshProp; propIndex++) {
+
+            //If they don't match continue
+            if (surfaceMesh->element[i].markerID != meshProp[propIndex].attrIndex) continue;
+
+            // If bcType specified in meshProp
+            if ((meshProp[propIndex].bcType != NULL) &&
+                (Surf_Grid_BC_Flag != NULL)) {
+
+                bcType = (createBL == (int)true) ? -STD_UG3_GBC : STD_UG3_GBC;
+                if      (strncasecmp(meshProp[propIndex].bcType, "Farfield"             ,  8) == 0 ||
+                         strncasecmp(meshProp[propIndex].bcType, "Freestream"           , 10) == 0 ||
+                         strncasecmp(meshProp[propIndex].bcType, "FARFIELD_UG3_GBC"     , 16) == 0)
+                    bcType = FARFIELD_UG3_GBC;
+                else if (strncasecmp(meshProp[propIndex].bcType, "Viscous"              ,  7) == 0 ||
+                         strncasecmp(meshProp[propIndex].bcType, "-STD_UG3_GBC"         , 12) == 0)
+                    bcType = -STD_UG3_GBC;
+                else if (strncasecmp(meshProp[propIndex].bcType, "Inviscid"             ,  8) == 0 ||
+                         strncasecmp(meshProp[propIndex].bcType, "STD_UG3_GBC"          , 11) == 0)
+                    bcType = STD_UG3_GBC;
+                else if (strncasecmp(meshProp[propIndex].bcType, "Symmetry"             ,  8) == 0 ||
+                         strncasecmp(meshProp[propIndex].bcType, "BL_INT_UG3_GBC"       , 14) == 0)
+                    bcType = BL_INT_UG3_GBC;
+                else if (strncasecmp(meshProp[propIndex].bcType, "TRANSP_SRC_UG3_GBC"   , 18) == 0)
+                    bcType = TRANSP_SRC_UG3_GBC;
+                else if (strncasecmp(meshProp[propIndex].bcType, "TRANSP_BL_INT_UG3_GBC", 21) == 0)
+                    bcType = TRANSP_BL_INT_UG3_GBC;
+                else if (strncasecmp(meshProp[propIndex].bcType, "TRANSP_UG3_GBC"       , 14) == 0)
+                    bcType = TRANSP_UG3_GBC;
+                else if (strncasecmp(meshProp[propIndex].bcType, "-TRANSP_UG3_GBC"      , 15) == 0)
+                    bcType = -TRANSP_UG3_GBC;
+                else if (strncasecmp(meshProp[propIndex].bcType, "TRANSP_INTRNL_UG3_GBC", 20) == 0)
+                    bcType = TRANSP_INTRNL_UG3_GBC;
+                else if (strncasecmp(meshProp[propIndex].bcType, "FIXED_BL_INT_UG3_GBC" , 19) == 0)
+                    bcType = FIXED_BL_INT_UG3_GBC;
+
+                // Set face BC flag
+                Surf_Grid_BC_Flag[i+1] = bcType;
+            }
+
+            if ((surfaceMesh->element[i].elementType != Triangle &&
+                 surfaceMesh->element[i].elementType != Quadrilateral) ||
+                createBL == (int)false) continue;
+
+            // Get face indexing for Triangles - 1 bias
+            if (surfaceMesh->element[i].elementType == Triangle) {
+                pointIndex[0] = surfaceMesh->element[i].connectivity[0];
+                pointIndex[1] = surfaceMesh->element[i].connectivity[1];
+                pointIndex[2] = surfaceMesh->element[i].connectivity[2];
+                pointIndex[3] = surfaceMesh->element[i].connectivity[2]; //Repeat last point for simplicity
+            }
+
+            if (surfaceMesh->element[i].elementType == Quadrilateral) {
+                pointIndex[0] = surfaceMesh->element[i].connectivity[0];
+                pointIndex[1] = surfaceMesh->element[i].connectivity[1];
+                pointIndex[2] = surfaceMesh->element[i].connectivity[2];
+                pointIndex[3] = surfaceMesh->element[i].connectivity[3];
+            }
+
+            // Set boundary layer spacing
+            if (Initial_Normal_Spacing != NULL) {
+                Initial_Normal_Spacing[pointIndex[0]] =
+                        meshProp[propIndex].boundaryLayerSpacing*capsMeshLength;
+                Initial_Normal_Spacing[pointIndex[1]] =
+                        meshProp[propIndex].boundaryLayerSpacing*capsMeshLength;
+                Initial_Normal_Spacing[pointIndex[2]] =
+                        meshProp[propIndex].boundaryLayerSpacing*capsMeshLength;
+                Initial_Normal_Spacing[pointIndex[3]] =
+                        meshProp[propIndex].boundaryLayerSpacing*capsMeshLength;
+            }
+
+            // Set boundary layer thickness
+            if (BL_Thickness != NULL) {
+                BL_Thickness[pointIndex[0]] =
+                      meshProp[propIndex].boundaryLayerThickness*capsMeshLength;
+                BL_Thickness[pointIndex[1]] =
+                      meshProp[propIndex].boundaryLayerThickness*capsMeshLength;
+                BL_Thickness[pointIndex[2]] =
+                      meshProp[propIndex].boundaryLayerThickness*capsMeshLength;
+                BL_Thickness[pointIndex[3]] =
+                      meshProp[propIndex].boundaryLayerThickness*capsMeshLength;
+            }
+
+            // Set face BC flag if not already set
+            if (Surf_Grid_BC_Flag != NULL)
+                if (Surf_Grid_BC_Flag[i+1] == 0 &&
+                    meshProp[propIndex].boundaryLayerSpacing > 0 &&
+                    meshProp[propIndex].boundaryLayerThickness > 0)
+                  Surf_Grid_BC_Flag[i+1] = -STD_UG3_GBC;
+
+            break;
+        }
     }
 
     // Read background grid and function data.
@@ -1160,11 +1316,11 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
     }*/
 
     // Set write mesh flag - do not write out the mesh internally
-    status = ug_add_flag_arg ((char*)"mpfrmt=0" , &prog_argc, &prog_argv); if (status != 0) goto cleanup;
+    status = ug_add_flag_arg ((char *) "mpfrmt=0", &prog_argc, &prog_argv);
+    if (status != 0) goto cleanup;
 
     // Generate unstructured volume grid.
-    if (status== 0 && Program_Flag == 1)
-    {
+    if (status== 0 && Program_Flag == 1) {
         status = aflr3_grid_generator (prog_argc,
                                        prog_argv,
                                        Message_Flag,
@@ -1200,8 +1356,8 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
                                        &Source_Coordinates,
                                        &Source_Spacing,
                                        &Source_Metric);
-
         if (status != EGADS_SUCCESS) {
+            FILE *fp;
 
             printf("Volume grid generation failed!\n");
 
@@ -1215,7 +1371,46 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
                                             Surf_ID_Flag,
                                             Surf_Tria_Connectivity,
                                             Coordinates);
+            fp = aim_fopen(aimInfo, "aflr3_surf_debug.tec", "w");
+            if (fp == NULL) goto cleanup;
+            fprintf(fp, "VARIABLES = X, Y, Z, BC, ID\n");
 
+            fprintf(fp, "ZONE N=%d, E=%d, F=FEBLOCK, ET=Triangle\n",
+                    Number_of_Nodes, Number_of_Surf_Trias);
+            fprintf(fp, ", VARLOCATION=([1,2,3]=NODAL,[4,5]=CELLCENTERED)\n");
+            // write nodal coordinates
+            if (Coordinates != NULL)
+                for (d = 0; d < 3; d++) {
+                    for (i = 0; i < Number_of_Nodes; i++) {
+                        if (i % 5 == 0) fprintf( fp, "\n");
+                        fprintf(fp, "%22.15e ", Coordinates[i+1][d]);
+                    }
+                    fprintf(fp, "\n");
+                }
+
+            if (Surf_Grid_BC_Flag != NULL)
+                for (i = 0; i < Number_of_Surf_Trias; i++) {
+                    if (i % 5 == 0) fprintf( fp, "\n");
+                    fprintf(fp, "%d ", Surf_Grid_BC_Flag[i+1]);
+                }
+
+            if ((Surf_ID_Flag != NULL) && (Surf_Error_Flag != NULL))
+                for (i = 0; i < Number_of_Surf_Trias; i++) {
+                    if (i % 5 == 0) fprintf( fp, "\n");
+                    if (Surf_Error_Flag[i+1] < 0)
+                        fprintf(fp, "-1 ");
+                    else
+                        fprintf(fp, "%d ", Surf_ID_Flag[i+1]);
+                }
+
+            // cell connectivity
+            if (Surf_Tria_Connectivity != NULL)
+                for (i = 0; i < Number_of_Surf_Trias; i++)
+                    fprintf(fp, "%d %d %d\n", Surf_Tria_Connectivity[i+1][0],
+                                              Surf_Tria_Connectivity[i+1][1],
+                                              Surf_Tria_Connectivity[i+1][2]);
+
+            fclose(fp);
             goto cleanup;
         }
 
@@ -1236,7 +1431,6 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
 
         if (status != EGADS_SUCCESS) {
             printf("Volume grid generation failed!\n");
-
 
             ug3_write_surf_grid_error_file (Output_Case_Name,
                                             status,
@@ -1321,7 +1515,8 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
                                      Coordinates,
                                      volumeMesh);
         if (status != CAPS_SUCCESS) {
-            printf("Error occurred while transferring volume grid, status = %d\n", status);
+            printf("Error occurred while transferring volume grid, status = %d\n",
+                   status);
             goto cleanup;
         }
     }
@@ -1339,35 +1534,33 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
                           Vol_Pent_5_Connectivity, Vol_Pent_6_Connectivity,
                           Vol_Tet_Connectivity, Coordinates);*/
 
-
-
     status = CAPS_SUCCESS;
 
-    cleanup:
+cleanup:
 
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in aflr3_Volume_Mesh status = %d\n", status);
+    if (status != CAPS_SUCCESS)
+      printf("Error: Premature exit in aflr3_Volume_Mesh status = %d\n", status);
 
-        EG_free(meshInputString); meshInputString = NULL;
+    EG_free(meshInputString); meshInputString = NULL;
 
-        // Free program arguements
-        ug_free_argv(prog_argv); prog_argv = NULL;
+    // Free program arguements
+    ug_free_argv(prog_argv); prog_argv = NULL;
 
-        // Free grid generation and parameter array space in structures.
-        // Note that aflr3_grid_generator frees all background data.
-        ug_io_free_grid (Surf_Grid_BC_Flag,
-                         Surf_ID_Flag,
-                         Surf_Reconnection_Flag,
-                         Surf_Quad_Connectivity,
-                         Surf_Tria_Connectivity,
-                         Vol_Hex_Connectivity,
-                         Vol_ID_Flag,
-                         Vol_Pent_5_Connectivity,
-                         Vol_Pent_6_Connectivity,
-                         Vol_Tet_Connectivity,
-                         Coordinates,
-                         Initial_Normal_Spacing,
-                         BL_Thickness);
-
+    // Free grid generation and parameter array space in structures.
+    // Note that aflr3_grid_generator frees all background data.
+    ug_io_free_grid(Surf_Grid_BC_Flag,
+                    Surf_ID_Flag,
+                    Surf_Reconnection_Flag,
+                    Surf_Quad_Connectivity,
+                    Surf_Tria_Connectivity,
+                    Vol_Hex_Connectivity,
+                    Vol_ID_Flag,
+                    Vol_Pent_5_Connectivity,
+                    Vol_Pent_6_Connectivity,
+                    Vol_Tet_Connectivity,
+                    Coordinates,
+                    Initial_Normal_Spacing,
+                    BL_Thickness);
         Surf_Grid_BC_Flag = NULL;
         Surf_ID_Flag = NULL;
         Surf_Reconnection_Flag = NULL;
@@ -1397,13 +1590,13 @@ int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
         BG_Spacing = NULL;
         BG_Metric = NULL;
 
-        ug_free (BG_U_Scalars); // only needed if there is an error before aflr3
-        ug_free (BG_U_Metrics); // only needed if there is an error before aflr3
+        ug_free(BG_U_Scalars); // only needed if there is an error before aflr3
+        ug_free(BG_U_Metrics); // only needed if there is an error before aflr3
 
         BG_U_Scalars = NULL;
         BG_U_Metrics = NULL;
 
-        ug_io_free_node (Source_Coordinates, Source_Spacing, Source_Metric);
+        ug_io_free_node(Source_Coordinates, Source_Spacing, Source_Metric);
 
         Source_Coordinates = NULL;
         Source_Spacing = NULL;

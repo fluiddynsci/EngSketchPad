@@ -1,5 +1,8 @@
 # CSM file example of two wings with an outer bounding sphere 
 
+# lenght units in ft
+ATTRIBUTE capsLength $ft
+
 # Design Parameters:
 despmtr   area         40.00000
 despmtr   aspect       5.00000
@@ -64,6 +67,7 @@ store     Wing 0 0
 # Wing 1 - Restore
 restore   Wing 0
     attribute capsGroup $Wing1
+    attribute capsMesh $Wing1
     attribute _name $Wing1
     attribute AFLR4_Cmp_ID 1
     attribute AFLR4_Edge_Refinement_Weight 1
@@ -71,6 +75,7 @@ restore   Wing 0
 # Wing 2 -  Restore and scale, translate
 restore   Wing 0
     attribute capsGroup $Wing2
+    attribute capsMesh $Wing2
     attribute _name             $Wing2
     attribute AFLR4_Scale_Factor 10
     attribute AFLR4_Cmp_ID 2
@@ -81,6 +86,7 @@ restore   Wing 0
 # Create a bounding box as a farfied 
 sphere    0   0   0   80
     attribute capsGroup $Farfield
+    attribute capsMesh $Farfield
     attribute _name       $Farfield
     attribute AFLR_GBC $FARFIELD_UG3_GBC
     attribute AFLR4_Cmp_ID 3

@@ -7203,15 +7203,1066 @@
  1jun20  fix a few comments in OpenCSM.h to be consistent with
              training
 
+*******  v1.18 release
+
+ 8jun20  uprev to v1.19 (ESP.html, ESP-localhost.html, ESP-help.html,
+             OpenCSM.h, ocsm.rc)
+
+ 8jun20  update DARPA image in welcome slide for training_2020
+
+ 8jun20  add designK* test cases
+
+ 9jun20  implement simple and Laplace smoothing in createTessVels
+
+11jun20  add sensitivity checks to verify target in Makefile.DARWIN64
+
+11jun20  update training welcome slides
+
+11jun20  fix tric bug in Laplace smoothing within createTessVels
+
+14jun20  allow plotting of NodeBodys in StepThru mode
+
+14jun20  fix bug in StepThru mode if configuration started off with a
+             Sketch
+
+14jun20  update training_2020/lecture slides
+
+16jun20  allow comments to not start in column 1 in udpWaffle
+
+16jun20  fix message in udpWaffle to list CPOINT as a valid statement
+             type
+
+16jun20  fix ESP indentation associated with CATEND in ESP editor
+
+17jun20  add training_2020/exercises slides
+
+17jun20  add a hint for PATBEG in ESP editor
+
+17jun20  add @version at-parameter
+
+17jun20  allow user to edit .csm if it only contains DESPMTR
+             statements
+
+18jun20  fix bug that did not clear local Parameters associated with a
+             UDC if an error was thrown in a UDC
+
+18jun20  add test cases for making training pictures: attribute8*,
+             csystem6* sketch7*, tparams*, and waffle8*
+
+18jun20  add swap.udc and swapTest.csm
+
+18jun20  make assert_failed a catchable signal
+
+18jun20  fix error in round_pat test case
+
+18jun20  tell user which block is open when issuing error
+
+19jun20  fix bug in constraint solver if given Incidence was not
+             between -180 and +180
+
+19jun20  fix bug in constraint solver if given Angle was not between
+             -180 and +180
+
+19jun20  fix documentation associated with IMPORT when numbodies
+             argument is -1 (to return all Bodys in a Group)
+
+21jun20  allow spaces and tabs before >> for inline files
+
+22jun20  fix drawing of Axes in ESP so that they always extend to the
+             origin
+
+26jun20  add periodic argument to RULE and BLEND
+
+26jun20  change error to warning if a RULE has a Xsect with
+             multiplicity more than 1
+
+26jun20  if begList and/or endList in BLEND contains 3 values, it
+             specifiies the inward tangent vector
+
+26jun20  add rule19*, blend19*, blend20*, and boend21* test cases
+
+26jun20  improve description of BLEND in training slides
+
+28jun20  update names of constants associated with Parameters
+
+28jun20  make CFGPMTR statement exactly parallel the DESPMTR statement
+
+28jun20  give CONPMTRs global scope
+
+29jun20  ignore despmtr=0 argument to DIMENSION statment
+
+29jun20  add dimension test case
+
+29jun20  in ESP, report errors in ocsmLoad to user and set up
+            GUI so that file can be editted
+
+ 1jul20  keep as many values as possible when resizing a Parameter via
+             a DIMENSION statement; if after resizing the number of
+             values is larger, repeat the last value
+
+ 1jul20  misc fixes to training_2020 files
+
+ 2jul20  fix bug in ocsmSave that wrote DIMENSIONs associated with
+             DESPMTRs and CFGPMTRs twice
+
+ 3jul20  fix bug associated with DIMENSIONing a Parameter that had
+             previously contained a string value
+
+10jul20  allow RULE to work for two WireBodys with coincident
+             endpoints
+
+10jul20  add bentDisk* and shrinkwrap* test cases
+
+11jul20  fix bug in COMBINE that restricted input SheetBodys to only
+             have one Face each
+
+11jul20  fix bug associated with EVALUATE EDGERNG and EVALUATE FACERNG
+
+11jul20  new capability: in SUBTRACT, if Body2 is a NodeBody, split
+             Edges in Body1 at Body2
+
+11jul20  fix bug that used an undefined variable when returning from
+             an include-type UDC
+
+11jul20  update the fitter in Slugs
+
+13jul20  add rule20* to rule26* test cases
+
+13jul20  add creation of plugs.hist file
+
+14jul20  add UBOUND statements to a few Plugs test cases to help them
+             converge
+
+14jul14  require DESPMTR or CFGPMTR statement before LBOUND or UBOUND
+             is specified
+
+14jul20  fix bug that caused segfault if bad value given in LBOUND or
+             UBOUND statement
+
+14jul20  upgrade to latest version of T-Blade3
+
+16jul20  modify shrinkwrap1 test case to manually REORDER a WireBody
+
+16jul20  add DESPMTR perturbation when Plugs stalls (in the hopes of
+             unstalling it)
+
+16jul20  fix iford for BOX with negative dimensions; add boxC test
+             case
+
+17jul20  update reordering in RULE/BLEND to handle case of WireBodys
+             with coincident endpoints;  revert back to original
+             version of shrinkwrap1 test case
+
+18jul20  incorporate MIXED_TESS flag in serveCSM
+
+24jul20  add verification data for 7.4.1
+
+24jul20  fix bug in sensCSM that did not EG_mapBody when checking
+             tessellation sensitivities
+
+26jul20  update Gloves
+
+27jul20  add many options to Gloves; add glovesTest.csm
+
+28jul20  reorder ASSERT choices when writing verification data
+             for @xcg, @ycg, @zcg
+
+28jul20  add trange output in ocsmPrintEgo of an Edge
+
+28jul20  add WARNINGs for apparently spurious Nodes
+
+29jul20  change color of Faces in SheetBodys to a light pink
+
+30jul20  add addVerify target to Makefile.DARWIN64
+
+30jul20  update 7.4.1 verification data to account for removal of
+             spurious Nodes
+
+31jul20  update 7.3.1 verification data to account for removal of
+             spurious Nodes
+
+ 1aug20  improve spurious Node checks
+
+ 1aug20  modify some 7.3.1 verification data to allow for differences
+             in the treatment of spurious Nodes for different OSs
+
+ 2aug20  modify some test cases to account for latest changes to
+             spurious Node code
+
+ 2aug20  add Node, Edge, and Face counts every time a Body is created
+
+ 6aug20  update and reorganize training_2020 materials
+
+ 6aug20  allow plotting of shaded triangles (jmax=-3) and
+             quadrilaterals (jmax=-4) in the plotfile in ESP
+
+ 7aug20  change way color spectrum is defined in serveCSM
+
+ 8aug20  add split option to udpFitcurve
+
+ 8aug20  add equis option to udfFlend
+
+ 8aug20  modify Tblade3/hub_inflation test case
+
+10aug20  update error checking in udfFlend
+
+23aug20  update training slides to correct spacing when using tex2020
+
+23aug20  get latest version of T-Blade3
+
+23aug20  remove targets from Makfile.DARWIN64 and Makefile.LINUX64 that
+             used gv (buildCSM, matchCSM, and gridCSM)
+
+24aug20  add vlimits argument to udpTblade to optionally create a
+             SheetBody with the hub, tip, or both clipped; add cliptest
+             test case
+
+26aug20  add equis, npnt, and slpfac arguments to udfFlend
+
+27aug20  fix (long long) cast for windows in udfFlend
+
+27aug20  add scribedSphere test case
+
+28aug20  allow 0 as wildcard in any or all fields in SELECT FACE ibody
+             iford iseq=1 statement
+
+28aug20  allow 0 as wildcard in any or all fields in SELECT EDGE
+             ibody1 iford1 ibody2 iford2 iseq=1 statement
+
+28aug20  update LINT_FLAGS in Makefile.DARWIN64
+
+28aug20  fix typo in udpTblade
+
+29aug20  update test cases that broke when allowing wildcards in
+             SELECT: atTest, attribute6a, flowaround*, flowthru*,
+             select8, and shrinkwrap* (this occured when you were
+             SELECTing a non-manifold Edge)
+
+29aug20  allow any attribute matches in SELECT ADD and SELECT SUB
+
+ 4sep20  allow a DIMENSION statement (of a DESPMTR or CFGPMTR) to have
+             an expression for nrow and/or ncol
+
+ 4sep20  update dimension test case
+
+ 9sep20  clarify rules for SET statement (in OpenCSM.h)
+
+ 9sep20  modify expressions test case with more SET tests
+
+ 9sep20  make illegal_pmtr_index a catchable signal
+
+10sep20  allow SET to copy a whole parameter even if some of the
+             elements are undefined
+
+10sep20  allow ocsmUpdateDespmtrs to work with subscripted DESPMTRS
+
+10sep20  add oscmSaveDespmtrs to save the current DESPMTRs
+
+12sep20  add MESSAGE command to print message both to transcript and
+             in the ESP MessageWindow; add message1 test case
+
+13sep20  in ESP, use Bodys and plotdata to set initial view
+
+13sep20  extend val2str to use e notation if ndigits is negative
+
+13sep20  in the ESP .csm editor, return to the past location in the
+             file when starting editor
+
+16sep20  fix bug detected by sanitizer in MESSAGE command
+
+16sep20  fix typo in udpRadwaf associated with DEBUG printing
+
+16sep20  fix bug that properly reDIMENSIONs DESPMTRs if a CFGPMTR or
+             another DESPMTR is changed
+
+19sep20  add @toler to get largest tolerance associated with @sellist
+
+19sep20  switch from EG_solidBoolean to EG_generalBoolean; update
+             verification data where EG_generalBoolean produces fewer
+             degeneracies than EG_solidBoolean; fix cases so that
+             there are no sliver Faces
+
+21sep20  add ocsmUpdateTess to overwrite a tessellation
+
+21sep20  add -tess option to serveCSM
+
+23sep20  add -dxdd flag to serveCSM to automatically generate a .sens
+             file for the given DESPMTR
+
+23sep20  fix bug in ESP that caused a iparent=-1 message if a DESPMTR
+             and Body had the same name
+
+24sep20  fix bug that could give nonsense message in MessageWindow if
+             a bad file is read
+
+24sep20  add ocsmRegSizeCB to OpenCSM API to register a callback that
+             gets called if the size of a DESPMTR changes; add
+             dimension2 test case
+
+24sep20  update ESP so that changes in sizes of DESPMTRs are reflected
+             in the TreeWindow
+
+26sep20  fix error messages in ESP if problem occurs during ocsmLoad()
+
+28sep20  add void* userdata to modl_T structure
+
+30sep20  simplify the method for setting design velocities for
+             multi-valued DESPMTRs in ESP
+
+30sep20  add capability to ESP to show table of OUTPMTR values and
+             velocities; add pmtrtest2 test case
+
+30sep20  add printout of velocities of OUTPMTRs to serveCSMs output
+
+ 5oct20  fix indexing problem associated with changing the size of the
+             last DESPMTR
+
+ 5oct20  allow CFGPMTRs to be changed in ocsmUpdateDespmtrs
+
+ 5oct20  fix bug in serveCSM to not use callback if WebViewer is not
+             started (yet)
+
+ 5oct20  add pmtrtest3 test case and associated test in Makefile.DARWIN64
+
+ 8oct20  write CFGPMTRs in ocsmSaveDespmtrs
+
+12oct20  allow the ESP DisplayFilter to numerically compare values if
+             attrValue is numeric
+
+12oct20  fix error handling when EG_hollowBody fails
+
+12oct20  add message to serveCSM summary to tell if verification was
+             requested but a .vfy file could not be found
+
+13oct20  change message associated with locating to explicitly say
+             that the reported value is approximate
+
+14oct20  fix message returned to ESP when an error is detected while
+             processing the arguments to a UDPRIM
+
+14oct20  make messages returned to ESP by udpBox, udpImport, udpNaca,
+             udpSample, udpSupell, udpWaffle, amd udfEditAttr more
+             explanatory
+
+15oct20  when changing DisplayType to 0 in ESP, do not ask for upper
+             and lower limits
+
+15oct20  improve ESP MessageWindow messages when there is a problem in
+             a UDP/UDF
+
+17oct20  allow the BOX command to create a NodeBody
+
+17oct20  get velocities correct for the BOX command when generating a
+             WireBody or NodeBody
+
+17oct20  allow one to retrieve the velocities of the @parameters
+             associated with the mass properties
+
+17oct20  change MALLOC and FREE macros in common.h to use EG_alloc and
+             EG_free
+
+18oct20  add massprop* test cases
+
+21oct20  update ocsmFindPmtr so that if type=0, it will not create a
+             new Parameter and will return ipmtr=0 if Parameter is not
+             found at the global scope
+
+24oct20  add ocsmGetTessNpnt and ocsmGetEnt to OpenCSM API
+
+25oct20  change function signatures of ocsmPrintAttrs, ocsmPrintBodys,
+             ocsmPrintBrchs, ocsmPrintBrep and ocsmPrintPmtrs to use a
+             filename instead of a file pointer
+
+25oct20  rewrite pyOcsm to use python.ctypes (rather than the C code
+             that only worked in Python 2.x)
+
+25oct20  add testPyOcsm.py to test pyOcsm.py
+
+28oct20  add assertions for all return values in testPyOcsm.py
+
+28oct20  modify pyOcsm to make it more pythonic
+
+29oct20  add ocsmGetEgo to OpenCSM API and pyOcsm
+
+29oct20  add sketch8 test case (for testing sensitivities)
+
+29oct20  fix ESP bug that accidentally disabled buttons in Sketcher and
+             Gloves
+
+30oct20  rename ocsmGetEnt to ocsmFindEnt to make its name more
+             representative of what it does
+
+30oct20  change way tmp_OpenCSM_ files are handled so that only those
+             associated with a specific MODL are removed when ocsmFree
+             is called; add pyOcsm/inline.csm and modify testPyOcsm.py
+             to test
+
+30oct20  fix for mkdir differences between LINUX and WIN64
+
+ 1nov20  test RegMesgCB and RegSizeCB in testPyOcsm.py
+
+ 2nov20  make Ocsm.attributes private in pyOcsm.py
+
+ 4nov20  modify sketch8* test cases
+
+ 6nov20  extend ocsmNewBrch to add all the appropriate Branches if a
+             UDC is added
+
+ 6nov20  modify testPyOcsm to test adding a UDC via NewBrch
+
+ 8nov20  report an error if the child script in udpCsm.c does not
+             leave a Body on the stack
+
+ 8nov20  extend CONPMTRs so that they can be arrays of numbers
+
+ 8nov20  modify ocsmLoadDict so that CONPMTRs can be defined with
+             multiple values
+
+ 9nov20  cosmetic changes in pyOcsm
+
+ 9nov20  number tests in testPyOcsm
+
+10nov20  fix bug in ocsmLoad if unrecognized filename is given
+
+13nov20  disable recycling if a file edited in ESP editor changes the
+             type, name, any arguments, or any attributes on a Branch
+
+13nov20  add colors.dict, which defines the standard RGB color table,
+             to the data directory
+
+18nov20  fix bug in recycle checker when different Branch types are
+             detected
+
+24nov20  reformulate windtunnel7 test case to eliminate EGADS warnings
+
+25nov20  use EG_fuseSheets when UNIONing SheetBodys; update
+             verification tests to account for fewer Nodes
+
+25nov20  modify JOIN so that it only works if there are common Edges
+             in SheetBodys or Faces in SolidBodys
+
+25nov20  add joinUnion* test cases
+
+26nov20  update some verification data to be consistent with JOINs new
+             rules
+
+28nov20  fix output during execution of SELECT statement
+
+30nov20  fix sensitivity bug when computed by sensitivities and the
+             velocity of a mass property is needed
+
+30nov20  add GetTessVel checks to pyOcsm
+
+30nov20  update ocsmGetValu to get the correct dot for an OUTPMTR
+
+ 1dec20  fix bug in createTessVels that did not compute Node
+             sensitivities correctly for WireBodys
+
+ 1dec20  add more sensitivity checks to testPyOcsm
+
+ 1dec20  fix memory leak in joinSheetBodys
+
+ 5dec20  extend RULE and BLEND to create WireBodys if all inputs are
+             NodeBodys
+
+ 5dec20  check for repeated Xsects at beginning and end of RULE and
+             BLEND
+
+ 5dec20  add rule27* and blend27* test cases
+
+ 6dec20  extend EXTRUDE to create a WireBody if its input is a
+            NodeBody; add extrudeB test case
+
+ 6dec20  simplify sensitivity calculations for primitives
+
+ 6dec20  improve messages if error is encountered in sensCSM
+
+ 7dec20  add designL* test cases
+
+ 9dec20  change offset in Edge.iford from 100 to 10000; modify
+             select1a, select1b, and select2 test cases
+
+10dec20  add blend_nacelle test case
+
+11dec20  add -allVels command line option to serveCSM to compute
+             velocities for Edges and Nodes as well as Faces
+
+11dec20  add _hist attribute to WireBodys
+
+12dec20  add udfPrintEgo
+
+12dec20  fix bug that did not reset hasC0blend flag in ocsmBuild
+
+15dec20  update udpBiconvex so that there is no restriction on
+             camber; improve sensitivity calculations
+
+16dec20  return useful error message when SUBTRACTion of a SheetBody
+             from a SolidBody fails during the imprint operation
+
+16dec20  update some sensitivity verification data
+
+16dec20  rename pyOcsm to pyOCSM
+
+16dec20  update pyOCSM to use EGOs directly (instead of void pointers)
+
+17dec20  add studentGallery/espRacer
+
+18dec20  during sensitivities, get Edge history from adjoining Faces
+
+18dec20  fix bug that sometimes incorrectly set the .ibody or .iford
+             for Edges
+
+18dec20  get velocity on Edges from PRIMITIVE or GROWN directly (ie,
+             not via the adjoinig Faces)
+
+21dec20  fix _edgeID for cases with a BOOLEAN after multiple RESTOREs
+
+21dec20  fix sensitivities for some cases with LINES
+
+21dec20  fix bug that occurred during a rebuild for a Parameter that
+             was DIMENSIONed but not set
+
+21dec20  increase MAX_NAME_LEN from 32 to 64
+
+21dec20  automatically add missing semi-colon to end of argument in
+             SOLBEG statement
+
+21dec20  add designM* test cases
+
+22dec20  compute sensitivities associated with SOLBEG/SOLEND; add
+             designN* test cases
+
+22dec20  add -skipHelp command line argument to test_pyOCSM
+
+23dec20  fix memory leak in ocsmLoadDict
+
+23dec20  add copyright statement to pyOCSM
+
+23dec20  fix a few problems in pyOCSM
+
+23dec20  remove all references to SUPIN from Makefiles
+
+24dec20  fix bug in sensitivities for SOLBEG/SOLEND
+
+24dec20  rename designL3* and designL4* test cases until recursive
+             RULEs/BLENDs can be properly handled
+
+24dec20  update 7.4.1 .csen files for design1b and design4
+
+25dec20  do not check Body index in ocsmGetEgo is asking for context
+
+25dec20  fix memory management in pyOCSM
+
+26dec20  fix memory leaks associated with deleting an Attribute or
+             Csystem
+
+26dec20  move PrintEgo to top level in pyOCSM
+
+27dec20  change ocsmGetEgo to return a copy of a Body, Tessellation,
+             Face, Edge, or Node
+
+27dec20  add ocsmSetBnds to ocsm.def
+
+27dec20  update memory management in pyOCSM
+
+28dec20  add more tests to test_pyOCSM.py
+
+28dec20  produce useful error message if UDP/UDF cannot be loaded
+
+29dec20  change copyright notice to 2021
+
+ 1jan21  add range to ocsmPrintBrep
+
+ 2jan21  refactor sensitivity code and remove redundant functions
+
+ 4jan21  update makeFace for upcoming EGADS update
+
+ 8jan21  add designP* test cases
+
+ 9jan21  fix EXTRUDE/SCALE sensitivity bug
+
+ 9jan21  compute Edge and Node sensitivity directly for EXTRUDE
+
+10jan21  change sensCSM command line option from -addData to
+             -addVerify
+
+11jan21  change sensCSM to only look at Edge and Face sensitivities at
+             interior points
+
+11jan21  change serveCSM command line option from -sensTess to -tessel
+
+12jan21  get Edge and Node sensitivities directly from the source
+             rather than from the Faces
+
+13jan21  simplify algorithm for find tessellation sensitivities on
+             Edges
+
+13jan21  remove testing of Face normals and Segment direction in
+             -tessel checks in sensCSM
+
+13jan20  fix numerous sensitivity bugs
+
+14jan20  fix (recently-added) bug associated with skipping rebuild if
+             there is an EVALUATE statement
+
+14jan21  improve cloud point reclassification process in Plugs
+
+15jan21  extend designP* test cases
+
+15jan21  fix propagation of .hasdots for cases with multiple RESTOREs
+
+16jan21  handle sensitivity case when WireBody is INTERSECTed or
+             SUBTRACTed with a SolidBody
+
+16jan21  require finite-difference sensitivities for cases with
+             EVALUATE statements
+
+17jan21  use internal _dots for Edges if it exists
+
+17jan21  compute sensitivities for BLEND of all NodeBodys
+
+17jan21  update .tsen and .csem files for all 7.3.1 and some 7.4.1 test
+             cases
+
+18jan21  remove _hist and __trace__ attributes from Bodys when importing
+
+18jan21  update .csen and .tsen files for 7.4.1 for designP* test
+             cases
+
+18jan21  return EXIT_FAILURE if there is a problem with the .csen or
+             .tsen file in sensCSM
+
+19jan21  fix Slugs problems that were introduced by recent changes in
+             EGADS
+
+19jan21  add holes test case for Slugs
+
+19jan21  add sense printout for Face children in ocsmPrintEgo
+
+19jan21  update Plugs verification data for 7.3.1
+
+19jan21  fix Slugs so that it no longer issues Face is Fixed messages
+
+20jan21  fix warning messages generated by udpFitCurve, udpRadwaf,
+             udpKulfan, and udfCatmull
+
+20jan21  remove __trace__ warning for Nodes in a REVOLVE since they
+              might not exist in the SolidBody if they were on the
+              centerline
+
+20jan21  do not run plugs if there is a pendingError
+
+20jan21  allow user to skip phase1 in Plugs
+
+20jan21  write plugs.despmtrs file at end of Plugs
+
+20jan21  remove perturbation process in Plugs since it did not work,
+             especially for cases without LBOUNDs and UBOUNDs
+
+21jan21  fix bug when SWEEPing a WireBody; update sweep0a verification
+             data
+
+21jan21  fix Edge blue/green coloring in ESP
+
+21jan21  update verification data for plugs1c, plugs4b, plugs7a, and
+             plugs8a, since the results were close to the correct
+             DESPMTRs
+
+22jan21  add designP*d test cases
+
+22jan21  use new Node-only versions of EG_ruled and EG_blend
+
+22jan21  fix bug in Face orientation when SUBTRACTing two in-plane
+             SheetBodys
+
+25jan21  enable more spline functions in RULE/BLEND sensitivities
+
+26jan21  improve Plugs messages for outLevel 0
+
+26jan21  fix bug in velocityOfNode for a RULE/BLEND with a rotated
+             Xsect
+
+26jan21  fix typo in Edge tessellation sensitivities; fix affected
+             .tsen files
+
+26jan21  fix bug that drew too many things when showing tufts for
+             tessellation sensitivities
+
+27jan21  add udpProp and its test cases
+
+28jan21  add perturbations in Plugs when LM fails to help avoid local
+             minima
+
+ 4feb21  many changes in order to pass lint and scan-build tests
+
+ 6feb21  fix bug associated with CSYSTEMs that was introduced recently
+
+ 6feb21  a few more fixups to try to pass ESP_Stanalizer
+
+ 6feb21  update Makefile for lint options
+
+ 7feb21  fix bug introduced in last attempt to get around
+             false-positives in stanizer
+
+ 7feb21  more changes to get around false-positives produced by
+             stanalizer
+
+ 9feb21  add A12 to studentGallery
+
+11feb21  (for now) disable _hist and __trace__ in Bodys that are
+             returned from udpCsm (which means that we cannot get
+             sensitivities on the Body returned from udpCsm)
+
+11feb21  add etopo* test cases
+
+12feb21  adjust tolerance for detecting colinear points in CIRARC in
+             sketcher
+
+13feb21  significant speedup in creating sceneGraphMetaData,
+             especially for cases with many Faces and Edges
+
+14feb21  add A12.png for ESP-help
+
+16feb21  issue error message if problem generating SPLINE with
+             specified SSLOPE
+
+16feb21  fix bug associated with flipped Sketch containing an SSLOPE
+             statement; add sslope5* test cases
+
+19feb20  first implementation of ErepEd; add ereped* test cases
+
+20feb21  add udfNuscale to non-uniformly scale a Body (after
+             converting it to all BSPLINES); add nuscale* test cases
+
+20feb21  fix typo in GetUV in pyOCSM
+
+20feb21  add nasa_worm test case
+
+21feb21  add udfPrintEgo to Makefile and NMakefile
+
+22feb21  fix typos in ESP-ereped.js
+
+24fab21  fix memory leaks in udfNuscale
+
+25feb21  fix problems that were caused by incorrect fix of memory
+             leaks in udfNuscale
+
+25feb21  extend ocsmPrintEgo to work for EBodys, ...
+
+25feb21  add ocsmMakeEBody to OpenCSM API
+
+26feb21  next version of Erep Editor
+
+26feb21  add erepAtEnd flag so that ocsmBuild builds EBodys at end
+             based upon _erepAttr and _erepAngle attributes
+
+26feb21  add new DisplayType (6) in ESP to visualize EBodys if they
+             exist
+
+27feb21  fix important bug in tessellation sensitivities for Faces
+
+27feb21  allow configuration sensitivities on EEdges and EFaces
+
+28feb21  add more features to Erep Editor; add ereped5 test case
+
+28feb21  allow user to show either configuration or tessellation
+             sensitivities in ESP (and make the -tessel flag obsolete
+             in serveCSM)
+
+ 1mar21  update .tsen files to be consistent with fixed bug in
+             tessellation sensitivities
+
+ 3mar21  fix some minor bugs when compiling with GRAFIC
+
+ 3mar21  update ESP for recent change to WebViewer
+
+ 3mar21  update Makefiles for requirement to compile with c++
+
+ 4mar21  minor update to parka to eliminate warning with old gcc
+
+ 5mar21  add waffle9a test case
+
+ 6mar21  refactor (simplify) tessellation sensitivities code; update
+             .tsen files
+
+ 7mar21  add designQ* test cases
+
+ 9mar21  allow color names to be specified in either lowercase or
+             UPPERCASE
+
+ 9mar21  fix bug that improperly colored Edges after call to
+             udfEditAttr
+
+11mar21  fix tessellation sensitivity bug along Edges
+
+11mar21  add creation of a logdist.plot file that contains triangles
+            with the log(distance) at every Face tessellation point
+            (blue=1e-12, red=1e-03) if sensCSM is called with the
+            -tessel and -despmtr flags
+
+12mar21  add __hasC0blend__ Attribute so that finite differences are
+             used for sensitivities if a C0 blend has been recycled
+
+12mar21  update .tsen files
+
+13mar21  allow UDP/UDF to get its << arguments from a stream instead
+             of a tmp_OpenCSM_xx/yy file
+
+13mar21  add udpInline* test cases
+
+13mar21  update udfEditAttr to get its file from a stream
+
+13mar21  fix bug that did not properly write inline files associated
+             with a UDPARG statement
+
+15mar21  simplify udfEditAttr code to accomodate stanalyzer
+
+17mar21  add more info in key window printout when in ESP-sketch
+
+19mar21  update Makefile.LINUX64 for use on new ubuntu 20.04 system
+
+20mar21  add more DEBUG information in udfEditAttr
+
+20mar21  fix bug that wrote Body_xxxxxx.egads file twice if from a UDF
+
+20mar21  fix bug associated with Edge attributes when Body was
+             recycled via -loadEgads
+
+21mar21  update to udfEditAttr to account for the fact that windoze
+             does not properly handle ftell() and fseek() if file is
+             opened for read in text mode
+
+23mar21  revise Makefile.DARWIN64 so that target testESP tests
+             -dumpEgads and -loadEgads
+
+24mar21  fix recently-added bug that did not put attributes on a Body
+             that was recycled via -loadEgads
+
+25mar21  fix bug in computing tessellation sensitivity at endpoints of
+             Edges
+
+25mar21  fix allocation bug in sensCSM -tessel; update some .tsen
+             files
+
+26mar21  fix bug in udfNuscale that caused an abort if input was a
+             FaceBody; add nuscale4 test case
+
+30mar21  compute tessellation sensitivities for EBodys
+
+ 2apr21  add udfSlices; add slices* test cases
+
+ 5apr21  fix scene graph bug associated with changing DisplayType to 6
+
+ 8apr21  fix bug where scene graphc meta data was not cleared after
+             being transferred to the borwser
+
+11apr21  fix bug in ocsmCopy to not malloc when minline=0
+
+11apr21  update wingStruct test cases to use JOIN instead of UNION
+
+11apr21  add many more flend* test cases
+
+11apr21  add ability to apply flend to a single Body
+
+11apr21  update flend to work even in cases where tangent vectors are
+             (anti-)parallel
+
+13apr21  signal an error when attempting to EXTRACT a degenerate Edge
+
+14apr21  fix bug in JOIN if toMark is set but there is only one Body
+             after the mark
+
+15apr21  fix Tblade3 cases that use flends
+
+16apr21  fix bug in flend that caused out-of-bounds error
+
+16apr21  first cut at multi-user collaboration in ESP
+
+17apr21  change all wv_sendText to wv_broadcastText in serveCSM
+
+17apr21  update IMPORT to use tessellation if .egads file contains one
+             or more tessellations
+
+18apr21  update UDPRIM to use tessellation if returned model contains
+             one or more tessellations
+
+18apr18  fix bug in ocsmPrintEgo for cases where MODL contained a
+             TESSELLATION or EBODY
+
+18apr21  fix memory leaks in udfFlend
+
+18apr21  improvements to multi-user collaboration
+
+23apr21  fix memory leaks in udfFlend
+
+24apr21  extend ocsmGetEgo to allow EBody or tessellation on EBody to
+             be returned
+
+25apr21  add options to udpSupell to get better end-slopes, which is
+             sometimes needed for very large n abd high apsect ratios
+
+25apr21  add droopInlet* test cases
+
+25apr21  fix memory leak in sensCSM -tessel
+
+27apr21  add lock in serveCSM so that browser messages do not
+             interfere with each other when there are multiple browsers
+
+27apr21  update pyOCSM for latest Windoze/Python 3.9 change
+
+27apr21  fix SOLBEG iteration message
+
+30apr21  fix bug in ocsmGetTessVels that did not rebuild perturbation
+             for cases where a UDPARG contained an argument that could
+             not be computed analytically
+
+30apr21  add more droopInlet* test cases (rounded inlets)
+
+30apr21  add appliedLate test case to show how to apply chamfers and
+             fillets at the end of the build process
+
+ 1may21  fold case in argument names to UDPARG and UDPRIM
+
+ 2may21  update udpParsec; update parsec test cases; add designR* test
+             cases
+
+ 2may21  in removeVels, remove sensitivity cache for any Body created
+             by a UDPRIM (since we do not know what was done inside
+             the UDP)
+
+ 3may21  remove 6.8.1 verification data
+
+ 3may21  minor changes to Makefile.DARWIN64 and Makefile.LINUX64
+
+ 4may21  update verification data for parsec2* on 7.3.1
+
+ 4may21  update udpWaffle to get its file from a stream; add waffle9b
+             test case
+
+ 4may21  update udpBezier to get its file from a stream
+
+ 5may21  update udpFitcurve to get its file from a stream; modify
+             fitCurve6* test cases
+
+ 5may21  update udpFreeform to get its file from a stream
+
+ 5may21  update udpNurbbody to get its file from a stream; add more
+             nurbbody* test cases
+
+ 6may21  reorganize pyOCSM files so that python recognizes it as a
+             package
+
+ 7may21  do not remove previous velocities if call to ocsmSetVel or
+             ocsmSetVelD does not result in a change
+
+ 8may21  fix bug in STORE when overwriting a storage location with a
+             GROUP that contains a different number of Bodys; add
+             group6 test case
+
+ 9may21  fix bug that returned an error when IMPORTing an .egads file
+             that contains a tessellation; add import8* test cases
+
+ 9may21  fix bug in ocsmSave when writing .csm file that has UDPARG
+             statements associated with a UDC; add save1 test case
+
+ 9may21  add save2 test case to ensure that inline inputs to a UDP get
+             saved correctly in ocsmSave
+
+ 9may21  fix out-of-bounds bug when processing inline files associated
+             with a UDP/UDF
+
+ 9may21  change ocsmGetEgo so that it always returns the ego rather
+             than a copy of the ego
+ 
+ 9may21  add ocsmSetEgo to OpenCSM API, pyOCSM, and test_pyOCSM
+
+10may21  change the name of configuration sensitivities to geometric
+             sensitivities
+
+13may21  add imprint5 test case (which is expected to fail)
+
+13may21  move data/tutorial* to data/legacy/tutorial*
+
+15may21  add ExpandAll/CollapseAll button in ESP to expand listing of
+             Branches
+
+15may21  fix coloring of some Branches in ESP TreeWindow
+
+15may21  add ExpandAll/CollapseAll buttons for DesignParameters and
+             LocalVariables
+
+16may21  RESTORE . (dot) now duplicates Body on top of stack; add
+             restore2 test case
+
+16may21  return an error from ESP if despmtr change is illegal (such
+             as out of range)
+
+16may21  modify contains.udc and overlaps.udc so that they leave the
+             stack unchanged
+
+16may21  update ESP-help (except tutorials)
+
+16may21  update ESP_QuickReference
+
+17may21  remove unneeded part of tutorial3
+
+18may21  update scripts for testing ESPbeta and Esp pre-builts
+
+19may21  allow selection of geometric and tessellation sensitivities
+             for multi-valued DESPMTRs in ESP
+
+19may21  update to tutorial files for cases when spindle is not
+             created
+
+20may21  fix coloring of children Branches when a DesignParameter is
+             editted in ESP
+
+20may21  first attempt at new tutorial descriptions
+
+21may21  do not allow editing of .udc in ESP unless there is a
+             matching .csm or .cpc
+
+21may21  if ocsmSave is called to write a .udc file but there is no
+             matching UDPRIM statement, write a include-type UDC
+         
+24may21  change DisplayFilter so that it posts help via an alert
+             instead of the MessageWindow
+
+24may21  update all tutorials in ESP-help.html
+
+25may21  fix error when drawing outline in StepThru mode
+
+26may21  fix core dump if opening file in ESP without a filename
+
+26may21  fix bug in ESP that made commands not available if File->Open
+             had more Branches than previous model
+
+26may21  add description of MessageWindow background colors in
+             Tutorial 1
+
+27may21  update instructions for testing pre-builts
+
+27may21  do not let .udc file be opened via File->Open
+
+27may21  fix description of adding a sketch to Tutorial 3
+
+         refactor ESP applications so that they are modular and
+             dynamically loadable
+
+         multi-thread tessellation sensitivities
+
+         add mass property calculation errors in sensCSM
+
+         apply _faceID to UDPRIM Body (and not UDPARG Body)
+
+         compute sensitivities for Sketches
+
          fix bug that did not generate correct sensitivities for
              scribed Edges
 
          add mass property sensitivity tests to sensCSM
 
          add ability to specify SSLOPE in ESP sketcher
-
-         migrate from EG_solidBoolean and EG_fuseSheets to
-             EG_generalBoolean
 
          same DESPMTR in multiple UDCs causes last one to be ignored
 
@@ -7227,11 +8278,9 @@
 
          modify udfFlend so that it can operate on a single Body
 
-         ocsmNewBrch does not load UDC
-
          add udfBump to modify B-spline Faces
 
-         fix sensitivities generated by udpParsec and udpKulfan
+         fix sensitivities generated by udpKulfan
 
          make sure recycled Bodys get updated attributes
 

@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import time to sleep in-between attempts to call pointwise
 import time
@@ -17,35 +15,33 @@ parser = argparse.ArgumentParser(description = 'Pointwise Pytest Example',
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Working directory
 workDir = os.path.join(str(args.workDir[0]), "PointwiseAnalysisTest")
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
 # Load CSM file
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript, 
+                           outLevel=args.verbosity)
 
 # Load AFLR4 aim
-pointwise = myProblem.loadAIM(aim = "pointwiseAIM",
-                              analysisDir = workDir)
+pointwise = myProblem.analysis.create(aim = "pointwiseAIM", name = "pointwise")
 
 # Set project name so a mesh file is generated
-pointwise.setAnalysisVal("Proj_Name", "pyCAPS_Pointwise_Test")
-pointwise.setAnalysisVal("Mesh_Format", "Tecplot")
+pointwise.input.Proj_Name = "pyCAPS_Pointwise_Test"
+pointwise.input.Mesh_Format = "Tecplot"
 
 # Block level for viscous mesh
-pointwise.setAnalysisVal("Block_Full_Layers"         , 1)
-pointwise.setAnalysisVal("Block_Max_Layers"          , 100)
+pointwise.input.Block_Full_Layers = 1
+pointwise.input.Block_Max_Layers  = 100
 
 # Set mesh sizing parmeters, only Wing2 is viscous
 viscousBC  = {"boundaryLayerSpacing" : 0.001}
-pointwise.setAnalysisVal("Mesh_Sizing", [("Wing2", viscousBC)])
+pointwise.input.Mesh_Sizing = {"Wing2": viscousBC}
 
 # Run AIM pre-analysis
 pointwise.preAnalysis()
@@ -80,7 +76,4 @@ os.chdir(currentDir)
 # Run AIM post-analysis
 pointwise.postAnalysis()
 
-#pointwise.viewGeometry()
-
-# Close CAPS
-myProblem.closeCAPS()
+#pointwise.geometry.view()

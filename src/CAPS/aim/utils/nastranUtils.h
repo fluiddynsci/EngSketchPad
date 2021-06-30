@@ -1,3 +1,5 @@
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
 #include "feaTypes.h"  // Bring in FEA structures
 #include "vlmTypes.h"  // Bring in VLM structures
 
@@ -5,8 +7,9 @@
 extern "C" {
 #endif
 
-// Write out FLFact Card.
-int nastran_writeFLFactCard(FILE *fp, feaFileFormatStruct *feaFileFormat, int id, int numVal, double values[]);
+
+// Write SET case control card
+int nastran_writeSetCard(FILE *fp, int n, int numSetID, int *setID);
 
 // Write a Nastran element cards not supported by mesh_writeNastran in meshUtils.c
 int nastran_writeSubElementCard(FILE *fp, meshStruct *feaMesh, int numProperty, feaPropertyStruct *feaProperty, feaFileFormatStruct *feaFileFormat);
@@ -68,8 +71,23 @@ int nastran_writeDesignConstraintCard(FILE *fp, feaDesignConstraintStruct *feaDe
 // Write design variable/optimization information from a feaDesignVariable structure
 int nastran_writeDesignVariableCard(FILE *fp, feaDesignVariableStruct *feaDesignVariable, feaFileFormatStruct *feaFileFormat);
 
-// Write a Nastran DDVAL card from a set of ddvalSet. The id is set through the ddvalID variable.
-int nastran_writeDDVALCard(FILE *fp, int ddvalID, int numDDVALSet, double ddvalSet[], feaFileFormatStruct *feaFileFormat);
+// Write design variable relation information from a feaDesignVariableRelation structure
+int nastran_writeDesignVariableRelationCard(FILE *fp, feaDesignVariableRelationStruct *feaDesignVariableRelation, feaProblemStruct *feaProblem, feaFileFormatStruct *feaFileFormat);
+
+// Write equation information from a feaDesignEquation structure
+int nastran_writeDesignEquationCard(FILE *fp, feaDesignEquationStruct *feaEquation, feaFileFormatStruct *fileFormat);
+
+// Write design table constants information from a feaDesignTable structure 
+int nastran_writeDesignTableCard(FILE *fp, feaDesignTableStruct *feaDesignTable, feaFileFormatStruct *fileFormat);
+
+// Write design response information from a feaDesignResponse structure 
+int nastran_writeDesignResponseCard(FILE *fp, feaDesignResponseStruct *feaDesignResponse, feaFileFormatStruct *fileFormat);
+
+// Write design equation response information from a feaDesignEquationResponse structure 
+int nastran_writeDesignEquationResponseCard(FILE *fp, feaDesignEquationResponseStruct *feaDesignEquationResponse, feaProblemStruct *feaProblem, feaFileFormatStruct *fileFormat);
+
+// Write design optimization parameter information from a feaDesignOptParam struct
+int nastran_writeDesignOptParamCard(FILE *fp, feaDesignOptParamStruct *feaDesignOptParam, feaFileFormatStruct *fileFormat);
 
 // Read data from a Nastran F06 file to determine the number of eignevalues
 int nastran_readF06NumEigenValue(FILE *fp, int *numEigenVector);
@@ -85,6 +103,11 @@ int nastran_readF06EigenValue(FILE *fp, int *numEigenVector, double ***dataMatri
 // Read data from a Nastran F06 file and load it into a dataMatrix[numGridPoint][8]
 // where variables are Grid Id, Coord Id, T1, T2, T3, R1, R2, R3
 int nastran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint, double ***dataMatrix);
+
+// Read objective values for a Nastran OP2 file  and liad it into a dataMatrix[numPoint]
+int nastran_readOP2Objective(char *filename, int *numPoint,  double **dataMatrix);
+
+int nastran_writeAeroCamberTwist(FILE *fp, int numAero, feaAeroStruct *feaAero, feaFileFormatStruct *feaFileFormat);
 
 #ifdef __cplusplus
 }

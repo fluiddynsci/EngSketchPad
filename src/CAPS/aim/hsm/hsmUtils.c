@@ -12,8 +12,10 @@
 
 #include "hsmTypes.h" // Bring in hsm structures
 
+
 // Initiate hsmMemory structure
-int initiate_hsmMemoryStruct(hsmMemoryStruct *mem) {
+int initiate_hsmMemoryStruct(hsmMemoryStruct *mem)
+{
 
     /*
     mem->numNode = 0;
@@ -50,8 +52,10 @@ int initiate_hsmMemoryStruct(hsmMemoryStruct *mem) {
     return CAPS_SUCCESS;
 }
 
+
 // Destroy hsmMemory structure
-int destroy_hsmMemoryStruct(hsmMemoryStruct *mem) {
+int destroy_hsmMemoryStruct(hsmMemoryStruct *mem)
+{
 
     /*
     mem->numNode = 0;
@@ -67,7 +71,7 @@ int destroy_hsmMemoryStruct(hsmMemoryStruct *mem) {
 
     EG_free(mem->vars);     mem->vars    = NULL;
 
-     EG_free(mem->deps);    mem->deps    = NULL;
+    EG_free(mem->deps);    mem->deps    = NULL;
 
     EG_free(mem->pars);     mem->pars    = NULL;
 
@@ -88,8 +92,11 @@ int destroy_hsmMemoryStruct(hsmMemoryStruct *mem) {
     return CAPS_SUCCESS;
 }
 
+
 // Allocate hsmMemory structure
-int allocate_hsmMemoryStruct(int numNode, int numElement, int maxDim, hsmMemoryStruct *mem) {
+int allocate_hsmMemoryStruct(int numNode, int numElement, int maxDim,
+                             hsmMemoryStruct *mem)
+{
 //int numBCEdge, int numBCNode, int numJoint)
 
     // Global parameters
@@ -155,8 +162,10 @@ int allocate_hsmMemoryStruct(int numNode, int numElement, int maxDim, hsmMemoryS
         return EGADS_MALLOC;
 }
 
+
 // Initiate hsmTempMemory structure
-int initiate_hsmTempMemoryStruct(hsmTempMemoryStruct *mem) {
+int initiate_hsmTempMemoryStruct(hsmTempMemoryStruct *mem)
+{
 
     // Don't know what these are variables
     mem->bf = NULL;
@@ -203,8 +212,10 @@ int initiate_hsmTempMemoryStruct(hsmTempMemoryStruct *mem) {
 
 }
 
+
 // Destroy hsmTempMemory structure
-int destroy_hsmTempMemoryStruct(hsmTempMemoryStruct *mem) {
+int destroy_hsmTempMemoryStruct(hsmTempMemoryStruct *mem)
+{
 
     // Don't know what these are variables
     EG_free(mem->bf);        mem->bf = NULL;
@@ -251,8 +262,11 @@ int destroy_hsmTempMemoryStruct(hsmTempMemoryStruct *mem) {
     return CAPS_SUCCESS;
 }
 
+
 // Allocate hsmTempMemory structure
-int allocate_hsmTempMemoryStruct(int numNode, int maxValence, int maxDim, hsmTempMemoryStruct *mem) {
+int allocate_hsmTempMemoryStruct(int numNode, int maxValence, int maxDim,
+                                 hsmTempMemoryStruct *mem)
+{
 
     mem->bf       = (double *) EG_alloc(  3*3*numNode*sizeof(double));
     if (mem->bf       == NULL) goto bail;
@@ -360,6 +374,7 @@ int allocate_hsmTempMemoryStruct(int numNode, int maxValence, int maxDim, hsmTem
         return EGADS_MALLOC;
 }
 
+
 // Convert an EGADS body to a boundary element model - disjointed at edges
 int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                   double paramTess[3],                 // (in)  Tessellation parameters
@@ -371,7 +386,7 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                   mapAttrToIndexStruct *constraintMap, // (in)  map from CAPSConstraint names to indexes
                   mapAttrToIndexStruct *loadMap,       // (in)  map from CAPSLoad names to indexes
                   mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
-                  mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
+       /*@null@*/ mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
                   meshStruct *feaMesh)                 // (out) FEA mesh structure
 {
     int status = 0; // Function return status
@@ -396,17 +411,16 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
     int       periodic, nchange, oclass, mtype, nchild, *senses;
 
     // Edge point distributions
-    int   *points=NULL, *isouth=NULL, *ieast=NULL, *inorth=NULL, *iwest=NULL;
-    double    params[3], bbox[6], size, range[2], arclen, data[4];
-    double    *rpos=NULL;
-    ego  eref, *echilds, eloop;
+    int    *points=NULL, *isouth=NULL, *ieast=NULL, *inorth=NULL, *iwest=NULL;
+    double params[3], bbox[6], size, range[2], arclen, data[4];
+    double *rpos=NULL;
+    ego    eref, *echilds, eloop;
 
-    int          n, cnt, iloop, iedge, eindex, last,
-                 numEdgePoints, nloop, nedge, *sen;
+    int          n, cnt, iloop, iedge, eindex, last, numEdgePoints, nloop;
+    int          nedge, *sen;
     double       uvbox[4];
     const double *xyzs = NULL, *ts = NULL;
     ego          *loops = NULL, *edges = NULL, *nodes = NULL;
-
 
     // Attributues
     const char *attrName;
@@ -429,9 +443,17 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
 
     status = EG_getBodyTopos(ebody, NULL, EDGE, &numEdge, &eedges);
     if (status != EGADS_SUCCESS) goto cleanup;
+    if (eedges == NULL) {
+        status = CAPS_NULLOBJ;
+        goto cleanup;
+    }
 
     status = EG_getBodyTopos(ebody, NULL, FACE, &numFace, &efaces);
     if (status < EGADS_SUCCESS) goto cleanup;
+    if (efaces == NULL) {
+        status = CAPS_NULLOBJ;
+        goto cleanup;
+    }
 
     // Determine the nominal number of points along each Edge
     points = (int    *) EG_alloc((numEdge+1)     *sizeof(int   ));
@@ -476,11 +498,12 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
             goto cleanup;
         }
 
-        //points[i] = MIN(MAX(MAX(edgePointMin,2), (int)(1+arclen/params[0])), edgePointMax);
+      //points[i] = MIN(MAX(MAX(edgePointMin,2), (int)(1+arclen/params[0])),
+      //                edgePointMax);
         points[i] = (int) min_DoubleVal(
-                                  max_DoubleVal(
-                                          max_DoubleVal( (double) edgePointMin, 2.0),
-                                         (double) (1+arclen/params[0])),
+                              max_DoubleVal(
+                                  max_DoubleVal( (double) edgePointMin, 2.0),
+                                                 (double) (1+arclen/params[0])),
                                  (double) edgePointMax);
     }
 
@@ -575,12 +598,12 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
 
         if (points[edge] == 2) {
             i = 0;
-            status = EG_attributeAdd(eedges[edge-1],
-                                     ".rPos", ATTRINT, 1, &i, NULL, NULL);
+            status = EG_attributeAdd(eedges[edge-1], ".rPos", ATTRINT,
+                                     1, &i, NULL, NULL);
             if (status < EGADS_SUCCESS) goto cleanup;
         } else {
-            status = EG_attributeAdd(eedges[edge-1],
-                                     ".rPos", ATTRREAL, points[edge]-2, NULL, rpos, NULL);
+            status = EG_attributeAdd(eedges[edge-1], ".rPos", ATTRREAL,
+                                     points[edge]-2, NULL, rpos, NULL);
             if (status < EGADS_SUCCESS) goto cleanup;
         }
     }
@@ -600,17 +623,21 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
     // If making quads on faces lets setup an array to keep track of which faces have been quaded.
     if (quadMesh == (int) true) {
         feaMesh->bodyTessMap.numTessFace = numFace;
-        if (feaMesh->bodyTessMap.tessFaceQuadMap != NULL) EG_free(feaMesh->bodyTessMap.tessFaceQuadMap);
+        if (feaMesh->bodyTessMap.tessFaceQuadMap != NULL) {
+            EG_free(feaMesh->bodyTessMap.tessFaceQuadMap);
+            feaMesh->bodyTessMap.tessFaceQuadMap = NULL;
+        }
 
-        if( numFace > 0) {
+        if (numFace > 0) {
             feaMesh->bodyTessMap.tessFaceQuadMap = (int *) EG_alloc(numFace*sizeof(int));
             if (feaMesh->bodyTessMap.tessFaceQuadMap == NULL) {
                 status = EGADS_MALLOC;
                 goto cleanup;
             }
+            // Set default to 0
+            for (face = 0; face < numFace; face++)
+                feaMesh->bodyTessMap.tessFaceQuadMap[face] = 0;
         }
-        // Set default to 0
-        for (face = 0; face < numFace; face++) feaMesh->bodyTessMap.tessFaceQuadMap[face] = 0;
     }
 
     if (quadMesh == (int) true) {
@@ -647,7 +674,8 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
 
         status = retrieve_CAPSIgnoreAttr(efaces[face], &attrName);
         if (status == CAPS_SUCCESS) {
-            printf("\tcapsIgnore attribute found for face - %d!! - NOT currently allowed\n", face+1);
+            printf("\tcapsIgnore attribute found for face - %d!! - NOT currently allowed\n",
+                   face+1);
             status = CAPS_BADVALUE;
             goto cleanup; // This isn't currently allowed - see element->connectivity in permutation array
             //continue;
@@ -655,17 +683,20 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
 
         status = retrieve_CAPSGroupAttr(efaces[face], &attrName);
         if (status != CAPS_SUCCESS) {
-            printf("Error: no capsGroup attribute found for face - %d!!\n", face+1);
+            printf("Error: no capsGroup attribute found for face - %d!!\n",
+                   face+1);
             goto cleanup;
         }
 
         status = get_mapAttrToIndexIndex(attrMap, attrName, &attrIndex);
         if (status != CAPS_SUCCESS) {
-            printf("Error: capsGroup name %s not found in attribute to index map\n", attrName);
+            printf("Error: capsGroup name %s not found in attribute to index map\n",
+                   attrName);
             goto cleanup;
         }
 
-        status = get_mapAttrToIndexIndex(coordSystemMap, attrName, &coordSystemIndex);
+        status = get_mapAttrToIndexIndex(coordSystemMap, attrName,
+                                         &coordSystemIndex);
         if (status != CAPS_SUCCESS) coordSystemIndex = 0;
 
         loadIndex = CAPSMAGIC;
@@ -675,24 +706,32 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
             status = get_mapAttrToIndexIndex(loadMap, attrName, &loadIndex);
 
             if (status != CAPS_SUCCESS) {
-                printf("Error: capsLoad name %s not found in attribute to index map\n", attrName);
+                printf("Error: capsLoad name %s not found in attribute to index map\n",
+                       attrName);
                 goto cleanup;
             }
         }
 
         if (quadMesh == (int) true) {
-            status = EG_getQuads(feaMesh->bodyTessMap.egadsTess, face+1, &numPoint, &xyz, &uv, &pointType, &pointTopoIndex, &numPatch);
+            status = EG_getQuads(feaMesh->bodyTessMap.egadsTess, face+1,
+                                 &numPoint, &xyz, &uv, &pointType,
+                                 &pointTopoIndex, &numPatch);
             if (status < EGADS_SUCCESS) goto cleanup;
 
         } else numPatch = -1;
 
-        if (numPatch > 0) {
+        if ((numPatch > 0) && (feaMesh->bodyTessMap.tessFaceQuadMap != NULL)) {
 
             feaMesh->bodyTessMap.tessFaceQuadMap[face] = 0;
             for (patch = 1; patch <= numPatch; patch++) {
 
-                status = EG_getPatch(feaMesh->bodyTessMap.egadsTess, face+1, patch, &n1, &n2, &pvindex, &pbounds);
+                status = EG_getPatch(feaMesh->bodyTessMap.egadsTess, face+1,
+                                     patch, &n1, &n2, &pvindex, &pbounds);
                 if (status < EGADS_SUCCESS) goto cleanup;
+                if (pvindex == NULL) {
+                    status = CAPS_NULLVALUE;
+                    goto cleanup;
+                }
 
                 for (j = 1; j < n2; j++) {
                     for (i = 1; i < n1; i++) {
@@ -701,15 +740,18 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                         feaMesh->meshQuickRef.numQuadrilateral += 1;
                         feaMesh->numElement = numElement;
 
-                        feaMesh->element = (meshElementStruct *) EG_reall(feaMesh->element,
-                                                                          feaMesh->numElement*sizeof(meshElementStruct));
+                        feaMesh->element = (meshElementStruct *)
+                                           EG_reall(feaMesh->element,
+                                                    feaMesh->numElement*
+                                                    sizeof(meshElementStruct));
 
                         if (feaMesh->element == NULL) {
                             status = EGADS_MALLOC;
                             goto cleanup;
                         }
 
-                        status = initiate_meshElementStruct(&feaMesh->element[numElement-1], feaMesh->analysisType);
+                        status = initiate_meshElementStruct(&feaMesh->element[numElement-1],
+                                                            feaMesh->analysisType);
                         if (status != CAPS_SUCCESS) goto cleanup;
 
                         feaMesh->bodyTessMap.tessFaceQuadMap[face] += 1;
@@ -721,14 +763,19 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                         status = mesh_allocMeshElementConnectivity(&feaMesh->element[numElement-1]);
                         if (status != CAPS_SUCCESS) goto cleanup;
 
-                        feaMesh->element[numElement-1].connectivity[0] = pvindex[(i-1)+n1*(j-1)] + feaMesh->numNode;
-                        feaMesh->element[numElement-1].connectivity[1] = pvindex[(i  )+n1*(j-1)] + feaMesh->numNode;
-                        feaMesh->element[numElement-1].connectivity[2] = pvindex[(i  )+n1*(j  )] + feaMesh->numNode;
-                        feaMesh->element[numElement-1].connectivity[3] = pvindex[(i-1)+n1*(j  )] + feaMesh->numNode;
+                        feaMesh->element[numElement-1].connectivity[0] =
+                                    pvindex[(i-1)+n1*(j-1)] + feaMesh->numNode;
+                        feaMesh->element[numElement-1].connectivity[1] =
+                                    pvindex[(i  )+n1*(j-1)] + feaMesh->numNode;
+                        feaMesh->element[numElement-1].connectivity[2] =
+                                    pvindex[(i  )+n1*(j  )] + feaMesh->numNode;
+                        feaMesh->element[numElement-1].connectivity[3] =
+                                    pvindex[(i-1)+n1*(j  )] + feaMesh->numNode;
 
                         feaMesh->element[numElement-1].markerID = attrIndex;
 
-                        feaData = (feaMeshDataStruct *) feaMesh->element[numElement-1].analysisData;
+                        feaData = (feaMeshDataStruct *)
+                                  feaMesh->element[numElement-1].analysisData;
 
                         feaData->propertyID = attrIndex;
                         feaData->coordID = coordSystemIndex;
@@ -738,12 +785,19 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
             }
         } else {
             status = EG_getTessFace(feaMesh->bodyTessMap.egadsTess, face+1,
-                                    &numPoint, &xyz, &uv, &pointType, &pointTopoIndex,
+                                    &numPoint, &xyz, &uv, &pointType,
+                                    &pointTopoIndex,
                                     &numTri, &triConn, &triNeighbor);
             if (status < EGADS_SUCCESS) goto cleanup;
+            if (triConn   == NULL) {
+                status = CAPS_NULLVALUE;
+                goto cleanup;
+            }
 
-            feaMesh->element = (meshElementStruct *) EG_reall(feaMesh->element,
-                                                              (feaMesh->numElement+numTri)*sizeof(meshElementStruct));
+            feaMesh->element = (meshElementStruct *)
+                               EG_reall(feaMesh->element,
+                                        (feaMesh->numElement+numTri)*
+                                        sizeof(meshElementStruct));
 
             if (feaMesh->element == NULL) {
                 status = EGADS_MALLOC;
@@ -757,7 +811,8 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                 feaMesh->meshQuickRef.numTriangle += 1;
                 feaMesh->numElement = numElement;
 
-                status = initiate_meshElementStruct(&feaMesh->element[numElement-1], feaMesh->analysisType);
+                status = initiate_meshElementStruct(&feaMesh->element[numElement-1],
+                                                    feaMesh->analysisType);
                 if (status != CAPS_SUCCESS) goto cleanup;
 
                 feaMesh->element[numElement-1].elementType = Triangle;
@@ -767,13 +822,17 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                 status = mesh_allocMeshElementConnectivity(&feaMesh->element[numElement-1]);
                 if (status != CAPS_SUCCESS) goto cleanup;
 
-                feaMesh->element[numElement-1].connectivity[0] = triConn[3*i + 0] + feaMesh->numNode;
-                feaMesh->element[numElement-1].connectivity[1] = triConn[3*i + 1] + feaMesh->numNode;
-                feaMesh->element[numElement-1].connectivity[2] = triConn[3*i + 2] + feaMesh->numNode;
+                feaMesh->element[numElement-1].connectivity[0] =
+                                           triConn[3*i + 0] + feaMesh->numNode;
+                feaMesh->element[numElement-1].connectivity[1] =
+                                           triConn[3*i + 1] + feaMesh->numNode;
+                feaMesh->element[numElement-1].connectivity[2] =
+                                           triConn[3*i + 2] + feaMesh->numNode;
 
                 feaMesh->element[numElement-1].markerID = attrIndex;
 
-                feaData = (feaMeshDataStruct *) feaMesh->element[numElement-1].analysisData;
+                feaData = (feaMeshDataStruct *)
+                           feaMesh->element[numElement-1].analysisData;
 
                 feaData->propertyID = attrIndex;
                 feaData->coordID = coordSystemIndex;
@@ -786,29 +845,38 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
         status = EG_getTopology(efaces[face], &eref, &oclass, &mtype, uvbox,
                                 &nloop, &loops, &senses);
         if (status != EGADS_SUCCESS) goto cleanup;
+        if (loops == NULL) {
+            status = CAPS_NULLVALUE;
+            goto cleanup;
+        }
 
         for (cnt = iloop = 0; iloop < nloop; iloop++) {
             status = EG_getTopology(loops[iloop], &eref, &oclass, &mtype,
                                     NULL, &nedge, &edges, &senses);
             if (status != EGADS_SUCCESS) goto cleanup;
+            if (edges == NULL) {
+                status = CAPS_NULLVALUE;
+                goto cleanup;
+            }
 
             last = cnt;
             for (iedge = 0; iedge < nedge; iedge++) {
                 status = EG_getTopology(edges[iedge], &eref, &oclass,
                                         &mtype, range, &n, &nodes, &sen);
                 if (status != EGADS_SUCCESS) goto cleanup;
-
                 if (mtype == DEGENERATE) continue;
 
                 // get the load information on the edge
                 loadIndex = CAPSMAGIC;
-                status = retrieve_CAPSLoadAttr(edges[iedge], &attrName);
+                status    = retrieve_CAPSLoadAttr(edges[iedge], &attrName);
                 if (status == CAPS_SUCCESS) {
 
-                    status = get_mapAttrToIndexIndex(loadMap, attrName, &loadIndex);
+                    status = get_mapAttrToIndexIndex(loadMap, attrName,
+                                                     &loadIndex);
 
                     if (status != CAPS_SUCCESS) {
-                        printf("Error: capsLoad name %s not found in attribute to index map\n", attrName);
+                        printf("Error: capsLoad name %s not found in attribute to index map\n",
+                               attrName);
                         goto cleanup;
                     }
                 }
@@ -816,11 +884,14 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                 eindex = EG_indexBodyTopo(ebody, edges[iedge]);
                 if (eindex < EGADS_SUCCESS) goto cleanup;
 
-                status = EG_getTessEdge(feaMesh->bodyTessMap.egadsTess, eindex, &numEdgePoints, &xyzs, &ts);
+                status = EG_getTessEdge(feaMesh->bodyTessMap.egadsTess, eindex,
+                                        &numEdgePoints, &xyzs, &ts);
                 if (status != EGADS_SUCCESS) goto cleanup;
 
-                feaMesh->element = (meshElementStruct *) EG_reall(feaMesh->element,
-                                                                  (feaMesh->numElement+numEdgePoints-1)*sizeof(meshElementStruct));
+                feaMesh->element = (meshElementStruct *)
+                                   EG_reall(feaMesh->element,
+                                            (feaMesh->numElement+numEdgePoints-1)*
+                                            sizeof(meshElementStruct));
 
                 if (feaMesh->element == NULL) {
                     status = EGADS_MALLOC;
@@ -828,7 +899,8 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                 }
 
                 for (i = 0; i < numEdgePoints-1; i++, cnt++) {
-                    status = initiate_meshElementStruct(&feaMesh->element[numElement], feaMesh->analysisType);
+                    status = initiate_meshElementStruct(&feaMesh->element[numElement],
+                                                        feaMesh->analysisType);
                     if (status != CAPS_SUCCESS) goto cleanup;
 
                     feaMesh->element[numElement].elementType = Line;
@@ -857,9 +929,16 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
         }
 
         // Get node information
-        feaMesh->node = (meshNodeStruct *) EG_reall(feaMesh->node, (feaMesh->numNode+numPoint)*sizeof(meshNodeStruct));
+        feaMesh->node = (meshNodeStruct *)
+                        EG_reall(feaMesh->node,
+                                 (feaMesh->numNode+numPoint)*
+                                 sizeof(meshNodeStruct));
         if (feaMesh->node == NULL) {
             status = EGADS_MALLOC;
+            goto cleanup;
+        }
+        if ((pointType == NULL) || (pointTopoIndex == NULL)) {
+            status = CAPS_NULLVALUE;
             goto cleanup;
         }
 
@@ -867,7 +946,8 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
 
             j = i + feaMesh->numNode;
 
-            status = initiate_meshNodeStruct(&feaMesh->node[j], feaMesh->analysisType);
+            status = initiate_meshNodeStruct(&feaMesh->node[j],
+                                             feaMesh->analysisType);
             if (status != CAPS_SUCCESS) goto cleanup;
 
             feaMesh->node[j].nodeID = j+1;
@@ -876,7 +956,8 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
             feaMesh->node[j].xyz[2] = xyz[3*i+2];
 
             // Get geometry data for node
-            feaMesh->node[j].geomData = (meshGeomDataStruct *) EG_alloc(sizeof(meshGeomDataStruct));
+            feaMesh->node[j].geomData = (meshGeomDataStruct *)
+                                        EG_alloc(sizeof(meshGeomDataStruct));
 
             if (feaMesh->node[j].geomData == NULL) {
                 status = EGADS_MALLOC;
@@ -890,12 +971,14 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
             feaMesh->node[j].geomData->topoIndex = pointTopoIndex[i];
 
             // Want the face index to be set for topoIndex
-            if (feaMesh->node[j].geomData->topoIndex < 0) feaMesh->node[j].geomData->topoIndex = face+1;
+            if (feaMesh->node[j].geomData->topoIndex < 0)
+                feaMesh->node[j].geomData->topoIndex = face+1;
 
             feaMesh->node[j].geomData->uv[0] = uv[2*i + 0];
             feaMesh->node[j].geomData->uv[1] = uv[2*i + 1];
 
-            status = EG_evaluate(efaces[face], (const double *) &feaMesh->node[j].geomData->uv, result);
+            status = EG_evaluate(efaces[face], (const double *)
+                                 &feaMesh->node[j].geomData->uv, result);
             if (status != EGADS_SUCCESS) goto cleanup;
 
             // U
@@ -910,6 +993,7 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
 
             // Get attributes
             feaData = (feaMeshDataStruct *) feaMesh->node[j].analysisData;
+/*@-nullpass@*/
             status = fea_setFEADataPoint(efaces, eedges, enodes,
                                          attrMap,
                                          coordSystemMap,
@@ -917,35 +1001,41 @@ int hsm_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                                          loadMap,
                                          transferMap,
                                          connectMap,
-                                         feaMesh->node[j].geomData->type, feaMesh->node[j].geomData->topoIndex,
+                                         NULL,
+                                         feaMesh->node[j].geomData->type,
+                                         feaMesh->node[j].geomData->topoIndex,
                                          feaData);
+/*@+nullpass@*/
             if (status != CAPS_SUCCESS) goto cleanup;
             feaData->propertyID = attrIndex;
         }
         feaMesh->numNode += numPoint;
     }
 
-    cleanup:
+cleanup:
 
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in hsm_bodyToBEM, status %d\n", status);
+    if (status != CAPS_SUCCESS)
+        printf("Error: Premature exit in hsm_bodyToBEM, status %d\n", status);
 
-        EG_free(iwest );
-        EG_free(inorth);
-        EG_free(ieast );
-        EG_free(isouth);
-        EG_free(rpos  );
-        EG_free(points );
+    EG_free(iwest );
+    EG_free(inorth);
+    EG_free(ieast );
+    EG_free(isouth);
+    EG_free(rpos  );
+    EG_free(points );
 
-        EG_free(enodes);
-        EG_free(eedges);
-        EG_free(efaces);
+    EG_free(enodes);
+    EG_free(eedges);
+    EG_free(efaces);
 
-        return status;
+    return status;
 }
 
+
 // Write hsm data to a Tecplot file
-int hsm_writeTecplot(const char *analysisPath, char *projectName,
-                     meshStruct feaMesh, hsmMemoryStruct *hsmMemory, int permutation[]) {
+int hsm_writeTecplot(void *aimInfo, char *projectName, meshStruct feaMesh,
+                     hsmMemoryStruct *hsmMemory, int permutation[])
+{
 
     int status; // Function return status
 
@@ -962,17 +1052,28 @@ int hsm_writeTecplot(const char *analysisPath, char *projectName,
     const char * variableName[] = {"x" , "y" , "z",
                                    "x'", "y'", "z'",
                                    "x Displacement", "y Displacement", "z Displacement",
-                                   "x'<sub>Material normal</sub>", "y'<sub>Material normal</sub>", "z'<sub>Material normal</sub>",
+                                   "x'<sub>Material normal</sub>",
+                                   "y'<sub>Material normal</sub>",
+                                   "z'<sub>Material normal</sub>",
                                    "drilling rotation DOF",
                                    "e<sub>1,x</sub>", "e<sub>1,y</sub>", "e<sub>1,z</sub>",
                                    "e<sub>2,x</sub>", "e<sub>2,y</sub>", "e<sub>2,z</sub>",
                                    "n<sub>x</sub>", "n<sub>y</sub>", "n<sub>z</sub>",
-                                   "Strain, <greek>e</greek><sub>11</sub>", "Strain, <greek>e</greek><sub>22</sub>", "Strain, <greek>e</greek><sub>12</sub>",
-                                   "Curv. Change, <greek>k</greek><sub>11</sub>", "Curv. Change, <greek>k</greek><sub>22</sub>", "Curv. Change, <greek>k</greek><sub>12</sub>",
-                                   "Stress, f<sub>11</sub>", "Stress, f<sub>22</sub>", "Stress, f<sub>12</sub>",
-                                   "Stress Mom., m<sub>11</sub>", "Stress Mom., m<sub>22</sub>", "Stress Mom., m<sub>12</sub>",
-                                   "Shear Stress, f<sub>1n</sub>", "Shear Stress, f<sub>2n</sub>",
-                                   "Tilt Angle, <greek>g</greek><sub>1</sub>", "Tilt Angle, <greek>g</greek><sub>2</sub>",
+                                   "Strain, <greek>e</greek><sub>11</sub>",
+                                   "Strain, <greek>e</greek><sub>22</sub>",
+                                   "Strain, <greek>e</greek><sub>12</sub>",
+                                   "Curv. Change, <greek>k</greek><sub>11</sub>",
+                                   "Curv. Change, <greek>k</greek><sub>22</sub>",
+                                   "Curv. Change, <greek>k</greek><sub>12</sub>",
+                                   "Stress, f<sub>11</sub>", "Stress, f<sub>22</sub>",
+                                   "Stress, f<sub>12</sub>",
+                                   "Stress Mom., m<sub>11</sub>",
+                                   "Stress Mom., m<sub>22</sub>",
+                                   "Stress Mom., m<sub>12</sub>",
+                                   "Shear Stress, f<sub>1n</sub>",
+                                   "Shear Stress, f<sub>2n</sub>",
+                                   "Tilt Angle, <greek>g</greek><sub>1</sub>",
+                                   "Tilt Angle, <greek>g</greek><sub>2</sub>",
                                     };
     // Needs to be consistent with variableName
     int numOutVariable = sizeof(variableName)/sizeof(const char *);
@@ -982,7 +1083,7 @@ int hsm_writeTecplot(const char *analysisPath, char *projectName,
 
     if (permutation == NULL) return CAPS_NULLVALUE;
 
-    stringLength = strlen(analysisPath) + 1 + strlen(projectName) + strlen(fileExt) + 1;
+    stringLength = strlen(projectName) + strlen(fileExt) + 1;
 
     // Write out Tecplot files
     filename = (char *) EG_alloc(stringLength*sizeof(char));
@@ -991,20 +1092,14 @@ int hsm_writeTecplot(const char *analysisPath, char *projectName,
         goto cleanup;
     }
 
-    strcpy(filename, analysisPath);
-    #ifdef WIN32
-        strcat(filename, "\\");
-    #else
-        strcat(filename, "/");
-    #endif
-
-    strcat(filename, projectName);
+    strcpy(filename, projectName);
     strcat(filename, fileExt);
 
     // Lets allocate our Tecplot matrix
     dataMatrix    = (double **) EG_alloc(numOutVariable*sizeof(double));
 
-    numElement = feaMesh.meshQuickRef.numTriangle + feaMesh.meshQuickRef.numQuadrilateral;
+    numElement = feaMesh.meshQuickRef.numTriangle +
+                 feaMesh.meshQuickRef.numQuadrilateral;
     connectMatrix = (int *) EG_alloc(4*numElement*sizeof(int));
 
     if (dataMatrix == NULL  || connectMatrix == NULL) {
@@ -1042,9 +1137,12 @@ int hsm_writeTecplot(const char *analysisPath, char *projectName,
       dataMatrix[m++][i] = hsmMemory->vars[k*IVTOT + ivrz];
 
       // Displacement
-      dataMatrix[m++][i] = hsmMemory->vars[k*IVTOT + ivrx] - hsmMemory->pars[k*LVTOT + lvr0x];
-      dataMatrix[m++][i] = hsmMemory->vars[k*IVTOT + ivry] - hsmMemory->pars[k*LVTOT + lvr0y];
-      dataMatrix[m++][i] = hsmMemory->vars[k*IVTOT + ivrz] - hsmMemory->pars[k*LVTOT + lvr0z];
+      dataMatrix[m++][i] = hsmMemory->vars[k*IVTOT + ivrx] -
+                           hsmMemory->pars[k*LVTOT + lvr0x];
+      dataMatrix[m++][i] = hsmMemory->vars[k*IVTOT + ivry] -
+                           hsmMemory->pars[k*LVTOT + lvr0y];
+      dataMatrix[m++][i] = hsmMemory->vars[k*IVTOT + ivrz] -
+                           hsmMemory->pars[k*LVTOT + lvr0z];
 
       // Unit material-normal vector of deformed geometry
       dataMatrix[m++][i] = hsmMemory->vars[k*IVTOT + ivdx];
@@ -1107,7 +1205,8 @@ int hsm_writeTecplot(const char *analysisPath, char *projectName,
 
         if (element->elementType == Line) continue;
 
-        if (element->elementType != Triangle && element->elementType != Quadrilateral) {
+        if (element->elementType != Triangle && element->elementType !=
+            Quadrilateral) {
             printf("Unsupported element type\n");
             status = CAPS_BADVALUE;
             goto cleanup;
@@ -1133,8 +1232,9 @@ int hsm_writeTecplot(const char *analysisPath, char *projectName,
         }
         elem++;
     }
-
-    status = tecplot_writeFEPOINT(filename,
+/*@-nullpass@*/
+    status = tecplot_writeFEPOINT(aimInfo,
+                                  filename,
                                   "HSM solution to Tecplot",
                                   "HSM solution",
                                   numOutVariable,
@@ -1145,35 +1245,35 @@ int hsm_writeTecplot(const char *analysisPath, char *projectName,
                                   numElement,
                                   connectMatrix,
                                   NULL);
+/*@+nullpass@*/
     if (status != CAPS_SUCCESS) goto cleanup;
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in hsm_writeTecplot status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS)
+        printf("Error: Premature exit in hsm_writeTecplot status = %d\n",
+                status);
 
-        if (filename != NULL) EG_free(filename);
+    if (filename != NULL) EG_free(filename);
 
-        if (dataMatrix != NULL) {
-            for (i = 0; i < numOutVariable; i++) {
-                if (dataMatrix[i] != NULL)  EG_free(dataMatrix[i]);
-            }
-            EG_free(dataMatrix);
+    if (dataMatrix != NULL) {
+        for (i = 0; i < numOutVariable; i++) {
+            if (dataMatrix[i] != NULL)  EG_free(dataMatrix[i]);
         }
+        EG_free(dataMatrix);
+    }
 
-        if (connectMatrix !=  NULL) EG_free(connectMatrix);
+    if (connectMatrix !=  NULL) EG_free(connectMatrix);
 
-        return status;
+    return status;
 }
 
 
-
-
 // Set global parameters in hsmMemory structure
-int hsm_setGlobalParameter(feaProblemStruct feaProblem, hsmMemoryStruct *hsmMemory) {
-
-    int status; // Function return status
+int hsm_setGlobalParameter(feaProblemStruct feaProblem,
+                           hsmMemoryStruct *hsmMemory)
+{
     int loadIndex; // Indexing
 
     double normalize;
@@ -1190,9 +1290,12 @@ int hsm_setGlobalParameter(feaProblemStruct feaProblem, hsmMemoryStruct *hsmMemo
         normalize = sqrt(normalize);
 
         if (feaLoad->loadType == Gravity) {
-            hsmMemory->parg[lggeex] = feaLoad->gravityAcceleration*feaLoad->directionVector[0]/normalize;
-            hsmMemory->parg[lggeey] = feaLoad->gravityAcceleration*feaLoad->directionVector[1]/normalize;
-            hsmMemory->parg[lggeez] = feaLoad->gravityAcceleration*feaLoad->directionVector[2]/normalize;
+            hsmMemory->parg[lggeex] =
+              feaLoad->gravityAcceleration*feaLoad->directionVector[0]/normalize;
+            hsmMemory->parg[lggeey] =
+              feaLoad->gravityAcceleration*feaLoad->directionVector[1]/normalize;
+            hsmMemory->parg[lggeez] =
+              feaLoad->gravityAcceleration*feaLoad->directionVector[2]/normalize;
         }
 
         // Linear - velocity + acceleration  -- NO INPUTS YET
@@ -1227,17 +1330,14 @@ int hsm_setGlobalParameter(feaProblemStruct feaProblem, hsmMemoryStruct *hsmMemo
 //             &   lggaby = 23,  !  g_Y
 //             &   lggabz = 24,  !_ g_Z)
 
-
-    status = CAPS_SUCCESS;
-    goto cleanup;
-    cleanup:
-           if (status != CAPS_SUCCESS) printf("Error: Premature exit in hsm_setGlobalParameter status = %d\n", status);
-
-           return status;
+    return CAPS_SUCCESS;
 }
 
+
 // Set surface on nodes in hsmMemory->pars structure
-int hsm_setSurfaceParameter(feaProblemStruct feaProblem, int permutation[], hsmMemoryStruct *hsmMemory) {
+int hsm_setSurfaceParameter(feaProblemStruct feaProblem, int permutation[],
+                            hsmMemoryStruct *hsmMemory)
+{
 
     int status; // Function return status
     int i, j, k, m, loadIndex; // Indexing
@@ -1271,7 +1371,8 @@ int hsm_setSurfaceParameter(feaProblemStruct feaProblem, int permutation[], hsmM
                 }
 
                 for (j = 0; j < feaProblem.feaMesh.numElement; j++) {
-                    if (feaProblem.feaMesh.element[j].elementID == feaLoad->elementIDSet[i] ) break;
+                    if (feaProblem.feaMesh.element[j].elementID ==
+                        feaLoad->elementIDSet[i]) break;
                 }
 
                 numConnect = mesh_numMeshConnectivity(feaProblem.feaMesh.element[j].elementType);
@@ -1291,7 +1392,8 @@ int hsm_setSurfaceParameter(feaProblemStruct feaProblem, int permutation[], hsmM
                         (feaLoad->loadType == PressureExternal) ) {
 
                         if (numConnect > 4) {
-                            printf("Error: Unsupported element type (connectivity length = %d) for load type PressureDistribute or PressureExternal\n", numConnect);
+                            printf("Error: Unsupported element type (connectivity length = %d) for load type PressureDistribute or PressureExternal\n",
+                                   numConnect);
                             status = CAPS_NOTIMPLEMENT;
                             goto cleanup;
                         }
@@ -1317,15 +1419,19 @@ int hsm_setSurfaceParameter(feaProblemStruct feaProblem, int permutation[], hsmM
 
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in hsm_setSurfaceParameter status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS)
+        printf("Error: Premature exit in hsm_setSurfaceParameter status = %d\n",
+               status);
 
-        return status;
+    return status;
 }
 
 
 // Set BC values on hsm-Edges (mesh segments) parameters in hsmMemory->pare structure
-int hsm_setEdgeBCParameter(feaProblemStruct feaProblem, int permutation[], hsmMemoryStruct *hsmMemory) {
+int hsm_setEdgeBCParameter(feaProblemStruct feaProblem, int permutation[],
+                           hsmMemoryStruct *hsmMemory)
+{
 
     int status; // Function return status
     int i, j, k, m, loadIndex; // Indexing
@@ -1372,7 +1478,8 @@ int hsm_setEdgeBCParameter(feaProblemStruct feaProblem, int permutation[], hsmMe
                  for (m = 0; m < numConnect; m++) {
 
                      // Get index in hsmMemory
-                     hsmMemory->kbcedge[2*k + m] = permutation[feaProblem.feaMesh.element[j].connectivity[m]-1];
+                     hsmMemory->kbcedge[2*k + m] =
+                         permutation[feaProblem.feaMesh.element[j].connectivity[m]-1];
 
                      if (feaLoad->loadType == LineForce) {
 
@@ -1407,14 +1514,19 @@ int hsm_setEdgeBCParameter(feaProblemStruct feaProblem, int permutation[], hsmMe
 
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in hsm_setEdgeBCParameter status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS)
+        printf("Error: Premature exit in hsm_setEdgeBCParameter status = %d\n",
+               status);
 
-        return status;
+    return status;
 }
 
+
 // Set BC values on hsm-nodes (vertexes) in hsmMemory->parp structure
-int hsm_setNodeBCParameter(feaProblemStruct feaProblem, int permutation[], hsmMemoryStruct *hsmMemory) {
+int hsm_setNodeBCParameter(feaProblemStruct feaProblem, int permutation[],
+                           hsmMemoryStruct *hsmMemory)
+{
 
     int status; // Function return status
 
@@ -1458,7 +1570,6 @@ int hsm_setNodeBCParameter(feaProblemStruct feaProblem, int permutation[], hsmMe
               j = -1;
               if (hsmMemory->kbcnode[hsmMemory->numBCNode] == 0) {
                   j = hsmMemory->numBCNode;
-                  incrementFlag = (int) true;
               } else {
                   for (m = 0 ; m < hsmMemory->numBCNode; m++) {
                       if (hsmMemory->kbcnode[m] == k) {
@@ -1546,7 +1657,8 @@ int hsm_setNodeBCParameter(feaProblemStruct feaProblem, int permutation[], hsmMe
                     hsmMemory->lbcnode[j] += lbcr3;
 
                 } else {
-                    printf("Error: DOF constraint %d, not supported yet\n", feaConstraint->dofConstraint);
+                    printf("Error: DOF constraint %d, not supported yet\n",
+                           feaConstraint->dofConstraint);
                     status = CAPS_BADVALUE;
                     goto cleanup;
                 }
@@ -1567,7 +1679,8 @@ int hsm_setNodeBCParameter(feaProblemStruct feaProblem, int permutation[], hsmMe
                     hsmMemory->parp[j*LPTOT+lpt2z] = hsmMemory->pars[k*LVTOT+lve02z];
 
                 } else {
-                    printf("Error: Unsupported constraint type - %d!\n", feaConstraint->constraintType);
+                    printf("Error: Unsupported constraint type - %d!\n",
+                           feaConstraint->constraintType);
                     status = CAPS_BADVALUE;
                     goto cleanup;
                 }
@@ -1576,7 +1689,8 @@ int hsm_setNodeBCParameter(feaProblemStruct feaProblem, int permutation[], hsmMe
             }
 
         } else {
-            printf("Error: Unsupported constraint type - %d!\n", feaConstraint->constraintType);
+            printf("Error: Unsupported constraint type - %d!\n",
+                   feaConstraint->constraintType);
             status = CAPS_NOTIMPLEMENT;
             goto cleanup;
         }
@@ -1584,8 +1698,10 @@ int hsm_setNodeBCParameter(feaProblemStruct feaProblem, int permutation[], hsmMe
 
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in hsm_setNodeBCParameter status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS)
+        printf("Error: Premature exit in hsm_setNodeBCParameter status = %d\n",
+               status);
 
-        return status;
+    return status;
 }

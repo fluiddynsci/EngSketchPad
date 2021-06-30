@@ -1,12 +1,8 @@
 # Use: Initiate/close problem. 
 
-# Import pyCAPS module (Linux and OSx = pyCAPS.so file; Windows = pyCAPS.pyd file) 
+# Import pyCAPS module
 import pyCAPS
 
 # Instantiate our CAPS problem "myProblem" 
-print("Initiating capsProblem")
+print("Initiating Problem")
 myProblem = pyCAPS.capsProblem()
-
-# Close our problem
-print("Closing our problem")
-myProblem.closeCAPS()

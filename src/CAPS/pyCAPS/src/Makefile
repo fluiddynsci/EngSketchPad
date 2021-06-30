@@ -87,7 +87,7 @@ installs: install2 install3
 
 # Run Cython - development only	
 cython:
-	(cython pyCAPS.pyx)
+	(cython -Wextra pyCAPS.pyx)
 	-rm pyCAPS.h
 
 # Run Cython and compile pyCAPS.c - development only

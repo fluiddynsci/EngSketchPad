@@ -11,7 +11,7 @@ tire.o:	tire.c $(IDIR)/egads.h $(IDIR)/egadsTypes.h \
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) tire.c
 
 clean:
-	-rm tire.o
+	-rm -f tire.o
 
 cleanall:	clean
-	-rm tire
+	-rm -f tire

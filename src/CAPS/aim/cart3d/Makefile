@@ -76,6 +76,13 @@ $(ODIR)/cart3dTest.o:	cart3dTest.c $(IDIR)/caps.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) cart3dTest.c \
 		-o $(ODIR)/cart3dTest.o
 
+lint:
+	@echo "Cart3D AIM:"
+	$(LINT) -I../../include -I$(IDIR) -I../utils -I$(CART3DLIB)/xddm -I$(CART3DLIB)/libCart3D -I$(CART3DLIB)/c3dio cart3dTest.c cart3dAIM.c -incondefs -exportlocal -nestcomment -uniondef -redef
+	@echo " "
+	@echo "ESPxddm:"
+	$(LINT) -I../../include -I$(IDIR) -I../utils -I$(CART3DLIB)/xddm -I$(CART3DLIB)/libCart3D -I$(CART3DLIB)/c3dio -Dxddm_free=free ESPxddm.c bodyTess.c -incondefs -exportlocal -nestcomment -uniondef
+
 clean:
 	-rm -f $(ODIR)/writeTrix.o $(ODIR)/xddm.o $(ODIR)/bodyTess.o \
 		$(ODIR)/ESPxddm.o $(ODIR)/cart3dAIM.o $(ODIR)/cart3dTest.o
@@ -83,8 +90,9 @@ clean:
 cleanall:	clean
 	-rm -f $(BDIR)/ESPxddm $(LDIR)/cart3dAIM.so $(TDIR)/cart3dTest
 	
-dox:
-	(cd doc; doxygen cart3dAIM_dox.cfg; cd latex; make; mv refman.pdf CART3DAIM.pdf)
+dox: doc/html/index.html
+doc/html/index.html: $(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
+	(cd doc; doxygen cart3dAIM_dox.cfg; cd latex; make; mv refman.pdf cart3dAIM.pdf)
 
 doxclean:
 	(cd doc; rm -f INPUT; rm -rf html latex; rm -f cart3dAIM.tag)	

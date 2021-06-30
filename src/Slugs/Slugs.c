@@ -1,4 +1,4 @@
- /*
+/*
  ************************************************************************
  *                                                                      *
  * Slugs.c -- server for Static Legacy Unstructured Geometry System     *
@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -386,6 +386,10 @@ extern int        EG_getPlane(ego eloop, ego *eplane);
 #ifdef GRAFIC
     static void   plotPoints_image(int*, void*, void*, void*, void*, void*,
                                    void*, void*, void*, void*, void*, float*, char*, int);
+    extern int    plotCurve(int m, double XYZcloud[], /*@null@*/double Tcloud[],
+                            int n, double cp[], double normf, double dotmin, int nmin);
+    extern int    plotSurface(int m, double XYZcloud[], /*@null@*/double Ucloud[],
+                              int n, double cp[], double normf, int nmin);
 #endif
 
 
@@ -508,7 +512,7 @@ main(int       argc,                /* (in)  number of arguments */
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "*                    Program Slugs                       *");
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2013/2020         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2013/2021         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************");
 
@@ -589,6 +593,8 @@ main(int       argc,                /* (in)  number of arguments */
 
     /* initialize the scene graph meta data */
     if (batch == 0) {
+        SPLINT_CHECK_FOR_NULL(sgFocusData);
+        
         sgFocusData[0] = '\0';
     }
 
@@ -1396,11 +1402,11 @@ generateBrep(char   message[])          /* (out) error message */
 
     int       nchange, uncolored;
     int       icolr, jcolr, itri, jtri, ntri, ip0, ip1, ip2;
-    int       isgmt, nsgmt, ibeg, iend, ilup;
+    int       isgmt, nsgmt, ibeg, iend, ilup, jlup, klup;
     int       ipnt, jpnt, count, done, i, j, swap;
     int       inode, iedge, jedge, iface;
-    int       *nodnum=NULL;
-    double    areax, areay, areaz, area;
+    int       *nodnum=NULL, *edgtmp=NULL, *luptmp=NULL;
+    double    areax, areay, areaz, amax, *area=NULL;
     char      filename[257];
 
     sgmt_T     *sgmt=NULL;
@@ -1978,11 +1984,9 @@ generateBrep(char   message[])          /* (out) error message */
             if        (iedge > 0) {
                 ibeg = edge[+iedge].ibeg;
                 iend = edge[+iedge].iend;
-            } else if (iedge < 0) {
+            } else {
                 ibeg = edge[-iedge].iend;
                 iend = edge[-iedge].ibeg;
-            } else {
-                assert(0);   // fix this
             }
             done++;
 
@@ -2003,7 +2007,7 @@ generateBrep(char   message[])          /* (out) error message */
                             done++;
                             break;
                         }
-                    } else if (iedge < 0) {
+                    } else {
                         if (edge[-iedge].iend == iend) {
                             if (i > done) {
                                 swap                  = face[iface].edg[done];
@@ -2014,8 +2018,6 @@ generateBrep(char   message[])          /* (out) error message */
                             done++;
                             break;
                         }
-                    } else {
-                        assert(0);   // fix this
                     }
                 }
 
@@ -2065,8 +2067,10 @@ generateBrep(char   message[])          /* (out) error message */
 
         /* sort the Loops based upon area */
         if (face[iface].nlup > 1) {
+            MALLOC(area, double, face[iface].nlup);
+
             for (ilup = 0; ilup < face[iface].nlup; ilup++) {
-                area = 0;
+                area[ilup] = 0;
 
                 i     = face[iface].lup[ilup];
                 iedge = face[iface].edg[i];
@@ -2074,11 +2078,9 @@ generateBrep(char   message[])          /* (out) error message */
                 if        (iedge > 0) {
                     ibeg = edge[+iedge].ibeg;
                     ip0  = edge[+iedge].pnt[0];
-                } else if (iedge < 0) {
+                } else {
                     ibeg = edge[-iedge].iend;
                     ip0  = edge[-iedge].pnt[edge[-iedge].npnt-1];
-                } else {
-                    assert(0);   // fix this
                 }
 
                 while (1) {
@@ -2100,11 +2102,11 @@ generateBrep(char   message[])          /* (out) error message */
                                   - (tess.xyz[3*ip2  ] - tess.xyz[3*ip0  ])
                                   * (tess.xyz[3*ip1+1] - tess.xyz[3*ip0+1]);
 
-                            area += sqrt(areax*areax + areay*areay + areaz*areaz);
+                            area[ilup] += sqrt(areax*areax + areay*areay + areaz*areaz);
                         }
 
                         if (edge[+iedge].iend == ibeg) break;
-                    } else if (iedge < 0) {
+                    } else {
                         for (j = edge[-iedge].npnt-1; j > 0; j--) {
                             ip1 = edge[-iedge].pnt[j  ];
                             ip2 = edge[-iedge].pnt[j-1];
@@ -2122,12 +2124,10 @@ generateBrep(char   message[])          /* (out) error message */
                                   - (tess.xyz[3*ip2  ] - tess.xyz[3*ip0  ])
                                   * (tess.xyz[3*ip1+1] - tess.xyz[3*ip0+1]);
 
-                            area += sqrt(areax*areax + areay*areay + areaz*areaz);
+                            area[ilup] += sqrt(areax*areax + areay*areay + areaz*areaz);
                         }
 
                         if (edge[-iedge].ibeg == ibeg) break;
-                    } else {
-                        assert(0);   // fix this
                     }
 
                     if (i == face[iface].nedg-1) break;
@@ -2137,8 +2137,42 @@ generateBrep(char   message[])          /* (out) error message */
 
                 i     = face[iface].lup[ilup];
                 iedge = face[iface].edg[i];
-                printf("   Loop %2d starts at i=%2d (iedge=%4d) and has area %f\n", ilup, i, iedge, area);
+                printf("   Loop %2d starts at i=%2d (iedge=%4d) and has area %f\n", ilup, i, iedge, area[ilup]);
             }
+
+            MALLOC(edgtmp, int, face[iface].nedg+1);
+            MALLOC(luptmp, int, face[iface].nlup+1);
+
+            for (i = 0; i < face[iface].nedg; i++) {
+                edgtmp[i] = face[iface].edg[i];
+            }
+            for (i = 0; i <= face[iface].nlup; i++) {
+                luptmp[i] = face[iface].lup[i];
+            }
+
+            j = 0;
+            for (ilup = 0; ilup < face[iface].nlup; ilup++) {
+
+                klup = -1;
+                amax =  0;
+                for (jlup = 0; jlup < face[iface].nlup; jlup++) {
+                    if (area[jlup] > amax) {
+                        klup = jlup;
+                        amax = area[jlup];
+                    }
+                }
+
+                area[klup] = -1;        /* so that it does not get picked again */
+
+                for (i = luptmp[klup]; i < luptmp[klup+1]; i++) {
+                    face[iface].edg[j++] = edgtmp[i];
+                }
+
+                face[iface].lup[ilup+1] = j;
+            }
+
+            FREE(edgtmp);
+            FREE(luptmp);
 
             printf("...after sorting Loops so that largest area is first\n");
             for (ilup = 0; ilup < face[iface].nlup; ilup++) {
@@ -2158,6 +2192,8 @@ generateBrep(char   message[])          /* (out) error message */
                     }
                 }
             }
+
+            FREE(area);
 
             printf("there are %d Loops, so no face* file created\n", face[iface].nlup);
             continue;
@@ -2250,6 +2286,9 @@ generateBrep(char   message[])          /* (out) error message */
 cleanup:
     FREE(sgmt  );
     FREE(nodnum);
+    FREE(edgtmp);
+    FREE(luptmp);
+    FREE(area  );
 
     return status;
 }
@@ -2276,16 +2315,16 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
     int       inode, iedge, iloop, iface, closed=1, nfaces, ncp, ndata;
     int       periodic, nnode, nedge, nface, ipnt;
 
-    int       i, j, ij, header[7], senses[10], oclass, mtype, nchild, *senses2;
-    double    xyz[3], *cpdata=NULL, tdata[4], data[18], data2[4], area;
-    double    rms, rmstrain, uv_out[2], xyz_out[18], toler;
-    ego       context, eref, ecurv, esurf, eloops[10], eshell, ebody, emodel;
+    int       i, j, k, ij, header[7], sense, *senses=NULL, oclass, mtype, nchild, *senses2;
+    double    xyz[3], *cpdata=NULL, tdata[4], data[18], data2[4];
+    double    rms, rmstrain, uv_out[2], xyz_out[18], area;
+    ego       context, eref, ecurv, esurf, *eloops=NULL, eshell, ebody, emodel;
     ego       enode, enodes[2], *eedges=NULL, *efaces=NULL, *echilds;
     FILE      *fpsum=NULL;
 
     ROUTINE(generateEgads);
 
-    /* --------------------------------------------------------------- */
+    /* -------------------------------------------------2-------------- */
 
     SPRINT0(1, "Generating EGADS ...");
 
@@ -2392,25 +2431,52 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
         if (face[iface].cp == NULL) {
             printf("planar\n");
 
-            /* make the list of Edges associated with this Face */
             MALLOC(eedges, ego, face[iface].nedg);
+            MALLOC(senses, int, face[iface].nedg);
+            MALLOC(eloops, ego, face[iface].nlup);
 
-            for (i = 0; i < face[iface].nedg; i++) {
-                iedge = abs(face[iface].edg[i]);
-                eedges[i] = edge[iedge].eedge;
+            /* make the outer Loop associated with this Face.  start with
+               the list of Edges associated with the out Loop */
+            j = 0;
+            for (i = face[iface].lup[0]; i < face[iface].lup[1]; i++) {
+                if (face[iface].edg[i] > 0) {
+                    eedges[j] = edge[+face[iface].edg[i]].eedge;
+                    senses[j] = SFORWARD;
+                } else {
+                    eedges[j] = edge[-face[iface].edg[i]].eedge;
+                    senses[j] = SREVERSE;
+                }
+                j++;
             }
 
-            /* make the Loops (by multiple calls to EG_makeLoop) */
-            for (iloop = 0; iloop < 10; iloop++) {
-                status = EG_makeLoop(face[iface].nedg, eedges, NULL, 0, &(eloops[iloop]));
-                printf("EG_makeLoop -> status=%d\n", status);
-                CHECK_STATUS(EG_makeLoop);
-                senses[iloop] = SFORWARD;
+            /* make the Loop (cannot use EG_makeLoop since sense of first Edge
+               might be SREVERSE) */
+            status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL,
+                                     j, eedges, senses, &eloops[0]);
+            CHECK_STATUS(EG_makeTopology);
 
-                if (status == 0) break;
+            /* make the inner Loops associated with this Face */
+            for (iloop = 1; iloop < face[iface].nlup; iloop++) {
+
+                /* make the list of Edges associated with this Loop */
+                j = 0;
+                for (i = face[iface].lup[iloop]; i < face[iface].lup[iloop+1]; i++) {
+                    if (face[iface].edg[i] > 0) {
+                        eedges[j] = edge[+face[iface].edg[i]].eedge;
+                        senses[j] = SFORWARD;
+                    } else {
+                        eedges[j] = edge[-face[iface].edg[i]].eedge;
+                        senses[j] = SREVERSE;
+                    }
+                    j++;
+                }
+
+                /* make the Loop (cannot use EG_makeLoop since sense of first Edge
+                   might be SREVERSE) */
+                status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL,
+                                         j, eedges, senses, &eloops[iloop]);
+                CHECK_STATUS(EG_makeTopology);
             }
-
-            FREE(eedges);
 
             /* get the plane from the first Loop */
             status = EG_getPlane(eloops[0], &esurf);
@@ -2420,25 +2486,31 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
             CHECK_STATUS(EG_getPlane);
 
             /* make the Face */
-            iloop++;
-            assert(iloop <= 10);
+            senses[0] = SFORWARD;       /* outer Loop */
+            for (i = 1; i < face[iface].nlup; i++) {
+                senses[i] = SREVERSE;   /* inner Loops */
+            }
 
             status = EG_getArea(eloops[0], NULL, &area);
             CHECK_STATUS(EG_getArea);
 
             if (area < 0) {
-                senses[0] = SREVERSE;
+                sense = SREVERSE;
             } else {
-                senses[0] = SFORWARD;
+                sense = SFORWARD;
             }
 
-            status = EG_makeTopology(context, esurf, FACE, senses[0], NULL,
-                                         iloop, eloops, senses, &(face[iface].eface));
+            status = EG_makeTopology(context, esurf, FACE, sense, NULL,
+                                         face[iface].nlup, eloops, NULL, &(face[iface].eface));
             printf("EG_makeTopology(FACE) -> status=%d\n", status);
             CHECK_STATUS(EG_makeTopology);
 
             efaces[nfaces] = face[iface].eface;
             nfaces++;
+
+            FREE(eedges);
+            FREE(senses);
+            FREE(eloops);
 
         /* for now, this only works with Faces bounded by 4 Edges */
         } else if (face[iface].lup[1] < 2 || face[iface].lup[1] > 4) {
@@ -2456,6 +2528,12 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
         /* Faces with 4 Edges in outer loop */
         } else {
             printf("non-planar\n");
+
+            printf("iface=%d, nedg=%d, nlup=%d\n", iface, face[iface].nedg, face[iface].nlup);
+
+            MALLOC(eedges, ego, 8+2*face[iface].nedg                 );
+            MALLOC(senses, int, 4+  face[iface].nedg+face[iface].nlup);
+            MALLOC(eloops, ego,                      face[iface].nlup);
 
             /* create the Surface */
             header[0] = 0;            // bitflag
@@ -2501,8 +2579,6 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
             CHECK_STATUS(EG_makeGeometry);
 
             FREE(cpdata);
-
-            MALLOC(eedges, ego, 8);
 
             /* create the PCurves associated with the Edges */
             iedge = face[iface].edg[0];
@@ -2666,65 +2742,52 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
 
             /* add any inner Loops */
             for (iloop = 1; iloop < face[iface].nlup; iloop++) {
-                double dmax;
 
                 j = 0;
+                k = face[iface].lup[iloop+1] - face[iface].lup[iloop];
                 for (i = face[iface].lup[iloop]; i < face[iface].lup[iloop+1]; i++) {
                     iedge = face[iface].edg[i];
                     if        (iedge > 0) {
                         eedges[j] = edge[+iedge].eedge;
-                    } else if (iedge < 0) {
-                        eedges[j] = edge[-iedge].eedge;
+                        senses[j] = SFORWARD;
                     } else {
-                        assert(0);   // fix this
+                        eedges[j] = edge[-iedge].eedge;
+                        senses[j] = SREVERSE;
                     }
+
+                    /* pcurves */
+                    status = EG_otherCurve(esurf, eedges[j], 1e-4, &eedges[k]);
+                    printf("EG_otherCurve(%d) -> status=%d\n", j, status);
+                    CHECK_STATUS(EG_otherCurve);
+
                     j++;
+                    k++;
                 }
 
-                /* report the maximum distance of the Edges in this Loop from the surface */
-                {
-                    int    ii, jj;
-                    double trange[4], tt, xyz_in[18], dist;
-
-                    dmax = 0;
-                    for (jj = 0; jj < j; jj++) {
-                        status = EG_getRange(eedges[jj], trange, &periodic);
-                        CHECK_STATUS(EG_getRange);
-
-                        for (ii = 0; ii < 101; ii++) {
-                            tt   = trange[0] + ii * 0.01 * (trange[1] - trange[0]);
-
-                            status = EG_evaluate(eedges[jj], &tt, xyz_in);
-                            CHECK_STATUS(EG_evaluate);
-
-                            status = EG_invEvaluate(esurf, xyz_in, uv_out, xyz_out);
-                            CHECK_STATUS(EG_invEvaluate);
-
-                            dist = sqrt(  (xyz_in[0]-xyz_out[0]) * (xyz_in[0]-xyz_out[0])
-                                        + (xyz_in[1]-xyz_out[1]) * (xyz_in[1]-xyz_out[1])
-                                        + (xyz_in[2]-xyz_out[2]) * (xyz_in[2]-xyz_out[2]));
-                            if (dist > dmax) dmax = dist;
-                        }
-                    }
-                    printf("iloop=%2d, dmax=%12.4e\n", iloop, dmax);
-                }
-
-                toler = MAX(1.5*dmax, 1.0e-4);
-                status = EG_makeLoop(j, eedges, esurf, toler, &(eloops[iloop]));
-                printf("EG_makeLoop(%d,toler=%10.3e) -> status=%d\n", iloop, toler, status);
-                CHECK_STATUS(EG_makeLoop);
+                /* make the Loop (cannot use EG_makeLoop since sense of first Edge
+                   might be SREVERSE) */
+                status = EG_makeTopology(context, esurf, LOOP, CLOSED, NULL,
+                                         j, eedges, senses, &eloops[iloop]);
+                CHECK_STATUS(EG_makeTopology);
             }
 
-            FREE(eedges);
-
             /* create the Face */
+            senses[0] = SFORWARD;       /* outer Loop */
+            for (i = 1; i < face[iface].nlup; i++) {
+                senses[i] = SREVERSE;   /* inner Loops */
+            }
+
             status = EG_makeTopology(context, esurf, FACE, SFORWARD, NULL,
-                                     face[iface].nlup, eloops, senses, &(face[iface].eface));
+                                     face[iface].nlup, eloops, NULL, &(face[iface].eface));
             printf("EG_makeTopology(FACE) -> status=%d\n", status);
             CHECK_STATUS(EG_makeTopology);
 
             efaces[nfaces] = face[iface].eface;
             nfaces++;
+
+            FREE(eedges);
+            FREE(senses);
+            FREE(eloops);
         }
 
         if (face[iface].npnt > 0) {
@@ -2867,6 +2930,8 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
 
 cleanup:
     FREE(eedges);
+    FREE(senses);
+    FREE(eloops);
     FREE(efaces);
     FREE(cpdata);
 
@@ -2955,10 +3020,11 @@ generateFits(int    ncp,                /* (in)  number of control points */
         MALLOC(Tcloud, double, npnt);
 
         /* fit the cloud of points  with ncp control points */
-        bitflag = 0;
+        bitflag = 1;
         smooth  = 1;
+        numiter = 1000;
         status = fit1dCloud(npnt, bitflag, edge[iedge].xyz, ncp, edge[iedge].cp, smooth,
-                            Tcloud, &normf, &maxf, &dotmin, &nmin, &numiter, NULL);
+                            Tcloud, &normf, &maxf, &dotmin, &nmin, &numiter, stdout);
         printf("fit1dCloud(npnt=%d, ncp=%d) -> status=%d,  numiter=%3d,  normf=%12.4e,  dotmin=%.4f,  nmin=%d\n",
                npnt, ncp, status, numiter, normf, dotmin, nmin);
         CHECK_STATUS(fit1dCloud);
@@ -3198,7 +3264,7 @@ generateFits(int    ncp,                /* (in)  number of control points */
                 face[iface].cp[3*(i+ncp*j)+1] = edge[iedge].cp[3*ii+1];
                 face[iface].cp[3*(i+ncp*j)+2] = edge[iedge].cp[3*ii+2];
             }
-        } else if (iedge < 0) {
+        } else {
             iedge = -iedge;
             j  = 0;
             for (i = 0; i < ncp; i++) {
@@ -3207,8 +3273,6 @@ generateFits(int    ncp,                /* (in)  number of control points */
                 face[iface].cp[3*(i+ncp*j)+1] = edge[iedge].cp[3*ii+1];
                 face[iface].cp[3*(i+ncp*j)+2] = edge[iedge].cp[3*ii+2];
             }
-        } else {
-            assert(0);   // fix this
         }
 
         // east
@@ -3225,7 +3289,7 @@ generateFits(int    ncp,                /* (in)  number of control points */
                     face[iface].cp[3*(i+ncp*j)+1] = edge[iedge].cp[3*jj+1];
                     face[iface].cp[3*(i+ncp*j)+2] = edge[iedge].cp[3*jj+2];
                 }
-            } else if (iedge < 0) {
+            } else {
                 iedge = -iedge;
                 i = ncp - 1;
                 for (j = 0; j < ncp; j++) {
@@ -3234,8 +3298,6 @@ generateFits(int    ncp,                /* (in)  number of control points */
                     face[iface].cp[3*(i+ncp*j)+1] = edge[iedge].cp[3*jj+1];
                     face[iface].cp[3*(i+ncp*j)+2] = edge[iedge].cp[3*jj+2];
                 }
-            } else {
-                assert(0);   // fix this
             }
         } else {
             i = ncp - 1;
@@ -3285,7 +3347,7 @@ generateFits(int    ncp,                /* (in)  number of control points */
                 face[iface].cp[3*(i+ncp*j)+1] = edge[iedge].cp[3*ii+1];
                 face[iface].cp[3*(i+ncp*j)+2] = edge[iedge].cp[3*ii+2];
             }
-        } else if (iedge < 0) {
+        } else {
             iedge = -iedge;
             j = ncp - 1;
             for (i = 0; i < ncp; i++) {
@@ -3294,8 +3356,6 @@ generateFits(int    ncp,                /* (in)  number of control points */
                 face[iface].cp[3*(i+ncp*j)+1] = edge[iedge].cp[3*ii+1];
                 face[iface].cp[3*(i+ncp*j)+2] = edge[iedge].cp[3*ii+2];
             }
-        } else {
-            assert(0);   // fix this
         }
 
         // west
@@ -3312,7 +3372,7 @@ generateFits(int    ncp,                /* (in)  number of control points */
                     face[iface].cp[3*(i+ncp*j)+1] = edge[iedge].cp[3*jj+1];
                     face[iface].cp[3*(i+ncp*j)+2] = edge[iedge].cp[3*jj+2];
                 }
-            } else if (iedge < 0) {
+            } else {
                 iedge = -iedge;
                 i = 0;
                 for (j = 0; j < ncp; j++) {
@@ -3321,8 +3381,6 @@ generateFits(int    ncp,                /* (in)  number of control points */
                     face[iface].cp[3*(i+ncp*j)+1] = edge[iedge].cp[3*jj+1];
                     face[iface].cp[3*(i+ncp*j)+2] = edge[iedge].cp[3*jj+2];
                 }
-            } else {
-                assert(0);   // fix this
             }
         } else {
 #ifndef __clang_analyzer__
@@ -3338,7 +3396,6 @@ generateFits(int    ncp,                /* (in)  number of control points */
                 face[iface].cp[3*(i+ncp*j)+1] = ydegen;
                 face[iface].cp[3*(i+ncp*j)+2] = zdegen;
             }
-#endif
 
             /* remove points that are at the degeneracy */
             for (ipnt = npnt-1; ipnt >= 0; ipnt--) {
@@ -3355,6 +3412,7 @@ generateFits(int    ncp,                /* (in)  number of control points */
             if (face[iface].ntrain > face[iface].npnt) {
                 face[iface].ntrain = face[iface].npnt;
             }
+#endif
         }
     }
 
@@ -4883,7 +4941,7 @@ printEgo(ego    obj)                    /* (in)  ego to start */
         SPRINT6(0, "oclass0=%3d (%s)  mtype0=%3d (%s)  obj=%llx,  eref0=%llx",
                 oclass0, classname[oclass0], mtype0, mtypename,
                 (long long)obj, (long long)eref0);
-        if (oclass0 == LOOP) {
+        if (oclass0 == LOOP || oclass0 == FACE) {
             SPRINT0x(0, "< senses=");
             for (i = 0; i < nchild0; i++) {
                 SPRINT1x(0, "%2d ", senses0[i]);
@@ -4936,7 +4994,7 @@ printEgo(ego    obj)                    /* (in)  ego to start */
             SPRINT6(0, ". oclass1=%3d (%s)  mtype1=%3d (%s)  obj=%llx,  eref1=%llx",
                     oclass1, classname[oclass1], mtype1, mtypename,
                     (long long)(ebodys0[ichild0]), (long long)eref1);
-            if (oclass1 == LOOP) {
+            if (oclass1 == LOOP || oclass1 == FACE) {
                 SPRINT0x(0, ". < senses=");
                 for (i = 0; i < nchild1; i++) {
                     SPRINT1x(0, "%2d ", senses1[i]);
@@ -4974,7 +5032,7 @@ printEgo(ego    obj)                    /* (in)  ego to start */
                 SPRINT6(0, ". . oclass2=%3d (%s)  mtype2=%3d (%s)  obj=%llx,  eref2=%llx",
                         oclass2, classname[oclass2], mtype2, mtypename,
                         (long long)(ebodys1[ichild1]), (long long)eref2);
-                if (oclass2 == LOOP) {
+                if (oclass2 == LOOP || oclass2 == FACE) {
                     SPRINT0x(0, ". . < senses=");
                     for (i=0; i < nchild2; i++) {
                         SPRINT1x(0, "%2d ", senses2[i]);
@@ -5012,7 +5070,7 @@ printEgo(ego    obj)                    /* (in)  ego to start */
                     SPRINT6(0, ". . . oclass3=%3d (%s)  mtype3=%3d (%s)  obj=%llx,  eref3=%llx",
                             oclass3, classname[oclass3], mtype3, mtypename,
                             (long long)(ebodys2[ichild2]), (long long)eref3);
-                    if (oclass3 == LOOP) {
+                    if (oclass3 == LOOP || oclass3 == FACE) {
                         SPRINT0x(0, ". . . < senses=");
                         for (i=0; i < nchild3; i++) {
                             SPRINT1x(0, "%2d ", senses3[i]);
@@ -5050,7 +5108,7 @@ printEgo(ego    obj)                    /* (in)  ego to start */
                         SPRINT6(0, ". . . . oclass4=%3d (%s)  mtype4=%3d (%s)  obj=%llx,  eref4=%llx",
                                 oclass4, classname[oclass4], mtype4, mtypename,
                                 (long long)(ebodys3[ichild3]), (long long)eref4);
-                        if (oclass4 == LOOP) {
+                        if (oclass4 == LOOP || oclass4 == FACE) {
                             SPRINT0x(0, ". . . . < senses=");
                             for (i=0; i < nchild4; i++) {
                                 SPRINT1x(0, "%2d ", senses4[i]);
@@ -5088,7 +5146,7 @@ printEgo(ego    obj)                    /* (in)  ego to start */
                             SPRINT6(0, ". . . . . oclass5=%3d (%s)  mtype5=%3d (%s)  obj=%llx,  eref5=%llx",
                                     oclass5, classname[oclass5], mtype5, mtypename,
                                     (long long)(ebodys4[ichild4]), (long long)eref5);
-                            if (oclass5 == LOOP) {
+                            if (oclass5 == LOOP || oclass5 == FACE) {
                                 SPRINT0x(0, ". . . . . < senses=");
                                 for (i=0; i < nchild5; i++) {
                                     SPRINT1x(0, "%2d ", senses5[i]);
@@ -5350,8 +5408,6 @@ plotPoints_image(int   *ifunct,
             scale[2] = xmin - EPS06;
             scale[3] = xmax + EPS06;
         }
-
-        itypeP = itype;
 
         strcpy(text, " ");
 

@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -22,9 +20,6 @@ parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Num
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
 # Create working directory variable
 workDir = os.path.join(str(args.workDir[0]), "Aeroelastic_Iterative_FM")
 
@@ -36,38 +31,58 @@ numTransferIteration = 2
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransfer.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load AIMs
-myProblem.loadAIM(aim = "tetgenAIM",
-                  altName= "tetgen",
-                  analysisDir = workDir + "_FUN3D",
-                  capsIntent = "CFD")
+myProblem.analysis.create(aim = "egadsTessAIM",
+                          name= "egads",
+                          capsIntent = "CFD")
 
+myProblem.analysis.create(aim = "tetgenAIM",
+                          name= "tetgen",
+                          capsIntent = "CFD")
 
-myProblem.loadAIM(aim = "fun3dAIM",
-                  altName = "fun3d",
-                  analysisDir = workDir + "_FUN3D",
-                  parents = ["tetgen"],
-                  capsIntent = "CFD")
+myProblem.analysis["tetgen"].input["Surface_Mesh"].link(myProblem.analysis["egads"].output["Surface_Mesh"])
 
-myProblem.loadAIM(aim = "mystranAIM",
-                  altName = "mystran",
-                  analysisDir = workDir + "_MYSTRAN",
-                  capsIntent = "STRUCTURE")
+myProblem.analysis.create(aim = "fun3dAIM",
+                          name = "fun3d",
+                          capsIntent = "CFD")
 
-transfers = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
-for i in transfers:
-    myProblem.createDataTransfer(variableName = ["Pressure", "Displacement"],
-                                 aimSrc = ["fun3d", "mystran"],
-                                 aimDest =["mystran", "fun3d"],
-                                 transferMethod = ["Conserve", "Conserve"], #["Conserve", "Interpolate"]
-                                 initValueDest  = [None, (0,0,0)],
-                                 capsBound = i)
+myProblem.analysis["fun3d"].input["Mesh"].link(myProblem.analysis["tetgen"].output["Volume_Mesh"])
+
+myProblem.analysis.create(aim = "mystranAIM",
+                          name = "mystran",
+                          capsIntent = "STRUCTURE")
+
+boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
+for boundName in boundNames:
+    # Create the bound
+    bound = myProblem.bound.create(boundName)
+    
+    # Create the vertex sets on the bound for fun3d and mystran analysis
+    fun3dVset   = bound.vertexSet.create(myProblem.analysis["fun3d"])
+    mystranVset = bound.vertexSet.create(myProblem.analysis["mystran"])
+    
+    # Create pressure data sets
+    fun3d_Pressure   = fun3dVset.dataSet.create("Pressure", pyCAPS.fType.FieldOut)
+    mystran_Pressure = mystranVset.dataSet.create("Pressure", pyCAPS.fType.FieldIn)
+
+    # Create displacement data sets
+    fun3d_Displacement   = fun3dVset.dataSet.create("Displacement", pyCAPS.fType.FieldIn, init=[0,0,0])
+    mystran_Displacement = mystranVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+
+    # Link the data sets
+    mystran_Pressure.link(fun3d_Pressure, "Conserve")
+    fun3d_Displacement.link(mystran_Displacement, "Interpolate")
+    
+    # Close the bound as complete (cannot create more vertex or data sets)
+    bound.close()
 
 # Set inputs for tetgen
-myProblem.analysis["tetgen"].setAnalysisVal("Tess_Params", [.3, 0.01, 20.0])
-myProblem.analysis["tetgen"].setAnalysisVal("Preserve_Surf_Mesh", True)
+myProblem.analysis["tetgen"].input.Tess_Params = [.3, 0.01, 20.0]
+myProblem.analysis["tetgen"].input.Preserve_Surf_Mesh = True
 
 # Set inputs for fun3d
 Mach = 0.3
@@ -82,35 +97,35 @@ refPressure = (refDensity*speedofSound**2)/gamma
 
 AoA = 10 # angle of attack
 
-myProblem.analysis["fun3d"].setAnalysisVal("Proj_Name", projectName)
-myProblem.analysis["fun3d"].setAnalysisVal("Mesh_ASCII_Flag", False)
-myProblem.analysis["fun3d"].setAnalysisVal("Mach", Mach)
-myProblem.analysis["fun3d"].setAnalysisVal("Alpha", AoA)
-myProblem.analysis["fun3d"].setAnalysisVal("Equation_Type","compressible")
-myProblem.analysis["fun3d"].setAnalysisVal("Viscous", "inviscid")
-myProblem.analysis["fun3d"].setAnalysisVal("Num_Iter",1000)
-myProblem.analysis["fun3d"].setAnalysisVal("CFL_Schedule",[1, 5.0])
-myProblem.analysis["fun3d"].setAnalysisVal("CFL_Schedule_Iter", [1, 40])
-myProblem.analysis["fun3d"].setAnalysisVal("Overwrite_NML", True)
-myProblem.analysis["fun3d"].setAnalysisVal("Restart_Read","off")
-myProblem.analysis[i].setAnalysisVal("Pressure_Scale_Factor", 0.5*refDensity*refVelocity**2)
+myProblem.analysis["fun3d"].input.Proj_Name = projectName
+myProblem.analysis["fun3d"].input.Mesh_ASCII_Flag = False
+myProblem.analysis["fun3d"].input.Mach = Mach
+myProblem.analysis["fun3d"].input.Alpha = AoA
+myProblem.analysis["fun3d"].input.Equation_Type = "compressible"
+myProblem.analysis["fun3d"].input.Viscous = "inviscid"
+myProblem.analysis["fun3d"].input.Num_Iter = 1000
+myProblem.analysis["fun3d"].input.CFL_Schedule = [1, 5.0]
+myProblem.analysis["fun3d"].input.CFL_Schedule_Iter = [1, 40]
+myProblem.analysis["fun3d"].input.Overwrite_NML = True
+myProblem.analysis["fun3d"].input.Restart_Read = "off"
+myProblem.analysis["fun3d"].input.Pressure_Scale_Factor = 0.5*refDensity*refVelocity**2
 
 inviscid = {"bcType" : "Inviscid", "wallTemperature" : 1.1}
-myProblem.analysis["fun3d"].setAnalysisVal("Boundary_Condition", [("Skin", inviscid),
-                                                                  ("SymmPlane", "SymmetryY"),
-                                                                  ("Farfield","farfield")])
+myProblem.analysis["fun3d"].input.Boundary_Condition = {"Skin"      : inviscid,
+                                                         "SymmPlane": "SymmetryY",
+                                                         "Farfield" : "farfield"}
 
 # Set inputs for mystran
-myProblem.analysis["mystran"].setAnalysisVal("Proj_Name", projectName)
-myProblem.analysis["mystran"].setAnalysisVal("Edge_Point_Max", 3)
+myProblem.analysis["mystran"].input.Proj_Name = projectName
+myProblem.analysis["mystran"].input.Edge_Point_Max = 3
 
-myProblem.analysis["mystran"].setAnalysisVal("Quad_Mesh", True)
-myProblem.analysis["mystran"].setAnalysisVal("Tess_Params", [.5, .1, 15])
-myProblem.analysis["mystran"].setAnalysisVal("Analysis_Type", "Static");
+myProblem.analysis["mystran"].input.Quad_Mesh = True
+myProblem.analysis["mystran"].input.Tess_Params = [.5, .1, 15]
+myProblem.analysis["mystran"].input.Analysis_Type = "Static"
 
 # External pressure load to mystran that we will inherited from fun3d
 load = {"loadType" : "PressureExternal", "loadScaleFactor" : -1.0}
-myProblem.analysis["mystran"].setAnalysisVal("Load", ("pressureAero", load ))
+myProblem.analysis["mystran"].input.Load = {"pressureAero": load}
 
 madeupium    = {"materialType" : "isotropic",
                 "youngModulus" : 1.5E9, # lbf/ft^2
@@ -122,8 +137,8 @@ unobtainium  = {"materialType" : "isotropic",
                 "poissonRatio": 0.33,
                 "density" : 6.0} #slug/ft^3
 
-myProblem.analysis["mystran"].setAnalysisVal("Material", [("Madeupium", madeupium),
-                                                          ("Unobtainium", unobtainium)])
+myProblem.analysis["mystran"].input.Material = {"Madeupium": madeupium,
+                                                "Unobtainium": unobtainium}
 
 skin  = {"propertyType" : "Shell",
          "membraneThickness" : 0.0052, # ft - 1/16 in
@@ -137,12 +152,21 @@ ribSpar  = {"propertyType" : "Shell",
             "bendingInertiaRatio" : 1.0, # Default
             "shearMembraneRatio"  : 5.0/6.0} # Default
 
-myProblem.analysis["mystran"].setAnalysisVal("Property", [("Skin", skin),
-                                                          ("Ribs_and_Spars", ribSpar),
-                                                          ("Rib_Root", ribSpar)])
+myProblem.analysis["mystran"].input.Property = {"Skin": skin,
+                                                "Ribs_and_Spars": ribSpar,
+                                                "Rib_Root": ribSpar}
 constraint = {"groupName" : "Rib_Root",
               "dofConstraint" : 123456}
-myProblem.analysis["mystran"].setAnalysisVal("Constraint", ("edgeConstraint", constraint))
+myProblem.analysis["mystran"].input.Constraint = {"edgeConstraint": constraint}
+
+####### EGADS ########################
+# Run pre/post-analysis for tetgen
+print ("\nRunning PreAnalysis ......", "egads")
+myProblem.analysis["egads"].preAnalysis()
+
+print ("\nRunning PostAnalysis ......", "egads")
+myProblem.analysis["egads"].postAnalysis()
+#######################################
 
 
 ####### Tetgen ########################
@@ -154,18 +178,8 @@ print ("\nRunning PostAnalysis ......", "tetgen")
 myProblem.analysis["tetgen"].postAnalysis()
 #######################################
 
-# Populate vertex sets in the bounds after the mesh generation is copleted
-for j in transfers:
-    myProblem.dataBound[j].fillVertexSets()
-
 # Aeroelastic iteration loop
 for iter in range(numTransferIteration):
-
-    #Execute the dataTransfer of displacements to su2
-    #initValueDest is used on the first iteration
-    print ("\n\nExecuting dataTransfer \"Displacement\"......")
-    for j in transfers:
-        myProblem.dataBound[j].executeTransfer("Displacement")
 
     ####### FUN3D #########################
     print ("\nRunning PreAnalysis ......", "fun3d")
@@ -185,9 +199,7 @@ for iter in range(numTransferIteration):
     os.system("mpirun -np 10 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
 
     if os.path.getsize("Info.out") == 0: #
-        print ("FUN3D excution failed\n")
-        myProblem.closeCAPS()
-        raise SystemError
+        raise SystemError("FUN3D excution failed\n")
 
     shutil.copy(projectName + "_tec_boundary.plt", projectName + "_tec_boundary" + "_Interation_" + str(iter) + ".plt")
     os.chdir(currentDirectory) # Move back to top directory
@@ -198,10 +210,6 @@ for iter in range(numTransferIteration):
     myProblem.analysis["fun3d"].postAnalysis()
     #######################################
 
-    #Execute the dataTransfer of Pressure to mystran
-    print ("\n\nExecuting dataTransfer \"Pressure\"......")
-    for j in transfers:
-        myProblem.dataBound[j].executeTransfer("Pressure")
 
     ####### Mystran #######################
     print ("\nRunning PreAnalysis ......", "mystran")
@@ -216,9 +224,7 @@ for iter in range(numTransferIteration):
     os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run mystran via system call
 
     if os.path.getsize("Info.out") == 0:
-        print ("Mystran excution failed\n")
-        myProblem.closeCAPS()
-        raise SystemError
+        raise SystemError("Mystran excution failed\n")
 
     os.chdir(currentDirectory) # Move back to top directory
     #------------------------------
@@ -226,6 +232,3 @@ for iter in range(numTransferIteration):
     print ("\nRunning PostAnalysis ......", "mystran")
     myProblem.analysis["mystran"].postAnalysis()
     #######################################
-
-# Close CAPS
-myProblem.closeCAPS()

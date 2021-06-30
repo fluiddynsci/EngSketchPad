@@ -1,3 +1,5 @@
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
 #include "capsTypes.h" // Bring in CAPS types
 #include "vlmTypes.h"  // Bring in Vortex Lattice Method structures
 #include "miscTypes.h"  // Bring in miscellaneous types
@@ -70,7 +72,7 @@ int finalize_vlmSectionStruct(vlmSectionStruct *vlmSection);
 // will be ignored.
 int vlm_getSections(int numBody,
                     ego bodies[],
-                    const char *disciplineFilter,
+                    /*@null@*/ const char *disciplineFilter,
                     mapAttrToIndexStruct attrMap,
                     vlmSystemEnum sys,
                     int numSurface,
@@ -105,6 +107,15 @@ int vlm_getSectionCoordX(vlmSectionStruct *vlmSection,
                          double **xCoordOut,  // [numPoint] increasing x values
                          double **yUpperOut,  // [numPoint] for upper surface
                          double **yLowerOut); // [numPoint] for lower surface
+
+// Get the camber line for a set of x coordinates
+int vlm_getSectionCamberLine(vlmSectionStruct *vlmSection,
+                            double Cspace,       // Chordwise spacing (see spacer)
+                            int normalize,       // Normalize by chord (true/false)
+                            int numPoint,        // Number of points in airfoil
+                            double **xCoordOut,  // [numPoint] increasing x values
+                            double **yCamberOut);// [numPoint] camber line y values
+
 
 #ifdef __cplusplus
 }

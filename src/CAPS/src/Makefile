@@ -12,11 +12,10 @@ endif
 VPATH = $(ODIR)
 
 OBJS  = capsBase.o  capsAnalysis.o capsApprox.o capsAttr.o capsAIM.o \
-	capsBound.o capsProblem.o  capsValue.o  conjGrad.o printObject.o
+	capsBound.o capsProblem.o  capsValue.o  capsUnits.o conjGrad.o printObject.o
 
-default:	$(IDIR)/caps.h    $(IDIR)/capsErrors.h $(IDIR)/capsTypes.h \
-		$(IDIR)/aimUtil.h $(LDIR)/libaimUtil.a $(LDIR)/testingAIM.so \
-		$(LDIR)/$(CSHLIB) $(LDIR)/libcapsstatic.a
+default:	includes $(LDIR)/libaimUtil.a \
+		$(LDIR)/$(CSHLIB) $(LDIR)/libcapsstatic.a $(LDIR)/testingAIM.so
 
 $(LDIR)/testingAIM.so:	$(ODIR)/testingAIM.o $(LDIR)/libaimUtil.a
 	-rm $(LDIR)/testingAIM.so
@@ -38,7 +37,7 @@ $(ODIR)/aimUtil.o:	aimUtil.c ../include/capsTypes.h $(IDIR)/common.h $(IDIR)/Ope
 
 $(ODIR)/aimTransferUtil.o:	aimTransferUtil.c ../include/capsTypes.h \
 				../include/aimUtil.h
-	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../include \
+	$(CC) -c $(COPTS) $(DEFINE) -I../include -I$(IDIR) \
 		-I/usr/include/udunits2 aimTransferUtil.c \
 		-o $(ODIR)/aimTransferUtil.o
 
@@ -74,9 +73,12 @@ $(LDIR)/libcaps.dll:	$(OBJS)
 			-L$(LDIR) -ludunits2 -locsm -legads -ldl )
 
 $(OBJS): %.o: 	%.c ../include/capsErrors.h ../include/capsTypes.h capsBase.h \
-		$(IDIR)/OpenCSM.h $(IDIR)/common.h
+		capsFunIDs.h $(IDIR)/OpenCSM.h $(IDIR)/common.h
 	$(CC) -c $(COPTS) $(DEFINE) -I../include -I$(IDIR) -I. \
 		-I/usr/include/udunits2 $< -o $(ODIR)/$@
+
+includes:	$(IDIR)/caps.h $(IDIR)/capsErrors.h $(IDIR)/capsTypes.h \
+			$(IDIR)/aimUtil.h 
 
 $(IDIR)/aimUtil.h:	../include/aimUtil.h
 	touch $(IDIR)/aimUtil.h
@@ -97,6 +99,16 @@ $(IDIR)/capsTypes.h:	../include/capsTypes.h
 	touch $(IDIR)/capsTypes.h
 	rm $(IDIR)/capsTypes.h
 	cp -p ../include/capsTypes.h $(IDIR)/capsTypes.h
+
+lint:
+	@echo "CAPS library:"
+	$(LINT) -I../include -I$(IDIR) $(patsubst %.o,%.c,$(OBJS)) -uniondef -exportlocal -nullpass -Dclosedir=free
+	@echo " "
+	@echo "AIM utility library:"
+	$(LINT) -I../include -I$(IDIR) aimUtil.c aimTransferUtil.c -uniondef -exportlocal -initallelements
+	@echo " "
+	@echo "testingAIM:"
+	$(LINT) -I../include -I$(IDIR) testingAIM.c 
 
 clean:
 	-(cd $(ODIR); rm -f $(OBJS) testingAIM.o aimUtil.o aimTransferUtil.o)

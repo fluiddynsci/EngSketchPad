@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -20,31 +18,30 @@ args = parser.parse_args()
 # Working directory
 workDir = os.path.join(str(args.workDir[0]), "AstrosQuadding")
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
 # Load CSM file
 geometryScript = os.path.join("..","csmData","feaBoxes.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load astros aim
-astros = myProblem.loadAIM(aim = "astrosAIM", altName = "astros", analysisDir=workDir)
+astros = myProblem.analysis.create(aim = "astrosAIM", name = "astros")
 
 # Set project name so a mesh file is generated
 projectName = "quadding_test"
-astros.setAnalysisVal("Proj_Name", projectName)
+astros.input.Proj_Name = projectName
 
 # Global tessellation paramters
-astros.setAnalysisVal("Tess_Params", [0.1, 0.001, 15])
+astros.input.Tess_Params = [0.1, 0.001, 15]
 
 # Minimum number of points on an edge for quadding
-astros.setAnalysisVal("Edge_Point_Min", 10)
+astros.input.Edge_Point_Min = 10
 
 # Maximum number of points on an edge for quadding
-astros.setAnalysisVal("Edge_Point_Max", 15)
+astros.input.Edge_Point_Max = 15
 
 # Generate quad meshes
-astros.setAnalysisVal("Quad_Mesh", True)
+astros.input.Quad_Mesh = True
 
 
 # Set analysis
@@ -53,11 +50,8 @@ eigen = { "extractionMethod"     : "MGIV",
           "numEstEigenvalue"     : 1,
           "numDesiredEigenvalue" : 10,
           "eigenNormaliztion"    : "MASS"}
-astros.setAnalysisVal("Analysis", ("EigenAnalysis", eigen))
+astros.input.Analysis = {"EigenAnalysis": eigen}
 
 
 # Run AIM pre-analysis to genearte bdf file that demonstrates quadding
 astros.preAnalysis()
-
-# Close CAPS
-myProblem.closeCAPS()

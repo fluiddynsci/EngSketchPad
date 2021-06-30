@@ -1,7 +1,7 @@
 #
 # Written by Dr. Ryan Durscher AFRL/RQVC
 # 
-# This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3793.
+# This software has been cleared for public release on 27 Oct. 2020, case number 88ABW-2020-3328.
 
 # C-Imports 
 cimport cUDUNITS
@@ -92,7 +92,7 @@ cpdef capsConvert(value, fromUnits, toUnits, ignoreWarning = True):
         elif status == <int> cUDUNITS.UT_OS:
             msg = "Operating-system error!"
    
-        print "Unable to create new unit sytem!"
+        print("Unable to create new unit sytem!")
         
         raise ValueError(msg)
         #return None
@@ -120,7 +120,7 @@ cpdef capsConvert(value, fromUnits, toUnits, ignoreWarning = True):
                   + ") is meaningless/not possible (e.g. 'fromUnits' is 'meter' " \
                   + "and 'toUnits' is 'kilogram')!"
     
-        print "Unit conversion failure!" # Add better information here
+        print("Unit conversion failure!") # Add better information here
         
         if unitIn:
             cUDUNITS.ut_free(unitIn)
@@ -150,7 +150,7 @@ cpdef capsConvert(value, fromUnits, toUnits, ignoreWarning = True):
                  + ") is meaningless/not possible (e.g. 'fromUnits' is 'meter' " \
                   + "and 'toUnits' is 'kilogram')!"
     
-        print "Issue getting converter!"
+        print("Issue getting converter!")
         
         if unitIn:
             cUDUNITS.ut_free(unitIn)
@@ -233,7 +233,7 @@ cdef object convertUnitPythonObj(cCAPS.capsObj valueObj,
         
             if numCol == 1 and numRow == 1:
                 
-                status = cCAPS.caps_convert(valueObj, <char *> dataUnit, <double> data, &valueOut)
+                status = cCAPS.caps_convert(valueObj, <char *> dataUnit, <double> data, NULL, &valueOut)
                 if status != cCAPS.CAPS_SUCCESS: 
                     return status, data
                 
@@ -241,7 +241,7 @@ cdef object convertUnitPythonObj(cCAPS.capsObj valueObj,
                 
             elif numCol == 1:
                 
-                status = cCAPS.caps_convert(valueObj, <char *> dataUnit, <double> data[j], &valueOut)
+                status = cCAPS.caps_convert(valueObj, <char *> dataUnit, <double> data[j], NULL, &valueOut)
                 if status != cCAPS.CAPS_SUCCESS: 
                     return  status, data
                 
@@ -249,7 +249,7 @@ cdef object convertUnitPythonObj(cCAPS.capsObj valueObj,
                 
             else:
                 
-                status = cCAPS.caps_convert(valueObj, <char *> dataUnit, <double> data[j][i], &valueOut)
+                status = cCAPS.caps_convert(valueObj, <char *> dataUnit, <double> data[j][i], NULL, &valueOut)
                 if status != cCAPS.CAPS_SUCCESS: 
                     return status, data
                 

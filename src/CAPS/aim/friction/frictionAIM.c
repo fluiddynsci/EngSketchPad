@@ -3,7 +3,7 @@
  *
  *             FRICTION AIM
  *
- *      Copyright 2014-2020, Massachusetts Institute of Technology
+ *      Copyright 2014-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -15,18 +15,25 @@
 #include "aimUtil.h"
 #include "miscUtils.h"
 
-#ifdef WIN32
-#define getcwd   _getcwd
-#define PATH_MAX _MAX_PATH
-#else
-#include <unistd.h>
-#include <limits.h>
-#endif
 
-#define NUMINPUT  3
-#define NUMOUT    3
 #define PI        3.1415926535897931159979635
 #define NINT(A)         (((A) < 0)   ? (int)(A-0.5) : (int)(A+0.5))
+
+enum aimInputs
+{
+  inMach = 1,                  /* index is 1-based */
+  inAltitude,
+  inBL_Transition,
+  NUMINPUT = inBL_Transition   /* Total number of inputs */
+};
+
+enum aimOutputs
+{
+  outCDtotal = 1,              /* index is 1-based */
+  outCDform,
+  outCDfric,
+  NUMOUT = outCDfric           /* Total number of outputs */
+};
 
 //#define DEBUG
 
@@ -120,9 +127,6 @@ typedef struct {
     double turbTrans; // 0.0 fully turbulent (default) 1.0 laminar
 } frictionSec;
 
-static int        nInstance  = 0;
-
-
 
 /* ****************** FRICTION AIM Helper Functions ************************ */
 static void initiate_aimSurface(aimSurface *surface) {
@@ -166,7 +170,8 @@ calculate_distance(double *x1, double *x2, double *x0, double* D)
 
     double a[3], b[3], tmp[3], length;
 
-    length = sqrt((x1[0]-x2[0])*(x1[0]-x2[0]) + (x1[1]-x2[1])*(x1[1]-x2[1]) + (x1[2]-x2[2])*(x1[2]-x2[2]));
+    length = sqrt((x1[0]-x2[0])*(x1[0]-x2[0]) + (x1[1]-x2[1])*(x1[1]-x2[1]) +
+                  (x1[2]-x2[2])*(x1[2]-x2[2]));
     if (length < 1.0e-8) {
         x1[0] = x1[0] - 1.0;
     }
@@ -178,7 +183,8 @@ calculate_distance(double *x1, double *x2, double *x0, double* D)
     a[2] = x2[2] - x1[2];
     b[2] = x1[2] - x0[2];
     cross(a,b,tmp);
-    *D = sqrt(tmp[0]*tmp[0] + tmp[1]*tmp[1] + tmp[2]*tmp[2]) / sqrt(a[0]*a[0] + a[1]*a[1] + a[2]*a[2]);
+    *D = sqrt(tmp[0]*tmp[0] + tmp[1]*tmp[1] + tmp[2]*tmp[2]) /
+         sqrt(a[0]*a[0] + a[1]*a[1] + a[2]*a[2]);
 
 }
 
@@ -186,7 +192,8 @@ calculate_distance(double *x1, double *x2, double *x0, double* D)
 static int findSectionData(ego body,
                            int *nle, double *xyzLE,
                            int *nte, double *xyzTE,
-                           double *chordLength, double *arcLength, double *thickOverChord)
+                           double *chordLength, double *arcLength,
+                           double *thickOverChord)
 {
     //Input to this function is an egads body object
     //Find leading edge location x,y,z
@@ -209,7 +216,8 @@ static int findSectionData(ego body,
     // check body type, looking for a NODE
     status = aim_isNodeBody(body, data);
     if (status < EGADS_SUCCESS) {
-        printf(" FRICTION AIM Error: aim_isNodeBody Failure in findSectionData Code :: %d\n", status);
+        printf(" FRICTION AIM Error: aim_isNodeBody Failure in findSectionData Code :: %d\n",
+               status);
         return CAPS_IOERR;
     }
 
@@ -230,7 +238,7 @@ static int findSectionData(ego body,
 
     // Get Nodes from EGADS body, input to this function
     status = EG_getBodyTopos(body, NULL, NODE, &nNode, &nodes);
-    if (status != EGADS_SUCCESS) {
+    if ((status != EGADS_SUCCESS) || (nodes == NULL)) {
         printf(" FRICTION AIM Error: getBodyTopos Nodes = %d\n", status);
         status = CAPS_IOERR;
         goto cleanup;
@@ -258,7 +266,7 @@ static int findSectionData(ego body,
     index = 0;
     for (i = 0; i < nNode; i++) {
         status = EG_getTopology(nodes[i], &ref, &oclass, &mtype, xyz,
-                &n, &objs, &sens);
+                                &n, &objs, &sens);
         if (status != EGADS_SUCCESS) continue;
 
         // LE search
@@ -290,9 +298,11 @@ static int findSectionData(ego body,
     }
 
     // assign xyzLE location variables xle and xyzTE
-    status = EG_getTopology(nodes[*nle-1], &ref, &oclass, &mtype, xyzLE, &n, &objs, &sens);
+    status = EG_getTopology(nodes[*nle-1], &ref, &oclass, &mtype, xyzLE, &n,
+                            &objs, &sens);
     if (status != EGADS_SUCCESS) goto cleanup;
-    status = EG_getTopology(nodes[*nte-1], &ref, &oclass, &mtype, xyzTE, &n, &objs, &sens);
+    status = EG_getTopology(nodes[*nte-1], &ref, &oclass, &mtype, xyzTE, &n,
+                            &objs, &sens);
     if (status != EGADS_SUCCESS) goto cleanup;
 
     // determine distance between LT and TE points
@@ -312,7 +322,7 @@ static int findSectionData(ego body,
 
     // determine the arc length around the body
     status = EG_getBodyTopos(body, NULL, EDGE, &nEdge, &edges);
-    if (status != EGADS_SUCCESS) {
+    if ((status != EGADS_SUCCESS) || (edges == NULL)) {
         printf(" FRICTION AIM Error: LE getBodyTopos Edges = %d\n", status);
         goto cleanup;
     }
@@ -331,48 +341,44 @@ static int findSectionData(ego body,
 
 cleanup:
 
-    EG_free(nodes);
-    EG_free(edges);
+    AIM_FREE(nodes);
+    AIM_FREE(edges);
 
-    return CAPS_SUCCESS;
+    return status;
 }
 
 /* ********************** Exposed AIM Functions ***************************** */
 
 
 // ********************** AIM Function Break *****************************
-int
-aimInitialize(/*@unused@*/ int ngIn,  /*@unused@*/ /*@null@*/ capsValue *gIn,
-              int *qeFlag, /*@null@*/ const char *unitSys, int *nIn, int *nOut,
-              int *nFields, char ***fnames, int **ranks)
+int aimInitialize(int inst, /*@unused@*/ const char *unitSys, /*@unused@*/ void *aimInfo,
+                  /*@unused@*/ void **instStore, /*@unused@*/ int *major,
+                  /*@unused@*/ int *minor, int *nIn, int *nOut,
+                  int *nFields, char ***fnames, int **franks, int **fInOut)
 {
-    int flag, ret;
 
 #ifdef DEBUG
-    printf("\n frictionAIM/aimInitialize   ngIn = %d!\n", ngIn);
+    printf("\n frictionAIM/aimInitialize   instance = %d!\n", inst);
 #endif
-    flag     = *qeFlag;
-    *qeFlag  = 0;
 
     // specify the number of analysis input and out "parameters"
     *nIn     = NUMINPUT;    // Mach, Altitude
     *nOut    = NUMOUT;      // CDtotal, CDform, CDfric
-    if (flag == 1) return CAPS_SUCCESS;
+    if (inst == -1) return CAPS_SUCCESS;
 
-    // specify the field variables this analysis can generate
+    /* specify the field variables this analysis can generate and consume */
     *nFields = 0;
-    *ranks   = NULL;
     *fnames  = NULL;
+    *franks  = NULL;
+    *fInOut  = NULL;
 
-    /* return an index for the instance generated */
-    ret = nInstance;
-    nInstance++;
-    return ret;
+    return CAPS_SUCCESS;
 }
 
+
 // ********************** AIM Function Break *****************************
-int aimInputs(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
-              char **ainame, capsValue *defval)
+int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+              int index, char **ainame, capsValue *defval)
 {
 
     /*! \page aimInputsFRICTION AIM Inputs
@@ -383,10 +389,10 @@ int aimInputs(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
 
 
 #ifdef DEBUG
-    printf(" frictionAIM/aimInputs instance = %d  index = %d!\n", inst, index);
+    printf(" frictionAIM/aimInputs  index = %d!\n", index);
 #endif
 
-    if (index == 1) {
+    if (index == inMach) {
         *ainame               = EG_strdup("Mach");
         defval->type          = Double;
         defval->lfixed        = Change;
@@ -400,7 +406,7 @@ int aimInputs(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
          *  Mach number.
          */
 
-    } else if (index == 2) {
+    } else if (index == inAltitude) {
         *ainame               = EG_strdup("Altitude");
         defval->type          = Double;
         defval->lfixed        = Change;
@@ -415,11 +421,10 @@ int aimInputs(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
          *  Altitude in units of kft.
          */
 
-    } else if (index == 3) {
+    } else if (index == inBL_Transition) {
         *ainame               = EG_strdup("BL_Transition");
         defval->type          = Double;
         defval->dim           = Vector;
-        defval->length        = 1;
         defval->nrow          = 1;
         defval->ncol          = 1;
         defval->units         = NULL;
@@ -438,9 +443,10 @@ int aimInputs(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
     return CAPS_SUCCESS;
 }
 
+
 // ********************** AIM Function Break *****************************
-int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
-                   const char *apath, /*@null@*/ capsValue *inputs, capsErrs **errs)
+int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
+                   /*@null@*/ capsValue *inputs)
 {
 
     int status; // Function status return
@@ -476,11 +482,6 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
     char *tempString = NULL; // Temp. string holde
 
-    /*@-unrecog@*/
-    char         cpath[PATH_MAX];
-    /*@+unrecog@*/
-
-
     // EGADS function returns
     int atype, alen;
     const int       *ints;
@@ -490,8 +491,6 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 #ifdef DEBUG
     printf(" frictionAIM/aimPreAnalysis\n");
 #endif
-
-    *errs = NULL;
 
     // Get EGADS bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
@@ -515,16 +514,6 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
         return CAPS_SOURCEERR;
     }
 
-    // Get where we are and set the path to our input
-    (void) getcwd(cpath, PATH_MAX);
-
-    printf("\nCWD :: %s\n",cpath);
-    printf("APATH :: %s\n",apath);
-
-    if (chdir(apath) != 0) {
-        return CAPS_DIRERR;
-    }
-
     // Check inputs
     if (inputs == NULL) {
 #ifdef DEBUG
@@ -534,16 +523,15 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
         return CAPS_NULLVALUE;
     }
 
-    if (inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].nullVal == IsNull ||
-            inputs[aim_getIndex(aimInfo, "Altitude", ANALYSISIN)-1].nullVal == IsNull) {
+    if (inputs[inMach-1].nullVal == IsNull ||
+        inputs[inAltitude-1].nullVal == IsNull) {
 
         printf("Either input Mach or Altitude has not been set!\n");
         status = CAPS_NULLVALUE;
         goto cleanup;
     }
 
-    if (inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].length !=
-            inputs[aim_getIndex(aimInfo, "Altitude", ANALYSISIN)-1].length) {
+    if (inputs[inMach-1].length != inputs[inAltitude-1].length) {
 
         printf("Inputs Mach and Altitude must be the same length\n");
         status = CAPS_MISMATCH;
@@ -555,7 +543,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
     if (surfaces == NULL) {
 #ifdef DEBUG
-        printf(" frictionAIM/aimPreAnalysis Cannot allocate %d surfaces!\n", numBody);
+        printf(" frictionAIM/aimPreAnalysis Cannot allocate %d surfaces!\n",
+               numBody);
 #endif
         status =  EGADS_MALLOC;
         goto cleanup;
@@ -581,17 +570,18 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     for (i = 0; i < numBody; i++) {
 
         // search for the "capsReferenceArea" attribute
-        status = EG_attributeRet(bodies[i], "capsReferenceArea", &atype, &alen, &ints, &reals, &string);
+        status = EG_attributeRet(bodies[i], "capsReferenceArea", &atype, &alen,
+                                 &ints, &reals, &string);
         if (status == EGADS_SUCCESS) {
 
             if (atype == ATTRREAL) {
 
                 Sref = (double) reals[0];
 
-                status = aim_convert(aimInfo, lengthUnitsIn, Sref, "ft", &Sref); // Convert twice for area
+                status = aim_convert(aimInfo, 1, lengthUnitsIn, &Sref, "ft", &Sref); // Convert twice for area
                 if (status != CAPS_SUCCESS) goto cleanup;
 
-                status = aim_convert(aimInfo, lengthUnitsIn, Sref, "ft", &Sref);
+                status = aim_convert(aimInfo, 1, lengthUnitsIn, &Sref, "ft", &Sref);
                 if (status != CAPS_SUCCESS) goto cleanup;
 
 
@@ -604,12 +594,16 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
         }
 
         // Determine type of body - look for "capsType" attribute
-        status = EG_attributeRet(bodies[i], "capsType", &atype, &alen, &ints, &reals, &surfaces[i].attribute);
+        status = EG_attributeRet(bodies[i], "capsType", &atype, &alen, &ints,
+                                 &reals, &surfaces[i].attribute);
         if (status != EGADS_SUCCESS) {
 
-            printf(" *** WARNING frictionAIM: capsType not found on body %d - defaulting to 'Wing'!\n", i+1);
+            printf(" *** WARNING frictionAIM: capsType not found on body %d - defaulting to 'Wing'!\n",
+                   i+1);
+/*@-observertrans@*/
             surfaces[i].attribute = "Wing";
-
+/*@+observertrans@*/
+          
         } else {
 
             if (atype != ATTRSTRING) {
@@ -640,22 +634,25 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
                     &surfaces[i].arcLength,
                     &surfaces[i].thickOverChord);
             if (status != CAPS_SUCCESS) {
-                printf(" *** WARNING: frictionAIM: findSectionData = %d for body %d!\n", status, i+1);
+                printf(" *** WARNING: frictionAIM: findSectionData = %d for body %d!\n",
+                       status, i+1);
                 goto cleanup;
 
             }
 
             printf("Lifting Surface: Body = %d, units %s\n", i+1, lengthUnitsIn);
-            printf("\tXLE:   %8.6f %8.6f %8.6f\n", surfaces[i].xyzLE[0], surfaces[i].xyzLE[1], surfaces[i].xyzLE[2]);
-            printf("\tXTE:   %8.6f %8.6f %8.6f\n", surfaces[i].xyzTE[0], surfaces[i].xyzTE[1], surfaces[i].xyzTE[2]);
+            printf("\tXLE:   %8.6f %8.6f %8.6f\n",
+                   surfaces[i].xyzLE[0], surfaces[i].xyzLE[1], surfaces[i].xyzLE[2]);
+            printf("\tXTE:   %8.6f %8.6f %8.6f\n",
+                   surfaces[i].xyzTE[0], surfaces[i].xyzTE[1], surfaces[i].xyzTE[2]);
             printf("\tChord: %8.6f\n", surfaces[i].chordLength);
             printf("\tArc:   %8.6f\n", surfaces[i].arcLength);
             printf("\tT/C:   %8.6f\n", surfaces[i].thickOverChord);
             printf("\tType: %s\n", surfaces[i].attribute);
 
         } else if ((strcmp(surfaces[i].attribute,"Fuse")     == 0) ||
-                (strcmp(surfaces[i].attribute,"Fuselage") == 0) ||
-                (strcmp(surfaces[i].attribute,"Store")    == 0)) {
+                   (strcmp(surfaces[i].attribute,"Fuselage") == 0) ||
+                   (strcmp(surfaces[i].attribute,"Store")    == 0)) {
 
             surfaces[i].type = 1;
 
@@ -666,14 +663,16 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
                     &surfaces[i].arcLength,
                     &surfaces[i].thickOverChord);
             if (status != CAPS_SUCCESS) {
-                printf(" *** WARNING: frictionAIM: findSectionData = %d for body %d!\n", status, i+1);
+                printf(" *** WARNING: frictionAIM: findSectionData = %d for body %d!\n",
+                       status, i+1);
                 goto cleanup;
             }
 
             // volume, surface area (length), cg(3), iniria(9)
             status = EG_getMassProperties(bodies[i], massData);
             if (status != EGADS_SUCCESS) {
-                printf("Skipping - Body of Revolution: Body = %d, units %s, NODE type\n", i+1, lengthUnitsIn);
+                printf("Skipping - Body of Revolution: Body = %d, units %s, NODE type\n",
+                       i+1, lengthUnitsIn);
                 continue; // Probably have a node
             }
 
@@ -687,7 +686,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
         } else {
 
-            printf(" *** WARNING: frictionAIM: capsType attribute not recognized for body %d\n", i+1);
+            printf(" *** WARNING: frictionAIM: capsType attribute not recognized for body %d\n",
+                   i+1);
             printf("\tOptions: Wing, Tail, VTail, HTail, Canard, Vertical_Tail, Horizontal_Tail are all lifting surfaces\n");
             printf("\t Fuse, Fuselage, Store are all bodies of revolution\n");
         }
@@ -707,7 +707,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     secLift = (frictionSec *) EG_alloc(nsec*sizeof(frictionSec));
     if (secLift == NULL) {
 #ifdef DEBUG
-        printf(" frictionAIM/aimPreAnalysis Cannot allocate %d sections!\n", nsec);
+        printf(" frictionAIM/aimPreAnalysis Cannot allocate %d sections!\n",
+               nsec);
 #endif
         status = EGADS_MALLOC;
         goto cleanup;
@@ -718,7 +719,7 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
         (void) initiate_frictionSection(&secLift[i]);
 
         // Set turbulent transition based on input value
-        secLift[i].turbTrans = inputs[aim_getIndex(aimInfo, "BL_Transition", ANALYSISIN)-1].vals.real;
+        secLift[i].turbTrans = inputs[inBL_Transition-1].vals.real;
     }
 
     nsec      = 0;
@@ -748,20 +749,24 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
                 if (surfaces[i].type == 0) {
 
                     secLift[nsec].name = surfaces[i].attribute;
-                    secLift[nsec].thickOverChord = (surfaces[i].thickOverChord + surfaces[i-1].thickOverChord) / 2.0;
+                    secLift[nsec].thickOverChord = (surfaces[i].thickOverChord +
+                                                    surfaces[i-1].thickOverChord) / 2.0;
 
-                    calculate_distance(surfaces[i-1].xyzLE, surfaces[i-1].xyzTE, surfaces[i].xyzLE, &dist);
+                    calculate_distance(surfaces[i-1].xyzLE, surfaces[i-1].xyzTE,
+                                       surfaces[i].xyzLE, &dist);
 
-                    status = aim_convert(aimInfo, lengthUnitsIn, dist, "ft", &dist);
+                    status = aim_convert(aimInfo, 1, lengthUnitsIn, &dist, "ft", &dist);
                     if (status != CAPS_SUCCESS) goto cleanup;
 
                     refLength = (surfaces[i].chordLength + surfaces[i-1].chordLength) / 2.0;
                     refArea   = (dist * (surfaces[i].arcLength + surfaces[i-1].arcLength)) / 2.0;
 
-                    status = aim_convert(aimInfo, lengthUnitsIn, refLength, "ft", &secLift[nsec].refLength);
+                    status = aim_convert(aimInfo, 1, lengthUnitsIn, &refLength, "ft",
+                                         &secLift[nsec].refLength);
                     if (status != CAPS_SUCCESS) goto cleanup;
 
-                    status = aim_convert(aimInfo, lengthUnitsIn, refArea, "ft", &secLift[nsec].swet);
+                    status = aim_convert(aimInfo, 1, lengthUnitsIn, &refArea, "ft",
+                                         &secLift[nsec].swet);
                     if (status != CAPS_SUCCESS) goto cleanup;
 
                     nsec++;
@@ -794,7 +799,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
             if (nsecrevid[i] == 1) {
                 nsecrevidreal[tmp] = i;
                 nsecrevNewSec[tmp] = 0;
-                if (firstEntry==0 && strcmp(surfaces[i].attribute,surfaces[i-1].attribute) != 0) {
+                if (firstEntry==0 &&
+                    strcmp(surfaces[i].attribute,surfaces[i-1].attribute) != 0) {
                     // if the sections don't have the same attribute then another body has been found
                     nsecrev++;
                     nsecrevNewSec[tmp] = 1;
@@ -820,7 +826,7 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
             secBody[i].type = 1; // Change type from default of 0
             // Set turbulent transition based on input value
-            secBody[i].turbTrans = inputs[aim_getIndex(aimInfo, "BL_Transition", ANALYSISIN)-1].vals.real;
+            secBody[i].turbTrans = inputs[inBL_Transition-1].vals.real;
         }
 
         // tmp is the total number of surfaces that make up ALL of the body sections
@@ -832,7 +838,7 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
             if (nsecrevNewSec[i] == 1) {
                 if (i > 0) { // last body section is finished, onto the next one
 
-                    status = aim_convert(aimInfo, lengthUnitsIn, SREF, "ft", &SREF);
+                    status = aim_convert(aimInfo, 1, lengthUnitsIn, &SREF, "ft", &SREF);
                     if (status != CAPS_SUCCESS) goto cleanup;
 
                     secBody[nsecrev].thickOverChord = secBody[nsecrev].refLength / SREF;
@@ -848,21 +854,25 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
             if (firstEntry == 0) {
 
-                dist = fabs(surfaces[nsecrevidreal[i]].xyzLE[0] - surfaces[nsecrevidreal[i-1]].xyzLE[0]); // aligned with flow direction X - global axis
+                dist = fabs(surfaces[nsecrevidreal[i]].xyzLE[0] -
+                            surfaces[nsecrevidreal[i-1]].xyzLE[0]); // aligned with flow direction X - global axis
 
-                status = aim_convert(aimInfo, lengthUnitsIn, dist, "ft", &dist);
+                status = aim_convert(aimInfo, 1, lengthUnitsIn, &dist, "ft", &dist);
                 if (status != CAPS_SUCCESS) goto cleanup;
 
                 secBody[nsecrev].refLength = secBody[nsecrev].refLength + dist; // keep adding on each length component to the body ref
-                refArea   = (surfaces[nsecrevidreal[i]].arcLength + surfaces[nsecrevidreal[i-1]].arcLength);
+                refArea   = (surfaces[nsecrevidreal[i]].arcLength +
+                             surfaces[nsecrevidreal[i-1]].arcLength);
 
-                status = aim_convert(aimInfo, lengthUnitsIn, refArea, "ft", &refArea);
+                status = aim_convert(aimInfo, 1, lengthUnitsIn, &refArea, "ft", &refArea);
                 if (status != CAPS_SUCCESS) goto cleanup;
 
-                secBody[nsecrev].swet = secBody[nsecrev].swet + (dist * refArea) / 2.0;
-                refLength = (surfaces[nsecrevidreal[i]].chordLength + surfaces[nsecrevidreal[i-1]].chordLength) / 2.0; // ref diameter
+                secBody[nsecrev].swet = secBody[nsecrev].swet +
+                                        (dist * refArea) / 2.0;
+                refLength = (surfaces[nsecrevidreal[i]].chordLength +
+                             surfaces[nsecrevidreal[i-1]].chordLength) / 2.0; // ref diameter
 
-                status = aim_convert(aimInfo, lengthUnitsIn, refLength, "ft", &refLength);
+                status = aim_convert(aimInfo, 1, lengthUnitsIn, &refLength, "ft", &refLength);
                 if (status != CAPS_SUCCESS) goto cleanup;
 
                 if (surfaces[nsecrevidreal[i]].chordLength > SREF) {
@@ -872,7 +882,7 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
             if (i==tmp-1) {
 
-                status = aim_convert(aimInfo, lengthUnitsIn, SREF, "ft", &SREF);
+                status = aim_convert(aimInfo, 1, lengthUnitsIn, &SREF, "ft", &SREF);
                 if (status != CAPS_SUCCESS) goto cleanup;
 
                 secBody[nsecrev].thickOverChord = SREF / secBody[nsecrev].refLength;
@@ -880,19 +890,20 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
         }
     }
 
-    printf("Number of sections %d, number of revolution sections %d\n", nsec, nsecrev+1-nsecrevfound);
+    printf("Number of sections %d, number of revolution sections %d\n",
+           nsec, nsecrev+1-nsecrevfound);
 
     // Create char for number of sections in the friction input (lifting + bodyOfRev)
-    /*@-bufferoverflowhigh@*/
+/*@-bufferoverflowhigh@*/
     if (nsec+nsecrev+1-nsecrevfound >= 10) {
         sprintf(tmpInt,"%d.       ",nsec+nsecrev+1-nsecrevfound);
     } else {
         sprintf(tmpInt,"%d.        ",nsec+nsecrev+1-nsecrevfound);
     }
-    /*@+bufferoverflowhigh@*/
+/*@+bufferoverflowhigh@*/
 
     // Create input file for friction
-    fp = fopen("frictionInput.txt","w");
+    fp = aim_fopen(aimInfo, "frictionInput.txt","w");
     if (fp == NULL) {
         status =  CAPS_IOERR;
         goto cleanup;
@@ -901,8 +912,9 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     fprintf(fp,"CAPS Generated Friction Input File\n");
 
     tempString = convert_doubleToString(Sref,8,0); // 8 spaces, left justified (0)
+    AIM_NOTNULL(tempString, aimInfo, status);
     fprintf(fp,"%s  1.0       %s0.0\n",tempString,tmpInt);
-    if(tempString != NULL) EG_free(tempString);
+    AIM_FREE(tempString);
 
     //fprintf(fp,"1234567890123456789012345678901234567890123456789012345678901234567890\n");
 
@@ -918,28 +930,33 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
         // SWET spaces 21-30
         tempString = convert_doubleToString(secLift[i].swet,8,0); // 8 spaces, left justified (0)
+        AIM_NOTNULL(tempString, aimInfo, status);
         fprintf(fp,"%s  ",tempString);
-        EG_free(tempString); tempString = NULL;
+        AIM_FREE(tempString); tempString = NULL;
 
         // RefL spaces 31-40
         tempString = convert_doubleToString(secLift[i].refLength,8,0);
+        AIM_NOTNULL(tempString, aimInfo, status);
         fprintf(fp,"%s  ",tempString);
-        EG_free(tempString); tempString = NULL;
+        AIM_FREE(tempString);
 
         // ToC spaces 41-50
         tempString = convert_doubleToString(secLift[i].thickOverChord,8,0);
+        AIM_NOTNULL(tempString, aimInfo, status);
         fprintf(fp,"%s  ",tempString);
-        EG_free(tempString); tempString = NULL;
+        AIM_FREE(tempString);
 
         // Component type 51-60
         tempString = convert_doubleToString(secLift[i].type,8,0);
+        AIM_NOTNULL(tempString, aimInfo, status);
         fprintf(fp,"%s  ",tempString);
-        EG_free(tempString); tempString = NULL;
+        AIM_FREE(tempString);
 
         // FTrans 61-70
         tempString = convert_doubleToString(secLift[i].turbTrans,8,0);
+        AIM_NOTNULL(tempString, aimInfo, status);
         fprintf(fp,"%s  ",tempString);
-        EG_free(tempString); tempString = NULL;
+        AIM_FREE(tempString);
 
         //
         fprintf(fp,"\n");
@@ -957,73 +974,82 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
             // SWET spaces 21-30
             tempString = convert_doubleToString(secBody[i].swet,8,0);
+            AIM_NOTNULL(tempString, aimInfo, status);
             fprintf(fp,"%s  ",tempString);
-            EG_free(tempString); tempString = NULL;
+            AIM_FREE(tempString);
 
             // RefL spaces 31-40
             tempString = convert_doubleToString(secBody[i].refLength,8,0);
+            AIM_NOTNULL(tempString, aimInfo, status);
             fprintf(fp,"%s  ",tempString);
-            EG_free(tempString); tempString = NULL;
+            AIM_FREE(tempString);
 
             // ToC spaces 41-50
             tempString = convert_doubleToString(secBody[i].thickOverChord,8,0);
+            AIM_NOTNULL(tempString, aimInfo, status);
             fprintf(fp,"%s  ",tempString);
-            EG_free(tempString); tempString = NULL;
+            AIM_FREE(tempString);
 
             // Component type 51-60
             tempString = convert_doubleToString(secBody[i].type,8,0);
+            AIM_NOTNULL(tempString, aimInfo, status);
             fprintf(fp,"%s  ",tempString);
-            EG_free(tempString); tempString = NULL;
+            AIM_FREE(tempString);
 
             // FTrans 61-70
             tempString = convert_doubleToString(secBody[i].turbTrans,8,0);
+            AIM_NOTNULL(tempString, aimInfo, status);
             fprintf(fp,"%s  ",tempString);
-            EG_free(tempString); tempString = NULL;
+            AIM_FREE(tempString);
 
             //
             fprintf(fp,"\n");
         }
 
 
-    printf("Number of Mach-Altitude cases = %d\n", inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].length);
+    printf("Number of Mach-Altitude cases = %d\n", inputs[inMach-1].length);
 
     if (inputs[0].length == 1) {
         // MACH
-        tempString = convert_doubleToString(inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].vals.real, 8, 0);
+        tempString = convert_doubleToString(inputs[inMach-1].vals.real, 8, 0);
+        AIM_NOTNULL(tempString, aimInfo, status);
         fprintf(fp,"%s  ",tempString);
-        EG_free(tempString); tempString = NULL;
+        AIM_FREE(tempString);
 
         // ALTITUDE
-        tempString = convert_doubleToString(inputs[aim_getIndex(aimInfo, "Altitude", ANALYSISIN)-1].vals.real, 8, 0);
+        tempString = convert_doubleToString(inputs[inAltitude-1].vals.real, 8, 0);
+        AIM_NOTNULL(tempString, aimInfo, status);
         fprintf(fp,"%s\n",tempString);
-        EG_free(tempString); tempString = NULL;
+        AIM_FREE(tempString);
 
     } else {
 
-        for (i = 0; i < inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].length; i++) { // Multiple Mach, Altitude pairs
+        for (i = 0; i < inputs[inMach-1].length; i++) { // Multiple Mach, Altitude pairs
 
             // MACH
-            tempString = convert_doubleToString(inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].vals.reals[i], 8, 0);
+            tempString = convert_doubleToString(inputs[inMach-1].vals.reals[i],
+                                                8, 0);
+            AIM_NOTNULL(tempString, aimInfo, status);
             fprintf(fp,"%s  ",tempString);
-            EG_free(tempString); tempString = NULL;
+            AIM_FREE(tempString);
 
             // ALTITUDE
-            tempString = convert_doubleToString(inputs[aim_getIndex(aimInfo, "Altitude", ANALYSISIN)-1].vals.reals[i], 8, 0);
+            tempString = convert_doubleToString(inputs[inAltitude-1].vals.reals[i],
+                                                8, 0);
+            AIM_NOTNULL(tempString, aimInfo, status);
             fprintf(fp,"%s\n",tempString);
-            EG_free(tempString); tempString = NULL;
+            AIM_FREE(tempString);
         }
     }
 
     fprintf(fp,"0.00      0.00\n");
 
-
     status = CAPS_SUCCESS;
 
 cleanup:
 
-    if (status != CAPS_SUCCESS) printf("Premature exit in frictionAIM preAnalysis status = %d\n", status);
-
-    chdir(cpath);
+    if (status != CAPS_SUCCESS)
+      printf("Premature exit in frictionAIM preAnalysis status = %d\n", status);
 
     if (fp != NULL) fclose(fp);
 
@@ -1040,36 +1066,48 @@ cleanup:
     return status;
 }
 
+
 // ********************** AIM Function Break *****************************
-int aimOutputs( int inst, void *aimInfo, int index, char **aoname, capsValue *form)
+
+/* no longer optional and needed for restart */
+int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+                    /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
+{
+  return CAPS_SUCCESS;
+}
+
+
+// ********************** AIM Function Break *****************************
+int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+               int index, char **aoname, capsValue *form)
 {
 #ifdef DEBUG
-    printf(" frictionAIM/aimOutputs instance = %d  index = %d!\n", inst, index);
+    printf(" frictionAIM/aimOutputs  index = %d!\n", index);
 #endif
 
     /*! \page aimOutputsFRICTION AIM Outputs
      * Total, Form, and Friction drag components:
      */
 
-    if (index == 1) {
+    if (index == outCDtotal) {
 
-        *aoname             = EG_strdup("CDtotal");
+        *aoname = EG_strdup("CDtotal");
 
         /*! \page aimOutputsFRICTION
          * - <B> CDtotal = </B> Drag Coefficient [CDform + CDfric].
          */
 
-    } else if (index == 2) {
+    } else if (index == outCDform) {
 
-        *aoname             = EG_strdup("CDform");
+        *aoname = EG_strdup("CDform");
 
         /*! \page aimOutputsFRICTION
          * - <B> CDform = </B> Form Drag Coefficient.
          */
 
-    } else if (index == 3) {
+    } else if (index == outCDfric) {
 
-        *aoname             = EG_strdup("CDfric");
+        *aoname = EG_strdup("CDfric");
 
         /*! \page aimOutputsFRICTION
          * - <B> CDfric = </B> Friction Drag Coefficient.
@@ -1080,7 +1118,6 @@ int aimOutputs( int inst, void *aimInfo, int index, char **aoname, capsValue *fo
     form->lfixed = Change;
     form->sfixed = Fixed;
     form->dim    = Vector;
-    form->length = 1;
     form->nrow   = 1;
     form->ncol   = 1;
     form->vals.real = 0.0;
@@ -1089,9 +1126,10 @@ int aimOutputs( int inst, void *aimInfo, int index, char **aoname, capsValue *fo
     return CAPS_SUCCESS;
 }
 
+
 // ********************** AIM Function Break *****************************
-int aimCalcOutput(int inst, /*@unused@*/ void *aimInfo, const char *apath, int index,
-                  capsValue *val, capsErrs **errors)
+int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+                  int index, capsValue *val)
 {
 
     int status; // Function return status
@@ -1101,42 +1139,21 @@ int aimCalcOutput(int inst, /*@unused@*/ void *aimInfo, const char *apath, int i
     int valueCount = 0;
 
     size_t linecap = 0;
-    char   cpath[PATH_MAX], *valstr = NULL, *line = NULL;
+    char   *valstr = NULL, *line = NULL;
 
     double tmp, Fric[100], Prof[100], Tot[100];
 
     FILE   *fp = NULL;
 
 #ifdef DEBUG
-    printf(" frictionAIM/aimCalcOutput instance = %d  index = %d!\n", inst, index);
+    printf(" frictionAIM/aimCalcOutput  index = %d!\n", index);
 #endif
-
-    *errors        = NULL;
-
-    if (val->length > 1) {
-        if (val->vals.reals != NULL) EG_free(val->vals.reals);
-        val->vals.reals = NULL;
-    } else {
-        val->vals.real = 0.0;
-    }
 
     val->nrow = 1;
     val->ncol = 1;
-    val->length = val->nrow*val->ncol;
-
-    //  Get where we are and set the path to our output */
-    (void) getcwd(cpath, PATH_MAX);
-    if (chdir(apath) != 0) {
-#ifdef DEBUG
-        printf(" frictionAIM/aimCalcOutput Cannot chdir to %s!\n", apath);
-#endif
-
-        status = CAPS_DIRERR;
-        goto cleanup;
-    }
 
     // Open the friction output file
-    fp = fopen("frictionOutput.txt", "r");
+    fp = aim_fopen(aimInfo, "frictionOutput.txt", "r");
     if (fp == NULL) {
 #ifdef DEBUG
         printf(" frictionAIM/aimCalcOutput Cannot open Output file!\n");
@@ -1171,10 +1188,12 @@ int aimCalcOutput(int inst, /*@unused@*/ void *aimInfo, const char *apath, int i
 
                 Tot[valueCount] = tmp;
                 status = sscanf(line,"%*d %*lf %*lf %*lf %*lf %lf %*lf",&tmp);
+                if (status == -1) break; // using the break to exit the while loop, not a read error
 
                 Prof[valueCount] = tmp;
 
                 status = sscanf(line,"%*d %*lf %*lf %*lf %lf %*lf %*lf",&tmp);
+                if (status == -1) break; // using the break to exit the while loop, not a read error
 
                 Fric[valueCount] = tmp;
 
@@ -1198,16 +1217,15 @@ int aimCalcOutput(int inst, /*@unused@*/ void *aimInfo, const char *apath, int i
 
     val->nrow = valueCount;
     val->ncol = 1;
-    val->length = val->nrow*val->ncol;
 
     if (valueCount == 1) {
-        if (index == 1) val->vals.real = Tot[0];
-        if (index == 2) val->vals.real = Prof[0];
-        if (index == 3) val->vals.real = Fric[0];
+        if (index == outCDtotal) val->vals.real = Tot[0];
+        if (index == outCDform)  val->vals.real = Prof[0];
+        if (index == outCDfric)  val->vals.real = Fric[0];
 
     } else if (valueCount > 1) {
 
-        val->vals.reals = (double *) EG_alloc(val->length*sizeof(double));
+        val->vals.reals = (double *) EG_alloc(val->nrow*sizeof(double));
 
         if (val->vals.reals == NULL) {
             status = EGADS_MALLOC;
@@ -1216,9 +1234,9 @@ int aimCalcOutput(int inst, /*@unused@*/ void *aimInfo, const char *apath, int i
 
         for (i = 0; i < valueCount; i++) {
 
-            if (index == 1) val->vals.reals[i] = Tot[i];
-            if (index == 2) val->vals.reals[i] = Prof[i];
-            if (index == 3) val->vals.reals[i] = Fric[i];
+            if (index == outCDtotal) val->vals.reals[i] = Tot[i];
+            if (index == outCDform)  val->vals.reals[i] = Prof[i];
+            if (index == outCDfric)  val->vals.reals[i] = Fric[i];
 
         }
     }
@@ -1227,9 +1245,8 @@ int aimCalcOutput(int inst, /*@unused@*/ void *aimInfo, const char *apath, int i
     goto cleanup;
 
     cleanup:
-    if (status != CAPS_SUCCESS) printf("Premature exit in frictionAIM aimCalcOutput status = %d\n", status);
-
-    chdir(cpath);
+    if (status != CAPS_SUCCESS)
+      printf("Premature exit in frictionAIM aimCalcOutput status = %d\n", status);
 
     if (fp != NULL) fclose(fp);
 
@@ -1241,7 +1258,7 @@ int aimCalcOutput(int inst, /*@unused@*/ void *aimInfo, const char *apath, int i
 
 // ********************** AIM Function Break *****************************
 void
-aimCleanup()
+aimCleanup(/*@unused@*/ void *aimStore)
 {
 #ifdef DEBUG
     printf(" frictionAIM/aimCleanup!\n");

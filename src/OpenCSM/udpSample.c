@@ -14,7 +14,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -109,7 +109,10 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     int     wire, sense[4];
     double  node1[3], node2[3], node3[3], node4[3];
     double  data[18], trange[2];
+    char    *message=NULL;
     ego     enodes[9], ecurve, eedges[8], eloop, eface;
+
+    ROUTINE(udpExecute);
 
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
@@ -130,39 +133,42 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     *nMesh  = 0;
     *string = NULL;
 
+    MALLOC(message, char, 100);
+    message[0] = '\0';
+
     /* check arguments */
     if (udps[0].arg[0].size > 1) {
-        printf(" udpExecute: dx should be a scalar\n");
+        snprintf(message, 100, "dx should be a scalar");
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (DX(0) < 0) {
-        printf(" udpExecute: dx = %f < 0\n", DX(0));
+        snprintf(message, 100, "dx = %f < 0", DX(0));
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (udps[0].arg[1].size > 1) {
-        printf(" udpExecute: dy should be a scalar\n");
+        snprintf(message, 100, "dy should be a scalar");
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (DY(0) < 0) {
-        printf(" udpExecute: dy = %f < 0\n", DY(0));
+        snprintf(message, 100, "dy = %f < 0", DY(0));
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (udps[0].arg[2].size > 1) {
-        printf(" udpExecute: dz should be a scalar\n");
+        snprintf(message, 100, "dz should be a scalar");
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (DZ(0) < 0) {
-        printf(" udpExecute: dz = %f < 0\n", DZ(0));
+        snprintf(message, 100, "dz = %f < 0", DZ(0));
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (DX(0) <= 0 && DY(0) <= 0 && DZ(0) <= 0) {
-        printf(" udpExecute: dx=dy=dz=0\n");
+        snprintf(message, 100, "dx=dy=dz=0");
         status  = EGADS_GEOMERR;
         goto cleanup;
 
@@ -170,17 +176,14 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         // CENTER is not used
 
     } else if (CENTER_SIZ(0) != 3) {
-        printf(" udpExecute: center should contain 3 entries\n");
+        snprintf(message, 100, "center should contain 3 entries");
         status  = EGADS_GEOMERR;
         goto cleanup;
     }
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("dx[%d]         = %f\n", numUdp, DX(    numUdp));
@@ -197,12 +200,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* make private data (not needed here, but included to
        show how one would do this */
-    udps[numUdp].data = (char*) EG_alloc(30*sizeof(char));
-    if (udps[numUdp].data == NULL) {
-        status = EGADS_MALLOC;
-        printf(" udpExecute: problem creating private data\n");
-        goto cleanup;
-    }
+    MALLOC(udps[numUdp].data, char, 30);
 
     strcpy((char*)(udps[numUdp].data), "this is test private data");
 
@@ -243,11 +241,12 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
         /* Make SolidBody */
         status = EG_makeSolidBody(context, BOX, data, ebody);
-        if (status != EGADS_SUCCESS || *ebody == NULL) goto cleanup;
+        CHECK_STATUS(EG_makeSolidBody);
+        if (*ebody == NULL) goto cleanup;    // needed for splint
 
         /* set the output value(s) */
         status = EG_getMassProperties(*ebody, data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getMassProperties);
 
         AREA(0)   = data[1];
         VOLUME(0) = data[0];
@@ -318,10 +317,10 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
         /* make Nodes */
         status = EG_makeTopology(context, NULL, NODE, 0, node1, 0, NULL, NULL, &(enodes[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         status = EG_makeTopology(context, NULL, NODE, 0, node2, 0, NULL, NULL, &(enodes[1]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make the Line */
         data[0] = node1[0];
@@ -331,32 +330,33 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[4] = node2[1] - node1[1];
         data[5] = node2[2] - node1[2];
         status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, data, &ecurve);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeGeometry);
 
         /* get the parameter range */
         status = EG_invEvaluate(ecurve, node1, &(trange[0]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         status = EG_invEvaluate(ecurve, node2, &(trange[1]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         /* make Edge */
         status = EG_makeTopology(context, ecurve, EDGE, TWONODE, trange, 2, &(enodes[0]), NULL, &(eedges[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make Loop from this Edge */
         sense[0] = SFORWARD;
         sense[1] = SFORWARD;
         status = EG_makeTopology(context, NULL, LOOP, OPEN, NULL, 1, eedges, sense, &eloop);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* create the WireBody (which will be returned) */
         status = EG_makeTopology(context, NULL, BODY, WIREBODY, NULL, 1, &eloop, NULL, ebody);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
+        if (*ebody == NULL) goto cleanup;    // needed for splint
 
         /* set the output value(s) */
         status = EG_getMassProperties(*ebody, data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getMassProperties);
 
         AREA(0)   = data[1];
         VOLUME(0) = data[0];
@@ -400,16 +400,16 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
        /* make Nodes */
         status = EG_makeTopology(context, NULL, NODE, 0, node1, 0, NULL, NULL, &(enodes[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         status = EG_makeTopology(context, NULL, NODE, 0, node2, 0, NULL, NULL, &(enodes[1]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         status = EG_makeTopology(context, NULL, NODE, 0, node3, 0, NULL, NULL, &(enodes[2]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         status = EG_makeTopology(context, NULL, NODE, 0, node4, 0, NULL, NULL, &(enodes[3]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* first and last Nodes are the same */
         enodes[4] = enodes[0];
@@ -422,18 +422,18 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[4] = node2[1] - node1[1];
         data[5] = node2[2] - node1[2];
         status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, data, &ecurve);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeGeometry);
 
         /* get the parameter range */
         status = EG_invEvaluate(ecurve, node1, &(trange[0]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         status = EG_invEvaluate(ecurve, node2, &(trange[1]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         /* make Edge */
         status = EG_makeTopology(context, ecurve, EDGE, TWONODE, trange, 2, &(enodes[0]), NULL, &(eedges[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make the Line 2 */
         data[0] = node2[0];
@@ -443,18 +443,18 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[4] = node3[1] - node2[1];
         data[5] = node3[2] - node2[2];
         status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, data, &ecurve);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeGeometry);
 
         /* get the parameter range */
         status = EG_invEvaluate(ecurve, node2, &(trange[0]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         status = EG_invEvaluate(ecurve, node3, &(trange[1]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         /* make Edge */
         status = EG_makeTopology(context, ecurve, EDGE, TWONODE, trange, 2, &(enodes[1]), NULL, &(eedges[1]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make the Line 3 */
         data[0] = node3[0];
@@ -464,18 +464,18 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[4] = node4[1] - node3[1];
         data[5] = node4[2] - node3[2];
         status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, data, &ecurve);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeGeometry);
 
         /* get the parameter range */
         status = EG_invEvaluate(ecurve, node3, &(trange[0]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         status = EG_invEvaluate(ecurve, node4, &(trange[1]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         /* make Edge */
         status = EG_makeTopology(context, ecurve, EDGE, TWONODE, trange, 2, &(enodes[2]), NULL, &(eedges[2]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make the Line 4 */
         data[0] = node4[0];
@@ -485,18 +485,18 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[4] = node1[1] - node4[1];
         data[5] = node1[2] - node4[2];
         status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, data, &ecurve);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeGeometry);
 
         /* get the parameter range */
         status = EG_invEvaluate(ecurve, node4, &(trange[0]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         status = EG_invEvaluate(ecurve, node1, &(trange[1]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         /* make Edge */
         status = EG_makeTopology(context, ecurve, EDGE, TWONODE, trange, 2, &(enodes[3]), NULL, &(eedges[3]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make Loop from this Edge */
         sense[0] = SFORWARD;
@@ -505,19 +505,20 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         sense[3] = SFORWARD;
 
         status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL, 4, eedges, sense, &eloop);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make Face from the loop */
         status = EG_makeFace(eloop, SREVERSE, NULL, &eface);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeFace);
 
         /* create the FaceBody (which will be returned) */
         status = EG_makeTopology(context, NULL, BODY, FACEBODY, NULL, 1, &eface, NULL, ebody);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
+        if (*ebody == NULL) goto cleanup;    // needed for splint
 
         /* set the output value(s) */
         status = EG_getMassProperties(*ebody, data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getMassProperties);
 
         AREA(0)   = data[1];
         VOLUME(0) = data[0];
@@ -532,8 +533,14 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 #endif
 
 cleanup:
-    if (status != EGADS_SUCCESS) {
+    if (strlen(message) > 0) {
+        *string = message;
+        printf("%s\n", message);
+    } else if (status != EGADS_SUCCESS) {
+        FREE(message);
         *string = udpErrorStr(status);
+    } else {
+        FREE(message);
     }
 
     return status;

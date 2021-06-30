@@ -16,9 +16,7 @@ ODIR  = $(ESP_BLOC)\obj
 ODIR  = .
 !ENDIF
 
-AFLR2_LIB = aflr2c.lib egen.lib \
-            qtb.lib rec2.lib dftr2.lib dftr3.lib dgeom.lib otb.lib \
-            ice2.lib ug2.lib ug3.lib ug_gq.lib ug.lib
+AFLR2_LIB = AFLR.lib
 
 default: $(ODIR)\aflr2_version.exe $(LDIR)\aflr2AIM.dll
 

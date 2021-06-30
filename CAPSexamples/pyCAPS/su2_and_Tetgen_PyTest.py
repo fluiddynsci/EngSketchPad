@@ -1,21 +1,14 @@
-## [importPrint]
-from __future__ import print_function
-## [importPrint]
-
 ## [import]
-# Import pyCAPS class file
+# Import pyCAPS module
 import pyCAPS
 
 # Import os module
 import os
-
-# Import argparse module
 import argparse
 
-# Import SU2 python environment
+# Import SU2 Python interface module
 from parallel_computation import parallel_computation as su2Run
 ## [import]
-
 
 # Setup and read command line options. Please note that this isn't required for pyCAPS
 parser = argparse.ArgumentParser(description = 'SU2 and Tetgen Pytest Example',
@@ -23,18 +16,13 @@ parser = argparse.ArgumentParser(description = 'SU2 and Tetgen Pytest Example',
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
+# Create working directory variable
 workDir = os.path.join(str(args.workDir[0]), "SU2TetgenAnalysisTest")
-# -----------------------------------------------------------------
-# Initialize capsProblem object
-# -----------------------------------------------------------------
-## [initateProblem]
-myProblem = pyCAPS.capsProblem()
-## [initateProblem]
 
 # -----------------------------------------------------------------
 # Load CSM file and Change a design parameter - area in the geometry
@@ -44,80 +32,101 @@ myProblem = pyCAPS.capsProblem()
 # Load CSM file
 ## [geometry]
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 ## [geometry]
 
 ## [capsDespmtrs]
 # Change a design parameter - area in the geometry
-myProblem.geometry.setGeometryVal("area", 50)
+myProblem.geometry.despmtr.area = 50
 ## [capsDespmtrs]
 
-# Load Tetgen aim
 ## [loadMeshAIM]
-myMesh = myProblem.loadAIM(aim = "tetgenAIM", analysisDir = workDir)
+# Load EGADS Tess aim
+mySurfMesh = myProblem.analysis.create(aim = "egadsTessAIM",
+                                       name = "tess")
+
+# Load Tetgen aim
+myMesh = myProblem.analysis.create(aim = "tetgenAIM",
+                                   name = "myMesh")
 ## [loadMeshAIM]
 
 ## [setMeshpmtrs]
+# Set project name so a mesh file is generated
+mySurfMesh.input.Proj_Name = "egadsTessMesh"
+
 # Set new EGADS body tessellation parameters
-myMesh.setAnalysisVal("Tess_Params", [.05, 0.01, 20.0])
+mySurfMesh.input.Tess_Params = [0.5, 0.1, 20.0]
+
+# Set output grid format since a project name is being supplied - Tecplot file
+mySurfMesh.input.Mesh_Format = "Tecplot"
+
+# Link surface mesh from EGADS to TetGen
+myMesh.input["Surface_Mesh"].link(mySurfMesh.output["Surface_Mesh"])
 
 # Preserve surface mesh while meshing
-myMesh.setAnalysisVal("Preserve_Surf_Mesh", True)
+myMesh.input.Preserve_Surf_Mesh = True
 ## [setMeshpmtrs]
 
+## [meshAnalysis]
 # Run AIM pre-analysis
-## [meshPreAnalysis]
-myMesh.preAnalysis()
-## [meshPreAnalysis]
+mySurfMesh.preAnalysis()
 
-## [meshExecute]
-# NO analysis is needed - TetGen was already ran during preAnalysis
-## [meshExecute]
+##########################################
+## egadsTess was ran during preAnalysis ##
+##########################################
 
 # Run AIM post-analysis
-## [meshPostAnalysis]
+mySurfMesh.postAnalysis()
+
+# Run AIM pre-analysis
+myMesh.preAnalysis()
+
+# NO analysis is needed - TetGen was already ran during preAnalysis
+
+# Run AIM post-analysis
 myMesh.postAnalysis()
-## [meshPostAnalysis]
+## [meshAnalysis]
 
 ## [loadSu2]
 # Load SU2 aim - child of Tetgen AIM
-myAnalysis = myProblem.loadAIM(aim = "su2AIM",
-                               analysisDir = workDir,
-                               parents = myMesh.aimName)
+myAnalysis = myProblem.analysis.create(aim = "su2AIM", name = "su2")
 ## [loadSu2]
 
 ## [setSu2Inputs]
+# Link the Mesh to the TetGen Volume_Mesh
+myAnalysis.input["Mesh"].link(myMesh.output["Volume_Mesh"])
 
 # Set SU2 Version
-myAnalysis.setAnalysisVal("SU2_Version","Falcon")
+myAnalysis.input.SU2_Version = "Blackbird"
 
 # Set project name
-myAnalysis.setAnalysisVal("Proj_Name", "pyCAPS_SU2_Tetgen")
+myAnalysis.input.Proj_Name = "pyCAPS_SU2_Tetgen"
 
 # Set AoA number
-myAnalysis.setAnalysisVal("Alpha", 1.0)
+myAnalysis.input.Alpha = 1.0
 
 # Set Mach number
-myAnalysis.setAnalysisVal("Mach", 0.5901)
+myAnalysis.input.Mach = 0.5901
 
 # Set equation type
-myAnalysis.setAnalysisVal("Equation_Type","Compressible")
+myAnalysis.input.Equation_Type = "Compressible"
 
 # Set number of iterations
-myAnalysis.setAnalysisVal("Num_Iter",10)
+myAnalysis.input.Num_Iter = 5
 
 # Specifcy the boundares used to compute forces
-myAnalysis.setAnalysisVal("Surface_Monitor", ["Wing1", "Wing2"])
-
+myAnalysis.input.Surface_Monitor = ["Wing1", "Wing2"]
 ## [setSu2Inputs]
 
-# Set boundary conditions
 ## [setSu2BCs]
+# Set boundary conditions
 inviscidBC1 = {"bcType" : "Inviscid"}
 inviscidBC2 = {"bcType" : "Inviscid"}
-myAnalysis.setAnalysisVal("Boundary_Condition", [("Wing1", inviscidBC1),
-                                                 ("Wing2", inviscidBC2),
-                                                 ("Farfield","farfield")])
+myAnalysis.input.Boundary_Condition = {"Wing1"   : inviscidBC1,
+                                       "Wing2"   : inviscidBC2,
+                                       "Farfield": "farfield"}
 ## [setSu2BCs]
 
 # Run AIM pre-analysis
@@ -132,7 +141,7 @@ currentDirectory = os.getcwd() # Get our current working directory
 
 os.chdir(myAnalysis.analysisDir) # Move into test directory
 
-su2Run(myAnalysis.getAnalysisVal("Proj_Name") + ".cfg", args.numberProc) # Run SU2
+su2Run(myAnalysis.input.Proj_Name + ".cfg", args.numberProc) # Run SU2
 
 os.chdir(currentDirectory) # Move back to top directory
 ## [su2Run]
@@ -147,21 +156,16 @@ myAnalysis.postAnalysis()
 # Get force results
 print("Total Force - Pressure + Viscous")
 # Get Lift and Drag coefficients
-print("Cl = " , myAnalysis.getAnalysisOutVal("CLtot"), \
-      "Cd = "  , myAnalysis.getAnalysisOutVal("CDtot"))
+print("Cl = " , myAnalysis.output.CLtot,
+      "Cd = " , myAnalysis.output.CDtot)
 
 # Get Cmx, Cmy, and Cmz coefficients
-print("Cmx = " , myAnalysis.getAnalysisOutVal("CMXtot"), \
-      "Cmy = "  , myAnalysis.getAnalysisOutVal("CMYtot"), \
-      "Cmz = "  , myAnalysis.getAnalysisOutVal("CMZtot"))
+print("Cmx = " , myAnalysis.output.CMXtot,
+      "Cmy = " , myAnalysis.output.CMYtot,
+      "Cmz = " , myAnalysis.output.CMZtot)
 
 # Get Cx, Cy, Cz coefficients
-print("Cx = " , myAnalysis.getAnalysisOutVal("CXtot"), \
-      "Cy = "  , myAnalysis.getAnalysisOutVal("CYtot"), \
-      "Cz = "  , myAnalysis.getAnalysisOutVal("CZtot"))
+print("Cx = " , myAnalysis.output.CXtot,
+      "Cy = " , myAnalysis.output.CYtot,
+      "Cz = " , myAnalysis.output.CZtot)
 ## [su2Output]
-
-# Close CAPS
-## [closeCAPS]
-myProblem.closeCAPS()
-## [closeCAPS]

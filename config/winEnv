@@ -93,11 +93,17 @@ if [ "$EFCOMP" = UNKNOWN ]; then
 fi
 
 START=UNKNOWN
+if [ -f "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" ]; then
+START="C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+fi
 if [ -f "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" ]; then
 START="C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
 fi
 if [ -f "C:\Program Files (x86)\Mozilla Firefox\firefox.exe" ]; then
 START="C:\Program Files (x86)\Mozilla Firefox\firefox.exe"
+fi
+if [ -f "C:\Program Files\Google\Chrome\Application\chrome.exe" ]; then
+START="C:\Program Files\Google\Chrome\Application\chrome.exe"
 fi
 if [ -f "C:\Program Files\Mozilla Firefox\firefox.exe" ]; then
 START="C:\Program Files\Mozilla Firefox\firefox.exe"
@@ -204,6 +210,7 @@ fi
 #
 # do we have a python?
 #
+echo
 PYTH=UNKNOWN
 if [ ! -n "$PYTHONINC" ]; then
 	PYTHONINC=UNKNOWN
@@ -214,21 +221,12 @@ fi
 pyt="`where python`"
 if [ -n "$pyt" ]; then
 	PYTH=python
+	echo "Info: Python exec $pyt found!"
 fi
 
-echo
 if [ "$PYTH" != UNKNOWN ]; then
 	if [ "$PYTHONINC" = UNKNOWN ]; then
 		pscr="from __future__ import print_function; import distutils.sysconfig as sysconfig; print(sysconfig.get_config_var('INCLUDEPY'))"
-		eval PYTHINC=\`python -c \"$pscr\"\`
-		if [ -f "$PYTHINC/Python.h" ]; then
-			PYTHONINC=$PYTHINC
-			echo "Info: Python header $PYTHONINC\\Python.h found!"
-		fi
-	fi
-
-	if [ "$PYTHONINC" = UNKNOWN ]; then
-		pscr="from __future__ import print_function; import distutils.sysconfig as sysconfig; print(sysconfig.get_path('platinclude'))"
 		eval PYTHINC=\`python -c \"$pscr\"\`
 		if [ -f "$PYTHINC/Python.h" ]; then
 			PYTHONINC=$PYTHINC
@@ -336,7 +334,12 @@ echo "MSVC    =" $MSVC
 if [ "$EFCOMP" != UNKNOWN ]; then
 	echo "EFCOMP  =" $EFCOMP
 fi
- 
+if [ "$PYTH" != UNKNOWN ]; then
+	echo "PYTHONINC=" $PYTHONINC
+	echo "PYTHONLIB=" $PYTHONLIB 
+	echo
+fi
+
 echo "rem ESP Environment File"                             > tmp
 echo "set MSVC="$MSVC                                      >> tmp
 echo "set ESP_ARCH="$CARCH                                 >> tmp
@@ -360,21 +363,19 @@ echo "set CAPS_GLYPH="$BASE/src/CAPS/aim/pointwise/glyph   >> tmp
 if [ "$PYTHONINC" != UNKNOWN ] && [ "$PYTHONLIB" != UNKNOWN ]; then
 	echo "set PYTHONINC=$PYTHONINC"                    >> tmp
 	echo "set PYTHONLIB=$PYTHONLIB"                    >> tmp
-	echo "set PYTHONPATH="$BASE/lib                    >> tmp
 else
-	echo "rem set PYTHONINC=C:\Python37\include"               >> tmp
-	echo "rem set PYTHONLIB=C:\Python37\Libs\python37.lib"     >> tmp
-	echo "rem set PYTHONPATH="$BASE/lib                        >> tmp
-	echo "rem set PATH=C:\Python37;%PATH%"                     >> tmp
+	echo "rem set PYTHONINC=C:\Python38\include"               >> tmp
+	echo "rem set PYTHONLIB=C:\Python38\Libs\python38.lib"     >> tmp
+	echo "rem set PATH=C:\Python38;%PATH%"                     >> tmp
 fi
+echo "set PYTHONPATH="$BASE/pyESP";%PYTHONPATH%"           >> tmp
 if [ "$TETGEN" != UNKNOWN ]; then
-	echo "set TETGEN=$TETGEN"                          >> tmp
+	echo "set TETGEN=$TETGEN"                                  >> tmp
 else
-	echo "rem set TETGEN=Z:\HOME\Projects\TetGen\tetgen1.5.1"  >> tmp
+	echo "rem set TETGEN=Z:\HOME\Projects\TetGen\tetgen1.6.0"  >> tmp
 fi
 if [ "$START" != UNKNOWN ]; then
 	echo "set SLUGS_START=\"\"$START\" $BASE\SLUGS\Slugs.html\"" >> tmp
-	echo "set CAPS_START=\"\"$START\" $BASE\src\CAPS\pyCAPS\viewer\capsViewer.html\"" >> tmp
 	echo "set ESP_START=\"\"$START\" $BASE\ESP\ESP.html\""       >> tmp
 	echo "set WV_START=\"\"$START\" $BASE\wvClient\wv.html\""    >> tmp
 fi

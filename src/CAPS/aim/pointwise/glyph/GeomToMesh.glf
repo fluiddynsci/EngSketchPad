@@ -1,5 +1,5 @@
 #
-# Copyright 2019 (c) Pointwise, Inc.
+# Copyright (c) 2019-2020 Pointwise, Inc.
 # All rights reserved.
 #
 # This sample Pointwise script is not supported by Pointwise, Inc.
@@ -181,6 +181,7 @@ proc geomtomesh { } {
     puts "    ProxGrowthRate           = $conParams(ProxGrowthRate)"
     puts "    SourceSpacing            = $conParams(SourceSpacing)"
     puts "    TurnAngleHard            = $conParams(TurnAngleHard)"
+    puts "    EqualSpacing             = $conParams(EqualSpacing)"
     puts "Domain level"
     puts "    Algorithm                = $domParams(Algorithm)"
     puts "    FullLayers               = $domParams(FullLayers)"
@@ -195,12 +196,14 @@ proc geomtomesh { } {
     puts "    MaxEdge                  = $domParams(MaxEdge)"
     puts "    Adapt                    = $domParams(Adapt)"
     puts "    WallSpacing              = $domParams(WallSpacing)"
+    puts "    StrDomConvertARTrigger   = $domParams(StrDomConvertARTrigger)"
     puts "Block level"
     puts "    Algorithm                = $blkParams(Algorithm)"
     puts "    VoxelLayers              = $blkParams(VoxelLayers)"
     puts "    boundaryDecay            = $blkParams(boundaryDecay)"
     puts "    collisionBuffer          = $blkParams(collisionBuffer)"
     puts "    maxSkewAngle             = $blkParams(maxSkewAngle)"
+    puts "    TRexSkewDelay            = $blkParams(TRexSkewDelay)"
     puts "    edgeMaxGrowthRate        = $blkParams(edgeMaxGrowthRate)"
     puts "    fullLayers               = $blkParams(fullLayers)"
     puts "    maxLayers                = $blkParams(maxLayers)"
@@ -290,12 +293,17 @@ proc geomtomesh { } {
         if { $genParams(ModelSize) > 0.0 } {
             puts "Explicitly setting model size to $genParams(ModelSize)"
             pw::Database setModelSize $genParams(ModelSize)
+            if [catch { $importer setAttribute FileModelSizeFromFile false } msg] {
+                puts "Error while setting Model Size attribute."
+                puts $msg
+                puts "Leaving model size unchanged."
+            }
         } else {
             puts "Determining model size from file."
             if [catch { $importer setAttribute FileModelSizeFromFile true } msg] {
-                puts "Error while Model Size attribute."
+                puts "Error while setting Model Size attribute."
                 puts $msg
-                puts "Leaving model size undefined."
+                puts "Leaving model size undefined via the Glyph script."
             }
         }
         $importer read
@@ -408,7 +416,7 @@ proc geomtomesh { } {
 
     if { $conParams(InitDim) > 3 } {
         # Perform merge operation to eliminate duplicate connectors
-        if { 0 < [connectorMergeUsingEndpoints $conList] } {
+        if { 0 < [connectorMergeUsingEndpoints $conList $tol] } {
             set conList [pw::Grid getAll -type pw::Connector]
             puts "After endpoint based merge, connector list has [llength $conList] entries."
         }
@@ -505,7 +513,7 @@ proc geomtomesh { } {
     #   | Apply connector attributes |
     #    ----------------------------
 
-    adjustNodeSpacingFromGeometry $blkParams(edgeMaxGrowthRate) $conParams(MinDim) $conParams(MaxDim) \
+    adjustNodeSpacingFromGeometry $conParams(MinDim) $conParams(MaxDim) \
         conMaxDS nodeList nodeSpacing
 
     set i 0
@@ -533,13 +541,21 @@ proc geomtomesh { } {
         set tAR 0.0
     }
 
-    connectorDimensionFromEndSpacing $blkParams(edgeMaxGrowthRate) $conParams(MinDim) $conParams(MaxDim) \
-        $conList $conMaxDS $tAR $nodeList $nodeSpacing $softconTRex $hardconTRex
+    if { 0 == $conParams(EqualSpacing) } {
+        connectorDimensionFromEndSpacing $blkParams(edgeMaxGrowthRate) $conParams(MinDim) $conParams(MaxDim) \
+            $conList $conMaxDS $tAR $nodeList $nodeSpacing $softconTRex $hardconTRex
+    } else {
+        puts "Resetting all connectors to equal spacing."
+        set conList [pw::Grid getAll -type pw::Connector]
+        foreach con $conList {
+            $con replaceDistribution 1 [pw::DistributionTanh create]
+        }
+    }
 
     pw::Display update
 
-    set domList [pw::Grid getAll -type pw::DomainUnstructured]
-    puts "Domain list has [llength $domList] entries."
+    set udomList [pw::Grid getAll -type pw::DomainUnstructured]
+    puts "Domain list has [llength $udomList] entries."
 
     #    ------------------------------
     #   |   Setup periodic domains     |
@@ -552,14 +568,14 @@ proc geomtomesh { } {
     if { 0 < [llength $targetDomList] } {
         # reconstruct domain list minus target domain list
         set alldoms [pw::Grid getAll -type pw::DomainUnstructured]
-        set domList [list]
+        set udomList [list]
         foreach dom $alldoms {
             set i [lsearch $targetDomList $dom]
             if { -1 == $i } {
-                lappend domList $dom
+                lappend udomList $dom
             }
         }
-        puts "After removing target domains, domains list has [llength $domList] entries."
+        puts "After removing target domains, unstructured domains list has [llength $udomList] entries."
 
         # Performing regular merge on connectors
         set mergeMode [pw::Application begin Merge]
@@ -570,7 +586,7 @@ proc geomtomesh { } {
         set conList [pw::Grid getAll -type pw::Connector]
     }
 
-    if { [llength $domList] == 0 } {
+    if { [llength $udomList] == 0 } {
         exit -1
     }
 
@@ -581,19 +597,12 @@ proc geomtomesh { } {
     #    -------------------------
 
     # search for domain attributes from geometry
-    loadDomainAttributes
-
-    pw::Display update
-
-    #    --------------------------
-    #   |   Set up domain T-Rex    |
-    #    --------------------------
-
-    # set up domain T-Rex using end point spacing values
-    if { 0 < $domParams(MaxLayers) } {
-        setup2DTRexBoundaries $domList $domParams(TRexARLimit) $softconTRex $hardconTRex
-    }
-
+    set alludomList [pw::Grid getAll -type pw::DomainUnstructured]
+    set sdomList [pw::Grid getAll -type pw::DomainStructured]
+    loadDomainAttributes $alludomList $sdomList
+    CheckForBluntDomains $alludomList $nodeList $nodeSpacing
+    
+    
     #    ----------------------------------
     #   |  Adapt connectors using sources  |
     #    ----------------------------------
@@ -603,10 +612,85 @@ proc geomtomesh { } {
         puts "Performing Source Cloud Refinement"
         connectorSourceSpacing $blkParams(boundaryDecay)
     }
+    
 
-    foreach dom $domList {
+    #    -------------------------------------------------------------------
+    #   |  Optionally convert high aspect domains to structured             |
+    #    -------------------------------------------------------------------
+    if {0 != $domParams(StrDomConvertARTrigger)} {
+        IdentifyMappableDomains
+        ConvertHighAspectDoms
+    }
+    
+    pw::Display update
+
+    #    --------------------------
+    #   |   Set up domain T-Rex    |
+    #    --------------------------
+
+    # set up domain T-Rex using end point spacing values
+    if { 0 < $domParams(MaxLayers) } {
+        setup2DTRexBoundaries $udomList $domParams(TRexARLimit) $softconTRex $hardconTRex
+    }
+
+
+    set numBaffles 0
+    foreach dom $udomList {
         $dom setUnstructuredSolverAttribute SwapCellsWithNoInteriorPoints True
         $dom setUnstructuredSolverAttribute TRexIsoTropicHeight [expr sqrt(3.0) / 2.0 ]
+        set baffle [domAttributeFromGeometry $dom "PW:Baffle"]
+        if { "Baffle" == $baffle } {
+            incr numBaffles 1
+        }
+    }
+
+    if { 0 < $numBaffles } {
+        puts "Number of baffles = $numBaffles"
+        adjustWakeConnectorSpacing $blkParams(edgeMaxGrowthRate) \
+            $conMaxDS $tAR nodeList nodeSpacing
+    }
+
+    #    -------------------------------------------------------------------
+    #   |  Set short ends to equal spacing on mapped domains if appropriate |
+    #    -------------------------------------------------------------------
+    if {0 != $domParams(StrDomConvertARTrigger)} {
+        set sdomList [pw::Grid getAll -type pw::DomainStructured]
+        if { 0 < [llength $sdomList] } {
+            foreach dom $sdomList {
+                set numedges [$dom getEdgeCount]
+                set sconList [list]
+
+                for { set e 1 } { $e <= $numedges } { incr e } {
+                    set ed [$dom getEdge $e]
+                    set numcons [$ed getConnectorCount]
+                    for { set i 1 } { $i <= $numcons } { incr i } {
+                        set con [$ed getConnector $i]
+                        lappend sconList $con
+                    }
+                }
+                if { 4 == [llength $sconList] } {
+                    set avgdim 0
+                    foreach con $sconList {
+                        set dim [$con getDimension]
+                        incr avgdim $dim
+                    }
+                    set avgdim [expr $avgdim * 0.25 ]
+                    foreach con $sconList {
+                        set dim [$con getDimension]
+                        if { $dim < $avgdim } {
+                            set sp [$con getAverageSpacing]
+                            set conDist [$con getDistribution 1]
+                            set s0 [$conDist getBeginSpacing]
+                            set s1 [$conDist getEndSpacing]
+                            if { $sp < $s0 || $sp < $s1 } {
+                                $con setDistribution 1 [pw::DistributionTanh create]
+                                puts "Resetting connector [$con getName] to equal spacing."
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #    --------------------------
@@ -615,8 +699,8 @@ proc geomtomesh { } {
 
     # do a refinement pass on all domains
     if { 0 == $genParams(SkipMeshing) } {
-        puts "Performing refinement pass on all domains."
-        foreach dom $domList {
+        puts "Performing refinement pass on all unstructured domains."
+        foreach dom $udomList {
             puts "  Refining domain [$dom getName]"
             set refineMode [pw::Application begin UnstructuredSolver [list $dom]]
             if { 0 != [catch { $refineMode run Refine } ] } {
@@ -631,16 +715,80 @@ proc geomtomesh { } {
         }
     } else {
         SetDomSkipMeshing false
-        puts "Performing initialization pass on all domains."
-        foreach dom $domList {
-            puts "Initializing domain [$dom getName]"
-            set initMode [pw::Application begin UnstructuredSolver [list $dom]]
-            if { 0 != [catch { $initMode run Initialize } ] } {
-                puts "Initialize failed for domain [$dom getName]"
-                set blkParams(volInitialize) 0
+        puts "Performing initialization pass on all unstructured domains."
+        # initialize doms in parallel
+        set initMode [pw::Application begin UnstructuredSolver $udomList]
+        if { 0 != [catch { $initMode run Initialize } ] } {
+            set failedDoms [$initMode getFailedEntities]
+            foreach dom $failedDoms {
+                puts "Initialize failed for domain [mkEntLink $dom]"
             }
-            $initMode end
-            pw::Display update
+            set blkParams(volInitialize) 0
+        }
+        $initMode end
+        pw::Display update
+    }
+
+
+    #    -----------------------------------------------------------------------
+    #   |  Clean up any mapped domains                                          |
+    #   |  If triangle mesh requested, converte to diagonalized representation  |
+    #    -----------------------------------------------------------------------
+    if {0 != $domParams(StrDomConvertARTrigger)} {
+        set sdomList [pw::Grid getAll -type pw::DomainStructured]
+        if { 0 < [llength $sdomList] } {
+            if {"Triangle" == $domParams(IsoType) && "Triangle" == $domParams(TRexType) } {
+                puts "Diagonalizing structured domains."
+                foreach dom $sdomList {
+                    puts "Domain [$dom getName] will be diagonalized and deleted."
+                }
+                set tmp [pw::Collection create]
+                $tmp set $sdomList
+                set mode [pw::Application begin Create]
+                $tmp do triangulate BestFit
+                $tmp do setEnabled false
+                $mode end
+                unset mode
+                $tmp delete
+                unset tmp
+            } else {
+                puts "Converting structured domains to unstructured quad domains."
+                foreach dom $sdomList {
+                    puts "Domain [$dom getName] will be converted and deleted."
+                }
+                set tmp [pw::Collection create]
+                $tmp set $sdomList
+                set mode [pw::Application begin Create]
+                $tmp do triangulate KeepQuads
+                $tmp do setEnabled false
+                $mode end
+                unset mode
+                $tmp delete
+                unset tmp
+            }
+            puts "Reapplying geometry name attributes on domains."
+            set alludomList [pw::Grid getAll -type pw::DomainUnstructured]
+            set udomList [list]
+            foreach dom $alludomList {
+                set name [domAttributeFromGeometry $dom "PW:Name"]
+                if { "" != $name } {
+                    puts "Domain [$dom getName] boundary name = $name."
+                    if [catch { pw::BoundaryCondition getByName $name } bc] {
+                        puts "    Creating boundary name $name"
+                        set bc [pw::BoundaryCondition create]
+                        $bc setName $name
+                    } else {
+                        puts "    $name already in boundary name list."
+                    }
+                    $bc apply $dom
+                }
+                set i [lsearch $targetDomList $dom]
+                if { -1 == $i } {
+                    lappend udomList $dom
+                }
+            }
+            puts "Deleting [llength $sdomList] domains in structured list."
+            pw::Entity delete $sdomList
         }
     }
 
@@ -651,16 +799,15 @@ proc geomtomesh { } {
     #    --------------------------
 
     # create single unstructured block
-    puts "Total number of domains = [llength $domList]"
+    puts "Total number of domains = [llength $udomList]"
 
     # assembling domain list that excludes baffles
-    set domList [pw::Grid getAll -type pw::DomainUnstructured]
-    puts "Domain list for assembly has [llength $domList] entries."
+    puts "Unstructured domain list for assembly has [llength $udomList] entries."
     set bdomList [list]
     set rdomList [list]
     set unusedDoms [list]
     set numBaffles 0
-    foreach dom $domList {
+    foreach dom $udomList {
         set baffle [domAttributeFromGeometry $dom "PW:Baffle"]
         if { "Baffle" == $baffle } {
             incr numBaffles 1
@@ -672,6 +819,22 @@ proc geomtomesh { } {
     }
     if { 0 < $numBaffles } {
         puts "Number of baffles = $numBaffles"
+    }
+    set sdomList [pw::Grid getAll -type pw::DomainStructured]
+    puts "Structured domain list for assembly has [llength $sdomList] entries."
+    foreach dom $sdomList {
+        set baffle [domAttributeFromGeometry $dom "PW:Baffle"]
+        if { "Baffle" == $baffle } {
+            incr numBaffles 1
+            puts "Baffle domain [$dom getName]"
+            lappend bdomList $dom
+        } else {
+            lappend rdomList $dom
+        }
+    }
+    puts "Periodic target domain list for assembly has [llength $targetDomList] entries."
+    foreach dom $targetDomList {
+        lappend rdomList $dom
     }
 
     puts "Creating unstructured block from [llength $rdomList] domains."
@@ -739,6 +902,9 @@ proc geomtomesh { } {
             if { [catch { $uBlk setUnstructuredSolverAttribute VoxelTransitionLayers $blkParams(VoxelLayers) }] } {
                 puts "  Solver Voxel Transition Layers attribute not supported in this version of Pointwise."
             }
+            if { 0 < $blkParams(TRexSkewDelay) } {
+                $uBlk setUnstructuredSolverAttribute TRexSkewCriteriaDelayLayers $blkParams(TRexSkewDelay)
+            }
 
             #    --------------------------
             #   |  Apply block attributes  |
@@ -752,6 +918,13 @@ proc geomtomesh { } {
 
             set numLayers 0
             if { 0 < $blkParams(maxLayers) } {
+                set domList [pw::Grid getAll -type pw::DomainUnstructured]
+                set sdomList [pw::Grid getAll -type pw::DomainStructured]
+                if [llength $sdomList] {
+                    foreach dom $sdomList {
+                        lappend domList $dom
+                    }
+                }
                 if { 1 == [setupTRexBoundaries $uBlk $domList] } {
                     set numLayers $blkParams(maxLayers)
                 }
@@ -759,7 +932,7 @@ proc geomtomesh { } {
 
             $uBlk setUnstructuredSolverAttribute TRexMaximumLayers $numLayers
             if { 1 < $blkParams(fullLayers) } {
-                $uBlk setUnstructuredSolverAttribute TRexSkewCriteriaDelayLayers $blkParams(fullLayers)
+                $uBlk setUnstructuredSolverAttribute TRexSkewCriteriaDelayLayers [expr max($blkParams(TRexSkewDelay), $blkParams(fullLayers))]
             }
             $uBlk setUnstructuredSolverAttribute TRexIsotropicHeight [expr sqrt(2.0) / sqrt(3.0)]
             $uBlk setUnstructuredSolverAttribute IterationCount 11
@@ -867,9 +1040,16 @@ proc geomtomesh { } {
             }
         }
 
-        if { $genParams(writeGMA) } {
+        if { "1.0" == $genParams(writeGMA) } {
+            # write GMA version 1.0
             set fname "[file rootname $CADFile].GeomToMesh.gma"
             writeEgadsAssocFile $uBlk $fname
+        }
+            
+        if { "2.0" == $genParams(writeGMA) } {
+            # write GMA version 2.0
+            set fname "[file rootname $CADFile].GeomToMesh.gma"
+            writeEgadsAssocFile $uBlk $fname 2
         }
 
         puts "GeomToMesh I/O finished!"
@@ -900,6 +1080,8 @@ source [file join $scriptDir "GMDatabaseUtility.glf"]
 source [file join $scriptDir "GMMeshParamCoords.glf"]
 source [file join $scriptDir "GMSafe.glf"]
 source [file join $scriptDir "GMUtility.glf"]
+source [file join $scriptDir "GMMeshParamCoords2.glf"]
+
 
 #     --------------------------
 #    | Load GeomToMesh Defaults |

@@ -1,10 +1,5 @@
-## [importPrint]
-from __future__ import print_function
-## [importPrint]
-
-## [import]
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -27,52 +22,40 @@ parser = argparse.ArgumentParser(description = 'Astros Three Bar Link Design PyT
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
+workDir = os.path.join(str(args.workDir[0]), "AstrosThreeBarLinkDesign")
 
-## [initateProblem]
-# Initialize capsProblem object
-myProblem = capsProblem()
-## [initateProblem]
-
-## [geometry]
 # Load CSM file
 geometryScript = os.path.join("..","csmData","feaThreeBar.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
-## [geometry]
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
-## [loadAIM]
-# Load nastran aim
-nastranAIM = myProblem.loadAIM( aim = "nastranAIM",
-                                altName = "nastran",
-                                analysisDir= os.path.join(str(args.workDir[0]), "AstrosThreeBarLinkDesign") )
-## [loadAIM]
+# Load astros aim
+astrosAIM = myProblem.analysis.create( aim = "nastranAIM", # TODO: Fix astrosAIM...
+                                       name = "astros")
 
-## [setInputs]
 # Set project name so a mesh file is generated
-projectName = "threebar_nastran_Test"
-nastranAIM.setAnalysisVal("Proj_Name", projectName)
-nastranAIM.setAnalysisVal("File_Format", "Free")
-nastranAIM.setAnalysisVal("Mesh_File_Format", "Large")
-nastranAIM.setAnalysisVal("Edge_Point_Max", 2);
-nastranAIM.setAnalysisVal("Edge_Point_Min", 2);
-nastranAIM.setAnalysisVal("Analysis_Type", "StaticOpt");
-## [setInputs]
+projectName = "threebar_astros_Test"
+astrosAIM.input.Proj_Name = projectName
+astrosAIM.input.File_Format = "Free"
+astrosAIM.input.Mesh_File_Format = "Large"
+astrosAIM.input.Edge_Point_Max = 2
+astrosAIM.input.Edge_Point_Min = 2
+astrosAIM.input.Analysis_Type = "StaticOpt"
 
-## [defineMaterials]
 madeupium    = {"materialType" : "isotropic",
                 "youngModulus" : 1.0E7 ,
                 "poissonRatio" : .33,
                 "density"      : 0.1,
                 "yieldAllow"   : 5.6E7}
 
-nastranAIM.setAnalysisVal("Material", [("Madeupium", madeupium)])
-## [defineMaterials]
+astrosAIM.input.Material = {"Madeupium": madeupium}
 
-## [defineProperties]
 rod  =   {"propertyType"      : "Rod",
           "material"          : "Madeupium",
           "crossSecArea"      : 1.0}
@@ -81,12 +64,10 @@ rod2  =   {"propertyType"      : "Rod",
           "material"          : "Madeupium",
           "crossSecArea"      : 2.0}
 
-nastranAIM.setAnalysisVal("Property", [("bar1", rod),
-                                       ("bar2", rod2),
-                                       ("bar3", rod)])
-## [defineProperties]
+astrosAIM.input.Property = {"bar1": rod,
+                            "bar2": rod2,
+                            "bar3": rod}
 
-## [defineDesignVar]
 DesVar1    = {"groupName" : "bar1",
               "initialValue" : rod["crossSecArea"],
               "lowerBound" : rod["crossSecArea"]*0.5,
@@ -111,20 +92,17 @@ DesVar3    = {"groupName" : "bar3",
               "independentVariable" : "Bar1A",
               "fieldName" : "A"}
 
-myProblem.analysis["nastran"].setAnalysisVal("Design_Variable", [("Bar1A", DesVar1),
-                                                                ("Bar2A", DesVar2),
-                                                                ("Bar3A", DesVar3)])
-## [defineDesignVar]
+myProblem.analysis["astros"].input.Design_Variable = {"Bar1A": DesVar1,
+                                                      "Bar2A": DesVar2,
+                                                      "Bar3A": DesVar3}
 
 # Set constraints
-## [defineConstraints]
 constraint = {"groupName" : ["boundary"],
               "dofConstraint" : 123456}
 
-nastranAIM.setAnalysisVal("Constraint", ("BoundaryCondition", constraint))
-## [defineConstraints]
+astrosAIM.input.Constraint = {"BoundaryCondition": constraint}
 
-## [defineDesCon]
+
 designConstraint1 = {"groupName" : "bar1",
                     "responseType" : "STRESS",
                     "lowerBound" : -madeupium["yieldAllow"],
@@ -140,39 +118,30 @@ designConstraint3 = {"groupName" : "bar3",
                     "lowerBound" : -madeupium["yieldAllow"],
                     "upperBound" :  madeupium["yieldAllow"]}
 
-myProblem.analysis["nastran"].setAnalysisVal("Design_Constraint",[("stress1", designConstraint1),
-                                                                  ("stress2", designConstraint2),
-                                                                  ("stress3", designConstraint3)])
-## [defineDesCon]
+myProblem.analysis["astros"].input.Design_Constraint = {"stress1": designConstraint1,
+                                                        "stress2": designConstraint2,
+                                                        "stress3": designConstraint3}
 
-## [defineLoad]
 load = {"groupName" : "force",
         "loadType" : "GridForce",
         "forceScaleFactor" : 20000.0,
         "directionVector" : [0.8, -0.6, 0.0]}
 
-nastranAIM.setAnalysisVal("Load", ("appliedForce", load ))
-## [defineLoad]
+astrosAIM.input.Load = {"appliedForce": load}
 
-## [defineAnalysis]
-
-value = {"analysisType"         : "Static",
-         "analysisConstraint"     : "BoundaryCondition",
-         "analysisLoad"         : "appliedForce"}
+value = {"analysisType"        : "Static",
+         "analysisConstraint"  : "BoundaryCondition",
+         "analysisLoad"        : "appliedForce"}
 
 
-myProblem.analysis["nastran"].setAnalysisVal("Analysis", ("SingleLoadCase", value ))
-## [defineAnalysis]
+myProblem.analysis["astros"].input.Analysis = {"SingleLoadCase": value}
 
 # Run AIM pre-analysis
-## [preAnalysis]
-nastranAIM.preAnalysis()
-## [preAnalysis]
+astrosAIM.preAnalysis()
 
-## [run]
 print ("\n\nRunning Astros......")
 currentDirectory = os.getcwd() # Get our current working directory
-os.chdir(nastranAIM.analysisDir) # Move into test directory
+os.chdir(astrosAIM.analysisDir) # Move into test directory
 
 # Copy files needed to run astros
 astros_files = ["ASTRO.D01",  # *.DO1 file
@@ -187,13 +156,5 @@ if (args.noAnalysis == False):
 
 os.chdir(currentDirectory) # Move back to working directory
 print ("Done running Astros!")
-## [run]
 
-## [postAnalysis]
-nastranAIM.postAnalysis()
-## [postAnalysis]
-
-# Close CAPS
-## [close]
-myProblem.closeCAPS()
-## [close]
+astrosAIM.postAnalysis()

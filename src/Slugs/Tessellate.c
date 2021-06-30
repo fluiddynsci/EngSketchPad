@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -32,6 +32,7 @@
 #include <string.h>
 #include <assert.h>
 
+#include "egads.h"        // needed for EG_alloc, ...
 #include "common.h"
 #include "Tessellate.h"
 #include "RedBlackTree.h"
@@ -2001,6 +2002,10 @@ floaterUV(tess_T  *tess)                /* (in)  pointer to TESS */
     ROUTINE(floaterUV);
 
     /* ----------------------------------------------------------------------- */
+
+    smf.a    = NULL;
+    smf.icol = NULL;
+    smf.next = NULL;
 
     /* determine if Points are interior or on a boundary */
     MALLOC(onbound, int, tess->npnt);

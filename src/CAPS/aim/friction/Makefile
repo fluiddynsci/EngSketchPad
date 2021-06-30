@@ -35,14 +35,21 @@ $(TDIR)/friction:	$(ODIR)/friction.o
 $(ODIR)/friction.o:	friction_eja_mod.f
 	$(FCOMP) -c $(FOPTS) friction_eja_mod.f -o $(ODIR)/friction.o
 
+lint:
+	$(LINT) -I../../include -I$(IDIR) -I../utils $(wildcard *.c) -exportlocal -evalorder -nestcomment -boolops -retvalother
+
 clean:
 	-rm $(ODIR)/frictionAIM.o $(ODIR)/friction.o
 
 cleanall:	clean
 	-rm $(LDIR)/frictionAIM.so $(TDIR)/friction
 
-dox:
-	(cd doc; doxygen frictionAIM_dox.cfg; cd latex; make; mv refman.pdf FRICTIONAIM.pdf)
+dox: doc/html/index.html
+doc/html/index.html: \
+				../../examples/pyCAPS/friction_PyTest.py \
+				../../examples/csmData/frictionWingTailFuselage.csm \
+				$(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
+	(cd doc; doxygen frictionAIM_dox.cfg; cd latex; make; mv refman.pdf frictionAIM.pdf)
 
 doxclean:
 	(cd doc; rm -f INPUT; rm -rf html latex; rm -f frictionAIM.tag)	

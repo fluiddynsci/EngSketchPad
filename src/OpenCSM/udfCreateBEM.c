@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -76,6 +76,8 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     double  data[4];
     ego     context, eref, *ebodys;
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(emodel=%llx)\n", (long long)emodel);
     printf("filename(0) = %s\n", FILENAME(0));
@@ -92,7 +94,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* check that Model was input that contains on Body */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -105,7 +107,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     }
 
     status = EG_getContext(emodel, &context);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     /* check arguments */
     if        (udps[0].arg[1].size >= 2) {
@@ -142,10 +144,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("filename(%d) = %s\n", numUdp, FILENAME(numUdp));
@@ -158,12 +157,13 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* make a copy of the Body (so that it does not get removed
      when OpenCSM deletes emodel) */
     status = EG_copyObject(ebodys[0], NULL, ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_copyObject);
+    if (*ebody == NULL) goto cleanup;   // needed for splint
 
     /* annotate the Body and create the BEM file */
     status = createBemFile(*ebody, FILENAME(numUdp), SPACE(numUdp),
                           IMIN(numUdp), IMAX(numUdp));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(createBemFile);
 
     /* the copy of the Body that was annotated is returned */
     udps[numUdp].ebody = *ebody;
@@ -246,25 +246,27 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
     ego       *enodes=NULL, *eedges=NULL, *efaces=NULL, eref, *echilds, *etemp, eloop;
     ego       etess, newTess;
 
+    ROUTINE(createBemFile);
+    
     /* --------------------------------------------------------------- */
 
     /* get number of Nodes, Edges, and Faces in ebody */
     status = EG_getBodyTopos(ebody, NULL, NODE, &nnode, &enodes);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
     status = EG_getBodyTopos(ebody, NULL, EDGE, &nedge, &eedges);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
     status = EG_getBodyTopos(ebody, NULL, FACE, &nface, &efaces);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
+
+    if (enodes == NULL) goto cleanup;   // needed for splint
+    if (eedges == NULL) goto cleanup;   // needed for splint
+    if (efaces == NULL) goto cleanup;   // needed for splint
 
     /* determine the nominal number of points along each Edge */
-    npnts = (int    *) malloc((nedge+1)*sizeof(int   ));
-    rpos  = (double *) malloc((imax   )*sizeof(double));
-    if (npnts == NULL || rpos == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(npnts, int,    (nedge+1));
+    MALLOC(rpos,  double, (imax   ));
 
     /* add .tParams to the Body */
     params[0] = 2 * space;
@@ -273,15 +275,15 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
 
     status = EG_attributeAdd(ebody, ".tParams", ATTRREAL, 3,
                              NULL, params, NULL);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_attributeAdd);
 
     /* determine the number of points (including endpoints) for each Edge */
     for (iedge = 1; iedge <= nedge; iedge++) {
         status = EG_getRange(eedges[iedge-1], range, &periodic);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getRange);
 
         status = EG_arcLength(eedges[iedge-1], range[0], range[1], &arclen);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_arcLength);
 
         npnts[iedge] = MIN(MAX(MAX(imin,2), (int)(1+arclen/space)), imax);
 
@@ -290,15 +292,9 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
     }
 
     /* make arrays to remember if Node, Edge, or Face is to be ignored */
-    ignoreNode = (int *) malloc(nnode*sizeof(int));
-    ignoreEdge = (int *) malloc(nedge*sizeof(int));
-    ignoreFace = (int *) malloc(nface*sizeof(int));
-    if (ignoreNode == NULL ||
-        ignoreEdge == NULL ||
-        ignoreFace == NULL   ) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(ignoreNode, int, nnode);
+    MALLOC(ignoreEdge, int, nedge);
+    MALLOC(ignoreFace, int, nface);
 
     /* keep track of whether or not each Node, Edge, and Face is
        ignored or not */
@@ -328,7 +324,7 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
         /* if the Edge is not ignored, we cannot ignore its Nodes either */
         if (ignoreEdge[iedge] == 0) {
             status = EG_getBodyTopos(ebody, eedges[iedge], NODE, &ntemp, &etemp);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getBodyTopos);
 
             for (itemp = 0; itemp < ntemp; itemp++) {
                 inode = EG_indexBodyTopo(ebody, etemp[itemp]);
@@ -355,7 +351,7 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
         /* if the Face is not ignored, we cannot ignore its Nodes or Edges either */
         if (ignoreFace[iface] == 0) {
             status = EG_getBodyTopos(ebody, efaces[iface], NODE, &ntemp, &etemp);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getBodyTopos);
 
             for (itemp = 0; itemp < ntemp; itemp++) {
                 inode = EG_indexBodyTopo(ebody, etemp[itemp]);
@@ -367,7 +363,7 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
             EG_free(etemp);
 
             status = EG_getBodyTopos(ebody, efaces[iface], EDGE, &ntemp, &etemp);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getBodyTopos);
 
             for (itemp = 0; itemp < ntemp; itemp++) {
                 iedge = EG_indexBodyTopo(ebody, etemp[itemp]);
@@ -381,15 +377,10 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
     }
 
     /* make arrays for "opposite" sides of four-sided Faces (with only one loop) */
-    isouth = (int *) malloc((nface+1)*sizeof(int));
-    ieast  = (int *) malloc((nface+1)*sizeof(int));
-    inorth = (int *) malloc((nface+1)*sizeof(int));
-    iwest  = (int *) malloc((nface+1)*sizeof(int));
-    if (isouth == NULL || ieast == NULL ||
-        inorth == NULL || iwest == NULL   ) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(isouth, int, (nface+1));
+    MALLOC(ieast,  int, (nface+1));
+    MALLOC(inorth, int, (nface+1));
+    MALLOC(iwest,  int, (nface+1));
 
     for (iface = 1; iface <= nface; iface++) {
         isouth[iface] = 0;
@@ -400,28 +391,28 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
         status = EG_getTopology(efaces[iface-1],
                                 &eref, &oclass, &mtype, data,
                                 &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         if (nchild != 1) continue;
 
         eloop = echilds[0];
         status = EG_getTopology(eloop, &eref, &oclass, &mtype, data,
                                 &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         if (nchild != 4) continue;
 
         isouth[iface] = status = EG_indexBodyTopo(ebody, echilds[0]);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_indexBodyTopo);
 
         ieast[iface]  = status = EG_indexBodyTopo(ebody, echilds[1]);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_indexBodyTopo);
 
         inorth[iface] = status = EG_indexBodyTopo(ebody, echilds[2]);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_indexBodyTopo);
 
         iwest[iface]  = status = EG_indexBodyTopo(ebody, echilds[3]);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_indexBodyTopo);
     }
 
     /* make "opposite" sides of four-sided Faces (with only one loop) match */
@@ -468,21 +459,21 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
             i = 0;
             status = EG_attributeAdd(eedges[iedge-1],
                                      ".rPos", ATTRINT, 1, &i, NULL, NULL);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_attributeAdd);
         } else {
             status = EG_attributeAdd(eedges[iedge-1],
                                      ".rPos", ATTRREAL, npnts[iedge]-2, NULL, rpos, NULL);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_attributeAdd);
         }
     }
 
     /* make the new tessellation */
     status = EG_makeTessBody(ebody, params, &etess);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTessBody);
 
     status = EG_attributeAdd(ebody, "_tParams",
                              ATTRREAL, 3, NULL, params, NULL);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_attributeAdd);
 
     /* convert the triangles to quads */
     status = EG_quadTess(etess, &newTess);
@@ -494,25 +485,7 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
 
     /* put attribute on Body so that OpenCSM makes quads too */
     status = EG_attributeAdd(ebody, "_makeQuads", ATTRINT, 1, &one, NULL, NULL);
-    if (status < EGADS_SUCCESS) goto cleanup;
-
-//$$$    /* make quads in each four-sided Face */
-//$$$    params[0] = 0;
-//$$$    params[1] = 0;
-//$$$    params[2] = 0;
-//$$$
-//$$$#ifndef __clang_analyzer__
-//$$$    for (iface = 1; iface <= nface; iface++) {
-//$$$        if (iwest[iface] <= 0) continue;
-//$$$
-//$$$        status = EG_attributeAdd(efaces[iface-1],
-//$$$                                 "_makeQuads", ATTRINT, 1, &one, NULL, NULL);
-//$$$        if (status < EGADS_SUCCESS) goto cleanup;
-//$$$
-//$$$        status = EG_makeQuads(etess, params, iface);
-//$$$        if (status < EGADS_SUCCESS) goto cleanup;
-//$$$    }
-//$$$#endif
+    CHECK_STATUS(EG_attributeAdd);
 
     /* initialize the CIDs, GIDs, PIDs, and EIDs for the output file */
     ncid = 0;   // coordinate  IDs
@@ -527,13 +500,9 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
         goto cleanup;
     }
 
-    nodeGID = (int  *) malloc((nnode+1)*sizeof(int ));
-    edgeGID = (int **) malloc((nedge+1)*sizeof(int*));
-    faceGID = (int **) malloc((nface+1)*sizeof(int*));
-    if (nodeGID == NULL || edgeGID == NULL || faceGID == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(nodeGID, int,  (nnode+1));
+    MALLOC(edgeGID, int*, (nedge+1));
+    MALLOC(faceGID, int*, (nface+1));
 
     /* create arrays to hold global IDs for all points in tessellation */
     for (iedge = 0; iedge <= nedge; iedge++) {
@@ -550,13 +519,13 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
 
         fprintf(fpBEM, "$ node %d", inode);
         status = EG_attributeNum(enodes[inode-1], &nattr);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_attributeNum);
 
         for (iattr = 1; iattr <= nattr; iattr++) {
             status = EG_attributeGet(enodes[inode-1], iattr,
                                      &aname, &atype, &alen,
                                      &tempIlist, &tempRlist, &tempClist);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_attributeGet);
 
             if        (atype == ATTRINT) {
                 fprintf(fpBEM, " %s=", aname);
@@ -579,7 +548,7 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
 
         status = EG_getTopology(enodes[inode-1], &eref, &oclass, &mtype,
                                 data, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         fprintf(fpBEM, "GRID    %8d %7d %7.4f %7.4f %7.4f\n",
                 ngid, ncid, data[0],
@@ -592,13 +561,13 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
 
         fprintf(fpBEM, "$ edge %d", iedge);
         status = EG_attributeNum(eedges[iedge-1], &nattr);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_attributeNum);
 
         for (iattr = 1; iattr <= nattr; iattr++) {
             status = EG_attributeGet(eedges[iedge-1], iattr,
                                      &aname, &atype, &alen,
                                      &tempIlist, &tempRlist, &tempClist);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_attributeGet);
 
             if        (atype == ATTRINT) {
                 fprintf(fpBEM, " %s=", aname);
@@ -618,25 +587,21 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
 
         status = EG_getTessEdge(etess, iedge,
                                 &npnt, &xyz, &uv);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessEdge);
 
         if (npnt <= 0) continue;
 
-        edgeGID[iedge] = (int *) malloc(npnt*sizeof(int));
-        if (edgeGID[iedge] == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        MALLOC(edgeGID[iedge], int, npnt);
 
         status = EG_getTopology(eedges[iedge-1], &eref, &oclass, &mtype,
                                 data, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         ibeg = status = EG_indexBodyTopo(ebody, echilds[0]);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_indexBodyTopo);
 
         iend = status = EG_indexBodyTopo(ebody, echilds[1]);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_indexBodyTopo);
 
         edgeGID[iedge][0] = nodeGID[ibeg];
 
@@ -659,13 +624,13 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
 
         fprintf(fpBEM, "$ face %d", iface);
         status = EG_attributeNum(efaces[iface-1], &nattr);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_attributeNum);
 
         for (iattr = 1; iattr <= nattr; iattr++) {
             status = EG_attributeGet(efaces[iface-1], iattr,
                                      &aname, &atype, &alen,
                                      &tempIlist, &tempRlist, &tempClist);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_attributeGet);
 
             if        (atype == ATTRINT) {
                 fprintf(fpBEM, " %s=", aname);
@@ -692,14 +657,10 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
         status = EG_getTessFace(etess, iface,
                                 &npnt, &xyz, &uv, &ptype, &pindx,
                                 &ntri, &tris, &tric);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessFace);
 //$$$        }
 
-        faceGID[iface] = (int *) malloc(npnt*sizeof(int));
-        if (faceGID[iface] == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        MALLOC(faceGID[iface], int, npnt);
 
         for (ipnt = 0; ipnt < npnt; ipnt++) {
             if (ptype[ipnt] == 0) {
@@ -728,7 +689,7 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
 
             status = EG_getTessEdge(etess, iedge,
                                     &npnt, &xyz, &uv);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getTessEdge);
 
             for (ipnt = 1; ipnt < npnt; ipnt++) {
                 neid++;
@@ -751,7 +712,7 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
         status = EG_getTessFace(etess, iface,
                                 &npnt, &xyz, &uv, &ptype, &pindx,
                                 &ntri, &tris, &tric);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessFace);
 
         for (itri = 0; itri < ntri; itri+=2) {
             neid++;
@@ -763,7 +724,7 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
         }
     }
 
-//$$$    /* write out the CQUAD4 or CTRIA3 cards associated with all Faces */
+    /* write out the CQUAD4 or CTRIA3 cards associated with all Faces */
 //$$$    for (iface = 1; iface <= nface; iface++) {
 //$$$        npid++;
 //$$$        fprintf(fpBEM, "$ face %d\n", iface);
@@ -829,9 +790,9 @@ createBemFile(ego    ebody,             /* (in)  EGADS Body */
     fpBEM = NULL;
 
 cleanup:
-    free(enodes);
-    free(eedges);
-    free(efaces);
+    FREE(enodes);
+    FREE(eedges);
+    FREE(efaces);
 
     if (fpBEM != NULL) {
         fprintf(fpBEM, "$$$ error encountered during writeBEM\n");
@@ -840,30 +801,30 @@ cleanup:
 
     if (faceGID != NULL) {
         for (iface = 1; iface <= nface; iface++) {
-            if (faceGID[iface] != NULL) free(faceGID[iface]);
+            FREE(faceGID[iface]);
         }
-        free(faceGID);
+        FREE(faceGID);
     }
 
     if (edgeGID != NULL) {
         for (iedge = 1; iedge <= nedge; iedge++) {
-            if (edgeGID[iedge] != NULL) free(edgeGID[iedge]);
+            FREE(edgeGID[iedge]);
         }
-        free(edgeGID);
+        FREE(edgeGID);
     }
 
-    if (nodeGID != NULL) free(nodeGID);
+    FREE(nodeGID);
 
-    if (iwest  != NULL) free(iwest );
-    if (inorth != NULL) free(inorth);
-    if (ieast  != NULL) free(ieast );
-    if (isouth != NULL) free(isouth);
-    if (rpos   != NULL) free(rpos  );
-    if (npnts  != NULL) free(npnts );
+    FREE(iwest );
+    FREE(inorth);
+    FREE(ieast );
+    FREE(isouth);
+    FREE(rpos  );
+    FREE(npnts );
 
-    if (ignoreNode != NULL) free(ignoreNode);
-    if (ignoreEdge != NULL) free(ignoreEdge);
-    if (ignoreFace != NULL) free(ignoreFace);
+    FREE(ignoreNode);
+    FREE(ignoreEdge);
+    FREE(ignoreFace);
 
     return status;
 }

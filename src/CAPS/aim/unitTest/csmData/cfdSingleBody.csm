@@ -74,13 +74,16 @@ store     Wing 0 0
 ## [farfield]
 #sphere    0   0   0   80
 #    attribute capsGroup $Farfield
+#    attribute capsMesh $Farfield
 BOX    -40   -40   -40   80   80   80
     attribute capsGroup $Farfield
+    attribute capsMesh $Farfield
     attribute AFLR_GBC  $FARFIELD_UG3_GBC
 
 # Wing 1 - Restore
 restore   Wing 0
     attribute capsGroup $Wing1
+    attribute capsMesh $Wing1
 ## [attribute]
 
 # Subtract wing from farfield

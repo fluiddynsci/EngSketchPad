@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -20,92 +18,109 @@ parser = argparse.ArgumentParser(description = 'Aeroelastic Displacement SU2 and
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
 parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot data")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
 # Create working directory variable
-workDir = os.path.join(str(args.workDir[0]), "AeroelasticSimple_Displacement")
+workDir = os.path.join(str(args.workDir[0]), "AeroelasticSimple_Displacement_SU2_Mystran")
 
 # Create projectName vairbale
 projectName = "aeroelasticSimple_Displacement_SM"
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransferSimple.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load AIMs
-myMesh = myProblem.loadAIM(aim = "tetgenAIM",
-                  altName= "tetgen",
-                  analysisDir = workDir + "_SU2",
-                  capsIntent = "CFD")
+surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
+                                     name= "egads",
+                                     capsIntent = "CFD")
 
-su2 = myProblem.loadAIM(aim = "su2AIM",
-                        altName = "su2",
-                        analysisDir = workDir + "_SU2",
-                        parents = ["tetgen"],
-                        capsIntent = "CFD")
+mesh = myProblem.analysis.create(aim = "tetgenAIM", 
+                                 name= "tetgen",
+                                 capsIntent = "CFD")
 
-mystran = myProblem.loadAIM(aim = "mystranAIM",
-                            altName = "mystran",
-                            analysisDir = workDir + "_MYSTRAN",
-                            capsIntent = "STRUCTURE")
+mesh.input["Surface_Mesh"].link(surfMesh.output["Surface_Mesh"])
 
-transfers = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
-for i in transfers:
-    myProblem.createDataTransfer(variableName = "Displacement",
-                                 aimSrc = "mystran",
-                                 aimDest ="su2",
-                                 transferMethod = "Interpolate", # "Conserve",
-                                 capsBound = i)
+su2 = myProblem.analysis.create(aim = "su2AIM", 
+                                name = "su2", 
+                                capsIntent = "CFD")
 
-# Set inputs for tetgen
-myMesh.setAnalysisVal("Tess_Params", [.3, 0.01, 20.0])
-myMesh.setAnalysisVal("Preserve_Surf_Mesh", True)
-myMesh.setAnalysisVal("Mesh_Quiet_Flag", True if args.verbosity == 0 else False)
+su2.input["Mesh"].link(mesh.output["Volume_Mesh"])
+
+mystran = myProblem.analysis.create(aim = "mystranAIM",
+                                    name = "mystran",
+                                    capsIntent = "STRUCTURE")
+
+# Create the data transfer connections
+boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
+for boundName in boundNames:
+    # Create the bound
+    bound = myProblem.bound.create(boundName)
+    
+    # Create the vertex sets on the bound for su2 and mystran analysis
+    su2Vset     = bound.vertexSet.create(su2)
+    mystranVset = bound.vertexSet.create(mystran)
+
+    # Create displacement data sets
+    su2_Displacement     = su2Vset.dataSet.create("Displacement", pyCAPS.fType.FieldIn)
+    mystran_Displacement = mystranVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+
+    # Link the data set
+    su2_Displacement.link(mystran_Displacement, "Interpolate")
+    
+    # Close the bound as complete (cannot create more vertex or data sets)
+    bound.close()
+
+# Set inputs for egads 
+surfMesh.input.Tess_Params = [.3, 0.01, 20.0]
+
+# Set inputs for tetgen 
+mesh.input.Preserve_Surf_Mesh = True
+mesh.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
 
 # Set inputs for su2
 speedofSound = 340.0 # m/s
 refVelocity = 100.0 # m/s
 refDensity = 1.2 # kg/m^3
 
-su2.setAnalysisVal("Proj_Name", projectName)
-su2.setAnalysisVal("Mach", refVelocity/speedofSound)
-su2.setAnalysisVal("Equation_Type","compressible")
-su2.setAnalysisVal("Num_Iter",5)
-su2.setAnalysisVal("Output_Format", "Tecplot")
-su2.setAnalysisVal("SU2_Version", "Falcon") # "Falcon", "Raven"
-su2.setAnalysisVal("Pressure_Scale_Factor",0.5*refDensity*refVelocity**2)
-su2.setAnalysisVal("Surface_Monitor", ["Skin"])
+su2.input.Proj_Name = projectName
+su2.input.Mach = refVelocity/speedofSound
+su2.input.Equation_Type = "compressible"
+su2.input.Num_Iter = 3
+su2.input.Output_Format = "Tecplot"
+su2.input.SU2_Version = "Blackbird"
+su2.input.Pressure_Scale_Factor = 0.5*refDensity*refVelocity**2
+su2.input.Surface_Monitor = ["Skin"]
 
 inviscid = {"bcType" : "Inviscid"}
-su2.setAnalysisVal("Boundary_Condition", [("Skin", inviscid),
-                                          ("SymmPlane", "SymmetryY"),
-                                          ("Farfield","farfield")])
+su2.input.Boundary_Condition = {"Skin"     : inviscid,
+                                "SymmPlane": "SymmetryY",
+                                "Farfield" : "farfield"}
 
 # BC names of surfaces that should be deformed (default all invisicd and viscous)
-su2.setAnalysisVal("Surface_Deform", ["Skin"])
+su2.input.Surface_Deform = ["Skin"]
 
 
 # Set inputs for mystran
-mystran.setAnalysisVal("Proj_Name", projectName)
-mystran.setAnalysisVal("Edge_Point_Max", 10)
-mystran.setAnalysisVal("Edge_Point_Min", 10)
+mystran.input.Proj_Name = projectName
+mystran.input.Edge_Point_Max = 10
+mystran.input.Edge_Point_Min = 10
 
-mystran.setAnalysisVal("Quad_Mesh", True)
-mystran.setAnalysisVal("Tess_Params", [.5, .1, 15])
-mystran.setAnalysisVal("Analysis_Type", "Static");
+mystran.input.Quad_Mesh = True
+mystran.input.Tess_Params = [.5, .1, 15]
+mystran.input.Analysis_Type = "Static"
 
 madeupium    = {"materialType" : "isotropic",
                 "youngModulus" : 72.0E9 ,
-                "poissonRatio": 0.33,
+                "poissonRatio" : 0.33,
                 "density" : 2.8E3}
-mystran.setAnalysisVal("Material", ("Madeupium", madeupium))
+mystran.input.Material = {"Madeupium": madeupium}
 
 skin  = {"propertyType" : "Shell",
          "membraneThickness" : 0.06,
@@ -119,29 +134,34 @@ ribSpar  = {"propertyType" : "Shell",
             "bendingInertiaRatio" : 1.0, # Default
             "shearMembraneRatio"  : 5.0/6.0} # Default
 
-mystran.setAnalysisVal("Property", [("Skin", skin),
-                                    ("Rib_Root", ribSpar)])
+mystran.input.Property = {"Skin"    : skin,
+                          "Rib_Root": ribSpar}
 
 constraint = {"groupName" : "Rib_Root",
               "dofConstraint" : 123456}
-mystran.setAnalysisVal("Constraint", ("edgeConstraint", constraint))
+mystran.input.Constraint = {"edgeConstraint": constraint}
 
 # Static uniform pressure load
 load = {"groupName": "Skin", "loadType" : "Pressure", "pressureForce": 1E8}
-mystran.setAnalysisVal("Load", ("pressureInternal", load ))
+mystran.input.Load = {"pressureInternal": load}
+
+####### EGADS ########################
+# Run pre/post-analysis for tetgen
+print ("\nRunning PreAnalysis ......", "tetgen")
+surfMesh.preAnalysis()
+
+print ("\nRunning PostAnalysis ......", "tetgen")
+surfMesh.postAnalysis()
+#######################################
 
 ####### Tetgen ########################
 # Run pre/post-analysis for tetgen
 print ("\nRunning PreAnalysis ......", "tetgen")
-myMesh.preAnalysis()
+mesh.preAnalysis()
 
 print ("\nRunning PostAnalysis ......", "tetgen")
-myMesh.postAnalysis()
+mesh.postAnalysis()
 #######################################
-
-# Populate vertex sets in the bounds after the mesh generation is copleted
-for j in transfers:
-    myProblem.dataBound[j].fillVertexSets()
 
 
 ####### Mystran #######################
@@ -158,9 +178,7 @@ os.chdir(mystran.analysisDir) # Move into test directory
 os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run su2 via system call
 
 if os.path.getsize("Info.out") == 0:
-    print ("Mystran excution failed\n")
-    myProblem.closeCAPS()
-    raise SystemError
+    raise SystemError("Mystran excution failed\n")
 
 os.chdir(currentDirectory) # Move back to top directory
 
@@ -168,21 +186,15 @@ print ("\nRunning PostAnalysis ......", "mystran")
 mystran.postAnalysis()
 #######################################
 
-# Execute and plot the dataTransfer
-print ("\nExecuting dataTransfer ......")
-for j in transfers:
-    myProblem.dataBound[j].executeTransfer()
-    if (args.noPlotData == False):
+# Plot the dataTransfer
+for boundName in boundNames:
+    if args.noPlotData == False:
         try:
-            print ("\tPlotting dataTransfer source......", j)
-            myProblem.dataBound[j].dataSetSrc["Displacement"].viewData()
+            print ("\tPlotting dataTransfer source......", boundName)
+            myProblem.bound[boundName].vertexSet["mystran"].dataSet["Displacement"].view()
             print ("\tPlotting dataTransfer destination......")
-            myProblem.dataBound[j].dataSetDest["Displacement"].viewData()
-            #myProblem.dataBound[j].viewData("Displacement",
-            #                                filename = os.path.join(mystran.analysisDir, j + "_Displacement"),
-            #                                showImage=False,
-            #                                colormap="Purples")
-        except:
+            myProblem.bound[boundName].vertexSet["su2"].dataSet["Displacement"].view()
+        except ImportError:
             print("Unable to plot data")
 
 
@@ -200,12 +212,12 @@ os.chdir(su2.analysisDir) # Move into test directory
 # Run SU2 mesh deformation
 # Work around python 3 bug in su2Deform function
 if sys.version_info[0] < 3:
-    su2Deform(su2.getAnalysisVal("Proj_Name") + ".cfg", args.numberProc)
+    su2Deform(su2.input.Proj_Name + ".cfg", args.numberProc)
 else:
-    os.system("SU2_DEF " + su2.getAnalysisVal("Proj_Name") + ".cfg")
+    os.system("SU2_DEF " + su2.input.Proj_Name + ".cfg")
 
 # Run SU2 CFD solver
-su2Run(su2.getAnalysisVal("Proj_Name") + ".cfg", args.numberProc)
+su2Run(su2.input.Proj_Name + ".cfg", args.numberProc)
 
 os.chdir(currentDirectory) # Move back to top directory
 
@@ -213,6 +225,3 @@ print ("\nRunning PostAnalysis ......", "su2")
 # Run AIM post-analysis
 su2.postAnalysis()
 #######################################
-
-# Close CAPS
-myProblem.closeCAPS()

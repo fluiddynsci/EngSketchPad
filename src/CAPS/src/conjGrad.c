@@ -3,7 +3,7 @@
  *
  *             (unconstrained) conjugate gradient optimization
  *
- *      Copyright 2014-2020, Massachusetts Institute of Technology
+ *      Copyright 2014-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -15,8 +15,7 @@
 
 #include "egadsErrors.h"
 
-#define  MAX(A,B)     (((A) < (B)) ? (B) : (A))
-#define  SIGN(A)      (((A) < 0) ? -1 : (((A) > 0) ? +1 : 0))
+#define MAX(A,B)     (((A) < (B)) ? (B) : (A))
 
 
 /*
@@ -89,8 +88,11 @@ golden(int    (*func)(int, double[], void *, double *, /*@null@*/ double[]),
     /* compute u by parabolic extrapolation */
     r = (x1 - x0) * (f1 - f3);
     q = (x1 - x3) * (f1 - f0);
-    u = x1 - ((x1-x3) * q - (x1-x0)*r)
-    / (2 * SIGN(q-r)*MAX(fabs(q-r),TINY));
+    if (q >= r) {
+      u = x1 - ((x1-x3) * q - (x1-x0)*r) / (2.0 * MAX(q-r, TINY));
+    } else {
+      u = x1 + ((x1-x3) * q - (x1-x0)*r) / (2.0 * MAX(r-q, TINY));
+    }
     ulim = x1 + GLIMIT * (x3-x1);
     
     /* parabolic u is between x1 anc x3 */

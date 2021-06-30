@@ -1,9 +1,14 @@
 import unittest
 
 import os
+import glob
 import shutil
+import __main__
+import gc
 
-from sys import version_info as pyVersion
+
+# f90nml is used to write fun3d inputs not available in the aim
+import f90nml
 
 import pyCAPS
 
@@ -13,86 +18,104 @@ class TestFUN3D(unittest.TestCase):
     def setUpClass(cls):
 
         cls.file = os.path.join("..","csmData","cfdMultiBody.csm")
-        cls.analysisDir = "workDir_fun3dTest"
+        cls.problemName = "workDir_fun3dTest"
+        cls.iProb = 1
+        cls.cleanUp()
 
         cls.configFile = "fun3d.nml"
-        cls.myProblem = pyCAPS.capsProblem()
-
-        cls.myGeometry = cls.myProblem.loadCAPS(cls.file)
-
-        cls.myAnalysis = cls.myProblem.loadAIM(aim = "fun3dAIM",
-                                               analysisDir = cls.analysisDir)
         
-        cls.myAnalysis.setAnalysisVal("Overwrite_NML", True)
+        cls.myProblem = pyCAPS.Problem(cls.problemName, capsFile=cls.file, outLevel=0)
+
+        egadsTess = cls.myProblem.analysis.create(aim = "egadsTessAIM")
+
+        # Modify local mesh sizing parameters
+        egadsTess.input.Tess_Params = [0.5, 0.01, 15.0]
+        Mesh_Sizing = {"Farfield": {"tessParams" : [7.,  2., 20.0]}}
+        egadsTess.input.Mesh_Sizing = Mesh_Sizing
+
+        egadsTess.preAnalysis()
+        egadsTess.postAnalysis()
+
+        tetgen = cls.myProblem.analysis.create(aim = "tetgenAIM",
+                                               name = "tetgen")
+
+        tetgen.input["Surface_Mesh"].link(egadsTess.output["Surface_Mesh"])
+
+        tetgen.preAnalysis()
+        tetgen.postAnalysis()
+
+        cls.myAnalysis = cls.myProblem.analysis.create(aim = "fun3dAIM")
+        
+        cls.myAnalysis.input["Mesh"].link(tetgen.output["Volume_Mesh"])
+
+        cls.myAnalysis.input.Overwrite_NML = True
 
     @classmethod
     def tearDownClass(cls):
- 
-        # Remove analysis directories
-        if os.path.exists(cls.analysisDir):
-            shutil.rmtree(cls.analysisDir)
+        del cls.myAnalysis
+        del cls.myProblem
+        cls.cleanUp()
+
+    @classmethod
+    def cleanUp(cls):
         
-        if os.path.exists(cls.analysisDir + '_1'):
-            shutil.rmtree(cls.analysisDir + '_1')
-            
-        if os.path.exists(cls.analysisDir + '_2'):
-            shutil.rmtree(cls.analysisDir + '_2')
-            
-        if os.path.exists(cls.analysisDir + '_3'):
-            shutil.rmtree(cls.analysisDir + '_3')
+        # Remove problem directories
+        dirs = glob.glob( cls.problemName + '*')
+        for dir in dirs:
+            if os.path.isdir(dir):
+                shutil.rmtree(dir)
 
-        if os.path.exists(cls.analysisDir + '_4'):
-            shutil.rmtree(cls.analysisDir + '_4')
-
-#         # Remove created files
-#         if os.path.isfile("myGeometry.egads"):
-#             os.remove("myGeometry.egads")
-
-        cls.myProblem.closeCAPS()
         
     # Try put an invalid boundary name
     def test_invalidBoundaryName(self):
         # Create a new instance
-        myAnalysis = self.myProblem.loadAIM(aim = "fun3dAIM",
-                                            analysisDir = self.analysisDir + "_1")
+        # Use self.fun3d to ensure fun3d is not tracked in the traceback frames
+        self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
         
-        myAnalysis.setAnalysisVal("Boundary_Condition", [("Wing1", {"bcType" : "Inviscid"}), # No capsGroup 'X'
-                                                         ("X", {"bcType" : "Inviscid"}),
-                                                         ("Farfield","farfield")])
+        self.fun3d.input["Mesh"].link(self.myProblem.analysis["tetgen"].output["Volume_Mesh"])
+
+        self.fun3d.input.Boundary_Condition = {"Wing1": {"bcType" : "Inviscid"}, # No capsGroup 'X'
+                                               "X": {"bcType" : "Inviscid"},
+                                               "Farfield":"farfield"}
         with self.assertRaises(pyCAPS.CAPSError) as e:
-            myAnalysis.preAnalysis()
- 
+            self.fun3d.preAnalysis()
         self.assertEqual(e.exception.errorName, "CAPS_NOTFOUND")
+        
+        del self.fun3d
         
     # Try an invalid boundary type
-    def test_invalidBoundary(self):        
+    def test_invalidBoundary(self):
         # Create a new instance
-        myAnalysis = self.myProblem.loadAIM(aim = "fun3dAIM",
-                                            analysisDir = self.analysisDir + "_2")
+        # Use self.fun3d to ensure fun3d is not tracked in the traceback frames
+        self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
         
-        myAnalysis.setAnalysisVal("Boundary_Condition", ("Wing1", {"bcType" : "X"}))
+        self.fun3d.input["Mesh"].link(self.myProblem.analysis["tetgen"].output["Volume_Mesh"])
+
+        self.fun3d.input.Boundary_Condition = {"Wing1": {"bcType" : "X"}}
         
         with self.assertRaises(pyCAPS.CAPSError) as e:
-            myAnalysis.preAnalysis()
+            self.fun3d.preAnalysis()
  
         self.assertEqual(e.exception.errorName, "CAPS_NOTFOUND")
+
+        del self.fun3d
         
     # Test re-enter 
     def test_reenter(self):
         
-        self.myAnalysis.setAnalysisVal("Boundary_Condition", [("Wing1", {"bcType" : "Inviscid"}),
-                                                              ("Wing2", {"bcType" : "Inviscid"}),
-                                                              ("Farfield","farfield")])
+        self.myAnalysis.input.Boundary_Condition = {"Wing1": {"bcType" : "Inviscid"},
+                                                    "Wing2": {"bcType" : "Inviscid"},
+                                                    "Farfield":"farfield"}
         self.myAnalysis.preAnalysis()
         self.myAnalysis.postAnalysis()
         
         self.assertEqual(os.path.isfile(os.path.join(self.myAnalysis.analysisDir, self.configFile)), True)
         
-        os.remove(os.path.join(self.analysisDir, self.configFile))
+        os.remove(os.path.join(self.myAnalysis.analysisDir, self.configFile))
         
-        self.myAnalysis.setAnalysisVal("Boundary_Condition", [("Wing1", {"bcType" : "Viscous"}),
-                                                              ("Wing2", {"bcType" : "Inviscid"}),
-                                                              ("Farfield","farfield")])
+        self.myAnalysis.input.Boundary_Condition = {"Wing1": {"bcType" : "Viscous"},
+                                                    "Wing2": {"bcType" : "Inviscid"},
+                                                    "Farfield":"farfield"}
         self.myAnalysis.preAnalysis()
         self.myAnalysis.postAnalysis()
         
@@ -102,53 +125,125 @@ class TestFUN3D(unittest.TestCase):
     def test_overwriteNML(self):
         
         # Create a new instance
-        myAnalysis = self.myProblem.loadAIM(aim = "fun3dAIM",
-                                            analysisDir = self.analysisDir + "_3")
-        myAnalysis.setAnalysisVal("Overwrite_NML", False)
+        self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
         
-        myAnalysis.setAnalysisVal("Boundary_Condition", ("Wing1", {"bcType" : "Inviscid"}))
+        self.fun3d.input["Mesh"].link(self.myProblem.analysis["tetgen"].output["Volume_Mesh"])
+
+        self.fun3d.input.Overwrite_NML = False
         
-        myAnalysis.preAnalysis() # Don't except an config file because Overwrite_NML = False
+        self.fun3d.input.Boundary_Condition = {"Wing1": {"bcType" : "Viscous"},
+                                               "Wing2": {"bcType" : "Inviscid"},
+                                               "Farfield":"farfield"}
+        
+        self.fun3d.preAnalysis() # Don't except a config file because Overwrite_NML = False
     
-        self.assertEqual(os.path.isfile(os.path.join(myAnalysis.analysisDir, self.configFile)), False)
+        self.assertEqual(os.path.isfile(os.path.join(self.fun3d.analysisDir, self.configFile)), False)
+        
+        del self.fun3d
 
     # Create sensitvities
     def test_sensitivity(self):
-        
-        aflr4 = self.myProblem.loadAIM(aim = "aflr4AIM",
-                                       analysisDir = self.analysisDir + "_4")
-
-        aflr4.setAnalysisVal("Mesh_Length_Factor", 20.00)
-
-        tetgen = self.myProblem.loadAIM(aim = "tetgenAIM",
-                                        analysisDir = self.analysisDir + "_4",
-                                        parents = aflr4.aimName)
-        # Set Tetgen: maximum radius-edge ratio
-        tetgen.setAnalysisVal("Quality_Rad_Edge", 1.5)
-
-        # Set surface mesh preservation
-        tetgen.setAnalysisVal("Preserve_Surf_Mesh", True)
 
         # Create a new instance
-        myAnalysis = self.myProblem.loadAIM(aim = "fun3dAIM",
-                                            analysisDir = self.analysisDir + "_4",
-                                            parents = tetgen.aimName)
+        self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
         
-        myAnalysis.setAnalysisVal("Boundary_Condition", [("Wing1", {"bcType" : "Viscous"}),
-                                                         ("Wing2", {"bcType" : "Inviscid"}),
-                                                         ("Farfield","farfield")])
+        self.fun3d.input["Mesh"].link(self.myProblem.analysis["tetgen"].output["Volume_Mesh"])
+
+        self.fun3d.input.Boundary_Condition = {"Wing1": {"bcType" : "Viscous"},
+                                               "Wing2": {"bcType" : "Inviscid"},
+                                               "Farfield":"farfield"}
                 
-        # TODO: This needs more work...
-        myAnalysis.setAnalysisVal("Sensitivity", "something")
+        self.fun3d.input.Design_Variable = {"Alpha": {"upperBound": 10.0}}
+        
+        self.fun3d.input.Design_Objective = {"ClCd": {"weight": 1.0, "target": 2.7}}
+        
+        self.fun3d.input.Alpha = 1
+        
+        self.fun3d.preAnalysis()
+        self.fun3d.postAnalysis()
+        
+        del self.fun3d
+        
+    # Test using Cython to write and modify the *.nml file
+    def test_cythonNML(self):
+        
+        # Create a new instance
+        self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
+        
+        self.fun3d.input["Mesh"].link(self.myProblem.analysis["tetgen"].output["Volume_Mesh"])
+        
+        fun3dnml = f90nml.Namelist()
+        fun3dnml['boundary_output_variables'] = f90nml.Namelist()
+        fun3dnml['boundary_output_variables']['mach'] = True
+        fun3dnml['boundary_output_variables']['cp'] = True
+        fun3dnml['boundary_output_variables']['average_velocity'] = True
 
-        aflr4.preAnalysis()
-        aflr4.postAnalysis()
+        fun3dnml.write(os.path.join(self.fun3d.analysisDir,self.configFile), force=True)
 
-        tetgen.preAnalysis()
-        tetgen.postAnalysis()
+        self.fun3d.input.Use_Python_NML = True
+        self.fun3d.input.Overwrite_NML = False # append
+        
+        self.fun3d.input.Boundary_Condition = {"Wing1": {"bcType" : "Viscous"},
+                                               "Wing2": {"bcType" : "Inviscid"},
+                                               "Farfield":"farfield"}
+        
+        self.fun3d.preAnalysis()
+    
+        self.assertEqual(os.path.isfile(os.path.join(self.fun3d.analysisDir, self.configFile)), True)
+        
+        del self.fun3d
 
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
+     # Test using Cython to write and modify the *.nml file with reentrance into the AIM
+    def test_cythonNMLReentrance(self):
+        
+        # Create a new instance
+        self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
+        
+        self.fun3d.input["Mesh"].link(self.myProblem.analysis["tetgen"].output["Volume_Mesh"])
+
+        self.fun3d.input.Use_Python_NML = True
+        self.fun3d.input.Overwrite_NML = False # append
+        
+        self.fun3d.input.Boundary_Condition = {"Wing1": {"bcType" : "Viscous"},
+                                               "Wing2": {"bcType" : "Inviscid"},
+                                               "Farfield":"farfield"}
+        
+        self.fun3d.preAnalysis()
+    
+        self.assertEqual(os.path.isfile(os.path.join(self.fun3d.analysisDir, self.configFile)), True)
+        
+        self.fun3d.postAnalysis()
+        
+        self.fun3d.input.Mach = 0.8
+         
+        self.fun3d.preAnalysis()
+             
+        self.assertEqual(os.path.isfile(os.path.join(self.fun3d.analysisDir, self.configFile)), True)
+        
+        self.fun3d.postAnalysis()
+        
+    # Test using Cython to write and modify the *.nml file - catch an error
+    def test_cythonNMLError(self):
+    
+        # Create a new instance
+        # Use self.fun3d to ensure fun3d is not tracked in the traceback frames
+        self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
+        
+        # Create a bad nml file 
+        f = open(os.path.join(self.fun3d.analysisDir,self.configFile), "w")
+        f.write("&badNamelist")
+        f.close()
+        
+        self.fun3d.input.Use_Python_NML = True
+        self.fun3d.input.Overwrite_NML = False # append
+     
+        self.fun3d.input.Boundary_Condition = {"Wing1": {"bcType" : "Inviscid"}}
+        
+        with self.assertRaises(pyCAPS.CAPSError) as e:
+            self.fun3d.preAnalysis()
+        self.assertEqual(e.exception.errorName, "CAPS_BADVALUE")
+
+        del self.fun3d
 
 if __name__ == '__main__':
     unittest.main()

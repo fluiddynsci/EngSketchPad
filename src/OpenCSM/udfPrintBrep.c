@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -87,7 +87,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* check that Model was input that contains one Body */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -100,16 +100,13 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     }
 
     status = EG_getContext(emodel, &context);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     /* check arguments */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
 #endif
@@ -117,18 +114,15 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* make a copy of the Body (so that it does not get removed
      when OpenCSM deletes emodel) */
     status = EG_copyObject(ebodys[0], NULL, ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_copyObject);
 
     /* get a pointer to ocsm's MODL */
     status = EG_getUserPointer(context, (void**)(&(modl)));
-    if (status != EGADS_SUCCESS) {
-        printf(" udpExecute: problem in getUserPointer\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(EG_getUserPointer);
 
     MODL = (modl_T *) modl;
 
-//$$$    /* make sure that we were passed the last Body in the MODL */
+    /* make sure that we were passed the last Body in the MODL */
 //$$$    if (MODL->body[MODL->nbody].ebody != ebodys[0]) {
 //$$$        printf(" udpExecute: only last Body can be printed\n");
 //$$$        status = EGADS_NOTBODY;
@@ -136,8 +130,8 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 //$$$    }
 
     /* print the Brep info */
-    status = ocsmPrintBrep(MODL, MODL->nbody, stdout);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    status = ocsmPrintBrep(MODL, MODL->nbody, "");
+    CHECK_STATUS(ocsmPrintBrep);
 
     /* set the output value */
 

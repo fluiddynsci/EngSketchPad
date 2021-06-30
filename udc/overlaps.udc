@@ -9,6 +9,12 @@
 
 INTERFACE overlaps  out  -1
 
+STORE     overlaps 1
+STORE     overlaps 2
+
+# try to perform INTERSECTion
+RESTORE   overlaps 1
+RESTORE   overlaps 2
 INTERSECT
 
 SET       status   0
@@ -24,5 +30,9 @@ ELSE
    STORE  .
    SET    overlaps  0
 ENDIF
+
+# restore the stack to its original condition
+RESTORE   overlaps 2
+RESTORE   overlaps 1
 
 END

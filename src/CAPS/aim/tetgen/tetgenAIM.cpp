@@ -5,6 +5,7 @@
  *
  *      Written by Dr. Ryan Durscher AFRL/RQVC
  *
+ *     This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
  */
 
 
@@ -16,12 +17,6 @@
  * Delaunay tetrahedralizations, boundary conforming Delaunay meshes, and Voronoi partitions.
  *
  * An outline of the AIM's inputs and outputs are provided in \ref aimInputsTetGen and \ref aimOutputsTetGen, respectively.
- *
- * The accepted and expected geometric representation and analysis intentions are detailed in \ref geomRepIntentTetGen.
- *
- * Details of the AIM's shareable data structures are outlined in \ref sharableDataTetGen if connecting this AIM to other AIMs in a
- * parent-child like manner.
- *
  *
  * Current issues include:
  *  - The holes or seed points provided to TetGen by creating an taking the cnetroid of a tetrahedron from an 'empty' mesh.
@@ -36,6 +31,9 @@
  * through an interface function that takes the body tessellation and transfers the data to a "tetgenio" object
  * in PLCs format (Piecewise Linear Complexes). After volume meshing is complete the mesh can be output in various
  *  mesh formats (see \ref aimInputsTetGen for additional details).
+ *
+ *  \section clearanceTetgen Clearance Statement
+ *  This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
  */
 
 #include <string.h>
@@ -43,28 +41,47 @@
 #include "capsTypes.h"
 #include "aimUtil.h"
 
-#include "meshUtils.h"  // Collection of helper functions for meshing
-#include "cfdUtils.h"   // Collection of helper functions for cfd analysis
-#include "miscUtils.h"  // Collection of helper functions for miscellaneous use
-#include "feaUtils.h"  // Collection of helper functions for fea use
+#include "meshUtils.h"       // Collection of helper functions for meshing
+#include "miscUtils.h"
+#include "deprecateUtils.h"
 
 #include "tetgen_Interface.hpp" // Bring in TetGen 'interface' function
 
 #ifdef WIN32
-#define getcwd     _getcwd
 #define snprintf   _snprintf
 #define strcasecmp stricmp
-#define PATH_MAX   _MAX_PATH
-#else
-#include <unistd.h>
-#include <limits.h>
 #endif
 
-
-#define NUMINPUT  18  // number of mesh inputs
-#define NUMOUT     1  // number of outputs
-
 //#define DEBUG
+
+
+enum aimInputs
+{
+  Proj_Name = 1,                 /* index is 1-based */
+  Tess_Params,
+  Preserve_Surf_Mesh,
+  Mesh_Verbose_Flag,
+  Mesh_Quiet_Flag,
+  Quality_Rad_Edge,
+  Quality_Angle,
+  Mesh_Format,
+  Mesh_ASCII_Flag,
+  Mesh_Gen_Input_String,
+  Ignore_Surface_Mesh_Extraction,
+  Mesh_Tolerance,
+  Multiple_Mesh,
+  Regions,
+  Holes,
+  Surface_Mesh,
+  NUMINPUT = Surface_Mesh        /* Total number of inputs */
+};
+
+enum aimOutputs
+{
+  Done = 1,                    /* index is 1-based */
+  Volume_Mesh,
+  NUMOUT = Volume_Mesh         /* Total number of outputs */
+};
 
 
 typedef struct {
@@ -87,50 +104,55 @@ typedef struct {
 
 } aimStorage;
 
-static aimStorage *tetgenInstance = NULL;
-static int         numInstance  = 0;
 
-static int destroy_aimStorage(int iIndex) {
+
+static int destroy_aimStorage(aimStorage *tetgenInstance)
+{
 
     int i; // Indexing
 
     int status; // Function return status
 
     // Destroy meshInput
-    status = destroy_meshInputStruct(&tetgenInstance[iIndex].meshInput);
-    if (status != CAPS_SUCCESS) printf("Status = %d, tetgenAIM instance %d, meshInput cleanup!!!\n", status, iIndex);
+    status = destroy_meshInputStruct(&tetgenInstance->meshInput);
+    if (status != CAPS_SUCCESS)
+      printf("Status = %d, tetgenAIM  meshInput cleanup!!!\n", status);
 
     // Destroy surfaceMesh allocated arrays
-    if (tetgenInstance[iIndex].surfaceMeshInherited == (int) false) { // Did the parent aim already destroy the surfaces?
-
-        if (tetgenInstance[iIndex].surfaceMesh != NULL) {
-            for (i = 0; i < tetgenInstance[iIndex].numSurfaceMesh; i++) {
-                status = destroy_meshStruct(&tetgenInstance[iIndex].surfaceMesh[i]);
-                if (status != CAPS_SUCCESS) printf("Error during destroy_meshStruct, status = %d\n", status);
+    if (tetgenInstance->surfaceMeshInherited == (int) false) {
+        // Did the parent aim already destroy the surfaces?
+        if (tetgenInstance->surfaceMesh != NULL) {
+            for (i = 0; i < tetgenInstance->numSurfaceMesh; i++) {
+                status = destroy_meshStruct(&tetgenInstance->surfaceMesh[i]);
+                if (status != CAPS_SUCCESS)
+                  printf("Error during destroy_meshStruct, status = %d\n",
+                         status);
             }
-            EG_free(tetgenInstance[iIndex].surfaceMesh);
+            EG_free(tetgenInstance->surfaceMesh);
         }
     }
 
-    tetgenInstance[iIndex].numSurfaceMesh = 0;
-    tetgenInstance[iIndex].surfaceMeshInherited = (int) false;
-    tetgenInstance[iIndex].surfaceMesh = NULL;
+    tetgenInstance->numSurfaceMesh = 0;
+    tetgenInstance->surfaceMeshInherited = (int) false;
+    tetgenInstance->surfaceMesh = NULL;
 
     // Destroy volumeMesh allocated arrays
-    if (tetgenInstance[iIndex].volumeMesh != NULL) {
-        for (i = 0; i < tetgenInstance[iIndex].numVolumeMesh; i++) {
-            status = destroy_meshStruct(&tetgenInstance[iIndex].volumeMesh[i]);
-            if (status != CAPS_SUCCESS) printf("Error during destroy_meshStruct, status = %d\n", status);
+    if (tetgenInstance->volumeMesh != NULL) {
+        for (i = 0; i < tetgenInstance->numVolumeMesh; i++) {
+            status = destroy_meshStruct(&tetgenInstance->volumeMesh[i]);
+            if (status != CAPS_SUCCESS)
+              printf("Error during destroy_meshStruct, status = %d\n", status);
         }
 
-        EG_free(tetgenInstance[iIndex].volumeMesh);
+        EG_free(tetgenInstance->volumeMesh);
     }
-    tetgenInstance[iIndex].numVolumeMesh = 0;
-    tetgenInstance[iIndex].volumeMesh = NULL;
+    tetgenInstance->numVolumeMesh = 0;
+    tetgenInstance->volumeMesh = NULL;
 
     // Destroy attribute to index map
-    status = destroy_mapAttrToIndexStruct(&tetgenInstance[iIndex].attrMap);
-    if (status != CAPS_SUCCESS) printf("Status = %d, tetgenAIM instance %d, attrMap cleanup!!!\n", status, iIndex);
+    status = destroy_mapAttrToIndexStruct(&tetgenInstance->attrMap);
+    if (status != CAPS_SUCCESS)
+      printf("Status = %d, tetgenAIM  attrMap cleanup!!!\n", status);
 
     return CAPS_SUCCESS;
 }
@@ -140,81 +162,76 @@ static int destroy_aimStorage(int iIndex) {
 /* ********************** Exposed AIM Functions ***************************** */
 
 extern "C" int
-aimInitialize(int ngIn, capsValue *gIn, int *qeFlag, const char *unitSys,
-              int *nIn, int *nOut, int *nFields, char ***fnames, int **ranks)
+aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
+              /*@unused@*/ void **instStore, /*@unused@*/ int *major,
+              /*@unused@*/ int *minor, int *nIn, int *nOut,
+              int *nFields, char ***fnames, int **franks, int **fInOut)
 {
-    int status; // Function status return
-    int flag;   // query/execute flag
+    int status = CAPS_SUCCESS; // Function status return
 
-    aimStorage *tmp;
+    aimStorage *tetgenInstance = NULL;
 
 #ifdef DEBUG
-    printf("\n tetgenAIM/aimInitialize   ngIn = %d!\n", ngIn);
+    printf("\n tetgenAIM/aimInitialize   instance = %d!\n", inst);
 #endif
-    flag     = *qeFlag;
-    // Set that the AIM executes itself
-    *qeFlag  = 1;
 
     /* specify the number of analysis input and out "parameters" */
     *nIn     = NUMINPUT;
     *nOut    = NUMOUT;
-    if (flag == 1) return CAPS_SUCCESS;
+    if (inst == -1) return CAPS_SUCCESS;
 
-    /* specify the field variables this analysis can generate */
+    /* specify the field variables this analysis can generate and consume */
     *nFields = 0;
-    *ranks   = NULL;
     *fnames  = NULL;
+    *franks  = NULL;
+    *fInOut  = NULL;
 
     // Allocate tetgenInstance
-    if (tetgenInstance == NULL) {
-        tetgenInstance = (aimStorage *) EG_alloc(sizeof(aimStorage));
-        if (tetgenInstance == NULL) return EGADS_MALLOC;
-    } else {
-        tmp = (aimStorage *) EG_reall(tetgenInstance, (numInstance+1)*sizeof(aimStorage));
-        if (tmp == NULL) return EGADS_MALLOC;
-        tetgenInstance = tmp;
-    }
+    AIM_ALLOC(tetgenInstance, 1, aimStorage, aimInfo, status);
+    *instStore = tetgenInstance;
 
     // Set initial values for tetgenInstance //
 
     // Container for volume mesh
-    tetgenInstance[numInstance].numVolumeMesh = 0;
-    tetgenInstance[numInstance].volumeMesh = NULL;
+    tetgenInstance->numVolumeMesh = 0;
+    tetgenInstance->volumeMesh = NULL;
 
     // Container for surface meshes
-    tetgenInstance[numInstance].surfaceMeshInherited = (int) false;
+    tetgenInstance->surfaceMeshInherited = (int) false;
 
-    tetgenInstance[numInstance].numSurfaceMesh = 0;
-    tetgenInstance[numInstance].surfaceMesh = NULL;
+    tetgenInstance->numSurfaceMesh = 0;
+    tetgenInstance->surfaceMesh = NULL;
 
     // Container for attribute to index map
-    status = initiate_mapAttrToIndexStruct(&tetgenInstance[numInstance].attrMap);
-    if (status != CAPS_SUCCESS) return status;
+    status = initiate_mapAttrToIndexStruct(&tetgenInstance->attrMap);
+    AIM_STATUS(aimInfo, status);
 
     // Container for mesh input
-    status = initiate_meshInputStruct(&tetgenInstance[numInstance].meshInput);
+    status = initiate_meshInputStruct(&tetgenInstance->meshInput);
+    AIM_STATUS(aimInfo, status);
 
-    // Increment number of instances
-    numInstance += 1;
-
-    return (numInstance-1);
+cleanup:
+    if (status != CAPS_SUCCESS) AIM_FREE(*instStore);
+    return CAPS_SUCCESS;
 }
 
 
 extern "C" int
-aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval)
+aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, int index,
+          char **ainame, capsValue *defval)
 {
     /*! \page aimInputsTetGen AIM Inputs
      * The following list outlines the TetGen meshing options along with their default value available
      * through the AIM interface.
      */
+    int status = CAPS_SUCCESS;
 
 #ifdef DEBUG
-    printf(" tetgenAIM/aimInputs instance = %d  index = %d!\n", iIndex, index);
+    printf(" tetgenAIM/aimInputs  index = %d!\n", index);
 #endif
 
     // Meshing Inputs
-    if (index == 1) {
+    if (index == Proj_Name) {
         *ainame              = EG_strdup("Proj_Name"); // If NULL a volume grid won't be written by the AIM
         defval->type         = String;
         defval->nullVal      = IsNull;
@@ -227,16 +244,15 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * This corresponds to the output name of the mesh. If left NULL, the mesh is not written to a file.
          */
 
-    } else if (index == 2) {
+    } else if (index == Tess_Params) {
         *ainame               = EG_strdup("Tess_Params");
         defval->type          = Double;
         defval->dim           = Vector;
-        defval->length        = 3;
         defval->nrow          = 3;
         defval->ncol          = 1;
         defval->units         = NULL;
         defval->lfixed        = Fixed;
-        defval->vals.reals    = (double *) EG_alloc(defval->length*sizeof(double));
+        defval->vals.reals    = (double *) EG_alloc(defval->nrow*sizeof(double));
         if (defval->vals.reals != NULL) {
             defval->vals.reals[0] = 0.025;
             defval->vals.reals[1] = 0.001;
@@ -255,7 +271,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * between triangle facets (or Edge segment tangents for a WIREBODY tessellation), note that a
          * zero ignores this phase
          */
-    } else if (index == 3) {
+    } else if (index == Preserve_Surf_Mesh) {
         *ainame               = EG_strdup("Preserve_Surf_Mesh");
         defval->type          = Boolean;
         defval->vals.integer  = true;
@@ -265,7 +281,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * Tells TetGen to preserve the surface mesh provided (i.e. do not add Steiner points on the surface). Discrete data transfer
          * will <b>NOT</b> be possible if Steiner points are added.
          */
-    } else if (index == 4) {
+    } else if (index == Mesh_Verbose_Flag) {
         *ainame               = EG_strdup("Mesh_Verbose_Flag");
         defval->type          = Boolean;
         defval->vals.integer  = false;
@@ -274,7 +290,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * - <B> Mesh_Verbose_Flag = False</B> <br>
          * Verbose output from TetGen.
          */
-    } else if (index == 5) {
+    } else if (index == Mesh_Quiet_Flag) {
         *ainame               = EG_strdup("Mesh_Quiet_Flag");
         defval->type          = Boolean;
         defval->vals.integer  = false;
@@ -283,7 +299,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * - <B> Mesh_Quiet_Flag = False</B> <br>
          * Complete suppression of all TetGen output messages (not including errors).
          */
-    } else if (index == 6) {
+    } else if (index == Quality_Rad_Edge) {
         *ainame               = EG_strdup("Quality_Rad_Edge"); // TetGen specific parameters
         defval->type          = Double;
         defval->vals.real     = 1.5;
@@ -292,7 +308,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * - <B> Quality_Rad_Edge = 1.5</B> <br>
          * TetGen maximum radius-edge ratio.
          */
-    } else if (index == 7) {
+    } else if (index == Quality_Angle) {
         *ainame               = EG_strdup("Quality_Angle"); // TetGen specific parameters
         defval->type          = Double;
         defval->vals.real     = 0.0;
@@ -301,7 +317,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * - <B> Quality_Angle = 0.0</B> <br>
          * TetGen minimum dihedral angle (in degrees).
          */
-    } else if (index == 8) {
+    } else if (index == Mesh_Format) {
         *ainame               = EG_strdup("Mesh_Format");
         defval->type          = String;
         defval->vals.string   = EG_strdup("AFLR3"); // TECPLOT, VTK, AFLR3, SU2, NASTRAN
@@ -311,7 +327,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * - <B> Mesh_Format = "AFLR3"</B> <br>
          * Mesh output format. Available format names  include: "AFLR3", "TECPLOT", "SU2", "VTK", and "NASTRAN".
          */
-    } else if (index == 9) {
+    } else if (index == Mesh_ASCII_Flag) {
         *ainame               = EG_strdup("Mesh_ASCII_Flag");
         defval->type          = Boolean;
         defval->vals.integer  = true;
@@ -320,7 +336,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * - <B> Mesh_ASCII_Flag = True</B> <br>
          * Output mesh in ASCII format, otherwise write a binary file if applicable.
          */
-    } else if (index == 10) {
+    } else if (index == Mesh_Gen_Input_String) {
         *ainame               = EG_strdup("Mesh_Gen_Input_String");
         defval->type          = String;
         defval->nullVal       = IsNull;
@@ -336,7 +352,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * of the relevant AIM input variables. See \ref tetgenCommandLineInput for options to include
          * in the input string.
          */
-    } else if (index == 11) { // Deprecated
+    } else if (index == Ignore_Surface_Mesh_Extraction) { // Deprecated
         *ainame               = EG_strdup("Ignore_Surface_Mesh_Extraction");
         defval->type          = Boolean;
         defval->vals.integer  = true;
@@ -347,7 +363,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
 //         * used to reconstruct a separate (not dependent on the volume mesh node numbering) representation of the surface mesh. In
 //         * general, this has little use and can add a significant computational penalty. The default value of "True" is recommended.
 //         */
-    } else if (index == 12) {
+    } else if (index == Mesh_Tolerance) {
         *ainame               = EG_strdup("Mesh_Tolerance"); // TetGen specific parameters
         defval->type          = Double;
         defval->vals.real     = 1E-16;
@@ -356,7 +372,7 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * - <B> Mesh_Tolerance = 1E-16</B> <br>
          * Sets the tolerance for coplanar test in TetGen.
          */
-    } else if (index == 13) {
+    } else if (index == Multiple_Mesh) {
         *ainame               = EG_strdup("Multiple_Mesh");
         defval->type          = Boolean;
         defval->vals.integer  = (int) false;
@@ -366,49 +382,48 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * If set to True a volume will be generated for each body. When set to False (default value) only a single volume
          * mesh will be created.
          */
-    } else if (index == 14) {
-        *ainame               = EG_strdup("Edge_Point_Min");
-        defval->type          = Integer;
-        defval->vals.integer  = 0;
-        defval->lfixed        = Fixed;
-        defval->nrow          = 1;
-        defval->ncol          = 1;
-        defval->nullVal       = IsNull;
-
-        /*! \page aimInputsTetGen
-         * - <B> Edge_Point_Min = NULL</B> <br>
-         * Minimum number of points on an edge including end points to use when creating a surface mesh (min 2).
-         */
-
-    } else if (index == 15) {
-        *ainame               = EG_strdup("Edge_Point_Max");
-        defval->type          = Integer;
-        defval->vals.integer  = 0;
-        defval->length        = 1;
-        defval->lfixed        = Fixed;
-        defval->nrow          = 1;
-        defval->ncol          = 1;
-        defval->nullVal       = IsNull;
-
-        /*! \page aimInputsTetGen
-         * - <B> Edge_Point_Max = NULL</B> <br>
-         * Maximum number of points on an edge including end points to use when creating a surface mesh (min 2).
-         */
-
-    } else if (index == 16) {
-        *ainame              = EG_strdup("Mesh_Sizing");
-        defval->type         = Tuple;
-        defval->nullVal      = IsNull;
-        //defval->units        = NULL;
-        defval->dim          = Vector;
-        defval->lfixed       = Change;
-        defval->vals.tuple   = NULL;
-
-        /*! \page aimInputsTetGen
-         * - <B>Mesh_Sizing = NULL </B> <br>
-         * See \ref meshSizingProp for additional details.
-         */
-    } else if (index == 17) {
+//    } else if (index == 14) {
+//        *ainame               = EG_strdup("Edge_Point_Min");
+//        defval->type          = Integer;
+//        defval->vals.integer  = 0;
+//        defval->lfixed        = Fixed;
+//        defval->nrow          = 1;
+//        defval->ncol          = 1;
+//        defval->nullVal       = IsNull;
+//
+//        /*! \page aimInputsTetGen
+//         * - <B> Edge_Point_Min = NULL</B> <br>
+//         * Minimum number of points on an edge including end points to use when creating a surface mesh (min 2).
+//         */
+//
+//    } else if (index == 15) {
+//        *ainame               = EG_strdup("Edge_Point_Max");
+//        defval->type          = Integer;
+//        defval->vals.integer  = 0;
+//        defval->lfixed        = Fixed;
+//        defval->nrow          = 1;
+//        defval->ncol          = 1;
+//        defval->nullVal       = IsNull;
+//
+//        /*! \page aimInputsTetGen
+//         * - <B> Edge_Point_Max = NULL</B> <br>
+//         * Maximum number of points on an edge including end points to use when creating a surface mesh (min 2).
+//         */
+//
+//    } else if (index == 16) {
+//        *ainame              = EG_strdup("Mesh_Sizing");
+//        defval->type         = Tuple;
+//        defval->nullVal      = IsNull;
+//        //defval->units        = NULL;
+//        defval->dim          = Vector;
+//        defval->lfixed       = Change;
+//        defval->vals.tuple   = NULL;
+//
+//        /*! \page aimInputsTetGen
+//         * - <B>Mesh_Sizing = NULL </B> <br>
+//         * See \ref meshSizingProp for additional details.
+//         */
+    } else if (index == Regions) {
         *ainame              = EG_strdup("Regions");
         defval->type         = Tuple;
         defval->nullVal      = IsNull;
@@ -430,16 +445,16 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
          * script,
          *
          *  \code{.py}
-         *  tetgen.setAnalysisVal('Regions', [
-         *    ( 'A', { 'id': 10, 'seed': [0, 0,  1] } ),
-         *    ( 'B', { 'id': 20, 'seed': [0, 0, -1] } )
-         *  ])
+         *  tetgen.input.Regions = {
+         *    'A': { 'id': 10, 'seed': [0, 0,  1] },
+         *    'B': { 'id': 20, 'seed': [0, 0, -1] }
+         *  }
          *  \endcode
          *
          * Automatic hole detection will be disabled if one or both of the
          * `Regions` and `Holes` inputs is not NULL.
          */
-    } else if (index == 18) {
+    } else if (index == Holes) {
       *ainame              = EG_strdup("Holes");
       defval->type         = Tuple;
       defval->nullVal      = IsNull;
@@ -457,139 +472,80 @@ aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval
        * 3-vector `seed` point.  For example, from within a pyCAPS script,
        *
        *  \code{.py}
-       *  tetgen.setAnalysisVal('Holes', [
-       *    ( 'A', { 'seed': [ 1, 0, 0] } ),
-       *    ( 'B', { 'seed': [-1, 0, 0] } )
-       *  ])
+       *  tetgen.input.Holes = {
+       *    'A': { 'seed': [ 1, 0, 0] },
+       *    'B': { 'seed': [-1, 0, 0] }
+       *  }
        *  \endcode
        *
        * Automatic hole detection will be disabled if one or both of the
        * `Regions` and `Holes` inputs is not NULL.
        */
+
+    } else if (index == Surface_Mesh) {
+        *ainame             = AIM_NAME(Surface_Mesh);
+        defval->type        = Pointer;
+        defval->dim         = Vector;
+        defval->lfixed      = Change;
+        defval->sfixed      = Change;
+        defval->vals.AIMptr = NULL;
+        defval->nullVal     = IsNull;
+        AIM_STRDUP(defval->units, "meshStruct", aimInfo, status);
+
+        /*! \page aimInputsTetGen
+         * - <B>Surface_Mesh = NULL</B> <br>
+         * A Surface_Mesh link.
+         */
     }
 
+    AIM_NOTNULL(*ainame, aimInfo, status);
 
-    /* if (index != 1 && index != 10 && index != 13 ){
-        // Link variable(s) to parent(s) if available
-        status = aim_link(aimInfo, *ainame, ANALYSISIN, defval);
-        //printf("Status = %d: Var Index = %d, Type = %d, link = %lX\n", status, index, defval->type, defval->link);
-    }*/
-
-    return CAPS_SUCCESS;
-}
-
-extern "C" int
-aimData(int iIndex, const char *name, enum capsvType *vtype, int *rank, int *nrow,
-        int *ncol, void **data, char **units)
-{
-
-    /*! \page sharableDataTetGen AIM Shareable Data
-     * The TetGen AIM has the following shareable data types/values with its children AIMs if they are so inclined.
-     * - <B> Volume_Mesh</B> <br>
-     * The returned volume mesh after TetGen execution is complete in meshStruct (see meshTypes.h) format.
-     * - <B> Attribute_Map</B> <br>
-     * An index mapping between capsGroups found on the geometry in mapAttrToIndexStruct (see miscTypes.h) format.
-     */
-
-#ifdef DEBUG
-    printf(" tetgenAIM/aimData instance = %d  name = %s!\n", iIndex, name);
-#endif
-
-//    * - <B> Surface_Mesh</B> <br>
-//    * The returned surface mesh in meshStruct (see meshTypes.h) format.
-
-//    // The returned surface mesh from TetGen
-//    if (strcasecmp(name, "Surface_Mesh") == 0){
-//        *vtype = Value;
-//        *rank  = *ncol = 1;
-//        *nrow = tetgenInstance[iIndex].numSurfaceMesh;
-//        *data  = &tetgenInstance[iIndex].surfaceMesh;
-//        *units = NULL;
-//
-//        return CAPS_SUCCESS;
-//    }
-
-    // The returned Volume mesh from TetGen
-    if (strcasecmp(name, "Volume_Mesh") == 0){
-        *vtype = Value;
-        *rank  = *ncol = 1;
-        *nrow = tetgenInstance[iIndex].numVolumeMesh;
-        if (tetgenInstance[iIndex].numVolumeMesh == 1) {
-            *data  = &tetgenInstance[iIndex].volumeMesh[0];
-        } else {
-            *data  = tetgenInstance[iIndex].volumeMesh;
-        }
-
-        *units = NULL;
-
-        return CAPS_SUCCESS;
-    }
-
-    // Share the attribute map
-    if (strcasecmp(name, "Attribute_Map") == 0){
-        *vtype = Value;
-        *rank  = *nrow = *ncol = 1;
-        *data  = &tetgenInstance[iIndex].attrMap;
-        *units = NULL;
-
-        return CAPS_SUCCESS;
-    }
-
-    return CAPS_NOTFOUND;
+cleanup:
+    if (status != CAPS_SUCCESS) AIM_FREE(*ainame);
+    return status;
 }
 
 
 extern "C" int
-aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath, capsValue *aimInputs,
-        capsErrs **errs)
+aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 {
     int i, elem, body; // Indexing
 
     int status; // Return status
+  
+    aimStorage *tetgenInstance;
 
     // Incoming bodies
     const char *intents;
     ego *bodies = NULL;
     int numBody = 0;
 
-    // Data transfer related variables
-    int            nrow, ncol, rank;
-    void           *dataTransfer;
-    char           *units;
-    enum capsvType vtype;
-
     // Meshing related variables
-    double  tessParams[3], refLen = -1.0;
+    //double  tessParams[3]; //, refLen = -1.0;
     meshElementStruct *element;
 
     // Global settings
-    int minEdgePoint = -1, maxEdgePoint = -1;
+    //int minEdgePoint = -1, maxEdgePoint = -1;
 
     // Mesh attribute parameters
-    int numMeshProp = 0;
-    meshSizingStruct *meshProp = NULL;
+    //int numMeshProp = 0;
+    //meshSizingStruct *meshProp = NULL;
 
     double  box[6], boxMax[6] = {0,0,0,0,0,0};
 
     int     bodyBoundingBox = 0;
 
-    // Inherit surface mesh related variables
-    int numSurfMesh = 0;
-
     // File ouput
     char *filename;
     char bodyNumber[11];
 
-    // NULL out errors
-    *errs = NULL;
 
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
     if (status != CAPS_SUCCESS) return status;
 
 #ifdef DEBUG
-    printf(" tetgenAIM/aimPreAnalysis instance = %d  numBody = %d!\n", iIndex,
-            numBody);
+    printf(" tetgenAIM/aimPreAnalysis  numBody = %d!\n", numBody);
 #endif
 
     if (numBody <= 0 || bodies == NULL) {
@@ -598,188 +554,69 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath, capsValue *a
 #endif
         return CAPS_SOURCEERR;
     }
+    tetgenInstance = (aimStorage *) instStore;
 
     // Cleanup previous aimStorage for the instance in case this is the second time through preAnalysis for the same instance
-    status = destroy_aimStorage(iIndex);
+    status = destroy_aimStorage(tetgenInstance);
     if (status != CAPS_SUCCESS) {
-        if (status != CAPS_SUCCESS) printf("Status = %d, tetgenAIM instance %d, aimStorage cleanup!!!\n", status, iIndex);
+        printf("Status = %d, tetgenAIM  aimStorage cleanup!!!\n", status);
         return status;
     }
 
     // Get capsGroup name and index mapping
-    status = aim_getData(aimInfo, "Attribute_Map", &vtype, &rank, &nrow, &ncol, &dataTransfer, &units);
-    if (status == CAPS_SUCCESS) {
-
-        printf("Found link for attrMap (Attribute_Map) from parent\n");
-
-        status = copy_mapAttrToIndexStruct( (mapAttrToIndexStruct *) dataTransfer, &tetgenInstance[iIndex].attrMap);
-        if (status != CAPS_SUCCESS) return status;
-
-    } else {
-
-        if (status == CAPS_DIRTY) printf("Parent AIMS are dirty\n");
-        else printf("Linking status during attrMap (Attribute_Map) = %d\n",status);
-
-        printf("Didn't find a link to attrMap from parent - getting it ourselves\n");
-
-        // Get capsGroup name and index mapping
-        status = create_CAPSGroupAttrToIndexMap(numBody,
-                                                bodies,
-                                                2, // Only search down to the edge level of the EGADS body
-                                                &tetgenInstance[iIndex].attrMap);
-        if (status != CAPS_SUCCESS) return status;
-    }
-
-    // Tessellate body(ies)
-    // Tess_Params -> -1 because of aim_getIndex 1 bias
-    tessParams[0] = aimInputs[aim_getIndex(aimInfo, "Tess_Params", ANALYSISIN)-1].vals.reals[0]; // Gets multiplied by bounding box size
-    tessParams[1] = aimInputs[aim_getIndex(aimInfo, "Tess_Params", ANALYSISIN)-1].vals.reals[1]; // Gets multiplied by bounding box size
-    tessParams[2] = aimInputs[aim_getIndex(aimInfo, "Tess_Params", ANALYSISIN)-1].vals.reals[2];
+    status = create_CAPSGroupAttrToIndexMap(numBody,
+                                            bodies,
+                                            2, // Only search down to the edge level of the EGADS body
+                                            &tetgenInstance->attrMap);
+    if (status != CAPS_SUCCESS) return status;
 
     // Get surface mesh
-    status = aim_getData(aimInfo, "Surface_Mesh", &vtype, &rank, &nrow, &ncol, &dataTransfer, &units);
-    if (status == CAPS_SUCCESS) {
+    if (aimInputs[Surface_Mesh-1].nullVal == IsNull) {
+        AIM_ANALYSISIN_ERROR(aimInfo, Surface_Mesh, "'Surface_Mesh' input must be linked to an output 'Surface_Mesh'");
+        status = CAPS_BADVALUE;
+        goto cleanup;
+    }
 
-        printf("Found link for a surface mesh (Surface_Mesh) from parent\n");
+    // Get mesh
+    tetgenInstance->numSurfaceMesh = aimInputs[Surface_Mesh-1].length;
+    tetgenInstance->surfaceMesh    = (meshStruct *)aimInputs[Surface_Mesh-1].vals.AIMptr;
+    tetgenInstance->surfaceMeshInherited = (int) true;
 
-        numSurfMesh = 0;
-        if      (nrow == 1 && ncol != 1) numSurfMesh = ncol;
-        else if (nrow != 1 && ncol == 1) numSurfMesh = nrow;
-        else if (nrow == 1 && ncol == 1) numSurfMesh = nrow;
-        else {
-
-            printf("Can not except 2D matrix of surface meshes\n");
-            return  CAPS_BADVALUE;
-        }
-
-        if (numSurfMesh != numBody) {
-            printf("Number of inherited surface meshes does not match the number of bodies\n");
-            return CAPS_SOURCEERR;
-        }
-        tetgenInstance[iIndex].numSurfaceMesh =  numSurfMesh;
-        tetgenInstance[iIndex].surfaceMesh = (meshStruct * ) dataTransfer;
-        tetgenInstance[iIndex].surfaceMeshInherited = (int) true;
-
-    } else { // Use EGADS body tessellation for surface mesh
-
-        tetgenInstance[iIndex].numSurfaceMesh = numBody;
-        tetgenInstance[iIndex].surfaceMesh = (meshStruct * ) EG_alloc(tetgenInstance[iIndex].numSurfaceMesh*sizeof(meshStruct));
-        if (tetgenInstance[iIndex].surfaceMesh == NULL) return EGADS_MALLOC;
-
-        for (body = 0; body < numBody; body++) {
-            status = initiate_meshStruct(&tetgenInstance[iIndex].surfaceMesh[body]);
-            if (status != CAPS_SUCCESS) return status;
-        }
-
-        tetgenInstance[iIndex].surfaceMeshInherited = (int) false;
-
-        // Max and min number of points
-        if (aimInputs[aim_getIndex(aimInfo, "Edge_Point_Min", ANALYSISIN)-1].nullVal != IsNull) {
-            minEdgePoint = aimInputs[aim_getIndex(aimInfo, "Edge_Point_Min", ANALYSISIN)-1].vals.integer;
-            if (minEdgePoint < 2) {
-              printf("**********************************************************\n");
-              printf("Edge_Point_Min = %d must be greater or equal to 2\n", minEdgePoint);
-              printf("**********************************************************\n");
-              status = CAPS_BADVALUE;
-              goto cleanup;
-            }
-        }
-
-        if (aimInputs[aim_getIndex(aimInfo, "Edge_Point_Max", ANALYSISIN)-1].nullVal != IsNull) {
-            maxEdgePoint = aimInputs[aim_getIndex(aimInfo, "Edge_Point_Max", ANALYSISIN)-1].vals.integer;
-            if (maxEdgePoint < 2) {
-              printf("**********************************************************\n");
-              printf("Edge_Point_Max = %d must be greater or equal to 2\n", maxEdgePoint);
-              printf("**********************************************************\n");
-              status = CAPS_BADVALUE;
-              goto cleanup;
-            }
-        }
-
-        if (maxEdgePoint >= 2 && minEdgePoint >= 2 && minEdgePoint > maxEdgePoint) {
-          printf("**********************************************************\n");
-          printf("Edge_Point_Max must be greater or equal Edge_Point_Min\n");
-          printf("Edge_Point_Max = %d, Edge_Point_Min = %d\n",maxEdgePoint,minEdgePoint);
-          printf("**********************************************************\n");
-          status = CAPS_BADVALUE;
-          goto cleanup;
-        }
-
-        // Get mesh sizing parameters
-        if (aimInputs[aim_getIndex(aimInfo, "Mesh_Sizing", ANALYSISIN)-1].nullVal != IsNull) {
-
-            status = mesh_getSizingProp(aimInputs[aim_getIndex(aimInfo, "Mesh_Sizing", ANALYSISIN)-1].length,
-                                        aimInputs[aim_getIndex(aimInfo, "Mesh_Sizing", ANALYSISIN)-1].vals.tuple,
-                                        &tetgenInstance[iIndex].attrMap,
-                                        &numMeshProp,
-                                        &meshProp);
-            if (status != CAPS_SUCCESS) goto cleanup;
-        }
-
-        // Modify the EGADS body tessellation based on given inputs
-        status =  mesh_modifyBodyTess(numMeshProp,
-                                      meshProp,
-                                      minEdgePoint,
-                                      maxEdgePoint,
-                                      0, // quadMesh
-                                      &refLen,
-                                      tessParams,
-                                      tetgenInstance[iIndex].attrMap,
-                                      numBody,
-                                      bodies);
-        if (status != CAPS_SUCCESS) goto cleanup;
-
-        // Clean up meshProps
-        if (meshProp != NULL) {
-
-            for (i = 0; i < numMeshProp; i++) {
-
-                (void) destroy_meshSizingStruct(&meshProp[i]);
-            }
-            EG_free(meshProp);
-            meshProp = NULL;
-        }
-
-        for (body = 0; body < numBody; body++) {
-
-            printf("Getting surface mesh for body %d (of %d)\n", body+1, numBody);
-
-            status = mesh_surfaceMeshEGADSBody(bodies[body],
-                                               refLen,
-                                               tessParams,
-                                               (int)false, //quadMesh
-                                               &tetgenInstance[iIndex].attrMap,
-                                               &tetgenInstance[iIndex].surfaceMesh[body]);
-            if (status != CAPS_SUCCESS) return status;
-
-        }
+    if (tetgenInstance->numSurfaceMesh != numBody) {
+        AIM_ANALYSISIN_ERROR(aimInfo, Surface_Mesh, "Number of linked surface meshes (%d) does not match the number of bodies (%d)\n",
+                             tetgenInstance->numSurfaceMesh, numBody);
+        return CAPS_SOURCEERR;
     }
 
     // Create/setup volume meshes
-    if (aimInputs[aim_getIndex(aimInfo, "Multiple_Mesh", ANALYSISIN)-1].vals.integer == (int) true) {
+    if (aimInputs[Multiple_Mesh-1].vals.integer == (int) true) {
 
-        tetgenInstance[iIndex].numVolumeMesh = numBody;
-        tetgenInstance[iIndex].volumeMesh = (meshStruct *) EG_alloc(tetgenInstance[iIndex].numVolumeMesh *sizeof(meshStruct));
-        if (tetgenInstance[iIndex].volumeMesh == NULL) {
+        tetgenInstance->numVolumeMesh = numBody;
+        tetgenInstance->volumeMesh = (meshStruct *)
+                     EG_alloc(tetgenInstance->numVolumeMesh*sizeof(meshStruct));
+        if (tetgenInstance->volumeMesh == NULL) {
             status = EGADS_MALLOC;
             goto cleanup;
         }
 
-        for (body = 0; body < tetgenInstance[iIndex].numVolumeMesh; body++) {
-            status = initiate_meshStruct(&tetgenInstance[iIndex].volumeMesh[body]);
+        for (body = 0; body < tetgenInstance->numVolumeMesh; body++) {
+            status = initiate_meshStruct(&tetgenInstance->volumeMesh[body]);
             if (status != CAPS_SUCCESS) goto cleanup;
 
             // Set reference mesh - One surface per body
-            tetgenInstance[iIndex].volumeMesh[body].numReferenceMesh = 1;
-            tetgenInstance[iIndex].volumeMesh[body].referenceMesh = (meshStruct *) EG_alloc(tetgenInstance[iIndex].volumeMesh[body].numReferenceMesh*
-                                                                                            sizeof(meshStruct));
-            if (tetgenInstance[iIndex].volumeMesh[body].referenceMesh == NULL) {
+            tetgenInstance->volumeMesh[body].numReferenceMesh = 1;
+            tetgenInstance->volumeMesh[body].referenceMesh = (meshStruct *)
+                  EG_alloc(tetgenInstance->volumeMesh[body].numReferenceMesh*
+                           sizeof(meshStruct));
+            if (tetgenInstance->volumeMesh[body].referenceMesh == NULL) {
                 status = EGADS_MALLOC;
                 goto cleanup;
             }
 
-            tetgenInstance[iIndex].volumeMesh[body].referenceMesh[0] = tetgenInstance[iIndex].surfaceMesh[body];
-            printf("Tetgen MultiMesh TopoIndex = %d\n", tetgenInstance[iIndex].volumeMesh[0].referenceMesh[0].element[0].topoIndex);
+            tetgenInstance->volumeMesh[body].referenceMesh[0] =
+                tetgenInstance->surfaceMesh[body];
+            printf("Tetgen MultiMesh TopoIndex = %d\n",
+                   tetgenInstance->volumeMesh[0].referenceMesh[0].element[0].topoIndex);
 
         }
 
@@ -828,9 +665,9 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath, capsValue *a
             if (body != bodyBoundingBox) {
                 // Swap two indices to reverse the normal vector of all elements on internal bodies
                 // so they point out of the domain
-                for (elem = 0; elem < tetgenInstance[iIndex].surfaceMesh[body].numElement; elem++) {
+                for (elem = 0; elem < tetgenInstance->surfaceMesh[body].numElement; elem++) {
 
-                    element = tetgenInstance[iIndex].surfaceMesh[body].element + elem;
+                    element = tetgenInstance->surfaceMesh[body].element + elem;
 
                     // This should be valid for both Triangles and Quadrilaterals
                     i = element->connectivity[2];
@@ -840,183 +677,192 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath, capsValue *a
             }
         }
 
-        tetgenInstance[iIndex].numVolumeMesh = 1;
-        tetgenInstance[iIndex].volumeMesh = (meshStruct *) EG_alloc(tetgenInstance[iIndex].numVolumeMesh*sizeof(meshStruct));
-        if (tetgenInstance[iIndex].volumeMesh == NULL) {
+        tetgenInstance->numVolumeMesh = 1;
+        tetgenInstance->volumeMesh = (meshStruct *)
+                     EG_alloc(tetgenInstance->numVolumeMesh*sizeof(meshStruct));
+        if (tetgenInstance->volumeMesh == NULL) {
             status = EGADS_MALLOC;
             goto cleanup;
         }
 
-        status = initiate_meshStruct(&tetgenInstance[iIndex].volumeMesh[0]);
+        status = initiate_meshStruct(&tetgenInstance->volumeMesh[0]);
         if (status != CAPS_SUCCESS) goto cleanup;
 
         // Combine mesh - temporary store the combined mesh in the volume mesh
-        status = mesh_combineMeshStruct(tetgenInstance[iIndex].numSurfaceMesh,
-                                        tetgenInstance[iIndex].surfaceMesh,
-                                        &tetgenInstance[iIndex].volumeMesh[0]);
+        status = mesh_combineMeshStruct(tetgenInstance->numSurfaceMesh,
+                                        tetgenInstance->surfaceMesh,
+                                        &tetgenInstance->volumeMesh[0]);
         if (status != CAPS_SUCCESS) goto cleanup;
 
         // Set reference meshes - All surfaces
-        tetgenInstance[iIndex].volumeMesh[0].numReferenceMesh = tetgenInstance[iIndex].numSurfaceMesh;
-        tetgenInstance[iIndex].volumeMesh[0].referenceMesh = (meshStruct *) EG_alloc(tetgenInstance[iIndex].volumeMesh[0].numReferenceMesh*
-                                                                                     sizeof(meshStruct));
-        if (tetgenInstance[iIndex].volumeMesh[0].referenceMesh == NULL) {
+        tetgenInstance->volumeMesh[0].numReferenceMesh =
+            tetgenInstance->numSurfaceMesh;
+        tetgenInstance->volumeMesh[0].referenceMesh = (meshStruct *)
+            EG_alloc(tetgenInstance->volumeMesh[0].numReferenceMesh*
+                     sizeof(meshStruct));
+        if (tetgenInstance->volumeMesh[0].referenceMesh == NULL) {
             status = EGADS_MALLOC;
             goto cleanup;
         }
 
-        for (body = 0; body < tetgenInstance[iIndex].numSurfaceMesh; body++) {
-            tetgenInstance[iIndex].volumeMesh[0].referenceMesh[body] = tetgenInstance[iIndex].surfaceMesh[body];
-
+        for (body = 0; body < tetgenInstance->numSurfaceMesh; body++) {
+            tetgenInstance->volumeMesh[0].referenceMesh[body] =
+                tetgenInstance->surfaceMesh[body];
         }
 
          // Report surface mesh
-        printf("Number of surface nodes - %d\n",tetgenInstance[iIndex].volumeMesh[0].numNode);
-        printf("Number of surface elements - %d\n",tetgenInstance[iIndex].volumeMesh[0].numElement);
+        printf("Number of surface nodes - %d\n",
+               tetgenInstance->volumeMesh[0].numNode);
+        printf("Number of surface elements - %d\n",
+               tetgenInstance->volumeMesh[0].numElement);
     }
 
     // Setup meshing input structure - mesher specific input gets set below before entering interface
-    //                                                      -1 because aim_getIndex is 1 bias
-    tetgenInstance[iIndex].meshInput.preserveSurfMesh = aimInputs[aim_getIndex(aimInfo, "Preserve_Surf_Mesh", ANALYSISIN)-1].vals.integer;
-    tetgenInstance[iIndex].meshInput.quiet            = aimInputs[aim_getIndex(aimInfo, "Mesh_Quiet_Flag",    ANALYSISIN)-1].vals.integer;
-    tetgenInstance[iIndex].meshInput.outputASCIIFlag  = aimInputs[aim_getIndex(aimInfo, "Mesh_ASCII_Flag",    ANALYSISIN)-1].vals.integer;
+    tetgenInstance->meshInput.preserveSurfMesh = aimInputs[Preserve_Surf_Mesh-1].vals.integer;
+    tetgenInstance->meshInput.quiet            = aimInputs[Mesh_Quiet_Flag-1].vals.integer;
+    tetgenInstance->meshInput.outputASCIIFlag  = aimInputs[Mesh_ASCII_Flag-1].vals.integer;
 
-    tetgenInstance[iIndex].meshInput.outputFormat = EG_strdup(aimInputs[aim_getIndex(aimInfo, "Mesh_Format", ANALYSISIN)-1].vals.string);
-    if (tetgenInstance[iIndex].meshInput.outputFormat == NULL) return EGADS_MALLOC;
+    tetgenInstance->meshInput.outputFormat = EG_strdup(aimInputs[Mesh_Format-1].vals.string);
+    if (tetgenInstance->meshInput.outputFormat == NULL) return EGADS_MALLOC;
 
-    if (aimInputs[aim_getIndex(aimInfo, "Proj_Name", ANALYSISIN)-1].nullVal != IsNull) {
+    if (aimInputs[Proj_Name-1].nullVal != IsNull) {
 
-        tetgenInstance[iIndex].meshInput.outputFileName = EG_strdup(aimInputs[aim_getIndex(aimInfo, "Proj_Name", ANALYSISIN)-1].vals.string);
-        if (tetgenInstance[iIndex].meshInput.outputFileName == NULL) return EGADS_MALLOC;
+        tetgenInstance->meshInput.outputFileName = EG_strdup(aimInputs[Proj_Name-1].vals.string);
+        if (tetgenInstance->meshInput.outputFileName == NULL) return EGADS_MALLOC;
     }
-
-    tetgenInstance[iIndex].meshInput.outputDirectory = EG_strdup(analysisPath);
-    if (tetgenInstance[iIndex].meshInput.outputDirectory == NULL) return EGADS_MALLOC;
 
     // Set tetgen specific mesh inputs
-    //                                                                          -1 because aim_getIndex is 1 bias
-    tetgenInstance[iIndex].meshInput.tetgenInput.meshQuality_rad_edge = aimInputs[aim_getIndex(aimInfo, "Quality_Rad_Edge"              , ANALYSISIN)-1].vals.real;
-    tetgenInstance[iIndex].meshInput.tetgenInput.meshQuality_angle    = aimInputs[aim_getIndex(aimInfo, "Quality_Angle"                 , ANALYSISIN)-1].vals.real;
-    tetgenInstance[iIndex].meshInput.tetgenInput.verbose              = aimInputs[aim_getIndex(aimInfo, "Mesh_Verbose_Flag"             , ANALYSISIN)-1].vals.integer;
-    tetgenInstance[iIndex].meshInput.tetgenInput.ignoreSurfaceExtract = aimInputs[aim_getIndex(aimInfo, "Ignore_Surface_Mesh_Extraction", ANALYSISIN)-1].vals.integer;
-    tetgenInstance[iIndex].meshInput.tetgenInput.meshTolerance        = aimInputs[aim_getIndex(aimInfo, "Mesh_Tolerance"                , ANALYSISIN)-1].vals.real;
+    tetgenInstance->meshInput.tetgenInput.meshQuality_rad_edge =
+       aimInputs[Quality_Rad_Edge-1].vals.real;
+    tetgenInstance->meshInput.tetgenInput.meshQuality_angle    =
+       aimInputs[Quality_Angle-1].vals.real;
+    tetgenInstance->meshInput.tetgenInput.verbose              =
+       aimInputs[Mesh_Verbose_Flag-1].vals.integer;
+    tetgenInstance->meshInput.tetgenInput.ignoreSurfaceExtract =
+       aimInputs[Ignore_Surface_Mesh_Extraction-1].vals.integer;
+    tetgenInstance->meshInput.tetgenInput.meshTolerance        =
+       aimInputs[Mesh_Tolerance-1].vals.real;
 
-    if (aimInputs[aim_getIndex(aimInfo, "Regions", ANALYSISIN) - 1].nullVal != IsNull) {
-      populate_regions(&tetgenInstance[iIndex].meshInput.tetgenInput.regions,
-                       aimInputs[aim_getIndex(aimInfo, "Regions", ANALYSISIN) - 1].length,
-                       aimInputs[aim_getIndex(aimInfo, "Regions", ANALYSISIN) - 1].vals.tuple);
+    if (aimInputs[Regions-1].nullVal != IsNull) {
+      populate_regions(&tetgenInstance->meshInput.tetgenInput.regions,
+                       aimInputs[Regions-1].length,
+                       aimInputs[Regions-1].vals.tuple);
     }
-    if (aimInputs[aim_getIndex(aimInfo, "Holes", ANALYSISIN) - 1].nullVal != IsNull) {
-      populate_holes(&tetgenInstance[iIndex].meshInput.tetgenInput.holes,
-                     aimInputs[aim_getIndex(aimInfo, "Holes", ANALYSISIN) - 1].length,
-                     aimInputs[aim_getIndex(aimInfo, "Holes", ANALYSISIN) - 1].vals.tuple);
-    }
-
-    if (aimInputs[aim_getIndex(aimInfo, "Mesh_Gen_Input_String", ANALYSISIN)-1].nullVal != IsNull) {
-
-        tetgenInstance[iIndex].meshInput.tetgenInput.meshInputString = EG_strdup(aimInputs[aim_getIndex(aimInfo, "Mesh_Gen_Input_String", ANALYSISIN)-1].vals.string);
-        if (tetgenInstance[iIndex].meshInput.tetgenInput.meshInputString == NULL) return EGADS_MALLOC;
+    if (aimInputs[Holes-1].nullVal != IsNull) {
+      populate_holes(&tetgenInstance->meshInput.tetgenInput.holes,
+                     aimInputs[Holes-1].length,
+                     aimInputs[Holes-1].vals.tuple);
     }
 
-    status = populate_bndCondStruct_from_mapAttrToIndexStruct(&tetgenInstance[iIndex].attrMap, &tetgenInstance[iIndex].meshInput.bndConds);
+    if (aimInputs[Mesh_Gen_Input_String-1].nullVal != IsNull) {
+
+        tetgenInstance->meshInput.tetgenInput.meshInputString =
+            EG_strdup(aimInputs[Mesh_Gen_Input_String-1].vals.string);
+        if (tetgenInstance->meshInput.tetgenInput.meshInputString == NULL)
+            return EGADS_MALLOC;
+    }
+
+    status = populate_bndCondStruct_from_mapAttrToIndexStruct(&tetgenInstance->attrMap,
+                                                              &tetgenInstance->meshInput.bndConds);
     if (status != CAPS_SUCCESS) return status;
 
     // Call tetgen volume mesh interface
-    for (body = 0; body < tetgenInstance[iIndex].numVolumeMesh; body++) {
+    for (body = 0; body < tetgenInstance->numVolumeMesh; body++) {
 
         // Call tetgen volume mesh interface for each body
-        if (tetgenInstance[iIndex].numVolumeMesh > 1) {
+        if (tetgenInstance->numVolumeMesh > 1) {
             printf("Getting volume mesh for body %d (of %d)\n", body+1, numBody);
 
-            status = tetgen_VolumeMesh(tetgenInstance[iIndex].meshInput,
-                                      &tetgenInstance[iIndex].volumeMesh[body].referenceMesh[0],
-                                      &tetgenInstance[iIndex].volumeMesh[body]);
+            status = tetgen_VolumeMesh(aimInfo,
+                                       tetgenInstance->meshInput,
+                                      &tetgenInstance->volumeMesh[body].referenceMesh[0],
+                                      &tetgenInstance->volumeMesh[body]);
         } else {
             printf("Getting volume mesh\n");
 
-            status = tetgen_VolumeMesh(tetgenInstance[iIndex].meshInput,
-                                      &tetgenInstance[iIndex].volumeMesh[body],
-                                      &tetgenInstance[iIndex].volumeMesh[body]);
+            status = tetgen_VolumeMesh(aimInfo,
+                                       tetgenInstance->meshInput,
+                                      &tetgenInstance->volumeMesh[body],
+                                      &tetgenInstance->volumeMesh[body]);
         }
 
         if (status != CAPS_SUCCESS) {
 
-            if (numBody > 1) printf("TetGen volume mesh failed on body - %d!!!!\n", body+1);
+            if (numBody > 1) printf("TetGen volume mesh failed on body - %d!!!!\n",
+                                    body+1);
             else printf("TetGen volume mesh failed!!!!\n");
             return status;
         }
     }
 
     // If filename is not NULL write the mesh
-    if (tetgenInstance[iIndex].meshInput.outputFileName != NULL) {
+    if (tetgenInstance->meshInput.outputFileName != NULL) {
 
-        for (body = 0; body < tetgenInstance[iIndex].numVolumeMesh; body++) {
+        for (body = 0; body < tetgenInstance->numVolumeMesh; body++) {
 
-            if (aimInputs[aim_getIndex(aimInfo, "Multiple_Mesh", ANALYSISIN)-1].vals.integer == (int) true) {
+            if (aimInputs[Multiple_Mesh-1].vals.integer == (int) true) {
                 sprintf(bodyNumber, "%d", body);
-                filename = (char *) EG_alloc((strlen(tetgenInstance[iIndex].meshInput.outputFileName) +
-                                              strlen(tetgenInstance[iIndex].meshInput.outputDirectory)+2+strlen("_Vol")+strlen(bodyNumber))*sizeof(char));
+                filename = (char *) EG_alloc((strlen(tetgenInstance->meshInput.outputFileName) +
+                                              2+strlen("_Vol")+strlen(bodyNumber))*sizeof(char));
             } else {
-                filename = (char *) EG_alloc((strlen(tetgenInstance[iIndex].meshInput.outputFileName) +
-                                              strlen(tetgenInstance[iIndex].meshInput.outputDirectory)+2)*sizeof(char));
-
+                filename = (char *) EG_alloc((strlen(tetgenInstance->meshInput.outputFileName) +2)*sizeof(char));
             }
 
             if (filename == NULL) return EGADS_MALLOC;
 
-            strcpy(filename, tetgenInstance[iIndex].meshInput.outputDirectory);
-#ifdef WIN32
-            strcat(filename, "\\");
-#else
-            strcat(filename, "/");
-#endif
-            strcat(filename, tetgenInstance[iIndex].meshInput.outputFileName);
+            strcpy(filename, tetgenInstance->meshInput.outputFileName);
 
-            if (aimInputs[aim_getIndex(aimInfo, "Multiple_Mesh", ANALYSISIN)-1].vals.integer == (int) true) {
+            if (aimInputs[Multiple_Mesh-1].vals.integer == (int) true) {
                 strcat(filename,"_Vol");
                 strcat(filename,bodyNumber);
             }
 
-            if (strcasecmp(tetgenInstance[iIndex].meshInput.outputFormat, "AFLR3") == 0) {
+            if (strcasecmp(tetgenInstance->meshInput.outputFormat, "AFLR3") == 0) {
 
-                status = mesh_writeAFLR3(filename,
-                                         tetgenInstance[iIndex].meshInput.outputASCIIFlag,
-                                         &tetgenInstance[iIndex].volumeMesh[body],
+                status = mesh_writeAFLR3(aimInfo,
+                                         filename,
+                                         tetgenInstance->meshInput.outputASCIIFlag,
+                                         &tetgenInstance->volumeMesh[body],
                                          1.0);
 
-            } else if (strcasecmp(tetgenInstance[iIndex].meshInput.outputFormat, "VTK") == 0) {
+            } else if (strcasecmp(tetgenInstance->meshInput.outputFormat, "VTK") == 0) {
 
-                status = mesh_writeVTK(filename,
-                                       tetgenInstance[iIndex].meshInput.outputASCIIFlag,
-                                       &tetgenInstance[iIndex].volumeMesh[body],
+                status = mesh_writeVTK(aimInfo,
+                                       filename,
+                                       tetgenInstance->meshInput.outputASCIIFlag,
+                                       &tetgenInstance->volumeMesh[body],
                                        1.0);
 
-            } else if (strcasecmp(tetgenInstance[iIndex].meshInput.outputFormat, "SU2") == 0) {
+            } else if (strcasecmp(tetgenInstance->meshInput.outputFormat, "SU2") == 0) {
 
-                status = mesh_writeSU2(filename,
-                                       tetgenInstance[iIndex].meshInput.outputASCIIFlag,
-                                       &tetgenInstance[iIndex].volumeMesh[body],
-                                       tetgenInstance[iIndex].meshInput.bndConds.numBND,
-                                       tetgenInstance[iIndex].meshInput.bndConds.bndID,
+                status = mesh_writeSU2(aimInfo,
+                                       filename,
+                                       tetgenInstance->meshInput.outputASCIIFlag,
+                                       &tetgenInstance->volumeMesh[body],
+                                       tetgenInstance->meshInput.bndConds.numBND,
+                                       tetgenInstance->meshInput.bndConds.bndID,
                                        1.0);
 
-            } else if (strcasecmp(tetgenInstance[iIndex].meshInput.outputFormat, "Tecplot") == 0) {
+            } else if (strcasecmp(tetgenInstance->meshInput.outputFormat, "Tecplot") == 0) {
 
-                status = mesh_writeTecplot(filename,
-                                           tetgenInstance[iIndex].meshInput.outputASCIIFlag,
-                                           &tetgenInstance[iIndex].volumeMesh[body],
+                status = mesh_writeTecplot(aimInfo,
+                                           filename,
+                                           tetgenInstance->meshInput.outputASCIIFlag,
+                                           &tetgenInstance->volumeMesh[body],
                                            1.0);
 
-            } else if (strcasecmp(tetgenInstance[iIndex].meshInput.outputFormat, "Nastran") == 0) {
+            } else if (strcasecmp(tetgenInstance->meshInput.outputFormat, "Nastran") == 0) {
 
-                status = mesh_writeNASTRAN(filename,
-                                           tetgenInstance[iIndex].meshInput.outputASCIIFlag,
-                                           &tetgenInstance[iIndex].volumeMesh[body],
+                status = mesh_writeNASTRAN(aimInfo,
+                                           filename,
+                                           tetgenInstance->meshInput.outputASCIIFlag,
+                                           &tetgenInstance->volumeMesh[body],
                                            LargeField,
                                            1.0);
 
             } else {
-                printf("Unrecognized mesh format, \"%s\", the volume mesh will not be written out\n", tetgenInstance[iIndex].meshInput.outputFormat);
+                printf("Unrecognized mesh format, \"%s\", the volume mesh will not be written out\n",
+                       tetgenInstance->meshInput.outputFormat);
             }
 
             if (filename != NULL) EG_free(filename);
@@ -1032,22 +878,44 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath, capsValue *a
     goto cleanup;
 
     cleanup:
+        if (status != CAPS_SUCCESS)
+          printf("Error: tetgenAIM status %d\n", status);
 
-        if (meshProp != NULL) {
-
-            for (i = 0; i < numMeshProp; i++) {
-
-                (void) destroy_meshSizingStruct(&meshProp[i]);
-            }
-
-            EG_free(meshProp);
-        }
+//        if (meshProp != NULL) {
+//
+//            for (i = 0; i < numMeshProp; i++) {
+//
+//                (void) destroy_meshSizingStruct(&meshProp[i]);
+//            }
+//
+//            EG_free(meshProp);
+//        }
 
         return status;
 }
 
+
+/* the execution code from above should be moved here */
 extern "C" int
-aimOutputs(/*@unused@*/ int iIndex, void *aimInfo,  int index, char **aoname, capsValue *form)
+aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc, int *state)
+{
+  *state = 0;
+  return CAPS_SUCCESS;
+}
+
+
+/* no longer optional and needed for restart */
+extern "C" int
+aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+                /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
+{
+  return CAPS_SUCCESS;
+}
+
+
+extern "C" int
+aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,  int index,
+           char **aoname, capsValue *form)
 {
     /*! \page aimOutputsTetGen AIM Outputs
      * The following list outlines the TetGen AIM outputs available through the AIM interface.
@@ -1055,201 +923,116 @@ aimOutputs(/*@unused@*/ int iIndex, void *aimInfo,  int index, char **aoname, ca
      * - <B>Done</B> = True if a volume mesh(es) was created, False if not.
      */
 
+    int status = CAPS_SUCCESS;
+
 #ifdef DEBUG
-    printf(" tetgenAIM/aimOutputs instance = %d  index = %d!\n", iIndex, index);
+    printf(" tetgenAIM/aimOutputs  index = %d!\n", index);
 #endif
 
-    *aoname = EG_strdup("Done");
-    form->type = Boolean;
-    form->vals.integer = (int) false;
+    if (index == Done) {
 
-    return CAPS_SUCCESS;
+        *aoname = EG_strdup("Done");
+        form->type = Boolean;
+        form->vals.integer = (int) false;
+
+    } else if (index == Volume_Mesh) {
+
+        *aoname           = AIM_NAME(Volume_Mesh);
+        form->type        = Pointer;
+        form->dim         = Vector;
+        form->lfixed      = Change;
+        form->sfixed      = Change;
+        form->vals.AIMptr = NULL;
+        form->nullVal     = IsNull;
+        AIM_STRDUP(form->units, "meshStruct", aimInfo, status);
+
+        /*! \page aimOutputsTetGen
+         * - <B> Volume_Mesh </B> <br>
+         * The volume mesh for a link
+         */
+
+    } else {
+        status = CAPS_BADINDEX;
+        AIM_STATUS(aimInfo, status, "Unknown output index %d!", index);
+    }
+
+    AIM_NOTNULL(*aoname, aimInfo, status);
+
+cleanup:
+    if (status != CAPS_SUCCESS) AIM_FREE(*aoname);
+    return status;
 }
 
 
 extern "C" int
-aimCalcOutput(int iIndex, void *aimInfo, const char *analysisPath, int index, capsValue *val,
-        capsErrs **errors)
+aimCalcOutput(void *instStore, void *aimInfo, int index, capsValue *val)
 {
-    int i; //Indexing
+    int i, status = CAPS_SUCCESS;
+    aimStorage *tetgenInstance;
 
 #ifdef DEBUG
-    printf(" tetgenAIM/aimCalcOutput instance = %d  index = %d!\n", iIndex, index);
+    printf(" tetgenAIM/aimCalcOutput  index = %d!\n", index);
 #endif
+    tetgenInstance = (aimStorage *) instStore;
 
-    *errors           = NULL;
-    val->vals.integer = (int) false;
+    if (Done == index) {
 
-    // Check to see if a volume mesh was generated - maybe a file was written, maybe not
-    for (i = 0; i < tetgenInstance[iIndex].numVolumeMesh; i++) {
-        // Check to see if a volume mesh was generated
-        if (tetgenInstance[iIndex].volumeMesh[i].numElement != 0 &&
-            tetgenInstance[iIndex].volumeMesh[i].meshType == VolumeMesh) {
+        val->vals.integer = (int) false;
 
-            val->vals.integer = (int) true;
+        // Check to see if a volume mesh was generated - maybe a file was written, maybe not
+        for (i = 0; i < tetgenInstance->numVolumeMesh; i++) {
+            // Check to see if a volume mesh was generated
+            if (tetgenInstance->volumeMesh[i].numElement != 0 &&
+                tetgenInstance->volumeMesh[i].meshType == VolumeMesh) {
 
-        } else {
+                val->vals.integer = (int) true;
 
-            val->vals.integer = (int) false;
-
-            if (tetgenInstance[iIndex].numVolumeMesh > 1) {
-                printf("No tetrahedral elements were generated for volume mesh %d\n", i+1);
             } else {
-                printf("No tetrahedral elements were generate\n");
-            }
 
-            return CAPS_SUCCESS;
+                val->vals.integer = (int) false;
+
+                if (tetgenInstance->numVolumeMesh > 1) {
+                    printf("No tetrahedral elements were generated for volume mesh %d\n", i+1);
+                } else {
+                    printf("No tetrahedral elements were generate\n");
+                }
+
+                return CAPS_SUCCESS;
+            }
         }
+
+    } else if (Volume_Mesh == index) {
+
+        // Return the volume meshes
+        val->nrow        = tetgenInstance->numVolumeMesh;
+        val->vals.AIMptr = tetgenInstance->volumeMesh;
+
+    } else {
+
+        status = CAPS_BADINDEX;
+        AIM_STATUS(aimInfo, status, "Unknown output index %d!", index);
+
     }
 
-    return CAPS_SUCCESS;
+cleanup:
+
+    return status;
 }
 
 extern "C" void
-aimCleanup()
+aimCleanup(void *instStore)
 {
-    int iIndex; //Indexing
-
     int status; // Function return status
+    aimStorage *tetgenInstance;
 
 #ifdef DEBUG
     printf(" tetgenAIM/aimCleanup!\n");
-
 #endif
+    tetgenInstance = (aimStorage *) instStore;
 
-    // Clean up tetgenInstance data
-    for ( iIndex = 0; iIndex < numInstance; iIndex++) {
+    status = destroy_aimStorage(tetgenInstance);
+    if (status != CAPS_SUCCESS)
+        printf("Status = %d, tetgenAIM  aimStorage cleanup!!!\n", status);
 
-        printf(" Cleaning up tetgenInstance - %d\n", iIndex);
-
-        status = destroy_aimStorage(iIndex);
-        if (status != CAPS_SUCCESS) printf("Status = %d, tetgenAIM instance %d, aimStorage cleanup!!!\n", status, iIndex);
-    }
-
-    if (tetgenInstance != NULL) EG_free(tetgenInstance);
-    tetgenInstance = NULL;
-    numInstance = 0;
-}
-
-/************************************************************************/
-
-/*
- * since this AIM does not support field variables or CAPS bounds, the
- * following functions are not required to be filled in except for aimDiscr
- * which just stores away our bodies and aimFreeDiscr that does some cleanup
- * when CAPS terminates
- */
-
-
-
-extern "C" int
-aimFreeDiscr(capsDiscr *discr)
-{
-#ifdef DEBUG
-    printf(" tetgenAIM/aimFreeDiscr instance = %d!\n", discr->instance);
-#endif
-
-    return CAPS_SUCCESS;
-}
-
-extern "C" int
-aimDiscr(char *transferName, capsDiscr *discr)
-{
-    int stat, inst;
-
-    inst = discr->instance;
-
-#ifdef DEBUG
-    printf(" tetgenAIM/aimDiscr: transferName = %s, instance = %d!\n", transferName, inst);
-#endif
-
-    if ((inst < 0) || (inst >= numInstance)) return CAPS_BADINDEX;
-
-    stat = aimFreeDiscr(discr);
-    if (stat != CAPS_SUCCESS) return stat;
-
-    return CAPS_SUCCESS;
-}
-
-
-extern "C" int
-aimLocateElement(/*@unused@*/ capsDiscr *discr, /*@unused@*/ double *params,
-        /*@unused@*/ double *param,    /*@unused@*/ int *eIndex,
-        /*@unused@*/ double *bary)
-{
-#ifdef DEBUG
-    printf(" tetgenAIM/aimLocateElement instance = %d!\n", discr->instance);
-#endif
-
-    return CAPS_SUCCESS;
-}
-
-extern "C" int
-aimTransfer(/*@unused@*/ capsDiscr *discr, /*@unused@*/ const char *name,
-        /*@unused@*/ int npts, /*@unused@*/ int rank,
-        /*@unused@*/ double *data, /*@unused@*/ char **units)
-{
-#ifdef DEBUG
-    printf(" tetgenAIM/aimTransfer name = %s  instance = %d  npts = %d/%d!\n",
-            name, discr->instance, npts, rank);
-#endif
-
-    return CAPS_SUCCESS;
-}
-
-extern "C" int
-aimInterpolation(/*@unused@*/ capsDiscr *discr, /*@unused@*/ const char *name,
-        /*@unused@*/ int eIndex, /*@unused@*/ double *bary,
-        /*@unused@*/ int rank, /*@unused@*/ double *data,
-        /*@unused@*/ double *result)
-{
-#ifdef DEBUG
-    printf(" tetgenAIM/aimInterpolation  %s  instance = %d!\n",
-            name, discr->instance);
-#endif
-
-    return CAPS_SUCCESS;
-}
-
-
-extern "C" int
-aimInterpolateBar(/*@unused@*/ capsDiscr *discr, /*@unused@*/ const char *name,
-        /*@unused@*/ int eIndex, /*@unused@*/ double *bary,
-        /*@unused@*/ int rank, /*@unused@*/ double *r_bar,
-        /*@unused@*/ double *d_bar)
-{
-#ifdef DEBUG
-    printf(" tetgenAIM/aimInterpolateBar  %s  instance = %d!\n",
-            name, discr->instance);
-#endif
-
-    return CAPS_SUCCESS;
-}
-
-
-extern "C" int
-aimIntegration(/*@unused@*/ capsDiscr *discr, /*@unused@*/ const char *name,
-        /*@unused@*/ int eIndex, /*@unused@*/ int rank,
-        /*@unused@*/ /*@null@*/ double *data, /*@unused@*/ double *result)
-{
-#ifdef DEBUG
-    printf(" tetgenAIM/aimIntegration  %s  instance = %d!\n",
-            name, discr->instance);
-#endif
-
-    return CAPS_SUCCESS;
-}
-
-
-extern "C" int
-aimIntegrateBar(/*@unused@*/ capsDiscr *discr, /*@unused@*/ const char *name,
-        /*@unused@*/ int eIndex, /*@unused@*/ int rank,
-        /*@unused@*/ double *r_bar, /*@unused@*/ double *d_bar)
-{
-#ifdef DEBUG
-    printf(" tetgenAIM/aimIntegrateBar  %s  instance = %d!\n",
-            name, discr->instance);
-#endif
-
-    return CAPS_SUCCESS;
+    EG_free(tetgenInstance);
 }

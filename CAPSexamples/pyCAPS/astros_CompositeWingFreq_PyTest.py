@@ -1,19 +1,12 @@
-## [importPrint]
-from __future__ import print_function
-## [importPrint]
-
-## [import]
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import modules
 import os
 import sys
 import shutil
 import argparse
-## [import]
 
-## [environment]
 # ASTROS_ROOT should be the path containing ASTRO.D01 and ASTRO.IDX
 try:
    ASTROS_ROOT = os.environ["ASTROS_ROOT"]
@@ -21,62 +14,60 @@ try:
 except KeyError:
    print("Please set the environment variable ASTROS_ROOT")
    sys.exit(1)
-## [environment]
 
-## [arguments]
 # Setup and read command line options. Please note that this isn't required for pyCAPS
 parser = argparse.ArgumentParser(description = 'Astros CompositeWingFreq PyTest Example',
                                  prog = 'astros_CompositeWingFreq_PyTest',
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = ".", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
-## [arguments]
 
-## [initateProblem]
-# Initialize pyCAPS object
-myProblem = capsProblem()
-## [initateProblem]
+workDir = os.path.join(str(args.workDir[0]), "AstrosCompositeWing_Freq")
 
-## [geometry]
 # Load CSM file
 geometryScript = os.path.join("..","csmData","compositeWing.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
-## [geometry]
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
-## [loadAIM]
-# Load astros aim
-myAnalysis = myProblem.loadAIM( aim = "astrosAIM",
-                                altName = "astros",
-                                analysisDir = os.path.join(str(args.workDir[0]), "AstrosCompositeWing_Freq") )
-## [loadAIM]
+# Create astros aim
+astros = myProblem.analysis.create( aim = "astrosAIM",
+                                    name = "astros" )
 
 # Setup bound information for visualization
 numEigenVector = 5
-eigenVector = []
+eigenVectors = []
 for i in range(numEigenVector):
-    eigenVector.append("EigenVector_" + str(i+1))
+    eigenVectors.append("EigenVector_" + str(i+1))
 
-transfers = ["wing"]
-for i in transfers:
-    myProblem.createDataBound(variableName = eigenVector,
-                              aimSrc = ["astros"]*len(eigenVector),
-                              capsBound = i)
+# Create the capsBounds for data transfer
+boundNames = ["wing"]
+for boundName in boundNames:
+    # Create the bound
+    bound = myProblem.bound.create(boundName)
+    
+    # Create the vertex sets on the bound for astros analysis
+    astrosVset = bound.vertexSet.create(astros)
+    
+    # Create eigenVector data sets
+    for eigenVector in eigenVectors:
+        astros_eigenVector = astrosVset.dataSet.create(eigenVector, pyCAPS.fType.FieldOut)
 
-## [setInputs]
+    # Close the bound as complete (cannot create more vertex or data sets)
+    bound.close()
+
 # Set project name so a mesh file is generated
 projectName = "astros_CompositeWing"
-myAnalysis.setAnalysisVal("Proj_Name", projectName)
-myAnalysis.setAnalysisVal("Edge_Point_Max", 10)
-myAnalysis.setAnalysisVal("File_Format", "Small")
-myAnalysis.setAnalysisVal("Mesh_File_Format", "Large")
-myAnalysis.setAnalysisVal("Analysis_Type", "Modal");
-## [setInputs]
+astros.input.Proj_Name        = projectName
+astros.input.Edge_Point_Max   = 10
+astros.input.File_Format      = "Small"
+astros.input.Mesh_File_Format = "Large"
+astros.input.Analysis_Type    = "Modal"
 
-## [defineMaterials]
 Aluminum  = {"youngModulus" : 10.5E6 ,
              "poissonRatio" : 0.3,
              "density"      : 0.1/386,
@@ -95,11 +86,9 @@ Graphite_epoxy = {"materialType"        : "Orthotropic",
                   "shearAllow"          : 19.0e-3,
                   "allowType"           : 1}
 
-myAnalysis.setAnalysisVal("Material", [("Aluminum", Aluminum),
-                                       ("Graphite_epoxy", Graphite_epoxy)])
-## [defineMaterials]
+astros.input.Material = {"Aluminum": Aluminum,
+                         "Graphite_epoxy": Graphite_epoxy}
 
-## [defineProperties]
 aluminum  = {"propertyType"         : "Shell",
              "material"             : "Aluminum",
              "bendingInertiaRatio"  : 1.0, # Default - not necesssary
@@ -116,37 +105,29 @@ composite  = {"propertyType"           : "Composite",
               "symmetricLaminate"      : True,
               "compositeFailureTheory" : "STRAIN" }
 
-#myAnalysis.setAnalysisVal("Property", ("wing", aluminum))
-myAnalysis.setAnalysisVal("Property", ("wing", composite))
-## [defineProperties]
+#astros.input.Property = {"wing": aluminum}
+astros.input.Property = {"wing": composite}
 
-## [defineConstraints]
 constraint = {"groupName" : "root",
               "dofConstraint" : 123456}
 
-myAnalysis.setAnalysisVal("Constraint", ("root", constraint))
-## [defineConstraints]
+astros.input.Constraint = {"root": constraint}
 
-## [defineAnalysis]
 eigen = { "extractionMethod"     : "MGIV",
           "frequencyRange"       : [0, 1000],
           "numEstEigenvalue"     : 1,
           "numDesiredEigenvalue" : 10,
           "eigenNormaliztion"    : "MASS"}
 
-myAnalysis.setAnalysisVal("Analysis", ("EigenAnalysis", eigen))
-## [defineAnalysis]
+astros.input.Analysis = {"EigenAnalysis": eigen}
 
-## [preAnalysis]
-myAnalysis.preAnalysis()
-## [preAnalysis]
+astros.preAnalysis()
 
-## [run]
 ####### Run Astros ####################
 print ("\n\nRunning Astros......")
 currentDirectory = os.getcwd() # Get our current working directory
 
-os.chdir(myAnalysis.analysisDir) # Move into test directory
+os.chdir(astros.analysisDir) # Move into test directory
 
 # Copy files needed to run astros
 astros_files = ["ASTRO.D01",  # *.DO1 file
@@ -162,33 +143,24 @@ if (args.noAnalysis == False):
 os.chdir(currentDirectory) # Move back to working directory
 print ("Done running Astros!")
 ######################################
-## [run]
 
-## [postAnalysis]
 # Run AIM post-analysis
-myAnalysis.postAnalysis()
-## [postAnalysis]
+astros.postAnalysis()
 
 # Get Eigen-frequencies
 print ("\nGetting results for natural frequencies.....")
-natrualFreq = myProblem.analysis["astros"].getAnalysisOutVal("EigenFrequency")
+natrualFreq = myProblem.analysis["astros"].output.EigenFrequency
 
 mode = 1
 for i in natrualFreq:
     print ("Natural freq (Mode {:d}) = ".format(mode) + '{:.5f} '.format(i) + "(Hz)")
     mode += 1
 
-for i in transfers:
-    for eigenName in eigenVector:
-        #myProblem.dataBound[i].executeTransfer(eigenName)
-        #myProblem.dataBound[i].dataSetSrc[eigenName].viewData()
-        #myProblem.dataBound[i].dataSetSrc[eigenName].writeTecplot(filename = myAnalysis.analysisDir + "/Data")
-        #myProblem.dataBound[i].viewData()
-        pass
-    myProblem.dataBound[i].writeTecplot(myAnalysis.analysisDir + "/Data_All_Eigen")
+fp = open(astros.analysisDir + "/Data_All_Eigen.dat", "w")
 
+for i in myProblem.bound.keys():
+    for j in myProblem.bound[i].vertexSet.keys():
+        for eigenVector in eigenVectors:
+            myProblem.bound[i].vertexSet[j].dataSet[eigenVector].writeTecplot(file=fp)
 
-## [close]
-# Close CAPS
-myProblem.closeCAPS()
-## [close]
+fp.close()

@@ -33,10 +33,13 @@ $(ODIR)/tetgen_Interface.o:	tetgen_Interface.cpp ../utils/meshUtils.h
 		-DTETLIBRARY tetgen_Interface.cpp -o $(ODIR)/tetgen_Interface.o
 
 $(ODIR)/predicates.o:	$(TETGEN)/predicates.cxx
-	$(CXX) -c $(COPTS) -O0 $(TETGEN)/predicates.cxx -o $(ODIR)/predicates.o
+	$(CXX) -c $(COPTS) -O0 -w $(TETGEN)/predicates.cxx -o $(ODIR)/predicates.o
 
 $(ODIR)/tetgen.o:	$(TETGEN)/tetgen.cxx
 	$(CXX) -c $(COPTS) -DTETLIBRARY -w $(TETGEN)/tetgen.cxx -o $(ODIR)/tetgen.o
+
+lint:
+	$(LINT) -I../../include -I$(IDIR) $(wildcard *.c) -uniondef -exportlocal -nullpass
 
 clean:
 	-rm -f $(ODIR)/tetgen.o $(ODIR)/predicates.o $(ODIR)/tetgen_Interface.o \
@@ -45,8 +48,9 @@ clean:
 cleanall:	clean
 	-rm -f $(LDIR)/tetgenAIM.so
 
-dox:
-	(cd doc; doxygen tetgenAIM_dox.cfg; cd latex; make; mv refman.pdf TetgenAIM.pdf)
+dox: doc/html/index.html
+doc/html/index.html: $(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
+	(cd doc; doxygen tetgenAIM_dox.cfg; cd latex; make; mv refman.pdf tetgenAIM.pdf)
 
 doxclean:
 	(cd doc; rm -f INPUT; rm -rf html latex; rm -f tetgenAIM.tag)

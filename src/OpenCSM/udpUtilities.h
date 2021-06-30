@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -48,6 +48,7 @@
 #define PI       3.1415926535897931159979635
 #define TWOPI    6.2831853071795862319959269
 #define NINT(A)  (((A) < 0)   ? (int)(A-0.5) : (int)(A+0.5))
+#define SQR(A)   ((A)*(A))
 
 #define ROUTINE(NAME) char routine[] = #NAME ;\
     if (routine[0] == '\0') printf("bad routine(%s)\n", routine);
@@ -62,7 +63,7 @@
     goto cleanup;
 #define MALLOC(PTR,TYPE,SIZE)                                           \
     if (PTR != NULL) {                                                  \
-        printf("ERROR:: MALLOC overwrites for %s=%llx (called from %s:%d)\n", #PTR, (long long)PTR, routine, __LINE__); \
+        printf("ERROR:: MALLOC overwrites for %s (called from %s:%d)\n", #PTR, routine, __LINE__); \
         status = EGADS_MALLOC;                                          \
         goto cleanup;                                                   \
     }                                                                   \
@@ -87,6 +88,13 @@
     }                                                           \
     PTR = NULL;
 
+
+#define SPLINT_CHECK_FOR_NULL(X)                                        \
+    if ((X) == NULL) {                                                  \
+        printf("ERROR:: SPLINT found %s is NULL (called from %s:%d)\n", #X, routine, __LINE__); \
+        status = OCSM_UNKNOWN;                                          \
+        goto cleanup;                                                   \
+    }
 
 /* definition of the udp structures */
 typedef struct {

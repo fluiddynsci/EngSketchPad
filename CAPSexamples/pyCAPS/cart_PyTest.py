@@ -1,7 +1,3 @@
-## [importPrint]
-from __future__ import print_function
-## [importPrint]
-
 # Import pyCAPS and os module
 ## [import]
 import pyCAPS
@@ -25,13 +21,6 @@ workDir = os.path.join(str(args.workDir[0]), "cart3dTest")
 ## [argparse]
 
 # -----------------------------------------------------------------
-# Initialize capsProblem object
-# -----------------------------------------------------------------
-## [initateProblem]
-myProblem = pyCAPS.capsProblem()
-## [initateProblem]
-
-# -----------------------------------------------------------------
 # Load CSM file and Change a design parameter - area in the geometry
 # Any despmtr from the avlWing.csm file are available inside the pyCAPS script
 # They are: thick, camber, area, aspect, taper, sweep, washout, dihedral
@@ -39,7 +28,9 @@ myProblem = pyCAPS.capsProblem()
 
 ## [geometry]
 geometryScript = os.path.join("..","csmData","cfd_airfoilSection.csm")
-myGeometry = myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 ## [geometry]
 
 # -----------------------------------------------------------------
@@ -47,8 +38,7 @@ myGeometry = myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
 # -----------------------------------------------------------------
 print ("Loading AIM")
 ## [loadAIM]
-myAnalysis = myProblem.loadAIM(aim = "cart3dAIM",
-                               analysisDir = workDir)
+myAnalysis = myProblem.analysis.create(aim = "cart3dAIM")
 ## [loadAIM]
 # -----------------------------------------------------------------
 # Also available are all aimInput values
@@ -56,13 +46,11 @@ myAnalysis = myProblem.loadAIM(aim = "cart3dAIM",
 # -----------------------------------------------------------------
 
 ## [setInputs]
-myAnalysis.setAnalysisVal("Mach", 0.95)
-myAnalysis.setAnalysisVal("alpha", 2.0)
-myAnalysis.setAnalysisVal("maxCycles", 10)
-myAnalysis.setAnalysisVal("nDiv", 6)
-myAnalysis.setAnalysisVal("maxR", 12)
-
-
+myAnalysis.input.Mach      = 0.95
+myAnalysis.input.alpha     = 2.0
+myAnalysis.input.maxCycles = 10
+myAnalysis.input.nDiv      = 6
+myAnalysis.input.maxR      = 12
 ## [setInputs]
 
 # -----------------------------------------------------------------
@@ -73,15 +61,15 @@ myAnalysis.preAnalysis()
 ## [preAnalysis]
 
 # -----------------------------------------------------------------
-# Run AVL
+# Run Cart3D
 # -----------------------------------------------------------------
-## [runAVL]
+## [runCart3D]
 print ("Running CART3D")
 currentDirectory = os.getcwd() # Get our current working directory
 os.chdir(myAnalysis.analysisDir) # Move into test directory
 os.system("flowCart -v -T");
 os.chdir(currentDirectory) # Move back to working directory
-## [runAVL]
+## [runCart3D]
 
 # -----------------------------------------------------------------
 # Run AIM post-analysis
@@ -91,21 +79,16 @@ myAnalysis.postAnalysis()
 ## [postAnalysis]
 
 
-print ("C_A  " + str(myAnalysis.getAnalysisOutVal("C_A")))
-print ("C_Y  " + str(myAnalysis.getAnalysisOutVal("C_Y")))
-print ("C_N  " + str(myAnalysis.getAnalysisOutVal("C_N")))
-print ("C_D  " + str(myAnalysis.getAnalysisOutVal("C_D")))
-print ("C_S  " + str(myAnalysis.getAnalysisOutVal("C_S")))
-print ("C_L  " + str(myAnalysis.getAnalysisOutVal("C_L")))
-print ("C_l  " + str(myAnalysis.getAnalysisOutVal("C_l")))
-print ("C_m  " + str(myAnalysis.getAnalysisOutVal("C_m")))
-print ("C_n  " + str(myAnalysis.getAnalysisOutVal("C_n")))
-print ("C_M_x  " + str(myAnalysis.getAnalysisOutVal("C_M_x")))
-print ("C_M_y  " + str(myAnalysis.getAnalysisOutVal("C_M_y")))
-print ("C_M_z  " + str(myAnalysis.getAnalysisOutVal("C_M_z")))
-
+print ("C_A  " + str(myAnalysis.output.C_A))
+print ("C_Y  " + str(myAnalysis.output.C_Y))
+print ("C_N  " + str(myAnalysis.output.C_N))
+print ("C_D  " + str(myAnalysis.output.C_D))
+print ("C_S  " + str(myAnalysis.output.C_S))
+print ("C_L  " + str(myAnalysis.output.C_L))
+print ("C_l  " + str(myAnalysis.output.C_l))
+print ("C_m  " + str(myAnalysis.output.C_m))
+print ("C_n  " + str(myAnalysis.output.C_n))
+print ("C_M_x  " + str(myAnalysis.output.C_M_x))
+print ("C_M_y  " + str(myAnalysis.output.C_M_y))
+print ("C_M_z  " + str(myAnalysis.output.C_M_z))
 ## [output]
-# -----------------------------------------------------------------
-# Close CAPS
-# -----------------------------------------------------------------
-myProblem.closeCAPS()

@@ -412,11 +412,12 @@ interpret:
 			}
 
 			/* call him back to inform him he is up */
-
+#ifndef __clang_analyzer__
 			wsi->protocol->callback(context, wsi_child,
 					 LWS_CALLBACK_CLIENT_ESTABLISHED,
 					 wsi_child->user_space,
 					 NULL, 0);
+#endif
 
 			return 0;
 
@@ -682,8 +683,9 @@ int lws_extension_callback_x_google_mux(
 				continue;
 
 			muxdebug("  %s / %s\n", wsi_parent->c_address, (char *)in);
-			if (strcmp(wsi_parent->c_address, in))
-				continue;
+#ifndef __clang_analyzer__
+			if (strcmp(wsi_parent->c_address, in)) continue;
+#endif
 			muxdebug("  %u / %u\n", wsi_parent->c_port, (unsigned int)len);
 
 			if (wsi_parent->c_port != (unsigned int)len)
@@ -978,9 +980,10 @@ handle_additions:
 			conn->wsi_children[n] = wsi_child;
 			if ((n + 1) > conn->highest_child_subchannel)
 				conn->highest_child_subchannel = n + 1;
-
+#ifndef __clang_analyzer__
 			muxdebug("Setting CHILD LIST entry %d to %p\n",
 				  n + MUX_REAL_CHILD_INDEX_OFFSET, (void *)wsi_parent);
+#endif
 			wsi_child = wsi_temp;
 		}
 		wsi->candidate_children_list = NULL;
@@ -1017,8 +1020,9 @@ handle_additions:
 		muxdebug("LWS_EXT_CALLBACK_PACKET_TX_DO_SEND: %p, "
 			 "my subchannel=%d\n",
 			 (void *)conn->wsi_parent, conn->subchannel);
-
+#ifndef __clang_analyzer__
 		pin = *((unsigned char **)in);
+#endif
 		basepin = pin;
 
 		wsi_parent = conn->wsi_parent;
@@ -1085,6 +1089,7 @@ handle_additions:
 
 			pin -= lws_addheader_mux_opcode(send_buf, len + n) + n;
 			basepin = pin;
+#ifndef __clang_analyzer__
 			pin += lws_addheader_mux_opcode(pin, len + n);
 
 			if (conn->subchannel >= 31) {
@@ -1093,6 +1098,7 @@ handle_additions:
 				*pin++ = conn->subchannel;
 			} else
 				*pin++ = (conn->subchannel << 3) | LWS_EXT_XGM_OPC__DATA;
+#endif
 		}
 
 		/*
@@ -1156,14 +1162,13 @@ handle_additions:
 
 		/* send raw if we're not a child */
 
-		if (!wsi->extension_handles)
-			return 0;
-
+		if (!wsi->extension_handles) return 0;
+#ifndef __clang_analyzer__
 		subcommand_length = lws_mux_subcommand_header(LWS_EXT_XGM_OPC__ADDCHANNEL, ongoing_subchannel, pb, len);
-
 		pb += lws_addheader_mux_opcode(pb, subcommand_length + len);
 		pb += lws_mux_subcommand_header(LWS_EXT_XGM_OPC__ADDCHANNEL, ongoing_subchannel, pb, len);
 		memcpy(pb, in, len);
+#endif
 		pb += len;
 
 		lws_issue_raw_ext_access(wsi->extension_handles, &send_buf[LWS_SEND_BUFFER_PRE_PADDING],
@@ -1215,13 +1220,14 @@ handle_additions:
 	case LWS_EXT_CALLBACK_CHECK_OK_TO_PROPOSE_EXTENSION:
 
 		/* disallow deflate-stream if we are a mux child connection */
-
+#ifndef __clang_analyzer__
 		if (strcmp(in, "deflate-stream") == 0 &&
 				 client_handshake_generation_is_for_mux_child) {
 
 			muxdebug("mux banned deflate-stream on child connection\n");
 			return 1; /* disallow */
 		}
+#endif
 		break;
 
 	default:

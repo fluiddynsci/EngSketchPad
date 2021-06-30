@@ -1,10 +1,6 @@
-## [importPrint]
-from __future__ import print_function
-## [importPrint]
-
 ## [import]
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -17,39 +13,36 @@ parser = argparse.ArgumentParser(description = 'Nastran Three Bar Pytest Example
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-## [initateProblem]
-# Initialize capsProblem object
-myProblem = capsProblem()
-## [initateProblem]
+workDir = os.path.join(args.workDir[0], "NastranThreeBarMultiLoad")
 
 ## [geometry]
 # Load CSM file
 geometryScript = os.path.join("..","csmData","feaThreeBar.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 ## [geometry]
 
 ## [loadAIM]
 # Load nastran aim
-nastranAIM = myProblem.loadAIM(aim = "nastranAIM",
-                               altName = "nastran",
-                               analysisDir= os.path.join(str(args.workDir[0]), "NastranThreeBarMultiLoad"),
-                               capsIntent = "STRUCTURE")
+nastranAIM = myProblem.analysis.create(aim = "nastranAIM",
+                                       name = "nastran")
 ## [loadAIM]
 
 ## [setInputs]
 # Set project name so a mesh file is generated
 projectName = "threebar_nastran_Test"
-nastranAIM.setAnalysisVal("Proj_Name", projectName)
-nastranAIM.setAnalysisVal("File_Format", "Free")
-nastranAIM.setAnalysisVal("Mesh_File_Format", "Large")
-nastranAIM.setAnalysisVal("Edge_Point_Max", 2);
-nastranAIM.setAnalysisVal("Edge_Point_Min", 2);
-nastranAIM.setAnalysisVal("Analysis_Type", "Static");
+nastranAIM.input.Proj_Name = projectName
+nastranAIM.input.File_Format = "Free"
+nastranAIM.input.Mesh_File_Format = "Large"
+nastranAIM.input.Edge_Point_Max = 2
+nastranAIM.input.Edge_Point_Min = 2
+nastranAIM.input.Analysis_Type = "Static"
 ## [setInputs]
 
 ## [defineMaterials]
@@ -58,7 +51,7 @@ madeupium    = {"materialType" : "isotropic",
                 "poissonRatio" : .33,
                 "density"      : 0.1}
 
-nastranAIM.setAnalysisVal("Material", [("Madeupium", madeupium)])
+nastranAIM.input.Material = {"Madeupium": madeupium}
 ## [defineMaterials]
 
 ## [defineProperties]
@@ -70,60 +63,58 @@ rod2  =   {"propertyType"     : "Rod",
           "material"          : "Madeupium",
           "crossSecArea"      : 2.0}
 
-nastranAIM.setAnalysisVal("Property", [("bar1", rod),
-                                       ("bar2", rod2),
-                                       ("bar3", rod)])
+nastranAIM.input.Property = {"bar1": rod,
+                             "bar2": rod2,
+                             "bar3": rod}
 ## [defineProperties]
 
-# Set constraints
 ## [defineConstraints]
-constraints = []
+# Set constraints
+constraints = {}
 
 constraint = {"groupName"         : ["boundary"],
               "dofConstraint"     : 123456}
-tmp = ( "conOne", constraint )
-constraints.append( tmp )
+constraints["conOne"] = constraint
 
 constraint = {"groupName"         : ["boundary"],
               "dofConstraint"     : 123}
-tmp = ( "conTwo", constraint )
-constraints.append( tmp )
+constraints["conTwo"] = constraint
 
-nastranAIM.setAnalysisVal("Constraint", constraints)
+nastranAIM.input.Constraint = constraints
 ## [defineConstraints]
 
 ## [defineLoad]
-loads = []
+loads = {}
 
 load = {"groupName"         : "force",
         "loadType"          : "GridForce",
         "forceScaleFactor"  : 20000.0,
         "directionVector"   : [0.8, -0.6, 0.0]}
-loads.append( ("loadOne", load) )
+loads["loadOne"] = load
 
 load = {"groupName"         : "force",
         "loadType"          : "GridForce",
         "forceScaleFactor"  : 20000.0,
         "directionVector"   : [-0.8, -0.6, 0.0]}
-loads.append( ("loadTwo", load) )
+loads["loadTwo"] = load
 
-nastranAIM.setAnalysisVal("Load", loads)
+nastranAIM.input.Load = loads
 ## [defineLoad]
 
 ## [defineAnalysis]
-analysisCases = []
+analysisCases = {}
 
 value = {"analysisType"         : "Static",
-         "analysisConstraint"     : "conOne",
+         "analysisConstraint"   : "conOne",
          "analysisLoad"         : "loadOne"}
-analysisCases.append( ("analysisOne", value ) )
+analysisCases["analysisOne"] = value
 
 value = {"analysisType"         : "Static",
-         "analysisConstraint"     : "conTwo",
+         "analysisConstraint"   : "conTwo",
          "analysisLoad"         : "loadTwo"}
-analysisCases.append( ("analysisTwo", value ) )
+analysisCases["analysisTwo"] = value
 
-myProblem.analysis["nastran"].setAnalysisVal("Analysis", analysisCases)
+myProblem.analysis["nastran"].input.Analysis = analysisCases
 ## [defineAnalysis]
 
 # Run AIM pre-analysis
@@ -143,8 +134,3 @@ print ("Done running Nastran!")
 ## [postAnalysis]
 nastranAIM.postAnalysis()
 ## [postAnalysis]
-
-# Close CAPS
-## [close]
-myProblem.closeCAPS()
-## [close]

@@ -111,7 +111,7 @@ skbeg           xc        yc-.20    zc-.40
     cirarc      xc        yc        zc+.45    xc        yc-.20    zc+.40
     linseg      xc        yc-.20    zc-.40
 skend
-extrude         0.70      0.00      0.00
+extrude         1.00      0.00      0.00
 name           hole
 set            body3      @nbody
 recall         1
@@ -233,9 +233,9 @@ select     edge      body2     5    body2     6    1
 set        iedge_    @iedge
 select     edge      body2     5    body2     6    2
 set        iedge_    @iedge
-select     edge      body2     6    body2     3    1
+select     edge      body2     3    body2     6    1
 set        iedge_    @iedge
-select     edge      body2     6    body2     3    2
+select     edge      body2     3    body2     6    2
 set        iedge_    @iedge
 
 select     edge      body3     1    body3     3    1
@@ -252,7 +252,7 @@ select     edge      body3     4    body3     5    1
 set        iedge_    @iedge
 select     edge      body3     5    body3     6    1
 set        iedge_    @iedge
-select     edge      body3     6    body3     3    1
+select     edge      body3     3    body3     6    1
 set        iedge_    @iedge
 
 select     edge      body1     2    body2     3    3
@@ -290,8 +290,6 @@ select     edge      body1     2    body3     4    1
 set        iedge_    @iedge
 
 select     edge      body2     3    body3     3    1
-set        iedge_    @iedge
-select     edge      body2     3    body3     3    2
 set        iedge_    @iedge
 select     edge      body2     3    body3     4    1
 set        iedge_    @iedge

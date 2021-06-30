@@ -107,6 +107,10 @@ template __declspec( dllimport )
                                              SurrealS<1> *);
 
 template __declspec( dllimport )
+         int EG_spline1dFit< double >(int, int, const double *,
+                                      const double *,
+                                      double, int *, double **);
+template __declspec( dllimport )
          int EG_spline1dFit< SurrealS<1> >(int, int, const SurrealS<1> *,
                                            const SurrealS<1> *,
                                            double, int *, SurrealS<1> **);

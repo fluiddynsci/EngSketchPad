@@ -1,8 +1,9 @@
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
 
 #include "meshTypes.h"  // Bring in mesh structures
 #include "capsTypes.h"  // Bring in CAPS types
 #include "feaTypes.h"  // Bring in FEA structures
-
+#include "miscTypes.h" 
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +20,7 @@ int fea_createMesh(void *aimInfo,
                    mapAttrToIndexStruct *loadMap,       // (in)  map from CAPSLoad names to indexes
                    mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                    mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
+                   mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
                    int *numMesh,                        // (out) total number of FEA mesh structures
                    meshStruct **feaMesh,                // (out) FEA mesh structure
                    feaProblemStruct *feaProblem );      // (out) FEA problem structure
@@ -37,6 +39,7 @@ int fea_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                   mapAttrToIndexStruct *loadMap,       // (in)  map from CAPSLoad names to indexes
                   mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                   mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
+                  mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
                   meshStruct *feaMesh);                // (out) FEA mesh structure
 
 // Set the fea analysis meta data in a mesh
@@ -46,6 +49,7 @@ int fea_setAnalysisData( mapAttrToIndexStruct *attrMap,       // (in)  map from 
                          mapAttrToIndexStruct *loadMap,       // (in)  map from CAPSLoad names to indexes
                          mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                          mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
+                         mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
                          meshStruct *feaMesh);                // (in/out) FEA mesh structure
 
 // Set feaData for a given point index and topology index. Ego faces, edges, and nodes must be provided along with attribute maps
@@ -56,19 +60,24 @@ int fea_setFEADataPoint(ego *faces, ego *edges, ego *nodes,
                         mapAttrToIndexStruct *loadMap,
                         mapAttrToIndexStruct *transferMap,
                         mapAttrToIndexStruct *connectMap,
+                        mapAttrToIndexStruct *responseMap,  
                         int pointType, int pointTopoIndex,
                         feaMeshDataStruct *feaData);// Set the feaData structure
 
 // Get the material properties from a capsTuple
-int fea_getMaterial(int numMaterialTuple,
+int fea_getMaterial(void *aimInfo,
+                    int numMaterialTuple,
                     capsTuple materialTuple[],
+                    feaUnitsStruct *feaMaterialUnits,
                     int *numMaterial,
                     feaMaterialStruct *feaMaterial[]) ;
 
 // Get the property properties from a capsTuple
-int fea_getProperty(int numPropertyTuple,
+int fea_getProperty(void *aimInfo,
+                    int numPropertyTuple,
                     capsTuple propertyTuple[],
                     mapAttrToIndexStruct *attrMap,
+                    feaUnitsStruct *feaUnits,
                     feaProblemStruct *feaProblem);
 
 // Get the constraint properties from a capsTuple
@@ -103,7 +112,17 @@ int fea_getLoad(int numLoadTuple,
 // Get the design variables from a capsTuple
 int fea_getDesignVariable(int numDesignVariableTuple,
                           capsTuple designVariableTuple[],
+                          int numDesignVariableRelationTuple,
+                          capsTuple designVariableRelationTuple[],
+                          mapAttrToIndexStruct *attrMap,
                           feaProblemStruct *feaProblem);
+
+// Get a design variable relation from a capsTuple key value pair
+int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput, 
+                                       feaDesignVariableRelationStruct *designVariableRelation,
+                                       mapAttrToIndexStruct *attrMap,
+                                       feaProblemStruct *feaProblem,
+                                       char *forceGroupName);
 
 // Get the design constraints from a capsTuple
 int fea_getDesignConstraint(int numDesignConstraintTuple,
@@ -117,6 +136,78 @@ int fea_getCoordSystem(int numBody,
                        int *numCys,
                        feaCoordSystemStruct *feaCoordSystem[]);
 
+// Get the design equations from a capsTuple
+int fea_getDesignEquation(int numEquationTuple,
+                          capsTuple equationTuple[],
+                          feaProblemStruct *feaProblem);
+
+// Get the design table constants from a capsTuple
+int fea_getDesignTable(int numConstantTuple,
+                       capsTuple constantTuple[],
+                       feaProblemStruct *feaProblem);
+
+// Get the design sensitivity responses from capsTuple
+int fea_getDesignResponse(int numDesignResponseTuple,
+                          capsTuple designResponseTuple[],
+                          mapAttrToIndexStruct *attrMap,
+                          feaProblemStruct *feaProblem);
+
+// Get the design sensitivity equation response from capsTuple
+int fea_getDesignEquationResponse(int numDesignEquationResponseTuple,
+                                  capsTuple designEquationResponseTuple[],
+                                  feaProblemStruct *feaProblem);
+
+// Get the design optimization parameters from a capsTuple
+int fea_getDesignOptParam(int numOptParam,
+                          capsTuple optParam[],
+                          feaProblemStruct *feaProblem);
+                      
+// Find feaPropertyStructs with given names in feaProblem
+// Returns array of borrowed pointers
+int fea_findPropertiesByNames(feaProblemStruct *feaProblem, 
+                             int numPropertyNames,
+                             char **propertyNames, 
+                             int *numProperties,
+                             feaPropertyStruct ***properties);
+
+// Find feaMaterialStructs with given names in feaProblem
+// Returns array of borrowed pointers
+int fea_findMaterialsByNames(feaProblemStruct *feaProblem, 
+                            int numMaterialNames, 
+                            char **materialNames,
+                            int *numMaterials, 
+                            feaMaterialStruct ***materials);
+
+// Find feaDesignVariableStructs with given names in feaProblem
+// Returns array of borrowed pointers
+int fea_findDesignVariablesByNames(feaProblemStruct *feaProblem, 
+                                   int numDesignVariableNames,
+                                   char **designVariableNames, 
+                                   int *numDesignVariables,
+                                   feaDesignVariableStruct ***designVariables);
+
+// Find feaDesignResponseStructs with given names in feaProblem
+// Returns array of borrowed pointers
+int fea_findDesignResponsesByNames(feaProblemStruct *feaProblem, 
+                                   int numDesignResponseNames,
+                                   char **designResponseNames, 
+                                   int *numDesignResponses,
+                                   feaDesignResponseStruct ***designResponses);
+
+// Find feaDesignEquationResponseStructs with given names in feaProblem
+// Returns array of borrowed pointers
+int fea_findEquationResponsesByNames(feaProblemStruct *feaProblem, 
+                                   int numEquationResponseNames,
+                                   char **equationResponseNames, 
+                                   int *numEquationResponses,
+                                   feaDesignEquationResponseStruct ***equationResponses);
+
+// Find feaDesignEquationStruct with given equationName in feaProblem
+// Returns borrowed pointer
+int fea_findEquationByName(feaProblemStruct *feaProblem, 
+                           char *equationName, 
+                           feaDesignEquationStruct **equation);
+
 // Initiate (0 out all values and NULL all pointers) of feaProperty in the feaPropertyStruct structure format
 int initiate_feaPropertyStruct(feaPropertyStruct *feaProperty);
 
@@ -128,6 +219,12 @@ int initiate_feaMaterialStruct(feaMaterialStruct *feaMaterial);
 
 // Destroy (0 out all values and free and NULL all pointers) of feaMaterial in the feaMaterialStruct structure format
 int destroy_feaMaterialStruct(feaMaterialStruct *feaMaterial);
+
+// Initiate (0 out all values and NULL all pointers) of feaUnits in the feaUnitsStruct structure format
+int initiate_feaUnitsStruct(feaUnitsStruct *feaUnits);
+
+// Destroy (0 out all values and NULL all pointers) of feaUnits in the feaUnitsStruct structure format
+int destroy_feaUnitsStruct(feaUnitsStruct *feaUnits);
 
 // Initiate (0 out all values and NULL all pointers) of feaConstraint in the feaConstraintStruct structure format
 int initiate_feaConstraintStruct(feaConstraintStruct *feaConstraint);
@@ -199,7 +296,43 @@ int destroy_feaAeroRefStruct(feaAeroRefStruct *feaAeroRef);
 int initiate_feaConnectionStruct(feaConnectionStruct *feaConnect);
 
 // Destroy (0 out all values and NULL all pointers) of feaConnect in the feaConnectionStruct structure format
-int Destroy_feaConnectionStruct(feaConnectionStruct *feaConnect);
+int destroy_feaConnectionStruct(feaConnectionStruct *feaConnect);
+
+// Initiate (0 out all values and NULL all pointers) of feaDesignEquationStruct
+int initiate_feaDesignEquationStruct(feaDesignEquationStruct *equation);
+
+// Destroy (0 out all values and NULL all pointers) of feaDesignEquationStruct
+int destroy_feaDesignEquationStruct(feaDesignEquationStruct *equation);
+
+// Initiate (0 out all values and NULL all pointers) of feaDesignResponseStruct
+int initiate_feaDesignResponseStruct(feaDesignResponseStruct *response);
+
+// Destroy (0 out all values and NULL all pointers) of feaDesignResponseStruct
+int destroy_feaDesignResponseStruct(feaDesignResponseStruct *response);
+
+// Initiate (0 out all values and NULL all pointers) of feaDesignEquationResponseStruct
+int initiate_feaDesignEquationResponseStruct(feaDesignEquationResponseStruct* equationResponse);
+
+// Destroy (0 out all values and NULL all pointers) of feaDesignEquationResponseStruct
+int destroy_feaDesignEquationResponseStruct(feaDesignEquationResponseStruct* equationResponse);
+
+// Initiate (0 out all values and NULL all pointers) of feaDesignTableStruct
+int initiate_feaDesignTableStruct(feaDesignTableStruct *table);
+
+// Destroy (0 out all values and NULL all pointers) of feaDesignTableStruct
+int destroy_feaDesignTableStruct(feaDesignTableStruct *table);
+
+// Initiate (0 out all values and NULL all pointers) of feaDesignOptParamStruct
+int initiate_feaDesignOptParamStruct(feaDesignOptParamStruct *table);
+
+// Destroy (0 out all values and NULL all pointers) of feaDesignOptParamStruct
+int destroy_feaDesignOptParamStruct(feaDesignOptParamStruct *table);
+
+// Initiate (0 out all values and NULL all pointers) of feaDesignVariableRelationStruct
+int initiate_feaDesignVariableRelationStruct(feaDesignVariableRelationStruct *relation);
+
+// Destroy (0 out all values and NULL all pointers) of feaDesignVariableRelationStruct
+int destroy_feaDesignVariableRelationStruct(feaDesignVariableRelationStruct *relation);
 
 // Transfer external pressure from the discrObj into the feaLoad structure
 int fea_transferExternalPressure(void *aimInfo, meshStruct *feaMesh, feaLoadStruct *feaLoad);
@@ -209,6 +342,23 @@ int fea_retrieveAeroRef(int numBody, ego *bodies, feaAeroRefStruct *feaAeroRef);
 
 // Assign element "subtypes" based on properties set
 int fea_assignElementSubType(int numProperty, feaPropertyStruct *feaProperty, meshStruct *feaMesh);
+
+// Create connections for gluing - Connections are appended
+int fea_glueMesh(meshStruct *mesh,
+                 int connectionID,
+                 int connectionType,
+                 int dofDependent,
+                 char *slaveName,
+                 int numMasterName,
+                 char *masterName[],
+                 mapAttrToIndexStruct *attrMap,
+                 int maxNumMaster,
+                 double searchRadius,
+                 int *numConnectOut,
+                 feaConnectionStruct *feaConnectOut[]);
+
+// Create a default analysis structure based on previous inputs
+int fea_createDefaultAnalysis(feaProblemStruct *feaProblem, char *analysisType);
 
 #ifdef __cplusplus
 }

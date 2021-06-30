@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -18,71 +16,71 @@ parser = argparse.ArgumentParser(description = 'SU2 and AFLR2 Node Distance PyTe
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
 # Project name
 projectName = "pyCAPS_SU2_aflr2"
-
-# Load CSM file
-geometryScript = os.path.join("..","csmData","cfd2D.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
 
 # Create working directory variable
 workDir = os.path.join(str(args.workDir[0]), "SU2AFLR2NodeDistAnalysisTest")
 
-# Set intention - could also be set during .loadAIM
-myProblem.capsIntent = "CFD"
+# Load CSM file
+geometryScript = os.path.join("..","csmData","cfd2D.csm")
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load aflr2 aim
-myProblem.loadAIM(aim = "aflr2AIM", analysisDir = workDir)
+myProblem.analysis.create(aim = "aflr2AIM", name = "aflr2")
 
 airfoil = {"numEdgePoints" : 40, "edgeDistribution" : "Tanh", "initialNodeSpacing" : [0.01, 0.01]}
 
-myProblem.analysis["aflr2AIM"].setAnalysisVal("Mesh_Sizing", [("Airfoil"   , airfoil),
-                                                              ("TunnelWall", {"numEdgePoints" : 50}),
-                                                              ("InFlow",     {"numEdgePoints" : 25}),
-                                                              ("OutFlow",    {"numEdgePoints" : 25}),
-                                                              ("2DSlice",    {"tessParams" : [0.50, .01, 45]})])
+myProblem.analysis["aflr2"].input.Mesh_Sizing = {"Airfoil"   : airfoil,
+                                                 "TunnelWall": {"numEdgePoints" : 50},
+                                                 "InFlow"    : {"numEdgePoints" : 25},
+                                                 "OutFlow"   : {"numEdgePoints" : 25},
+                                                 "2DSlice"   : {"tessParams" : [0.50, .01, 45]}}
 
 # Make quad/tri instead of just quads
-#myProblem.analysis["aflr2AIM"].setAnalysisVal("Mesh_Gen_Input_String", "mquad=1 mpp=3")
+#myProblem.analysis["aflr2AIM"].input.Mesh_Gen_Input_String = "mquad=1 mpp=3"
 
 # Run AIM pre-analysis
-myProblem.analysis["aflr2AIM"].preAnalysis()
+myProblem.analysis["aflr2"].preAnalysis()
 
 # NO analysis is needed - AFLR2 was already ran during preAnalysis
 
 # Run AIM post-analysis
-myProblem.analysis["aflr2AIM"].postAnalysis()
+myProblem.analysis["aflr2"].postAnalysis()
 
-# Load SU2 aim - child of aflr2 AIM
-su2 = myProblem.loadAIM(aim = "su2AIM",
-                        altName = "su2",
-                        analysisDir = workDir, parents = ["aflr2AIM"])
+# Load SU2 aim
+su2 = myProblem.analysis.create(aim = "su2AIM",
+                                name = "su2")
+
+su2.input["Mesh"].link(myProblem.analysis["aflr2"].output["Surface_Mesh"])
 
 # Set project name
-su2.setAnalysisVal("Proj_Name", projectName)
+su2.input.Proj_Name = projectName
+
+# Set SU2 Version
+su2.input.SU2_Version = "Blackbird"
 
 # Set AoA number
-su2.setAnalysisVal("Alpha", 0.0)
+su2.input.Alpha = 0.0
 
 # Set equation type
-su2.setAnalysisVal("Equation_Type","Compressible")
+su2.input.Equation_Type = "Compressible"
 
 # Set number of iterations
-su2.setAnalysisVal("Num_Iter",10)
+su2.input.Num_Iter = 10
 
 # Set the aim to 2D mode
-su2.setAnalysisVal("Two_Dimensional", True)
+su2.input.Two_Dimensional = True
 
 # Set output file format
-su2.setAnalysisVal("Output_Format","Tecplot")
+su2.input.Output_Format = "Tecplot"
 
 # Set boundary conditions
 inviscidBC = {"bcType" : "Inviscid"}
@@ -94,7 +92,7 @@ Pinf = 101300.0
 Tinf = 280
 
 # Set Mach number
-su2.setAnalysisVal("Mach", Mach)
+su2.input.Mach = Mach
 
 # Set boundary conditions
 wallBC = {"bcType" : "Inviscid"}
@@ -109,13 +107,13 @@ inflow = {"bcType" : "SubsonicInflow",
           "vVelocity" : 0.0,
           "wVelocity" : 0.0}
 
-su2.setAnalysisVal("Boundary_Condition", [("Airfoil"   , wallBC),
-                                          ("TunnelWall", wallBC),
-                                          ("InFlow", inflow),
-                                          ("OutFlow",backPressureBC)])
+su2.input.Boundary_Condition = {"Airfoil"   : wallBC,
+                                "TunnelWall": wallBC,
+                                "InFlow"    : inflow,
+                                "OutFlow"   : backPressureBC}
 
 # Specifcy the boundares used to compute forces
-su2.setAnalysisVal("Surface_Monitor", ["Airfoil"])
+su2.input.Surface_Monitor = ["Airfoil"]
 
 # Run AIM pre-analysis
 su2.preAnalysis()
@@ -136,42 +134,36 @@ su2.postAnalysis()
 
 print ("Total Force - Pressure + Viscous")
 # Get Lift and Drag coefficients
-print ("Cl = " , myProblem.analysis["su2"].getAnalysisOutVal("CLtot"), \
-       "Cd = " , myProblem.analysis["su2"].getAnalysisOutVal("CDtot"))
+print ("Cl = " , myProblem.analysis["su2"].output.CLtot,
+       "Cd = " , myProblem.analysis["su2"].output.CDtot)
 
 # Get Cmz coefficient
-print ("Cmz = " , myProblem.analysis["su2"].getAnalysisOutVal("CMZtot"))
+print ("Cmz = " , myProblem.analysis["su2"].output.CMZtot)
 
 # Get Cx and Cy coefficients
-print ("Cx = " , myProblem.analysis["su2"].getAnalysisOutVal("CXtot"), \
-       "Cy = " , myProblem.analysis["su2"].getAnalysisOutVal("CYtot"))
+print ("Cx = " , myProblem.analysis["su2"].output.CXtot,
+       "Cy = " , myProblem.analysis["su2"].output.CYtot)
 
 print ("Pressure Contribution")
 # Get Lift and Drag coefficients
-print ("Cl_p = " , myProblem.analysis["su2"].getAnalysisOutVal("CLtot_p"), \
-       "Cd_p = " , myProblem.analysis["su2"].getAnalysisOutVal("CDtot_p"))
+print ("Cl_p = " , myProblem.analysis["su2"].output.CLtot_p,
+       "Cd_p = " , myProblem.analysis["su2"].output.CDtot_p)
 
 # Get Cmz coefficient
-print ("Cmz_p = " , myProblem.analysis["su2"].getAnalysisOutVal("CMZtot_p"))
+print ("Cmz_p = " , myProblem.analysis["su2"].output.CMZtot_p)
 
 # Get Cx and Cy coefficients
-print ("Cx_p = " , myProblem.analysis["su2"].getAnalysisOutVal("CXtot_p"), \
-       "Cy_p = " , myProblem.analysis["su2"].getAnalysisOutVal("CYtot_p"))
+print ("Cx_p = " , myProblem.analysis["su2"].output.CXtot_p,
+       "Cy_p = " , myProblem.analysis["su2"].output.CYtot_p)
 
 print ("Viscous Contribution")
 # Get Lift and Drag coefficients
-print ("Cl_v = " , myProblem.analysis["su2"].getAnalysisOutVal("CLtot_v"), \
-       "Cd_v = " , myProblem.analysis["su2"].getAnalysisOutVal("CDtot_v"))
+print ("Cl_v = " , myProblem.analysis["su2"].output.CLtot_v,
+       "Cd_v = " , myProblem.analysis["su2"].output.CDtot_v)
 
 # Get Cmz coefficient
-print ("Cmz_v = " , myProblem.analysis["su2"].getAnalysisOutVal("CMZtot_v"))
+print ("Cmz_v = " , myProblem.analysis["su2"].output.CMZtot_v)
 
 # Get Cx and Cy coefficients
-print ("Cx_v = " , myProblem.analysis["su2"].getAnalysisOutVal("CXtot_v"), \
-       "Cy_v = " , myProblem.analysis["su2"].getAnalysisOutVal("CYtot_v"))
-
-# Save away CAPS problem
-#myProblem.saveCAPS()
-
-# Close CAPS
-myProblem.closeCAPS()
+print ("Cx_v = " , myProblem.analysis["su2"].output.CXtot_v,
+       "Cy_v = " , myProblem.analysis["su2"].output.CYtot_v)

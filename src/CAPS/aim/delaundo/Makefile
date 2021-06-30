@@ -24,6 +24,9 @@ $(ODIR)/delaundoAIM.o:	delaundoAIM.c $(IDIR)/capsTypes.h \
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils delaundoAIM.c \
 		-o $(ODIR)/delaundoAIM.o
 
+lint:
+	$(LINT) -I../../include -I$(IDIR) -I../utils $(wildcard *.c) -exportlocal -bufferoverflowhigh
+
 clean:
 	-rm $(ODIR)/delaundoAIM.o
 
@@ -31,7 +34,8 @@ cleanall:	clean
 	-rm $(LDIR)/delaundoAIM.so
 
 	
-dox:
+dox: doc/html/index.html
+doc/html/index.html: $(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
 	(cd doc; doxygen delaundoAIM_dox.cfg; cd latex; make; mv refman.pdf delaundoAIM.pdf)
 
 doxclean:

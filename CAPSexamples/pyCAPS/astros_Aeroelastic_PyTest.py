@@ -1,7 +1,6 @@
-from __future__ import print_function
 
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -24,33 +23,33 @@ parser = argparse.ArgumentParser(description = 'Astros Aeroelastic PyTest Exampl
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
+workDir= os.path.join(str(args.workDir[0]), "AstrosAeroWingBEM")
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","feaWingBEMAero.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load astros aim
-myProblem.loadAIM(aim = "astrosAIM",
-                  altName = "astros",
-                  analysisDir= os.path.join(str(args.workDir[0]), "AstrosAeroWingBEM"))
+myProblem.analysis.create(aim = "astrosAIM",
+                          name = "astros")
 
 # Set project name so a mesh file is generated
 projectName = "astrosAero"
-myProblem.analysis["astros"].setAnalysisVal("Proj_Name", projectName)
+myProblem.analysis["astros"].input.Proj_Name = projectName
 
-myProblem.analysis["astros"].setAnalysisVal("Edge_Point_Max", 4)
+myProblem.analysis["astros"].input.Edge_Point_Max = 4
 
-myProblem.analysis["astros"].setAnalysisVal("Quad_Mesh", True)
+myProblem.analysis["astros"].input.Quad_Mesh = True
 
 # Set analysis type
-myProblem.analysis["astros"].setAnalysisVal("Analysis_Type", "Aeroelastic")
+myProblem.analysis["astros"].input.Analysis_Type = "Aeroelastic"
 
 # Set analysis
 trim1 = { "analysisType" : "AeroelasticStatic",
@@ -66,14 +65,14 @@ trim1 = { "analysisType" : "AeroelasticStatic",
           }
 
 
-myProblem.analysis["astros"].setAnalysisVal("Analysis", [("Trim1", trim1)])
+myProblem.analysis["astros"].input.Analysis = {"Trim1": trim1}
 
 # Set materials
 unobtainium  = {"youngModulus" : 2.2E6 ,
                 "poissonRatio" : .5,
                 "density"      : 7850}
 
-myProblem.analysis["astros"].setAnalysisVal("Material", ("Unobtainium", unobtainium))
+myProblem.analysis["astros"].input.Material = {"Unobtainium": unobtainium}
 
 # Set property
 shell  = {"propertyType"        : "Shell",
@@ -86,31 +85,31 @@ shell2  = {"propertyType"       : "Shell",
           "bendingInertiaRatio" : 1.0, # Default
           "shearMembraneRatio"  : 5.0/6.0} # Default }
 
-myProblem.analysis["astros"].setAnalysisVal("Property", [("Ribs", shell),
-                                                         ("Spar1", shell),
-                                                         ("Spar2", shell),
-                                                         ("Rib_Root", shell),
-                                                         ("Skin", shell2)])
+myProblem.analysis["astros"].input.Property = {"Ribs"    : shell,
+                                               "Spar1"   : shell,
+                                               "Spar2"   : shell,
+                                               "Rib_Root": shell,
+                                               "Skin"    : shell2}
 
 
 # Defined Connections
 connection = {"dofDependent"   : 123456,
               "connectionType" : "RigidBody"}
 
-myProblem.analysis["astros"].setAnalysisVal("Connect",("Rib_Root", connection))
+myProblem.analysis["astros"].input.Connect = {"Rib_Root": connection}
 
 
 # Set constraints
 constraint = {"groupName"     : ["Rib_Root_Point"],
               "dofConstraint" : 12456}
 
-myProblem.analysis["astros"].setAnalysisVal("Constraint", ("ribConstraint", constraint))
+myProblem.analysis["astros"].input.Constraint = {"ribConstraint": constraint}
 
 # Set supports
 support = {"groupName" : ["Rib_Root_Point"],
            "dofSupport": 3}
 
-myProblem.analysis["astros"].setAnalysisVal("Support", ("ribSupport", support))
+myProblem.analysis["astros"].input.Support = {"ribSupport": support}
 
 
 # Aero
@@ -120,7 +119,7 @@ wing = {"groupName"    : "Wing",
 
 # Note the surface name corresponds to the capsBound found in the *.csm file. This links
 # the spline for the aerodynamic surface to the structural model
-myProblem.analysis["astros"].setAnalysisVal("VLM_Surface", ("Skin_Top", wing))
+myProblem.analysis["astros"].input.VLM_Surface = {"Skin_Top": wing}
 
 # Run AIM pre-analysis
 myProblem.analysis["astros"].preAnalysis()
@@ -147,6 +146,3 @@ print ("Done running Astros!")
 
 # Run AIM post-analysis
 myProblem.analysis["astros"].postAnalysis()
-
-# Close CAPS
-myProblem.closeCAPS()

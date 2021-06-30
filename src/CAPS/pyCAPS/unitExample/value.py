@@ -17,7 +17,3 @@ print("Name = ",   myValue.name)
 print("Value = ",  myValue.value)
 print("Units = ",  myValue.units)
 print("Limits = ", myValue.limits)
-                               
-# Close our problems
-print("Closing our problem")
-myProblem.closeCAPS()

@@ -59,7 +59,8 @@ ELSE
    ENDIF
 ENDIF
 
-# leave the container on the stack
+# restore the stack to its original condition
 RESTORE   contains 2
+RESTORE   contains 1
 
 END

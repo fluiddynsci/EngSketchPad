@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -23,52 +21,53 @@ parser = argparse.ArgumentParser(description = 'Astros PyTest Example',
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
+workDir = os.path.join(str(args.workDir[0]), "AstrosModalWingBEM")
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","feaWingBEM.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript, 
+                           outLevel=args.verbosity)
 
 
-# Load egadsTess aim
-myProblem.loadAIM( aim = "egadsTessAIM",
-                   altName = "tess" )
+# Create egadsTess aim
+myProblem.analysis.create( aim = "egadsTessAIM",
+                           name = "tess" )
 
 # All triangles in the grid
-myProblem.analysis["tess"].setAnalysisVal("Mesh_Elements", "Quad")
+myProblem.analysis["tess"].input.Mesh_Elements = "Quad"
 
 # Set global tessellation parameters
-myProblem.analysis["tess"].setAnalysisVal("Tess_Params", [.05,.5,15])
-
+myProblem.analysis["tess"].input.Tess_Params = [.05,.5,15]
 
 # Generate the surface mesh
 myProblem.analysis["tess"].preAnalysis()
 myProblem.analysis["tess"].postAnalysis()
 
 
-# Load astros aim
-myProblem.loadAIM( aim = "astrosAIM",
-                   altName = "astros",
-                   analysisDir= os.path.join(str(args.workDir[0]), "AstrosModalWingBEM"),
-                   parents = ["tess"] )
+# Create astros aim
+myProblem.analysis.create( aim = "astrosAIM",
+                           name = "astros" )
+
+# Link the Surface_Mesh
+myProblem.analysis["astros"].input["Mesh"].link(myProblem.analysis["tess"].output["Surface_Mesh"])
 
 # Set project name so a mesh file is generated
 projectName = "pyCAPS_astros_Test"
-myProblem.analysis["astros"].setAnalysisVal("Proj_Name", projectName)
+myProblem.analysis["astros"].input.Proj_Name = projectName
 
-myProblem.analysis["astros"].setAnalysisVal("Edge_Point_Max", 6)
+myProblem.analysis["astros"].input.Edge_Point_Max = 6
 
-myProblem.analysis["astros"].setAnalysisVal("Quad_Mesh", True)
+myProblem.analysis["astros"].input.Quad_Mesh = True
 
-#myProblem.analysis["astros"].setAnalysisVal("File_Format", "Free")
+#myProblem.analysis["astros"].input.File_Format = "Free"
 
-myProblem.analysis["astros"].setAnalysisVal("Mesh_File_Format", "Large")
+myProblem.analysis["astros"].input.Mesh_File_Format = "Large"
 
 # Set analysis
 eigen = { "extractionMethod"     : "MGIV",
@@ -76,7 +75,7 @@ eigen = { "extractionMethod"     : "MGIV",
           "numEstEigenvalue"     : 1,
           "numDesiredEigenvalue" : 10,
           "eigenNormaliztion"    : "MASS"}
-myProblem.analysis["astros"].setAnalysisVal("Analysis", ("EigenAnalysis", eigen))
+myProblem.analysis["astros"].input.Analysis = {"EigenAnalysis": eigen}
 
 # Set materials
 unobtainium  = {"youngModulus" : 2.2E6 ,
@@ -87,8 +86,8 @@ madeupium    = {"materialType" : "isotropic",
                 "youngModulus" : 1.2E5 ,
                 "poissonRatio" : .5,
                 "density"      : 7850}
-myProblem.analysis["astros"].setAnalysisVal("Material", [("Unobtainium", unobtainium),
-                                                          ("Madeupium", madeupium)])
+myProblem.analysis["astros"].input.Material = {"Unobtainium": unobtainium,
+                                               "Madeupium": madeupium}
 
 # Set property
 shell  = {"propertyType"      : "Shell",
@@ -97,13 +96,13 @@ shell  = {"propertyType"      : "Shell",
           "shearMembraneRatio"  : 0, # Turn of shear - no materialShear
           "membraneThickness" : 0.2}
 
-myProblem.analysis["astros"].setAnalysisVal("Property", ("Ribs_and_Spars", shell))
+myProblem.analysis["astros"].input.Property = {"Ribs_and_Spars": shell}
 
 # Set constraints
 constraint = {"groupName" : ["Rib_Constraint"],
               "dofConstraint" : 123456}
 
-myProblem.analysis["astros"].setAnalysisVal("Constraint", ("ribConstraint", constraint))
+myProblem.analysis["astros"].input.Constraint = {"ribConstraint": constraint}
 
 
 # Run AIM pre-analysis
@@ -134,12 +133,9 @@ myProblem.analysis["astros"].postAnalysis()
 
 # Get Eigen-frequencies
 print ("\nGetting results for natural frequencies.....")
-natrualFreq = myProblem.analysis["astros"].getAnalysisOutVal("EigenFrequency")
+natrualFreq = myProblem.analysis["astros"].output.EigenFrequency
 
 mode = 1
 for i in natrualFreq:
     print ("Natural freq (Mode {:d}) = ".format(mode) + '{:.5f} '.format(i) + "(Hz)")
     mode += 1
-
-# Close CAPS
-myProblem.closeCAPS()

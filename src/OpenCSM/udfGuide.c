@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -70,6 +70,8 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     ego     context, eref, *ebodys, *echilds, *eloops, *eedges;
     ego     eface, eloop, exform, *exsects=NULL;
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(emodel=%llx)\n", (long long)emodel);
     printf("nxsect    = %d\n", NXSECT(0));
@@ -123,7 +125,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     /* check that Model was input that contains two Bodys */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -144,7 +146,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
        and the second Body (the path) is a WireBody */
     status = EG_getTopology(ebodys[0], &eref, &oclass, &mtype,
                             data, &nchild, &echilds, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != BODY || (mtype != WIREBODY && mtype != FACEBODY && mtype != SHEETBODY)) {
             printf(" udpExecute: left Body must be WireBody or SheetBody\n");
@@ -154,7 +156,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
     status = EG_getTopology(ebodys[1], &eref, &oclass, &mtype,
                             data, &nchild, &echilds, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != BODY || mtype != WIREBODY) {
             printf(" udpExecute: RITE Body must be WireBody\n");
@@ -164,10 +166,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("nxsect(%d) = %d\n", numUdp, NXSECT(numUdp));
@@ -184,33 +183,29 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 #endif
 
     status = EG_getContext(emodel, &context);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     /* get an array to hold the cross-sections */
-    exsects = (ego *) malloc(NXSECT(numUdp)*sizeof(ego));
-    if (exsects == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(exsects, ego, NXSECT(numUdp));
 
     /* for now, make sure guide curve is comprised of a single Edge */
     status = EG_getTopology(ebodys[1], &eref, &oclass, &mtype,
                             data, &nloop, &eloops, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
     if (nloop != 1) {status = -990; goto cleanup;}
 
     status = EG_getTopology(eloops[0], &eref, &oclass, &mtype,
                             data, &nedge, &eedges, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
     if (nedge != 1) {status = -991; goto cleanup;}
 
     status = EG_getRange(eedges[0], trange, &periodic);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getRange);
 
     /* extract Face and Loop from ebodys[0] */
     status = EG_getTopology(ebodys[0], &eref, &oclass, &mtype,
                             data, &nchild, &echilds, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
     eface = echilds[0];
 
     if        (mtype == WIREBODY) {
@@ -218,7 +213,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     } else {
         status = EG_getTopology(eface, &eref, &oclass, &mtype,
                                 data, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
         eloop = echilds[0];
     }
 
@@ -226,9 +221,9 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     for (i = 0; i < NXSECT(0); i++) {
         tt = trange[0] + (trange[1] - trange[0]) * (double)(i) / (double)(NXSECT(0)-1);
         status = EG_evaluate(eedges[0], &tt, data);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_evaluate);
 
-        /* this only works for tranlation or for axes aligned with x-, y-, or z- */
+        /* this only works for translation or for axes aligned with x-, y-, or z- */
         if (udps[0].arg[2].size != 6) {
             xform[ 0] =  1;          xform[ 1] =  0;          xform[ 2] =  0;          xform[ 3] = data[0]-origin[0];
             xform[ 4] =  0;          xform[ 5] =  1;          xform[ 6] =  0;          xform[ 7] = data[1]-origin[1];
@@ -255,22 +250,23 @@ udpExecute(ego  emodel,                 /* (in)  input model */
         }
 
         status = EG_makeTransform(context, xform, &exform);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTransform);
 
         if (i == 0 || i == NXSECT(0)-1) {
             status = EG_copyObject(eface, exform, &exsects[i]);
         } else {
             status = EG_copyObject(eloop, exform, &exsects[i]);
         }
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_copyObject);
 
         status = EG_deleteObject(exform);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_deleteObject);
     }
 
     /* create the blend */
     status = EG_blend(NXSECT(0), exsects, NULL, NULL, ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_blend);
+    if (*ebody == NULL) goto cleanup;   // needed fro splint
 
 #ifdef DEBUG
     printf("*ebody\n");
@@ -283,7 +279,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
         status = EG_attributeAdd(*ebody, "__markFaces__", ATTRINT, 1,
                                  &idum, NULL, NULL);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_attributeAdd);
     }
 
     /* no output value(s) */

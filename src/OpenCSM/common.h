@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -46,7 +46,7 @@
         status = BAD_MALLOC;                                            \
         goto cleanup;                                                   \
     }                                                                   \
-    PTR = (TYPE *) malloc((SIZE) * sizeof(TYPE));                       \
+    PTR = (TYPE *) EG_alloc((SIZE) * sizeof(TYPE));                     \
     if (PTR == NULL) {                                                  \
         printf("ERROR:: MALLOC PROBLEM for %s (called from %s:%d)\n", #PTR, routine, __LINE__); \
         status = BAD_MALLOC;                                            \
@@ -56,7 +56,7 @@
     if (PTR == NULL) {                                                  \
         MALLOC(PTR,TYPE,SIZE);                                          \
     } else {                                                            \
-       realloc_temp = realloc(PTR, (SIZE) * sizeof(TYPE));              \
+       realloc_temp = EG_reall(PTR, (SIZE) * sizeof(TYPE));            \
        if (PTR == NULL) {                                               \
            printf("ERROR:: RALLOC PROBLEM for %s (called from %s:%d)\n", #PTR, routine, __LINE__); \
            status = BAD_MALLOC;                                         \
@@ -67,7 +67,7 @@
     }
 #define FREE(PTR)                                               \
     if (PTR != NULL) {                                          \
-        free(PTR);                                              \
+        EG_free(PTR);                                           \
     }                                                           \
     PTR = NULL;
 #define STRLEN(A)   (int)strlen(A)
@@ -161,6 +161,12 @@
         printf(FORMAT,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O); printf("\n");  \
     }
 
+#define SPLINT_CHECK_FOR_NULL(X)                                        \
+    if ((X) == NULL) {                                                  \
+        printf("ERROR:: SPLINT found %s is NULL (called from %s:%d)\n", #X, routine, __LINE__); \
+        status = -9999;                                                 \
+        goto cleanup;                                                   \
+    }
 
 /* error codes */
 #define           BAD_MALLOC      -900

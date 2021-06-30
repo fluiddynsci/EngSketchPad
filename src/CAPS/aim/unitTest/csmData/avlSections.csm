@@ -86,6 +86,8 @@ rotatex   -45        0         0
 translate 2          0.75      0.3
 attribute capsGroup    $hTail
 attribute _name        $sech1
+attribute vlmNumSpan  6
+#attribute vlmSspace   2
 
 # inverted camber
 udprim    naca      Thickness thick      Camber  -camber sharpte 0

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -120,6 +120,8 @@ typedef struct {
     ego     context;          /* EGADS context */
 } poly_TT;
 
+static void *realloc_temp=NULL;              /* used by RALLOC macro */
+
 /*
  ************************************************************************
  *                                                                      *
@@ -198,7 +200,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* check that Model was input that contains one Body */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -211,7 +213,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     }
 
     status = EG_getContext(emodel, &context);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     poly.context = context;
 
@@ -219,10 +221,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("nsubdiv( %d) = %d\n", numUdp, NSUBDIV( numUdp));
@@ -231,28 +230,31 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* get pointers to the input Body's Nodes, Edges, and Faces */
     status = EG_getBodyTopos(ebodys[0], NULL, NODE, &nnode, &enodes);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
     status = EG_getBodyTopos(ebodys[0], NULL, EDGE, &nedge, &eedges);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
     status = EG_getBodyTopos(ebodys[0], NULL, FACE, &nface, &efaces);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
-    /* these assertions are needed for scan-build */
-    assert(nnode > 0);
-    assert(nedge > 0);
-    assert(nface > 0);
+    if (nnode <= 0) goto cleanup;       // needed for scan-build
+    if (nedge <= 0) goto cleanup;       // needed for scan-build
+    if (nface <= 0) goto cleanup;       // needed for scan-build
+
+    if (enodes == NULL) goto cleanup;   // needed for splint
+    if (eedges == NULL) goto cleanup;   // needed for splint
+    if (efaces == NULL) goto cleanup;   // needed for splint
 
     /* check that the input Body his a solid and that all Edges
        are lines */
     for (iedge = 0; iedge < nedge; iedge++) {
         status = EG_getTopology(eedges[iedge], &eref, &oclass, &mtype,
                                 data, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         status = EG_getGeometry(eref, &oclass, &mtype, &rgeom, NULL, NULL);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getGeometry);
 
         if (oclass != CURVE || mtype != LINE) {
             printf(" udpExecute: expecting solid Body.  oclass=%d, mtype=%d\n", oclass, mtype);
@@ -265,28 +267,28 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     for (inode = 0; inode < nnode; inode++) {
         status = EG_getTopology(enodes[inode], &eref, &oclass, &mtype,
                                 data, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         status = addNode(&poly, data[0], data[1], data[2]);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addNode);
     }
 
     for (iedge = 0; iedge < nedge; iedge++) {
         status = EG_getTopology(eedges[iedge], &eref, &oclass, &mtype,
                                 data, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         ibeg = EG_indexBodyTopo(ebodys[0], echilds[0]) - 1;
         iend = EG_indexBodyTopo(ebodys[0], echilds[1]) - 1;
 
         status = addEdge(&poly, ibeg, iend);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addEdge);
     }
 
     for (iface = 0; iface < nface; iface++) {
         status = EG_getTopology(efaces[iface], &eref, &oclass, &mtype,
                                 data, &nloop, &eloops, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         if (nloop != 1) {
             printf(" udpExecute: expecting Face %d to have one Loop %d\n", iface, nloop);
@@ -296,7 +298,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
         status = EG_getTopology(eloops[0], &eref, &oclass, &mtype,
                                 data, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         if (nchild != 4) {
             printf(" udpExecute: expecting Face %d to have four Edges %d\n", iface, nchild);
@@ -345,7 +347,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         }
 
         status = addFace(&poly, is, ie, in, iw, limit);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addFace);
     }
 
     if        (PROGRESS(numUdp) == 1) {
@@ -353,8 +355,10 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
                poly.nnode, poly.nedge, poly.nface);
     } else if (PROGRESS(numUdp) == 2) {
         status = printPoly(&poly);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(printPoly);
     }
+
+    if (poly.edges == NULL) goto cleanup;    // needed for splint
 
     /* make sure that we have a good polyhedron */
     for (iedge = 0; iedge < poly.nedge; iedge++) {
@@ -370,25 +374,26 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* perform the subdivisions */
     for (isubdiv = 0; isubdiv < NSUBDIV(numUdp); isubdiv++) {
         status = subdivide(&poly);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(subdivide);
 
         if        (PROGRESS(numUdp) == 1) {
             printf("      sdiv %3d  nnode=%5d, nedge=%5d, nface=%5d\n",
                    isubdiv+1, poly.nnode, poly.nedge, poly.nface);
         } else if (PROGRESS(numUdp) == 2) {
             status = printPoly(&poly);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(printPoly);
         }
 
     }
 
     /* make the Brep */
     status = makeBrep(&poly, ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(makeBrep);
+    if (*ebody == NULL) goto cleanup;   // needed for splint
 
     /* set the output value(s) */
     status = EG_getMassProperties(*ebody, data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getMassProperties);
 
     AREA(0)   = data[1];
     VOLUME(0) = data[0];
@@ -396,7 +401,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* tell OpenCSM that the Faces do not have a _body attribute */
     status = EG_attributeAdd(*ebody, "__markFaces__", ATTRINT, 1,
                              &one, NULL, NULL);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_attributeAdd);
 
     /* remember this model (Body) */
     udps[numUdp].ebody = *ebody;
@@ -470,8 +475,8 @@ addNode(poly_TT *poly,                  /* (in)  pointer to poly_TT */
 {
     int    status = EGADS_SUCCESS;
 
-    void   *temp;
-
+    ROUTINE(addNode);
+    
 #ifdef DEBUG
     printf("call addNode(%f, %f, %f) -> %d\n", x, y, z, poly->nnode);
 #endif
@@ -481,18 +486,9 @@ addNode(poly_TT *poly,                  /* (in)  pointer to poly_TT */
         poly->mnode += 50;
 
         if (poly->nnode == 0) {
-            poly->nodes = (node_TT *) EG_alloc(poly->mnode*sizeof(node_TT));
-            if (poly->nodes == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
+            MALLOC(poly->nodes, node_TT, poly->mnode);
         } else {
-            temp = EG_reall(poly->nodes,       poly->mnode*sizeof(node_TT));
-            if (temp == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
-            poly->nodes = (node_TT *)temp;
+            RALLOC(poly->nodes, node_TT, poly->mnode);
         }
     }
 
@@ -535,7 +531,7 @@ addEdge(poly_TT *poly,                  /* (in)  pointer to poly_TT */
 {
     int    status = EGADS_SUCCESS;
 
-    void   *temp;
+    ROUTINE(addEdge);
 
 #ifdef DEBUG
     printf("call addEdge(ibeg=%d, iend=%d) -> %d\n", ibeg, iend, poly->nedge);
@@ -546,18 +542,9 @@ addEdge(poly_TT *poly,                  /* (in)  pointer to poly_TT */
         poly->medge += 50;
 
         if (poly->nedge == 0) {
-            poly->edges = (edge_TT *) EG_alloc(poly->medge*sizeof(edge_TT));
-            if (poly->edges == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
+            MALLOC(poly->edges, edge_TT, poly->medge);
         } else {
-            temp = EG_reall(poly->edges,       poly->medge*sizeof(edge_TT));
-            if (temp == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
-            poly->edges = (edge_TT *)temp;
+            RALLOC(poly->edges, edge_TT, poly->medge);
         }
     }
 
@@ -605,7 +592,7 @@ addFace(poly_TT *poly,                  /* (in)  pointer to poly_TT */
 {
     int    status = EGADS_SUCCESS;
 
-    void   *temp;
+    ROUTINE(addFace);
 
 #ifdef DEBUG
     printf("call addFace(isouth=%d, ieast=%d, inorth=%d, iwest=%d) -> %d\n", isouth, ieast, inorth, iwest, poly->nface);
@@ -616,18 +603,9 @@ addFace(poly_TT *poly,                  /* (in)  pointer to poly_TT */
         poly->mface += 50;
 
         if (poly->nface == 0) {
-            poly->faces = (face_TT *) EG_alloc(poly->mface*sizeof(face_TT));
-            if (poly->faces == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
+            MALLOC(poly->faces, face_TT, poly->mface);
         } else {
-            temp = EG_reall(poly->faces,       poly->mface*sizeof(face_TT));
-            if (temp == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
-            poly->faces = (face_TT *)temp;
+            RALLOC(poly->faces, face_TT, poly->mface);
         }
     }
 
@@ -696,6 +674,8 @@ subdivide(poly_TT *poly)                /* (in)  pointer to poly_TT */
     int    ibeg, iend, ileft, irite, inew, isw, ise, ine, inw;
     double xedge, yedge, zedge, xface, yface, zface;
 
+    ROUTINE(subdivide);
+
 #ifdef DEBUG
     printf("calling subdivide: nnode=%d, nedge=%d, nface=%d\n", poly->nnode, poly->nedge, poly->nface);
 #endif
@@ -729,7 +709,7 @@ subdivide(poly_TT *poly)                /* (in)  pointer to poly_TT */
 
         /* add a new Node */
         status = addNode(poly, xface, yface, zface);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addNode);
 
         poly->faces[iface].ic = poly->nnode - 1;
 
@@ -780,7 +760,7 @@ subdivide(poly_TT *poly)                /* (in)  pointer to poly_TT */
 
         /* add a new Node */
         status = addNode(poly, xedge, yedge, zedge);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addNode);
 
         inew = poly->nnode - 1;
 
@@ -795,7 +775,7 @@ subdivide(poly_TT *poly)                /* (in)  pointer to poly_TT */
 
         /* add a new Edge (for second half) */
         status = addEdge(poly, inew, iend);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addEdge);
 
         /* modify old Edge */
         poly->edges[iedge].iend  = inew;
@@ -811,16 +791,16 @@ subdivide(poly_TT *poly)                /* (in)  pointer to poly_TT */
 
         /* create 4 Edges */
         status = addEdge(poly, poly->edges[poly->faces[iface].isouth].iend, poly->faces[iface].ic);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addEdge);
 
         status = addEdge(poly, poly->faces[iface].ic, poly->edges[poly->faces[iface].ieast ].iend);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addEdge);
 
         status = addEdge(poly, poly->faces[iface].ic, poly->edges[poly->faces[iface].inorth].iend);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addEdge);
 
         status = addEdge(poly, poly->edges[poly->faces[iface].iwest ].iend, poly->faces[iface].ic);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addEdge);
 
         /* add three new Faces */
         status = addFace(poly,
@@ -829,7 +809,7 @@ subdivide(poly_TT *poly)                /* (in)  pointer to poly_TT */
                          poly->nedge - 3,
                          poly->nedge - 4,
                          poly->faces[iface].limit);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addFace);
 
         status = addFace(poly,
                          poly->nedge - 3,
@@ -837,7 +817,7 @@ subdivide(poly_TT *poly)                /* (in)  pointer to poly_TT */
                          poly->edges[poly->faces[iface].inorth].inext,
                          poly->nedge - 2,
                          poly->faces[iface].limit);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addFace);
 
         status = addFace(poly,
                          poly->nedge - 1,
@@ -845,7 +825,7 @@ subdivide(poly_TT *poly)                /* (in)  pointer to poly_TT */
                          poly->faces[iface].inorth,
                          poly->edges[poly->faces[iface].iwest ].inext,
                          poly->faces[iface].limit);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(addFace);
 
         /* modify old Face */
         poly->faces[iface].ieast  = poly->nedge - 4;
@@ -896,12 +876,14 @@ makeBrep(poly_TT *poly,                 /* (in)  pointer to poly_TT */
     double begXYZ[3], endXYZ[3], data[18], trange[2];
     ego    begNode, endNode, sEdge, eEdge, nEdge, wEdge;
     ego    eref, *echilds, ecurve, enodes[2], esurf, *eedges=NULL, eloop, *efaces=NULL, eshell;
+
+    ROUTINE(makeBrep);
     
     /* make the Nodes */
     for (inode = 0; inode < poly->nnode; inode++) {
         status = EG_makeTopology(poly->context, NULL, NODE, 0,
                                  poly->nodes[inode].xyz, 0, NULL, NULL, &(poly->nodes[inode].enode));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
     }
 
     /* make the Edges */
@@ -914,11 +896,11 @@ makeBrep(poly_TT *poly,                 /* (in)  pointer to poly_TT */
         /* get the coordinates of begNode and endNode */
         status = EG_getTopology(begNode, &eref, &oclass, &mtype,
                                 begXYZ, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         status = EG_getTopology(endNode, &eref, &oclass, &mtype,
-                                endXYZ, &nchild, &echilds, &senses); 
-        if (status < EGADS_SUCCESS) goto cleanup;
+                                endXYZ, &nchild, &echilds, &senses);
+        CHECK_STATUS(EG_getTopology);
 
         /* create a lime between begNode and endNode */
         data[0] = begXYZ[0];
@@ -930,14 +912,14 @@ makeBrep(poly_TT *poly,                 /* (in)  pointer to poly_TT */
         data[5] = endXYZ[2] - begXYZ[2];
 
         status = EG_makeGeometry(poly->context, CURVE, LINE, NULL, NULL, data, &ecurve);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeGeometry);
 
         /* find the parametric coordinates at endpoints */
         status = EG_invEvaluate(ecurve, begXYZ, &(trange[0]), data);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         status = EG_invEvaluate(ecurve, endXYZ, &(trange[1]), data);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         /* make the Edge */
         enodes[0] = begNode;
@@ -945,19 +927,15 @@ makeBrep(poly_TT *poly,                 /* (in)  pointer to poly_TT */
 
         status = EG_makeTopology(poly->context, ecurve, EDGE, TWONODE,
                                  trange, 2, enodes, NULL, &(poly->edges[iedge].eedge));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
     }
 
     /* make the Faces */
     senses = NULL;
 
-    eedges = (ego *) EG_alloc(    8             *sizeof(ego));
-    efaces = (ego *) EG_alloc(      poly->nface *sizeof(ego));
-    senses = (int *) EG_alloc(MAX(8,poly->nface)*sizeof(int));
-    if (eedges == NULL || efaces == NULL || senses == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(eedges, ego, 8                 );
+    MALLOC(efaces, ego, poly->nface       );
+    MALLOC(senses, int, MAX(8,poly->nface));
 
     for (iface = 0; iface < poly->nface; iface++) {
 
@@ -974,45 +952,45 @@ makeBrep(poly_TT *poly,                 /* (in)  pointer to poly_TT */
         eedges[3] = wEdge;
 
         status = EG_makeLoop(4, eedges, NULL, 0, &eloop);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeLoop);
 
         /* make a surface from the loop */
         status = EG_isoCline(eloop, 0, 0, &esurf);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_isoCline);
 
         /* remove the loop */
         status = EG_deleteObject(eloop);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_deleteObject);
 
         /* make a new loop (that references esurf) */
         eedges[0] = sEdge;
         senses[0] = SFORWARD;
         status = EG_otherCurve(esurf, eedges[0], 0, &(eedges[4]));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_otherCurve);
 
         eedges[1] = eEdge;
         senses[1] = SFORWARD;
         status = EG_otherCurve(esurf, eedges[1], 0, &(eedges[5]));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_otherCurve);
 
         eedges[2] = nEdge;
         senses[2] = SREVERSE;
         status = EG_otherCurve(esurf, eedges[2], 0, &(eedges[6]));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_otherCurve);
 
         eedges[3] = wEdge;
         senses[3] = SREVERSE;
         status = EG_otherCurve(esurf, eedges[3], 0, &(eedges[7]));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_otherCurve);
 
         status = EG_makeTopology(poly->context, esurf, LOOP, CLOSED,
                                  NULL, 4, eedges, senses, &eloop);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make the Face */
-        status = EG_makeTopology(poly->context, esurf, FACE, SREVERSE,
-                                 NULL, 1, &eloop, senses, &(poly->faces[iface].eface));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        status = EG_makeTopology(poly->context, esurf, FACE, SFORWARD,
+                                 NULL, 1, &eloop, NULL, &(poly->faces[iface].eface));
+        CHECK_STATUS(EG_makeTopology);
     }
 
     /* make a Shell and solid Body */
@@ -1023,11 +1001,11 @@ makeBrep(poly_TT *poly,                 /* (in)  pointer to poly_TT */
 
     status = EG_makeTopology(poly->context, NULL, SHELL, CLOSED,
                              NULL, poly->nface, efaces, senses, &eshell);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_makeTopology(poly->context, NULL, BODY, SOLIDBODY,
                              NULL, 1, &eshell, NULL, ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
 cleanup:
     if (eedges != NULL) EG_free(eedges);

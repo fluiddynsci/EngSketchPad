@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -84,7 +84,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* check that Model was input that contains one Body */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -97,16 +97,13 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     }
 
     status = EG_getContext(emodel, &context);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     /* check arguments */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
 #endif
@@ -114,23 +111,24 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* make a copy of the Body (so that it does not get removed
      when OpenCSM deletes emodel) */
     status = EG_copyObject(ebodys[0], NULL, ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_copyObject);
+    if (*ebody == NULL) goto cleanup;   // needed for splint
 
     /* Body bbox */
     status = EG_getBoundingBox(*ebody, bbox);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBoundingBox);
     printf("    Body        x:%10.5f %10.5f   y:%10.5f %10.5f   z:%10.5f %10.5f\n\n",
                bbox[0], bbox[3], bbox[1], bbox[4], bbox[2], bbox[5]);
     
 
     /* Node bboxes */
     status = EG_getBodyTopos(*ebody, NULL, NODE, &nnode, &enodes);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
     
     for (inode = 0; inode < nnode; inode++) {
         status = EG_getTopology(enodes[inode], &eref, &oclass, &mtype,
                                 data, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         printf("    Node %4d   x:%10.5f              y:%10.5f              z:%10.5f\n",
                inode+1, data[0], data[1], data[2]);
@@ -140,11 +138,11 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* Edge bboxes */
     status = EG_getBodyTopos(*ebody, NULL, EDGE, &nedge, &eedges);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
     
     for (iedge = 0; iedge < nedge; iedge++) {
         status = EG_getBoundingBox(eedges[iedge], bbox);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getBoundingBox);
 
         printf("    Edge %4d   x:%10.5f %10.5f   y:%10.5f %10.5f   z:%10.5f %10.5f\n",
                iedge+1, bbox[0], bbox[3], bbox[1], bbox[4], bbox[2], bbox[5]);
@@ -154,11 +152,11 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* Face bboxes */
     status = EG_getBodyTopos(*ebody, NULL, FACE, &nface, &efaces);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
     
     for (iface = 0; iface < nface; iface++) {
         status = EG_getBoundingBox(efaces[iface], bbox);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getBoundingBox);
 
         printf("    Face %4d   x:%10.5f %10.5f   y:%10.5f %10.5f   z:%10.5f %10.5f\n",
                iface+1, bbox[0], bbox[3], bbox[1], bbox[4], bbox[2], bbox[5]);

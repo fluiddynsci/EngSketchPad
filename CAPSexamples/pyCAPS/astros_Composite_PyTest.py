@@ -1,7 +1,6 @@
-from __future__ import print_function
 
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -23,34 +22,34 @@ parser = argparse.ArgumentParser(description = 'Astros Composite PyTest Example'
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
+workDir= os.path.join(str(args.workDir[0]), "AstrosCompositeTest")
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","feaCantileverPlate.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript, 
+                           outLevel=args.verbosity)
 
 # Load astros aim
-myProblem.loadAIM( aim = "astrosAIM",
-                   altName = "astros",
-                   analysisDir= os.path.join(str(args.workDir[0]), "AstrosCompositeTest") )
+myProblem.analysis.create( aim = "astrosAIM",
+                           name = "astros" )
 
 # Set project name so a mesh file is generated
 projectName = "pyCAPS_astros_Test"
-myProblem.analysis["astros"].setAnalysisVal("Proj_Name", projectName)
+myProblem.analysis["astros"].input.Proj_Name = projectName
 
-myProblem.analysis["astros"].setAnalysisVal("Edge_Point_Max", 10)
+myProblem.analysis["astros"].input.Edge_Point_Max = 10
 
-myProblem.analysis["astros"].setAnalysisVal("Quad_Mesh", True)
+myProblem.analysis["astros"].input.Quad_Mesh = True
 
-myProblem.analysis["astros"].setAnalysisVal("File_Format", "Small")
+myProblem.analysis["astros"].input.File_Format = "Small"
 
-myProblem.analysis["astros"].setAnalysisVal("Mesh_File_Format", "Large")
+myProblem.analysis["astros"].input.Mesh_File_Format = "Large"
 
 # Set analysis
 eigen = { "extractionMethod"     : "MGIV",
@@ -58,7 +57,7 @@ eigen = { "extractionMethod"     : "MGIV",
           "numEstEigenvalue"     : 1,
           "numDesiredEigenvalue" : 4,
           "eigenNormaliztion"    : "MASS"}
-myProblem.analysis["astros"].setAnalysisVal("Analysis", ("EigenAnalysis", eigen))
+myProblem.analysis["astros"].input.Analysis = {"EigenAnalysis": eigen}
 
 # Set materials
 unobtainium  = {"youngModulus" : 2.2E6 ,
@@ -69,8 +68,8 @@ madeupium    = {"materialType" : "isotropic",
                 "youngModulus" : 1.2E5 ,
                 "poissonRatio" : .5,
                 "density"      : 7850}
-myProblem.analysis["astros"].setAnalysisVal("Material", [("Unobtainium", unobtainium),
-                                                          ("Madeupium", madeupium)])
+myProblem.analysis["astros"].input.Material = {"Unobtainium": unobtainium,
+                                                "Madeupium": madeupium}
 
 # Set property
 shell  = {"propertyType"           : "Composite",
@@ -83,13 +82,13 @@ shell  = {"propertyType"           : "Composite",
           "compositeThickness"     : [1.2, 0.5, 2.0],
           "compositeOrientation"   : [30.6, 45, 50.4]}
 
-myProblem.analysis["astros"].setAnalysisVal("Property", ("plate", shell))
+myProblem.analysis["astros"].input.Property = {"plate": shell}
 
 # Set constraints
 constraint = {"groupName" : ["plateEdge"],
               "dofConstraint" : 123456}
 
-myProblem.analysis["astros"].setAnalysisVal("Constraint", ("cantilever", constraint))
+myProblem.analysis["astros"].input.Constraint = {"cantilever": constraint}
 
 
 # Run AIM pre-analysis
@@ -117,6 +116,3 @@ print ("Done running Astros!")
 
 # Run AIM post-analysis
 myProblem.analysis["astros"].postAnalysis()
-
-# Close CAPS
-myProblem.closeCAPS()

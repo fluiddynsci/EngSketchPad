@@ -156,7 +156,34 @@ SKBEG     x6      -2*r1  z6      -2*r1
    LINSEG x6      -2*r1  z6      -2*r1
 SKEND
 EXTRUDE   0        4*r1  0          4*r1
+SET       cutter   @nbody
 INTERSECT
+STORE     nose
+
+# split edges at top and bottom of nose
+RESTORE   nose
+BOX       x1-2*r1  0  z1-2*r1  4*r1  0  4*r1
+INTERSECT
+
+SELECT    NODE
+SELECT    SORT     $zcg
+SET       topNode  @sellist[3]
+SET       botNode  @sellist[1]
+SELECT    NODE     topNode
+SET       xtop     @xcg
+SET       ytop     @ycg
+SET       ztop     @zcg
+SELECT    NODE     botNode
+SET       xbot     @xcg
+SET       ybot     @ycg
+SET       zbot     @zcg
+STORE     .
+
+RESTORE   nose
+POINT     xtop   ytop   ztop
+SUBTRACT
+POINT     xbot   ybot   zbot
+SUBTRACT
 
 STORE     nose
 
@@ -164,7 +191,7 @@ STORE     nose
 MARK
     # extract back of nose
     RESTORE   nose
-    SELECT    face    @nbody-2  6
+    SELECT    face    cutter  6
     EXTRACT   @iface
 
     # forward break

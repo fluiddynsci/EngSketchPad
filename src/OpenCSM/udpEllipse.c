@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -74,6 +74,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     double  params[11], node[3], data[18], trange[4], tbeg;
     ego     enodes[9], ecurve, eedges[8], eloop, eface;
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
     printf("rx(0)     = %f\n", RX(    0));
@@ -135,10 +137,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("rx(   %d) = %f\n", numUdp, RX(   numUdp));
@@ -251,16 +250,16 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* make the Curve */
     status = EG_makeGeometry(context, CURVE, ELLIPSE, NULL, NULL, params, &ecurve);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     status = EG_invEvaluate(ecurve, node, trange, data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
 
     tbeg = trange[0] + THBEG(0);
 
     /* make sure we get the trange between 0 and TWOPI */
     status = EG_getRange(ecurve, trange, &periodic);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getRange);
 
     if (fabs(trange[0]) > EPS06 || fabs(trange[1]-TWOPI) > EPS06) {
         printf("STOPPING because of trange problem in udpEllipse\n");
@@ -276,10 +275,10 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     for (iedge = 0; iedge < NEDGE(0); iedge++) {
         trange[0] = tbeg + (double)(iedge) / (double)(NEDGE(0)) * TWOPI;
         status = EG_evaluate(ecurve, trange, data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_evaluate);
 
         status = EG_makeTopology(context, NULL, NODE, 0, data, 0, NULL, NULL, &(enodes[iedge]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
     }
 
     enodes[NEDGE(0)] = enodes[0];
@@ -290,28 +289,28 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         trange[0] = tbeg + (double)(iedge  ) / (double)(NEDGE(0)) * TWOPI;
         trange[1] = tbeg + (double)(iedge+1) / (double)(NEDGE(0)) * TWOPI;
         status = EG_makeTopology(context, ecurve, EDGE, TWONODE, trange, 2, &(enodes[iedge]), NULL, &(eedges[iedge]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make Loop from this Edge */
         senses[iedge] = SFORWARD;
     }
 
     status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL, NEDGE(0), eedges, senses, &eloop);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* make Face from the loop */
     status = EG_makeFace(eloop, SFORWARD, NULL, &eface);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeFace);
 
     /* since this will make a PLANE, we need to add an Attribute
        to tell OpenCSM to scale the UVs when computing sensitivities */
     status = EG_attributeAdd(eface, "_scaleuv", ATTRINT, 1,
                              &add, NULL, NULL);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_attributeAdd);
 
     /* create the FaceBody (which will be returned) */
     status = EG_makeTopology(context, NULL, BODY, FACEBODY, NULL, 1, &eface, senses, ebody);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* set the output value(s) */
 
@@ -353,6 +352,8 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
     double data[18];
     ego    eref, *echilds, *enodes, *eedges, *efaces, eent;
 
+    ROUTINE(udpSensitivity);
+    
 #ifdef DEBUG
     printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f %f)\n",
            (long long)ebody, npnt, entType, entIndex, uvs[0], uvs[1]);
@@ -374,21 +375,21 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
     /* find the ego entity */
     if (entType == OCSM_NODE) {
         status = EG_getBodyTopos(ebody, NULL, NODE, &nnode, &enodes);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getBodyTopos);
 
         eent = enodes[entIndex-1];
 
         EG_free(enodes);
     } else if (entType == OCSM_EDGE) {
         status = EG_getBodyTopos(ebody, NULL, EDGE, &nedge, &eedges);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getBodyTopos);
 
         eent = eedges[entIndex-1];
 
         EG_free(eedges);
     } else if (entType == OCSM_FACE) {
         status = EG_getBodyTopos(ebody, NULL, FACE, &nface, &efaces);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getBodyTopos);
 
         eent = efaces[entIndex-1];
 
@@ -406,13 +407,13 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
         if        (entType == OCSM_NODE) {
             status = EG_getTopology(eent, &eref, &oclass, &mtype,
                                     data, &nchild, &echilds, &senses);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getTopology);
         } else if (entType == OCSM_EDGE) {
             status = EG_evaluate(eent, &(uvs[ipnt]), data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
         } else if (entType == OCSM_FACE) {
             status = EG_evaluate(eent, &(uvs[2*ipnt]), data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
         }
 
         /* compute the sensitivity */

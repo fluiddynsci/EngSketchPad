@@ -3,7 +3,8 @@ EXPORTS
 aimInitialize
 aimCleanup
 aimInputs
-aimData
 aimPreAnalysis
+aimExecute
+aimPostAnalysis
 aimOutputs
 aimCalcOutput

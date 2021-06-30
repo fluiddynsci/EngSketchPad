@@ -1,90 +1,271 @@
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
+
+#ifdef HAVE_PYTHON
+#include "Python.h" // Bring in Python API
+#endif
+
+
 #include <string.h>
 #include <math.h>
+
+#include "aimUtil.h"
 
 #include "feaTypes.h"  // Bring in FEA structures
 #include "capsTypes.h" // Bring in CAPS types
 
+#include "feaUtils.h" // Bring in FEA utility functions
+#include "vlmUtils.h" // Bring in VLM utility functions
 #include "miscUtils.h" //Bring in misc. utility functions
 #include "nastranUtils.h" // Bring in nastran utility header
+#include "nastranCards.h" // Bring in nastran cards
+
+#include "cardUtils.h"
+
+#ifdef HAVE_PYTHON
+#include "nastranOP2Reader.h" // Bring in Cython generated header file
+
+#ifndef CYTHON_PEP489_MULTI_PHASE_INIT
+#define CYTHON_PEP489_MULTI_PHASE_INIT (PY_VERSION_HEX >= 0x03050000)
+#endif
+
+#if CYTHON_PEP489_MULTI_PHASE_INIT
+static int nastranOP2Reader_Initialized = (int)false;
+#endif
+
+#endif
 
 #ifdef WIN32
 #define strcasecmp  stricmp
 #endif
 
-// Write out FLFact Card.
-int nastran_writeFLFactCard(FILE *fp, feaFileFormatStruct *feaFileFormat,
-                            int id, int numVal, double values[]) {
-    char *delimiter;
-    char *tempString=NULL;
-    int fieldWidth;
-    int i, fieldsRemaining;
 
-    if (fp == NULL) return CAPS_IOERR;
-    if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
+#define PI        3.1415926535897931159979635
+
+
+static int _getDesignVariableIDSet(feaProblemStruct *feaProblem, 
+                                   int numDesignVariableNames, 
+                                   char **designVariableNames, 
+                                   int *numDesignVariableID,
+                                   int **designVariableIDSet) {
+    int i, status;
+
+    int numDesignVariables;
+    int *designVariableIDs;
+    feaDesignVariableStruct **designVariables = NULL;
+
+    if (numDesignVariableNames == 0) {
+        *numDesignVariableID = 0;
+        *designVariableIDSet = NULL;
+        return CAPS_SUCCESS;
     }
 
-    fprintf(fp,"%-8s", "FLFACT");
+    status = fea_findDesignVariablesByNames(
+        feaProblem,
+        numDesignVariableNames, designVariableNames,
+        &numDesignVariables, &designVariables
+    );
 
-    fieldsRemaining = 8;
-    tempString = convert_integerToString(id, fieldWidth, 1);
-    fprintf(fp, "%s%s", delimiter, tempString);
-    EG_free(tempString);
+    if (status == CAPS_NOTFOUND) {
+        PRINT_WARNING("Only %d of %d design variables found", 
+                      numDesignVariables, numDesignVariableNames);
+    }
+    else if (status != CAPS_SUCCESS) goto cleanup;
 
-    fieldsRemaining -= 1;
+    designVariableIDs = EG_alloc(sizeof(int) * numDesignVariables);
 
-    for (i = 0; i < numVal; i++) {
+    for (i = 0; i < numDesignVariables; i++) {
 
-        tempString = convert_doubleToString(values[i], fieldWidth, 1);
+        designVariableIDs[i] = designVariables[i]->designVariableID;
+    }
 
-        fprintf(fp, "%s%s", delimiter, tempString);
-        fieldsRemaining-= 1;
+    *numDesignVariableID = numDesignVariables;
+    *designVariableIDSet = designVariableIDs;
 
-        EG_free(tempString);
+    cleanup:
 
-        if (fieldsRemaining == 0 && i < numVal) {
+        if (designVariables != NULL) {
+            EG_free(designVariables);
+        }
+        return status;
+}
 
-            if (feaFileFormat->fileType == FreeField) fprintf(fp, ",");
+static int _getDesignResponseIDSet(feaProblemStruct *feaProblem, 
+                                   int numDesignResponseNames, 
+                                   char **designResponseNames, 
+                                   int *numDesignResponseID,
+                                   int **designResponseIDSet) {
+    int i, status;
 
-            fprintf(fp, "%-8s","+C");
-            fprintf(fp, "\n");
-            fprintf(fp, "%-8s","+C");
+    int numDesignResponses;
+    int *designResponseIDs;
+    feaDesignResponseStruct **designResponses = NULL;
 
-            fieldsRemaining = 8;
+    if (numDesignResponseNames == 0) {
+        *numDesignResponseID = 0;
+        *designResponseIDSet = NULL;
+        return CAPS_SUCCESS;
+    }
+
+    status = fea_findDesignResponsesByNames(
+        feaProblem, 
+        numDesignResponseNames, designResponseNames,
+        &numDesignResponses, &designResponses
+    );
+
+    if (status == CAPS_NOTFOUND) {
+        PRINT_WARNING("Only %d of %d design responses found", 
+                      numDesignResponses, numDesignResponseNames);
+    }
+    else if (status != CAPS_SUCCESS) goto cleanup;
+
+    designResponseIDs = EG_alloc(sizeof(int) * numDesignResponses);
+
+    for (i = 0; i < numDesignResponses; i++) {
+
+        designResponseIDs[i] = 100000 + designResponses[i]->responseID;
+    }
+
+    *numDesignResponseID = numDesignResponses;
+    *designResponseIDSet = designResponseIDs;
+
+    cleanup:
+
+        if (designResponses != NULL) {
+            EG_free(designResponses);
+        }
+        return status;
+}
+
+static int _getEquationResponseIDSet(feaProblemStruct *feaProblem, 
+                                   int numEquationResponseNames, 
+                                   char **equationResponseNames, 
+                                   int *numEquationResponseID,
+                                   int **equationResponseIDSet) {
+    int i, status;
+
+    int numEquationResponses;
+    int *equationResponseIDs;
+    feaDesignEquationResponseStruct **equationResponses = NULL;
+
+    if (numEquationResponseNames == 0) {
+        *numEquationResponseID = 0;
+        *equationResponseIDSet = NULL;
+        return CAPS_SUCCESS;
+    }
+
+    status = fea_findEquationResponsesByNames(
+        feaProblem, 
+        numEquationResponseNames, equationResponseNames,
+        &numEquationResponses, &equationResponses
+    );
+
+    if (status == CAPS_NOTFOUND) {
+        PRINT_WARNING("Only %d of %d design equation responses found", 
+                      numEquationResponses, numEquationResponseNames);
+    }
+    else if (status != CAPS_SUCCESS) goto cleanup;
+
+    equationResponseIDs = EG_alloc(sizeof(int) * numEquationResponses);
+
+    for (i = 0; i < numEquationResponses; i++) {
+
+        equationResponseIDs[i] = 200000 + equationResponses[i]->equationResponseID;
+    }
+
+    *numEquationResponseID = numEquationResponses;
+    *equationResponseIDSet = equationResponseIDs;
+
+    cleanup:
+
+        if (equationResponses != NULL) {
+            EG_free(equationResponses);
+        }
+        return status;
+}
+
+static int _getEquationID(feaProblemStruct *feaProblem, char *equationName, int *equationID) {
+
+    int status;
+
+    feaDesignEquationStruct *equation;
+
+    status = fea_findEquationByName(feaProblem, equationName, &equation);
+    if (status != CAPS_SUCCESS) return status;
+
+    *equationID = equation->equationID;
+
+    return status;
+}
+
+
+// Write SET case control card
+int nastran_writeSetCard(FILE *fp, int n, int numSetID, int *setID) {
+
+    int i, maxCharPerID = 10; // 8 per field, 2 for command and space
+
+    int bufferLength = 0, addLength, lineLength = 0;
+    char *buffer = NULL, *continuation = "\n\t        ";
+
+    if (numSetID == 0) {
+        PRINT_ERROR("Empty case control set, n = %d", n);
+    }   
+    else if (numSetID == 1) {
+        fprintf(fp, "\tSET %d = %d\n", n, setID[0]);
+    }
+    else {
+
+        buffer = EG_alloc(sizeof(char) * (maxCharPerID * numSetID 
+                                          + 100 * strlen(continuation) // enough for 100 continuations
+                                          + 1)); 
+        if (buffer == NULL) {
+            return EGADS_MALLOC;
+        }
+        
+        for (i = 0; i < numSetID-1; i++) {
+            
+            // dry run, do we pass the 72-char limit ?
+            addLength = snprintf(NULL, 0, "%d, ", setID[i]);
+
+            if (lineLength + addLength >= 72 ) {
+                addLength = snprintf(buffer + bufferLength, strlen(continuation) + 1, "%s", continuation);
+                lineLength = addLength - 1; // -1 because dont count newline
+                bufferLength += addLength;
+            }
+
+            addLength = snprintf(buffer + bufferLength, maxCharPerID, "%d, ", setID[i]);
+            lineLength += addLength;
+            bufferLength += addLength;
         }
 
+        snprintf(buffer + bufferLength, maxCharPerID, "%d", setID[numSetID-1]);
+
+        fprintf(fp, "\tSET %d = %s\n", n, buffer);
+
+        if (buffer != NULL) EG_free(buffer);
     }
-    fprintf(fp, "\n");
+
     return CAPS_SUCCESS;
 }
+
 
 // Write a Nastran element cards not supported by mesh_writeNastran in meshUtils.c
 int nastran_writeSubElementCard(FILE *fp, meshStruct *feaMesh, int numProperty, feaPropertyStruct *feaProperty, feaFileFormatStruct *feaFileFormat) {
 
+    int status;
+
     int i, j; // Indexing
-    int  fieldWidth;
-    char *tempString=NULL;
-    char *delimiter;
+
+    int *mcid;
+    double *theta, zoff;
+    
 
     int found;
     feaMeshDataStruct *feaData;
 
     if (numProperty > 0 && feaProperty == NULL) return CAPS_NULLVALUE;
     if (feaMesh == NULL) return CAPS_NULLVALUE;
-
-    if (feaFileFormat->gridFileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 7;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-    }
 
     if (feaMesh->meshType == VolumeMesh) return CAPS_SUCCESS;
 
@@ -94,108 +275,192 @@ int nastran_writeSubElementCard(FILE *fp, meshStruct *feaMesh, int numProperty, 
 
         feaData = (feaMeshDataStruct *) feaMesh->element[i].analysisData;
 
+        found = (int) false;
+        for (j = 0; j < numProperty; j++) {
+            if (feaData->propertyID == feaProperty[j].propertyID) {
+                found = (int) true;
+                break;
+            }
+        }
+
+        if (feaData->coordID != 0){
+            mcid = &feaData->coordID;
+            theta = NULL;
+        } else {
+            mcid = NULL;
+            theta = NULL;
+        }
+
+        if (found == (int) true) {
+            zoff = feaProperty[j].membraneThickness * feaProperty[j].zOffsetRel / 100.0;
+        } else {
+            zoff = 0.0;
+        }
+
         if (feaMesh->element[i].elementType == Node &&
             feaData->elementSubType == ConcentratedMassElement) {
-
-            found = (int) false;
-            for (j = 0; j < numProperty; j++) {
-                if (feaData->propertyID == feaProperty[j].propertyID) {
-                    found = (int) true;
-                    break;
-                }
-            }
 
             if (found == (int) false) {
                 printf("No property information found for element %d of type \"ConcentratedMass\"!", feaMesh->element[i].elementID);
                 continue;
             }
-
-            fprintf(fp, "%-8s%s%7d%s%7d%s%7d", "CONM2",
-                                                delimiter, feaMesh->element[i].elementID,
-                                                delimiter, feaMesh->element[i].connectivity[0],
-                                                delimiter, feaData->coordID);
-
-            tempString = convert_doubleToString( feaProperty[j].mass, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString( feaProperty[j].massOffset[0], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString( feaProperty[j].massOffset[1], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString( feaProperty[j].massOffset[2], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            // Blank space
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-
-            /* No continuation lines in CONM2 Input
-			// Continuation line
-			if (feaFileFormat->fileType == FreeField) {
-				fprintf(fp, ", +C");
-			} else {
-				fprintf(fp, "+C%6s", "");
-			}
-             */
-
-            fprintf(fp, "\n");
-
-            // Continuation line
-            if (feaFileFormat->fileType == FreeField) {
-                //fprintf(fp, "+C");
-            } else {
-                //fprintf(fp, "+C%6s", "");
-                fprintf(fp, "%8s", "");
-            }
-
-            // I11
-            tempString = convert_doubleToString( feaProperty[j].massInertia[0], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            // I21
-            tempString = convert_doubleToString( feaProperty[j].massInertia[1], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            // I22
-            tempString = convert_doubleToString( feaProperty[j].massInertia[2], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            // I31
-            tempString = convert_doubleToString( feaProperty[j].massInertia[3], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            // I32
-            tempString = convert_doubleToString( feaProperty[j].massInertia[4], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            // I33
-            tempString = convert_doubleToString( feaProperty[j].massInertia[5], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            fprintf(fp, "\n");
+            
+            status = nastranCard_conm2(
+                fp,
+                &feaMesh->element[i].elementID, // eid
+                feaMesh->element[i].connectivity, // g
+                &feaData->coordID, // cid
+                &feaProperty[j].mass, // m
+                feaProperty[j].massOffset, // x
+                feaProperty[j].massInertia, // i
+                feaFileFormat->gridFileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
 
-        if (feaData->elementSubType == BarElement) {
-            printf("Bar elements not supported yet - Sorry !\n");
+        if (feaMesh->element[i].elementType == Line) {
+
+            if (feaData->elementSubType == BarElement) {
+
+                if (found == (int) false) {
+                    printf("No property information found for element %d of type \"Bar\"!", feaMesh->element[i].elementID);
+                    continue;
+                }
+                
+                status = nastranCard_cbar(
+                    fp, 
+                    &feaMesh->element[i].elementID, // eid
+                    &feaData->propertyID, // pid
+                    feaMesh->element[i].connectivity, // g
+                    feaProperty[j].orientationVec, // x
+                    NULL, // g0 
+                    NULL, // pa
+                    NULL, // pb
+                    NULL, // wa
+                    NULL, // wb
+                    feaFileFormat->gridFileType
+                );
+                if (status != CAPS_SUCCESS) return status;
+
+            }
+
+            if (feaData->elementSubType == BeamElement) {
+                printf("Beam elements not supported yet - Sorry !\n");
+                return CAPS_NOTIMPLEMENT;
+            }
         }
 
-        if (feaData->elementSubType == BeamElement) {
-            printf("Beam elements not supported yet - Sorry !\n");
+        if ( feaMesh->element[i].elementType == Triangle) {
+
+            if (feaData->elementSubType == ShellElement) {
+
+                if (found == (int) false) {
+                    printf("No property information found for element %d of type \"ShellElement\"!", feaMesh->element[i].elementID);
+                    continue;
+                }
+
+                status = nastranCard_ctria3(
+                    fp, 
+                    &feaMesh->element[i].elementID, // eid
+                    &feaData->propertyID, //pid
+                    feaMesh->element[i].connectivity, // g
+                    theta, // theta
+                    mcid, // mcid
+                    &zoff, // zoffs
+                    NULL, // t
+                    feaFileFormat->gridFileType
+                );
+                if (status != CAPS_SUCCESS) return status;
+            }
+        }
+
+
+        if ( feaMesh->element[i].elementType == Triangle_6) {
+
+            if (feaData->elementSubType == ShellElement) {
+
+                if (found == (int) false) {
+                    printf("No property information found for element %d of type \"ShellElement\"!", feaMesh->element[i].elementID);
+                    continue;
+                }
+
+                status = nastranCard_ctria6(
+                    fp, 
+                    &feaMesh->element[i].elementID, // eid
+                    &feaData->propertyID, //pid
+                    feaMesh->element[i].connectivity, // g
+                    theta, // theta
+                    mcid, // mcid
+                    &zoff, // zoffs
+                    NULL, // t
+                    feaFileFormat->gridFileType
+                );
+                if (status != CAPS_SUCCESS) return status;
+            }
+        }
+
+        if ( feaMesh->element[i].elementType == Quadrilateral) {
+
+            if (feaData->elementSubType == ShearElement) {
+
+                if (found == (int) false) {
+                    printf("No property information found for element %d of type \"ShearElement\"!", feaMesh->element[i].elementID);
+                    continue;
+                }
+
+                status = nastranCard_cshear(
+                    fp, 
+                    &feaMesh->element[i].elementID, // eid
+                    &feaData->propertyID, //pid
+                    feaMesh->element[i].connectivity, // g
+                    feaFileFormat->gridFileType
+                );
+                if (status != CAPS_SUCCESS) return status;
+            }
+
+
+            if (feaData->elementSubType == ShellElement) {
+
+                if (found == (int) false) {
+                    printf("No property information found for element %d of type \"ShellElement\"!", feaMesh->element[i].elementID);
+                    continue;
+                }
+
+                status = nastranCard_cquad4(
+                    fp, 
+                    &feaMesh->element[i].elementID, // eid
+                    &feaData->propertyID, //pid
+                    feaMesh->element[i].connectivity, // g
+                    theta, // theta
+                    mcid, // mcid
+                    &zoff, // zoffs
+                    NULL, // t
+                    feaFileFormat->gridFileType);
+                if (status != CAPS_SUCCESS) return status;
+            }
+        }
+
+        if ( feaMesh->element[i].elementType == Quadrilateral_8) {
+
+            if (feaData->elementSubType == ShellElement) {
+
+                if (found == (int) false) {
+                    printf("No property information found for element %d of type \"ShellElement\"!", feaMesh->element[i].elementID);
+                    continue;
+                }
+
+                status = nastranCard_cquad8(
+                    fp, 
+                    &feaMesh->element[i].elementID, // eid
+                    &feaData->propertyID, //pid
+                    feaMesh->element[i].connectivity, // g
+                    theta, // theta
+                    mcid, // mcid
+                    &zoff, // zoffs
+                    NULL, // t
+                    feaFileFormat->gridFileType);
+                if (status != CAPS_SUCCESS) return status;
+            }
         }
     }
 
@@ -205,142 +470,94 @@ int nastran_writeSubElementCard(FILE *fp, meshStruct *feaMesh, int numProperty, 
 // Write a Nastran connections card from a feaConnection structure
 int nastran_writeConnectionCard(FILE *fp, feaConnectionStruct *feaConnect, feaFileFormatStruct *feaFileFormat) {
 
-    int  fieldWidth;
-    char *tempString=NULL;
-    char *delimiter;
+    int status;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaConnect == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->gridFileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 7;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-    }
-
     // Mass
     if (feaConnect->connectionType == Mass) {
 
-        fprintf(fp,"%-8s", "CMASS2");
-
-        tempString = convert_integerToString(feaConnect->elementID, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaConnect->mass, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->connectivity[0], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->componentNumberStart, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->connectivity[1], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->componentNumberEnd, fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
+        status = nastranCard_cmass2(
+            fp, 
+            &feaConnect->elementID, // eid
+            &feaConnect->mass, // m
+            &feaConnect->connectivity[0], // g1
+            &feaConnect->connectivity[1], // g2
+            &feaConnect->componentNumberStart, // c1
+            &feaConnect->componentNumberEnd, // c2
+            feaFileFormat->gridFileType
+        );
+        if (status != CAPS_SUCCESS) return status;
     }
 
     // Spring
     if (feaConnect->connectionType == Spring) {
 
-        fprintf(fp,"%-8s", "CELAS2");
-
-        tempString = convert_integerToString(feaConnect->elementID, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaConnect->stiffnessConst, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->connectivity[0], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->componentNumberStart, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->connectivity[1], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->componentNumberEnd, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaConnect->dampingConst, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaConnect->stressCoeff, fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
-
+        status = nastranCard_celas2(
+            fp, 
+            &feaConnect->elementID, // eid
+            &feaConnect->stiffnessConst, // k
+            &feaConnect->connectivity[0], // g1
+            &feaConnect->connectivity[1], // g2
+            &feaConnect->componentNumberStart, // c1
+            &feaConnect->componentNumberEnd, // c2
+            &feaConnect->dampingConst, // ge
+            &feaConnect->stressCoeff, // s
+            feaFileFormat->gridFileType
+        );
+        if (status != CAPS_SUCCESS) return status;
     }
 
     // Damper
     if (feaConnect->connectionType == Damper) {
 
-        fprintf(fp,"%-8s", "CDAMP2");
-
-        tempString = convert_integerToString(feaConnect->elementID, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaConnect->dampingConst, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->connectivity[0], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->componentNumberStart, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->connectivity[1], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->componentNumberEnd, fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
+        status = nastranCard_cdamp2(
+            fp, 
+            &feaConnect->elementID, // eid
+            &feaConnect->dampingConst, // b
+            &feaConnect->connectivity[0], // g1
+            &feaConnect->connectivity[1], // g2
+            &feaConnect->componentNumberStart, // c1
+            &feaConnect->componentNumberEnd, // c2
+            feaFileFormat->gridFileType
+        );
+        if (status != CAPS_SUCCESS) return status;
     }
 
     // Rigid Body
     if (feaConnect->connectionType == RigidBody) {
 
-        fprintf(fp,"%-8s", "RBE2");
+        status = nastranCard_rbe2(
+            fp, 
+            &feaConnect->elementID, // eid
+            &feaConnect->connectivity[0], // gn
+            &feaConnect->dofDependent, // cm 
+            1, &feaConnect->connectivity[1], // gm
+            feaFileFormat->gridFileType
+        );
+        if (status != CAPS_SUCCESS) return status;
+    }
 
-        tempString = convert_integerToString(feaConnect->elementID, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
+    // Rigid Body Interpolate
+    if (feaConnect->connectionType == RigidBodyInterpolate) {
 
-        tempString = convert_integerToString(feaConnect->connectivity[0], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->dofDependent, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaConnect->connectivity[1], fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
-
+        status = nastranCard_rbe3(
+            fp, 
+            &feaConnect->elementID, // eid
+            &feaConnect->connectivity[1], // refgrid
+            &feaConnect->dofDependent, // refc 
+            feaConnect->numMaster,
+            feaConnect->masterWeighting, // wt
+            feaConnect->masterComponent, // c
+            feaConnect->masterIDSet, // g
+            0, 
+            NULL, // gm
+            NULL, // cm
+            feaFileFormat->gridFileType
+        );
+        if (status != CAPS_SUCCESS) return status;
     }
 
     return CAPS_SUCCESS;
@@ -349,175 +566,69 @@ int nastran_writeConnectionCard(FILE *fp, feaConnectionStruct *feaConnect, feaFi
 // Write a Nastran AERO card from a feaAeroRef structure
 int nastran_writeAEROCard(FILE *fp, feaAeroRefStruct *feaAeroRef, feaFileFormatStruct *feaFileFormat) {
 
-    char *delimiter = NULL;
-    char *tempString;
-    int fieldWidth;
+    double refDensity = 1.0;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaAeroRef == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-    }
-
-    fprintf(fp,"%-8s", "AERO");
-
-    tempString = convert_integerToString( feaAeroRef->coordSystemID, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString); // ACSID
-    EG_free(tempString);
-
-    // Blank space
-    if (feaFileFormat->fileType == FreeField) {
-        fprintf(fp, ", ");
-    } else {
-        fprintf(fp, " %7s", "");
-    }
-
-    tempString = convert_doubleToString( feaAeroRef->refChord, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString); // REFC
-    EG_free(tempString);
-
-    tempString = convert_doubleToString( 1.0, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString); // RHOREF
-    EG_free(tempString);
-
-    fprintf(fp,"\n");
-
-    return CAPS_SUCCESS;
+    return nastranCard_aero(
+        fp, 
+        &feaAeroRef->coordSystemID, // acsid
+        NULL, // velocity
+        &feaAeroRef->refChord, // refc
+        &refDensity, // rhoref
+        NULL, // symxz
+        NULL, // symxy
+        feaFileFormat->fileType
+    );
 }
 
 // Write a Nastran AEROS card from a feaAeroRef structure
 int nastran_writeAEROSCard(FILE *fp, feaAeroRefStruct *feaAeroRef, feaFileFormatStruct *feaFileFormat) {
 
-    char *delimiter = NULL;
-    char *tempString;
-    int fieldWidth;
-
     if (fp == NULL) return CAPS_IOERR;
     if (feaAeroRef == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-    }
 
-    fprintf(fp,"%-8s", "AEROS");
-
-    tempString = convert_integerToString( feaAeroRef->coordSystemID, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString); // ACSID
-    EG_free(tempString);
-
-    tempString = convert_integerToString( feaAeroRef->rigidMotionCoordSystemID, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString); // RCSID
-    EG_free(tempString);
-
-    tempString = convert_doubleToString( feaAeroRef->refChord, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString); // REFC
-    EG_free(tempString);
-
-    tempString = convert_doubleToString( feaAeroRef->refSpan, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString); // REFB
-    EG_free(tempString);
-
-    tempString = convert_doubleToString( feaAeroRef->refArea, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString); // REFS
-    EG_free(tempString);
-
-    tempString = convert_integerToString( feaAeroRef->symmetryXZ, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString); // SYMXZ
-    EG_free(tempString);
-
-    tempString = convert_integerToString( feaAeroRef->symmetryXY, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString); // SYMXY
-    EG_free(tempString);
-
-    fprintf(fp,"\n");
-
-    return CAPS_SUCCESS;
+    return nastranCard_aeros(
+        fp,
+        &feaAeroRef->coordSystemID, // acsid
+        &feaAeroRef->rigidMotionCoordSystemID, // rcsid
+        &feaAeroRef->refChord, // refc
+        &feaAeroRef->refSpan, // refb
+        &feaAeroRef->refArea, // refs
+        &feaAeroRef->symmetryXZ, // symxz
+        &feaAeroRef->symmetryXY, // symxy
+        feaFileFormat->fileType
+    );
 }
 
 // Write Nastran SET1 card from a feaAeroStruct
 int nastran_writeSet1Card(FILE *fp, feaAeroStruct *feaAero, feaFileFormatStruct *feaFileFormat) {
 
-    int i; // Indexing
-
-    char *delimiter = NULL;
-
-    int sidIndex= 0, lineCount = 0; // Counters
-
     if (fp == NULL) return CAPS_IOERR;
     if (feaAero == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-    } else {
-        delimiter = " ";
-    }
-
-    if (feaAero->numGridID != 0) fprintf(fp,"%-8s%s%7d", "SET1", delimiter , feaAero->surfaceID);
-
-    lineCount = 1;
-    for (i = 0; i <feaAero->numGridID; i++) {
-        sidIndex += 1;
-        if (sidIndex % (8*lineCount) == 0) {
-
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ",+C%-5d\n", lineCount-1); // Start of continuation
-                fprintf(fp, "+C%-5d,"  , lineCount-1);  // End of continuation
-            } else {
-                fprintf(fp, "+C%-6d\n", lineCount-1); // Start of continuation
-                fprintf(fp, "+C%-6d"  , lineCount-1);  // End of continuation
-            }
-
-            lineCount += 1;
-        }
-
-        fprintf(fp,"%s%7d",delimiter, feaAero->gridIDSet[i]);
-    }
-
-    if (feaAero->numGridID != 0) fprintf(fp,"\n\n");
-
-    return CAPS_SUCCESS;
+    return nastranCard_set1(
+        fp,
+        &feaAero->surfaceID, // sid
+        feaAero->numGridID, feaAero->gridIDSet, // g
+        feaFileFormat->fileType
+    );
 }
 
 // Write Nastran Spline1 cards from a feaAeroStruct
 int nastran_writeAeroSplineCard(FILE *fp, feaAeroStruct *feaAero, feaFileFormatStruct *feaFileFormat) {
 
-    int  fieldWidth;
-    char *tempString = NULL, *idString = NULL, *delimiter = NULL;
-
     int numSpanWise;
+    int boxBegin, boxEnd;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaAero == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
-
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-    }
-
-    idString = convert_integerToString( feaAero->surfaceID, 7, 1);
-
-    fprintf(fp,"%-8s", "SPLINE1");
-    fprintf(fp, "%s%s",delimiter, idString); // EID
-    fprintf(fp, "%s%s",delimiter, idString); // CAER0
-
-    fprintf(fp, "%s%s",delimiter, idString); // Box 1
-    EG_free(tempString);
 
     if (feaAero->vlmSurface.NspanTotal > 0)
         numSpanWise = feaAero->vlmSurface.NspanTotal;
@@ -530,167 +641,333 @@ int nastran_writeAeroSplineCard(FILE *fp, feaAeroStruct *feaAero, feaFileFormatS
         return CAPS_BADVALUE;
     }
 
-    tempString = convert_integerToString( feaAero->surfaceID + numSpanWise*feaAero->vlmSurface.Nchord - 1, fieldWidth, 1);
+    boxBegin = feaAero->surfaceID;
+    boxEnd = feaAero->surfaceID + numSpanWise*feaAero->vlmSurface.Nchord - 1;
 
-//    tempString = convert_integerToString( feaAero->surfaceID +
-//                                         (feaAero->vlmSurface.Nspan-1)*(feaAero->vlmSurface.Nchord-1) - 1,
-//                                         fieldWidth, 1);
+    return nastranCard_spline1(
+        fp,
+        &feaAero->surfaceID, // eid
+        &feaAero->surfaceID, // caero
+        &boxBegin, // box1
+        &boxEnd, // box2
+        &feaAero->surfaceID, // setg
+        NULL, // dz
+        feaFileFormat->fileType
+    );
+}
 
-    fprintf(fp, "%s%s",delimiter, tempString); // Box 2
-    EG_free(tempString);
+static inline double _getSectionChordLength(vlmSectionStruct *section) {
 
+    return sqrt(pow(section->xyzTE[0] - section->xyzLE[0], 2) +
+                pow(section->xyzTE[1] - section->xyzLE[1], 2) +
+                pow(section->xyzTE[2] - section->xyzLE[2], 2));
+}
 
-    fprintf(fp, "%s%s",delimiter, idString); // SetG
+// Get divisions as equal fractions from 0.0 to 1.0
+static inline int _getDivisions(int numDivs, double **divisionsOut) {
 
-    fprintf(fp, "\n");
+    int i;
 
-    if (idString != NULL) EG_free(idString);
+    double *divisions = NULL;
+    
+    divisions = EG_alloc(numDivs * sizeof(double));
+    if (divisions == NULL) return EGADS_MALLOC;
+
+    divisions[0] = 0.0;
+    for (i = 1; i < numDivs-1; i++) {
+        divisions[i] = divisions[i-1] + 1. / numDivs;
+    }
+    divisions[numDivs-1] = 1.0;
+
+    *divisionsOut = divisions;
 
     return CAPS_SUCCESS;
+}
+
+// Determine index of closest division percent to control surface percent chord
+static inline int _getClosestDivisionIndex(int numDivs, double *divs, double percentChord, int *closestDivIndexOut) {
+
+    int i, closestDivIndex = 0;
+    double closestDivDist = 1.0, divDist;
+
+    for (i = 0; i < numDivs; i++) {
+        divDist = fabs(percentChord - divs[i]);
+        if (divDist < closestDivDist) {
+            closestDivDist = divDist;
+            closestDivIndex = i;
+        }
+    }
+
+    if ((closestDivIndex == 0) || (closestDivIndex == numDivs-1) || (closestDivDist == 1.0)) {
+        return CAPS_BADVALUE;
+    }
+
+    *closestDivIndexOut = closestDivIndex;
+
+    return CAPS_SUCCESS;
+}
+
+// Get set of box IDs corresponding to control surface
+static int _getControlSurfaceBoxIDs(int boxBeginID, int numChordDivs,
+                       /*@unused@*/ double *chordDivs,
+                                    int numSpanDivs,
+                       /*@unused@*/ double *spanDivs,
+                                    int hingelineIndex,
+                                    int isTrailing, int *numBoxIDsOut, int **boxIDsOut) {
+    
+    int ichord, ispan, csBoxIndex, boxCount, chordDivIndex;
+
+    int boxID, numBoxIDs, *boxIDs = NULL;
+
+    numBoxIDs = (numChordDivs-1) * (numSpanDivs-1);
+
+    // conservative allocate
+    boxIDs = EG_alloc(numBoxIDs * sizeof(int));
+    if (boxIDs == NULL) return EGADS_MALLOC;
+
+    boxCount = 0;
+    csBoxIndex = 0;
+
+    for (ichord = 0; ichord < numChordDivs-1; ichord++) {
+
+        chordDivIndex = ichord + 1;
+
+        for (ispan = 0; ispan < numSpanDivs-1; ispan++) {
+            
+            boxID = boxBeginID + boxCount++;
+
+            if (!isTrailing && chordDivIndex <= hingelineIndex) {
+                boxIDs[csBoxIndex++] = boxID;
+            }
+            else if (isTrailing && chordDivIndex > hingelineIndex) {
+                boxIDs[csBoxIndex++] = boxID;
+            }
+        }
+    }
+
+    numBoxIDs = csBoxIndex;
+
+    *numBoxIDsOut = numBoxIDs;
+    *boxIDsOut = boxIDs;
+
+    return CAPS_SUCCESS;
+}
+
+static int _writeAesurfCard(FILE *fp, 
+                            feaAeroStruct *feaAero, 
+                            vlmSectionStruct *rootSection, 
+                            vlmSectionStruct *tipSection, 
+                            feaFileFormatStruct *feaFileFormat) {
+    
+    int i, j, status;
+
+    int controlID, coordSystemID, aelistID;
+    int numChordDivs, numSpanDivs, numBoxes;
+    double *chordDivs = NULL, *spanDivs = NULL;
+    int *boxIDs = NULL, hingelineDivIndex;
+    double xyzHingeVec[3] = {0.0, 0.0, 0.0};
+    double pointA[3] = {0.0, 0.0, 0.0};
+    double pointB[3] = {0.0, 0.0, 0.0};
+    double pointC[3] = {0.0, 0.0, 0.0};
+
+    int found;
+
+    vlmControlStruct *controlSurface, *controlSurface2 = NULL;
+
+    for (i = 0; i < rootSection->numControl; i++) {
+        
+        controlSurface = &rootSection->vlmControl[i];
+
+        // find matching control surface info on tip section
+        found = (int) false;
+        controlSurface2 = NULL;
+        for (j = 0; j < tipSection->numControl; j++) {
+            if (strcmp(rootSection->vlmControl[i].name, tipSection->vlmControl[j].name) == 0) {
+                controlSurface2 = &tipSection->vlmControl[j];
+                found = (int) true;
+                break;
+            }
+        }
+        if (!found) continue;
+
+        // get hingeline vector
+        for (j = 0; j < 3; j++) {
+            xyzHingeVec[j] = controlSurface2->xyzHinge[j] - controlSurface->xyzHinge[j];
+        }
+
+        controlID = feaAero->surfaceID + i;
+
+        // get control surface coordinate system points
+        pointA[0] = controlSurface->xyzHinge[0];
+        pointA[1] = controlSurface->xyzHinge[1];
+        pointA[2] = controlSurface->xyzHinge[2];
+
+        pointB[0] = pointA[0];
+        pointB[1] = pointA[1];
+        pointB[2] = pointA[2] + 1;
+
+        pointC[0] = pointA[0] + 1;
+        pointC[1] = xyzHingeVec[0]/xyzHingeVec[1] * pointC[0];
+        pointC[2] = pointA[2] + 0.5;
+        
+        // get chordwise division fractions
+        numChordDivs = feaAero->vlmSurface.Nchord + 1;
+        status = _getDivisions(numChordDivs, &chordDivs);
+        if (status != CAPS_SUCCESS) goto cleanup;
+
+        // get spanwise division fractions
+        numSpanDivs = feaAero->vlmSurface.NspanTotal + 1;
+        status = _getDivisions(numSpanDivs, &spanDivs);
+        if (status != CAPS_SUCCESS) goto cleanup;
+
+        // hingeline is the closest chord div to percent chord
+        status = _getClosestDivisionIndex(
+            numChordDivs, chordDivs, controlSurface->percentChord, &hingelineDivIndex);
+        if (status != CAPS_SUCCESS) goto cleanup;
+
+        status = _getControlSurfaceBoxIDs(feaAero->surfaceID, 
+                                            numChordDivs, chordDivs, 
+                                            numSpanDivs, spanDivs, 
+                                            hingelineDivIndex, controlSurface->leOrTe,
+                                            &numBoxes, &boxIDs);
+        if (status != CAPS_SUCCESS) goto cleanup;
+
+        coordSystemID = controlID;
+        status = nastranCard_cord2r(
+            fp,
+            &coordSystemID, // cid
+            NULL, // rid
+            pointA, // a
+            pointB, // b
+            pointC, // c
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) goto cleanup;
+
+        aelistID = controlID;
+        status = nastranCard_aelist(
+            fp,
+            &aelistID,
+            numBoxes,
+            boxIDs,
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) goto cleanup;
+
+        status = nastranCard_aesurf(
+            fp, 
+            &controlID, // id, ignored
+            controlSurface->name, // label
+            &coordSystemID, // cid
+            &aelistID, // alid
+            NULL, // eff
+            "LDW", // ldw
+            NULL, // crefc
+            NULL, // crefs
+            NULL, // pllim
+            NULL, // pulim
+            NULL, // hmllim
+            NULL, // hmulim
+            NULL, // tqllim
+            NULL, // tqulim
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) goto cleanup;
+    }
+
+    status = CAPS_SUCCESS;
+
+    cleanup:
+
+        if (chordDivs != NULL) EG_free(chordDivs);
+        if (spanDivs != NULL) EG_free(spanDivs);
+        if (boxIDs != NULL) EG_free(boxIDs);
+
+        return status;
 }
 
 // Write Nastran CAERO1 cards from a feaAeroStruct
 int nastran_writeCAeroCard(FILE *fp, feaAeroStruct *feaAero, feaFileFormatStruct *feaFileFormat) {
 
-    int i, j, section; // Indexing
+    int status;
 
-    double chordLength = 0, chordVec[3];
-    int  fieldWidth;
-    char *tempString = NULL, *delimiter = NULL;
+    int i, sectionIndex; // Indexing
+
+    int *nspan, *nchord, *lspan, *lchord, defaultIGroupID = 1;
+
+    double chordLength12, chordLength43;
+    double *xyz1, *xyz4;
+
+    vlmSectionStruct *rootSection, *tipSection;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaAero == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-    }
-
     //printf("NUMBER OF SECTIONS = %d\n", feaAero->vlmSurface.numSection);
     for (i = 0; i < feaAero->vlmSurface.numSection-1; i++) {
 
-        tempString = convert_integerToString( feaAero->surfaceID, 7, 1);
-
-        fprintf(fp,"\n");
-
-        // Write necessary PAER0 card
-        fprintf(fp,"%-8s", "PAERO1");
-        fprintf(fp, "%s%s",delimiter, tempString);
-        fprintf(fp, "\n");
-
-        // Start of CAERO1 entry
-        fprintf(fp,"%-8s", "CAERO1");
-
-        fprintf(fp, "%s%s",delimiter, tempString); // Element ID
-        fprintf(fp, "%s%s",delimiter, tempString); // PAERO  ID
-        EG_free(tempString);
-
-        tempString = convert_integerToString( feaAero->coordSystemID, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
         // If Cspace and/or Sspace is something (to be defined) lets write a AEFact card instead with our own distributions
         if (feaAero->vlmSurface.Sspace == 0.0) {
-            tempString = convert_integerToString( feaAero->vlmSurface.NspanTotal, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
+            nspan = &feaAero->vlmSurface.NspanTotal;
+            lspan = NULL;
         } else {
-            tempString = convert_integerToString( 0, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
+            nspan = NULL;
+            lspan = 0; // TODO: aefact card id
+            PRINT_WARNING("Definition of spanwise boxes via LSPAN not implemented yet!\n");
         }
 
         if (feaAero->vlmSurface.Cspace == 0.0) {
-            tempString = convert_integerToString( feaAero->vlmSurface.Nchord, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
+            nchord = &feaAero->vlmSurface.Nchord;
+            lchord = NULL;
         } else {
-            tempString = convert_integerToString( 0, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
+            nchord = NULL;
+            lchord = 0; // TODO: aefact card id
+            PRINT_WARNING("Definition of chordwise boxes via LCHORD not implemented yet!\n");
         }
 
-        if (feaAero->vlmSurface.Sspace != 0.0) {
-            printf("Not implemented yet!\n");
-        } else {
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-            //tempString = convert_integerToString( 0, fieldWidth, 1);
-            //fprintf(fp, "%s%s",delimiter, tempString);
-            //EG_free(tempString);
+        sectionIndex = feaAero->vlmSurface.vlmSection[i].sectionIndex;
+        rootSection = &feaAero->vlmSurface.vlmSection[sectionIndex];
+        xyz1 = rootSection->xyzLE;
+        chordLength12 = _getSectionChordLength(rootSection);
+
+        sectionIndex = feaAero->vlmSurface.vlmSection[i+1].sectionIndex;
+        tipSection = &feaAero->vlmSurface.vlmSection[sectionIndex];
+        xyz4 = tipSection->xyzLE;
+        chordLength43 = _getSectionChordLength(tipSection);
+
+        // Write necessary PAER0 card
+        status = nastranCard_paero1(
+            fp,
+            &feaAero->surfaceID, // pid
+            0, NULL, // b
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) return status;
+
+        status = nastranCard_caero1(
+            fp,
+            &feaAero->surfaceID, // eid
+            &feaAero->surfaceID, // pid
+            &feaAero->coordSystemID, // cp
+            nspan, // nspan
+            nchord, // nchord
+            lspan, // lspan
+            lchord, // lchord
+            &defaultIGroupID, // igid
+            xyz1, // xyz1
+            xyz4, // xyz4
+            &chordLength12, // x12
+            &chordLength43, // x43
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) return status;
+
+        if (rootSection->numControl > 0) {
+
+            status = _writeAesurfCard(fp, feaAero, rootSection, tipSection, feaFileFormat);
+            if (status != CAPS_SUCCESS) return status;
         }
-
-        if (feaAero->vlmSurface.Cspace != 0.0) {
-            printf("Not implemented yet!\n");
-        } else {
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-            //tempString = convert_integerToString( 0, fieldWidth, 1);
-            //fprintf(fp, "%s%s",delimiter, tempString);
-            //EG_free(tempString);
-        }
-
-        // IGID - default to 1.... for now
-        tempString = convert_integerToString( 1, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        // Continuation line
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, ", +C");
-        } else {
-            fprintf(fp, "+C%6s", "");
-        }
-
-        fprintf(fp, "\n");
-
-        // Continuation line
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, "+C");
-        } else {
-            fprintf(fp, "+C%6s", "");
-        }
-
-
-        for (j = i; j < (2+i); j++) {
-            section = feaAero->vlmSurface.vlmSection[j].sectionIndex;
-
-            tempString = convert_doubleToString( feaAero->vlmSurface.vlmSection[section].xyzLE[0], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaAero->vlmSurface.vlmSection[section].xyzLE[1], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString( feaAero->vlmSurface.vlmSection[section].xyzLE[2], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            chordVec[0] = feaAero->vlmSurface.vlmSection[section].xyzTE[0] - feaAero->vlmSurface.vlmSection[section].xyzLE[0];
-            chordVec[1] = feaAero->vlmSurface.vlmSection[section].xyzTE[1] - feaAero->vlmSurface.vlmSection[section].xyzLE[1];
-            chordVec[2] = feaAero->vlmSurface.vlmSection[section].xyzTE[2] - feaAero->vlmSurface.vlmSection[section].xyzLE[2];
-            chordLength = sqrt(pow(chordVec[0], 2) +
-                               pow(chordVec[1], 2) +
-                               pow(chordVec[2], 2));
-
-            tempString = convert_doubleToString( chordLength, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-        }
-
-        fprintf(fp, "\n");
     }
 
     return CAPS_SUCCESS;
@@ -699,9 +976,6 @@ int nastran_writeCAeroCard(FILE *fp, feaAeroStruct *feaAero, feaFileFormatStruct
 // Write Nastran coordinate system card from a feaCoordSystemStruct structure
 int nastran_writeCoordinateSystemCard(FILE *fp, feaCoordSystemStruct *feaCoordSystem, feaFileFormatStruct *feaFileFormat) {
 
-    int  fieldWidth;
-    char *tempString, *delimiter;
-
     double pointA[3] = {0, 0, 0};
     double pointB[3] = {0, 0, 0};
     double pointC[3] = {0, 0, 0};
@@ -709,14 +983,6 @@ int nastran_writeCoordinateSystemCard(FILE *fp, feaCoordSystemStruct *feaCoordSy
     if (fp == NULL) return CAPS_IOERR;
     if (feaCoordSystem == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
-
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-    }
 
     pointA[0] = feaCoordSystem->origin[0];
     pointA[1] = feaCoordSystem->origin[1];
@@ -731,168 +997,86 @@ int nastran_writeCoordinateSystemCard(FILE *fp, feaCoordSystemStruct *feaCoordSy
     pointC[2] = feaCoordSystem->normal1[2] + pointB[2];
 
     // Rectangular
-    if (feaCoordSystem->coordSystemType == RectangularCoordSystem) fprintf(fp,"%-8s", "CORD2R");
+    if (feaCoordSystem->coordSystemType == RectangularCoordSystem) {
 
+        return nastranCard_cord2r(
+            fp,
+            &feaCoordSystem->coordSystemID, // cid
+            &feaCoordSystem->refCoordSystemID, //rid
+            pointA, // a
+            pointB, // b
+            pointC, // c
+            feaFileFormat->fileType
+        );
+    }
     // Spherical
-    if (feaCoordSystem->coordSystemType == SphericalCoordSystem)  fprintf(fp,"%-8s", "CORD2S");
+    else if (feaCoordSystem->coordSystemType == SphericalCoordSystem) {
 
+        return nastranCard_cord2s(
+            fp,
+            &feaCoordSystem->coordSystemID, // cid
+            &feaCoordSystem->refCoordSystemID, //rid
+            pointA, // a
+            pointB, // b
+            pointC, // c
+            feaFileFormat->fileType
+        );
+    }
     // Cylindrical
-    if (feaCoordSystem->coordSystemType == CylindricalCoordSystem) fprintf(fp,"%-8s", "CORD2C");
+    else if (feaCoordSystem->coordSystemType == CylindricalCoordSystem) {
 
-    if (feaCoordSystem->coordSystemType == RectangularCoordSystem ||
-        feaCoordSystem->coordSystemType == SphericalCoordSystem   ||
-        feaCoordSystem->coordSystemType == CylindricalCoordSystem) {
+        return nastranCard_cord2c(
+            fp,
+            &feaCoordSystem->coordSystemID, // cid
+            &feaCoordSystem->refCoordSystemID, //rid
+            pointA, // a
+            pointB, // b
+            pointC, // c
+            feaFileFormat->fileType
+        );
+    }
+    else {
 
-        tempString = convert_integerToString( feaCoordSystem->coordSystemID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString( feaCoordSystem->refCoordSystemID, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( pointA[0], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( pointA[1], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( pointA[2], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( pointB[0], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( pointB[1], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( pointB[2], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        // Continuation line
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, ",+C");
-        } else {
-            fprintf(fp, "+C%6s", "");
-        }
-
-        fprintf(fp, "\n");
-
-        // Continuation line
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, "+C");
-        } else {
-            fprintf(fp, "+C%6s", "");
-        }
-
-        tempString = convert_doubleToString( pointC[0], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( pointC[1], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( pointC[2], fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
-
-    } else {
-
-        printf("Unrecognized coordinate system type !!\n");
+        PRINT_ERROR("Unrecognized coordinate system type !!\n");
         return CAPS_BADVALUE;
     }
-
-    return CAPS_SUCCESS;
 }
 
 // Write combined Nastran constraint card from a set of constraint IDs.
 // 	The combined constraint ID is set through the constraintID variable.
 int nastran_writeConstraintADDCard(FILE *fp, int constraintID, int numSetID, int constraintSetID[], feaFileFormatStruct *feaFileFormat) {
 
-    int i; // Indexing
-
-    int sidIndex= 0, lineCount = 0; // Counters
-
-    char *delimiter;
-
     if (fp == NULL) return CAPS_IOERR;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-    } else {
-        delimiter = " ";
-    }
-
-    if (numSetID != 0) fprintf(fp,"%-8s%s%7d", "SPCADD",delimiter , constraintID);
-
-    lineCount = 1;
-    for (i = 0; i < numSetID; i++) {
-        sidIndex += 1;
-        if (sidIndex % (8*lineCount) == 0) {
-
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ",+C%-5d\n", lineCount-1); // Start of continuation
-                fprintf(fp, "+C%-5d,"  , lineCount-1);  // End of continuation
-            } else {
-                fprintf(fp, "+C%-6d\n", lineCount-1); // Start of continuation
-                fprintf(fp, "+C%-6d"  , lineCount-1);  // End of continuation
-            }
-
-            lineCount += 1;
-        }
-
-        fprintf(fp,"%s%7d",delimiter, constraintSetID[i]);
-    }
-
-    if (numSetID != 0) fprintf(fp,"\n$\n");
-
-    return CAPS_SUCCESS;
+    return nastranCard_spcadd(
+        fp, &constraintID, numSetID, constraintSetID, feaFileFormat->fileType);
 }
 
 // Write Nastran constraint card from a feaConstraint structure
 int nastran_writeConstraintCard(FILE *fp, feaConstraintStruct *feaConstraint, feaFileFormatStruct *feaFileFormat) {
 
+    int status;
     int i; // Indexing;
-    char *tempString, *delimiter;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaConstraint == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-    } else {
-        delimiter = " ";
-    }
-
     if (feaConstraint->constraintType == Displacement) {
 
         for (i = 0; i < feaConstraint->numGridID; i++) {
-            fprintf(fp,"%-8s", "SPC");
 
-            tempString = convert_integerToString(feaConstraint->constraintID, 7, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaConstraint->gridIDSet[i], 7, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaConstraint->dofConstraint, 7, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString( feaConstraint->gridDisplacement, 7, 1);
-            fprintf(fp, "%s%s\n",delimiter, tempString);
-            EG_free(tempString);
+            status = nastranCard_spc(
+                fp, 
+                &feaConstraint->constraintID, // sid
+                1, // currently always 1 single tuple of Gi Ci Di
+                &feaConstraint->gridIDSet[i], // g
+                &feaConstraint->dofConstraint, // c
+                &feaConstraint->gridDisplacement, // d
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
     }
 
@@ -900,19 +1084,15 @@ int nastran_writeConstraintCard(FILE *fp, feaConstraintStruct *feaConstraint, fe
 
         for (i = 0; i < feaConstraint->numGridID; i++) {
 
-            fprintf(fp,"%-8s", "SPC1");
-
-            tempString = convert_integerToString(feaConstraint->constraintID , 7, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaConstraint->dofConstraint, 7, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaConstraint->gridIDSet[i], 7, 1);
-            fprintf(fp, "%s%s\n",delimiter, tempString);
-            EG_free(tempString);
+            status = nastranCard_spc1(
+                fp, 
+                &feaConstraint->constraintID, // sid
+                &feaConstraint->dofConstraint, // c
+                1, // currently always 1 single Gi value
+                &feaConstraint->gridIDSet[i], // g
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
     }
 
@@ -922,39 +1102,39 @@ int nastran_writeConstraintCard(FILE *fp, feaConstraintStruct *feaConstraint, fe
 // Write Nastran support card from a feaSupport structure - withID = NULL or false SUPORT, if withID = true SUPORT1
 int nastran_writeSupportCard(FILE *fp, feaSupportStruct *feaSupport, feaFileFormatStruct *feaFileFormat, int *withID) {
 
+    int status;
+
     int i; // Indexing;
-    char *tempString, *delimiter;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaSupport == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-    } else {
-        delimiter = " ";
-    }
-
     for (i = 0; i < feaSupport->numGridID; i++) {
 
         if (withID != NULL && *withID == (int) true) {
-            fprintf(fp,"%-8s", "SUPORT1");
 
-            tempString = convert_integerToString(feaSupport->supportID, 7, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
+            status = nastranCard_suport1(
+                fp,
+                &feaSupport->supportID, // sid
+                1,
+                &feaSupport->gridIDSet[i], // id
+                &feaSupport->dofSupport, // c
+                feaFileFormat->fileType
+            );
+        }
+        else {
 
-        } else {
-            fprintf(fp,"%-8s", "SUPORT");
+            status = nastranCard_suport(
+                fp,
+                1,
+                &feaSupport->gridIDSet[i], // id
+                &feaSupport->dofSupport, // c
+                feaFileFormat->fileType
+            );
         }
 
-        tempString = convert_integerToString(feaSupport->gridIDSet[i], 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaSupport->dofSupport, 7, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
+        if (status != CAPS_SUCCESS) return status;
     }
 
     return CAPS_SUCCESS;
@@ -963,270 +1143,86 @@ int nastran_writeSupportCard(FILE *fp, feaSupportStruct *feaSupport, feaFileForm
 // Write a Nastran Material card from a feaMaterial structure
 int nastran_writeMaterialCard(FILE *fp, feaMaterialStruct *feaMaterial, feaFileFormatStruct *feaFileFormat) {
 
-    int  fieldWidth;
-    char *tempString, *delimiter;
+    double strainAllowable = 1.0;
+    double *g1z = NULL, *g2z = NULL, *xt = NULL, *xc = NULL;
+    double *yt = NULL, *yc = NULL, *s = NULL, *strn = NULL;
+    double *g = NULL;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaMaterial == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-    }
-
     // Isotropic
     if (feaMaterial->materialType == Isotropic) {
 
-        /*
-        fprintf(fp,"%-8s %s %s %s %s %s\n", "MAT1",
-                                            convert_integerToString(feaMaterial->materialID  , 7, 1),
-                                            convert_doubleToString( feaMaterial->youngModulus, 7, 1),
-                                            convert_doubleToString( feaMaterial->shearModulus, 7, 1),
-                                            convert_doubleToString( feaMaterial->poissonRatio, 7, 1),
-                                            convert_doubleToString( feaMaterial->density     , 7, 1));
-         */
-
-        fprintf(fp,"%-8s", "MAT1");
-
-        tempString = convert_integerToString(feaMaterial->materialID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaMaterial->youngModulus, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaMaterial->shearModulus, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaMaterial->poissonRatio, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaMaterial->density, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaMaterial->thermalExpCoeff, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaMaterial->temperatureRef, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaMaterial->dampingCoeff, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        /*
-
-        // Continuation line
-		if (feaFileFormat->fileType == FreeField) {
-			fprintf(fp, ",+C");
-		} else {
-			fprintf(fp, "+C%6s", "");
-		}
-
-		fprintf(fp, "\n");
-
-		// Continuation line
-		if (feaFileFormat->fileType == FreeField) {
-			fprintf(fp, "+C");
-		} else {
-			fprintf(fp, "+C%6s", "");
-		}
-
-		tempString = convert_doubleToString( feaMaterial->tensionAllow, fieldWidth, 1);
-		fprintf(fp, "%s%s",delimiter, tempString);
-		EG_free(tempString);
-
-		tempString = convert_doubleToString( feaMaterial->compressAllow, fieldWidth, 1);
-		fprintf(fp, "%s%s",delimiter, tempString);
-		EG_free(tempString);
-
-		tempString = convert_doubleToString( feaMaterial->shearAllow, fieldWidth, 1);
-		fprintf(fp, "%s%s",delimiter, tempString);
-		EG_free(tempString);
-
-         */
-
-        fprintf(fp, "\n");
+        return nastranCard_mat1(
+            fp,
+            &feaMaterial->materialID, // mid
+            &feaMaterial->youngModulus, // e
+            g, // g
+            &feaMaterial->poissonRatio, // nu
+            &feaMaterial->density, // rho
+            &feaMaterial->thermalExpCoeff, // a
+            &feaMaterial->temperatureRef, // tref
+            &feaMaterial->dampingCoeff, // ge
+            NULL, // &feaMaterial->tensionAllow, // st
+            NULL, // &feaMaterial->compressAllow, // sc
+            NULL, // &feaMaterial->sheerAllow, // ss
+            NULL, // mcsid
+            feaFileFormat->fileType
+        );
     }
 
     // Orthotropic
     if (feaMaterial->materialType == Orthotropic) {
 
-        fprintf(fp,"%-8s", "MAT8");
+        if (feaMaterial->shearModulusTrans1Z != 0) 
+            g1z = &feaMaterial->shearModulusTrans1Z;
 
-        tempString = convert_integerToString(feaMaterial->materialID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
+        if (feaMaterial->shearModulusTrans2Z != 0) 
+            g2z = &feaMaterial->shearModulusTrans2Z;
 
-        tempString = convert_doubleToString( feaMaterial->youngModulus, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
+        if (feaMaterial->tensionAllow != 0) 
+            xt = &feaMaterial->tensionAllow;
 
-        tempString = convert_doubleToString( feaMaterial->youngModulusLateral, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
+        if (feaMaterial->compressAllow != 0) 
+            xc = &feaMaterial->compressAllow;
 
-        tempString = convert_doubleToString( feaMaterial->poissonRatio, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
+        if (feaMaterial->tensionAllowLateral != 0) 
+            yt = &feaMaterial->tensionAllowLateral;
 
-        tempString = convert_doubleToString( feaMaterial->shearModulus, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
+        if (feaMaterial->compressAllowLateral != 0) 
+            yc = &feaMaterial->compressAllowLateral;
 
-        if (feaMaterial->shearModulusTrans1Z != 0) {
-            tempString = convert_doubleToString( feaMaterial->shearModulusTrans1Z, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-        } else { // Blank space
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-        }
+        if (feaMaterial->shearAllow != 0) 
+            s = &feaMaterial->shearAllow;
 
-        if (feaMaterial->shearModulusTrans2Z != 0) {
-            tempString = convert_doubleToString( feaMaterial->shearModulusTrans2Z, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-        } else { // Blank space
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-        }
+        if (feaMaterial->allowType != 0) 
+            strn = &strainAllowable;
 
-        tempString = convert_doubleToString( feaMaterial->density, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        // Continuation line
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, ", +C");
-        } else {
-            fprintf(fp, "+C%6s", "");
-        }
-
-        fprintf(fp, "\n");
-
-        // Continuation line
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, "+C");
-        } else {
-            fprintf(fp, "+C%6s", "");
-        }
-
-        tempString = convert_doubleToString( feaMaterial->thermalExpCoeff, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaMaterial->thermalExpCoeffLateral, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaMaterial->temperatureRef, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        if (feaMaterial->tensionAllow != 0.0) {
-            tempString = convert_doubleToString( feaMaterial->tensionAllow, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-        } else { // Blank space
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-        }
-
-        if (feaMaterial->compressAllow != 0.0) {
-            tempString = convert_doubleToString( feaMaterial->compressAllow, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-        } else { // Blank space
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-        }
-
-        if (feaMaterial->tensionAllowLateral != 0.0) {
-            tempString = convert_doubleToString( feaMaterial->tensionAllowLateral, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-        } else { // Blank space
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-        }
-
-        if (feaMaterial->compressAllowLateral != 0.0) {
-            tempString = convert_doubleToString( feaMaterial->compressAllowLateral, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-        } else { // Blank space
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-        }
-
-        if (feaMaterial-> shearAllow != 0.0) {
-            tempString = convert_doubleToString( feaMaterial->shearAllow, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-        } else { // Blank space
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-        }
-
-        // Continuation line
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, ", +C");
-        } else {
-            fprintf(fp, "+C%6s", "");
-        }
-
-        fprintf(fp, "\n");
-
-        // Continuation line
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, "+C");
-        } else {
-            fprintf(fp, "+C%6s", "");
-        }
-
-        tempString = convert_doubleToString( feaMaterial->dampingCoeff, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        fprintf(fp, "%s%7s",delimiter, "");
-
-        if (feaMaterial->allowType == 0) {
-            fprintf(fp, "\n");
-        } else {
-            fprintf(fp, "%s1.0\n",delimiter);
-        }
+        return nastranCard_mat8(
+            fp,
+            &feaMaterial->materialID, // mid
+            &feaMaterial->youngModulus, // e1
+            &feaMaterial->youngModulusLateral, // e2
+            &feaMaterial->poissonRatio, // nu
+            &feaMaterial->shearModulus, // g12
+            g1z, // g1z
+            g2z, // g2z
+            &feaMaterial->density, // rho
+            &feaMaterial->thermalExpCoeff, // a1
+            &feaMaterial->thermalExpCoeffLateral, // a2
+            &feaMaterial->temperatureRef, // tref
+            xt, // xt
+            xc, // xc
+            yt, // yt
+            yc, // yc
+            s, // s
+            &feaMaterial->dampingCoeff, // ge
+            NULL, // f12
+            strn, // strn
+            feaFileFormat->fileType
+        );
     }
 
     return CAPS_SUCCESS;
@@ -1235,86 +1231,73 @@ int nastran_writeMaterialCard(FILE *fp, feaMaterialStruct *feaMaterial, feaFileF
 // Write a Nastran Property card from a feaProperty structure
 int nastran_writePropertyCard(FILE *fp, feaPropertyStruct *feaProperty, feaFileFormatStruct *feaFileFormat) {
 
-    int i; // Indexing
+    double *nsm = NULL; // massPerLength, massPerArea field
 
-    int  fieldWidth;
-    char *tempString=NULL;
-    char *delimiter;
+    // pshell
+    int *mid2 = NULL, *mid3 = NULL;
+    double *i12t3 = NULL, *tst = NULL;
+
+    // pcomp
+    char *lam = NULL;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaProperty == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
-
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-    }
 
     //          1D Elements        //
 
     // Rod
     if (feaProperty->propertyType ==  Rod) {
 
-        fprintf(fp,"%-8s", "PROD");
-
-        tempString = convert_integerToString(feaProperty->propertyID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaProperty->materialID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaProperty->crossSecArea, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaProperty->torsionalConst, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaProperty->torsionalStressReCoeff, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaProperty->massPerLength, fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
-
+        return nastranCard_prod(
+            fp,
+            &feaProperty->propertyID, // pid
+            &feaProperty->materialID, // mid
+            &feaProperty->crossSecArea, // a
+            &feaProperty->torsionalConst, // j
+            &feaProperty->torsionalStressReCoeff, // c
+            &feaProperty->massPerLength, // nsm
+            feaFileFormat->fileType
+        );
     }
 
     // Bar
     if (feaProperty->propertyType ==  Bar) {
 
-        fprintf(fp,"%-8s", "PBAR");
+        if (feaProperty->crossSecType != NULL) {
 
-        tempString = convert_integerToString(feaProperty->propertyID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
+            return nastranCard_pbarl(
+                fp,
+                &feaProperty->propertyID, // pid
+                &feaProperty->materialID, // mid
+                feaProperty->crossSecType, // type
+                NULL, // f0
+                10, feaProperty->crossSecDimension,
+                &feaProperty->massPerLength, // nsm
+                feaFileFormat->fileType
+            );
 
-        tempString = convert_integerToString(feaProperty->materialID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
+        } else {
 
-        tempString = convert_doubleToString( feaProperty->crossSecArea, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaProperty->zAxisInertia, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaProperty->yAxisInertia, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString( feaProperty->torsionalConst, fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
-
+            return nastranCard_pbar(
+                fp,
+                &feaProperty->propertyID, // pid
+                &feaProperty->materialID, // mid
+                &feaProperty->crossSecArea, // a
+                &feaProperty->zAxisInertia, // i1
+                &feaProperty->yAxisInertia, // i2
+                NULL, // i12
+                &feaProperty->torsionalConst, // j
+                &feaProperty->massPerLength, // nsm
+                NULL, // c
+                NULL, // d
+                NULL, // e
+                NULL, // f
+                NULL, // k1
+                NULL, // k2
+                feaFileFormat->fileType
+            );
+        }
     }
 
     //          2D Elements        //
@@ -1322,254 +1305,84 @@ int nastran_writePropertyCard(FILE *fp, feaPropertyStruct *feaProperty, feaFileF
     // Shell
     if (feaProperty->propertyType == Shell) {
 
-        fprintf(fp,"%-8s", "PSHELL");
-
-        // Property ID
-        tempString = convert_integerToString(feaProperty->propertyID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        // Material ID
-        tempString = convert_integerToString(feaProperty->materialID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        // Membrane thickness
-        tempString = convert_doubleToString(feaProperty->membraneThickness, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
         if (feaProperty->materialBendingID != 0) {
-            tempString = convert_integerToString(feaProperty->materialBendingID, 7, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaProperty->bendingInertiaRatio, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-        } else {// Print a blank
-            if (feaFileFormat->fileType == FreeField) {
-                if (feaProperty->materialShearID != 0 || feaProperty->massPerArea != 0) {
-                    fprintf(fp, ", , ");
-                }
-            } else {
-                fprintf(fp, " %7s %7s", "", "");
-            }
-
-            /*// Print a blank - ATTENTION - THIS LOGIC DIDN't LOOK RIGHT
-			if (feaProperty->materialShearID != 0 | feaFileFormat->fileType == FreeField) {
-				if (feaProperty->massPerArea != 0) {
-					fprintf(fp, ", , ");
-				}
-			} else {
-				fprintf(fp, " %7s  %7s", "", "");
-			}*/
-        }
+            mid2 = &feaProperty->materialBendingID;
+            i12t3 = &feaProperty->bendingInertiaRatio;
+        } 
 
         if (feaProperty->materialShearID != 0) {
-            tempString = convert_integerToString(feaProperty->materialShearID, 7, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaProperty->shearMembraneRatio, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-        } else {// Print a blank
-            if (feaFileFormat->fileType == FreeField) {
-                if (feaProperty->massPerArea != 0) {
-                    fprintf(fp, ", , ");
-                }
-            } else {
-                fprintf(fp, " %7s %7s", "", "");
-            }
+            mid3 = &feaProperty->materialShearID;
+            tst = &feaProperty->shearMembraneRatio;
         }
 
-        if (feaProperty->massPerArea != 0){
-            tempString = convert_doubleToString(feaProperty->massPerArea, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
+        if (feaProperty->massPerArea != 0) {
+            nsm = &feaProperty->massPerArea;
         }
-
-        fprintf(fp, "\n");
+        
+        return nastranCard_pshell(
+            fp,
+            &feaProperty->propertyID, // pid
+            &feaProperty->materialID, // mid
+            &feaProperty->membraneThickness, // t
+            mid2, // mid2
+            i12t3, // i12t3
+            mid3, // mid3
+            tst, // tst
+            nsm, // nsm
+            NULL, // z1
+            NULL, // z2
+            NULL, // mid4
+            feaFileFormat->fileType
+        );
     }
 
     // Shear
     if (feaProperty->propertyType == Shear) {
 
-        fprintf(fp,"%-8s", "PSHEAR");
-
-        // Property ID
-        tempString = convert_integerToString(feaProperty->propertyID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        // Material ID
-        tempString = convert_integerToString(feaProperty->materialID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        // Membrane thickness
-        tempString = convert_doubleToString(feaProperty->membraneThickness, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        // NSM
-        if (feaProperty->massPerArea != 0){
-            tempString = convert_doubleToString(feaProperty->massPerArea, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
+        if (feaProperty->massPerArea != 0) {
+            nsm = &feaProperty->massPerArea;
         }
 
-        fprintf(fp, "\n");
+        return nastranCard_pshear(
+            fp,
+            &feaProperty->propertyID, // pid
+            &feaProperty->materialID, // mid
+            &feaProperty->membraneThickness, // t
+            nsm, // nsm
+            NULL, // f1
+            NULL, // f2
+            feaFileFormat->fileType
+        );
     }
 
     // Composite
     if (feaProperty->propertyType == Composite) {
-        fprintf(fp,"%-8s", "PCOMP");
 
-        // PID
-        tempString = convert_integerToString(feaProperty->propertyID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        if (tempString != NULL) EG_free(tempString);
-
-        // BLANK FIELD Z0
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, ", ");
-        } else {
-            fprintf(fp, " %7s", "");
+        if (feaProperty->massPerArea != 0) {
+            nsm = &feaProperty->massPerArea;
         }
 
-        // NSM
-        if (feaProperty->massPerArea != 0){
-            tempString = convert_doubleToString(feaProperty->massPerArea, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-        } else {// Print a blank
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
+        if (feaProperty->compositeSymmetricLaminate == (int) true) {
+            lam = "SYM";
         }
 
-        // SHEAR BOND ALLOWABLE SB
-        tempString = convert_doubleToString(feaProperty->compositeShearBondAllowable, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        if (tempString != NULL) EG_free(tempString);
-
-        // FAILURE THEORY
-        if (feaProperty->compositeFailureTheory != NULL) {
-            fprintf(fp, "%s%7s",delimiter, feaProperty->compositeFailureTheory);
-        } else {
-            fprintf(fp, "%s%7s",delimiter, "");
-        }
-
-        // BLANK FIELD TREF
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, ", ");
-        } else {
-            fprintf(fp, " %7s", "");
-        }
-
-        // BLANK FIELD DAMPING
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, ", ");
-        } else {
-            fprintf(fp, " %7s", "");
-        }
-
-        // LAM
-        if (feaProperty->compositeSymmetricLaminate == (int) true){
-            fprintf(fp, "%s%7s",delimiter, "SYM");
-        } else {// Print a blank
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ", ");
-            } else {
-                fprintf(fp, " %7s", "");
-            }
-        }
-
-        // CONTINUATION LINE
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp, ",+C");
-        } else {
-            fprintf(fp, "+C%6s", "");
-        }
-
-        fprintf(fp, "\n");
-
-        // LOOP OVER PLYS
-        for (i = 0; i < feaProperty->numPly; i++) {
-
-            if ( (double)i/2.0 == (double) (i/2) ) {
-                // CONINUATION LINE
-                if (feaFileFormat->fileType == FreeField) {
-                    fprintf(fp, "+C");
-                } else {
-                    fprintf(fp, "+C%6s", "");
-                }
-            }
-
-            // MID
-            tempString = convert_integerToString(feaProperty->compositeMaterialID[i], 7, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            if (tempString != NULL) EG_free(tempString);
-
-            // THICKNESS
-            if (feaProperty->compositeThickness != NULL) {
-                tempString = convert_doubleToString(feaProperty->compositeThickness[i], fieldWidth, 1);
-                fprintf(fp, "%s%s",delimiter, tempString);
-                if (tempString != NULL) EG_free(tempString);
-
-            } else {
-                if (feaFileFormat->fileType == FreeField) {
-                    fprintf(fp, ", ");
-                } else {
-                    fprintf(fp, " %7s", "");
-                }
-            }
-
-            // THETA
-            if (feaProperty->compositeOrientation != NULL) {
-                tempString = convert_doubleToString(feaProperty->compositeOrientation[i], fieldWidth, 1);
-                fprintf(fp, "%s%s",delimiter, tempString);
-                if (tempString != NULL) EG_free(tempString);
-            } else {
-
-                if (feaFileFormat->fileType == FreeField) {
-                    fprintf(fp, ", ");
-                } else {
-                    fprintf(fp, " %7s", "");
-                }
-            }
-
-            // BLANK STRESS / STRAIN OUTPUT
-            if (i < feaProperty->numPly-1) {
-                if (feaFileFormat->fileType == FreeField) {
-                    fprintf(fp, ", ");
-                } else {
-                    fprintf(fp, " %7s", "");
-                }
-            }
-
-            if ( (double)i/2.0 != (double) (i/2) ) {
-                // CONINUATION LINE
-                if (i < feaProperty->numPly-1) {
-                    if (feaFileFormat->fileType == FreeField) {
-                        fprintf(fp, ",+C");
-                    } else {
-                        fprintf(fp, "+C%6s", "");
-                    }
-                }
-                fprintf(fp, "\n");
-            }
-
-            if (i == feaProperty->numPly-1){
-                fprintf(fp, "\n");
-            }
-
-        }
+        return nastranCard_pcomp(
+            fp,
+            &feaProperty->propertyID, // pid
+            NULL, // z0
+            nsm, // nsm
+            &feaProperty->compositeShearBondAllowable, // sb
+            feaProperty->compositeFailureTheory,
+            NULL, // tref
+            NULL, // ge
+            lam, // lam
+            feaProperty->numPly, // number of layers
+            feaProperty->compositeMaterialID, // mid
+            feaProperty->compositeThickness, // t
+            feaProperty->compositeOrientation, // theta
+            NULL, // sout
+            feaFileFormat->fileType
+        );
     }
 
     //          3D Elements        //
@@ -1577,15 +1390,17 @@ int nastran_writePropertyCard(FILE *fp, feaPropertyStruct *feaProperty, feaFileF
     // Solid
     if (feaProperty->propertyType == Solid) {
 
-        fprintf(fp,"%-8s", "PSOLID");
-
-        tempString = convert_integerToString(feaProperty->propertyID, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaProperty->materialID, 7, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
+        return nastranCard_psolid(
+            fp,
+            &feaProperty->propertyID, // pid
+            &feaProperty->materialID, // mid
+            NULL, // cordm
+            NULL, // in
+            NULL, // stress
+            NULL, // isop
+            NULL, // fctn
+            feaFileFormat->fileType
+        );
     }
 
     return CAPS_SUCCESS;
@@ -1595,115 +1410,67 @@ int nastran_writePropertyCard(FILE *fp, feaPropertyStruct *feaProperty, feaFileF
 // 	for the load. The overall load scale factor is set to 1. The combined load ID is set through the loadID variable.
 int nastran_writeLoadADDCard(FILE *fp, int loadID, int numSetID, int loadSetID[], feaLoadStruct feaLoad[], feaFileFormatStruct *feaFileFormat) {
 
+    int status;
+
     int i; // Indexing
 
-    int sidIndex= 0, lineCount = 0; // Counters
-
-    double overallScale = 1.0;
-
-    char *tempString, *delimiter;
+    double overallScale = 1.0, *loadScaleFactors = NULL;
 
     if (fp == NULL) return CAPS_IOERR;
     if (numSetID > 0 && feaLoad == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-    } else {
-        delimiter = " ";
+    loadScaleFactors = (double *) EG_alloc(sizeof(double) * numSetID);
+    if (loadScaleFactors == NULL) {
+        return EGADS_MALLOC;
     }
 
-    if (numSetID != 0) {
-        fprintf(fp,"%-8s%s%7d", "LOAD", delimiter, loadID);
-
-        tempString = convert_doubleToString(overallScale, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-    }
-
-    lineCount = 1;
     for (i = 0; i < numSetID; i++) {
-        sidIndex += 2;
-        if (sidIndex % (8*lineCount) == 0) {
-
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ",+L%-5d\n", lineCount-1); // Start of continuation
-                fprintf(fp, "+L%-5d,"  , lineCount-1);  // End of continuation
-            } else {
-                fprintf(fp, "+L%-6d\n", lineCount-1);  // Start of continuation
-                fprintf(fp, "+L%-6d"  , lineCount-1);  // End of continuation
-            }
-
-            lineCount += 1;
-        }
-
         // ID's are 1 bias
-        tempString = convert_doubleToString(feaLoad[loadSetID[i]-1].loadScaleFactor, 7, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        fprintf(fp,"%s%7d",delimiter, loadSetID[i]);
+        loadScaleFactors[i] = feaLoad[loadSetID[i]-1].loadScaleFactor;
     }
 
-    if (numSetID != 0) fprintf(fp,"\n$\n");
+    status = nastranCard_load(
+        fp,
+        &loadID,
+        &overallScale,
+        numSetID, 
+        loadScaleFactors,
+        loadSetID,
+        feaFileFormat->fileType
+    );
 
-    return CAPS_SUCCESS;
+    EG_free(loadScaleFactors);
+
+    return status;
 }
 
 // Write a Nastran Load card from a feaLoad structure
 int nastran_writeLoadCard(FILE *fp, feaLoadStruct *feaLoad, feaFileFormatStruct *feaFileFormat)
 {
-    int i, j; // Indexing
-    int fieldWidth;
-    char *tempString=NULL;
-    char *delimiter;
+    int status;
+
+    int i; // Indexing
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaLoad == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
-
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-    }
 
     // Concentrated force at a grid point
     if (feaLoad->loadType ==  GridForce) {
 
         for (i = 0; i < feaLoad->numGridID; i++) {
 
-            fprintf(fp,"%-8s", "FORCE");
-
-            tempString = convert_integerToString(feaLoad->loadID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaLoad->gridIDSet[i], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaLoad->coordSystemID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaLoad->forceScaleFactor, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaLoad->directionVector[0], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaLoad->directionVector[1], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaLoad->directionVector[2], fieldWidth, 1);
-            fprintf(fp, "%s%s\n",delimiter, tempString);
-            EG_free(tempString);
+            status = nastranCard_force(
+                fp,
+                &feaLoad->loadID, // sid
+                &feaLoad->gridIDSet[i], // g
+                &feaLoad->coordSystemID, // cid
+                &feaLoad->forceScaleFactor, // f
+                feaLoad->directionVector, // n
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
     }
 
@@ -1711,85 +1478,47 @@ int nastran_writeLoadCard(FILE *fp, feaLoadStruct *feaLoad, feaFileFormatStruct 
     if (feaLoad->loadType ==  GridMoment) {
 
         for (i = 0; i < feaLoad->numGridID; i++) {
-            fprintf(fp,"%-8s", "MOMENT");
 
-            tempString = convert_integerToString(feaLoad->loadID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaLoad->gridIDSet[i], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaLoad->coordSystemID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaLoad->momentScaleFactor, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaLoad->directionVector[0], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaLoad->directionVector[1], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaLoad->directionVector[2], fieldWidth, 1);
-            fprintf(fp, "%s%s\n",delimiter, tempString);
-            EG_free(tempString);
+            status = nastranCard_moment(
+                fp,
+                &feaLoad->loadID, // sid
+                &feaLoad->gridIDSet[i], // g
+                &feaLoad->coordSystemID, // cid
+                &feaLoad->momentScaleFactor, // m
+                feaLoad->directionVector, // n
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
     }
 
     // Gravitational load
     if (feaLoad->loadType ==  Gravity) {
 
-        fprintf(fp,"%-8s", "GRAV");
-
-        tempString = convert_integerToString(feaLoad->loadID, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_integerToString(feaLoad->coordSystemID, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaLoad->gravityAcceleration, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaLoad->directionVector[0], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaLoad->directionVector[1], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaLoad->directionVector[2], fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
+        status = nastranCard_grav(
+            fp,
+            &feaLoad->loadID, // sid
+            &feaLoad->coordSystemID, // cid
+            &feaLoad->gravityAcceleration, // g
+            feaLoad->directionVector, // n
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) return status;
     }
 
     // Pressure load
     if (feaLoad->loadType ==  Pressure) {
 
         for (i = 0; i < feaLoad->numElementID; i++) {
-            fprintf(fp,"%-8s", "PLOAD2");
 
-            tempString = convert_integerToString(feaLoad->loadID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaLoad->pressureForce, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaLoad->elementIDSet[i], fieldWidth, 1);
-            fprintf(fp, "%s%s\n",delimiter, tempString);
-            EG_free(tempString);
+            status = nastranCard_pload2(
+                fp,
+                &feaLoad->loadID, // sid
+                &feaLoad->pressureForce, // p
+                1, &feaLoad->elementIDSet[i], // eid
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
     }
 
@@ -1797,23 +1526,19 @@ int nastran_writeLoadCard(FILE *fp, feaLoadStruct *feaLoad, feaFileFormatStruct 
     if (feaLoad->loadType ==  PressureDistribute) {
 
         for (i = 0; i < feaLoad->numElementID; i++) {
-            fprintf(fp,"%-8s", "PLOAD4");
 
-            tempString = convert_integerToString(feaLoad->loadID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaLoad->elementIDSet[i], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            for (j = 0; j < 4; j++) {
-                tempString = convert_doubleToString(feaLoad->pressureDistributeForce[j], fieldWidth, 1);
-                fprintf(fp, "%s%s",delimiter, tempString);
-                EG_free(tempString);
-            }
-
-            fprintf(fp,"\n");
+            status = nastranCard_pload4(
+                fp,
+                &feaLoad->loadID, // sid
+                &feaLoad->elementIDSet[i], // eid
+                feaLoad->pressureDistributeForce, // j
+                NULL, // g1
+                NULL, // g3
+                NULL, // cid
+                NULL, // n
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
     }
 
@@ -1821,23 +1546,19 @@ int nastran_writeLoadCard(FILE *fp, feaLoadStruct *feaLoad, feaFileFormatStruct 
     if (feaLoad->loadType ==  PressureExternal) {
 
         for (i = 0; i < feaLoad->numElementID; i++) {
-            fprintf(fp,"%-8s", "PLOAD4");
 
-            tempString = convert_integerToString(feaLoad->loadID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaLoad->elementIDSet[i], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            for (j = 0; j < 4; j++) {
-                tempString = convert_doubleToString(feaLoad->pressureMultiDistributeForce[4*i + j], fieldWidth, 1);
-                fprintf(fp, "%s%s",delimiter, tempString);
-                EG_free(tempString);
-            }
-
-            fprintf(fp,"\n");
+            status = nastranCard_pload4(
+                fp,
+                &feaLoad->loadID, // sid
+                &feaLoad->elementIDSet[i], // eid
+                &feaLoad->pressureMultiDistributeForce[4*i], // j
+                NULL, // g1
+                NULL, // g3
+                NULL, // cid
+                NULL, // n
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
     }
 
@@ -1845,76 +1566,42 @@ int nastran_writeLoadCard(FILE *fp, feaLoadStruct *feaLoad, feaFileFormatStruct 
     if (feaLoad->loadType ==  Rotational) {
 
         for (i = 0; i < feaLoad->numGridID; i++) {
-            fprintf(fp,"%-8s", "RFORCE");
 
-            tempString = convert_integerToString(feaLoad->loadID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaLoad->gridIDSet[i], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaLoad->coordSystemID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString( feaLoad->angularVelScaleFactor, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString( feaLoad->directionVector[0], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString( feaLoad->directionVector[1], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString( feaLoad->directionVector[2], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp,", ,+RF\n");
-                fprintf(fp,"+RF     ");
-            } else {
-                fprintf(fp," %7s%-7s\n", "", "+RF");
-                fprintf(fp,"%-8s", "+RF");
-            }
-
-            tempString = convert_doubleToString( feaLoad->angularAccScaleFactor, fieldWidth, 1);
-            fprintf(fp, "%s%s\n",delimiter, tempString);
-            EG_free(tempString);
+            status = nastranCard_rforce(
+                fp,
+                &feaLoad->loadID, // sid
+                &feaLoad->gridIDSet[i], // g
+                &feaLoad->coordSystemID, // cid
+                &feaLoad->angularVelScaleFactor, // a
+                feaLoad->directionVector, // r
+                NULL, // method
+                &feaLoad->angularAccScaleFactor, // racc
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
     }
     // Thermal load at a grid point
     if (feaLoad->loadType ==  Thermal) {
 
-        fprintf(fp,"%-8s", "TEMPD");
-
-        tempString = convert_integerToString(feaLoad->loadID, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaLoad->temperatureDefault, fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
+        status = nastranCard_tempd(
+            fp,
+            1, &feaLoad->loadID, // sid
+            &feaLoad->temperatureDefault, // t
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) return status;
 
         for (i = 0; i < feaLoad->numGridID; i++) {
-            fprintf(fp,"%-8s", "TEMP");
 
-            tempString = convert_integerToString(feaLoad->loadID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaLoad->gridIDSet[i], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaLoad->temperature, fieldWidth, 1);
-            fprintf(fp, "%s%s\n",delimiter, tempString);
-            EG_free(tempString);
+            status = nastranCard_temp(
+                fp,
+                &feaLoad->loadID, // sid
+                1, &feaLoad->gridIDSet[i], // g
+                &feaLoad->temperature, // t
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
     }
 
@@ -1924,27 +1611,24 @@ int nastran_writeLoadCard(FILE *fp, feaLoadStruct *feaLoad, feaFileFormatStruct 
 // Write a Nastran Analysis card from a feaAnalysis structure
 int nastran_writeAnalysisCard(FILE *fp, feaAnalysisStruct *feaAnalysis, feaFileFormatStruct *feaFileFormat) {
 
+    int status;
+
     int i; // Indexing
     int numVel = 23;
     double velocity, dv, vmin, vmax, velocityArray[23];
 
-    int sidIndex= 0, lineCount = 0; // Counters
+    int analysisID, densityID, machID, velocityID;
 
-    int fieldWidth, status;
+    double *mach = NULL;
 
-    char *tempString, *delimiter;
+    // trim
+    int numParams, paramIndex;
+    double *paramMags;
+    char **paramLabels;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaAnalysis == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
-
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth  = 7;
-    }
 
     // Eigenvalue
     if (feaAnalysis->analysisType == Modal || feaAnalysis->analysisType == AeroelasticFlutter) {
@@ -1952,280 +1636,143 @@ int nastran_writeAnalysisCard(FILE *fp, feaAnalysisStruct *feaAnalysis, feaFileF
         if (feaAnalysis->extractionMethod != NULL &&
             strcasecmp(feaAnalysis->extractionMethod, "Lanczos") == 0) {
 
-            fprintf(fp,"%-8s", "EIGRL");
-
-            tempString = convert_integerToString(feaAnalysis->analysisID  , fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaAnalysis->frequencyRange[0], fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaAnalysis->frequencyRange[1], fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaAnalysis->numDesiredEigenvalue, fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            // fprintf(fp, "%s%7s%s%7s%s%-7s", delimiter, "", delimiter, "", delimiter, "");
-
-            if (feaAnalysis->eigenNormaliztion != NULL) {
-
-                fprintf(fp, "%s%7s%s%7s%s%-7s", delimiter, "", delimiter, "", delimiter, "");
-
-                fprintf(fp, "%s%7s\n", delimiter, feaAnalysis->eigenNormaliztion);
-                //fprintf(fp, "%s%7s", delimiter, feaAnalysis->eigenNormaliztion);
-            } else {
-                fprintf(fp,"\n");
-                //fprintf(fp,"%s%7s", delimiter, ""); // Print blank space
-            }
-
-            /*
-			fprintf(fp, "%s%-7s\n", delimiter, "+E1");
-
-			fprintf(fp, "%-8s", "+E1");
-
-			tempString = convert_integerToString(feaAnalysis->lanczosMode, 7, 1);
-			fprintf(fp, "%s%s", delimiter, tempString);
-			EG_free(tempString);
-
-			if (feaAnalysis->lanczosType != NULL) {
-				fprintf(fp, "%s%7s\n", delimiter, feaAnalysis->lanczosType);
-			} else {
-				fprintf(fp,"\n");
-				//fprintf(fp, "%s%7s\n", delimiter, ""); // Print blank space
-			}
-             */
+            status = nastranCard_eigrl(
+                fp,
+                &feaAnalysis->analysisID, // sid
+                &feaAnalysis->frequencyRange[0], // v1
+                &feaAnalysis->frequencyRange[1], // v2
+                &feaAnalysis->numDesiredEigenvalue, // nd
+                NULL, // msglvl
+                NULL, // maxset
+                NULL, // shfscl
+                feaAnalysis->eigenNormaliztion,
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
 
         } else {
 
-            fprintf(fp,"%-8s", "EIGR");
-
-            tempString = convert_integerToString(feaAnalysis->analysisID, fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            if (feaAnalysis->extractionMethod != NULL) {
-                fprintf(fp, "%s%7s", delimiter, feaAnalysis->extractionMethod);
-            } else {
-                fprintf(fp, "%s%7s", delimiter, ""); // Print blank space
-            }
-
-            tempString = convert_doubleToString(feaAnalysis->frequencyRange[0], fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaAnalysis->frequencyRange[1], fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaAnalysis->numEstEigenvalue, fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaAnalysis->numDesiredEigenvalue, fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, "%s%7s%s%7s%s%-7s\n", delimiter, "", delimiter, "", delimiter, "+E1");
-            } else {
-                fprintf(fp, "%s%7s%s%7s%-7s\n", delimiter, "", delimiter, "", "+E1");
-            }
-
-            fprintf(fp, "%-8s", "+E1");
-
-            if (feaAnalysis->eigenNormaliztion != NULL) {
-                fprintf(fp, "%s%7s", delimiter, feaAnalysis->eigenNormaliztion);
-            } else {
-                fprintf(fp,"%s%7s", delimiter,  ""); // Print blank space
-            }
-
-            tempString = convert_integerToString(feaAnalysis->gridNormaliztion, fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaAnalysis->componentNormaliztion, fieldWidth, 1);
-            fprintf(fp, "%s%s\n", delimiter, tempString);
-            EG_free(tempString);
+            status = nastranCard_eigr(
+                fp,
+                &feaAnalysis->analysisID, // sid
+                feaAnalysis->extractionMethod, // method
+                &feaAnalysis->frequencyRange[0], // v1
+                &feaAnalysis->frequencyRange[1], // v2
+                &feaAnalysis->numEstEigenvalue, // ne
+                &feaAnalysis->numDesiredEigenvalue, // nd
+                feaAnalysis->eigenNormaliztion, // norm
+                &feaAnalysis->gridNormaliztion, // g
+                &feaAnalysis->componentNormaliztion, //c 
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
         }
     }
 
     if (feaAnalysis->analysisType == AeroelasticTrim) {
 
-        fprintf(fp,"%-8s", "TRIM");
+        numParams = (feaAnalysis->numRigidConstraint
+                     + feaAnalysis->numControlConstraint);
 
-        tempString = convert_integerToString(feaAnalysis->analysisID, fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
-
-        if (feaAnalysis->machNumber != NULL && feaAnalysis->numMachNumber > 0) {
-            tempString = convert_doubleToString(feaAnalysis->machNumber[0], fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-        } else {
-            fprintf(fp, "%s%7s", delimiter, " ");
+        paramLabels = EG_alloc(sizeof(char *) * numParams);
+        if (paramLabels == NULL) {
+            return EGADS_MALLOC;
         }
 
-        tempString = convert_doubleToString(feaAnalysis->dynamicPressure, fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
+        paramMags = EG_alloc(sizeof(double) * numParams);
+        if (paramMags == NULL) {
+            AIM_FREE(paramLabels);
+            return EGADS_MALLOC;
+        }
+        
+        paramIndex = 0;
 
-        lineCount = 1;
-        sidIndex = 4;
+        // Rigid Constraints
         for (i = 0; i < feaAnalysis->numRigidConstraint; i++) {
-
-
-            if (sidIndex % (8*lineCount) == 0) {
-
-                if (lineCount == 1) fprintf(fp,"%8s", " ");
-
-                if (feaFileFormat->fileType == FreeField) {
-                    fprintf(fp, ",+L%-5d\n", lineCount-1); // Start of continuation
-                    fprintf(fp, "+L%-5d,"  , lineCount-1);  // End of continuation
-                } else {
-                    fprintf(fp, "+L%-6d\n", lineCount-1);  // Start of continuation
-                    fprintf(fp, "+L%-6d"  , lineCount-1);  // End of continuation
-                }
-
-                lineCount += 1;
-            }
-
-            fprintf(fp,"%s%7s", delimiter,feaAnalysis->rigidConstraint[i]);
-
-            tempString = convert_doubleToString(feaAnalysis->magRigidConstraint[i], fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            sidIndex += 2;
+            paramLabels[paramIndex] = feaAnalysis->rigidConstraint[i];
+            paramMags[paramIndex++] = feaAnalysis->magRigidConstraint[i];
         }
 
+        // Control Constraints
         for (i = 0; i < feaAnalysis->numControlConstraint; i++) {
-
-            if (sidIndex % (8*lineCount) == 0) {
-
-                if (lineCount == 1) fprintf(fp,"%8s", " ");
-
-                if (feaFileFormat->fileType == FreeField) {
-                    fprintf(fp, ",+L%-5d\n", lineCount-1); // Start of continuation
-                    fprintf(fp, "+L%-5d,"  , lineCount-1);  // End of continuation
-                } else {
-                    fprintf(fp, "+L%-6d\n", lineCount-1);  // Start of continuation
-                    fprintf(fp, "+L%-6d"  , lineCount-1);  // End of continuation
-                }
-
-                lineCount += 1;
-            }
-
-            fprintf(fp,"%s%7s", delimiter,feaAnalysis->controlConstraint[i]);
-
-            tempString = convert_doubleToString(feaAnalysis->magControlConstraint[i], fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            sidIndex += 2;
+            paramLabels[paramIndex] = feaAnalysis->controlConstraint[i];
+            paramMags[paramIndex++] = feaAnalysis->magControlConstraint[i];
         }
 
-        fprintf(fp, "\n");
+        // Mach number if set
+        if (feaAnalysis->machNumber != NULL && feaAnalysis->machNumber[0] > 0.0) {
+            mach = feaAnalysis->machNumber;
+        }
+
+        status = nastranCard_trim(
+            fp,
+            &feaAnalysis->analysisID, // id
+            mach, // mach
+            &feaAnalysis->dynamicPressure, // q
+            numParams, 
+            paramLabels, // label
+            paramMags, // ux
+            feaFileFormat->fileType
+        );
+
+        EG_free(paramLabels);
+        EG_free(paramMags);
+
+        if (status != CAPS_SUCCESS) return status;
     }
 
     if (feaAnalysis->analysisType == AeroelasticFlutter) {
+
         fprintf(fp,"%s\n","$---1---|---2---|---3---|---4---|---5---|---6---|---7---|---8---|---9---|---10--|");
         // MKAERO1, FLUTTER, FLFACT for density, mach and velocity
+
         // Write MKAERO1 INPUT
-        fprintf(fp,"%-8s", "MKAERO1");
-
-        if (feaAnalysis->numMachNumber != 0) {
-            if (feaAnalysis->numMachNumber > 8) {
-                printf("\t*** Warning *** Mach number input for AeroelasticFlutter in nastranAIM must be less than eight\n");
-            }
-
-            for (i = 0; i < 8; i++) {
-                if (i < feaAnalysis->numMachNumber) {
-                    tempString = convert_doubleToString(feaAnalysis->machNumber[i], fieldWidth, 1);
-                    fprintf(fp, "%s%s", delimiter, tempString);
-                    EG_free(tempString);
-                } else {
-                    fprintf(fp, "%s%-7s", delimiter, "");
-                }
-            }
-        }
-
-        if (feaAnalysis->numReducedFreq != 0) {
-            if (feaAnalysis->numReducedFreq > 8) {
-                printf("\t*** Warning *** Reduced freq. input for AeroelasticFlutter in nastranAIM must be less than eight\n");
-            }
-
-            fprintf(fp, "+MK\n");
-            fprintf(fp, "%-8s","+MK");
-
-            for (i = 0; i < feaAnalysis->numReducedFreq; i++) {
-                if (i == 8) break;
-                tempString = convert_doubleToString(feaAnalysis->reducedFreq[i], fieldWidth, 1);
-                fprintf(fp, "%s%s", delimiter, tempString);
-                EG_free(tempString);
-            }
-
-            //fprintf(fp, "\n");
-
-        }
-
-        fprintf(fp, "\n");
+        status = nastranCard_mkaero1(
+            fp,
+            feaAnalysis->numMachNumber, feaAnalysis->machNumber, // m
+            feaAnalysis->numReducedFreq, feaAnalysis->reducedFreq, // k
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) return status;
 
         //fprintf(fp,"%s","$LUTTER SID     METHOD  DENS    MACH    RFREQ     IMETH   NVAL/OMAX   EPS   CONT\n");
 
+        analysisID = 100 + feaAnalysis->analysisID;
+        densityID = 10 * feaAnalysis->analysisID + 1;
+        machID = 10 * feaAnalysis->analysisID + 2;
+        velocityID = 10 * feaAnalysis->analysisID + 3;
 
-        // Write MKAERO1 INPUT
-        fprintf(fp,"%-8s", "FLUTTER");
-
-        //SID
-        tempString = convert_integerToString(100 + feaAnalysis->analysisID, fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
-
-        fprintf(fp, "%s%-7s", delimiter, "PK");
-        //fprintf(fp, "%s%-7s", delimiter, "KE");
-
-        //DENS
-        tempString = convert_integerToString(10 * feaAnalysis->analysisID + 1, fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
-
-        //MACH
-        tempString = convert_integerToString(10 * feaAnalysis->analysisID + 2, fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
-
-        //VELOCITY
-        tempString = convert_integerToString(10 * feaAnalysis->analysisID + 3, fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
-
-        fprintf(fp, "%s%-7s", delimiter, "L"); // IMETH
-
-        tempString = convert_integerToString(feaAnalysis->numDesiredEigenvalue, fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
-
-        fprintf(fp, "\n");
+        // Write FLUTTER INPUT
+        status = nastranCard_flutter(
+            fp,
+            &analysisID, // sid
+            "PK", // method
+            &densityID, // dens
+            &machID, // mach
+            &velocityID, // rfreq
+            "L", // imeth
+            &feaAnalysis->numDesiredEigenvalue, // nvalue
+            NULL, // eps
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) return status;
 
         fprintf(fp,"$ DENSITY\n");
-        fprintf(fp,"%-8s", "FLFACT");
-        //DENS
-        tempString = convert_integerToString(10 * feaAnalysis->analysisID + 1, fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaAnalysis->density, fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
-        fprintf(fp, "\n");
+        status = nastranCard_flfact(
+            fp, 
+            &densityID, 
+            1, &feaAnalysis->density, 
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) return status;
 
         fprintf(fp,"$ MACH\n");
-        status = nastran_writeFLFactCard(fp, feaFileFormat, 10 * feaAnalysis->analysisID + 2, feaAnalysis->numMachNumber, feaAnalysis->machNumber);
+        status = nastranCard_flfact(
+            fp, 
+            &machID, 
+            feaAnalysis->numMachNumber, feaAnalysis->machNumber, 
+            feaFileFormat->fileType
+        );
         if (status != CAPS_SUCCESS) return status;
 
         fprintf(fp,"$ DYANMIC PRESSURE=%f\n", feaAnalysis->dynamicPressure);
@@ -2243,12 +1790,13 @@ int nastran_writeAnalysisCard(FILE *fp, feaAnalysisStruct *feaAnalysis, feaFileF
         velocityArray[numVel-1] = velocity*10;
 
         fprintf(fp,"$ VELOCITY\n");
-        status = nastran_writeFLFactCard(fp, feaFileFormat, 10 * feaAnalysis->analysisID + 3, numVel, velocityArray);
+        status = nastranCard_flfact(
+            fp, 
+            &velocityID, 
+            numVel, velocityArray, 
+            feaFileFormat->fileType
+        );
         if (status != CAPS_SUCCESS) return status;
-
-        //fprintf(fp,"$ REDUCED FREQ\n");
-        //status = nastran_writeFLFactCard(fp, feaFileFormat, 10 * feaAnalysis->analysisID + 3,feaAnalysis->numReducedFreq, feaAnalysis->reducedFreq);
-        //if (status != CAPS_SUCCESS) return status;
 
     }
 
@@ -2259,97 +1807,58 @@ int nastran_writeAnalysisCard(FILE *fp, feaAnalysisStruct *feaAnalysis, feaFileF
 //  The combined design constraint ID is set through the constraint ID variable.
 int nastran_writeDesignConstraintADDCard(FILE *fp, int constraintID, int numSetID, int designConstraintSetID[], feaFileFormatStruct *feaFileFormat) {
 
-    int i; // Indexing
-
-    int sidIndex= 0, lineCount = 0; // Counters
-
-    char *delimiter;
-
     if (fp == NULL) return CAPS_IOERR;
     if (numSetID > 0 && designConstraintSetID == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-    } else {
-        delimiter = " ";
+    if (numSetID > 0) {
+        return nastranCard_dconadd(
+            fp, 
+            &constraintID, // dcid
+            numSetID, designConstraintSetID, // dc
+            feaFileFormat->fileType
+        );
     }
-
-    if (numSetID != 0) {
-        fprintf(fp,"%-8s%s%7d", "DCONADD", delimiter, constraintID);
+    else {
+        return CAPS_SUCCESS;
     }
-
-    lineCount = 1;
-    for (i = 0; i < numSetID; i++) {
-        sidIndex += 1;
-        if (sidIndex % (8*lineCount) == 0) {
-
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ",+L%-5d\n", lineCount-1); // Start of continuation
-                fprintf(fp, "+L%-5d,"  , lineCount-1);  // End of continuation
-            } else {
-                fprintf(fp, "+L%-6d\n", lineCount-1);  // Start of continuation
-                fprintf(fp, "+L%-6d"  , lineCount-1);  // End of continuation
-            }
-
-            lineCount += 1;
-        }
-
-        fprintf(fp,"%s%7d",delimiter, designConstraintSetID[i]);
-    }
-
-    if (numSetID != 0) fprintf(fp,"\n\n");
-
-    return CAPS_SUCCESS;
 }
 
 // Write design constraint/optimization information from a feaDesignConstraint structure
 int nastran_writeDesignConstraintCard(FILE *fp, feaDesignConstraintStruct *feaDesignConstraint, feaFileFormatStruct *feaFileFormat) {
 
+    int status;
+
     int  i, j, found; // Index
 
-    int fieldWidth;
+    int elementStressLocation[4], drespID, responseAttrB;
+    char label[9];
 
-    int elementStressLocation[4];
+    int axialStressCode = 2; //torsionalStressCode = 4;
+    int failureCriterionCode = 5;
 
-    char *tempString=NULL;
-    char *delimiter, *valstr;
+    char *tempString = NULL;
+    char *valstr;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaDesignConstraint == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-        //fprintf(fp, "$---1---|---2---|---3---|---4---|---5---|---6---|---7---|---8---|---9---|---10--|\n");
-    }
-
     for (i = 0; i < feaDesignConstraint->numPropertyID; i++) {
 
         if (feaDesignConstraint->propertySetType[i] == Rod) {
 
-            // DCONSTR, DCID, RID, LALLOW, UALLOW
-            fprintf(fp,"%-8s", "DCONSTR");
+            drespID = feaDesignConstraint->designConstraintID + 10000;
 
-            tempString = convert_integerToString(feaDesignConstraint->designConstraintID, fieldWidth, 1);
-            fprintf(fp,"%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaDesignConstraint->designConstraintID+10000, fieldWidth, 1);
-            fprintf(fp,"%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaDesignConstraint->lowerBound, fieldWidth, 1);
-            fprintf(fp,"%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaDesignConstraint->upperBound, fieldWidth, 1);
-            fprintf(fp,"%s%s\n",delimiter, tempString);
-            EG_free(tempString);
+            status = nastranCard_dconstr(
+                fp,
+                &feaDesignConstraint->designConstraintID,
+                &drespID,
+                &feaDesignConstraint->lowerBound,
+                &feaDesignConstraint->upperBound,
+                feaFileFormat->fileType
+            );
+            if (status != CAPS_SUCCESS) return status;
 
             //$...STRUCTURAL RESPONSE IDENTIFICATION
             //$DRESP1 ID      LABEL   RTYPE   PTYPE   REGION  ATTA    ATTB    ATT1    +
@@ -2357,33 +1866,25 @@ int nastran_writeDesignConstraintCard(FILE *fp, feaDesignConstraintStruct *feaDe
 
             // ------------- STRESS RESPONSE ---------------------------------------------------------------------
             if (strcmp(feaDesignConstraint->responseType,"STRESS") == 0) {
-                fprintf(fp,"%-8s", "DRESP1");
 
-                tempString = convert_integerToString(feaDesignConstraint->designConstraintID+10000, fieldWidth, 1);
-                fprintf(fp,"%s%s",delimiter, tempString);
+                // make label field value
+                tempString = convert_integerToString(drespID, 6, 0);
+                snprintf(label, 9, "R%s", tempString);
                 EG_free(tempString);
 
-                tempString = convert_integerToString(feaDesignConstraint->designConstraintID+10000, fieldWidth-2, 0);
-                fprintf(fp, "%sR%s", delimiter,  tempString);
-                EG_free(tempString);
-
-                fprintf(fp,"%s%7s",delimiter,feaDesignConstraint->responseType);
-
-                fprintf(fp,"%s%7s",delimiter,"PROD");
-
-                fprintf(fp,"%s%7s", delimiter,""); // REGION
-
-                tempString = convert_integerToString(2, fieldWidth, 1); // Axial Stress
-                // 2 - Axial Stress
-                // 4 - Torsional Stress
-                fprintf(fp, "%s%s",delimiter, tempString); // ATTA
-                EG_free(tempString);
-
-                fprintf(fp,"%s%7s", delimiter,""); // ATTB
-
-                tempString = convert_integerToString(feaDesignConstraint->propertySetID[i], fieldWidth, 1);
-                fprintf(fp, "%s%s\n",delimiter, tempString); // ATT1 (PROD PID)
-                EG_free(tempString);
+                status = nastranCard_dresp1(
+                    fp,
+                    &drespID, // id
+                    label, // label
+                    feaDesignConstraint->responseType, // rtype
+                    "PROD", // ptype
+                    NULL, // region
+                    Integer, &axialStressCode, // atta
+                    Integer, NULL, // attb
+                    Integer, 1, &feaDesignConstraint->propertySetID[i], // att
+                    feaFileFormat->fileType
+                );
+                if (status != CAPS_SUCCESS) return status;
             }
         } else if (feaDesignConstraint->propertySetType[i] == Bar) {
             // Nothing set yet
@@ -2398,56 +1899,39 @@ int nastran_writeDesignConstraintCard(FILE *fp, feaDesignConstraintStruct *feaDe
 
                 for (j = 0; j < 4; j++) {
 
-                    // DCONSTR, DCID, RID, LALLOW, UALLOW
-                    fprintf(fp,"%-8s", "DCONSTR");
+                    // DCONSTR
+                    drespID = feaDesignConstraint->designConstraintID + 10000 + j*1000;
 
-                    tempString = convert_integerToString(feaDesignConstraint->designConstraintID, fieldWidth, 1);
-                    fprintf(fp,"%s%s",delimiter, tempString);
+                    status = nastranCard_dconstr(
+                        fp,
+                        &feaDesignConstraint->designConstraintID,
+                        &drespID,
+                        &feaDesignConstraint->lowerBound,
+                        &feaDesignConstraint->upperBound,
+                        feaFileFormat->fileType
+                    );
+                    if (status != CAPS_SUCCESS) return status;
+
+                    // DRESP1
+
+                    // make label field value
+                    tempString = convert_integerToString(drespID, 6, 0);
+                    snprintf(label, 9, "R%s", tempString);
                     EG_free(tempString);
 
-                    tempString = convert_integerToString(feaDesignConstraint->designConstraintID+10000+j*1000, fieldWidth, 1);
-                    fprintf(fp,"%s%s",delimiter, tempString);
-                    EG_free(tempString);
-
-                    tempString = convert_doubleToString(feaDesignConstraint->lowerBound, fieldWidth, 1);
-                    fprintf(fp,"%s%s",delimiter, tempString);
-                    EG_free(tempString);
-
-                    tempString = convert_doubleToString(feaDesignConstraint->upperBound, fieldWidth, 1);
-                    fprintf(fp,"%s%s\n",delimiter, tempString);
-                    EG_free(tempString);
-
-
-                    // DRESP1, ID, LABEL, RTYPE, PTYPE, REGION, ATTA, ATTB, ATT1
-                    //         ATT2, ...
-
-                    fprintf(fp,"%-8s", "DRESP1");
-
-                    tempString = convert_integerToString(feaDesignConstraint->designConstraintID+10000+j*1000, fieldWidth, 1);
-                    fprintf(fp,"%s%s",delimiter, tempString);
-                    EG_free(tempString);
-
-                    tempString = convert_integerToString(feaDesignConstraint->designConstraintID+10000+j*1000, fieldWidth-2, 0);
-                    //fprintf(fp, "%s%s%.*s", delimiter,  tempString,1,feaDesignConstraint->name);
-                    fprintf(fp, "%sR%s", delimiter,  tempString);
-                    EG_free(tempString);
-
-                    fprintf(fp,"%s%7s",delimiter,feaDesignConstraint->responseType);
-
-                    fprintf(fp,"%s%7s",delimiter,"PSHELL");
-
-                    fprintf(fp,"%s%7s", delimiter,"");
-
-                    //printf("Printing DRESP1 isn't very robust yet.....\n");
-                    tempString = convert_integerToString(elementStressLocation[j], fieldWidth, 1);
-                    fprintf(fp, "%s%s",delimiter, tempString);
-                    EG_free(tempString);
-
-                    fprintf(fp,"%s%7s", delimiter,"");
-
-                    tempString = convert_integerToString(feaDesignConstraint->propertySetID[i], fieldWidth, 1);
-                    fprintf(fp, "%s%s\n",delimiter, tempString);
-                    EG_free(tempString);
+                    status = nastranCard_dresp1(
+                        fp,
+                        &drespID, // id
+                        label, // label
+                        feaDesignConstraint->responseType, // rtype
+                        "PSHELL", // ptype
+                        NULL, // region
+                        Integer, &elementStressLocation[j], // atta
+                        Integer, NULL, // attb
+                        Integer, 1, &feaDesignConstraint->propertySetID[i], // att
+                        feaFileFormat->fileType
+                    );
+                    if (status != CAPS_SUCCESS) return status;
                 }
             }
 
@@ -2455,51 +1939,29 @@ int nastran_writeDesignConstraintCard(FILE *fp, feaDesignConstraintStruct *feaDe
 
             // ------------- CFAILURE RESPONSE ---------------------------------------------------------------------
             if (strcmp(feaDesignConstraint->responseType,"CFAILURE") == 0) {
-                // DCONSTR, DCID, RID, LALLOW, UALLOW
-                fprintf(fp,"%-8s", "DCONSTR");
 
-                tempString = convert_integerToString(feaDesignConstraint->designConstraintID, fieldWidth, 1);
-                fprintf(fp,"%s%s",delimiter, tempString);
+                // DCONSTR
+
+                drespID = feaDesignConstraint->designConstraintID + 10000;
+
+                status = nastranCard_dconstr(
+                    fp,
+                    &feaDesignConstraint->designConstraintID,
+                    &drespID,
+                    &feaDesignConstraint->lowerBound,
+                    &feaDesignConstraint->upperBound,
+                    feaFileFormat->fileType
+                );
+                if (status != CAPS_SUCCESS) return status;
+
+                // DRESP1
+
+                // make label field value
+                tempString = convert_integerToString(drespID, 6, 0);
+                snprintf(label, 9, "L%s", tempString);
                 EG_free(tempString);
 
-                tempString = convert_integerToString(feaDesignConstraint->designConstraintID+10000, fieldWidth, 1);
-                fprintf(fp,"%s%s",delimiter, tempString);
-                EG_free(tempString);
-
-                tempString = convert_doubleToString(feaDesignConstraint->lowerBound, fieldWidth, 1);
-                fprintf(fp,"%s%s",delimiter, tempString);
-                EG_free(tempString);
-
-                tempString = convert_doubleToString(feaDesignConstraint->upperBound, fieldWidth, 1);
-                fprintf(fp,"%s%s\n",delimiter, tempString);
-                EG_free(tempString);
-
-                // DRESP1, ID, LABEL, RTYPE, PTYPE, REGION, ATTA, ATTB, ATT1
-                //         ATT2, ...
-                fprintf(fp,"%-8s", "DRESP1");
-
-                tempString = convert_integerToString(feaDesignConstraint->designConstraintID+10000, fieldWidth, 1);
-                fprintf(fp,"%s%s",delimiter, tempString);
-                EG_free(tempString);
-
-                tempString = convert_integerToString(feaDesignConstraint->designConstraintID+10000, fieldWidth-2, 0);
-                //fprintf(fp, "%s%s%.*s", delimiter,  tempString,1,feaDesignConstraint->name);
-                fprintf(fp, "%sL%s", delimiter,  tempString);
-                EG_free(tempString);
-
-                fprintf(fp,"%s%7s",delimiter,feaDesignConstraint->responseType);
-
-                fprintf(fp,"%s%7s",delimiter,"PCOMP");
-
-                fprintf(fp,"%s%7s", delimiter,"");
-
-                // ATTA - Failure Criterion Item Code (5)
-                tempString = convert_integerToString(5, fieldWidth, 1);
-                fprintf(fp, "%s%s",delimiter, tempString);
-                EG_free(tempString);
-
-                // ATTB - Lamina Number
-                if (feaDesignConstraint->fieldPosition == 0) {
+                 if (feaDesignConstraint->fieldPosition == 0) {
                     found = 0;
                     // OPTIONS ARE "Ti", "THETAi", "LAMINAi" all = Integer i
                     valstr = NULL;
@@ -2507,14 +1969,15 @@ int nastran_writeDesignConstraintCard(FILE *fp, feaDesignConstraintStruct *feaDe
 
                     valstr = strstr(feaDesignConstraint->fieldName, "THETA");
                     if (valstr != NULL) {
-                        fprintf(fp,"%s%7s", delimiter,&feaDesignConstraint->fieldName[5]);
+                        // little trick to get integer value of character digit, i.e. '1' - '0' = 1
+                        responseAttrB = feaDesignConstraint->fieldName[5] - '0';
                         found = 1;
                     }
 
                     if (found == 0) {
                         valstr = strstr(feaDesignConstraint->fieldName, "LAMINA");
                         if (valstr != NULL) {
-                            fprintf(fp,"%s%7s", delimiter,&feaDesignConstraint->fieldName[6]);
+                            responseAttrB = feaDesignConstraint->fieldName[6] - '0';
                             found = 1;
                         }
                     }
@@ -2522,30 +1985,34 @@ int nastran_writeDesignConstraintCard(FILE *fp, feaDesignConstraintStruct *feaDe
                     if (found == 0) {
                         valstr = strstr(feaDesignConstraint->fieldName, "T");
                         if (valstr != NULL) {
-                            fprintf(fp,"%s%7s", delimiter,&feaDesignConstraint->fieldName[1]);
+                            responseAttrB = feaDesignConstraint->fieldName[1] - '0';
                             found = 1;
                         }
                     }
 
                     if (found == 0) {
-                        printf("  WARNING: Cound not determine what Lamina to apply constraint too, using default = 1\n");
+                        printf("  WARNING: Could not determine what Lamina to apply constraint too, using default = 1\n");
                         printf("  String Entered: %s\n", feaDesignConstraint->fieldName);
-                        tempString = convert_integerToString(1, fieldWidth, 1);
-                        fprintf(fp, "%s%s",delimiter, tempString);
-                        EG_free(tempString);
+                        responseAttrB = 1;
                     }
                 } else {
-                    tempString = convert_integerToString(feaDesignConstraint->fieldPosition, fieldWidth, 1);
-                    fprintf(fp, "%s%s",delimiter, tempString);
-                    EG_free(tempString);
+                    responseAttrB = feaDesignConstraint->fieldPosition;
                 }
 
-                // ATT1 - Property ID
-                tempString = convert_integerToString(feaDesignConstraint->propertySetID[i], fieldWidth, 1);
-                fprintf(fp, "%s%s\n",delimiter, tempString);
-                EG_free(tempString);
+                status = nastranCard_dresp1(
+                    fp,
+                    &drespID, // id
+                    label, // label
+                    feaDesignConstraint->responseType, // rtype
+                    "PCOMP", // ptype
+                    NULL, // region
+                    Integer, &failureCriterionCode, // atta
+                    Integer, &responseAttrB, // attb
+                    Integer, 1, &feaDesignConstraint->propertySetID[i], // att
+                    feaFileFormat->fileType
+                );
+                if (status != CAPS_SUCCESS) return status;
             }
-
 
         } else if (feaDesignConstraint->propertySetType[i] == Solid) {
             // Nothing set yet
@@ -2555,310 +2022,730 @@ int nastran_writeDesignConstraintCard(FILE *fp, feaDesignConstraintStruct *feaDe
     return CAPS_SUCCESS;
 }
 
+// get element type value for TYPE field in DVCREL* card
+/*@null@*/
+static char * _getElementTypeIdentifier(int elementType, int elementSubType) {
+
+    char *identifier = NULL;
+
+    if (elementType == Node) {
+        
+        if (elementSubType == ConcentratedMassElement) {
+            identifier = "CONM2";
+        }
+        // else {
+        //     identifier = "CONM2"; // default
+        // }
+    }
+
+    if (elementType == Line) {
+
+        if (elementSubType == BarElement) {
+            identifier = "CBAR";
+        }
+        else if (elementSubType == BeamElement) {
+            // beam elements not supported yet
+            identifier = NULL;
+        }
+        else {
+            identifier = "CROD"; // default
+        }
+    }
+
+    if (elementType == Triangle) {
+
+        if (elementSubType == ShellElement) {
+            identifier = "CTRIA3";
+        }
+        else {
+            identifier = "CTRIA3"; // default
+        }
+    }
+
+    if (elementType == Triangle_6) {
+
+        if (elementSubType == ShellElement) {
+            identifier = "CTRIA6";
+        }
+        else {
+            identifier = "CTRIA6"; // default
+        }
+    }
+
+    if (elementType == Quadrilateral) {
+
+        if (elementSubType == ShearElement) {
+            identifier = "CSHEAR";
+        }
+        else if (elementSubType == ShellElement) {
+            identifier = "CQUAD4";
+        }
+        else {
+            identifier = "CQUAD4"; // default
+        }
+    }
+
+    if (elementType == Quadrilateral_8) {
+
+        if (elementSubType == ShellElement) {
+            identifier = "CQUAD8";
+        }
+        else {
+            identifier = "CQUAD8"; // default
+        }
+    }
+
+    if (identifier != NULL) {
+        return EG_strdup(identifier);
+    }
+    else {
+        return NULL;
+    }
+}
+
 // Write design variable/optimization information from a feaDesignVariable structure
 int nastran_writeDesignVariableCard(FILE *fp, feaDesignVariableStruct *feaDesignVariable, feaFileFormatStruct *feaFileFormat) {
 
-    int  i, c, fieldWidth;
+    // int  i;
 
     int status; // Function return status
 
-    char *tempString=NULL;
-    char *delimiter;
+    int *ddval = NULL;
+    double *xlb = NULL, *xub = NULL, *delxv = NULL;
+    // char *type = NULL;
+
+    int dlinkID;//, uniqueID;
+
+    // char *pname = NULL, *cname = NULL;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaDesignVariable == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
-        fprintf(fp, "$---1---|---2---|---3---|---4---|---5---|---6---|---7---|---8---|---9---|---10--|\n");
+    if (feaDesignVariable->numDiscreteValue == 0) {
+        xlb = &feaDesignVariable->lowerBound;
+        xub = &feaDesignVariable->upperBound;
+        delxv = &feaDesignVariable->maxDelta;
+    }
+    else {
+        ddval = &feaDesignVariable->designVariableID;
     }
 
+    status = nastranCard_desvar(
+        fp,
+        &feaDesignVariable->designVariableID, // id
+        feaDesignVariable->name, // label
+        &feaDesignVariable->initialValue, // xinit
+        xlb, // xlb 
+        xub, // xub
+        delxv, // delxv
+        ddval, // ddval
+        feaFileFormat->fileType
+    );
+    if (status != CAPS_SUCCESS) return status;
 
-    // DESVAR, ID, LABEL, XINIT, XLB, XUB, DELXV
-    fprintf(fp,"%-8s", "DESVAR");
-
-    tempString = convert_integerToString(feaDesignVariable->designVariableID, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString);
-    EG_free(tempString);
-
-    fprintf(fp, "%s%7s", delimiter,feaDesignVariable->name);
-
-    tempString = convert_doubleToString(feaDesignVariable->initialValue, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString);
-    EG_free(tempString);
-
-    /*
-    tempString = convert_doubleToString(feaDesignVariable->lowerBound, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString);
-    EG_free(tempString);
-
-    tempString = convert_doubleToString(feaDesignVariable->upperBound, fieldWidth, 1);
-    fprintf(fp, "%s%s",delimiter, tempString);
-    EG_free(tempString);
-     */
-
-    if (feaDesignVariable->numDiscreteValue == 0) {
-
-        tempString = convert_doubleToString(feaDesignVariable->lowerBound, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaDesignVariable->upperBound, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaDesignVariable->maxDelta, fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
-
-    } else {
-
-        if (feaFileFormat->fileType == FreeField) {
-            fprintf(fp,", , ");
-        } else {
-            fprintf(fp," %7s %7s", "", "");
-        }
-
-        // ID to DDVAL entry
-        tempString = convert_integerToString(feaDesignVariable->designVariableID, fieldWidth, 1);
-        fprintf(fp, "%s%s\n",delimiter, tempString);
-        EG_free(tempString);
+    if (ddval != NULL) {
 
         // Write DDVAL card
-        status = nastran_writeDDVALCard(fp,
-                                        feaDesignVariable->designVariableID,
-                                        feaDesignVariable->numDiscreteValue,
-                                        feaDesignVariable->discreteValue,
-                                        feaFileFormat);
+        status = nastranCard_ddval(
+            fp,
+            ddval, // id
+            feaDesignVariable->numDiscreteValue,
+            feaDesignVariable->discreteValue, // dval
+            feaFileFormat->fileType
+        );
         if (status != CAPS_SUCCESS) return status;
-
-    }
-
-
-    if (feaDesignVariable->designVariableType == MaterialDesignVar) {
-
-        for (i = 0; i < feaDesignVariable->numMaterialID; i++) {
-            fprintf(fp,"%-8s", "DVMREL1");
-
-            tempString = convert_integerToString(feaDesignVariable->designVariableID, fieldWidth, 1);
-            fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
-
-            // UnknownMaterial, Isotropic, Anisothotropic, Orthotropic, Anisotropic
-            if (feaDesignVariable->materialSetType[i] == Isotropic) {
-                fprintf(fp,"%s%7s",delimiter, "MAT1");
-            } else if (feaDesignVariable->materialSetType[i] == Anisothotropic) {
-                fprintf(fp,"%s%7s",delimiter, "MAT2");
-            } else if (feaDesignVariable->materialSetType[i] == Orthotropic) {
-                fprintf(fp,"%s%7s",delimiter, "MAT8");
-            } else if (feaDesignVariable->materialSetType[i] == Anisotropic) {
-                fprintf(fp,"%s%7s",delimiter, "MAT9");
-            }
-
-            tempString = convert_integerToString(feaDesignVariable->materialSetID[i], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            if (feaDesignVariable->fieldPosition == 0) {
-                fprintf(fp,"%s%7s",delimiter, feaDesignVariable->fieldName);
-            } else {
-                tempString = convert_integerToString(feaDesignVariable->fieldPosition, fieldWidth, 1);
-                fprintf(fp, "%s%s",delimiter, tempString);
-                EG_free(tempString);
-            }
-
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp,", , , , ");
-            } else {
-                fprintf(fp," %7s %7s %7s %7s", "", "", "", "");
-            }
-
-            tempString = convert_integerToString(feaDesignVariable->designVariableID, 5, 0);
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, "%s+DV%s\n+DV%s",delimiter, tempString, tempString);
-            } else {
-                fprintf(fp, "+DV%s\n+DV%s", tempString, tempString);
-            }
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaDesignVariable->designVariableID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(1.0, fieldWidth, 1);
-            fprintf(fp, "%s%s\n",delimiter, tempString);
-            EG_free(tempString);
-
-        }
-    }
-
-    if (feaDesignVariable->designVariableType == PropertyDesignVar) {
-
-        // DVPREL1, ID, TYPE, PID, FID, PMIN, PMAX, CO
-        //          DVID1, COEF1, DVID2, COEF2 ...
-        for (i = 0; i < feaDesignVariable->numPropertyID; i++) {
-
-            fprintf(fp,"%-8s", "DVPREL1");
-
-            tempString = convert_integerToString(feaDesignVariable->designVariableID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            // UnknownProperty, Rod, Bar, Shear, Shell, Composite, Solid
-            if (feaDesignVariable->propertySetType[i] == Rod) {
-                fprintf(fp,"%s%7s",delimiter, "PROD");
-            } else if (feaDesignVariable->propertySetType[i] == Bar) {
-                fprintf(fp,"%s%7s",delimiter, "PBAR");
-            } else if (feaDesignVariable->propertySetType[i] == Shell) {
-                fprintf(fp,"%s%7s",delimiter, "PSHELL");
-            } else if (feaDesignVariable->propertySetType[i] == Composite) {
-                fprintf(fp,"%s%7s",delimiter, "PCOMP");
-            } else if (feaDesignVariable->propertySetType[i] == Solid) {
-                fprintf(fp,"%s%7s",delimiter, "PSOLID");
-            }
-
-            tempString = convert_integerToString(feaDesignVariable->propertySetID[i], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            if (feaDesignVariable->fieldPosition == 0) {
-                fprintf(fp,"%s%7s",delimiter, feaDesignVariable->fieldName);
-            } else {
-                tempString = convert_integerToString(feaDesignVariable->fieldPosition, fieldWidth, 1);
-                fprintf(fp, "%s%s",delimiter, tempString);
-                EG_free(tempString);
-            }
-
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp,", , , , ");
-            } else {
-                fprintf(fp," %7s %7s %7s %7s", "", "", "", "");
-            }
-
-            tempString = convert_integerToString(feaDesignVariable->designVariableID, 5, 0);
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, "%s+DV%s\n+DV%s",delimiter, tempString, tempString);
-            } else {
-                fprintf(fp, "+DV%s\n+DV%s", tempString, tempString);
-            }
-            EG_free(tempString);
-
-            tempString = convert_integerToString(feaDesignVariable->designVariableID, fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(1.0, fieldWidth, 1);
-            fprintf(fp, "%s%s\n",delimiter, tempString);
-            EG_free(tempString);
-
-        }
     }
 
     if (feaDesignVariable->numIndependVariable > 0) {
-        c = 1;
-        // DLINK, ID,  DDVID,  CO,  CMULT,  IDV1,  C1,  IDV2,  C2
-        fprintf(fp,"%-8s", "DLINK");
 
-        tempString = convert_integerToString(feaDesignVariable->designVariableID+10000, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
+        dlinkID = feaDesignVariable->designVariableID + 10000;
 
-        tempString = convert_integerToString(feaDesignVariable->designVariableID, fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaDesignVariable->variableWeight[0], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        tempString = convert_doubleToString(feaDesignVariable->variableWeight[1], fieldWidth, 1);
-        fprintf(fp, "%s%s",delimiter, tempString);
-        EG_free(tempString);
-
-        for (i = 0; i < feaDesignVariable->numIndependVariable; i++) {
-
-            tempString = convert_integerToString(feaDesignVariable->independVariableID[i], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            tempString = convert_doubleToString(feaDesignVariable->independVariableWeight[i], fieldWidth, 1);
-            fprintf(fp, "%s%s",delimiter, tempString);
-            EG_free(tempString);
-
-            if (i > feaDesignVariable->numIndependVariable-1 && i == c) {
-                c = c + 4;
-                if (feaFileFormat->fileType == FreeField) {
-                    fprintf(fp, ",+C\n+, ");
-                } else {
-                    fprintf(fp, "+C%6s\n%8s", "", "");
-                }
-            } else if (i == feaDesignVariable->numIndependVariable-1) {
-                fprintf(fp,"\n");
-            }
-
-        }
+        status = nastranCard_dlink(
+            fp,
+            &dlinkID, // id
+            &feaDesignVariable->designVariableID, // ddvid
+            &feaDesignVariable->variableWeight[0], // c0
+            &feaDesignVariable->variableWeight[1], // cmult
+            feaDesignVariable->numIndependVariable, 
+            feaDesignVariable->independVariableID, // idv
+            feaDesignVariable->independVariableWeight, // c
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) return status;
     }
 
     return CAPS_SUCCESS;
 }
 
-// Write a Nastran DDVAL card from a set of ddvalSet. The id is set through the ddvalID variable.
-int nastran_writeDDVALCard(FILE *fp, int ddvalID, int numDDVALSet, double ddvalSet[], feaFileFormatStruct *feaFileFormat) {
+// Write design variable relation information from a feaDesignVariableRelation structure
+int nastran_writeDesignVariableRelationCard(FILE *fp, feaDesignVariableRelationStruct *feaDesignVariableRelation, feaProblemStruct *feaProblem, feaFileFormatStruct *feaFileFormat) {
+    
+    int i, j, status, uniqueID;
 
-    int i; // Indexing
-    int fieldWidth;
-    int sidIndex= 0, lineCount = 0; // Counters
-    char *tempString = NULL, *delimiter;
+    int numDesignVariable, *designVariableSetID = NULL;
+    feaDesignVariableStruct **designVariableSet = NULL, *designVariable;
+
+    int numRelation, relationIndex; 
+    int *relationSetID = NULL, *relationSetType = NULL, *relationSetSubType = NULL;
+
+    char *type = NULL, *fieldName = NULL;
 
     if (fp == NULL) return CAPS_IOERR;
-    if (numDDVALSet > 0 && ddvalSet == NULL) return CAPS_NULLVALUE;
+    if (feaDesignVariableRelation == NULL) return CAPS_NULLVALUE;
     if (feaFileFormat == NULL) return CAPS_NULLVALUE;
 
-    if (feaFileFormat->fileType == FreeField) {
-        delimiter = ",";
-        fieldWidth = 8;
-    } else {
-        delimiter = " ";
-        fieldWidth = 7;
+    // Get design variable relation set data from associated design variable(s)
+
+    status = fea_findDesignVariablesByNames(
+        feaProblem, 
+        feaDesignVariableRelation->numDesignVariable, feaDesignVariableRelation->designVariableNameSet,
+        &numDesignVariable, &designVariableSet
+    );
+
+    if (status == CAPS_NOTFOUND) {
+        PRINT_WARNING("Only %d of %d design variables found", 
+                      numDesignVariable, feaDesignVariableRelation->numDesignVariable);
+    }
+    else if (status != CAPS_SUCCESS) goto cleanup;
+
+    designVariableSetID = EG_alloc(sizeof(int) * numDesignVariable);
+    if (designVariableSetID == NULL) {
+        status = EGADS_MALLOC;
+        goto cleanup;
     }
 
-    if (numDDVALSet != 0) {
-        fprintf(fp,"%-8s", "DDVAL");
+    numRelation = 0;
+    relationIndex = 0;
+    for (i = 0; i < numDesignVariable; i++) {
+        
+        designVariable = designVariableSet[i];
 
-        tempString = convert_integerToString(ddvalID, fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
-    }
+        designVariableSetID[i] = designVariable->designVariableID;
 
-    lineCount = 1;
-    for (i = 0; i < numDDVALSet; i++) {
-        sidIndex += 2;
-        if (sidIndex % (8*lineCount) == 0) {
+        if (feaDesignVariableRelation->relationType == MaterialDesignVar) {
 
-            if (feaFileFormat->fileType == FreeField) {
-                fprintf(fp, ",+L%-5d\n", lineCount-1); // Start of continuation
-                fprintf(fp, "+L%-5d,"  , lineCount-1);  // End of continuation
-            } else {
-                fprintf(fp, "+L%-6d\n", lineCount-1);  // Start of continuation
-                fprintf(fp, "+L%-6d"  , lineCount-1);  // End of continuation
+            if (numRelation == 0) {
+                numRelation = designVariable->numMaterialID;
+                relationSetID = EG_alloc(numRelation * sizeof(int));
+                relationSetType = EG_alloc(numRelation * sizeof(int));
+            }
+            else {
+                numRelation += designVariable->numMaterialID;
+                relationSetID = EG_reall(relationSetID, numRelation * sizeof(int));
+                relationSetType = EG_reall(relationSetType, numRelation * sizeof(int));
             }
 
-            lineCount += 1;
+            if (relationSetID == NULL || relationSetType == NULL) {
+                status = EGADS_MALLOC;
+                goto cleanup;
+            }
+
+            for (j = 0; j < designVariable->numMaterialID; j++) {
+
+                relationSetID[relationIndex] = designVariable->materialSetID[j];
+                relationSetType[relationIndex] = designVariable->materialSetType[j];
+                relationIndex++;
+            }
         }
 
-        tempString = convert_doubleToString(ddvalSet[i], fieldWidth, 1);
-        fprintf(fp, "%s%s", delimiter, tempString);
-        EG_free(tempString);
+        else if (feaDesignVariableRelation->relationType == PropertyDesignVar) {
+
+            if (numRelation == 0) {
+                numRelation = designVariable->numPropertyID;
+                relationSetID = EG_alloc(numRelation * sizeof(int));
+                relationSetType = EG_alloc(numRelation * sizeof(int));
+            }
+            else {
+                numRelation += designVariable->numPropertyID;
+                relationSetID = EG_reall(relationSetID, numRelation * sizeof(int));
+                relationSetType = EG_reall(relationSetType, numRelation * sizeof(int));
+            }
+
+            if (relationSetID == NULL || relationSetType == NULL) {
+                status = EGADS_MALLOC;
+                goto cleanup;
+            }
+
+            for (j = 0; j < designVariable->numPropertyID; j++) {
+                relationSetID[relationIndex] = designVariable->propertySetID[j];
+                relationSetType[relationIndex] = designVariable->propertySetType[j];
+                relationIndex++;
+            }
+        }
+
+        else if (feaDesignVariableRelation->relationType == ElementDesignVar) {
+
+            if (numRelation == 0) {
+                numRelation = designVariable->numElementID;
+                relationSetID = EG_alloc(numRelation * sizeof(int));
+                relationSetType = EG_alloc(numRelation * sizeof(int));
+                relationSetSubType = EG_alloc(numRelation * sizeof(int));
+            }
+            else {
+                numRelation += designVariable->numElementID;
+                relationSetID = EG_reall(relationSetID, numRelation * sizeof(int));
+                relationSetType = EG_reall(relationSetType, numRelation * sizeof(int));
+                relationSetSubType = EG_reall(relationSetSubType, numRelation * sizeof(int));
+            }
+
+            if (relationSetID == NULL || relationSetType == NULL || relationSetSubType == NULL) {
+                status = EGADS_MALLOC;
+                goto cleanup;
+            }
+
+            for (j = 0; j < designVariable->numElementID; j++) {
+
+                relationSetID[relationIndex] = designVariable->elementSetID[j];
+                relationSetType[relationIndex] = designVariable->elementSetType[j];
+                relationSetSubType[relationIndex] = designVariable->elementSetSubType[j];
+                relationIndex++;
+            }
+        }
     }
 
-    if (numDDVALSet != 0) fprintf(fp,"\n");
+    // get *PNAME field value
+    if (feaDesignVariableRelation->fieldPosition == 0) {
+        fieldName = EG_strdup(feaDesignVariableRelation->fieldName);
+    } else {
+        fieldName = convert_integerToString(feaDesignVariableRelation->fieldPosition, 7, 1);
+    }
+
+    if (feaDesignVariableRelation->relationType == MaterialDesignVar) {
+
+        for (i = 0; i < numRelation; i++) {
+
+            uniqueID = feaDesignVariableRelation->relationID * 100 + i;
+            
+            // UnknownMaterial, Isotropic, Anisothotropic, Orthotropic, Anisotropic
+            if (relationSetType[i] == Isotropic) {
+                type = "MAT1";
+            } else if (relationSetType[i] == Anisothotropic) {
+                type = "MAT2";
+            } else if (relationSetType[i] == Orthotropic) {
+                type = "MAT8";
+            } else if (relationSetType[i] == Anisotropic) {
+                type = "MAT9";
+            } else {
+                PRINT_WARNING("Unknown material type: %d", relationSetType[i]);
+            }
+
+            status = nastranCard_dvmrel1(
+                fp,
+                &uniqueID, // id
+                type, // type
+                &relationSetID[i], // mid
+                fieldName, // mpname
+                NULL, // mpmin
+                NULL, // mpmax
+                &feaDesignVariableRelation->constantRelationCoeff, // c0
+                numDesignVariable,
+                designVariableSetID, // dvid
+                feaDesignVariableRelation->linearRelationCoeff, // coeff
+                feaFileFormat->fileType
+            );
+
+            if (status != CAPS_SUCCESS) goto cleanup;
+        }
+    }
+
+    else if (feaDesignVariableRelation->relationType == PropertyDesignVar) {
+
+        for (i = 0; i < numRelation; i++) {
+
+            uniqueID = feaDesignVariableRelation->relationID * 100 + i;
+
+            // UnknownProperty, Rod, Bar, Shear, Shell, Composite, Solid
+            if (relationSetType[i] == Rod) {
+                type = "PROD";
+            } else if (relationSetType[i] == Bar) {
+                type = "PBAR";
+            } else if (relationSetType[i] == Shell) {
+                type = "PSHELL";
+            } else if (relationSetType[i] == Shear) {
+                type = "PSHEAR";
+            } else if (relationSetType[i] == Composite) {
+                type = "PCOMP";
+            } else if (relationSetType[i] == Solid) {
+                type = "PSOLID";
+            } else {
+                PRINT_WARNING("Unknown property type: %d", relationSetType[i]);
+            }
+
+            status = nastranCard_dvprel1(
+                fp,
+                &uniqueID, // id
+                type, // type
+                &relationSetID[i], // pid
+                NULL, // fid
+                fieldName, // pname
+                NULL, // pmin
+                NULL, // pmax
+                &feaDesignVariableRelation->constantRelationCoeff, // c0
+                numDesignVariable,
+                designVariableSetID, // dvid
+                feaDesignVariableRelation->linearRelationCoeff, // coeff
+                feaFileFormat->fileType
+            );
+
+            if (status != CAPS_SUCCESS) goto cleanup;
+        }
+    }
+
+    else if (feaDesignVariableRelation->relationType == ElementDesignVar) {
+
+        for (i = 0; i < numRelation; i++) {
+            
+            uniqueID = feaDesignVariableRelation->relationID * 10000 + i;
+
+            // Element types:    UnknownMeshElement, Node, Line, Triangle, Triangle_6, Quadrilateral, Quadrilateral_8, Tetrahedral, Tetrahedral_10, Pyramid, Prism, Hexahedral
+            // Element subtypes: UnknownMeshSubElement, ConcentratedMassElement, BarElement, BeamElement, ShellElement, ShearElement
+            type = _getElementTypeIdentifier(relationSetType[i], relationSetSubType[i]);
+            if (type == NULL) {
+                PRINT_WARNING("Unknown element type and/or subtype: %d %d", 
+                              relationSetType[i],
+                              relationSetSubType[i]);
+            }
+
+            status = nastranCard_dvcrel1(
+                fp,
+                &uniqueID, // id
+                type, // type
+                &relationSetID[i], // eid
+                fieldName, // cpname
+                NULL, // cpmin
+                NULL, // cpmax
+                &feaDesignVariableRelation->constantRelationCoeff, // c0
+                numDesignVariable,
+                designVariableSetID, // dvid
+                feaDesignVariableRelation->linearRelationCoeff, // coeff
+                feaFileFormat->fileType
+            );
+
+            if (type != NULL) EG_free(type);
+
+            if (status != CAPS_SUCCESS) goto cleanup;
+        }
+    }
+
+    else {
+        PRINT_ERROR("Unknown design variable relation type: %d", 
+                    feaDesignVariableRelation->relationType);
+        status = CAPS_BADVALUE;
+    }
+
+
+    cleanup:
+
+        if (fieldName != NULL) {
+            EG_free(fieldName);
+        }
+
+        if (designVariableSet != NULL) {
+            EG_free(designVariableSet);
+        }
+
+        if (designVariableSetID != NULL) {
+            EG_free(designVariableSetID);
+        }
+
+        if (relationSetID != NULL) {
+            EG_free(relationSetID);
+        }
+
+        if (relationSetType != NULL) {
+            EG_free(relationSetType);
+        }
+
+        if (relationSetSubType != NULL) {
+            EG_free(relationSetSubType);
+        }
+
+        return status;
+}
+
+static int _getNextEquationLine(char **equationLines, const int lineIndex, 
+                                const char *equationString, const int lineMaxChar) {
+    
+    int numPrint, equationLength;
+
+    char lineBuffer[80];
+
+    equationLength = strlen(equationString);
+
+    if (equationLength < lineMaxChar) {
+        // full equation fits in first line
+        numPrint = snprintf(lineBuffer, lineMaxChar, "%s;", equationString);
+    }
+    else {
+        numPrint = snprintf(lineBuffer, lineMaxChar, "%s", equationString);
+    }
+    if (numPrint >= lineMaxChar) {
+        numPrint = lineMaxChar - 1; // -1 due to NULL terminator
+    }
+    equationLines[lineIndex] = EG_strdup(lineBuffer);
+
+    return numPrint;
+}
+
+static int _getEquationLines(feaDesignEquationStruct *feaEquation, 
+                             int *numEquationLines, 
+                             char ***equationLines) {
+
+    int i;
+
+    int numLines, lineIndex, numPrint, equationLength;
+    char *equationString, **lines;
+
+    // conservative estimate number of lines required
+    numLines = 0;
+    for (i = 0; i < feaEquation->equationArraySize; i++) {
+        equationString = feaEquation->equationArray[i];
+        if (i == 0)
+            numLines += 1 + ((strlen(equationString)+1) / 56);
+        else
+            numLines += 1 + ((strlen(equationString)+1) / 64);
+    }
+
+    if (numLines == 0) {
+        PRINT_WARNING("Empty equation: %s", feaEquation->name);
+        return CAPS_SUCCESS;
+    }
+
+    // assume equationLines is uninitialized
+    // alloc enough lines for double number of chars to be conservative
+    // 64 char per line
+    lines = EG_alloc(sizeof(char *) * numLines);
+    if (lines == NULL) {
+        return EGADS_MALLOC;
+    }
+    lineIndex = 0;
+
+    // first equation string
+
+    // first line is 56 char
+    equationString = feaEquation->equationArray[0];
+    equationLength = strlen(equationString);
+
+    numPrint = _getNextEquationLine(
+        lines, lineIndex, equationString, 56);
+    lineIndex++;
+
+    // each cont line is 64 char
+    // TODO: for readability, should each cont line start with 8 blank spaces?
+    while (numPrint < equationLength) {
+
+        numPrint += _getNextEquationLine(
+            lines, lineIndex, equationString + numPrint, 64);
+        lineIndex++;
+    }
+
+    // for each remaining equation string
+    for (i = 1; i < feaEquation->equationArraySize; i++) {
+        
+        equationString = feaEquation->equationArray[i];
+        equationLength = strlen(equationString);
+        numPrint = 0;
+
+        while (numPrint < equationLength) {
+
+            numPrint += _getNextEquationLine(
+                lines, lineIndex, equationString + numPrint, 64);
+            lineIndex++;
+        }
+    }
+
+    *numEquationLines = lineIndex;
+    *equationLines = lines;
 
     return CAPS_SUCCESS;
+}
+
+// Write equation information from a feaDesignEquation structure
+int nastran_writeDesignEquationCard(FILE *fp,
+                                    feaDesignEquationStruct *feaEquation,
+                       /*@unused@*/ feaFileFormatStruct *fileFormat) {
+
+    int status;
+
+    int numEquationLines = 0;
+    char **equationLines = NULL;
+
+    if (fp == NULL) return CAPS_IOERR;
+
+    status = _getEquationLines(feaEquation, &numEquationLines, &equationLines);
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    status = nastranCard_deqatn(fp, &feaEquation->equationID, numEquationLines, equationLines);
+
+    cleanup:
+
+        if (equationLines != NULL) {
+            string_freeArray(numEquationLines, &equationLines);
+        }
+
+        return status; 
+}
+
+// Write design table constants information from a feaDesignTable structure 
+int nastran_writeDesignTableCard(FILE *fp, feaDesignTableStruct *feaDesignTable, feaFileFormatStruct *fileFormat) {
+
+    if (feaDesignTable->numConstant > 0) {
+
+        return nastranCard_dtable(
+            fp, 
+            feaDesignTable->numConstant, 
+            feaDesignTable->constantLabel, // labl
+            feaDesignTable->constantValue, // valu
+            fileFormat->fileType
+        );
+    }
+    else {
+        return CAPS_SUCCESS;
+    }
+
+}
+
+// Write design response type "DISP"
+static int _writeDesignResponseDISP(FILE *fp, feaDesignResponseStruct *feaDesignResponse, feaFileFormatStruct *fileFormat) {
+
+    int status;
+
+    int drespID = 100000 + feaDesignResponse->responseID;
+
+    status = nastranCard_dresp1(
+        fp,
+        &drespID,
+        feaDesignResponse->name, // label
+        feaDesignResponse->responseType, // rtype
+        NULL, // ptype
+        NULL, // region
+        Integer, &feaDesignResponse->component, // atta
+        Integer, NULL, // attb
+        Integer, 1, &feaDesignResponse->gridID, // atti
+        fileFormat->fileType
+    );
+
+    return status;
+}
+
+// Write design response information from a feaDesignResponse structure 
+int nastran_writeDesignResponseCard(FILE *fp, feaDesignResponseStruct *feaDesignResponse, feaFileFormatStruct *fileFormat) {
+
+    const char *responseType = feaDesignResponse->responseType;
+
+    if (strcmp(responseType, "DISP") == 0) {
+        return _writeDesignResponseDISP(fp, feaDesignResponse, fileFormat);
+    }
+    else {
+        PRINT_ERROR("Unknown responseType: %s", responseType);
+        return CAPS_BADVALUE;
+    }
+}
+
+// Write design equation response information from a feaDesignEquationResponse structure 
+int nastran_writeDesignEquationResponseCard(FILE *fp, feaDesignEquationResponseStruct *feaEquationResponse, feaProblemStruct *feaProblem, feaFileFormatStruct *fileFormat) {
+
+    int status;
+
+    int drespID, equationID;
+    int numDesignVariableID=0, *designVariableIDSet = NULL;
+    int numConstant = 0;
+    char **constantLabelSet = NULL;
+    int numResponseID = 0, *responseIDSet = NULL;
+    int numGrid = 0, *gridIDSet = NULL, *dofNumberSet = NULL;
+    int numEquationResponseID = 0, *equationResponseIDSet = NULL;
+
+    status = _getEquationID(feaProblem, feaEquationResponse->equationName, &equationID);
+    if (status != CAPS_SUCCESS) {
+        PRINT_ERROR("Unable to get equation ID for name: %s - status: %d", 
+                    feaEquationResponse->equationName,
+                    status);
+        goto cleanup;
+    }
+
+    // DESVAR
+    status = _getDesignVariableIDSet(
+        feaProblem, 
+        feaEquationResponse->numDesignVariable, feaEquationResponse->designVariableNameSet, 
+        &numDesignVariableID, &designVariableIDSet
+    );
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    // DTABLE
+    numConstant = feaEquationResponse->numConstant;
+    constantLabelSet = feaEquationResponse->constantLabelSet;
+
+    // DRESP1
+    status = _getDesignResponseIDSet(
+        feaProblem, 
+        feaEquationResponse->numResponse, feaEquationResponse->responseNameSet, 
+        &numResponseID, &responseIDSet
+    );
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    // DNODE
+    numGrid = 0;
+    gridIDSet = NULL;
+    dofNumberSet = NULL;
+
+    // DRESP2
+    status = _getEquationResponseIDSet(
+        feaProblem, 
+        feaEquationResponse->numEquationResponse, feaEquationResponse->equationResponseNameSet, 
+        &numEquationResponseID, &equationResponseIDSet
+    );
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    drespID = 200000 + feaEquationResponse->equationResponseID;
+
+    status = nastranCard_dresp2(
+        fp,
+        &drespID, // id
+        feaEquationResponse->name, // label
+        &equationID, // eqid
+        NULL, //region
+        numDesignVariableID, designVariableIDSet, // dvid
+        numConstant, constantLabelSet, // labl
+        numResponseID, responseIDSet, // nr
+        numGrid, gridIDSet, dofNumberSet, // g, c
+        numEquationResponseID, equationResponseIDSet, // nrr
+        fileFormat->fileType
+    );
+
+    cleanup:
+
+        if (designVariableIDSet != NULL) {
+            EG_free(designVariableIDSet);
+        }
+        if (responseIDSet != NULL) {
+            EG_free(responseIDSet);
+        }
+        if (equationResponseIDSet != NULL) {
+            EG_free(equationResponseIDSet);
+        }
+
+        return status;
+}
+
+// Write design optimization parameter information from a feaDesignOptParam structure 
+int nastran_writeDesignOptParamCard(FILE *fp, feaDesignOptParamStruct *feaDesignOptParam, feaFileFormatStruct *fileFormat) {
+
+    if (feaDesignOptParam->numParam > 0) {
+
+        return nastranCard_doptprm(
+            fp, 
+            feaDesignOptParam->numParam, 
+            feaDesignOptParam->paramLabel, // param
+            feaDesignOptParam->paramType,
+            feaDesignOptParam->paramValue, // val
+            fileFormat->fileType
+        );
+    }
+    else {
+        return CAPS_SUCCESS;
+    }
+
 }
 
 // Read data from a Nastran F06 file to determine the number of eignevalues
@@ -3202,7 +3089,6 @@ int nastran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint, doub
 
     } else {
 
-        intLength = 0;
         beginSubcaseLine = (char *) EG_alloc((strlen(displacementLine)+1)*sizeof(char));
         if (beginSubcaseLine == NULL) return EGADS_MALLOC;
         sprintf(beginSubcaseLine,"%s",displacementLine);
@@ -3320,4 +3206,378 @@ int nastran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint, doub
 
     printf("Done reading displacements for Subcase = %d\n", subcaseId);
     return CAPS_SUCCESS;
+}
+
+// Read objective values for a Nastran OP2 file  and liad it into a dataMatrix[numPoint]
+int nastran_readOP2Objective(/*@unused@*/char *filename, int *numData,  double **dataMatrix) {
+
+    int status;
+
+    *numData = 0;
+    *dataMatrix = NULL;
+
+#ifdef HAVE_PYTHON
+    PyObject* mobj = NULL;
+#if CYTHON_PEP489_MULTI_PHASE_INIT
+    PyModuleDef *mdef = NULL;
+    PyObject *modname = NULL;
+#endif
+#endif
+
+#ifdef HAVE_PYTHON
+        {
+            // Flag to see if Python was already initialized - i.e. the AIM was called from within Python
+            int initPy = (int) false;
+
+            printf("\nUsing Python to read OP2 file\n");
+
+            // Initialize python
+            if (Py_IsInitialized() == 0) {
+                printf("\tInitializing Python within AIM\n\n");
+                Py_Initialize();
+                initPy = (int) true;
+            } else {
+                initPy = (int) false;
+            }
+
+            PyGILState_STATE gstate;
+            gstate = PyGILState_Ensure();
+
+            // Taken from "main" by running cython with --embed
+            #if PY_MAJOR_VERSION < 3
+                initnastranOP2Reader();
+            #elif CYTHON_PEP489_MULTI_PHASE_INIT
+                if (nastranOP2Reader_Initialized == (int)false || initPy == (int)true) {
+                    nastranOP2Reader_Initialized = (int)true;
+                    mobj = PyInit_nastranOP2Reader();
+                    if (!PyModule_Check(mobj)) {
+                        mdef = (PyModuleDef *) mobj;
+                        modname = PyUnicode_FromString("nastranOP2reader");
+                        mobj = NULL;
+                        if (modname) {
+                            mobj = PyModule_NewObject(modname);
+                            Py_DECREF(modname);
+                            if (mobj) PyModule_ExecDef(mobj, mdef);
+                        }
+                    }
+                }
+            #else
+                mobj = PyInit_nastranOP2Reader();
+            #endif
+
+            if (PyErr_Occurred()) {
+                PyErr_Print();
+                #if PY_MAJOR_VERSION < 3
+                    if (Py_FlushLine()) PyErr_Clear();
+                #endif
+                /* Release the thread. No Python API allowed beyond this point. */
+                PyGILState_Release(gstate);
+                status = CAPS_BADOBJECT;
+                goto cleanup;
+            }
+
+            Py_XDECREF(mobj);
+
+            status = nastran_getObjective((const char *) filename, numData, dataMatrix);
+            if (status == -1) {
+                printf("\tError: Python error occurred while reading OP2 file\n");
+            } else {
+                printf("\tDone reading OP2 file with Python\n");
+            }
+
+            if (PyErr_Occurred()) {
+                PyErr_Print();
+                #if PY_MAJOR_VERSION < 3
+                    if (Py_FlushLine()) PyErr_Clear();
+                #endif
+            }
+
+            /* Release the thread. No Python API allowed beyond this point. */
+            PyGILState_Release(gstate);
+
+            // Close down python
+            if (initPy == (int) false) {
+                printf("\n");
+            } else {
+                printf("\tClosing Python\n");
+                Py_Finalize(); // Do not finalize if the AIM was called from Python
+            }
+
+            if (status == -1) status = CAPS_NOTFOUND;
+            else {
+                if (numData == 0) status = CAPS_BADVALUE;
+                else              status = CAPS_SUCCESS;
+            }
+        }
+#else
+
+    status = CAPS_NOTIMPLEMENT;
+    goto cleanup;
+#endif
+
+cleanup:
+    if (status != CAPS_SUCCESS) printf("Error: Status %d during nastran_readOP2Objective\n", status);
+
+    return status;
+}
+
+// lagrange interpolation derivative
+static double _dL(double x, double x0, double x1, double x2) {
+
+    return ((x-x2) + (x-x1)) / ((x0-x1) * (x0-x2));
+}
+
+// Get interpolated z coordinate, using 3 bracketing points 
+// from xi, zi to define interpolating function
+static double _dzdx(double x, int n, double *xi, double *zi) {
+
+    int i, j, firstBracketIndex = 0;
+    double dz, xbracket[3]={0,0,0}, zbracket[3]={0,0,0};
+
+    // get 3 bracketing points
+    for (i = 0; i < n; i++) {
+
+        // if xi coord is greater than target x, found bracketing point
+        if (xi[i] > x) {
+
+            // first bracketing point is previous point
+            if (i != n-1) {
+                firstBracketIndex = (i-1);
+            }
+            // unless this is last point, then first is two points before
+            else {
+                firstBracketIndex = (i-2);
+            }
+
+            for (j = 0; j < 3; j++) {
+                xbracket[j] = xi[firstBracketIndex + j];
+                zbracket[j] = zi[firstBracketIndex + j];
+            }
+
+            break;
+        }
+
+        // if last iteration and not found, error
+        if (i == n-1) {
+            PRINT_ERROR("Could not find bracketing point in dzdx: %f!", x);
+            return 0.0;
+        }
+    }
+
+    dz = ( zbracket[0] * _dL(x, xbracket[0], xbracket[1], xbracket[2])
+         + zbracket[1] * _dL(x, xbracket[1], xbracket[0], xbracket[2])
+         + zbracket[2] * _dL(x, xbracket[2], xbracket[0], xbracket[1]));
+
+    return dz;
+}
+
+static double _getEndDownwash(double x, int n, double *xi, double *zi) {
+
+    return atan(_dzdx(x, n, xi, zi));
+}
+
+static double _getPanelDownwash(double wroot, double wtip, double yroot, double ytip, double yj) {
+
+    return wroot + (wtip - wroot) * ((yj - yroot) / (ytip - yroot));
+}
+
+static int _getSectionCamberTwist(vlmSectionStruct *sectionRoot, vlmSectionStruct *sectionTip,
+                                 int numChord, int numSpan, int *numPanelOut, double **downwashOut) {
+
+    int status;
+
+    int i, ichord, ispan, imid; // Indexing
+
+    int numPanel, numChordDiv, numSpanDiv;
+    double *xCoordRoot = NULL, *xCoordTip = NULL, *yCoord = NULL;
+    double *zCamberRoot = NULL, *zCamberTip=0;
+    double xmid, ymid, wroot, wtip, wij, yroot, ytip;
+    double *downwash = NULL;
+
+    if (sectionRoot == NULL) return CAPS_NULLVALUE;
+    if (sectionTip == NULL) return CAPS_NULLVALUE;
+
+    numChordDiv = numChord + 1;
+    numSpanDiv = numSpan + 1;
+
+    // get normalized chordwise coordinates and camber line
+
+    status = vlm_getSectionCamberLine(sectionRoot,
+                                    1.0, // Cosine distribution
+                                    (int) true, numChordDiv,
+                                    &xCoordRoot, &zCamberRoot);
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    status = vlm_getSectionCamberLine(sectionTip,
+                                    1.0, // Cosine distribution
+                                    (int) true, numChordDiv,
+                                    &xCoordTip, &zCamberTip);
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    // printf("camberRoot: ");
+    // for (i = 0; i < numChordDiv; i++) {
+    //     printf("%f, ", zCamberRoot[i]);
+    // }
+    // printf("\n");
+
+    // printf("camberTip: ");
+    // for (i = 0; i < numChordDiv; i++) {
+    //     printf("%f, ", zCamberTip[i]);
+    // }
+    // printf("\n");
+
+    // get normalized spanwise coordinates
+
+    yCoord = EG_alloc(numSpanDiv * sizeof(double));
+
+    for (i = 0; i < numSpanDiv; i++) {
+        yCoord[i] = i / (numSpanDiv-1.0); 
+    }
+
+    // get panel downwashes
+
+    numPanel = numSpan * numChord;
+
+    downwash = EG_alloc(numPanel * sizeof(double));
+    if (downwash == NULL) {
+        status = EGADS_MALLOC;
+        goto cleanup;
+    }
+
+    imid = 0;
+    for (ispan = 0; ispan < numSpanDiv-1; ++ispan) {
+
+        for (ichord = 0; ichord < numChordDiv-1; ichord++) {
+
+            // mid panel coordinates
+            xmid = (xCoordRoot[ichord] + xCoordRoot[ichord+1]) / 2; // xCoordRoot and xCoordTip should be the same since normalized
+            ymid  = (yCoord[ispan] + yCoord[ispan+1]) / 2;
+
+            // wroot
+            wroot = _getEndDownwash(xmid, numChordDiv, xCoordRoot, zCamberRoot);
+
+            // wtip (same as wroot because normalized ?)
+            wtip = _getEndDownwash(xmid, numChordDiv, xCoordTip, zCamberTip);
+
+            // yroot, ytip
+            yroot = yCoord[0];
+            ytip = yCoord[numSpanDiv-1];
+
+            // wij
+            wij = _getPanelDownwash(wroot, wtip, yroot, ytip, ymid);
+
+            downwash[imid] = wij;
+
+            imid++;
+        }
+    }
+
+    // printf("downwash: ");
+    // for (i = 0; i < numPanel; i++) {
+    //     printf("%f: %d, ", downwash[i], ((downwash[i] > -0.23) && (downwash[i] < 0.05)));
+    // }
+    // printf("\n");
+
+    status = CAPS_SUCCESS;
+
+    cleanup:
+
+        if (status == CAPS_SUCCESS) {
+            *numPanelOut = numPanel;
+            *downwashOut = downwash;
+        }
+        else {
+            if (downwash != NULL) EG_free(downwash);
+        }
+        if (xCoordRoot != NULL) EG_free(xCoordRoot);
+        if (xCoordTip != NULL) EG_free(xCoordTip);
+        if (yCoord != NULL) EG_free(yCoord);
+        if (zCamberRoot != NULL) EG_free(zCamberRoot);
+        if (zCamberTip != NULL) EG_free(zCamberTip);
+
+        return status;
+}
+
+// Write Nastran DMI cards for downwash matrix from collection of feaAeroStructs
+int nastran_writeAeroCamberTwist(FILE *fp, int numAero, feaAeroStruct *feaAero, feaFileFormatStruct *feaFileFormat) {
+
+    int i, j, iAero, status;
+
+    int numPanel, numSectionPanel;
+    int form, tin, tout;
+    double *downwash = NULL, *sectionDownwash = NULL;
+
+    feaAeroStruct *aero;
+
+    if (fp == NULL) return CAPS_IOERR;
+    if (feaAero == NULL) return CAPS_NULLVALUE;
+    if (feaFileFormat == NULL) return CAPS_NULLVALUE;
+
+    numPanel = 0;
+    numSectionPanel = 0;
+
+    for (iAero = 0; iAero < numAero; iAero++) {
+        
+        aero = &feaAero[iAero];
+
+        for (i = 0; i < aero->vlmSurface.numSection-1; i++) {
+
+            status = _getSectionCamberTwist(&aero->vlmSurface.vlmSection[i], 
+                                            &aero->vlmSurface.vlmSection[i+1],
+                                            aero->vlmSurface.Nchord,
+                                            aero->vlmSurface.NspanTotal,
+                                            &numSectionPanel, &sectionDownwash);
+            if (status != CAPS_SUCCESS) goto cleanup;
+
+            if (downwash == NULL) {
+                downwash = EG_alloc(numSectionPanel * sizeof(double));
+                if (downwash == NULL) {
+                    status = EGADS_MALLOC;
+                    goto cleanup;
+                }
+            }
+            else {
+                downwash = EG_reall(downwash, (numPanel + numSectionPanel) * sizeof(double));
+                if (downwash == NULL) {
+                    status = EGADS_MALLOC;
+                    goto cleanup;
+                }
+            }
+
+            for (j = 0; j < numSectionPanel; j++) {
+                downwash[numPanel++] = sectionDownwash[j];
+            }
+
+            EG_free(sectionDownwash);
+            sectionDownwash = NULL;
+        }
+    }
+
+    form = 2;
+    tin = 1;
+    tout = 0;
+
+    // Write DIM card
+    status = nastranCard_dmi(
+        fp,
+        "W2GJ",
+        &form, // form
+        &tin, // tin
+        &tout, // tout
+        numPanel, // m
+        1, // n
+        downwash, // a
+        NULL, // b
+        feaFileFormat->fileType
+    );
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    status = CAPS_SUCCESS;
+
+    cleanup:
+
+        if (sectionDownwash != NULL) EG_free(sectionDownwash);
+        if (downwash != NULL) EG_free(downwash);
+
+        return status;
 }

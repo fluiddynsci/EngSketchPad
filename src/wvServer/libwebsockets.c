@@ -182,13 +182,11 @@ libwebsocket_close_and_free_session(struct libwebsocket_context *context,
 	struct lws_tokens eff_buf;
 	struct libwebsocket_extension *ext;
 
-	if (!wsi)
-		return;
+	if (wsi == NULL) return;
 
 	old_state = wsi->state;
 
-	if (old_state == WSI_STATE_DEAD_SOCKET)
-		return;
+	if (old_state == WSI_STATE_DEAD_SOCKET) return;
 
 	wsi->close_reason = reason;
 
@@ -197,10 +195,9 @@ libwebsocket_close_and_free_session(struct libwebsocket_context *context,
 	 * parent and just his ch1 aspect is closing?
 	 */
 
-
+#ifndef __clang_analyzer__
 	for (n = 0; n < wsi->count_active_extensions; n++) {
-		if (!wsi->active_extensions[n]->callback)
-			continue;
+		if (!wsi->active_extensions[n]->callback) continue;
 
 		m = wsi->active_extensions[n]->callback(context,
 			wsi->active_extensions[n], wsi,
@@ -218,6 +215,7 @@ libwebsocket_close_and_free_session(struct libwebsocket_context *context,
 			return;
 		}
 	}
+#endif
 
 
 
@@ -787,12 +785,12 @@ libwebsocket_create_new_server_wsi(struct libwebsocket_context *context)
 	new_wsi->name_buffer_pos = 0;
 	new_wsi->mode = LWS_CONNMODE_WS_SERVING;
 
-        /*@+nullret@*/
+/*@+nullret@*/
 	for (n = 0; n < WSI_TOKEN_COUNT; n++) {
 		new_wsi->utf8_token[n].token = NULL;
 		new_wsi->utf8_token[n].token_len = 0;
 	}
-        /*@-nullret@*/
+/*@-nullret@*/
 
 	/*
 	 * these can only be set once the protocol is known
@@ -1069,8 +1067,7 @@ issue_hdr:
 
 	free(wsi->c_path);
 	free(wsi->c_host);
-	if (wsi->c_origin)
-		free(wsi->c_origin);
+	if (wsi->c_origin) free(wsi->c_origin);
 
 	return p;
 }
@@ -1236,7 +1233,8 @@ select_protocol:
 		goto check_accept;
 	}
 
-        /*@-nullderef@*/
+/*@-nullderef@*/
+#ifndef __clang_analyzer__
 	while (*pc && !okay) {
 		if ((!strncmp(pc, wsi->utf8_token[WSI_TOKEN_PROTOCOL].token,
 		 wsi->utf8_token[WSI_TOKEN_PROTOCOL].token_len)) &&
@@ -1250,7 +1248,8 @@ select_protocol:
 		while (*pc && *pc != ' ')
 			pc++;
 	}
-       /*@+nullderef@*/
+#endif
+/*@+nullderef@*/
 
 	/* done with him now */
 

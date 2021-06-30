@@ -1,15 +1,9 @@
-## [importPrint]
-from __future__ import print_function
-## [importPrint]
-
-## [import]
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
 import argparse
-## [import]
 
 # Setup and read command line options. Please note that this isn't required for pyCAPS
 parser = argparse.ArgumentParser(description = 'Nastran Composite Wing Design Pytest Example',
@@ -17,42 +11,31 @@ parser = argparse.ArgumentParser(description = 'Nastran Composite Wing Design Py
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-## [initateProblem]
-# Initialize pyCAPS object
-myProblem = capsProblem()
-## [initateProblem]
+workDir = os.path.join(str(args.workDir[0]), "NastranCompositeWing")
 
-
-## [geometry]
 # Load CSM file
 geometryScript = os.path.join("..","csmData","compositeWing.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
-## [geometry]
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
-## [loadAIM]
 # Load nastran aim
-nastranAIM = myProblem.loadAIM(aim = "nastranAIM",
-                               altName = "nastran",
-                               analysisDir= os.path.join(str(args.workDir[0]), "NastranCompositeWing"),
-                               capsIntent = "STRUCTURE")
-## [loadAIM]
+nastranAIM = myProblem.analysis.create(aim = "nastranAIM",
+                                       name = "nastran")
 
-## [setInputs]
 # Set project name so a mesh file is generated
 projectName = "nastran_Composite_Wing"
-nastranAIM.setAnalysisVal("Proj_Name", projectName)
-nastranAIM.setAnalysisVal("Edge_Point_Max", 40)
-nastranAIM.setAnalysisVal("File_Format", "Small")
-nastranAIM.setAnalysisVal("Mesh_File_Format", "Large")
-nastranAIM.setAnalysisVal("Analysis_Type", "StaticOpt");
-## [setInputs]
+nastranAIM.input.Proj_Name        = projectName
+nastranAIM.input.Edge_Point_Max   = 40
+nastranAIM.input.File_Format      = "Small"
+nastranAIM.input.Mesh_File_Format = "Large"
+nastranAIM.input.Analysis_Type    = "StaticOpt"
 
-## [defineMaterials]
 Aluminum  = {"youngModulus" : 10.5E6 ,
              "poissonRatio" : 0.3,
              "density"      : 0.1/386,
@@ -64,18 +47,16 @@ Graphite_epoxy = {"materialType"        : "Orthotropic",
                   "poissonRatio"        : 0.327,
                   "shearModulus"        : 0.80E6,
                   "density"             : 0.059/386,
-                  "tensionAllow"         : 11.2e-3,
+                  "tensionAllow"        : 11.2e-3,
                   "tensionAllowLateral" : 4.7e-3,
-                  "compressAllow"         : 11.2e-3,
+                  "compressAllow"       : 11.2e-3,
                   "compressAllowLateral": 4.7e-3,
-                  "shearAllow"             : 19.0e-3,
+                  "shearAllow"          : 19.0e-3,
                   "allowType"           : 1}
 
-nastranAIM.setAnalysisVal("Material", [("Aluminum", Aluminum),
-                                       ("Graphite_epoxy", Graphite_epoxy)])
-## [defineMaterials]
+nastranAIM.input.Material = {"Aluminum": Aluminum,
+                             "Graphite_epoxy": Graphite_epoxy}
 
-## [defineProperties]
 aluminum  = {"propertyType"        : "Shell",
              "material"            : "Aluminum",
              "bendingInertiaRatio" : 1.0, # Default - not necesssary
@@ -92,34 +73,26 @@ composite  = {"propertyType"          : "Composite",
               "symmetricLaminate"     : 1,
               "compositeFailureTheory": "STRN" }
 
-#nastranAIM.setAnalysisVal("Property", ("wing", aluminum))
-nastranAIM.setAnalysisVal("Property", ("wing", composite))
-## [defineProperties]
+#nastranAIM.input.Property = {"wing": aluminum}
+nastranAIM.input.Property = {"wing": composite}
 
-## [defineConstraints]
 constraint = {"groupName" : "root",
               "dofConstraint" : 123456}
 
-nastranAIM.setAnalysisVal("Constraint", ("BoundaryCondition", constraint))
-## [defineConstraints]
+nastranAIM.input.Constraint = {"BoundaryCondition": constraint}
 
-## [defineLoad]
 load = {"groupName" : "wing",
         "loadType" : "Pressure",
         "pressureForce" : 1.0}
 
-nastranAIM.setAnalysisVal("Load", ("appliedPressure", load ))
-## [defineLoad]
+nastranAIM.input.Load = {"appliedPressure": load}
 
-## [defineAnalysis]
 value = {"analysisType"         : "Static",
          "analysisConstraint"     : "BoundaryCondition",
          "analysisLoad"         : "appliedPressure"}
 
-nastranAIM.setAnalysisVal("Analysis", ("StaticAnalysis", value))
-## [defineAnalysis]
+nastranAIM.input.Analysis = {"StaticAnalysis": value}
 
-## [defineDesignVar]
 DesVar1    = {"groupName" : "wing",
               "initialValue" : 0.00525,
               "lowerBound" : 0.00525*0.5,
@@ -177,17 +150,15 @@ DesVar8    = {"groupName" : "wing",
               "fieldName" : "T8"}
 
 
-myProblem.analysis["nastran"].setAnalysisVal("Design_Variable", [("L1", DesVar1),
-                                                                ("L2", DesVar2),
-                                                                ("L3", DesVar3),
-                                                                ("L4", DesVar4),
-                                                                ("L5", DesVar5),
-                                                                ("L6", DesVar6),
-                                                                ("L7", DesVar7),
-                                                                ("L8", DesVar8)])
-## [defineDesignVar]
+myProblem.analysis["nastran"].input.Design_Variable = {"L1": DesVar1,
+                                                       "L2": DesVar2,
+                                                       "L3": DesVar3,
+                                                       "L4": DesVar4,
+                                                       "L5": DesVar5,
+                                                       "L6": DesVar6,
+                                                       "L7": DesVar7,
+                                                       "L8": DesVar8}
 
-## [defineDesCon]
 designConstraint1 = {"groupName" : "wing",
                     "responseType" : "CFAILURE",
                     "lowerBound" : 0.0,
@@ -236,21 +207,18 @@ designConstraint8 = {"groupName" : "wing",
                     "upperBound" :  0.9999,
                     "fieldName" : "LAMINA8"}
 
-myProblem.analysis["nastran"].setAnalysisVal("Design_Constraint",[("stress1", designConstraint1),
-                                                                  ("stress2", designConstraint2),
-                                                                  ("stress3", designConstraint3),
-                                                                  ("stress4", designConstraint4),
-                                                                  ("stress5", designConstraint5),
-                                                                  ("stress6", designConstraint6),
-                                                                  ("stress7", designConstraint7),
-                                                                  ("stress8", designConstraint8)])
-## [defineDesCon]
+myProblem.analysis["nastran"].input.Design_Constraint = {"stress1": designConstraint1,
+                                                         "stress2": designConstraint2,
+                                                         "stress3": designConstraint3,
+                                                         "stress4": designConstraint4,
+                                                         "stress5": designConstraint5,
+                                                         "stress6": designConstraint6,
+                                                         "stress7": designConstraint7,
+                                                         "stress8": designConstraint8}
 
-## [preAnalysis]
+# Run AIM pre-analysis
 nastranAIM.preAnalysis()
-## [preAnalysis]
 
-## [run]
 ####### Run Nastran####################
 print ("\n\nRunning Nastran......" )
 currentDirectory = os.getcwd() # Get our current working directory
@@ -262,14 +230,6 @@ if (args.noAnalysis == False):
 
 os.chdir(currentDirectory) # Move back to working directory
 print ("Done running Nastran!")
-## [run]
 
-## [postAnalysis]
 # Run AIM post-analysis
 nastranAIM.postAnalysis()
-## [postAnalysis]
-
-## [close]
-# Close CAPS
-myProblem.closeCAPS()
-## [close]

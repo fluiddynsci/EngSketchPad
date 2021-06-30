@@ -3,7 +3,7 @@
  *
  *             Construction Example
  *
- *      Copyright 2011-2016, Massachusetts Institute of Technology
+ *      Copyright 2011-2020, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -38,7 +38,7 @@ periodicSeam(ego eedge,                 /* (in)  Edge associated with seam */
   data[1] = range[0];
   data[2] = 0;
   data[3] = sense;
-  if (sense == -1) data[1] = range[1];
+  if (sense == SREVERSE) data[1] = range[1];
   
   /* make (linear) PCurve */
   return EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, pcurve);
@@ -607,7 +607,7 @@ main(int  /*@unused@*/ argc,            /* (in)  number of arguments */
     status = EG_makeSolidBody(context, CYLINDER, data, &ebody3);
     if (status != EGADS_SUCCESS) goto cleanup;
     
-    status = EG_solidBoolean(ebody2, ebody3, FUSION, &emodel);
+    status = EG_generalBoolean(ebody2, ebody3, FUSION, 0.0, &emodel);
     if (status != EGADS_SUCCESS) goto cleanup;
     
     status = EG_deleteObject(ebody2);
@@ -644,7 +644,7 @@ main(int  /*@unused@*/ argc,            /* (in)  number of arguments */
       status = EG_makeSolidBody(context, CYLINDER, data, &ebody4);
       if (status != EGADS_SUCCESS) goto cleanup;
       
-      status = EG_solidBoolean(source, ebody4, SUBTRACTION, &emodel);
+      status = EG_generalBoolean(source, ebody4, SUBTRACTION, 0.0, &emodel);
       if (status != EGADS_SUCCESS) goto cleanup;
       
       status = EG_deleteObject(source);

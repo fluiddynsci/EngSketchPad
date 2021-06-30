@@ -8,7 +8,7 @@ despmtr   Rpost     0.40      radius of posts
 despmtr   Rcross    0.20      radius of cross-frame members
 despmtr   Rfoot     1.00      radius of feet
 despmtr   Rleg      0.15      radius of legs
-despmtr   Rsupport  0.05      raius of leg supports
+despmtr   Rsupport  0.05      radius of leg supports
 despmtr   Yjoint    6.0       height of leg support joint
 despmtr   Nhole1    2.0       number of holes in box1
 despmtr   Nhole2    5.0       number of holes in box2

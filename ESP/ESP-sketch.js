@@ -1,7 +1,7 @@
 // ESP-sketch.js implements Sketcher functions for the Engineering Sketch Pad (ESP)
 // written by John Dannenhoffer and Bob Haimes
 
-// Copyright (C) 2010/2020  John F. Dannenhoffer, III (Syracuse University)
+// Copyright (C) 2010/2021  John F. Dannenhoffer, III (Syracuse University)
 //
 // This library is free software; you can redistribute it and/or
 //    modify it under the terms of the GNU Lesser General Public
@@ -559,7 +559,7 @@ sket.cmdSolve = function () {
     var buttext = button["innerHTML"];
 
     if (buttext == "Press to Solve") {
-        if (wv.curMode != 7) {
+        if (wv.curMode != 8) {
             alert("Command disabled,  Press 'Cancel' or 'OK' first");
             return;
         }
@@ -645,7 +645,7 @@ sket.cmdSave = function () {
         alert("cmdSave is not implemented for "+wv.server);
         return;
 
-    } else if (wv.curMode == 7) {
+    } else if (wv.curMode == 8) {
         sketcherSave();
         wv.brchStat = 0;
 
@@ -672,7 +672,7 @@ sket.cmdQuit = function () {
         }
     }
 
-    if (wv.curMode != 7) {
+    if (wv.curMode != 8) {
         alert("Command disabled.  Press 'Cancel' or 'OK' first");
         return;
     } else if (wv.server != "serveCSM") {
@@ -1004,7 +1004,7 @@ sket.cmdOut = function () {
 
 
 //
-// callback when any mouse is pressed  (when wv.curMode==7)
+// callback when any mouse is pressed  (when wv.curMode==8)
 //
 sket.mouseDown = function (e) {
     if (!e) var e = event;
@@ -3548,6 +3548,7 @@ var sketcherDraw = function () {
         mesg += "  'i' (incline)   'l' (length)\n";
         mesg += "Valid constraints on cirarcs\n";
         mesg += "  'r' (radius)    's' (sweep angle)\n";
+        mesg += "  'x' (x center)  'y' (y center)\n";
         mesg += "Valid commands anywhere\n";
         mesg += "  '<' (delete)    '?' (info)\n";
     } else if (sket.mode == 4) {

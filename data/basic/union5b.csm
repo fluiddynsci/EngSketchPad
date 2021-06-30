@@ -28,6 +28,6 @@ mark
 rule
 rotatex  theta 0 0
 
-union  0  0  -0.00001
+union  0  0  -0.0001
 
 end

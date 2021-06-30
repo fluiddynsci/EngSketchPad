@@ -3,7 +3,7 @@
  *
  *             Display the EGADS Tessellation using wv (the WebViewer)
  *
- *      Copyright 2011-2020, Massachusetts Institute of Technology
+ *      Copyright 2011-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -32,10 +32,6 @@
 #ifndef LITE
 /* from util subdirectory -- not in egads.h! */
 extern int EG_retessFaces(ego tess, int nf, int *iface, double *params);
-/*
-extern int EG_saveTess(ego tess, const char *name);
-extern int EG_loadTess(ego body, const char *name, ego *tess);
-*/
 #endif
 
 

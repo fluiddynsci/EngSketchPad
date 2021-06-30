@@ -3,7 +3,7 @@
  *
  *             avl AIM tester
  *
- *      Copyright 2014-2020, Massachusetts Institute of Technology
+ *      Copyright 2014-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -22,6 +22,38 @@
 #include <unistd.h>
 #endif
 
+
+static void
+printErrors(int nErr, capsErrs *errors)
+{
+  int         i, j, stat, eType, nLines;
+  char        **lines;
+  capsObj     obj;
+  static char *type[5] = {"Cont:   ", "Info:   ", "Warning:", "Error:  ",
+                          "Status: "};
+
+  if (errors == NULL) return;
+
+  for (i = 1; i <= nErr; i++) {
+    stat = caps_errorInfo(errors, i, &obj, &eType, &nLines, &lines);
+    if (stat != CAPS_SUCCESS) {
+      printf(" printErrors: %d/%d caps_errorInfo = %d\n", i, nErr, stat);
+      continue;
+    }
+    for (j = 0; j < nLines; j++) {
+      if (j == 0) {
+        printf(" CAPS %s ", type[eType+1]);
+      } else {
+        printf("               ");
+      }
+      printf("%s\n", lines[j]);
+    }
+  }
+  
+  caps_freeError(errors);
+}
+
+
 int main(int argc, char *argv[])
 {
 
@@ -31,70 +63,53 @@ int main(int argc, char *argv[])
     // CAPS objects
     capsObj          problemObj, avlObj, tempObj;
     capsErrs         *errors;
-    capsOwn          current;
 
     // CAPS return values
     int   nErr;
-    char *name;
-    enum capsoType   type;
-    enum capssType   subtype;
     enum capsvType   vtype;
-    capsObj link, parent;
-
 
     // Input values
-    capsTuple        *surfaceTuple = NULL, *flapTuple = NULL;
-    int               surfaceSize = 2, flapSize = 3;
-    double            doubleVal;
-    int               integerVal;
+    capsTuple *surfaceTuple = NULL, *flapTuple = NULL;
+    int       surfaceSize = 2, flapSize = 3;
+    double    doubleVal;
     //enum capsBoolean  boolVal;
 
     // Output values
+    int nrow, ncol;
     const char *valunits;
     const void *data;
+    const int  *partial;
 
     char *stringVal = NULL;
 
-    char analysisPath[PATH_MAX] = "./runDirectory";
+    int major, minor, nFields, *ranks, *fInOut, dirty, exec;
+    char *analysisPath, *unitSystem, *intents, **fnames;
     char currentPath[PATH_MAX];
 
     int runAnalysis = (int) true;
 
     printf("\n\nAttention: avlTest is hard coded to look for ../csmData/avlWingTail.csm\n");
-    printf("An analysisPath maybe specified as a command line option, if none is given "
-            "a directory called \"runDirectory\" in the current folder is assumed to exist! To "
-            "not make system calls to the avl executable the third command line option may be "
-            "supplied - 0 = no analysis , >0 run analysis (default).\n\n");
+    printf("To not make system calls to the avl executable the third command line option"
+           " may be supplied - 0 = no analysis , >0 run analysis (default).\n\n");
 
-    if (argc > 3) {
-
-        printf(" usage: avlTest analysisDirectoryPath noAnalysis!\n");
+    if (argc > 2) {
+        printf(" usage: avlTest noAnalysis!\n");
         return 1;
-
-    } else if (argc == 2 || argc == 3) {
-
-        strncpy(analysisPath,
-                argv[1],
-                strlen(argv[1])*sizeof(char));
-
-        analysisPath[strlen(argv[1])] = '\0';
-
-    } else {
-
-        printf("Assuming the analysis directory path to be -> %s", analysisPath);
     }
 
-    if (argc == 3) {
-        if (strcasecmp(argv[2], "0") == 0) runAnalysis = (int) false;
+    if (argc == 2) {
+        if (strcasecmp(argv[1], "0") == 0) runAnalysis = (int) false;
     }
 
-    status = caps_open("../csmData/avlWingTail.csm", "AVL_Example", &problemObj);
+    status = caps_open("AVL_Example", NULL, 0, "../csmData/avlWingTail.csm",
+                       1, &problemObj, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = caps_info(problemObj, &name, &type, &subtype, &link, &parent, &current);
-
     // Now load the avlAIM
-    status = caps_load(problemObj, "avlAIM", analysisPath, NULL, NULL, 0, NULL, &avlObj);
+    status = caps_makeAnalysis(problemObj, "avlAIM", NULL, NULL, NULL, 0,
+                               &avlObj, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set AVL_Surface
@@ -108,7 +123,9 @@ int main(int argc, char *argv[])
     surfaceTuple[1].name = EG_strdup("Vertical_Tail");
     surfaceTuple[1].value = EG_strdup("{\"numChord\": 5, \"spaceChord\": 1, \"numSpanTotal\": 10, \"spaceSpan\": 1}");
 
-    status = caps_setValue(tempObj, surfaceSize, 1,  (void **) surfaceTuple);
+    status = caps_setValue(tempObj, Tuple, surfaceSize, 1,
+                           (void **) surfaceTuple, NULL, NULL, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
 
@@ -117,16 +134,18 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     flapTuple = (capsTuple *) EG_alloc(flapSize*sizeof(capsTuple));
-    flapTuple[0].name = EG_strdup("WingRightLE");
+    flapTuple[0].name  = EG_strdup("WingRightLE");
     flapTuple[0].value = EG_strdup("{\"controlGain\": 0.5, \"deflectionAngle\": 25}");
 
-    flapTuple[1].name = EG_strdup("WingRightTE");
+    flapTuple[1].name  = EG_strdup("WingRightTE");
     flapTuple[1].value = EG_strdup("{\"controlGain\": 1.0, \"deflectionAngle\": 15}");
 
-    flapTuple[2].name = EG_strdup("Tail");
+    flapTuple[2].name  = EG_strdup("Tail");
     flapTuple[2].value = EG_strdup("{\"controlGain\": 1.0, \"deflectionAngle\": 15}");
 
-    status = caps_setValue(tempObj, flapSize, 1,  (void **) flapTuple);
+    status = caps_setValue(tempObj, Tuple, flapSize, 1,  (void **) flapTuple,
+                           NULL, NULL, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set Mach number
@@ -134,7 +153,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     doubleVal  = 0.5;
-    status = caps_setValue(tempObj, 1, 1, (void *) &doubleVal);
+    status = caps_setValue(tempObj, Double, 1, 1, (void *) &doubleVal,
+                           NULL, NULL, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set AoA
@@ -142,17 +163,27 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     doubleVal  = 1.0;
-    status = caps_setValue(tempObj, 1, 1, (void *) &doubleVal);
+    status = caps_setValue(tempObj, Double, 1, 1, (void *) &doubleVal,
+                           NULL, NULL, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Do the analysis setup for AVL;
     status = caps_preAnalysis(avlObj, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    /* get analysis info */
+    status = caps_analysisInfo(avlObj, &analysisPath, &unitSystem, &major,
+                               &minor, &intents, &nFields, &fnames, &ranks,
+                               &fInOut, &exec, &dirty);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Execute avl via system call
     (void) getcwd(currentPath, PATH_MAX);
 
     if (chdir(analysisPath) != 0) {
+        status = CAPS_DIRERR;
         printf(" ERROR: Cannot change directory to -> %s\n", analysisPath);
         goto cleanup;
     }
@@ -171,14 +202,17 @@ int main(int argc, char *argv[])
 
     (void) chdir(currentPath);
 
-    status = caps_postAnalysis(avlObj, current, &nErr, &errors);
+    status = caps_postAnalysis(avlObj, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Get  total Cl
     status = caps_childByName(avlObj, VALUE, ANALYSISOUT, "CLtot", &tempObj);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = caps_getValue(tempObj, &vtype, &integerVal, &data, &valunits, &nErr, &errors);
+    status = caps_getValue(tempObj, &vtype, &nrow, &ncol, &data, &partial,
+                           &valunits, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     printf("\nValue of Cltot = %f\n", ((double *) data)[0]);
@@ -187,39 +221,44 @@ int main(int argc, char *argv[])
     status = caps_childByName(avlObj, VALUE, ANALYSISOUT, "StripForces", &tempObj);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = caps_getValue(tempObj, &vtype, &integerVal, &data, &valunits, &nErr, &errors);
+    status = caps_getValue(tempObj, &vtype, &nrow, &ncol, &data, &partial,
+                           &valunits, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     printf("\nStripForces\n\n");
-    printf("%s = %s\n\n", ((capsTuple *) data)[0].name, ((capsTuple *) data)[0].value);
-    printf("%s = %s\n\n", ((capsTuple *) data)[1].name, ((capsTuple *) data)[1].value);
+    printf("%s = %s\n\n", ((capsTuple *) data)[0].name,
+                          ((capsTuple *) data)[0].value);
+    printf("%s = %s\n\n", ((capsTuple *) data)[1].name,
+                          ((capsTuple *) data)[1].value);
 
-    goto cleanup;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("\n\nPremature exit - status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS) printf("\n\nPremature exit - status = %d\n",
+                                       status);
 
-        if (surfaceTuple != NULL) {
-            for (i = 0; i < surfaceSize; i++) {
-
-                if (surfaceTuple[i].name != NULL) EG_free(surfaceTuple[i].name);
-                if (surfaceTuple[i].value != NULL) EG_free(surfaceTuple[i].value);
-            }
-            EG_free(surfaceTuple);
+    if (surfaceTuple != NULL) {
+        for (i = 0; i < surfaceSize; i++) {
+            if (surfaceTuple[i].name  != NULL) EG_free(surfaceTuple[i].name);
+            if (surfaceTuple[i].value != NULL) EG_free(surfaceTuple[i].value);
         }
+        EG_free(surfaceTuple);
+    }
 
-        if (flapTuple != NULL) {
-            for (i = 0; i < flapSize; i++) {
+    if (flapTuple != NULL) {
+        for (i = 0; i < flapSize; i++) {
 
-                if (flapTuple[i].name != NULL) EG_free(flapTuple[i].name);
-                if (flapTuple[i].value != NULL) EG_free(flapTuple[i].value);
-            }
-            EG_free(flapTuple);
+          if (flapTuple[i].name  != NULL) EG_free(flapTuple[i].name);
+          if (flapTuple[i].value != NULL) EG_free(flapTuple[i].value);
         }
+        EG_free(flapTuple);
+    }
 
-        if (stringVal != NULL) EG_free(stringVal);
+    if (stringVal != NULL) EG_free(stringVal);
 
-        (void) caps_close(problemObj);
+    i = 0;
+    if (status == CAPS_SUCCESS) i = 1;
+    (void) caps_close(problemObj, i, NULL);
 
-        return status;
+    return status;
 }

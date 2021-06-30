@@ -53,9 +53,9 @@ rule
    attribute capsGroup $Skin # propagates to faces becuase applied to primitive body
 
 select edge 3
-   attribute capsGroup $LeadingEdge
+   attribute capsMesh $LeadingEdge
 select edge 1
-   attribute capsGroup $TrailingEdge
+   attribute capsMesh $TrailingEdge
 
 select face @nbody 3 1 # latest body, 3rd face (sketch order after rule start & end), sequence 1 (only 1 generated)
    attribute capsBound $Skin_Top

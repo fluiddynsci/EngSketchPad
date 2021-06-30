@@ -3,7 +3,7 @@
  *
  *             Cart3D AIM
  *
- *      Copyright 2014-2020, Massachusetts Institute of Technology
+ *      Copyright 2014-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -19,13 +19,8 @@
 #include "miscUtils.h"
 
 #ifdef WIN32
-#define getcwd     _getcwd
 #define snprintf   _snprintf
 #define strcasecmp stricmp
-#define PATH_MAX   _MAX_PATH
-#else
-#include <unistd.h>
-#include <limits.h>
 #endif
 
 #define CROSS(a,b,c)      a[0] = (b[1]*c[2]) - (b[2]*c[1]);\
@@ -34,10 +29,40 @@
 #define DOT(a,b)         (a[0]*b[0] + a[1]*b[1] + a[2]*b[2])
 
 
-#define DEBUG
-#define NUMINPUT  26                 /* number of Cart3D inputs */
-#define NUMOUT    12                 /* number of outputs */
+//#define DEBUG
 
+enum aimInputs
+{
+  Tess_Params = 1,                   /* index is 1-based */
+  outer_box,
+  nDiv,
+  maxR,
+  Mach,
+  alpha,
+  beta,
+  Gamma,
+  maxCycles,
+  SharpFeatureDivisions,
+  nMultiGridLevels,
+  MultiGridCycleType,
+  MultiGridPreSmoothing,
+  MultiGridPostSmoothing,
+  CFL,
+  Limiter,
+  FluxFun,
+  iForce,
+  iHist,
+  nOrders,
+  Xslices,
+  Yslices,
+  Zslices,
+  Model_X_axis,
+  Model_Y_axis,
+  Model_Z_axis,
+  NUMINPUT = Model_Z_axis            /* Total number of inputs */
+};
+
+#define NUMOUT    12                 /* number of outputs */
 
 
 /* currently setup for a single body */
@@ -45,7 +70,6 @@ typedef struct {
   int  nface;
   int  nvert;
   int  ntris;
-  const char *apath;
 
   // Meshing parameters
   double tessParam[3];
@@ -107,90 +131,103 @@ typedef struct {
  */
 
 
-static c3dAIM *cartInstance = NULL;
-static int      numInstance = 0;
-
 
 
 /* ********************** Exposed AIM Functions ***************************** */
 
-int
-aimInitialize(int ngIn, /*@unused@*/ /*@null@*/ capsValue *gIn, int *qeFlag,
-              /*@unused@*/ const char *unitSys, int *nIn, int *nOut,
-              int *nFields, char ***fnames, int **ranks)
+int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
+                  /*@unused@*/ void **instStore, /*@unused@*/ int *major,
+                  /*@unused@*/ int *minor, int *nIn, int *nOut,
+                  int *nFields, char ***fnames, int **franks, int **fInOut)
 {
-  int    *ints, flag;
-  char   **strs;
-  c3dAIM *tmp;
+  int    *ints = NULL, i, status = CAPS_SUCCESS;
+  char   **strs = NULL;
+  c3dAIM *cartInstance = NULL;
 
 #ifdef DEBUG
-  printf("\n Cart3DAIM/aimInitialize   ngIn = %d!\n", ngIn);
+  printf("\n Cart3DAIM/aimInitialize   instance = %d!\n", inst);
 #endif
-  flag    = *qeFlag;
-  *qeFlag = 0;
 
   /* specify the number of analysis input and out "parameters" */
   *nIn     = NUMINPUT;
   *nOut    = NUMOUT;
-  if (flag == 1) return CAPS_SUCCESS;
+  if (inst == -1) return CAPS_SUCCESS;
 
   /* get the storage */
-  if (cartInstance == NULL) {
-    cartInstance = (c3dAIM *) EG_alloc(sizeof(c3dAIM));
-    if (cartInstance == NULL) return EGADS_MALLOC;
-  } else {
-    tmp = (c3dAIM *) EG_reall(cartInstance, (numInstance+1)*sizeof(c3dAIM));
-    if (tmp == NULL) return EGADS_MALLOC;
-    cartInstance = tmp;
-  }
-  cartInstance[numInstance].nface = 0;
-  cartInstance[numInstance].nvert = 0;
-  cartInstance[numInstance].ntris = 0;
-  cartInstance[numInstance].apath = NULL;
+  AIM_ALLOC(cartInstance, 1, c3dAIM, aimInfo, status);
+  *instStore = cartInstance;
 
+  cartInstance->nface = 0;
+  cartInstance->nvert = 0;
+  cartInstance->ntris = 0;
 
   /* Set meshing parameters  */
-  cartInstance[numInstance].tessParam[0] = 0.025;
-  cartInstance[numInstance].tessParam[1] = 0.001;
-  cartInstance[numInstance].tessParam[2] = 15.00;
-  cartInstance[numInstance].outerBox = 30;
-  cartInstance[numInstance].nDiv = 5;
-  cartInstance[numInstance].maxR = 11;
-  cartInstance[numInstance].sharpFeatureDivisions = 2;
-  cartInstance[numInstance].nMultiGridLevels = 1;
+  cartInstance->tessParam[0] = 0.025;
+  cartInstance->tessParam[1] = 0.001;
+  cartInstance->tessParam[2] = 15.00;
+  cartInstance->outerBox = 30;
+  cartInstance->nDiv = 5;
+  cartInstance->maxR = 11;
+  cartInstance->sharpFeatureDivisions = 2;
+  cartInstance->nMultiGridLevels = 1;
 
-  /* specify the field variables this analysis can generate */
+  /* specify the field variables this analysis can generate and consume */
   *nFields = 4;
-  ints     = (int *)   EG_alloc(*nFields*sizeof(int));
-  strs     = (char **) EG_alloc(*nFields*sizeof(char *));
-  if ((ints == NULL) || (strs == NULL)) {
-    if (ints != NULL) EG_free(ints);
-    if (strs != NULL) EG_free(strs);
-    EG_free(cartInstance);
-    cartInstance = NULL;
-    return EGADS_MALLOC;
-  }
+
+  /* specify the name of each field variable */
+  AIM_ALLOC(strs, *nFields, char *, aimInfo, status);
   strs[0]  = EG_strdup("Cp");
-  ints[0]  = 1;
   strs[1]  = EG_strdup("Density");
-  ints[1]  = 1;
   strs[2]  = EG_strdup("Velocity");
-  ints[2]  = 3;
   strs[3]  = EG_strdup("Pressure");
-  ints[3]  = 1;
-  *ranks   = ints;
+  for (i = 0; i < *nFields; i++)
+    if (strs[i] == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
   *fnames  = strs;
 
-  /* Increment number of instances */
-  numInstance++;
+  /* specify the dimension of each field variable */
+  AIM_ALLOC(ints, *nFields, int, aimInfo, status);
 
-  return numInstance-1;
+  ints[0]  = 1;
+  ints[1]  = 1;
+  ints[2]  = 3;
+  ints[3]  = 1;
+  *franks   = ints;
+  ints = NULL;
+
+  /* specify if a field is an input field or output field */
+  AIM_ALLOC(ints, *nFields, int, aimInfo, status);
+
+  ints[0]  = FieldOut;
+  ints[1]  = FieldOut;
+  ints[2]  = FieldOut;
+  ints[3]  = FieldOut;
+  *fInOut  = ints;
+  ints = NULL;
+
+  
+cleanup:
+  if (status != CAPS_SUCCESS) {
+    /* release all possibly allocated memory on error */
+    if (*fnames != NULL)
+      for (i = 0; i < *nFields; i++) AIM_FREE((*fnames)[i]);
+    AIM_FREE(*franks);
+    AIM_FREE(*fInOut);
+    AIM_FREE(*fnames);
+    AIM_FREE(*instStore);
+    *nFields = 0;
+  }
+
+  return status;
 }
+
 
 /* ********************** Exposed AIM Functions ***************************** */
 int
-aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
-          capsValue *defval)
+aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, int index,
+          char **name, capsValue *defval)
 {
   int status = CAPS_SUCCESS;
 
@@ -200,18 +237,17 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      */
 
 #ifdef DEBUG
-  printf(" Cart3DAIM/aimInputs  instance = %d  index = %d!\n", iIndex, index);
+  printf(" Cart3DAIM/aimInputs   index = %d!\n", index);
 #endif
 
-  if (index == 1) {
+  if (index == Tess_Params) {
     *name              = EG_strdup("Tess_Params");
     defval->type       = Double;
     defval->dim        = Vector;
-    defval->length     = 3;
-    defval->nrow       = 1;
-    defval->ncol       = 3;
+    defval->nrow       = 3;
+    defval->ncol       = 1;
     defval->units      = NULL;
-    defval->vals.reals = (double *) EG_alloc(defval->length*sizeof(double));
+    defval->vals.reals = (double *) EG_alloc(defval->nrow*sizeof(double));
     if (defval->vals.reals == NULL) {
       status = EGADS_MALLOC;
     } else {
@@ -228,7 +264,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      *  3. Max angle in degrees between triangle facets
      */
 
-  } else if (index == 2) {
+  } else if (index == outer_box) {
     *name             = EG_strdup("outer_box");
     defval->type      = Double;
     defval->vals.real = 30.;
@@ -237,7 +273,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * Factor of outer boundary box based on geometry length scale defined by the  diagonal of the
      * 3D tightly fitting bounding box around body being modeled.
      */
-  } else if (index == 3) {
+  } else if (index == nDiv) {
     *name                = EG_strdup("nDiv");
     defval->type         = Integer;
     defval->vals.integer = 5;
@@ -246,7 +282,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * nominal # of divisions in backgrnd mesh
      */
 
-  } else if (index == 4) {
+  } else if (index == maxR) {
     *name                = EG_strdup("maxR");
     defval->type         = Integer;
     defval->vals.integer = 11;
@@ -254,14 +290,14 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> maxR = int</B>. <Default 11> <br>
      * Max Num of cell refinements to perform
      */
-  } else if (index == 5) {
+  } else if (index == Mach) {
     *name             = EG_strdup("Mach");
     defval->type      = Double;
     defval->vals.real = 0.76;
       /*! \page aimInputsCART3D
      * - <B> Mach = double</B>. <Default 0.76> <br>
      */
-  } else if (index == 6) {
+  } else if (index == alpha) {
     *name             = EG_strdup("alpha");
     defval->type      = Double;
     defval->vals.real = 0.0;
@@ -269,7 +305,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> alpha = double</B>. <Default 0.0> <br>
      * Angle of Attach in Degrees
      */
-  } else if (index == 7) {
+  } else if (index == beta) {
     *name             = EG_strdup("beta");
     defval->type      = Double;
     defval->vals.real = 0.0;
@@ -277,7 +313,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> beta = double</B>. <Default 0.0> <br>
      * Side Slip Angle in Degrees
      */
-  } else if (index == 8) {
+  } else if (index == Gamma) {
     *name             = EG_strdup("gamma");
     defval->type      = Double;
     defval->vals.real = 1.4;
@@ -285,7 +321,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> gamma = double</B>. <Default 1.4> <br>
      * Ratio of specific heats (default is air)
      */
-  } else if (index == 9) {
+  } else if (index == maxCycles) {
     *name                = EG_strdup("maxCycles");
     defval->type         = Integer;
     defval->vals.integer = 1000;
@@ -293,7 +329,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> maxCycles = int</B>. <Default 1000> <br>
      * Number of iterations
      */
-  } else if (index == 10) {
+  } else if (index == SharpFeatureDivisions) {
     *name                = EG_strdup("SharpFeatureDivisions");
     defval->type         = Integer;
     defval->vals.integer = 2;
@@ -301,7 +337,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> SharpFeatureDivisions = int</B>. <Default 2> <br>
      * nominal # of ADDITIONAL divisions in backgrnd mesh around sharp features
      */
-  } else if (index == 11) {
+  } else if (index == nMultiGridLevels) {
     *name                = EG_strdup("nMultiGridLevels");
     defval->type         = Integer;
     defval->vals.integer = 1;
@@ -309,7 +345,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> nMultiGridLevels = int</B>. <Default 1> <br>
      * number of multigrid levels in the mesh (1 is a single mesh)
      */
-  } else if (index == 12) {
+  } else if (index == MultiGridCycleType) {
   *name                = EG_strdup("MultiGridCycleType");
   defval->type         = Integer;
   defval->vals.integer = 2;
@@ -318,7 +354,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * MultiGrid cycletype: 1 = "V-cycle", 2 = "W-cycle"
      * 'sawtooth' cycle is: V-cycle with MultiGridPreSmoothing = 1, MultiGridPostSmoothing = 0
      */
-  }  else if (index == 13) {
+  }  else if (index == MultiGridPreSmoothing) {
   *name                = EG_strdup("MultiGridPreSmoothing");
   defval->type         = Integer;
   defval->vals.integer = 1;
@@ -326,7 +362,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> MultiGridPreSmoothing = int</B>. <Default 1> <br>
      * number of pre-smoothing  passes in multigrid
      */
-  } else if (index == 14) {
+  } else if (index == MultiGridPostSmoothing) {
   *name                = EG_strdup("MultiGridPostSmoothing");
   defval->type         = Integer;
   defval->vals.integer = 1;
@@ -334,7 +370,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> MultiGridPostSmoothing = int</B>. <Default 1> <br>
      * number of post-smoothing  passes in multigrid
      */
-  } else if (index == 15) {
+  } else if (index == CFL) {
   *name             = EG_strdup("CFL");
   defval->type      = Double;
   defval->vals.real = 1.2;
@@ -342,7 +378,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> CFL = double</B>. <Default 1.2> <br>
      * CFL number typically between 0.9 and 1.4
      */
-  } else if (index == 16) {
+  } else if (index == Limiter) {
   *name                = EG_strdup("Limiter");
   defval->type         = Integer;
   defval->vals.integer = 2;
@@ -351,7 +387,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * organized in order of increasing dissipation. <br>
      * 0 = no Limiter, 1 = Barth-Jespersen, 2 = van Leer, 3 = sin limiter, 4 = van Albada, 5 = MinMod
      */
-  } else if (index == 17) {
+  } else if (index == FluxFun) {
   *name                = EG_strdup("FluxFun");
   defval->type         = Integer;
   defval->vals.integer = 0;
@@ -359,7 +395,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> FluxFun = int</B>. <Default 0> <br>
      * 0 = van Leer, 1 = van Leer-Hanel, 2 = Colella 1998, 3 = HLLC (alpha test)
      */
-  } else if (index == 18) {
+  } else if (index == iForce) {
   *name                = EG_strdup("iForce");
   defval->type         = Integer;
   defval->vals.integer = 10;
@@ -367,7 +403,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> iForce = int</B>. <Default 10> <br>
      * Report force & mom. information every iForce cycles
      */
-  } else if (index == 19) {
+  } else if (index == iHist) {
   *name                = EG_strdup("iHist");
   defval->type         = Integer;
   defval->vals.integer = 1;
@@ -375,7 +411,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> iHist = int</B>. <Default 1> <br>
      * Update 'history.dat' every iHist cycles
      */
-  } else if (index == 20) {
+  } else if (index == nOrders) {
   *name                = EG_strdup("nOrders");
   defval->type         = Integer;
   defval->vals.integer = 8;
@@ -384,7 +420,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * Num of orders of Magnitude reduction in residual
      */
 
-  } else if (index == 21) {
+  } else if (index == Xslices) {
     *name               = EG_strdup("Xslices");
     defval->type          = Double;
     defval->lfixed        = Change;
@@ -396,7 +432,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * - <B> Xslices = [double, ... , double] </B> <br>
      * X slice locations created in output.
      */
-  } else if (index == 22) {
+  } else if (index == Yslices) {
     *name               = EG_strdup("Yslices");
     defval->type          = Double;
     defval->lfixed        = Change;
@@ -409,7 +445,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
     * - <B> Yslices = [double, ... , double] </B> <br>
     * Y slice locations created in output.
       */
-  } else if (index == 23) {
+  } else if (index == Zslices) {
     *name               = EG_strdup("Zslices");
     defval->type          = Double;
     defval->lfixed        = Change;
@@ -423,7 +459,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
     * Z slice locations created in output.
     */
   }
-  else if (index == 24) {
+  else if (index == Model_X_axis) {
     *name = EG_strdup("Model_X_axis");
     defval->type = String;
     defval->units = NULL;
@@ -434,7 +470,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * Model_X_axis defines x-axis orientation.
      */
   }
-  else if (index == 25) {
+  else if (index == Model_Y_axis) {
     *name = EG_strdup("Model_Y_axis");
     defval->type = String;
     defval->units = NULL;
@@ -445,7 +481,7 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
      * Model_Y_axis defines y-axis orientation.
      */
   }
-  else if (index == 26) {
+  else if (index == Model_Z_axis) {
     *name = EG_strdup("Model_Z_axis");
     defval->type = String;
     defval->units = NULL;
@@ -459,36 +495,26 @@ aimInputs(int iIndex, /*@unused@*/ void *aimInfo, int index, char **name,
   return status;
 }
 
+
 /* ********************** Exposed AIM Functions ***************************** */
 int
-aimPreAnalysis(int iIndex, void *aimInfo, const char *apath, capsValue *inputs,
-               capsErrs **errs)
+aimPreAnalysis(void *instStore, void *aimInfo, capsValue *inputs)
 {
   int          i, j, varid, status, nBody, nface, nedge, nvert, ntri, *tris;
   int          atype, alen;
   double       params[3], box[6], size, *xyzs, Sref, Cref, Xref, Yref, Zref;
-  char         line[128], cpath[PATH_MAX];
+  char         line[128], aimFile[PATH_MAX];
   const int    *ints;
   const char   *string, *intents;
   const double *reals;
+  c3dAIM       *cartInstance;
   ego          *bodies, tess;
   verTags      *vtags;
   FILE         *fp;
 
-  *errs = NULL;
 #ifdef DEBUG
-  printf(" Cart3DAIM/aimPreAnalysis instance = %d!\n", iIndex);
+  printf(" Cart3DAIM/aimPreAnalysis!\n");
 #endif
-  cartInstance[iIndex].apath = apath;
-
-  /* get where we are and set the path to our input */
-  (void) getcwd(cpath, PATH_MAX);
-  if (chdir(apath) != 0) {
-#ifdef DEBUG
-    printf(" Cart3DAIM/aimPreAnalysis Cannot chdir to %s!\n", apath);
-#endif
-    return CAPS_DIRERR;
-  }
   
   if (inputs == NULL) {
 #ifdef DEBUG
@@ -496,18 +522,17 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *apath, capsValue *inputs,
 #endif
     return CAPS_NULLOBJ;
   }
+  
+  cartInstance = (c3dAIM *) instStore;
 
   // Get AIM bodies
   status = aim_getBodies(aimInfo, &intents, &nBody, &bodies);
   if (status != CAPS_SUCCESS) {
-    chdir(cpath);
     return status;
   }
 
   if (nBody != 1) {
-    printf(" Cart3DAIM/aimPreAnalysis instance = %d, nBody = %d!\n",
-           iIndex, nBody);
-    chdir(cpath);
+    printf(" Cart3DAIM/aimPreAnalysis nBody = %d!\n", nBody);
     return CAPS_SOURCEERR;
   }
 
@@ -540,25 +565,25 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *apath, capsValue *inputs,
 
   // Only do the meshing if the geometry has been changed or a meshing input variable has been changed
   if (aim_newGeometry(aimInfo) == CAPS_SUCCESS ||
-      cartInstance[iIndex].tessParam[0]          != inputs[aim_getIndex(aimInfo, "Tess_Params",  ANALYSISIN)-1].vals.reals[0] ||
-      cartInstance[iIndex].tessParam[1]          != inputs[aim_getIndex(aimInfo, "Tess_Params",  ANALYSISIN)-1].vals.reals[1] ||
-      cartInstance[iIndex].tessParam[2]          != inputs[aim_getIndex(aimInfo, "Tess_Params",  ANALYSISIN)-1].vals.reals[2] ||
-      cartInstance[iIndex].outerBox              != inputs[aim_getIndex(aimInfo, "outer_box",  ANALYSISIN)-1].vals.real ||
-      cartInstance[iIndex].nDiv                  != inputs[aim_getIndex(aimInfo, "nDiv",  ANALYSISIN)-1].vals.integer ||
-      cartInstance[iIndex].maxR                  != inputs[aim_getIndex(aimInfo, "maxR",  ANALYSISIN)-1].vals.integer ||
-      cartInstance[iIndex].sharpFeatureDivisions != inputs[aim_getIndex(aimInfo, "SharpFeatureDivisions",  ANALYSISIN)-1].vals.integer ||
-      cartInstance[iIndex].nMultiGridLevels      != inputs[aim_getIndex(aimInfo, "nMultiGridLevels",  ANALYSISIN)-1].vals.integer) {
+      cartInstance->tessParam[0]          != inputs[Tess_Params-1].vals.reals[0] ||
+      cartInstance->tessParam[1]          != inputs[Tess_Params-1].vals.reals[1] ||
+      cartInstance->tessParam[2]          != inputs[Tess_Params-1].vals.reals[2] ||
+      cartInstance->outerBox              != inputs[outer_box-1].vals.real ||
+      cartInstance->nDiv                  != inputs[nDiv-1].vals.integer ||
+      cartInstance->maxR                  != inputs[maxR-1].vals.integer ||
+      cartInstance->sharpFeatureDivisions != inputs[SharpFeatureDivisions-1].vals.integer ||
+      cartInstance->nMultiGridLevels      != inputs[nMultiGridLevels-1].vals.integer) {
 
     // Set new meshing parameters
-    cartInstance[iIndex].tessParam[0] = inputs[aim_getIndex(aimInfo, "Tess_Params",  ANALYSISIN)-1].vals.reals[0];
-    cartInstance[iIndex].tessParam[1] = inputs[aim_getIndex(aimInfo, "Tess_Params",  ANALYSISIN)-1].vals.reals[1];
-    cartInstance[iIndex].tessParam[2] = inputs[aim_getIndex(aimInfo, "Tess_Params",  ANALYSISIN)-1].vals.reals[2];
+    cartInstance->tessParam[0] = inputs[Tess_Params-1].vals.reals[0];
+    cartInstance->tessParam[1] = inputs[Tess_Params-1].vals.reals[1];
+    cartInstance->tessParam[2] = inputs[Tess_Params-1].vals.reals[2];
 
-    cartInstance[iIndex].outerBox = inputs[aim_getIndex(aimInfo, "outer_box",  ANALYSISIN)-1].vals.real;
-    cartInstance[iIndex].nDiv     = inputs[aim_getIndex(aimInfo, "nDiv",  ANALYSISIN)-1].vals.integer;
-    cartInstance[iIndex].maxR     = inputs[aim_getIndex(aimInfo, "maxR",  ANALYSISIN)-1].vals.integer;
-    cartInstance[iIndex].sharpFeatureDivisions = inputs[aim_getIndex(aimInfo, "SharpFeatureDivisions",  ANALYSISIN)-1].vals.integer;
-    cartInstance[iIndex].nMultiGridLevels      = inputs[aim_getIndex(aimInfo, "nMultiGridLevels",  ANALYSISIN)-1].vals.integer;
+    cartInstance->outerBox = inputs[outer_box-1].vals.real;
+    cartInstance->nDiv     = inputs[nDiv-1].vals.integer;
+    cartInstance->maxR     = inputs[maxR-1].vals.integer;
+    cartInstance->sharpFeatureDivisions = inputs[SharpFeatureDivisions-1].vals.integer;
+    cartInstance->nMultiGridLevels      = inputs[nMultiGridLevels-1].vals.integer;
 
     status = EG_getBoundingBox(bodies[0], box);
     if (status != EGADS_SUCCESS) return status;
@@ -571,12 +596,11 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *apath, capsValue *inputs,
     params[0] = inputs[0].vals.reals[0]*size;
     params[1] = inputs[0].vals.reals[1]*size;
     params[2] = inputs[0].vals.reals[2];
-    printf(" Tessellating Inst=%d with  MaxEdge = %lf  Sag = %lf  Angle = %lf\n",
-        iIndex, params[0], params[1], params[2]);
+    printf(" Tessellating with  MaxEdge = %lf  Sag = %lf  Angle = %lf\n",
+           params[0], params[1], params[2]);
 
     status = EG_makeTessBody(bodies[0], params, &tess);
     if (status != EGADS_SUCCESS) {
-      chdir(cpath);
       return status;
     }
 
@@ -584,15 +608,20 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *apath, capsValue *inputs,
     status = bodyTess(tess, &nface, &nedge, &nvert, &xyzs, &vtags, &ntri, &tris);
     if (status != EGADS_SUCCESS) {
       EG_deleteObject(tess);
-      chdir(cpath);
       return status;
     }
-    cartInstance[iIndex].nface = nface;
-    cartInstance[iIndex].nvert = nvert;
-    cartInstance[iIndex].ntris = ntri;
+    cartInstance->nface = nface;
+    cartInstance->nvert = nvert;
+    cartInstance->ntris = ntri;
+
+    status = aim_file(aimInfo, "Components.i.tri", aimFile);
+    if (status != EGADS_SUCCESS) {
+      EG_deleteObject(tess);
+      return status;
+    }
 
     /* write the tri file */
-    status = writeTrix("Components.i.tri", NULL, 1, nvert, xyzs, 0, NULL,
+    status = writeTrix(aimFile, NULL, 1, nvert, xyzs, 0, NULL,
              ntri, tris);
     EG_free(tris);
     EG_free(vtags);
@@ -600,16 +629,14 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *apath, capsValue *inputs,
     if (status != 0) {
       printf(" writeTrix return = %d\n", status);
       EG_deleteObject(tess);
-      chdir(cpath);
       return CAPS_IOERR;
     }
 
     /* store away the tessellation */
-    status = aim_setTess(aimInfo, tess);
+    status = aim_newTess(aimInfo, tess);
     if (status != 0) {
       printf(" aim_setTess return = %d\n", status);
       EG_deleteObject(tess);
-      chdir(cpath);
       return status;
     }
 
@@ -617,41 +644,37 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *apath, capsValue *inputs,
          inputs[1].vals.real, inputs[2].vals.integer,
          inputs[3].vals.integer);
     printf(" Executing: %s\n", line);
-    status = system(line);
+    status = aim_system(aimInfo, line);
     if (status != 0) {
       printf(" ERROR: autoInputs return = %d\n", status);
-      chdir(cpath);
       return CAPS_EXECERR;
     }
 
     snprintf(line, 128, "cubes -reorder -sf %d",
         inputs[9].vals.integer);
     printf(" Executing: %s\n", line);
-    status = system(line);
+    status = aim_system(aimInfo, line);
     if (status != 0) {
       printf(" ERROR: cubes return = %d\n", status);
-      chdir(cpath);
       return CAPS_EXECERR;
     }
 
     snprintf(line, 128, "mgPrep -n %d",
         inputs[10].vals.integer);
     printf(" Executing: %s\n", line);
-    status = system(line);
+    status = aim_system(aimInfo, line);
     if (status != 0) {
       printf(" ERROR: mgPrep return = %d\n", status);
-      chdir(cpath);
       return CAPS_EXECERR;
     }
   }
 
   /* create and output input.cntl */
-  fp = fopen("input.cntl", "w");
+  fp = aim_fopen(aimInfo, "input.cntl", "w");
   if (fp == NULL) {
 #ifdef DEBUG
     printf(" Cart3DAIM/aimCalcOutput Cannot open input.cntl!\n");
 #endif
-    chdir(cpath);
     return CAPS_DIRERR;
   }
 
@@ -753,21 +776,31 @@ aimPreAnalysis(int iIndex, void *aimInfo, const char *apath, capsValue *inputs,
   fprintf(fp, "Force entire\n\n");
   fprintf(fp, "Moment_Point %lf %lf %lf entire\n",Xref ,Yref ,Zref );
 
-  chdir(cpath);
   fclose(fp);
 
-  chdir(cpath);
   return CAPS_SUCCESS;
 }
 
+
+// ********************** AIM Function Break *****************************
+
+/* no longer optional and needed for restart */
+int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+                    /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
+{
+  return CAPS_SUCCESS;
+}
+
+
 // ********************** AIM Function Break *****************************
 int
-aimOutputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimStruc, int index,
+aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc, int index,
            char **aoname, capsValue *form)
 {
-  char *names[12] = {"C_A", "C_Y", "C_N", "C_D", "C_S", "C_L", "C_l", "C_m", "C_n", "C_M_x", "C_M_y", "C_M_z"};
+  char *names[12] = {"C_A", "C_Y", "C_N",   "C_D",   "C_S", "C_L", "C_l",
+                     "C_m", "C_n", "C_M_x", "C_M_y", "C_M_z"};
 #ifdef DEBUG
-  printf(" Cart3DAIM/aimOutputs instance = %d  index = %d!\n", iIndex, index);
+  printf(" Cart3DAIM/aimOutputs index = %d!\n", index);
 #endif
 
   /*! \page aimOutputsCART3D AIM Outputs
@@ -792,15 +825,16 @@ aimOutputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimStruc, int index,
   return CAPS_SUCCESS;
 }
 
+
 // ********************** AIM Function Break *****************************
 int
-aimCalcOutput(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, const char *apath,
-              int index, capsValue *val, capsErrs **errors)
+aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+              int index, capsValue *val)
 {
   int        offset;
   size_t     linecap = 0;
   const char comp = ':';
-  char       cpath[PATH_MAX], *valstr, *line = NULL;
+  char       *valstr, *line = NULL;
   FILE       *fp;
   char       *start[12]= { "entire   Axial Force (C_A):",
                            "entire Lateral Force (C_Y):",
@@ -821,29 +855,12 @@ aimCalcOutput(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, const char *a
     offset = 1;
   }
 
-/*
-#ifdef DEBUG
-  printf(" Cart3DAIM/aimCalcOutput instance = %d  index = %d!\n", iIndex, index);
-#endif
-*/
-  *errors = NULL;
-
-  /* get where we are and set the path to our output */
-  (void) getcwd(cpath, PATH_MAX);
-  if (chdir(apath) != 0) {
-#ifdef DEBUG
-    printf(" Cart3DAIM/aimCalcOutput Cannot chdir to %s!\n", apath);
-#endif
-    return CAPS_DIRERR;
-  }
-
   /* open the Cart3D loads file */
-  fp = fopen("loadsCC.dat", "r");
+  fp = aim_fopen(aimInfo, "loadsCC.dat", "r");
   if (fp == NULL) {
 #ifdef DEBUG
     printf(" Cart3DAIM/aimCalcOutput Cannot open Output file!\n");
 #endif
-    chdir(cpath);
     return CAPS_DIRERR;
   }
 
@@ -865,8 +882,6 @@ aimCalcOutput(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, const char *a
       break;
     }
   }
-
-  chdir(cpath);
   fclose(fp);
   if (line != NULL) EG_free(line);
 
@@ -881,373 +896,272 @@ aimCalcOutput(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, const char *a
   return CAPS_SUCCESS;
 }
 
-// ********************** AIM Function Break *****************************
 
+// ********************** AIM Function Break *****************************
 void
-aimCleanup()
+aimCleanup(/*@null@*/ void *instStore)
 {
 #ifdef DEBUG
   printf(" Cart3DAIM/aimCleanup!\n");
 #endif
 
-  if (cartInstance != NULL) EG_free(cartInstance);
-  cartInstance = NULL;
-  numInstance  = 0;
+  EG_free(instStore);
 }
 
-int
-aimFreeDiscr(capsDiscr *discr)
-{
-  int i;
-
-#ifdef DEBUG
-  printf(" Cart3DAIM/aimFreeDiscr instance = %d!\n", discr->instance);
-#endif
-
-  /* free up this capsDiscr */
-  if (discr->mapping != NULL) EG_free(discr->mapping);
-  if (discr->verts   != NULL) EG_free(discr->verts);
-  if (discr->celem   != NULL) EG_free(discr->celem);
-  if (discr->types   != NULL) {
-    for (i = 0; i < discr->nTypes; i++) {
-      if (discr->types[i].gst   != NULL) EG_free(discr->types[i].gst);
-      if (discr->types[i].dst   != NULL) EG_free(discr->types[i].dst);
-      if (discr->types[i].matst != NULL) EG_free(discr->types[i].matst);
-      if (discr->types[i].tris  != NULL) EG_free(discr->types[i].tris);
-    }
-    EG_free(discr->types);
-  }
-  if (discr->elems   != NULL) EG_free(discr->elems);
-  if (discr->dtris   != NULL) EG_free(discr->dtris);
-  if (discr->ptrm    != NULL) EG_free(discr->ptrm);
-
-  discr->nPoints  = 0;
-  discr->mapping  = NULL;
-  discr->nVerts   = 0;
-  discr->verts    = NULL;
-  discr->celem    = NULL;
-  discr->nTypes   = 0;
-  discr->types    = NULL;
-  discr->nElems   = 0;
-  discr->elems    = NULL;
-  discr->nDtris   = 0;
-  discr->dtris    = NULL;
-  discr->ptrm     = NULL;
-
-  return CAPS_SUCCESS;
-}
 
 // ********************** AIM Function Break *****************************
 int
 aimDiscr(char *tname, capsDiscr *discr)
 {
-  int          i, j, k, kk, n, ibod, stat, inst, nFace, atype, alen, tlen, nGlobal;
-  int          npts, ntris, nBody, global, *storage, *pairs = NULL, *vid = NULL;
-  const int    *ints, *ptype, *pindex, *tris, *nei;
-  const double *reals, *xyz, *uv;
-  const char   *string, *intents;
-  ego          tess, body, *bodies, *faces;
+  int           ibody, iface, i, vID=0, itri, ielem, status, found;
+  int           nFace, atype, alen, tlen, nBodyDisc;
+  int           ntris, nBody, state, nGlobal, global;
+  int           *vid = NULL;
+  const int     *ints, *ptype, *pindex, *tris, *nei;
+  const double  *reals, *xyz, *uv;
+  const char    *string, *intents;
+  ego           body, *bodies, *faces=NULL, *tess = NULL;
+  capsBodyDiscr *discBody;
 
-  inst = discr->instance;
 #ifdef DEBUG
-  printf(" Cart3DAIM/aimDiscr: tname = %s, instance = %d!\n", tname, inst);
+  printf(" capsAIM/aimDiscr: tname = %s, instance = %d!\n",
+         tname, aim_getInstance(discr->aInfo));
 #endif
-  if ((inst < 0) || (inst >= numInstance)) return CAPS_BADINDEX;
 
-  /* currently this works with 1 body! */
-  stat = aim_getBodies(discr->aInfo, &intents, &nBody, &bodies);
-  if (stat != CAPS_SUCCESS) {
-    printf(" Cart3DAIM/aimDiscr: %d aim_getBodies = %d!\n", inst, stat);
-    return stat;
-  }
-  stat = aimFreeDiscr(discr);
-  if (stat != CAPS_SUCCESS) return stat;
+  /* create the discretization structure for this capsBound */
+
+  status = aim_getBodies(discr->aInfo, &intents, &nBody, &bodies);
+  if (status != CAPS_SUCCESS) goto cleanup;
+
+  /* bodies is 2*nBodies long where the last nBodies
+     are the tess objects for the first nBodies */
+  tess = bodies + nBody;
 
   /* find any faces with our boundary marker */
-  for (n = i = 0; i < nBody; i++) {
-    stat = EG_getBodyTopos(bodies[i], NULL, FACE, &nFace, &faces);
-    if (stat != EGADS_SUCCESS) {
-      printf(" Cart3DAIM: getBodyTopos (Face) = %d for Body %d!\n", stat, i+1);
-      return stat;
+  for (nBodyDisc = ibody = 0; ibody < nBody; ibody++) {
+    if (tess[ibody] == NULL) continue;
+    status = EG_getBodyTopos(bodies[ibody], NULL, FACE, &nFace, &faces);
+    if (status != EGADS_SUCCESS) goto cleanup;
+    if (faces == NULL) {
+      status = EGADS_TOPOERR;
+      goto cleanup;
     }
-    if (nFace != cartInstance[inst].nface) {
-      printf(" Cart3DAIM: getBodyTopos nFace = %d, cached = %d!\n", nFace,
-             cartInstance[inst].nface);
-      return CAPS_MISMATCH;
-    }
-    for (j = 0; j < nFace; j++) {
-      stat = EG_attributeRet(faces[j], "capsBound", &atype, &alen,
-                             &ints, &reals, &string);
-      if (stat  != EGADS_SUCCESS)     continue;
-      if (atype != ATTRSTRING)        continue;
+    found = 0;
+    for (iface = 0; iface < nFace; iface++) {
+      status = EG_attributeRet(faces[iface], "capsBound", &atype, &alen,
+                               &ints, &reals, &string);
+      if (status != EGADS_SUCCESS)    continue;
+      if (atype  != ATTRSTRING)       continue;
       if (strcmp(string, tname) != 0) continue;
 #ifdef DEBUG
-      printf(" Cart3DAIM/aimDiscr: Body %d/Face %d matches %s!\n",
-             i+1, j+1, tname);
+      printf(" skeletonAIM/aimDiscr: Body %d/Face %d matches %s!\n",
+             ibody+1, iface+1, tname);
 #endif
-      n++;
+      /* count the number of face with capsBound */
+      found = 1;
     }
-    EG_free(faces);
+    if (found == 1) nBodyDisc++;
+    AIM_FREE(faces);
   }
-  if (n == 0) {
-    printf(" Cart3DAIM/aimDiscr: No Faces match %s!\n", tname);
+  if (nBodyDisc == 0) {
+    printf(" skeletonAIM/aimDiscr: No Faces match %s!\n", tname);
     return CAPS_SUCCESS;
   }
 
-  /* store away the faces */
-  stat  = EGADS_MALLOC;
-  pairs = (int *) EG_alloc(2*n*sizeof(int));
-  if (pairs == NULL) {
-    printf(" Cart3DAIM: alloc on pairs = %d!\n", n);
-    goto bail;
-  }
-  npts = ntris = 0;
-  for (n = i = 0; i < nBody; i++) {
-    stat = EG_getBodyTopos(bodies[i], NULL, FACE, &nFace, &faces);
-    if (stat != EGADS_SUCCESS) {
-      printf(" Cart3DAIM: getBodyTopos (Face) = %d for Body %d!\n", stat, i+1);
-      goto bail;
-    }
-    for (j = 0; j < nFace; j++) {
-      stat = EG_attributeRet(faces[j], "capsBound", &atype, &alen,
-                             &ints, &reals, &string);
-      if (stat  != EGADS_SUCCESS)     continue;
-      if (atype != ATTRSTRING)        continue;
-      if (strcmp(string, tname) != 0) continue;
-      pairs[2*n  ] = i+1;
-      pairs[2*n+1] = j+1;
-      n++;
-      stat = EG_getTessFace(bodies[i+nBody], j+1, &alen, &xyz, &uv, &ptype,
-                            &pindex, &tlen, &tris, &nei);
-      if (stat != EGADS_SUCCESS) {
-        printf(" Cart3DAIM: EG_getTessFace %d = %d for Body %d!\n",
-               j+1, stat, i+1);
-        continue;
-      }
-      npts  += alen;
-      ntris += tlen;
-    }
-    EG_free(faces);
-  }
-  if ((npts == 0) || (ntris == 0)) {
-#ifdef DEBUG
-    printf(" Cart3DAIM/aimDiscr: ntris = %d, npts = %d!\n", ntris, npts);
-#endif
-    stat = CAPS_SOURCEERR;
-    goto bail;
-  }
-  discr->nElems = ntris;
-
-  /* specify our single element type */
-  stat = EGADS_MALLOC;
+  /* specify our single triangle element type */
   discr->nTypes = 1;
-  discr->types  = (capsEleType *) EG_alloc(sizeof(capsEleType));
-  if (discr->types == NULL) goto bail;
+  AIM_ALLOC(discr->types, discr->nTypes, capsEleType, discr->aInfo, status);
+
   discr->types[0].nref  = 3;
-  discr->types[0].ndata = 0;            /* data at geom reference positions */
+  discr->types[0].ndata = 0;         /* data at geom reference positions
+                                        (i.e. vertex centered/iso-parametric) */
   discr->types[0].ntri  = 1;
-  discr->types[0].nmat  = 0;            /* match points at geom ref positions */
+  discr->types[0].nmat  = 0;         /* match points at geom ref positions */
   discr->types[0].tris  = NULL;
   discr->types[0].gst   = NULL;
   discr->types[0].dst   = NULL;
   discr->types[0].matst = NULL;
 
-  discr->types[0].tris   = (int *) EG_alloc(3*sizeof(int));
-  if (discr->types[0].tris == NULL) goto bail;
+  /* specify the numbering for the points on the triangle */
+  AIM_ALLOC(discr->types[0].tris, discr->types[0].nref, int, discr->aInfo, status);
+
   discr->types[0].tris[0] = 1;
   discr->types[0].tris[1] = 2;
   discr->types[0].tris[2] = 3;
 
-  discr->types[0].gst   = (double *) EG_alloc(6*sizeof(double));
-  if (discr->types[0].gst == NULL) goto bail;
-  discr->types[0].gst[0] = 0.0;
+  /* specify the reference coordinates for each point on the triangle */
+  AIM_ALLOC(discr->types[0].gst, 2*discr->types[0].nref, double, discr->aInfo, status);
+
+  discr->types[0].gst[0] = 0.0;   /* s = 0, t = 0 */
   discr->types[0].gst[1] = 0.0;
-  discr->types[0].gst[2] = 1.0;
+  discr->types[0].gst[2] = 1.0;   /* s = 1, t = 0 */
   discr->types[0].gst[3] = 0.0;
-  discr->types[0].gst[4] = 0.0;
+  discr->types[0].gst[4] = 0.0;   /* s = 0, t = 1 */
   discr->types[0].gst[5] = 1.0;
 
-  /* get the tessellation and
-     make up a simple linear continuous triangle discretization */
-#ifdef DEBUG
-  printf(" Cart3DAIM/aimDiscr: ntris = %d, npts = %d!\n", ntris, npts);
-#endif
-  discr->mapping = (int *) EG_alloc(2*npts*sizeof(int));
-  if (discr->mapping == NULL) goto bail;
-  discr->elems = (capsElement *) EG_alloc(ntris*sizeof(capsElement));
-  if (discr->elems == NULL) goto bail;
-  storage = (int *) EG_alloc(6*ntris*sizeof(int));
-  if (storage == NULL) goto bail;
-  discr->ptrm = storage;
+  /* allocate the body discretizations */
+  AIM_ALLOC(discr->bodys, discr->nBodys, capsBodyDiscr, discr->aInfo, status);
 
-  for (ibod = kk = k = i = 0; i < n; i++) {
-    while (pairs[2*i] != ibod) {
-      stat = EG_statusTessBody(bodies[pairs[2*i]-1 + nBody], &body, &j,
-                               &nGlobal);
-      if ((stat < EGADS_SUCCESS) || (nGlobal == 0)) {
-        printf(" Cart3DAIM/aimDiscr: EG_statusTessBody = %d, nGlobal = %d!\n",
-               stat, nGlobal);
-        goto bail;
+  /* get the tessellation and
+   make up a linear continuous triangle discretization */
+  vID = nBodyDisc = 0;
+  for (ibody = 0; ibody < nBody; ibody++) {
+    if (tess[ibody] == NULL) continue;
+    ntris = 0;
+    AIM_FREE(faces);
+    status = EG_getBodyTopos(bodies[ibody], NULL, FACE, &nFace, &faces);
+    if ((status != EGADS_SUCCESS) || (faces == NULL)) {
+      printf(" skeletonAIM: getBodyTopos (Face) = %d for Body %d!\n",
+             status, ibody+1);
+      status = EGADS_TOPOERR;
+      goto cleanup;
+    }
+    found = 0;
+    for (iface = 0; iface < nFace; iface++) {
+      status = EG_attributeRet(faces[iface], "capsBound", &atype, &alen,
+                               &ints, &reals, &string);
+      if (status != EGADS_SUCCESS)    continue;
+      if (atype  != ATTRSTRING)       continue;
+      if (strcmp(string, tname) != 0) continue;
+
+      status = EG_getTessFace(tess[ibody], iface+1, &alen, &xyz, &uv,
+                              &ptype, &pindex, &tlen, &tris, &nei);
+      if (status != EGADS_SUCCESS) {
+        printf(" skeletonAIM: EG_getTessFace %d = %d for Body %d!\n",
+               iface+1, status, ibody+1);
+        continue;
       }
-      if (vid != NULL) EG_free(vid);
-      stat = EGADS_MALLOC;
-      vid  = (int *) EG_alloc(nGlobal*sizeof(int));
-      if (vid == NULL) goto bail;
-      for (j = 0; j < nGlobal; j++) vid[j] = 0;
-      ibod++;
+      ntris += tlen;
+      found = 1;
     }
-    if (vid == NULL) {
-      printf(" Cart3DAIM/aimDiscr: vid == NULL!\n");
-      goto bail;
+    if (found == 0) continue;
+    if (ntris == 0) {
+#ifdef DEBUG
+      printf(" skeletonAIM/aimDiscr: ntris = %d!\n", ntris);
+#endif
+      status = CAPS_SOURCEERR;
+      goto cleanup;
     }
-    tess = bodies[pairs[2*i]-1 + nBody];
-    stat = EG_getTessFace(tess, pairs[2*i+1], &alen, &xyz, &uv, &ptype, &pindex,
-                          &tlen, &tris, &nei);
-    if (stat != EGADS_SUCCESS) continue;
-    for (j = 0; j < alen; j++) {
-      stat = EG_localToGlobal(tess, pairs[2*i+1], j+1, &global);
-      if (stat != EGADS_SUCCESS) {
-        printf(" Cart3DAIM/aimDiscr: %d %d - %d %d EG_localToGlobal = %d!\n",
-               pairs[2*i], j+1, ptype[j], pindex[j], stat);
-        goto bail;
+
+    discBody = &discr->bodys[nBodyDisc];
+    aim_initBodyDiscr(discBody);
+
+    discBody->tess = tess[ibody-1];
+    discBody->nElems = ntris;
+
+    AIM_ALLOC(discBody->elems   ,   ntris, capsElement, discr->aInfo, status);
+    AIM_ALLOC(discBody->gIndices, 6*ntris, int        , discr->aInfo, status);
+
+    status = EG_statusTessBody(tess[ibody-1], &body, &state, &nGlobal);
+    AIM_STATUS(discr->aInfo, status);
+
+    AIM_FREE(vid);
+    AIM_ALLOC(vid, nGlobal, int, discr->aInfo, status);
+    for (i = 0; i < nGlobal; i++) vid[i] = 0;
+
+    ielem = 0;
+    for (iface = 0; iface < nFace; iface++) {
+      status = EG_attributeRet(faces[iface], "capsBound", &atype, &alen,
+                               &ints, &reals, &string);
+      if (status != EGADS_SUCCESS)    continue;
+      if (atype  != ATTRSTRING)       continue;
+      if (strcmp(string, tname) != 0) continue;
+
+      status = EG_getTessFace(tess[ibody-1], iface, &alen, &xyz, &uv,
+                            &ptype, &pindex, &tlen, &tris, &nei);
+      AIM_STATUS(discr->aInfo, status);
+
+      /* construct global vertex indices */
+      for (i = 0; i < alen; i++) {
+        status = EG_localToGlobal(tess[ibody-1], iface, i+1, &global);
+        AIM_STATUS(discr->aInfo, status);
+        if (vid[global-1] != 0) continue;
+        vid[global-1] = vID+1;
+        vID++;
       }
-      if (vid[global-1] != 0) continue;
-      discr->mapping[2*k  ] = ibod;
-      discr->mapping[2*k+1] = global;
-      vid[global-1]         = k+1;
-      k++;
-    }
-    for (j = 0; j < tlen; j++, kk++) {
-      discr->elems[kk].bIndex      = ibod;
-      discr->elems[kk].tIndex      = 1;
-      discr->elems[kk].eIndex      = pairs[2*i+1];
+
+      /* fill elements */
+      for (itri = 0; itri < tlen; itri++, ielem++) {
+        discBody->elems[ielem].tIndex      = 1;
+        discBody->elems[ielem].eIndex      = iface;
 /*@-immediatetrans@*/
-      discr->elems[kk].gIndices    = &storage[6*kk];
+        discBody->elems[ielem].gIndices    = &discBody->gIndices[6*ielem];
 /*@+immediatetrans@*/
-      discr->elems[kk].dIndices    = NULL;
-      discr->elems[kk].eTris.tq[0] = j+1;
-      stat = EG_localToGlobal(tess, pairs[2*i+1], tris[3*j  ], &global);
-      if (stat != EGADS_SUCCESS)
-        printf(" Cart3DAIM/aimDiscr: tri %d/0 EG_localToGlobal = %d\n",
-               j+1, stat);
-      storage[6*kk  ] = vid[global-1];
-      storage[6*kk+1] = tris[3*j  ];
-      stat = EG_localToGlobal(tess, pairs[2*i+1], tris[3*j+1], &global);
-      if (stat != EGADS_SUCCESS)
-        printf(" Cart3DAIM/aimDiscr: tri %d/1 EG_localToGlobal = %d\n",
-               j+1, stat);
-      storage[6*kk+2] = vid[global-1];
-      storage[6*kk+3] = tris[3*j+1];
-      stat = EG_localToGlobal(tess, pairs[2*i+1], tris[3*j+2], &global);
-      if (stat != EGADS_SUCCESS)
-        printf(" Cart3DAIM/aimDiscr: tri %d/2 EG_localToGlobal = %d\n",
-               j+1, stat);
-      storage[6*kk+4] = vid[global-1];
-      storage[6*kk+5] = tris[3*j+2];
+        discBody->elems[ielem].dIndices    = NULL;
+        discBody->elems[ielem].eTris.tq[0] = itri+1;
+
+        status = EG_localToGlobal(tess[ibody-1], iface, tris[3*itri  ],
+                                  &global);
+        AIM_STATUS(discr->aInfo, status);
+        discBody->elems[ielem].gIndices[0] = vid[global-1];
+        discBody->elems[ielem].gIndices[1] = tris[3*itri  ];
+
+        status = EG_localToGlobal(tess[ibody-1], iface, tris[3*itri+1],
+                                  &global);
+        AIM_STATUS(discr->aInfo, status);
+        discBody->elems[ielem].gIndices[2] = vid[global-1];
+        discBody->elems[ielem].gIndices[3] = tris[3*itri+1];
+
+        status = EG_localToGlobal(tess[ibody-1], iface, tris[3*itri+2],
+                                  &global);
+        AIM_STATUS(discr->aInfo, status);
+        discBody->elems[ielem].gIndices[4] = vid[global-1];
+        discBody->elems[ielem].gIndices[5] = tris[3*itri+2];
+      }
     }
+    nBodyDisc++;
   }
-  discr->nPoints = k;
+
+  /* set the total number of points */
+  discr->nPoints = vID;
+
+  status = CAPS_SUCCESS;
+  
+cleanup:
 
   /* free up our stuff */
-  if (vid   != NULL) EG_free(vid);
-  if (pairs != NULL) EG_free(pairs);
+  AIM_FREE(faces);
+  AIM_FREE(vid);
 
-  return CAPS_SUCCESS;
-
-bail:
-  if (vid   != NULL) EG_free(vid);
-  if (pairs != NULL) EG_free(pairs);
-  aimFreeDiscr(discr);
-
-  return stat;
+  return status;
 }
+
 
 // ********************** AIM Function Break *****************************
 int
-aimLocateElement(capsDiscr *discr, double *params, double *param, int *eIndex,
-                 double *bary)
+aimLocateElement(capsDiscr *discr, double *params, double *param,
+                 int *bIndex, int *eIndex, double *bary)
 {
-  int    i, in[3], stat, ismall;
-  double we[3], w, smallw = -1.e300;
-
-  if (discr == NULL) return CAPS_NULLOBJ;
-
-  for (ismall = i = 0; i < discr->nElems; i++) {
-    in[0] = discr->elems[i].gIndices[0] - 1;
-    in[1] = discr->elems[i].gIndices[2] - 1;
-    in[2] = discr->elems[i].gIndices[4] - 1;
-    stat  = EG_inTriExact(&params[2*in[0]], &params[2*in[1]], &params[2*in[2]],
-                          param, we);
-    if (stat == EGADS_SUCCESS) {
-      *eIndex = i+1;
-      bary[0] = we[1];
-      bary[1] = we[2];
-      return CAPS_SUCCESS;
-    }
-    w = we[0];
-    if (we[1] < w) w = we[1];
-    if (we[2] < w) w = we[2];
-    if (w > smallw) {
-      ismall = i+1;
-      smallw = w;
-    }
-  }
-
-  /* must extrapolate! */
-  if (ismall == 0) return CAPS_NOTFOUND;
-  in[0] = discr->elems[ismall-1].gIndices[0] - 1;
-  in[1] = discr->elems[ismall-1].gIndices[2] - 1;
-  in[2] = discr->elems[ismall-1].gIndices[4] - 1;
-  EG_inTriExact(&params[2*in[0]], &params[2*in[1]], &params[2*in[2]],
-                param, we);
-  *eIndex = ismall;
-  bary[0] = we[1];
-  bary[1] = we[2];
-/*
-  printf(" aimLocateElement: extropolate to %d (%lf %lf %lf)  %lf\n",
-         ismall, we[0], we[1], we[2], smallw);
- */
-  return CAPS_SUCCESS;
+    return aim_locateElement(discr, params, param, bIndex, eIndex, bary);
 }
+
 
 // ********************** AIM Function Break *****************************
 int
 aimTransfer(capsDiscr *discr, const char *name, int npts, int rank, double *data,
             /*@unused@*/ char **units)
 {
-  int    i, j, k, stat;
-  char   cpath[PATH_MAX];
+  int    i, j, global, stat, bIndex;
   double *rvec;
+  c3dAIM *cartInstance;
 
 #ifdef DEBUG
-  printf(" Cart3DAIM/aimTransfer name = %s  instance = %d  npts = %d/%d!\n",
-         name, discr->instance, npts, rank);
+  printf(" Cart3DAIM/aimTransfer name = %s  npts = %d/%d!\n",
+         name, npts, rank);
 #endif
+  cartInstance = (c3dAIM *) discr->instStore;
 
-  (void) getcwd(cpath, PATH_MAX);
-  if (chdir(cartInstance[discr->instance].apath) != 0) {
-#ifdef DEBUG
-    printf(" Cart3DAIM/aimTransfer Cannot chdir to %s!\n",
-           cartInstance[discr->instance].apath);
-#endif
-    return CAPS_DIRERR;
-  }
-
-  rvec = (double *) EG_alloc(rank*cartInstance[discr->instance].nvert*
-                             sizeof(double));
+  rvec = (double *) EG_alloc(rank*cartInstance->nvert*sizeof(double));
   if (rvec == NULL) {
 #ifdef DEBUG
     printf(" Cart3DAIM/aimTransfer Cannot allocate %dx%d!\n",
-           rank, cartInstance[discr->instance].nvert);
+           rank, cartInstance->nvert);
 #endif
-    chdir(cpath);
     return EGADS_MALLOC;
   }
 
   /* try and read the trix file */
-  stat = readTrix("Components.i.trix", name,
-                  cartInstance[discr->instance].nvert, rank, rvec);
-  chdir(cpath);
+  stat = readTrix("Components.i.trix", name, cartInstance->nvert, rank, rvec);
   if (stat != 0) {
     EG_free(rvec);
     return CAPS_IOERR;
@@ -1255,208 +1169,71 @@ aimTransfer(capsDiscr *discr, const char *name, int npts, int rank, double *data
 
   /* move the appropriate parts of the tessellation to data */
   for (i = 0; i < npts; i++) {
-    /* assumes only single body otherwise need to look at body! */
-    k = discr->mapping[2*i+1] - 1;
-    for (j = 0; j < rank; j++) data[rank*i+j] = rvec[rank*k+j];
+    /* points might span multiple bodies */
+    bIndex = discr->tessGlobal[2*i  ];
+    global = discr->tessGlobal[2*i+1] +
+             discr->bodys[bIndex-1].globalOffset;
+    for (j = 0; j < rank; j++) data[rank*i+j] = rvec[rank*global+j];
   }
 
   EG_free(rvec);
   return CAPS_SUCCESS;
 }
 
+
 // ********************** AIM Function Break *****************************
 int
-aimInterpolation(capsDiscr *discr, /*@unused@*/ const char *name, int eIndex,
-                 double *bary, int rank, double *data, double *result)
+aimInterpolation(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
+                 int eIndex, double *bary, int rank, double *data,
+                 double *result)
 {
-  int    in[3], i;
-  double we[3];
-/*
 #ifdef DEBUG
-  printf(" Cart3DAIM/aimInterpolation  %s  instance = %d!\n",
-         name, discr->instance);
+    printf(" Cart3DAIM/aimInterpolation  %s!\n", name);
 #endif
-*/
-  if ((eIndex <= 0) || (eIndex > discr->nElems))
-    printf(" Cart3DAIM/Interpolation: eIndex = %d [1-%d]!\n",
-           eIndex, discr->nElems);
-
-  we[0] = 1.0 - bary[0] - bary[1];
-  we[1] = bary[0];
-  we[2] = bary[1];
-  in[0] = discr->elems[eIndex-1].gIndices[0] - 1;
-  in[1] = discr->elems[eIndex-1].gIndices[2] - 1;
-  in[2] = discr->elems[eIndex-1].gIndices[4] - 1;
-  for (i = 0; i < rank; i++)
-    result[i] = data[rank*in[0]+i]*we[0] + data[rank*in[1]+i]*we[1] +
-                data[rank*in[2]+i]*we[2];
-
-  return CAPS_SUCCESS;
+  
+    return  aim_interpolation(discr, name, bIndex, eIndex,
+                              bary, rank, data, result);
 }
 
+
 // ********************** AIM Function Break *****************************
 int
-aimInterpolateBar(capsDiscr *discr, /*@unused@*/ const char *name, int eIndex,
-                  double *bary, int rank, double *r_bar, double *d_bar)
+aimInterpolateBar(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
+                  int eIndex, double *bary, int rank, double *r_bar,
+                  double *d_bar)
 {
-  int    in[3], i;
-  double we[3];
-/*
 #ifdef DEBUG
-  printf(" Cart3DAIM/aimInterpolateBar  %s  instance = %d!\n",
-         name, discr->instance);
+    printf(" Cart3DAIM/aimInterpolateBar  %s!\n", name);
 #endif
-*/
-  if ((eIndex <= 0) || (eIndex > discr->nElems))
-    printf(" Cart3DAIM/InterpolateBar: eIndex = %d [1-%d]!\n",
-           eIndex, discr->nElems);
-
-  we[0] = 1.0 - bary[0] - bary[1];
-  we[1] = bary[0];
-  we[2] = bary[1];
-  in[0] = discr->elems[eIndex-1].gIndices[0] - 1;
-  in[1] = discr->elems[eIndex-1].gIndices[2] - 1;
-  in[2] = discr->elems[eIndex-1].gIndices[4] - 1;
-  for (i = 0; i < rank; i++) {
-/*  result[i] = data[rank*in[0]+i]*we[0] + data[rank*in[1]+i]*we[1] +
-                data[rank*in[2]+i]*we[2];  */
-    d_bar[rank*in[0]+i] += we[0]*r_bar[i];
-    d_bar[rank*in[1]+i] += we[1]*r_bar[i];
-    d_bar[rank*in[2]+i] += we[2]*r_bar[i];
-  }
-
-  return CAPS_SUCCESS;
+  
+    return  aim_interpolateBar(discr, name, bIndex, eIndex,
+                               bary, rank, r_bar, d_bar);
 }
 
+
 // ********************** AIM Function Break *****************************
 int
-aimIntegration(capsDiscr *discr, /*@unused@*/ const char *name, int eIndex, int rank,
-               /*@null@*/ double *data, double *result)
+aimIntegration(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
+               int eIndex, int rank, double *data, double *result)
 {
-  int        i, in[3], stat, ptype, pindex, nBody;
-  double     x1[3], x2[3], x3[3], xyz1[3], xyz2[3], xyz3[3], area;
-  const char *intents;
-  ego        *bodies;
-/*
 #ifdef DEBUG
-  printf(" Cart3DAIM/aimIntegration  %s  instance = %d!\n",
-         name, discr->instance);
+    printf(" Cart3DAIM/aimIntegration  %s!\n", name);
 #endif
-*/
-  if ((eIndex <= 0) || (eIndex > discr->nElems))
-    printf(" Cart3DAIM/aimIntegration: eIndex = %d [1-%d]!\n",
-           eIndex, discr->nElems);
-  stat = aim_getBodies(discr->aInfo, &intents, &nBody, &bodies);
-  if (stat != CAPS_SUCCESS) {
-    printf(" Cart3DAIM/aimIntegration: %d aim_getBodies = %d!\n",
-           discr->instance, stat);
-    return stat;
-  }
 
-  /* element indices */
-
-  in[0] = discr->elems[eIndex-1].gIndices[0] - 1;
-  in[1] = discr->elems[eIndex-1].gIndices[2] - 1;
-  in[2] = discr->elems[eIndex-1].gIndices[4] - 1;
-
-  stat = EG_getGlobal(bodies[discr->mapping[2*in[0]]+nBody-1],
-                      discr->mapping[2*in[0]+1], &ptype, &pindex, xyz1);
-  if (stat != CAPS_SUCCESS)
-    printf(" Cart3DAIM/aimIntegration: %d EG_getGlobal %d = %d!\n",
-           discr->instance, in[0], stat);
-  stat = EG_getGlobal(bodies[discr->mapping[2*in[1]]+nBody-1],
-                      discr->mapping[2*in[1]+1], &ptype, &pindex, xyz2);
-  if (stat != CAPS_SUCCESS)
-    printf(" Cart3DAIM/aimIntegration: %d EG_getGlobal %d = %d!\n",
-           discr->instance, in[1], stat);
-  stat = EG_getGlobal(bodies[discr->mapping[2*in[2]]+nBody-1],
-                      discr->mapping[2*in[2]+1], &ptype, &pindex, xyz3);
-  if (stat != CAPS_SUCCESS)
-    printf(" Cart3DAIM/aimIntegration: %d EG_getGlobal %d = %d!\n",
-           discr->instance, in[2], stat);
-
-  x1[0] = xyz2[0] - xyz1[0];
-  x2[0] = xyz3[0] - xyz1[0];
-  x1[1] = xyz2[1] - xyz1[1];
-  x2[1] = xyz3[1] - xyz1[1];
-  x1[2] = xyz2[2] - xyz1[2];
-  x2[2] = xyz3[2] - xyz1[2];
-  CROSS(x3, x1, x2);
-  area  = sqrt(DOT(x3, x3))/6.0;      /* 1/2 for area and then 1/3 for sum */
-  if (data == NULL) {
-    *result = 3.0*area;
-    return CAPS_SUCCESS;
-  }
-
-  for (i = 0; i < rank; i++)
-    result[i] = (data[rank*in[0]+i] + data[rank*in[1]+i] +
-                 data[rank*in[2]+i])*area;
-
-  return CAPS_SUCCESS;
+    return aim_integration(discr, name, bIndex, eIndex, rank,
+                           data, result);
 }
 
+
 // ********************** AIM Function Break *****************************
 int
-aimIntegrateBar(capsDiscr *discr, /*@unused@*/ const char *name, int eIndex, int rank,
-                double *r_bar, double *d_bar)
+aimIntegrateBar(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
+                int eIndex, int rank, double *r_bar, double *d_bar)
 {
-  int        i, in[3], stat, ptype, pindex, nBody;
-  double     x1[3], x2[3], x3[3], xyz1[3], xyz2[3], xyz3[3], area;
-  const char *intents;
-  ego        *bodies;
-/*
 #ifdef DEBUG
-  printf(" Cart3DAIM/aimIntegrateBar  %s  instance = %d!\n",
-         name, discr->instance);
+    printf(" Cart3DAIM/aimIntegrateBar  %s!\n", name);
 #endif
-*/
-  if ((eIndex <= 0) || (eIndex > discr->nElems))
-    printf(" Cart3DAIM/aimIntegrateBar: eIndex = %d [1-%d]!\n",
-           eIndex, discr->nElems);
-  stat = aim_getBodies(discr->aInfo, &intents, &nBody, &bodies);
-  if (stat != CAPS_SUCCESS) {
-    printf(" Cart3DAIM/aimIntegrateBar: %d aim_getBodies = %d!\n",
-           discr->instance, stat);
-    return stat;
-  }
-
-  /* element indices */
-
-  in[0] = discr->elems[eIndex-1].gIndices[0] - 1;
-  in[1] = discr->elems[eIndex-1].gIndices[2] - 1;
-  in[2] = discr->elems[eIndex-1].gIndices[4] - 1;
-  stat = EG_getGlobal(bodies[discr->mapping[2*in[0]]+nBody-1],
-                      discr->mapping[2*in[0]+1], &ptype, &pindex, xyz1);
-  if (stat != CAPS_SUCCESS)
-    printf(" CART3DAIM/aimIntegrateBar: %d EG_getGlobal %d = %d!\n",
-           discr->instance, in[0], stat);
-  stat = EG_getGlobal(bodies[discr->mapping[2*in[1]]+nBody-1],
-                      discr->mapping[2*in[1]+1], &ptype, &pindex, xyz2);
-  if (stat != CAPS_SUCCESS)
-    printf(" CART3DAIM/aimIntegrateBar: %d EG_getGlobal %d = %d!\n",
-           discr->instance, in[1], stat);
-  stat = EG_getGlobal(bodies[discr->mapping[2*in[2]]+nBody-1],
-                      discr->mapping[2*in[2]+1], &ptype, &pindex, xyz3);
-  if (stat != CAPS_SUCCESS)
-    printf(" CART3DAIM/aimIntegrateBar: %d EG_getGlobal %d = %d!\n",
-           discr->instance, in[2], stat);
-
-  x1[0] = xyz2[0] - xyz1[0];
-  x2[0] = xyz3[0] - xyz1[0];
-  x1[1] = xyz2[1] - xyz1[1];
-  x2[1] = xyz3[1] - xyz1[1];
-  x1[2] = xyz2[2] - xyz1[2];
-  x2[2] = xyz3[2] - xyz1[2];
-  CROSS(x3, x1, x2);
-  area  = sqrt(DOT(x3, x3))/6.0;      /* 1/2 for area and then 1/3 for sum */
-
-  for (i = 0; i < rank; i++) {
-/*  result[i] = (data[rank*in[0]+i] + data[rank*in[1]+i] +
-                 data[rank*in[2]+i])*area;  */
-    d_bar[rank*in[0]+i] += area*r_bar[i];
-    d_bar[rank*in[1]+i] += area*r_bar[i];
-    d_bar[rank*in[2]+i] += area*r_bar[i];
-  }
-
-  return CAPS_SUCCESS;
+  
+    return aim_integrateBar(discr, name, bIndex, eIndex, rank,
+                            r_bar, d_bar);
 }

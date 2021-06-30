@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -38,7 +38,7 @@
 
 /* data about possible arguments */
 static char*  argNames[NUMUDPARGS] = {"filename", };
-static int    argTypes[NUMUDPARGS] = {ATTRSTRING, };
+static int    argTypes[NUMUDPARGS] = {ATTRFILE,   };
 static int    argIdefs[NUMUDPARGS] = {0,          };
 static double argDdefs[NUMUDPARGS] = {0.,         };
 
@@ -69,7 +69,6 @@ static double argDdefs[NUMUDPARGS] = {0.,         };
 #define           EPS12           1.0e-12
 #define           MIN(A,B)        (((A) < (B)) ? (A) : (B))
 #define           MAX(A,B)        (((A) < (B)) ? (B) : (A))
-#define           SQR(A)          ((A) * (A))
 
 #ifdef WIN32
 // Returns filename portion of the given path
@@ -84,6 +83,8 @@ const char *basename(const char *path)
   return filename;
 }
 #endif
+
+static void *realloc_temp=NULL;              /* used by RALLOC macro */
 
 
 /*
@@ -103,11 +104,14 @@ udpExecute(ego  context_in,             /* (in)  Egads context (or model) */
     int     status = EGADS_SUCCESS;
 
     int     oclass, mtype, nchild, *senses;
-    int     nface, iface, i, n, header[7];
+    int     nface, iface, i, n, nument, header[7], ieof;
     int     j, nuknots, nvknots, ncpu, ncpv, *tempI=NULL;
-    double  data[18], temp, *rdata=NULL, *tempR=NULL;
-    FILE    *fp, *fp_output;
-    ego     eref, esurf, *ebodys, *efaces, *echilds, context, emodel, emodel2;
+    double  data[18], *rdata=NULL, *tempR=NULL;
+    char    *message=NULL, *filename, *token;
+    FILE    *fp=NULL, *fp_output;
+    ego     eref, esurf, *ebodys, *efaces, *echilds, context, emodel, emodel2, *efaces2=NULL;
+
+    ROUTINE(udpExecute);
 
 #ifdef DEBUG
     printf("udpExecute(context_in=%llx)\n", (long long)context_in);
@@ -119,14 +123,14 @@ udpExecute(ego  context_in,             /* (in)  Egads context (or model) */
     *nMesh  = 0;
     *string = NULL;
 
+    MALLOC(message, char, 100);
+    message[0] = '\0';
+
     /* check arguments */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("filename(%d) = %s\n", numUdp, FILENAME(numUdp));
@@ -141,27 +145,27 @@ udpExecute(ego  context_in,             /* (in)  Egads context (or model) */
         /* check that Model was input that contains one Body */
         status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                                 data, &nchild, &ebodys, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         if (oclass != MODEL) {
-            printf(" udpExecute: expecting a Model\n");
+            snprintf(message, 100, "expecting a Model\n");
             status = EGADS_NOTMODEL;
             goto cleanup;
         } else if (nchild != 1) {
-            printf(" udpExecute: expecting Model to contain one Body (not %d)\n", nchild);
+            snprintf(message, 100, "expecting Model to contain one Body (not %d)\n", nchild);
             status = EGADS_NOTBODY;
             goto cleanup;
         }
 
         status = EG_getContext(emodel, &context);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getContext);
 
         status = EG_getBodyTopos(ebodys[0], NULL, FACE, &nface, &efaces);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getBodyTopos);
 
         fp_output = fopen("nurbs.txt", "w");
         if (fp_output == NULL) {
-            printf(" udpExecute: could not open file\n");
+            snprintf(message, 100, "could not open file \"nurbs.txt\"\n");
             status = EGADS_NOTFOUND;
             goto cleanup;
         }
@@ -169,13 +173,15 @@ udpExecute(ego  context_in,             /* (in)  Egads context (or model) */
         for (iface = 0; iface < nface; iface++) {
             status = EG_getTopology(efaces[iface], &esurf, &oclass, &mtype,
                                     data, &nchild, &echilds, &senses);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getTopology);
 
             status = EG_getGeometry(esurf, &oclass, &mtype, &eref, &tempI, &tempR);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getGeometry);
+            if (tempI == NULL) goto cleanup;    // needed for splint
+            if (tempR == NULL) goto cleanup;    // needed for splint
 
             if (oclass != SURFACE || mtype != BSPLINE) {
-                printf(" udpExecute: not a bspline surface\n");
+                snprintf(message, 100, "not a bspline surface\n");
                 status = EGADS_NOTGEOM;
                 goto cleanup;
             }
@@ -216,74 +222,86 @@ udpExecute(ego  context_in,             /* (in)  Egads context (or model) */
         /* make a copy of the Body (so that it does not get removed
            when OpenCSM deletes emodel) */
         status = EG_copyObject(ebodys[0], NULL, ebody);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_copyObject);
 
     /* normal processing */
     } else {
 
         context = context_in;
 
-        /* open the filename and find the number of Faces (surfaces) */
-        fp = fopen(FILENAME(numUdp), "r");
-        if (fp == NULL) {
+        /* open the file or stream */
+        filename = FILENAME(numUdp);
+
+        if (filename == NULL) {
+            snprintf(message, 100, "NULL filename");
             status = EGADS_NOTFOUND;
             goto cleanup;
-        }
 
-        nface = 0;
-        while (!feof(fp)) {
-
-            /* read the header */
-            for (i = 0; i < 7; i++) {
-                fscanf(fp, "%d", &header[i]);
+        } else if (strncmp(filename, "<<\n", 3) == 0) {
+            token = strtok(filename, " \t\n");
+            if (token == NULL) {
+                ieof = 1;
+            } else {
+                ieof = 0;
             }
-            if (feof(fp)) break;
-
-            /* increment the number of Faces */
-            nface++;
-
-            /* read the (double) data */
-            /*  nknotu      nknotv           weight         ncpu        ncpv */
-            n = header[3] + header[6] + (3 + header[0]%2) * header[2] * header[5];
-
-            for (i = 0; i < n; i++) {
-                fscanf(fp, "%lf", &temp);
-            }
-        }
-#ifdef DEBUG
-        printf("nface=%d\n", nface);
-#endif
-
-        /* allocate array for the Faces */
-        assert(nface>0);
-
-        efaces = (ego*) malloc(nface*sizeof(ego));
-        if (efaces == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-
-        /* go back and read each surface (Face) */
-        rewind(fp);
-
-        for (iface = 0; iface < nface; iface++) {
-
-            /* read the header */
-            for (i = 0; i < 7; i++) {
-                fscanf(fp, "%d", &header[i]);
-            }
-
-            n = header[3] + header[6] + (3 + header[0]%2) * header[2] * header[5];
-
-            /* read the (double) data */
-            rdata = (double*) malloc(n*sizeof(double));
-            if (rdata == NULL) {
-                status = EGADS_MALLOC;
+        } else {
+            fp = fopen(filename, "rb");
+            if (fp == NULL) {
+                snprintf(message, 100, "could not open file \"%s\"", filename);
+                status = EGADS_NOTFOUND;
                 goto cleanup;
             }
 
+            ieof = feof(fp);
+        }
+
+        nface = 0;
+        MALLOC(efaces2, ego, 1);
+
+        while (ieof == 0) {
+
+            /* read the header */
+            for (i = 0; i < 7; i++) {
+                if (fp != NULL) {
+                    nument = fscanf(fp, "%d", &header[i]);
+                    if (nument != 1) {
+                        ieof = 1;
+                        break;
+                    }
+                } else {
+                    token = strtok(NULL, " \t\n");
+                    if (token == NULL) {
+                        ieof = 1;
+                        break;
+                    }
+                    header[i] = strtol(token, NULL, 10);
+                }
+            }
+            if (ieof == 1) break;
+
+            RALLOC(efaces2, ego, nface+1);
+
+            /* read the (double) data */
+            n = header[3] + header[6] + (3 + header[0]%2) * header[2] * header[5];
+            MALLOC(rdata, double, n);
+
             for (i = 0; i < n; i++) {
-                fscanf(fp, "%lf", &rdata[i]);
+                if (fp != NULL) {
+                    nument = fscanf(fp, "%lf", &rdata[i]);
+                    if (nument != 1) {
+                        snprintf(message, 100, "error while reading rdata[%d]", i);
+                        status = EGADS_NODATA;
+                        goto cleanup;
+                    }
+                } else {
+                    token = strtok(NULL, " \t\n");
+                    if (token == NULL) {
+                        snprintf(message, 100, "error while reading rdata[%d]", i);
+                        status = EGADS_NODATA;
+                        goto cleanup;
+                    }
+                    rdata[i] = strtod(token, NULL);
+                }
             }
 
             /* find the minimum and maximum knot values */
@@ -295,43 +313,56 @@ udpExecute(ego  context_in,             /* (in)  Egads context (or model) */
             /* make the BSPLINE Surface */
             status = EG_makeGeometry(context, SURFACE, BSPLINE, NULL,
                                      header, rdata, &esurf);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_makeGeometry);
 
-            free(rdata);
+            FREE(rdata);
 
             /* make the Face */
-            status = EG_makeFace(esurf, SFORWARD, data, &efaces[iface]);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            status = EG_makeFace(esurf, SFORWARD, data, &efaces2[nface]);
+            CHECK_STATUS(EG_makeFace);
+
+            nface++;
         }
 
-        fclose(fp);
+        if (fp != NULL) {
+            fclose(fp);
+        }
 
         /* sew the Faces into a new Model */
-        status = EG_sewFaces(nface, efaces, 0, 0, &emodel2);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        status = EG_sewFaces(nface, efaces2, 0, 0, &emodel2);
+        CHECK_STATUS(EG_sewFaces);
 
-        free(efaces);
+        FREE(efaces2);
 
         /* get the Body out of the new Model */
         status = EG_getTopology(emodel2, &eref, &oclass, &mtype, data,
                                 &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         /* make a copy of the Body so that it does not get destroyed
            when the Model is deleted */
         status = EG_copyObject(echilds[0], NULL, ebody);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_copyObject);
 
         status = EG_deleteObject(emodel2);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_deleteObject);
     }
 
     /* return the copied Body */
     udps[numUdp].ebody = *ebody;
 
 cleanup:
-    if (status != EGADS_SUCCESS) {
+    FREE(efaces2);
+    FREE(rdata  );
+
+    if (strlen(message) > 0) {
+        *string = message;
+        printf("%s\n", message);
+    } else if (status != EGADS_SUCCESS) {
+        FREE(message);
         *string = udpErrorStr(status);
+    } else {
+        FREE(message);
     }
 
     return status;

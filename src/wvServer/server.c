@@ -3,7 +3,7 @@
  *
  *		WV simple server code
  *
- *      Copyright 2011-2020, Massachusetts Institute of Technology
+ *      Copyright 2011-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -498,7 +498,9 @@ int wv_startServer(int port, char *interface, char *cert_path, char *key_path,
         if (ThreadCreate(serverThread, &servers[slot]) == -1) {
                 libwebsocket_context_destroy(context);
                 wv_destroyContext(&WVcontext);
+#ifndef __clang_analyzer__
                 servers[slot].loop = -1;
+#endif
                 fprintf(stderr, "thread init failed!\n");
                 return -1;
         }
@@ -514,7 +516,9 @@ void wv_cleanupServers()
   for (i = 0; i < nServers; i++) {
     if (servers[i].loop == -1) continue;
     wv_destroyContext(&servers[i].WVcontext);
+#ifndef __clang_analyzer__
     libwebsocket_context_destroy(servers[i].WScontext);
+#endif
   }
   wv_free(servers);
    servers = NULL;

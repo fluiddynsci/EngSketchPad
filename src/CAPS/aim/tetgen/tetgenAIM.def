@@ -1,17 +1,10 @@
 LIBRARY tetgenAIM
 EXPORTS
 aimInitialize
-aimCleanup
 aimInputs
-aimData
 aimPreAnalysis
+aimExecute
+aimPostAnalysis
 aimOutputs
 aimCalcOutput
-aimFreeDiscr
-aimDiscr
-aimLocateElement
-aimTransfer
-aimInterpolation
-aimInterpolateBar
-aimIntegration
-aimIntegrateBar
+aimCleanup

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2018/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2018/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -120,6 +120,7 @@ typedef struct {
 #define  EPS06               1.0e-6
 #define  MIN(A,B)            (((A) < (B)) ? (A) : (B))
 #define  MAX(A,B)            (((A) < (B)) ? (B) : (A))
+#define  SQR(A)              ((A) * (A))
 
 /*
  ***********************************************************************
@@ -1375,7 +1376,8 @@ computeParameters(grid_T *grid,         /* (in)  pointer to grid */
     grid->tri[itri].vc = (v0 + v1 + s * (u1 - u0)) / 2.0;
 
     /* compute the radius^2 of the circumcircle */
-    grid->tri[itri].rr = pow(grid->tri[itri].uc-u0, 2) + pow(grid->tri[itri].vc-v0, 2);
+    grid->tri[itri].rr = SQR(grid->tri[itri].uc-u0) + SQR(grid->tri[itri].vc-v0);
+
 cleanup:
     return status;
 }
@@ -1448,8 +1450,8 @@ distance(grid_T *grid,                  /* (in)  pointer to grid */
     /* -------------------------------------------------------------- */
 
 #ifndef __clang_analyzer__
-    result = sqrt( pow(grid->pnt[ip0].u - grid->pnt[ip1].u, 2)
-                 + pow(grid->pnt[ip0].v - grid->pnt[ip1].v, 2));
+    result = sqrt( SQR(grid->pnt[ip0].u - grid->pnt[ip1].u)
+                 + SQR(grid->pnt[ip0].v - grid->pnt[ip1].v));
 #endif
 
 //cleanup:
@@ -1491,7 +1493,7 @@ insertPoint(grid_T *grid,               /* (in)  pointer to grid */
     for (itri = 0; itri < grid->ntri; itri++) {
         if (grid->tri[itri].rr < 0) continue;
 
-        rtest = pow(grid->pnt[ipnt].u-grid->tri[itri].uc, 2) + pow(grid->pnt[ipnt].v-grid->tri[itri].vc, 2);
+        rtest = SQR(grid->pnt[ipnt].u-grid->tri[itri].uc) + SQR(grid->pnt[ipnt].v-grid->tri[itri].vc);
 
         if (rtest < grid->tri[itri].rr) {
 

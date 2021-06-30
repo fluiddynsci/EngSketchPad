@@ -18,6 +18,7 @@ all:
 	(cd nastran; make)
 	(cd astros; make)
 	(cd hsm; make)
+	(cd skeleton; make)
 	(cd su2; make)
 	(cd tsfoil; make)
 	(cd xfoil; make)
@@ -38,6 +39,38 @@ endif
 	(cd pointwise; make)
 	(cd custom; make)
 
+lint:
+	(cd avl; make lint)
+	(cd delaundo; make lint)
+	(cd egadsTess; make lint)
+	(cd friction; make lint)
+	(cd fun3d; make lint)
+	(cd mystran; make lint)
+	(cd masstran; make lint)
+	(cd nastran; make lint)
+	(cd astros; make lint)
+	(cd hsm; make lint)
+	(cd skeleton; make lint)
+	(cd su2; make lint)
+	(cd tsfoil; make lint)
+	(cd xfoil; make lint)
+ifdef AFLR
+	(cd aflr2; make lint)
+	(cd aflr3; make lint)
+	(cd aflr4; make lint)
+endif
+ifdef AWAVE
+	(cd awave; make lint)
+endif
+ifdef TETGEN
+	(cd tetgen; make lint)
+endif
+ifneq ("$(ESP_ARCH)","CYGWIN64")
+	(cd cart3d; make lint)
+endif
+	(cd pointwise; make lint)
+	(cd utils; make lint)
+
 clean:
 	(cd utils; make clean)
 	(cd avl; make clean)
@@ -50,6 +83,7 @@ clean:
 	(cd nastran; make clean)
 	(cd astros; make clean)
 	(cd hsm; make clean)
+	(cd skeleton; make clean)
 	(cd su2; make clean)
 	(cd tsfoil; make clean)
 	(cd xfoil; make clean)
@@ -77,6 +111,7 @@ cleanall:
 	(cd egadsTess; make cleanall)
 	(cd friction; make cleanall)
 	(cd fun3d; make cleanall)
+	(cd skeleton; make cleanall)
 	(cd su2; make cleanall)
 	(cd mystran; make cleanall)
 	(cd masstran; make cleanall)

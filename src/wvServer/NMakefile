@@ -27,6 +27,7 @@ default:	$(TDIR)\server.exe
 start:
 	cd $(ODIR)
 	xcopy $(SDIR)\*.c           /Q /Y
+	xcopy $(SDIR)\*.cpp         /Q /Y
 	xcopy $(SDIR)\*.h           /Q /Y
 
 $(TDIR)\server.exe:	$(ODIR)\servertest.obj $(LDIR)\wsserver.lib \
@@ -40,9 +41,9 @@ $(ODIR)\servertest.obj:	server.c
 	cl /c $(COPTS) $(DEFINE) /DSTANDALONE /I$(IDIR) /I$(IDIR)\winhelpers \
 		/I. /I$(SDIR)\win32helpers server.c /Fo$(ODIR)\servertest.obj
 
-$(LDIR)\wsserver.lib:	$(OBJS)
+$(LDIR)\wsserver.lib:	$(ODIR)\map.obj $(OBJS)
 	-del $(LDIR)\wsserver.lib
-	lib /out:$(LDIR)\wsserver.lib $(OBJS)
+	lib /out:$(LDIR)\wsserver.lib $(ODIR)\map.obj $(OBJS)
 
 $(OBJS):	extension-deflate-stream.h libwebsockets.h $(IDIR)\wsserver.h \
 		extension-x-google-mux.h private-libwebsockets.h \
@@ -50,6 +51,9 @@ $(OBJS):	extension-deflate-stream.h libwebsockets.h $(IDIR)\wsserver.h \
 .c.obj:
 	cl /c $(COPTS) $(DEFINE) /I. /I$(IDIR) /I$(IDIR)\winhelpers \
 		/I$(SDIR)\win32helpers /I$(SDIR)\zlib $<
+
+$(ODIR)\map.obj:	map.cpp
+	cl /c $(CPPOPT) $(DEFINE) map.cpp /Fo$(ODIR)\map.obj
 
 $(LDIR)\z.lib:
 	cd $(SDIR)\zlib
@@ -72,7 +76,7 @@ clean:
 !ELSE
 	cd $(SDIR)
 !ENDIF
-	-del $(OBJS)
+	-del map.obj $(OBJS)
 	cd $(SDIR)
 
 cleanall:	clean

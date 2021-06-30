@@ -9,8 +9,9 @@ ODIR  = $(ESP_BLOC)\obj
 ODIR  = .
 !ENDIF
 
-OBJS  =	meshUtils.obj cfdUtils.obj miscUtils.obj feaUtils.obj vlmUtils.obj nastranUtils.obj tecplotUtils.obj
+OBJS  =	attrUtils.obj meshUtils.obj cfdUtils.obj miscUtils.obj feaUtils.obj vlmUtils.obj nastranUtils.obj tecplotUtils.obj arrayUtils.obj deprecateUtils.obj cardUtils.obj nastranCards.obj jsonUtils.obj
 OBJSP =	vlmSpanSpace.obj
+OBJSPython = nastranOP2Reader.obj
 
 !IFDEF ESP_BLOC
 default:	start $(LDIR)\utils.lib end
@@ -24,13 +25,30 @@ start:
 	xcopy $(SDIR)\*.cpp   /Q /Y
 	xcopy $(SDIR)\*.h     /Q /Y
 
+!IFDEF PYTHONINC
+$(LDIR)\utils.lib:	$(OBJS) $(OBJSP) $(OBJSPython)
+	-del $(LDIR)\utils.lib
+	lib /out:$(LDIR)\utils.lib $(OBJS) $(OBJSP) $(OBJSPython)
+
+!ELSE
 $(LDIR)\utils.lib:	$(OBJS) $(OBJSP)
 	-del $(LDIR)\utils.lib
 	lib /out:$(LDIR)\utils.lib $(OBJS) $(OBJSP)
+!ENDIF
 
+!IFDEF PYTHONINC
+$(OBJS):	$(OBJS:.obj=.c)
+	cl /c $(COPTS) $(DEFINE) /I..\include /I$(IDIR) /I. /DHAVE_PYTHON  /I$(PYTHONINC) $*.c
+	
+!ELSE
 $(OBJS):	$(OBJS:.obj=.c)
 	cl /c $(COPTS) $(DEFINE) /I..\include /I$(IDIR) /I. $*.c
 
+!ENDIF
+
+$(OBJSPython): $(OBJSPython:.obj=.c)
+	cl /c $(COPTS) $(DEFINE) /I..\include /I$(IDIR) /I. /DHAVE_PYTHON  /I$(PYTHONINC) $*.c
+	
 $(OBJSP):	$(OBJSP:.obj=.cpp)
 	cl /c $(CPPOPT) $(DEFINE) /I..\include /I$(IDIR) /I. $*.cpp
 
@@ -42,6 +60,9 @@ clean:
 	cd $(ODIR)
 	-del $(OBJS)
 	-del $(OBJSP)
+!IFDEF PYTHONINC
+	-del $(OBJSPython)
+!ENDIF
 	cd $(SDIR)
 
 cleanall:	clean

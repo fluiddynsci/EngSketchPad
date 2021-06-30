@@ -32,7 +32,7 @@ STORE     body1
 
 # add Node to body2 to match body1 (OpenCASCADE 7.3.1)
 RESTORE   body1
-SELECT    NODE  9
+SELECT    NODE  1.0  -0.5  -0.2
 SET       xbeg  @xcg-.1
 SET       ybeg  @ycg-.1
 SET       zbeg  @zcg

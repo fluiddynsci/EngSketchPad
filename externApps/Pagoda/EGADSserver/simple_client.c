@@ -18,10 +18,6 @@
 #include "egads.h"
 
 
-/* entry point NOT in egads.h */
-extern int EG_importModel(egObject *context, const size_t nbytes,
-                          const char stream[], egObject **model);
-
 
 /***********************************************************************/
 /*                                                                     */

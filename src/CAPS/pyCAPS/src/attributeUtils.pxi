@@ -1,7 +1,7 @@
 #
 # Written by Dr. Ryan Durscher AFRL/RQVC
 # 
-# This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3793.
+# This software has been cleared for public release on 27 Oct. 2020, case number 88ABW-2020-3328.
 from _ast import Or
 
 cdef object sortAttrType(int atype, int alen, const int *ints, const double *reals, const char *string):
@@ -26,13 +26,10 @@ cdef object sortAttrType(int atype, int alen, const int *ints, const double *rea
             return <object> reals[0]
         
     elif atype == cEGADS.ATTRCSYS:
-        if (alen != 9):
-            raise CAPSError(cEGADS.EGADS_ATTRERR, msg="ATTRCSYS is not legnght 9! : len=" + str(alen))
         
-        value = [[0,0,0],[0,0,0],[0,0,0]]
-        for j in range(3):
-            for i in range(3):
-                value[j][i] = reals[i+3*j]
+        value = []
+        for i in range(alen):
+            value.append(reals[i])
         return value
 
     elif atype == cEGADS.ATTRSTRING:
@@ -69,7 +66,7 @@ cdef object createAttributeDict(cEGADS.ego obj, object getInternalAttr):
     
         elif status != cEGADS.EGADS_NOTFOUND:
         
-            if getInternalAttr is False and attrName[0] == '_':
+            if getInternalAttr is False and attrName[0] == b'_':
                 continue
             
             attrDict[_strify(attrName)] = sortAttrType(atype, alen, ints, reals, string)

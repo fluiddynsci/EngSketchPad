@@ -1,17 +1,11 @@
-## [importPrint]
-from __future__ import print_function
-## [importPrint]
-
-## [import]
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
 import sys
 import shutil
 import argparse
-## [import]
 
 # ASTROS_ROOT should be the path containing ASTRO.D01 and ASTRO.IDX
 try:
@@ -27,37 +21,30 @@ parser = argparse.ArgumentParser(description = 'Astros Three Bar Frequency PyTes
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-## [initateProblem]
-# Initialize capsProblem object
-myProblem = capsProblem()
-## [initateProblem]
+workDir = os.path.join(str(args.workDir[0]), "AstrosThreeBarFreq")
 
-## [geometry]
 # Load CSM file
 geometryScript = os.path.join("..","csmData","feaThreeBar.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
-## [geometry]
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
-## [loadAIM]
 # Load astros aim
-astrosAIM = myProblem.loadAIM( aim = "astrosAIM",
-                               altName = "astros",
-                               analysisDir= os.path.join(str(args.workDir[0]), "AstrosThreeBarFreq") )
-## [loadAIM]
+astrosAIM = myProblem.analysis.create(aim = "astrosAIM",
+                                      name = "astros")
 
-## [setInputs]
 # Set project name so a mesh file is generated
 projectName = "threebar_astros_Test"
-astrosAIM.setAnalysisVal("Proj_Name", projectName)
-astrosAIM.setAnalysisVal("Mesh_File_Format", "Large")
-astrosAIM.setAnalysisVal("Edge_Point_Max", 2);
-astrosAIM.setAnalysisVal("Edge_Point_Min", 2);
-astrosAIM.setAnalysisVal("Analysis_Type", "Modal");
+astrosAIM.input.Proj_Name = projectName
+astrosAIM.input.Mesh_File_Format = "Large"
+astrosAIM.input.Edge_Point_Max = 2
+astrosAIM.input.Edge_Point_Min = 2
+astrosAIM.input.Analysis_Type = "Modal"
 ## [setInputs]
 
 ## [defineMaterials]
@@ -66,47 +53,37 @@ madeupium    = {"materialType" : "isotropic",
                 "poissonRatio" : .33,
                 "density"      : 0.1}
 
-astrosAIM.setAnalysisVal("Material", [("Madeupium", madeupium)])
-## [defineMaterials]
+astrosAIM.input.Material = {"Madeupium": madeupium}
 
-## [defineProperties]
 rod  =   {"propertyType"      : "Rod",
           "material"          : "Madeupium",
           "crossSecArea"      : 1.0}
 
-rod2  =   {"propertyType"      : "Rod",
+rod2  =   {"propertyType"     : "Rod",
           "material"          : "Madeupium",
           "crossSecArea"      : 2.0}
 
-astrosAIM.setAnalysisVal("Property", [("bar1", rod),
-                                       ("bar2", rod2),
-                                       ("bar3", rod)])
-## [defineProperties]
+astrosAIM.input.Property = {"bar1": rod,
+                            "bar2": rod2,
+                            "bar3": rod}
 
 # Set constraints
-## [defineConstraints]
-constraint = {"groupName" : ["boundary"],
-              "dofConstraint" : 123456}
+constraint = {"groupName"         : ["boundary"],
+              "dofConstraint"     : 123456}
 
-astrosAIM.setAnalysisVal("Constraint", ("BoundaryCondition", constraint))
-## [defineConstraints]
+astrosAIM.input.Constraint = {"BoundaryCondition": constraint}
 
-## [defineAnalysis]
 eigen = { "extractionMethod"     : "MGIV",
           "frequencyRange"       : [0, 10000],
           "numEstEigenvalue"     : 1,
           "numDesiredEigenvalue" : 10,
           "eigenNormaliztion"    : "MASS"}
 
-astrosAIM.setAnalysisVal("Analysis", ("EigenAnalysis", eigen))
-## [defineAnalysis]
+astrosAIM.input.Analysis = {"EigenAnalysis": eigen}
 
 # Run AIM pre-analysis
-## [preAnalysis]
 astrosAIM.preAnalysis()
-## [preAnalysis]
 
-## [run]
 print ("\n\nRunning Astros......")
 currentDirectory = os.getcwd() # Get our current working directory
 os.chdir(astrosAIM.analysisDir) # Move into test directory
@@ -124,24 +101,14 @@ if (args.noAnalysis == False):
 
 os.chdir(currentDirectory) # Move back to working directory
 print ("Done running Astros!")
-## [run]
 
-## [postAnalysis]
 astrosAIM.postAnalysis()
-## [postAnalysis]
 
-## [print results]
 # Get Eigen-frequencies
 print ("\nGetting results for natural frequencies.....")
-natrualFreq = myProblem.analysis["astros"].getAnalysisOutVal("EigenFrequency")
+natrualFreq = myProblem.analysis["astros"].output.EigenFrequency
 
 mode = 1
 for i in natrualFreq:
     print ("Natural freq (Mode {:d}) = ".format(mode) + '{:.5f} '.format(i) + "(Hz)")
     mode += 1
-## [print results]
-
-# Close CAPS
-## [close]
-myProblem.closeCAPS()
-## [close]

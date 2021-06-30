@@ -1,16 +1,10 @@
-# Import other need modules
+# Import pyCAPS module
 ## [importModules]
-from __future__ import print_function
+import pyCAPS
 
 import os
-## [importModules]
-
 import argparse
-
-# Import pyCAPS class file
-## [importpyCAPS]
-from pyCAPS import capsProblem
-## [importpyCAPS]
+## [importModules]
 
 # Setup and read command line options. Please note that this isn't required for pyCAPS
 parser = argparse.ArgumentParser(description = 'FUN3D and Tetgen Pytest Example',
@@ -18,16 +12,11 @@ parser = argparse.ArgumentParser(description = 'FUN3D and Tetgen Pytest Example'
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-
-# Initialize capsProblem object
-## [initateProblem]
-myProblem = capsProblem()
-## [initateProblem]
 
 # Create working directory variable
 ## [localVariable]
@@ -37,97 +26,105 @@ workDir = os.path.join(str(args.workDir[0]), "FUN3DTetgenAnalysisTest")
 # Load CSM file
 ## [loadGeom]
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
-myGeometry = myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 ## [loadGeom]
 
 # Change a design parameter - area in the geometry
 ## [setGeom]
-myGeometry.setGeometryVal("area", 50)
+myProblem.geometry.despmtr.area = 50
 ## [setGeom]
 
 # Write out a new egads file for the geometry
-myGeometry.saveGeometry("pyCAPS_EGADS",
+myProblem.geometry.save("pyCAPS_EGADS",
                         directory = workDir,
                         extension="egads") # .egads extension added by default
 
-# Load Tetgen aim
 ## [loadMesh]
-meshAIM = myProblem.loadAIM(aim = "tetgenAIM",
-                            analysisDir = workDir)
+# Load egadsTess aim
+myProblem.analysis.create(aim = "egadsTessAIM", name = "egadsTess")
+
+# Load Tetgen aim
+meshAIM = myProblem.analysis.create(aim = "tetgenAIM", name = "tetgen")
 ## [loadMesh]
 
 ## [setMesh]
 # Set new EGADS body tessellation parameters
-meshAIM.setAnalysisVal("Tess_Params", [.05, 0.01, 20.0])
+myProblem.analysis["egadsTess"].input.Tess_Params = [1.0, 0.01, 20.0]
 
 # Preserve surface mesh while meshing
-meshAIM.setAnalysisVal("Preserve_Surf_Mesh", True)
+meshAIM.input.Preserve_Surf_Mesh = True
+
+# Link Surface_Mesh
+meshAIM.input["Surface_Mesh"].link(myProblem.analysis["egadsTess"].output["Surface_Mesh"])
 ## [setMesh]
 
+## [analysisMesh]
 # Run AIM pre-analysis
-## [preAnalysisMesh]
+myProblem.analysis["egadsTess"].preAnalysis()
+
+# NO analysis is needed - EGADS was already ran during preAnalysis
+
+# Run AIM post-analysis
+myProblem.analysis["egadsTess"].postAnalysis()
+
+# Run AIM pre-analysis
 meshAIM.preAnalysis()
-## [preAnalysisMesh]
 
 # NO analysis is needed - Tetgen was already ran during preAnalysis
 
 # Run AIM post-analysis
-## [postAnalysisMesh]
 meshAIM.postAnalysis()
-## [postAnalysisMesh]
+## [analysisMesh]
 
-# Get analysis info.
-myProblem.analysis["tetgenAIM"].getAnalysisInfo()
-
+# Load FUN3D aim
 ## [loadFUN3D]
-# Load FUN3D aim - child of Tetgen AIM
-fun3dAIM = myProblem.loadAIM(aim = "fun3dAIM",
-                             altName = "fun3d",
-                             analysisDir = workDir, parents = meshAIM.aimName)
+fun3dAIM = myProblem.analysis.create(aim = "fun3dAIM",
+                                     name = "fun3d")
 ## [loadFUN3D]
 
 ##[setFUN3D]
 # Set project name
-fun3dAIM.setAnalysisVal("Proj_Name", "fun3dTetgenTest")
+fun3dAIM.input.Proj_Name = "fun3dTetgenTest"
 
-fun3dAIM.setAnalysisVal("Mesh_ASCII_Flag", False)
+fun3dAIM.input.Mesh_ASCII_Flag = False
 
 # Set AoA number
-myProblem.analysis["fun3d"].setAnalysisVal("Alpha", 1.0)
+myProblem.analysis["fun3d"].input.Alpha = 1.0
 
 # Set Mach number
-myProblem.analysis["fun3d"].setAnalysisVal("Mach", 0.5901)
+myProblem.analysis["fun3d"].input.Mach = 0.5901
 
 # Set equation type
-fun3dAIM.setAnalysisVal("Equation_Type","compressible")
+fun3dAIM.input.Equation_Type = "compressible"
 
 # Set Viscous term
-myProblem.analysis["fun3d"].setAnalysisVal("Viscous", "inviscid")
+myProblem.analysis["fun3d"].input.Viscous = "inviscid"
 
 # Set number of iterations
-myProblem.analysis["fun3d"].setAnalysisVal("Num_Iter",10)
+myProblem.analysis["fun3d"].input.Num_Iter = 10
 
 # Set CFL number schedule
-myProblem.analysis["fun3d"].setAnalysisVal("CFL_Schedule",[0.5, 3.0])
+myProblem.analysis["fun3d"].input.CFL_Schedule = [0.5, 3.0]
 
 # Set read restart option
-fun3dAIM.setAnalysisVal("Restart_Read","off")
+fun3dAIM.input.Restart_Read = "off"
 
 # Set CFL number iteration schedule
-myProblem.analysis["fun3d"].setAnalysisVal("CFL_Schedule_Iter", [1, 40])
+myProblem.analysis["fun3d"].input.CFL_Schedule_Iter = [1, 40]
 
 # Set overwrite fun3d.nml if not linking to Python library
-myProblem.analysis["fun3d"].setAnalysisVal("Overwrite_NML", True)
-
+myProblem.analysis["fun3d"].input.Overwrite_NML = True
 ##[setFUN3D]
 
 # Set boundary conditions
 ##[setFUN3DBC]
 inviscidBC1 = {"bcType" : "Inviscid", "wallTemperature" : 1}
 inviscidBC2 = {"bcType" : "Inviscid", "wallTemperature" : 1.2}
-fun3dAIM.setAnalysisVal("Boundary_Condition", [("Wing1", inviscidBC1),
-                                               ("Wing2", inviscidBC2),
-                                               ("Farfield","farfield")])
+fun3dAIM.input.Boundary_Condition = {"Wing1"   : inviscidBC1,
+                                     "Wing2"   : inviscidBC2,
+                                     "Farfield": "farfield"}
 ##[setFUN3DBC]
 
 # Run AIM pre-analysis
@@ -156,57 +153,53 @@ fun3dAIM.postAnalysis()
 ##[results]
 print ("Total Force - Pressure + Viscous")
 # Get Lift and Drag coefficients
-print ("Cl = " , fun3dAIM.getAnalysisOutVal("CLtot"),
-       "Cd = " , fun3dAIM.getAnalysisOutVal("CDtot"))
+print ("Cl = " , fun3dAIM.output.CLtot,
+       "Cd = " , fun3dAIM.output.CDtot)
 
 # Get Cmx, Cmy, and Cmz coefficients
-print ("Cmx = " , fun3dAIM.getAnalysisOutVal("CMXtot"),
-       "Cmy = " , fun3dAIM.getAnalysisOutVal("CMYtot"),
-       "Cmz = " , fun3dAIM.getAnalysisOutVal("CMZtot"))
+print ("Cmx = " , fun3dAIM.output.CMXtot,
+       "Cmy = " , fun3dAIM.output.CMYtot,
+       "Cmz = " , fun3dAIM.output.CMZtot)
 
 # Get Cx, Cy, Cz coefficients
-print ("Cx = " , fun3dAIM.getAnalysisOutVal("CXtot"),
-       "Cy = " , fun3dAIM.getAnalysisOutVal("CYtot"),
-       "Cz = " , fun3dAIM.getAnalysisOutVal("CZtot"))
+print ("Cx = " , fun3dAIM.output.CXtot,
+       "Cy = " , fun3dAIM.output.CYtot,
+       "Cz = " , fun3dAIM.output.CZtot)
 
 print ("Pressure Contribution")
 # Get Lift and Drag coefficients
-print ("Cl_p = " , fun3dAIM.getAnalysisOutVal("CLtot_p"),
-       "Cd_p = " , fun3dAIM.getAnalysisOutVal("CDtot_p"))
+print ("Cl_p = " , fun3dAIM.output.CLtot_p,
+       "Cd_p = " , fun3dAIM.output.CDtot_p)
 
 # Get Cmx, Cmy, and Cmz coefficients
-print ("Cmx_p = " , fun3dAIM.getAnalysisOutVal("CMXtot_p"),
-       "Cmy_p = " , fun3dAIM.getAnalysisOutVal("CMYtot_p"),
-       "Cmz_p = " , fun3dAIM.getAnalysisOutVal("CMZtot_p"))
+print ("Cmx_p = " , fun3dAIM.output.CMXtot_p,
+       "Cmy_p = " , fun3dAIM.output.CMYtot_p,
+       "Cmz_p = " , fun3dAIM.output.CMZtot_p)
 
 # Get Cx, Cy, and Cz, coefficients
-print ("Cx_p = " , fun3dAIM.getAnalysisOutVal("CXtot_p"),
-       "Cy_p = " , fun3dAIM.getAnalysisOutVal("CYtot_p"),
-       "Cz_p = " , fun3dAIM.getAnalysisOutVal("CZtot_p"))
+print ("Cx_p = " , fun3dAIM.output.CXtot_p,
+       "Cy_p = " , fun3dAIM.output.CYtot_p,
+       "Cz_p = " , fun3dAIM.output.CZtot_p)
 
 print ("Viscous Contribution")
 # Get Lift and Drag coefficients
-print ("Cl_v = " , fun3dAIM.getAnalysisOutVal("CLtot_v"),
-       "Cd_v = " , fun3dAIM.getAnalysisOutVal("CDtot_v"))
+print ("Cl_v = " , fun3dAIM.output.CLtot_v,
+       "Cd_v = " , fun3dAIM.output.CDtot_v)
 
 # Get Cmx, Cmy, and Cmz coefficients
-print ("Cmx_v = " , fun3dAIM.getAnalysisOutVal("CMXtot_v"),
-       "Cmy_v = " , fun3dAIM.getAnalysisOutVal("CMYtot_v"),
-       "Cmz_v = " , fun3dAIM.getAnalysisOutVal("CMZtot_v"))
+print ("Cmx_v = " , fun3dAIM.output.CMXtot_v,
+       "Cmy_v = " , fun3dAIM.output.CMYtot_v,
+       "Cmz_v = " , fun3dAIM.output.CMZtot_v)
 
 # Get Cx, Cy, and Cz, coefficients
-print ("Cx_v = " , fun3dAIM.getAnalysisOutVal("CXtot_v"),
-       "Cy_v = " , fun3dAIM.getAnalysisOutVal("CYtot_v"),
-       "Cz_v = " , fun3dAIM.getAnalysisOutVal("CZtot_v"))
+print ("Cx_v = " , fun3dAIM.output.CXtot_v,
+       "Cy_v = " , fun3dAIM.output.CYtot_v,
+       "Cz_v = " , fun3dAIM.output.CZtot_v)
 ##[results]
 
 # Print out dictionary of component forces
-for i in fun3dAIM.getAnalysisOutVal("Forces"):
-    print ("Boundary name: ", i[0])
-    for j in i[1].keys():
-        print (" ", j," = ", i[1][j])
-
-# Close CAPS
-## [closeCAPS]
-myProblem.closeCAPS()
-## [closeCAPS]
+forces = fun3dAIM.output.Forces
+for i in forces.keys():
+    print ("Boundary name: ", i)
+    for j in forces[i].keys():
+        print (" ", j," = ", forces[i][j])

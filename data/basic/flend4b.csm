@@ -23,7 +23,7 @@ STORE     bodyR
 MARK
    RESTORE   bodyL
    SELECT    face $_flend $*
-      ATTRIBUTE _color $cyan
+      ATTRIBUTE _color $magenta
 
    RESTORE   bodyR
    SELECT    face $_flend $*
@@ -31,6 +31,6 @@ MARK
 UDPRIM    flend
 
 SELECT    face @nbody 0
-   ATTRIBUTE _color $red
+   ATTRIBUTE _color $cyan
 
 END

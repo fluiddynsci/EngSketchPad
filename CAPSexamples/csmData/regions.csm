@@ -20,7 +20,7 @@ restore cut
 subtract
 select face
     attribute capsGroup $box
-# and xtract the shell
+# and extract the shell
 extract 0
 
 # Get the segregated face
@@ -30,7 +30,7 @@ intersect
 select face
    attribute capsGroup $cut
 
-# Union the shell and face to create the segregated regions
-union
+# Join the shell and face to create the segregated regions
+join
 
 end

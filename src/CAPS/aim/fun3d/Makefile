@@ -37,7 +37,7 @@ endif
 
 ifdef PYTHONINC
 
-$(ODIR)/fun3dAIM.o: fun3dAIM.c fun3dUtils.h $(IDIR)/capsTypes.h
+$(ODIR)/fun3dAIM.o: fun3dAIM.c fun3dUtils.h fun3dNamelist.h $(IDIR)/capsTypes.h
 	$(CC) -c $(COPTS) $(DEFINE) -DHAVE_PYTHON -I$(IDIR) -I../utils \
 		-I$(PYTHONINC) fun3dAIM.c -o $(ODIR)/fun3dAIM.o
 
@@ -54,7 +54,10 @@ $(ODIR)/fun3dNamelist.o: fun3dNamelist.c fun3dNamelist.h
 $(ODIR)/fun3dUtils.o: fun3dUtils.c fun3dUtils.h $(IDIR)/capsTypes.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils \
 		fun3dUtils.c -o $(ODIR)/fun3dUtils.o
-		
+
+lint:
+	$(LINT) -I../../include -I$(IDIR) -I../utils fun3dAIM.c fun3dUtils.c -exportlocal -uniondef -nestcomment -bufferoverflowhigh -boolops
+
 clean:
 	-rm $(ODIR)/fun3dAIM.o $(ODIR)/fun3dUtils.o
 ifdef PYTHONINC
@@ -66,10 +69,14 @@ cleanall:	clean
 
 # Run Cython - development only	
 cython:
-	(cython fun3dNamelist.pyx -I../../pyCAPS/src/ --capi-reexport-cincludes) 
+	(cython -Wextra fun3dNamelist.pyx -I../../pyCAPS/src/ --capi-reexport-cincludes)
 
-dox:
-	(cd doc; doxygen fun3dAIM_dox.cfg; cd latex; make; mv refman.pdf FUN3DAIM.pdf)
+dox: doc/html/index.html
+doc/html/index.html: \
+				../../examples/pyCAPS/fun3d_and_Tetgen_PyTest.py \
+				../../examples/csmData/cfdMultiBody.csm \
+				$(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
+	(cd doc; doxygen fun3dAIM_dox.cfg; cd latex; make; mv refman.pdf fun3dAIM.pdf)
 
 doxclean:
 	(cd doc; rm -f INPUT; rm -rf html latex; rm -f fun3dAIM.tag)

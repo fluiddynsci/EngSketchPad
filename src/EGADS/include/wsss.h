@@ -3,7 +3,7 @@
  *
  *      	WV server-side structures header
  *
- *      Copyright 2011-2020, Massachusetts Institute of Technology
+ *      Copyright 2011-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -114,7 +114,7 @@ typedef struct {
 } wvGPrim;
 
 typedef struct {
-  /*@null@*/
+/*@null@*/
   wvCB    callback;             /* optional call-back */
   int     handShake;		/* larger scale handshaking */
   int     ioAccess;             /* IO currently has access */
@@ -133,18 +133,19 @@ typedef struct {
   int     sent;			/* send flag */
   int     nColor;		/* # Colors; -n sent, 0 delete, +n to be sent */
   int     titleLen;		/* titleLen (bytes); neg - send delete key */
-  /*@null@*/
+/*@null@*/
   float   *colors;		/* NULL or colors to be sent */
   float   lims[2];		/* key limits */
-  /*@null@*/
+/*@null@*/
   char    *title;		/* title for the key */
-  /*@null@*/
+/*@null@*/
   int     tnWidth;              /* thumbnail width */
   int     tnHeight;             /* thumbnail height */
-  /*@null@*/
+/*@null@*/
   char    *thumbnail;           /* the thumbnail image (rgba) */
-  /*@null@*/
+/*@null@*/
   wvGPrim *gPrims;              /* the graphics primitives */
+  void    *nameMap;             /* gPrim name handling */
 } wvContext;
 
 #endif  /*_WSSS_H_*/

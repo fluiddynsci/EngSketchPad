@@ -5,6 +5,7 @@
  *
  *     Written by Dr. Ryan Durscher AFRL/RQVC
  *
+ *     This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
  */
 
 
@@ -27,9 +28,6 @@
  *
  * An outline of the AIM's inputs and outputs are provided in \ref aimInputsFUN3D and \ref aimOutputsFUN3D, respectively.
  *
- *
- * Details of the AIM's shareable data structures are outlined in \ref sharableDataFUN3D if connecting this AIM to other AIMs in a
- * parent-child like manner.
  *
  * Details of the AIM's automated data transfer capabilities are outlined in \ref dataTransferFUN3D
  *
@@ -55,9 +53,9 @@
  * An example problem using the FUN3D AIM (coupled with a meshing AIM - TetGen) may be found at
  * \ref fun3dTetgenExample.
  *
+ * \section clearanceFUN3D Clearance Statement
+ *  This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
  */
-
-//The accepted and expected geometric representation and analysis intentions are detailed in  \ref geomRepIntentFUN3D.
 
 #ifdef HAVE_PYTHON
 
@@ -66,10 +64,12 @@
 #include "fun3dNamelist.h" // Bring in Cython generated header file
 // for namelist generation wiht Python
 
-#if PY_MAJOR_VERSION < 3
-#define Initialize_fun3dNamelist initfun3dNamelist
-#else
-#define Initialize_fun3dNamelist PyInit_fun3dNamelist
+#ifndef CYTHON_PEP489_MULTI_PHASE_INIT
+#define CYTHON_PEP489_MULTI_PHASE_INIT (PY_VERSION_HEX >= 0x03050000)
+#endif
+
+#if CYTHON_PEP489_MULTI_PHASE_INIT
+static int fun3dNamelist_Initialized = (int)false;
 #endif
 
 #endif
@@ -85,13 +85,8 @@
 #include "fun3dUtils.h"
 
 #ifdef WIN32
-#define getcwd     _getcwd
 #define snprintf   _snprintf
 #define strcasecmp stricmp
-#define PATH_MAX   _MAX_PATH
-#else
-#include <unistd.h>
-#include <limits.h>
 #endif
 
 /*
@@ -101,12 +96,12 @@
 #define DOT(a,b)         (a[0]*b[0] + a[1]*b[1] + a[2]*b[2])
  */
 
-#define NUMINPUT   34
 #define NUMOUTPUT  25
 
 #define MXCHAR  255
 
 //#define DEBUG
+
 
 typedef struct {
 
@@ -119,143 +114,130 @@ typedef struct {
     // Check to make sure data transfer is ok
     int dataTransferCheck;
 
-    // Analysis file path/directory
-    const char *analysisPath;
-
     // Pointer to CAPS input value for scaling pressure during data transfer
     capsValue *pressureScaleFactor;
 
     // Pointer to CAPS input value for offset pressure during data transfer
     capsValue *pressureScaleOffset;
 
-    // Number of geometric inputs
-    int numGeomIn;
-
-    // Pointer to CAPS geometric in values
-    capsValue *geomInVal;
+    // Design information
+    cfdDesignStruct design;
 
 } aimStorage;
-
-static aimStorage *fun3dInstance = NULL;
-static int         numInstance  = 0;
-
-
 
 
 // ********************** Exposed AIM Functions *****************************
 
-int aimInitialize(int ngIn, capsValue *gIn,
-                  int *qeFlag, const char *unitSys,
-                  int *nIn, int *nOut,
-                  int *nFields, char ***fnames, int **ranks)
+int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *aimInfo,
+                  void **instStore, /*@unused@*/ int *major,
+                  /*@unused@*/ int *minor, int *nIn, int *nOut,
+                  int *nFields, char ***fnames, int **franks, int **fInOut)
 {
 
-    int status; // Function status return
-    int flag;
+    int  status = CAPS_SUCCESS; // Function status return
 
-    int *ints;
-    char **strs;
+    int  *ints=NULL, i;
+    char **strs=NULL;
 
-    aimStorage *tmp;
+    aimStorage *fun3dInstance=NULL;
 
 #ifdef DEBUG
-    printf("\n fun3dAIM/aimInitialize   ngIn = %d!\n", ngIn);
+    printf("\n fun3dAIM/aimInitialize  inst = %d!\n", inst);
 #endif
-    flag     = *qeFlag;
-    *qeFlag  = 0;
 
     // Specify the number of analysis input and out "parameters"
     *nIn     = NUMINPUT;
     *nOut    = NUMOUTPUT;
-    if (flag == 1) return CAPS_SUCCESS;
+    if (inst == -1) return CAPS_SUCCESS;
 
-    // Specify the field variables this analysis can generate
-    *nFields = 4;
-    ints = (int *) EG_alloc(*nFields*sizeof(int));
-    if (ints == NULL) return EGADS_MALLOC;
-    ints[0]  = 1;
-    ints[1]  = 1;
-    ints[2]  = 1;
-    ints[3]  = 1;
-    *ranks   = ints;
+    /* specify the field variables this analysis can generate and consume */
+    *nFields = 7;
 
-    strs = (char **) EG_alloc(*nFields*sizeof(char *));
-    if (strs == NULL) {
-        EG_free(*ranks);
-        *ranks   = NULL;
-        return EGADS_MALLOC;
-    }
-
+    /* specify the name of each field variable */
+    AIM_ALLOC(strs, *nFields, char *, aimInfo, status);
     strs[0]  = EG_strdup("Pressure");
     strs[1]  = EG_strdup("P");
     strs[2]  = EG_strdup("Cp");
     strs[3]  = EG_strdup("CoefficientOfPressure");
+    strs[4]  = EG_strdup("Displacement");
+    strs[5]  = EG_strdup("EigenVector");
+    strs[6]  = EG_strdup("EigenVector_#");
+    for (i = 0; i < *nFields; i++)
+      if (strs[i] == NULL) {
+        status = EGADS_MALLOC;
+        goto cleanup;
+      }
     *fnames  = strs;
 
+    /* specify the dimension of each field variable */
+    AIM_ALLOC(ints, *nFields, int, aimInfo, status);
+
+    ints[0]  = 1;
+    ints[1]  = 1;
+    ints[2]  = 1;
+    ints[3]  = 1;
+    ints[4]  = 3;
+    ints[5]  = 3;
+    ints[6]  = 3;
+    *franks   = ints;
+    ints = NULL;
+
+    /* specify if a field is an input field or output field */
+    AIM_ALLOC(ints, *nFields, int, aimInfo, status);
+
+    ints[0]  = FieldOut;
+    ints[1]  = FieldOut;
+    ints[2]  = FieldOut;
+    ints[3]  = FieldOut;
+    ints[4]  = FieldIn;
+    ints[5]  = FieldIn;
+    ints[6]  = FieldIn;
+    *fInOut  = ints;
+    ints = NULL;
+
+
     // Allocate fun3dInstance
-    if (fun3dInstance == NULL) {
-
-        fun3dInstance = (aimStorage *) EG_alloc(sizeof(aimStorage));
-        if (fun3dInstance == NULL) {
-            EG_free(*fnames);
-            EG_free(*ranks);
-            *ranks   = NULL;
-            *fnames  = NULL;
-            return EGADS_MALLOC;
-        }
-
-    } else {
-        tmp = (aimStorage *) EG_reall(fun3dInstance, (numInstance+1)*sizeof(aimStorage));
-        if (tmp == NULL) {
-            EG_free(*fnames);
-            EG_free(*ranks);
-            *ranks   = NULL;
-            *fnames  = NULL;
-            return EGADS_MALLOC;
-        }
-
-        fun3dInstance = tmp;
-    }
+    AIM_ALLOC(fun3dInstance, 1, aimStorage, aimInfo, status);
+    *instStore = fun3dInstance;
 
     // Set initial values for fun3dInstance
-    fun3dInstance[numInstance].projectName = NULL;
-
-    // Analysis file path/directory
-    fun3dInstance[numInstance].analysisPath = NULL;
+    fun3dInstance->projectName = NULL;
 
     // Container for attribute to index map
-    status = initiate_mapAttrToIndexStruct(&fun3dInstance[numInstance].attrMap);
-    if (status != CAPS_SUCCESS) {
-        printf("Problem encountered during initiate_mapAttrToIndexStruct..continuing\n");
-        EG_free(*fnames);
-        EG_free(*ranks);
-        *ranks   = NULL;
-        *fnames  = NULL;
-        return status;
-    }
+    status = initiate_mapAttrToIndexStruct(&fun3dInstance->attrMap);
+    AIM_STATUS(aimInfo, status);
 
     // Check to make sure data transfer is ok
-    fun3dInstance[numInstance].dataTransferCheck = (int) true;
+    fun3dInstance->dataTransferCheck = (int) true;
 
     // Pointer to caps input value for scaling pressure during data transfer
-    fun3dInstance[numInstance].pressureScaleFactor = NULL;
+    fun3dInstance->pressureScaleFactor = NULL;
 
     // Pointer to caps input value for off setting pressure during data transfer
-    fun3dInstance[numInstance].pressureScaleOffset = NULL;
+    fun3dInstance->pressureScaleOffset = NULL;
 
-    // Number of geometric inputs
-    fun3dInstance[numInstance].numGeomIn = ngIn;
+    // Design information
+    status = initiate_cfdDesignStruct(&fun3dInstance->design);
+    AIM_STATUS(aimInfo, status);
 
-    // Point to CAPS geometric in values
-    fun3dInstance[numInstance].geomInVal = gIn;
+cleanup:
+    if (status != CAPS_SUCCESS) {
+        /* release all possibly allocated memory on error */
+        if (*fnames != NULL)
+          for (i = 0; i < *nFields; i++) AIM_FREE((*fnames)[i]);
+        AIM_FREE(*franks);
+        AIM_FREE(*fInOut);
+        AIM_FREE(*fnames);
+        AIM_FREE(*instStore);
+        *nFields = 0;
+    }
 
-    // Increment number of instances
-    numInstance += 1;
-
-    return (numInstance -1);
+    return status;
 }
 
-int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *defval)
+
+int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
+              char **ainame, capsValue *defval)
 {
     /*! \page aimInputsFUN3D AIM Inputs
      * The following list outlines the FUN3D inputs along with their default values available
@@ -264,15 +246,19 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
      * been changed in CAPS (i.e. set to something other than NULL).
      */
 
+    int status = CAPS_SUCCESS;
+    aimStorage *fun3dInstance;
 
 #ifdef DEBUG
-    printf(" fun3dAIM/aimInputs instance = %d  index = %d!\n", iIndex, index);
+    printf(" fun3dAIM/aimInputs index = %d!\n", index);
 #endif
+    fun3dInstance = (aimStorage *) instStore;
+    if (fun3dInstance == NULL) return CAPS_NULLVALUE;
 
     *ainame = NULL;
-
+  
     // FUN3D Inputs
-    if (index == 1) {
+    if (index == Proj_Name) {
         *ainame              = EG_strdup("Proj_Name");
         defval->type         = String;
         defval->nullVal      = NotNull;
@@ -283,7 +269,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * - <B> Proj_Name = "fun3d_CAPS"</B> <br>
          * This corresponds to the project\_rootname variable in the \&project namelist of fun3d.nml.
          */
-    } else if (index == 2) {
+    } else if (index == Mach) {
         *ainame              = EG_strdup("Mach"); // Mach number
         defval->type         = Double;
         defval->nullVal      = IsNull;
@@ -296,7 +282,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          *  This corresponds to the mach\_number variable in the \&reference\_physical\_properties
          *  namelist of fun3d.nml.
          */
-    } else if (index == 3) {
+    } else if (index == Re) {
         *ainame              = EG_strdup("Re"); // Reynolds number
         defval->type         = Double;
         defval->nullVal      = IsNull;
@@ -309,7 +295,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          *  This corresponds to the reynolds\_number variable in the \&reference\_physical\_properties
          *  namelist of fun3d.nml.
          */
-    } else if (index == 4) {
+    } else if (index == Viscoux) {
         *ainame              = EG_strdup("Viscous"); // Viscous term
         defval->type         = String;
         defval->vals.string  = NULL;
@@ -323,7 +309,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          *  This corresponds to the viscous\_terms variable in the \&governing\_equation namelist
          *  of fun3d.nml.
          */
-    } else if (index == 5) {
+    } else if (index == Equation_Type) {
         *ainame              = EG_strdup("Equation_Type"); // Equation type
         defval->type         = String;
         defval->vals.string  = NULL;
@@ -336,35 +322,35 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * This corresponds to the eqn\_type variable in the \&governing\_equation namelist of
          * fun3d.nml.
          */
-    } else if (index == 6) {
+    } else if (index == Alpha) {
         *ainame              = EG_strdup("Alpha");
         defval->type         = Double;
         defval->nullVal      = IsNull;
         defval->units        = NULL;
         defval->lfixed       = Change;
         defval->dim          = Scalar;
-        defval->units = EG_strdup("degree");
+        //defval->units = EG_strdup("degree");
 
         /*! \page aimInputsFUN3D
          * - <B> Alpha = NULL </B> <br>
          *  This corresponds to the angle\_of\_attack variable in the \&reference\_physical\_properties
          *  namelist of fun3d.nml [degree].
          */
-    } else if (index == 7) {
+    } else if (index == Beta) {
         *ainame              = EG_strdup("Beta");
         defval->type         = Double;
         defval->nullVal      = IsNull;
         defval->units        = NULL;
         defval->lfixed       = Change;
         defval->dim          = Scalar;
-        defval->units = EG_strdup("degree");
+        //defval->units = EG_strdup("degree");
 
         /*! \page aimInputsFUN3D
          * - <B> Beta = NULL </B> <br>
          *  This corresponds to the angle\_of\_yaw variable in the \&reference\_physical\_properties
          *  namelist of fun3d.nml [degree].
          */
-    } else if (index == 8) {
+    } else if (index == Overwrite_NML) {
         *ainame              = EG_strdup("Overwrite_NML");
         defval->type         = Boolean;
         defval->vals.integer = false;
@@ -380,7 +366,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          *  namelist file will be overwritten, as opposed to being appended.
          *
          */
-    } else if (index == 9) {
+    } else if (index == Mesh_Format) {
         *ainame              = EG_strdup("Mesh_Format");
         defval->type         = String;
         defval->vals.string  = EG_strdup("AFLR3");
@@ -390,7 +376,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * - <B>Mesh_Format = "AFLR3"</B> <br>
          *  Mesh output format. By default, an AFLR3 mesh will be used.
          */
-    } else if (index == 10) {
+    } else if (index == Mesh_ASCII_Flag) {
         *ainame              = EG_strdup("Mesh_ASCII_Flag");
         defval->type         = Boolean;
         defval->vals.integer = true;
@@ -399,7 +385,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * - <B>Mesh_ASCII_Flag = True</B> <br>
          *  Output mesh in ASCII format, otherwise write a binary file if applicable.
          */
-    } else if (index == 11) {
+    } else if (index == Num_Iter) {
         *ainame              = EG_strdup("Num_Iter");
         defval->type         = Integer;
         defval->nullVal      = IsNull;
@@ -412,41 +398,43 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          *  This corresponds to the steps variable in the \&code\_run\_control
          *  namelist of fun3d.nml.
          */
-    } else if (index == 12) {
+    } else if (index == CFL_Schedule) {
         *ainame               = EG_strdup("CFL_Schedule");
         defval->type          = Double;
         defval->dim           = Vector;
-        defval->length        = 2;
         defval->nrow          = 2;
         defval->ncol          = 1;
         defval->units         = NULL;
-        defval->vals.reals    = (double *) EG_alloc(defval->length*sizeof(double));
         defval->nullVal       = IsNull;
         defval->lfixed        = Fixed;
+
+        AIM_ALLOC(defval->vals.reals, defval->nrow, double, aimInfo, status);
+        defval->vals.reals[0] = defval->vals.reals[1] = 0.0;
 
         /*! \page aimInputsFUN3D
          * - <B>CFL_Schedule = NULL</B> <br>
          *  This corresponds to the schedule\_cfl variable in the \&nonlinear\_solver\_parameters
          *   namelist of fun3d.nml.
          */
-    } else if (index == 13) {
+    } else if (index == CFL_Schedule_Iter) {
         *ainame               = EG_strdup("CFL_Schedule_Iter");
         defval->type          = Integer;
         defval->dim           = Vector;
-        defval->length        = 2;
         defval->nrow          = 2;
         defval->ncol          = 1;
         defval->units         = NULL;
-        defval->vals.integers = (int *) EG_alloc(defval->length*sizeof(int));
         defval->nullVal       = IsNull;
         defval->lfixed        = Fixed;
+
+        AIM_ALLOC(defval->vals.integers, defval->nrow, int, aimInfo, status);
+        defval->vals.integers[0] = defval->vals.integers[1] = 0;
 
         /*! \page aimInputsFUN3D
          * - <B>CFL_Schedule_Inter = NULL</B> <br>
          *  This corresponds to the schedule\_iteration variable in the \&nonlinear\_solver\_parameters
          *  namelist of fun3d.nml.
          */
-    } else if (index == 14) {
+    } else if (index == Restart_Read) {
         *ainame              = EG_strdup("Restart_Read");
         defval->type         = String;
         defval->vals.string  = NULL;
@@ -458,7 +446,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * - <B>Restart_Read = NULL</B> <br>
          * This corresponds to the restart_read variable in the \&code_run_control namelist of fun3d.nml.
          */
-    } else if (index == 15) {
+    } else if (index == Boundary_Condition) {
         *ainame              = EG_strdup("Boundary_Condition");
         defval->type         = Tuple;
         defval->nullVal      = IsNull;
@@ -471,7 +459,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * - <B>Boundary_Condition = NULL </B> <br>
          * See \ref cfdBoundaryConditions for additional details.
          */
-    } else if (index == 16) {
+    } else if (index == Use_Python_NML) {
         *ainame              = EG_strdup("Use_Python_NML");
         defval->type         = Boolean;
         defval->vals.integer = (int) false;
@@ -480,39 +468,38 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * - <B>Use_Python_NML = False </B> <br>
          * By default, even if Python has been linked to the FUN3D AIM it is not used unless the this value is set to True.
          */
-    } else if (index == 17) {
+    } else if (index == Pressure_Scale_Factor) {
         *ainame              = EG_strdup("Pressure_Scale_Factor");
         defval->type         = Double;
         defval->vals.real    = 1.0;
-        defval->units      	 = NULL;
+        defval->units           = NULL;
 
-        fun3dInstance[iIndex].pressureScaleFactor = defval;
+        fun3dInstance->pressureScaleFactor = defval;
 
         /*! \page aimInputsFUN3D
          * - <B>Pressure_Scale_Factor = 1.0</B> <br>
          * Value to scale Cp data when transferring data. Data is scaled based on Pressure = Pressure_Scale_Factor*Cp + Pressure_Scale_Offset.
          */
-    } else if (index == 18) {
+    } else if (index == Pressure_Scale_Offset) {
         *ainame              = EG_strdup("Pressure_Scale_Offset");
         defval->type         = Double;
         defval->vals.real    = 0.0;
-        defval->units      	 = NULL;
+        defval->units           = NULL;
 
-        fun3dInstance[iIndex].pressureScaleOffset = defval;
+        fun3dInstance->pressureScaleOffset = defval;
 
         /*! \page aimInputsFUN3D
          * - <B>Pressure_Scale_Offset = 0.0</B> <br>
          * Value to offset Cp data when transferring data. Data is scaled based on Pressure = Pressure_Scale_Factor*Cp + Pressure_Scale_Offset.
          */
-    } else if (index == 19) {
+    } else if (index == NonInertial_Rotation_Rate) {
         *ainame              = EG_strdup("NonInertial_Rotation_Rate");
         defval->type          = Double;
         defval->dim           = Vector;
-        defval->length        = 3;
         defval->nrow          = 3;
         defval->ncol          = 1;
         defval->units         = NULL;
-        defval->vals.reals    = (double *) EG_alloc(defval->length*sizeof(double));
+        defval->vals.reals    = (double *) EG_alloc(defval->nrow*sizeof(double));
         if (defval->vals.reals == NULL) {
             return EGADS_MALLOC;
         } else {
@@ -528,15 +515,14 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * Array values correspond to the rotation\_rate\_x, rotation\_rate\_y, rotation\_rate\_z variables, respectively,
          * in the \&noninertial\_reference\_frame namelist of fun3d.nml.
          */
-    } else if (index == 20) {
+    } else if (index == NonInertial_Rotation_Center) {
         *ainame              = EG_strdup("NonInertial_Rotation_Center");
         defval->type          = Double;
         defval->dim           = Vector;
-        defval->length        = 3;
         defval->nrow          = 3;
         defval->ncol          = 1;
         defval->units         = NULL;
-        defval->vals.reals    = (double *) EG_alloc(defval->length*sizeof(double));
+        defval->vals.reals    = (double *) EG_alloc(defval->nrow*sizeof(double));
         if (defval->vals.reals == NULL) {
             return EGADS_MALLOC;
         } else {
@@ -552,7 +538,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * Array values correspond to the rotation\_center\_x, rotation\_center\_y, rotation\_center\_z variables, respectively,
          * in the \&noninertial\_reference\_frame namelist of fun3d.nml.
          */
-    } else if (index == 21) {
+    } else if (index == Two_Dimensional) {
         *ainame              = EG_strdup("Two_Dimensional");
         defval->type         = Boolean;
         defval->vals.integer = (int) false;
@@ -563,7 +549,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * swapping routine is attempted if not in the x-z plane). A 3D mesh will be written out,
          * where the body is extruded a length of 1 in the y-direction.
          */
-    } else if (index == 22) {
+    } else if (index == Modal_Aeroelastic) {
         *ainame              = EG_strdup("Modal_Aeroelastic");
         defval->type         = Tuple;
         defval->nullVal      = IsNull;
@@ -576,7 +562,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * - <B>Modal_Aeroelastic = NULL </B> <br>
          * See \ref cfdModalAeroelastic for additional details.
          */
-    } else if (index == 23) {
+    } else if (index == Modal_Ref_Velocity) {
         *ainame              = EG_strdup("Modal_Ref_Velocity");
         defval->type         = Double;
         defval->nullVal      = IsNull;
@@ -590,7 +576,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * aeroelastic simulations. This corresponds to the uinf variable in the \&aeroelastic\_modal\_data
          *  namelist of movingbody.input.
          */
-    }  else if (index == 24) {
+    }  else if (index == Modal_Ref_Length) {
         *ainame              = EG_strdup("Modal_Ref_Length");
         defval->type         = Double;
         //defval->units        = NULL;
@@ -604,7 +590,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * aeroelastic simulations. This corresponds to the grefl variable in the \&aeroelastic\_modal\_data
          *  namelist of movingbody.input.
          */
-    }  else if (index == 25) {
+    }  else if (index == Modal_Ref_Dynamic_Pressure) {
         *ainame              = EG_strdup("Modal_Ref_Dynamic_Pressure");
         defval->type         = Double;
         defval->nullVal      = IsNull;
@@ -618,7 +604,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * aeroelastic simulations. This corresponds to the qinf variable in the \&aeroelastic\_modal\_data
          *  namelist of movingbody.input.
          */
-    } else if (index == 26) {
+    } else if (index == Time_Accuracy) {
         *ainame              = EG_strdup("Time_Accuracy");
         defval->type         = String;
         defval->vals.string  = NULL;
@@ -631,7 +617,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * Defines the temporal scheme to use. This corresponds to the time_accuracy variable
          *  in the \&nonlinear_solver_parameters namelist of fun3d.nml.
          */
-    } else if (index == 27) {
+    } else if (index == Time_Step) {
         *ainame              = EG_strdup("Time_Step");
         defval->type         = Double;
         defval->nullVal      = IsNull;
@@ -644,7 +630,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * Non-dimensional time step during time accurate simulations. This corresponds to the time_step_nondim
          * variable in the \&nonlinear_solver_parameters namelist of fun3d.nml.
          */
-    } else if (index == 28) {
+    } else if (index == Num_Subiter) {
         *ainame              = EG_strdup("Num_Subiter");
         defval->type         = Integer;
         defval->nullVal      = IsNull;
@@ -657,7 +643,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * Number of subiterations used during a time step in a time accurate simulations. This
          * corresponds to the subiterations variable in the \&nonlinear_solver_parameters namelist of fun3d.nml.
          */
-    } else if (index == 29) {
+    } else if (index == Temporal_Error) {
         *ainame              = EG_strdup("Temporal_Error");
         defval->type         = Double;
         defval->nullVal      = IsNull;
@@ -670,7 +656,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * This sets the tolerance for which subiterations are stopped during time accurate simulations. This
          * corresponds to the temporal_err_floor variable in the \&nonlinear_solver_parameters namelist of fun3d.nml.
          */
-    } else if (index == 30) {
+    } else if (index == Reference_Area) {
         *ainame              = EG_strdup("Reference_Area");
         defval->type         = Double;
         defval->nullVal      = IsNull;
@@ -686,15 +672,14 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * Alternatively, the geometry (body) attribute "capsReferenceArea" maybe used to specify this variable
          * (note: values set through the AIM input will supersede the attribution value).
          */
-    } else if (index == 31) {
+    } else if (index == Moment_Length) {
         *ainame              = EG_strdup("Moment_Length");
         defval->type          = Double;
         defval->dim           = Vector;
-        defval->length        = 2;
         defval->nrow          = 2;
         defval->ncol          = 1;
         defval->units         = NULL;
-        defval->vals.reals    = (double *) EG_alloc(defval->length*sizeof(double));
+        defval->vals.reals    = (double *) EG_alloc(defval->nrow*sizeof(double));
         if (defval->vals.reals == NULL) {
             return EGADS_MALLOC;
         } else {
@@ -712,15 +697,14 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * used to specify the x- and y- moment lengths, respectively (note: values set through
          * the AIM input will supersede the attribution values).
          */
-    } else if (index == 32) {
+    } else if (index == Moment_Center) {
         *ainame              = EG_strdup("Moment_Center");
         defval->type          = Double;
         defval->dim           = Vector;
-        defval->length        = 3;
         defval->nrow          = 3;
         defval->ncol          = 1;
         defval->units         = NULL;
-        defval->vals.reals    = (double *) EG_alloc(defval->length*sizeof(double));
+        defval->vals.reals    = (double *) EG_alloc(defval->nrow*sizeof(double));
         if (defval->vals.reals == NULL) {
             return EGADS_MALLOC;
         } else {
@@ -739,13 +723,10 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
          * and "capsReferenceZ" may be used to specify the x-, y-, and z- moment centers, respectively
          * (note: values set through the AIM input will supersede the attribution values).
          */
-    } else if (index == 33) {
+    } else if (index == FUN3D_Version) {
         *ainame              = EG_strdup("FUN3D_Version");
         defval->type       = Double;
-        defval->dim        = Vector;
-        defval->length     = 1;
-        defval->nrow       = 1;
-        defval->ncol       = 1;
+        defval->dim        = Scalar;
         defval->units      = NULL;
         defval->vals.real  = 13.1;
         defval->lfixed     = Fixed;
@@ -753,59 +734,62 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame, capsValue *de
         /*! \page aimInputsFUN3D
          * - <B>FUN3D_Version = 13.1 </B> <br>
          * FUN3D version to generate specific configuration file for; currently only has influence over
-         * rubber.data (sensitivity file).
+         * rubber.data (sensitivity file) and aeroelastic modal data namelist in moving_body.input .
          */
-    } else if (index == 34) {
-        *ainame              = EG_strdup("Sensitivity");
-        defval->type         = Tuple;
-        defval->nullVal      = IsNull;
-        //defval->units        = NULL;
-        defval->dim          = Vector;
-        defval->lfixed       = Change;
-        defval->vals.tuple   = NULL;
+    } else if (index == Design_Variable) {
+        *ainame              = EG_strdup("Design_Variable");
+         defval->type         = Tuple;
+         defval->nullVal      = IsNull;
+         //defval->units        = NULL;
+         defval->lfixed       = Change;
+         defval->vals.tuple   = NULL;
+         defval->dim          = Vector;
+
+         /*! \page aimInputsFUN3D
+          * - <B> Design_Variable = NULL</B> <br>
+          * The design variable tuple is used to input design variable information for optimization, see \ref cfdDesignVariable for additional details.
+          */
+    } else if (index == Design_Objective) {
+        *ainame              = EG_strdup("Design_Objective");
+         defval->type         = Tuple;
+         defval->nullVal      = IsNull;
+         //defval->units        = NULL;
+         defval->lfixed       = Change;
+         defval->vals.tuple   = NULL;
+         defval->dim          = Vector;
+
+         /*! \page aimInputsFUN3D
+          * - <B> Design_Objective = NULL</B> <br>
+          * The design objective tuple is used to input objective information for optimization, see \ref cfdDesignObjective for additional details.
+          */
+    } else if (index == Mesh) {
+        *ainame             = AIM_NAME(Mesh);
+        defval->type        = Pointer;
+        defval->nrow        = 1;
+        defval->lfixed      = Fixed;
+        defval->vals.AIMptr = NULL;
+        defval->nullVal     = IsNull;
+        AIM_STRDUP(defval->units, "meshStruct", aimInfo, status);
 
         /*! \page aimInputsFUN3D
-         * - <B>Sensitivity = NULL </B> <br>
-         * A work in progress - Currently setting this value to any string will retrieve the parameterization for all
-         * geometric design parameters.
+         * - <B>Mesh = NULL</B> <br>
+         * A Surface_Mesh or Volume_Mesh link for 2D and 3D calculations respectively.
          */
+
+    } else {
+        status = CAPS_BADINDEX;
+        AIM_STATUS(aimInfo, status, "Unknown input index %d!", index);
     }
 
-    // Link variable(s) to parent(s) if available
-    /*if ((index != 1) && (*ainame != NULL) && (index !=15)) {
-            status = aim_link(aimInfo, *ainame, ANALYSISIN, defval);
-	    printf("Status = %d: Var Index = %d, Type = %d, link = %lX\n",
-                   status, index, defval->type, defval->link);
-	}*/
+    AIM_NOTNULL(*ainame, aimInfo, status);
 
-    return CAPS_SUCCESS;
+cleanup:
+    if (status != CAPS_SUCCESS) AIM_FREE(*ainame);
+    return status;
 }
 
-int aimData(/*@unused@*/ int iIndex,
-            /*@unused@*/ const char *name,
-            /*@unused@*/ enum capsvType *vtype,
-            /*@unused@*/ int *rank,
-            /*@unused@*/ int *nrow,
-            /*@unused@*/ int *ncol,
-            /*@unused@*/ void **data,
-            /*@unused@*/ char **units)
-{
 
-    /*! \page sharableDataFUN3D AIM Shareable Data
-     * Currently the FUN3D AIM does not have any shareable data types or values. It will try, however, to inherit a
-     * "Volume_Mesh" (for 3D simulations) or a "Surface_Mesh" (for 2D simulations) from any parent AIMs.
-     * Note that the inheritance of the volume/surface mesh variable is required
-     * if the FUN3D aim is to write a suitable grid and <sup>*</sup>.mapbc (boundary condition file for the AFLR3 mesh format) file.
-     */
-
-#ifdef DEBUG
-    printf(" fun3dAIM/aimData instance = %d  name = %s!\n", iIndex, name);
-#endif
-    return CAPS_NOTFOUND;
-}
-
-int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
-                   capsValue *aimInputs, capsErrs **errs)
+int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 {
 
     // Function return flag
@@ -818,11 +802,9 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
     // Indexing
     int i, body;
 
-    // Data transfer
-    int  nrow, ncol, rank;
-    void *dataTransfer = NULL;
-    enum capsvType vtype;
-    char *units = NULL;
+    int attrLevel = 0;
+    int       nGeomIn;
+    capsValue *geomInVal = NULL;
 
     // EGADS return values
     int          atype, alen;
@@ -840,16 +822,24 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
     ego  bodyRef, *bodyChild = NULL;
     double bodyData[4];
 
+    // FUN3D Version
+    double fun3dVersion;
+
+    // Optimization/Design
+    int optimization = (int) false;
+
     // Boundary/surface properties
-    cfdBCsStruct   bcProps;
+    cfdBoundaryConditionStruct   bcProps;
 
     // Modal Aeroelastic properties
-    modalAeroelasticStruct   modalAeroelastic;
+    cfdModalAeroelasticStruct   modalAeroelastic;
 
     // Boundary conditions container - for writing .mapbc file
     bndCondStruct bndConds;
 
     // Volume Mesh obtained from meshing AIM
+    meshStruct *meshlink = NULL;
+    meshStruct *surfaceMesh = NULL;
     meshStruct *volumeMesh = NULL;
     int numElementCheck; // Consistency checkers for volume-surface meshes
 
@@ -857,29 +847,44 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
     char **transferName = NULL;
     int numTransferName;
 
-    // NULL out errors
-    *errs = NULL;
+#ifdef HAVE_PYTHON
+    PyObject* mobj = NULL;
+#if CYTHON_PEP489_MULTI_PHASE_INIT
+    PyModuleDef *mdef = NULL;
+    PyObject *modname = NULL;
+#endif
+#endif
 
-    // Store away the analysis path/directory
-    fun3dInstance[iIndex].analysisPath = analysisPath;
+    aimStorage *fun3dInstance;
+
+    fun3dInstance = (aimStorage *) instStore;
+    if ((fun3dInstance == NULL) || (aimInputs == NULL)) return CAPS_NULLVALUE;
 
     // Initiate structures variables - will be destroyed during cleanup
-    status = initiate_cfdBCsStruct(&bcProps);
+    status = initiate_cfdBoundaryConditionStruct(&bcProps);
     if (status != CAPS_SUCCESS) return status;
 
-    status = initiate_modalAeroelasticStruct(&modalAeroelastic);
+    status = initiate_cfdModalAeroelasticStruct(&modalAeroelastic);
     if (status != CAPS_SUCCESS) return status;
 
     status = initiate_bndCondStruct(&bndConds);
     if (status != CAPS_SUCCESS) return status;
 
-
+    nGeomIn = aim_getIndex(aimInfo, NULL, GEOMETRYIN);
+    if (nGeomIn > 0) {
+        status = aim_getValue(aimInfo, 1, GEOMETRYIN, &geomInVal);
+        if (status != CAPS_SUCCESS) {
+            printf("Error: Cannot get Geometry In Value Structures\n");
+            return status;
+        }
+    }
+  
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
-    if (status != CAPS_SUCCESS) printf("aim_getBodies status = %d!!\n", status);
+    AIM_STATUS(aimInfo, status);
 
 #ifdef DEBUG
-    printf(" fun3dAIM/aimPreAnalysis instance = %d  numBody = %d!\n", iIndex, numBody);
+    printf(" fun3dAIM/aimPreAnalysis numBody = %d!\n", numBody);
 #endif
 
     if ((numBody <= 0) || (bodies == NULL)) {
@@ -889,18 +894,21 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
         return CAPS_SOURCEERR;
     }
 
+    // Get Version number
+    fun3dVersion = aimInputs[FUN3D_Version-1].vals.real;
 
     // Get reference quantities from the bodies
     for (body=0; body < numBody; body++) {
 
-        if (aimInputs[aim_getIndex(aimInfo, "Reference_Area", ANALYSISIN)-1].nullVal == IsNull) {
+        if (aimInputs[Reference_Area-1].nullVal == IsNull) {
 
-            status = EG_attributeRet(bodies[body], "capsReferenceArea", &atype, &alen, &ints, &reals, &string);
+            status = EG_attributeRet(bodies[body], "capsReferenceArea", &atype,
+                                     &alen, &ints, &reals, &string);
             if (status == EGADS_SUCCESS) {
 
                 if (atype == ATTRREAL) {
-                    aimInputs[aim_getIndex(aimInfo, "Reference_Area", ANALYSISIN)-1].vals.real = (double) reals[0];
-                    aimInputs[aim_getIndex(aimInfo, "Reference_Area", ANALYSISIN)-1].nullVal = NotNull;
+                    aimInputs[Reference_Area-1].vals.real = (double) reals[0];
+                    aimInputs[Reference_Area-1].nullVal = NotNull;
                 } else {
                     printf("capsReferenceArea should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
@@ -909,14 +917,15 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
             }
         }
 
-        if (aimInputs[aim_getIndex(aimInfo, "Moment_Length", ANALYSISIN)-1].nullVal == IsNull) {
+        if (aimInputs[Moment_Length-1].nullVal == IsNull) {
 
-            status = EG_attributeRet(bodies[body], "capsReferenceChord", &atype, &alen, &ints, &reals, &string);
+            status = EG_attributeRet(bodies[body], "capsReferenceChord", &atype,
+                                     &alen, &ints, &reals, &string);
             if (status == EGADS_SUCCESS){
 
                 if (atype == ATTRREAL) {
-                    aimInputs[aim_getIndex(aimInfo, "Moment_Length", ANALYSISIN)-1].vals.reals[0] = (double) reals[0];
-                    aimInputs[aim_getIndex(aimInfo, "Moment_Length", ANALYSISIN)-1].nullVal = NotNull;
+                    aimInputs[Moment_Length-1].vals.reals[0] = (double) reals[0];
+                    aimInputs[Moment_Length-1].nullVal = NotNull;
                 } else {
                     printf("capsReferenceChord should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
@@ -925,12 +934,13 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
 
             }
 
-            status = EG_attributeRet(bodies[body], "capsReferenceSpan", &atype, &alen, &ints, &reals, &string);
+            status = EG_attributeRet(bodies[body], "capsReferenceSpan", &atype,
+                                     &alen, &ints, &reals, &string);
             if (status == EGADS_SUCCESS) {
 
                 if (atype == ATTRREAL) {
-                    aimInputs[aim_getIndex(aimInfo, "Moment_Length", ANALYSISIN)-1].vals.reals[1] = (double) reals[0];
-                    aimInputs[aim_getIndex(aimInfo, "Moment_Length", ANALYSISIN)-1].nullVal = NotNull;
+                    aimInputs[Moment_Length-1].vals.reals[1] = (double) reals[0];
+                    aimInputs[Moment_Length-1].nullVal = NotNull;
                 } else {
                     printf("capsReferenceSpan should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
@@ -939,14 +949,15 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
             }
         }
 
-        if (aimInputs[aim_getIndex(aimInfo, "Moment_Center", ANALYSISIN)-1].nullVal == IsNull) {
+        if (aimInputs[Moment_Center-1].nullVal == IsNull) {
 
-            status = EG_attributeRet(bodies[body], "capsReferenceX", &atype, &alen, &ints, &reals, &string);
+            status = EG_attributeRet(bodies[body], "capsReferenceX", &atype,
+                                     &alen, &ints, &reals, &string);
             if (status == EGADS_SUCCESS) {
 
                 if (atype == ATTRREAL) {
-                    aimInputs[aim_getIndex(aimInfo, "Moment_Center", ANALYSISIN)-1].vals.reals[0] = (double) reals[0];
-                    aimInputs[aim_getIndex(aimInfo, "Moment_Center", ANALYSISIN)-1].nullVal = NotNull;
+                    aimInputs[Moment_Center-1].vals.reals[0] = (double) reals[0];
+                    aimInputs[Moment_Center-1].nullVal = NotNull;
                 } else {
                     printf("capsReferenceX should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
@@ -954,12 +965,13 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
                 }
             }
 
-            status = EG_attributeRet(bodies[body], "capsReferenceY", &atype, &alen, &ints, &reals, &string);
+            status = EG_attributeRet(bodies[body], "capsReferenceY", &atype,
+                                     &alen, &ints, &reals, &string);
             if (status == EGADS_SUCCESS) {
 
                 if (atype == ATTRREAL) {
-                    aimInputs[aim_getIndex(aimInfo, "Moment_Center", ANALYSISIN)-1].vals.reals[1] = (double) reals[0];
-                    aimInputs[aim_getIndex(aimInfo, "Moment_Center", ANALYSISIN)-1].nullVal = NotNull;
+                    aimInputs[Moment_Center-1].vals.reals[1] = (double) reals[0];
+                    aimInputs[Moment_Center-1].nullVal = NotNull;
                 } else {
                     printf("capsReferenceY should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
@@ -967,12 +979,13 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
                 }
             }
 
-            status = EG_attributeRet(bodies[body], "capsReferenceZ", &atype, &alen, &ints, &reals, &string);
+            status = EG_attributeRet(bodies[body], "capsReferenceZ", &atype,
+                                     &alen, &ints, &reals, &string);
             if (status == EGADS_SUCCESS) {
 
                 if (atype == ATTRREAL) {
-                    aimInputs[aim_getIndex(aimInfo, "Moment_Center", ANALYSISIN)-1].vals.reals[2] = (double) reals[0];
-                    aimInputs[aim_getIndex(aimInfo, "Moment_Center", ANALYSISIN)-1].nullVal = NotNull;
+                    aimInputs[Moment_Center-1].vals.reals[2] = (double) reals[0];
+                    aimInputs[Moment_Center-1].nullVal = NotNull;
                 } else {
                     printf("capsReferenceZ should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
@@ -990,7 +1003,7 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
 #endif
 
     // Should we use python even if it was linked?
-    usePython = aimInputs[aim_getIndex(aimInfo, "Use_Python_NML", ANALYSISIN)-1].vals.integer;
+    usePython = aimInputs[Use_Python_NML-1].vals.integer;
     if (usePython == (int) true && pythonLinked == (int) false) {
 
         printf("Use of Python library requested but not linked!\n");
@@ -1002,7 +1015,7 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
     }
 
     // Get project name
-    fun3dInstance[iIndex].projectName = aimInputs[aim_getIndex(aimInfo, "Proj_Name", ANALYSISIN)-1].vals.string;
+    fun3dInstance->projectName = aimInputs[Proj_Name-1].vals.string;
 
     // Get intent
 /* Ryan -- please fix
@@ -1017,205 +1030,205 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
         }
     }  */
 
+    // Get attribute to index mapping
     if (aim_newGeometry(aimInfo) == CAPS_SUCCESS) {
-
-        // Get attribute to index mapping
-        status = aim_getData(aimInfo, "Attribute_Map", &vtype, &rank, &nrow, &ncol, &dataTransfer, &units);
-        if (status == CAPS_SUCCESS) {
-
-            printf("Found link for attrMap (Attribute_Map) from parent\n");
-
-            //fun3dInstance[iIndex].attrMap = *(mapAttrToIndexStruct *) dataTransfer;
-
-            status = copy_mapAttrToIndexStruct( (mapAttrToIndexStruct *) dataTransfer, &fun3dInstance[iIndex].attrMap);
-            if (status != CAPS_SUCCESS) goto cleanup;
-
+        if (aimInputs[Two_Dimensional-1].vals.integer == (int) true) {
+          attrLevel = 2; // Only search down to the edge level of the EGADS body
         } else {
-
-
-            if (status == CAPS_DIRTY) printf("Parent AIMS are dirty\n");
-            else if (status == CAPS_SOURCEERR) printf("Multiple parents sharing Attribute_Map\n");
-            else printf("Linking status during Attribute_Map = %d\n",status);
-
-            printf("Didn't find a link to Attribute_Map from parent - getting it ourselves\n");
-
-
-            if (aimInputs[aim_getIndex(aimInfo, "Two_Dimensional", ANALYSISIN)-1].vals.integer == (int) true ) {
-
-                // Get capsGroup name and index mapping to make sure all faces and edges have a capsGroup value
-                status = create_CAPSGroupAttrToIndexMap(numBody,
-                                                        bodies,
-                                                        2, // Only search down to the edge level of the EGADS body
-                                                        &fun3dInstance[iIndex].attrMap);
-                if (status != CAPS_SUCCESS) goto cleanup;
-
-            } else {
-
-                // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
-                status = create_CAPSGroupAttrToIndexMap(numBody,
-                                                        bodies,
-                                                        1, // Only search down to the face level of the EGADS body
-                                                        &fun3dInstance[iIndex].attrMap);
-                if (status != CAPS_SUCCESS) goto cleanup;
-
-            }
+          attrLevel = 1; // Only search down to the face level of the EGADS body
         }
+
+        // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
+        status = create_CAPSGroupAttrToIndexMap(numBody,
+                                                bodies,
+                                                attrLevel,
+                                                &fun3dInstance->attrMap);
+        AIM_STATUS(aimInfo, status);
     }
 
     // Get boundary conditions - Only if the boundary condition has been set
-    if (aimInputs[aim_getIndex(aimInfo, "Boundary_Condition", ANALYSISIN)-1].nullVal ==  NotNull) {
+    if (aimInputs[Boundary_Condition-1].nullVal ==  NotNull) {
 
-        status = cfd_getBoundaryCondition( aimInputs[aim_getIndex(aimInfo, "Boundary_Condition", ANALYSISIN)-1].length,
-                                           aimInputs[aim_getIndex(aimInfo, "Boundary_Condition", ANALYSISIN)-1].vals.tuple,
-                                           &fun3dInstance[iIndex].attrMap,
+        status = cfd_getBoundaryCondition( aimInfo,
+                                           aimInputs[Boundary_Condition-1].length,
+                                           aimInputs[Boundary_Condition-1].vals.tuple,
+                                           &fun3dInstance->attrMap,
                                            &bcProps);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
     } else {
-        printf("Warning: No boundary conditions provided !!!!\n");
+        AIM_ANALYSISIN_ERROR(aimInfo, Boundary_Condition, "No boundary conditions provided!");
+        status = CAPS_BADVALUE;
+        goto cleanup;
     }
 
     // Get modal aeroelastic information - only get modal aeroelastic inputs if they have be set
-    if (aimInputs[aim_getIndex(aimInfo, "Modal_Aeroelastic", ANALYSISIN)-1].nullVal ==  NotNull) {
+    if (aimInputs[Modal_Aeroelastic-1].nullVal ==  NotNull) {
 
-        status = cfd_getModalAeroelastic( aimInputs[aim_getIndex(aimInfo, "Modal_Aeroelastic", ANALYSISIN)-1].length,
-                                          aimInputs[aim_getIndex(aimInfo, "Modal_Aeroelastic", ANALYSISIN)-1].vals.tuple,
-                                          &modalAeroelastic);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        status = cfd_getModalAeroelastic( aimInputs[Modal_Aeroelastic-1].length,
+                                          aimInputs[Modal_Aeroelastic-1].vals.tuple,
+                                         &modalAeroelastic);
+        AIM_STATUS(aimInfo, status);
 
 
-        modalAeroelastic.freestreamVelocity = aimInputs[aim_getIndex(aimInfo, "Modal_Ref_Velocity", ANALYSISIN)-1].vals.real;
-        modalAeroelastic.freestreamDynamicPressure = aimInputs[aim_getIndex(aimInfo, "Modal_Ref_Dynamic_Pressure", ANALYSISIN)-1].vals.real;
-        modalAeroelastic.lengthScaling = aimInputs[aim_getIndex(aimInfo, "Modal_Ref_Length", ANALYSISIN)-1].vals.real;
+        modalAeroelastic.freestreamVelocity = aimInputs[Modal_Ref_Velocity-1].vals.real;
+        modalAeroelastic.freestreamDynamicPressure = aimInputs[Modal_Ref_Dynamic_Pressure-1].vals.real;
+        modalAeroelastic.lengthScaling = aimInputs[Modal_Ref_Length-1].vals.real;
     }
 
+    // Get design variables
+    if (aimInputs[Design_Variable-1].nullVal == NotNull) {
+/*@-nullpass@*/
+        status = cfd_getDesignVariable(aimInputs[Design_Variable-1].length,
+                                       aimInputs[Design_Variable-1].vals.tuple,
+                                       aimInfo,
+                                       NUMINPUT, aimInputs,
+                                       nGeomIn,  geomInVal,
+                                       &fun3dInstance->design.numDesignVariable,
+                                       &fun3dInstance->design.designVariable);
+/*@+nullpass@*/
+        AIM_STATUS(aimInfo, status);
+
+        optimization = (int) true;
+    }
+
+    // Get design objectives
+    if (aimInputs[Design_Objective-1].nullVal == NotNull) {
+
+        if (optimization == (int) false) {
+            printf("\"Design_Objective\" has been set, but no values have been provided for \"Design_Variable\"!\n");
+            status = CAPS_BADVALUE;
+            goto cleanup;
+        }
+        status = cfd_getDesignObjective(aimInputs[Design_Objective-1].length,
+                                        aimInputs[Design_Objective-1].vals.tuple,
+                                        &fun3dInstance->design.numDesignObjective,
+                                        &fun3dInstance->design.designObjective);
+        AIM_STATUS(aimInfo, status);
+
+    } else {
+
+        if (optimization == (int) true) { // Create a default objective
+
+            printf("Creation of a default objective functions is not supported yet, user must provide an input for \"Design_Objective\"!\n");
+            status = CAPS_NOTIMPLEMENT;
+            goto cleanup;
+        }
+    }
+
+    if (aimInputs[Mesh-1].nullVal == IsNull) {
+        AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to an output 'Surface_Mesh' or 'Volume_Mesh'");
+        status = CAPS_BADVALUE;
+        goto cleanup;
+    }
+
+    // Get mesh
+    meshlink = (meshStruct *)aimInputs[Mesh-1].vals.AIMptr;
+    AIM_NOTNULL(meshlink, aimInfo, status);
+
     // Are we running in two-mode
-    if (aimInputs[aim_getIndex(aimInfo, "Two_Dimensional", ANALYSISIN)-1].vals.integer == (int) true ) {
+    if (aimInputs[Two_Dimensional-1].vals.integer == (int) true) {
 
         if (numBody > 1) {
-            printf("Only 1 body may be provided when running in two mode!!\n");
+            AIM_ERROR(aimInfo, "Only 1 body may be provided when running in two mode!! numBody = %d", numBody);
             status = CAPS_BADVALUE;
             goto cleanup;
         }
 
         for (body = 0; body < numBody; body++) {
             // What type of BODY do we have?
-            status = EG_getTopology(bodies[body], &bodyRef, &bodyOClass, &bodySubType, bodyData, &bodyNumChild, &bodyChild, &bodySense);
+            status = EG_getTopology(bodies[body], &bodyRef, &bodyOClass,
+                                    &bodySubType, bodyData, &bodyNumChild,
+                                    &bodyChild, &bodySense);
             if (status != EGADS_SUCCESS) goto cleanup;
 
             if (bodySubType != FACEBODY && bodySubType != SHEETBODY) {
-                printf("Body type must be either FACEBODY (%d) or a SHEETBODY (%d) when running in two mode!\n", FACEBODY, SHEETBODY);
+                printf("Body type must be either FACEBODY (%d) or a SHEETBODY (%d) when running in two mode!\n",
+                       FACEBODY, SHEETBODY);
                 status = CAPS_BADTYPE;
                 goto cleanup;
             }
         }
 
-
         // Add extruded plane boundary condition
-        bcProps.numBCID += 1;
-        bcProps.surfaceProps = (cfdSurfaceStruct *) EG_reall(bcProps.surfaceProps, bcProps.numBCID * sizeof(cfdSurfaceStruct));
-        if (bcProps.surfaceProps == NULL) return EGADS_MALLOC;
+        bcProps.numSurfaceProp += 1;
+        bcProps.surfaceProp = (cfdSurfaceStruct *) EG_reall(bcProps.surfaceProp,
+                             bcProps.numSurfaceProp * sizeof(cfdSurfaceStruct));
+        if (bcProps.surfaceProp == NULL) return EGADS_MALLOC;
 
-        status = intiate_cfdSurfaceStruct(&bcProps.surfaceProps[bcProps.numBCID-1]);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        status = initiate_cfdSurfaceStruct(&bcProps.surfaceProp[bcProps.numSurfaceProp-1]);
+        AIM_STATUS(aimInfo, status);
 
-        bcProps.surfaceProps[bcProps.numBCID-1].surfaceType = Symmetry;
-        bcProps.surfaceProps[bcProps.numBCID-1].symmetryPlane = 2;
+        bcProps.surfaceProp[bcProps.numSurfaceProp-1].surfaceType = Symmetry;
+        bcProps.surfaceProp[bcProps.numSurfaceProp-1].symmetryPlane = 2;
 
         // Find largest index value for bcID and set it plus 1 to the new surfaceProp
-        for (i = 0; i < bcProps.numBCID-1; i++) {
+        for (i = 0; i < bcProps.numSurfaceProp-1; i++) {
 
-            if (bcProps.surfaceProps[i].bcID >= bcProps.surfaceProps[bcProps.numBCID-1].bcID) {
-
-                bcProps.surfaceProps[bcProps.numBCID-1].bcID = bcProps.surfaceProps[i].bcID + 1;
+            if (bcProps.surfaceProp[i].bcID >= bcProps.surfaceProp[bcProps.numSurfaceProp-1].bcID) {
+                bcProps.surfaceProp[bcProps.numSurfaceProp-1].bcID = bcProps.surfaceProp[i].bcID + 1;
             }
         }
 
-        // Get Surface mesh
-        status = aim_getData(aimInfo, "Surface_Mesh", &vtype, &rank, &nrow, &ncol, &dataTransfer, &units);
-        if (status != CAPS_SUCCESS){
+        // Extrude Surface mesh
+        surfaceMesh = meshlink;
 
-            if (status == CAPS_DIRTY) printf("Parent AIMS are dirty\n");
-            else printf("Linking status = %d\n",status);
-
-            printf("Didn't find a link to a surface mesh (Surface_Mesh) from parent - a mesh will NOT be created.\n");
-
-        } else {
-
-            printf("Found link for surface mesh (Surface_Mesh) from parent\n");
-
-            volumeMesh = (meshStruct *) EG_alloc(sizeof(meshStruct));
-            if (volumeMesh == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
-
-            status = initiate_meshStruct(volumeMesh);
-            if (status != CAPS_SUCCESS) return status;
-
-            status = fun3d_2DMesh((meshStruct *) dataTransfer,
-                                  &fun3dInstance[iIndex].attrMap,
-                                  volumeMesh,
-                                  &bcProps.surfaceProps[bcProps.numBCID-1].bcID);
-            if (status != CAPS_SUCCESS) goto cleanup;
-
+        volumeMesh = (meshStruct *) EG_alloc(sizeof(meshStruct));
+        if (volumeMesh == NULL) {
+          status = EGADS_MALLOC;
+          goto cleanup;
         }
+
+        status = initiate_meshStruct(volumeMesh);
+        AIM_STATUS(aimInfo, status);
+
+        status = fun3d_2DMesh(surfaceMesh,
+                              &fun3dInstance->attrMap,
+                              volumeMesh,
+                              &bcProps.surfaceProp[bcProps.numSurfaceProp-1].bcID);
+        AIM_STATUS(aimInfo, status);
 
         // Can't currently do data transfer in 2D-mode
-        fun3dInstance[iIndex].dataTransferCheck = (int) false;
+        fun3dInstance->dataTransferCheck = (int) false;
 
     } else {
         // Get Volume mesh
-        status = aim_getData(aimInfo, "Volume_Mesh", &vtype, &rank, &nrow, &ncol, &dataTransfer, &units);
-        if (status != CAPS_SUCCESS){
-
-            if (status == CAPS_DIRTY) printf("Parent AIMS are dirty\n");
-            //else printf("Linking status = %d\n",status);
-
-            printf("Didn't find a link to a volume mesh (Volume_Mesh) from parent - a volume mesh will NOT be created.\n");
-
-            // No volume currently means we can't do datatransfer
-            fun3dInstance[iIndex].dataTransferCheck = (int) false;
-
-        } else {
-
-            printf("Found link for volume mesh (Volume_Mesh) from parent\n");
-            volumeMesh = (meshStruct *) dataTransfer;
-        }
+        volumeMesh = (meshStruct *) meshlink;
     }
 
     if (status == CAPS_SUCCESS) {
 
         status = populate_bndCondStruct_from_bcPropsStruct(&bcProps, &bndConds);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         // Replace dummy values in bcVal with FUN3D specific values
-        for (i = 0; i < bcProps.numBCID ; i++) {
+        for (i = 0; i < bcProps.numSurfaceProp ; i++) {
 
             // {UnknownBoundary, Inviscid, Viscous, Farfield, Extrapolate, Freestream,
             //  BackPressure, Symmetry, SubsonicInflow, SubsonicOutflow,
             //  MassflowIn, MassflowOut, FixedInflow, FixedOutflow}
 
-            if      (bcProps.surfaceProps[i].surfaceType == Inviscid) bndConds.bcVal[i] = 3000;
-            else if (bcProps.surfaceProps[i].surfaceType == Viscous)  bndConds.bcVal[i] = 4000;
-            else if (bcProps.surfaceProps[i].surfaceType == Farfield) bndConds.bcVal[i] = 5000;
-            else if (bcProps.surfaceProps[i].surfaceType == Extrapolate) bndConds.bcVal[i] = 5026;
-            else if (bcProps.surfaceProps[i].surfaceType == Freestream)  bndConds.bcVal[i] = 5050;
-            else if (bcProps.surfaceProps[i].surfaceType == BackPressure)    bndConds.bcVal[i] = 5051;
-            else if (bcProps.surfaceProps[i].surfaceType == SubsonicInflow)  bndConds.bcVal[i] = 7011;
-            else if (bcProps.surfaceProps[i].surfaceType == SubsonicOutflow) bndConds.bcVal[i] = 7012;
-            else if (bcProps.surfaceProps[i].surfaceType == MassflowIn)      bndConds.bcVal[i] = 7036;
-            else if (bcProps.surfaceProps[i].surfaceType == MassflowOut)     bndConds.bcVal[i] = 7031;
-            else if (bcProps.surfaceProps[i].surfaceType == FixedInflow)     bndConds.bcVal[i] = 7100;
-            else if (bcProps.surfaceProps[i].surfaceType == FixedOutflow)    bndConds.bcVal[i] = 7105;
-            else if (bcProps.surfaceProps[i].surfaceType == MachOutflow)     bndConds.bcVal[i] = 5052;
-            else if (bcProps.surfaceProps[i].surfaceType == Symmetry) {
 
-                if      (bcProps.surfaceProps[i].symmetryPlane == 1) bndConds.bcVal[i] = 6661;
-                else if (bcProps.surfaceProps[i].symmetryPlane == 2) bndConds.bcVal[i] = 6662;
-                else if (bcProps.surfaceProps[i].symmetryPlane == 3) bndConds.bcVal[i] = 6663;
+            if      (bcProps.surfaceProp[i].surfaceType == Inviscid       ) bndConds.bcVal[i] = 3000;
+            else if (bcProps.surfaceProp[i].surfaceType == Viscous        ) bndConds.bcVal[i] = 4000;
+            else if (bcProps.surfaceProp[i].surfaceType == Farfield       ) bndConds.bcVal[i] = 5000;
+            else if (bcProps.surfaceProp[i].surfaceType == Extrapolate    ) bndConds.bcVal[i] = 5026;
+            else if (bcProps.surfaceProp[i].surfaceType == Freestream     ) bndConds.bcVal[i] = 5050;
+            else if (bcProps.surfaceProp[i].surfaceType == BackPressure   ) bndConds.bcVal[i] = 5051;
+            else if (bcProps.surfaceProp[i].surfaceType == SubsonicInflow ) bndConds.bcVal[i] = 7011;
+            else if (bcProps.surfaceProp[i].surfaceType == SubsonicOutflow) bndConds.bcVal[i] = 7012;
+            else if (bcProps.surfaceProp[i].surfaceType == MassflowIn     ) bndConds.bcVal[i] = 7036;
+            else if (bcProps.surfaceProp[i].surfaceType == MassflowOut    ) bndConds.bcVal[i] = 7031;
+            else if (bcProps.surfaceProp[i].surfaceType == FixedInflow    ) bndConds.bcVal[i] = 7100;
+            else if (bcProps.surfaceProp[i].surfaceType == FixedOutflow   ) bndConds.bcVal[i] = 7105;
+            else if (bcProps.surfaceProp[i].surfaceType == MachOutflow    ) bndConds.bcVal[i] = 5052;
+            else if (bcProps.surfaceProp[i].surfaceType == Symmetry       ) {
+
+                if      (bcProps.surfaceProp[i].symmetryPlane == 1) bndConds.bcVal[i] = 6661;
+                else if (bcProps.surfaceProp[i].symmetryPlane == 2) bndConds.bcVal[i] = 6662;
+                else if (bcProps.surfaceProp[i].symmetryPlane == 3) bndConds.bcVal[i] = 6663;
                 else {
-                    printf("Unknown symmetryPlane for boundary %d - Defaulting to y-Symmetry\n", bcProps.surfaceProps[i].bcID);
+                    printf("Unknown symmetryPlane for boundary %d - Defaulting to y-Symmetry\n", bcProps.surfaceProp[i].bcID);
                     bndConds.bcVal[i] = 6662;
                 }
             }
@@ -1226,44 +1239,45 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
             status = EGADS_MALLOC;
             goto cleanup;
         }
-        strcpy(filename, analysisPath);
-#ifdef WIN32
-        strcat(filename, "\\");
-#else
-        strcat(filename, "/");
-#endif
-        strcat(filename, fun3dInstance[iIndex].projectName);
+        strcpy(filename, fun3dInstance->projectName);
 
         if (aim_newGeometry(aimInfo) == CAPS_SUCCESS) {
 
             // Write AFLR3
-            status = mesh_writeAFLR3(filename,
-                                     aimInputs[aim_getIndex(aimInfo, "Mesh_ASCII_Flag",  ANALYSISIN)-1].vals.integer,
+/*@-nullpass@*/
+            status = mesh_writeAFLR3(aimInfo, filename,
+                                     aimInputs[Mesh_ASCII_Flag-1].vals.integer,
                                      volumeMesh,
                                      1.0);
-
+/*@+nullpass@*/
             if (status != CAPS_SUCCESS) {
                 goto cleanup;
             }
         }
 
         // Write *.mapbc file
-        status = write_MAPBC(filename,
+        status = write_MAPBC(aimInfo, filename,
                              bndConds.numBND,
                              bndConds.bndID,
                              bndConds.bcVal);
         if (filename != NULL) EG_free(filename);
         filename = NULL;
 
-        if (status != CAPS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         // Lets check the volume mesh
+        if (volumeMesh == NULL) {
+            status = CAPS_BADVALUE;
+            goto cleanup;
+        }
 
         // Do we have an individual surface mesh for each body
-        if (volumeMesh->numReferenceMesh != numBody) {
-            printf("Number of inherited surface mesh in the volume mesh, %d, does not match the number "
-                    "of bodies, %d - data transfer will NOT be possible.\n\n", volumeMesh->numReferenceMesh,numBody);
-            fun3dInstance[iIndex].dataTransferCheck = (int) false;
+        if (volumeMesh->numReferenceMesh != numBody &&
+            aimInputs[Two_Dimensional-1].vals.integer == (int) false) {
+            printf("Number of linked surface mesh in the volume mesh, %d, does not match the number "
+                    "of bodies, %d - data transfer will NOT be possible.",
+                   volumeMesh->numReferenceMesh, numBody);
+            fun3dInstance->dataTransferCheck = (int) false;
         }
 
 
@@ -1280,23 +1294,23 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
                                                   volumeMesh->element,
                                                   Triangle,
                                                   &volumeMesh->meshQuickRef.numTriangle);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             status = mesh_retrieveNumMeshElements(volumeMesh->numElement,
                                                   volumeMesh->element,
                                                   Quadrilateral,
                                                   &volumeMesh->meshQuickRef.numQuadrilateral);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
         }
 
         if (numElementCheck != (volumeMesh->meshQuickRef.numTriangle + volumeMesh->meshQuickRef.numQuadrilateral)) {
 
-            fun3dInstance[iIndex].dataTransferCheck = (int) false;
+            fun3dInstance->dataTransferCheck = (int) false;
             printf("Volume mesher added surface elements - data transfer will NOT be possible.\n");
 
         } else { // Data transfer appears to be ok
-            fun3dInstance[iIndex].dataTransferCheck = (int) true;
+            fun3dInstance->dataTransferCheck = (int) true;
         }
     }
 
@@ -1317,7 +1331,7 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
             // Initialize python
             if (Py_IsInitialized() == 0) {
                 printf("\tInitializing Python for FUN3D AIM\n\n");
-                Py_Initialize();
+                Py_InitializeEx(0);
                 initPy = (int) true;
             } else {
 
@@ -1331,20 +1345,69 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
                 initPy = (int) false;
             }
 
+            PyGILState_STATE gstate;
+            gstate = PyGILState_Ensure();
 
-            (void) Initialize_fun3dNamelist();
+             // Taken from "main" by running cython with --embed
+            #if PY_MAJOR_VERSION < 3
+                initfun3dNamelist();
+            #elif CYTHON_PEP489_MULTI_PHASE_INIT
+                   if (fun3dNamelist_Initialized == (int)false || initPy == (int)true) {
+                    fun3dNamelist_Initialized = (int)true;
+                       mobj = PyInit_fun3dNamelist();
+                       if (!PyModule_Check(mobj)) {
+                        mdef = (PyModuleDef *) mobj;
+                        modname = PyUnicode_FromString("fun3dNamelist");
+                        mobj = NULL;
+                        if (modname) {
+                            mobj = PyModule_NewObject(modname);
+                            Py_DECREF(modname);
+                            if (mobj) PyModule_ExecDef(mobj, mdef);
+                          }
+                    }
+                }
+            #else
+                mobj = PyInit_fun3dNamelist();
+            #endif
+            
+            if (PyErr_Occurred()) {
+                PyErr_Print();
+                #if PY_MAJOR_VERSION < 3
+                if (Py_FlushLine()) PyErr_Clear();
+                #endif
+                /* Release the thread. No Python API allowed beyond this point. */
+                PyGILState_Release(gstate);
+                status = CAPS_BADVALUE;
+                goto cleanup;
+            }
+            
+            Py_XDECREF(mobj);
 
-            status = fun3d_writeNMLPython(aimInfo, analysisPath, aimInputs, bcProps);
+            status = fun3d_writeNMLPython(aimInfo, aimInputs, bcProps);
             if (status == -1) {
-                printf("\tWarning: Python error occurred while writing namelist file\n");
+                printf("\tError: Python error occurred while writing namelist file\n");
             } else {
                 printf("\tDone writing nml file with Python\n");
             }
 
+            if (PyErr_Occurred()) {
+                PyErr_Print();
+                #if PY_MAJOR_VERSION < 3
+                if (Py_FlushLine()) PyErr_Clear();
+                #endif
+                /* Release the thread. No Python API allowed beyond this point. */
+                PyGILState_Release(gstate);
+                status = CAPS_BADVALUE;
+                goto cleanup;
+            }
+
+            /* Release the thread. No Python API allowed beyond this point. */
+            PyGILState_Release(gstate);
+
             // Close down python
             if (initPy == (int) false) {
-                printf("\n");
                 /*
+                printf("\n");
                 printf("\tClosing new Python thread\n");
                 Py_EndInterpreter(newThread);
                 (void) PyThreadState_Swap(NULL); // This function call is probably not necessary;
@@ -1358,7 +1421,7 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
 
     } else {
 
-        if (aimInputs[aim_getIndex(aimInfo, "Overwrite_NML",ANALYSISIN)-1].vals.integer == (int) false) {
+        if (aimInputs[Overwrite_NML-1].vals.integer == (int) false) {
 
             printf("Since Python was not linked and/or being used, the \"Overwrite_NML\" input needs to be set to \"True\" to give");
             printf(" permission to create a new fun3d.nml. fun3d.nml will NOT be updated!!\n");
@@ -1367,67 +1430,65 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
 
             printf("Warning: The fun3d.nml file will be overwritten!\n");
 
-            status = fun3d_writeNML(aimInfo, analysisPath, aimInputs, bcProps);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            status = fun3d_writeNML(aimInfo, aimInputs, bcProps);
+            AIM_STATUS(aimInfo, status);
 
         }
     }
 
     // If data transfer is ok ....
-    if (fun3dInstance[iIndex].dataTransferCheck == (int) true) {
+    if (fun3dInstance->dataTransferCheck == (int) true) {
 
         //See if we have data transfer information
         status = aim_getBounds(aimInfo, &numTransferName, &transferName);
         if (status == CAPS_SUCCESS) {
 
-            if (aimInputs[aim_getIndex(aimInfo, "Modal_Aeroelastic", ANALYSISIN)-1].nullVal ==  NotNull) {
-                status = fun3D_dataTransfer(aimInfo,
-                                            analysisPath,
-                                            fun3dInstance[iIndex].projectName,
+            if (aimInputs[Modal_Aeroelastic-1].nullVal ==  NotNull) {
+                status = fun3d_dataTransfer(aimInfo,
+                                            fun3dInstance->projectName,
+                                            bcProps,
                                             *volumeMesh,
                                             &modalAeroelastic);
                 if (status == CAPS_SUCCESS) {
-
-                    status = fun3d_writeMovingBody(analysisPath, bcProps, &modalAeroelastic);
+                    status = fun3d_writeMovingBody(aimInfo, fun3dVersion, bcProps, &modalAeroelastic);
                 }
 
             } else{
-                status = fun3D_dataTransfer(aimInfo,
-                                            analysisPath,
-                                            fun3dInstance[iIndex].projectName,
+                status = fun3d_dataTransfer(aimInfo,
+                                            fun3dInstance->projectName,
+                                            bcProps,
                                             *volumeMesh,
                                             NULL);
             }
-
             if (status != CAPS_SUCCESS && status != CAPS_NOTFOUND) goto cleanup;
         }
     } // End if data transfer ok
 
 
-    // Sensitivity
-    if (aimInputs[aim_getIndex(aimInfo, "Sensitivity", ANALYSISIN)-1].nullVal ==  NotNull) {
+    // Optimization - variable must be set at a minimum
+    if (optimization == (int) true) {
 
-        if (fun3dInstance[iIndex].dataTransferCheck == (int) true ) {
+        if (fun3dInstance->dataTransferCheck == (int) true ) {
 
-            status = fun3d_makeDirectory(analysisPath);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            status = fun3d_makeDirectory(aimInfo);
+            AIM_STATUS(aimInfo, status);
 
-            status = fun3d_writeParameterization(aimInfo, analysisPath,
+            status = fun3d_writeParameterization(fun3dInstance->design.numDesignVariable,
+                                                 fun3dInstance->design.designVariable,
+                                                 aimInfo,
                                                  volumeMesh,
-                                                 fun3dInstance[iIndex].numGeomIn,
-                                                 fun3dInstance[iIndex].geomInVal);
-            if (status != CAPS_SUCCESS) goto cleanup;
+                                                 nGeomIn, geomInVal);
+            AIM_STATUS(aimInfo, status);
 
-            status = fun3d_writeRubber(aimInfo, aimInputs,
-                                       analysisPath,
-                                       volumeMesh,
-                                       fun3dInstance[iIndex].numGeomIn,
-                                       fun3dInstance[iIndex].geomInVal);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            status = fun3d_writeRubber(aimInfo,
+                                       fun3dInstance->design,
+                                       aimInputs[FUN3D_Version-1].vals.real,
+                                       volumeMesh);
+            AIM_STATUS(aimInfo, status);
 
         } else {
-            printf("The volume is not suitable for sensitivity input generation - possibly the volume mesher "
-                    "added unaccounted for points\n");
+            AIM_ERROR(aimInfo, "The volume is not suitable for sensitivity input generation - possibly the volume mesher "
+                               "added unaccounted for points\n");
             status = CAPS_BADVALUE;
             goto cleanup;
         }
@@ -1435,34 +1496,41 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
 
     status = CAPS_SUCCESS;
 
-    goto cleanup;
+cleanup:
 
-    cleanup:
+    if (transferName != NULL) EG_free(transferName);
+    if (filename != NULL) EG_free(filename);
 
-        if (status != CAPS_SUCCESS) printf("Premature exit in fun3DAIM preAnalysis status = %d\n", status);
+    (void) destroy_cfdBoundaryConditionStruct(&bcProps);
+    (void) destroy_cfdModalAeroelasticStruct(&modalAeroelastic);
 
-        if (transferName != NULL) EG_free(transferName);
-        if (filename != NULL) EG_free(filename);
+    (void) destroy_bndCondStruct(&bndConds);
 
-        (void) destroy_cfdBCsStruct(&bcProps);
-        (void) destroy_modalAeroelasticStruct(&modalAeroelastic);
+    // Clean up the volume mesh that was created for 2D mode
+    if (aimInputs[Two_Dimensional-1].vals.integer == (int) true) {
 
-        (void) destroy_bndCondStruct(&bndConds);
-
-        // Clean up the volume mesh that was created for 2D mode
-        if (aimInputs[aim_getIndex(aimInfo, "Two_Dimensional", ANALYSISIN)-1].vals.integer == (int) true ) {
-
-            // Destroy volume mesh since we created here instead of inheriting it
+        // Destroy volume mesh since we created here instead of inheriting it
+        if (volumeMesh != NULL) {
             (void) destroy_meshStruct(volumeMesh);
             EG_free(volumeMesh);
-
         }
 
-        return status;
+    }
+
+    return status;
 }
 
 
-int aimOutputs(int iIndex, void *aimStruc, int index, char **aoname, capsValue *form)
+/* no longer optional and needed for restart */
+int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+                    /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
+{
+  return CAPS_SUCCESS;
+}
+
+
+int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+               int index, char **aoname, capsValue *form)
 {
 
     /*! \page aimOutputsFUN3D AIM Outputs
@@ -1473,11 +1541,11 @@ int aimOutputs(int iIndex, void *aimStruc, int index, char **aoname, capsValue *
     int numOutVars = 8; // Grouped
 
 #ifdef DEBUG
-    printf(" fun3dAIM/aimOutputs instance = %d  index = %d!\n", iIndex, index);
+    printf(" fun3dAIM/aimOutputs index = %d!\n", index);
 #endif
 
     // Total Forces - Pressure + Viscous
-    if 		(index == 1) *aoname = EG_strdup("CLtot");
+    if      (index == 1) *aoname = EG_strdup("CLtot");
     else if (index == 2) *aoname = EG_strdup("CDtot");
     else if (index == 3) *aoname = EG_strdup("CMXtot");
     else if (index == 4) *aoname = EG_strdup("CMYtot");
@@ -1564,18 +1632,17 @@ int aimOutputs(int iIndex, void *aimStruc, int index, char **aoname, capsValue *
          */
 
     } else {
-
-        printf(" fun3dAIM/aimOutputs instance = %d  index = %d NOT Found!\n", iIndex, index);
+        printf(" fun3dAIM/aimOutputs index = %d NOT Found!\n", index);
         return CAPS_NOTFOUND;
     }
 
     if (index <= 3*numOutVars) {
-        form->type   = Double;
-        form->dim    = Vector;
-        form->length = 1;
-        form->nrow   = 1;
-        form->ncol   = 1;
-        form->units  = NULL;
+        form->type    = Double;
+        form->dim     = Vector;
+        form->nrow    = 1;
+        form->ncol    = 1;
+        form->units   = NULL;
+        form->nullVal = IsNull;
 
         form->vals.reals = NULL;
         form->vals.real = 0;
@@ -1584,9 +1651,11 @@ int aimOutputs(int iIndex, void *aimStruc, int index, char **aoname, capsValue *
     return CAPS_SUCCESS;
 }
 
-static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap, capsValue *val) {
 
-    int status; // Function return status
+static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap,
+                                capsValue *val)
+{
+    int status = CAPS_SUCCESS; // Function return status
 
     size_t linecap = 0;
 
@@ -1623,11 +1692,8 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap, capsVal
         goto cleanup;
     }
 
-    val->length = 0;
     val->nrow = 0;
     val->vals.tuple = NULL;
-
-    status = CAPS_NOTFOUND;
 
     while (getline(&line, &linecap, fp) >= 0) {
 
@@ -1646,21 +1712,19 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap, capsVal
 
                 sprintf(name, "%s", "Total");
             }
-            val->length += 1;
             val->nrow   += 1;
 
-            tempTuple = EG_reall(val->vals.tuple, val->length*sizeof(capsTuple));
+            tempTuple = EG_reall(val->vals.tuple, val->nrow*sizeof(capsTuple));
             if (tempTuple == NULL) {
                 status = EGADS_MALLOC;
-                val->length -= 1;
                 val->nrow -= 1;
                 goto cleanup;
             }
 
             val->vals.tuple = tempTuple;
             val->nullVal = NotNull;
-            val->vals.tuple[val->length -1 ].name = NULL;
-            val->vals.tuple[val->length -1 ].value = NULL;
+            val->vals.tuple[val->nrow -1 ].name = NULL;
+            val->vals.tuple[val->nrow -1 ].value = NULL;
 
             // Initiate JSON string
             sprintf(json, "{");
@@ -1692,7 +1756,8 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap, capsVal
             strncpy(num2, &line[j], 14); num2[14] = '\0';
             strncpy(num3, &line[k], 14); num3[14] = '\0';
 
-            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s,","CMX_p", num1, "CMY_p", num2, "CMZ_p", num3);
+            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s,",
+                    "CMX_p", num1, "CMY_p", num2, "CMZ_p", num3);
             strcat(json, lineVal); // Add to JSON string
 
             status = getline(&line, &linecap, fp);
@@ -1702,7 +1767,8 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap, capsVal
             strncpy(num2, &line[j], 14); num2[14] = '\0';
             strncpy(num3, &line[k], 14); num3[14] = '\0';
 
-            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s,","CX_p", num1, "CY_p", num2, "CZ_p", num3);
+            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s,",
+                    "CX_p", num1, "CY_p", num2, "CZ_p", num3);
             strcat(json, lineVal); // Add to JSON string
 
             status = getline(&line, &linecap, fp); //Skip line - "Viscous forces"
@@ -1724,7 +1790,8 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap, capsVal
             strncpy(num2, &line[j], 14); num2[14] = '\0';
             strncpy(num3, &line[k], 14); num3[14] = '\0';
 
-            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s,","CMX_v", num1, "CMY_v", num2, "CMZ_v", num3);
+            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s,",
+                    "CMX_v", num1, "CMY_v", num2, "CMZ_v", num3);
             strcat(json,lineVal); // Add to JSON string
 
             status = getline(&line, &linecap, fp);
@@ -1734,7 +1801,8 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap, capsVal
             strncpy(num2, &line[j], 14); num2[14] = '\0';
             strncpy(num3, &line[k], 14); num3[14] = '\0';
 
-            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s,","CX_v", num1, "CY_v", num2, "CZ_v", num3);
+            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s,",
+                    "CX_v", num1, "CY_v", num2, "CZ_v", num3);
             strcat(json,lineVal); // Add to JSON string
 
             status = getline(&line, &linecap, fp); //Skip line - "Total forces"
@@ -1756,7 +1824,8 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap, capsVal
             strncpy(num2, &line[j], 14); num2[14] = '\0';
             strncpy(num3, &line[k], 14); num3[14] = '\0';
 
-            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s,","CMX", num1, "CMY", num2, "CMZ", num3);
+            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s,",
+                    "CMX", num1, "CMY", num2, "CMZ", num3);
             strcat(json,lineVal); // Add to JSON string
 
             status = getline(&line, &linecap, fp);
@@ -1766,25 +1835,30 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap, capsVal
             strncpy(num2, &line[j], 14); num2[14] = '\0';
             strncpy(num3, &line[k], 14); num3[14] = '\0';
 
-            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s","CX", num1, "CY", num2, "CZ", num3);
+            sprintf(lineVal, "\"%s\":%s,\"%s\":%s,\"%s\":%s",
+                    "CX", num1, "CY", num2, "CZ", num3);
             strcat(json,lineVal); // Add to JSON string
 
             strcat(json,"}");
 
-            //printf("JSON = %s\n", json);
+//            printf("JSON = %s\n", json);
 
-            status = string_toInteger(name, &nameIndex);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            if (strcmp(name, "Total") != 0) {
+                status = string_toInteger(name, &nameIndex);
+                if (status != CAPS_SUCCESS) goto cleanup;
+            } else {
+                nameIndex = -1;
+            }
 
             status = get_mapAttrToIndexKeyword(attrMap, nameIndex, &keyWord);
             if (status == CAPS_SUCCESS) {
-                val->vals.tuple[val->length-1].name  = EG_strdup(keyWord);
+                val->vals.tuple[val->nrow-1].name  = EG_strdup(keyWord);
             } else {
 
-                val->vals.tuple[val->length-1].name  = EG_strdup(name);
+                val->vals.tuple[val->nrow-1].name  = EG_strdup(name);
             }
 
-            val->vals.tuple[val->length-1].value = EG_strdup(json);
+            val->vals.tuple[val->nrow-1].value = EG_strdup(json);
 
             // Reset name index value in case we have totals next
             nameIndex = 0;
@@ -1792,17 +1866,20 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap, capsVal
     }
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Premature exit in fun3DAIM fun3d_readForcesJSON status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS)
+      printf("Premature exit in fun3dAIM fun3d_readForcesJSON status = %d\n",
+             status);
 
-        if (line != NULL) EG_free(line);
+    if (line != NULL) EG_free(line);
 
-        return status;
+    return status;
 }
 
-static int fun3d_readForces(FILE *fp, int index, capsValue *val){
+
+static int fun3d_readForces(FILE *fp, int index, capsValue *val)
+{
 
     int status; // Function return
 
@@ -1866,19 +1943,20 @@ static int fun3d_readForces(FILE *fp, int index, capsValue *val){
 
         if (line == NULL) continue;
 
-        if (strcmp(line,bndSectionKeyword) == 0 && bndSectionFound == (int) false) {
+        if (strcmp(line, bndSectionKeyword) == 0 && bndSectionFound == (int) false) {
 
             //printf("FOUND section\n");
             bndSectionFound = (int) true;
             continue; // Skip to next line
         }
 
-        if (strcmp(line, bndSubSectionKeyword) == 0 && bndSectionFound    == (int) true
-                                                    && bndSubSectionFound == (int) false) {
+        if (bndSubSectionKeyword != NULL)
+            if (strcmp(line, bndSubSectionKeyword) == 0 &&
+                bndSectionFound == (int) true && bndSubSectionFound == (int) false) {
 
-            //printf("Found sub-sections\n");
-            bndSubSectionFound = (int) true;
-            continue; // Skipe to next line
+                //printf("Found sub-sections\n");
+                bndSubSectionFound = (int) true;
+                continue; // Skipe to next line
         }
 
         if (bndSectionFound == (int) true && bndSubSectionFound == (int) true){
@@ -1893,6 +1971,7 @@ static int fun3d_readForces(FILE *fp, int index, capsValue *val){
 
                 status = string_toDouble(&strValue[6], &val->vals.real);
                 if (status != CAPS_SUCCESS) goto cleanup;
+                val->nullVal = NotNull;
 
                 break;
             }
@@ -1905,201 +1984,145 @@ static int fun3d_readForces(FILE *fp, int index, capsValue *val){
     }
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Premature exit in fun3DAIM fun3d_readForces status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS)
+        printf("Premature exit in fun3dAIM fun3d_readForces status = %d\n",
+               status);
 
-        if (line != NULL) EG_free(line);
+    if (line != NULL) EG_free(line);
 
-        return status;
+    return status;
 }
 
 
 // Calculate FUN3D output
-int aimCalcOutput(int iIndex, /*@unused@*/ void *aimInfo, const char *analysisPath,
-        int index, capsValue *val, capsErrs **errors)
+int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
+                  capsValue *val)
 {
     int status;
-
-    char currentPath[PATH_MAX]; // Current directory path
 
     char *filename = NULL; // File to open
     char fileExtension[] = ".forces";
 
     FILE *fp = NULL; // File pointer
+  
+    aimStorage *fun3dInstance;
 
-    *errors        = NULL;
+    fun3dInstance = (aimStorage *) instStore;
+
     val->vals.real = 0.0; // Set default value
 
-    //printf("index = %d\n",index);
-
-    (void) getcwd(currentPath, PATH_MAX); // Get our current path
-
-    // Set path to analysis directory
-    if (chdir(analysisPath) != 0) return CAPS_DIRERR;
-
-
     // Open fun3d *.force file
-    filename = (char *) EG_alloc((strlen(fun3dInstance[iIndex].projectName) + strlen(fileExtension) +1)*sizeof(char));
+    filename = (char *) EG_alloc((strlen(fun3dInstance->projectName) +
+                                  strlen(fileExtension) +1)*sizeof(char));
     if (filename == NULL) {
-        chdir(currentPath);
-
         status = EGADS_MALLOC;
         goto cleanup;
     }
 
-    sprintf(filename, "%s%s", fun3dInstance[iIndex].projectName, fileExtension);
+    sprintf(filename, "%s%s", fun3dInstance->projectName, fileExtension);
 
-    fp = fopen(filename, "r");
-
-    // Restore the path we came in with
-    chdir(currentPath);
+    fp = aim_fopen(aimInfo, filename, "r");
 
     if (fp == NULL) {
 
-        printf("Could not open file: %s in %s\n", filename, analysisPath);
+        AIM_ERROR(aimInfo, "Could not open file: %s\n", filename);
         status = CAPS_IOERR;
         goto cleanup;
     }
 
     if (index == 25) {
-        status = fun3d_readForcesJSON(fp, &fun3dInstance[iIndex].attrMap, val);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        status = fun3d_readForcesJSON(fp, &fun3dInstance->attrMap, val);
+        AIM_STATUS(aimInfo, status);
 
     } else {
         status = fun3d_readForces(fp, index, val);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
     }
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Premature exit in fun3DAIM calcOutput status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS)
+        printf("Premature exit in fun3dAIM calcOutput status = %d\n", status);
 
-        if (fp !=  NULL) fclose(fp);
-        if (filename != NULL) EG_free(filename); // Free filename allocation
+    if (fp != NULL) fclose(fp);
+    if (filename != NULL) EG_free(filename); // Free filename allocation
 
-        return status;
-
+    return status;
 }
 
-void aimCleanup()
+
+void aimCleanup(void *instStore)
 {
-    int iIndex;
+    aimStorage *fun3dInstance;
 
 #ifdef DEBUG
     printf(" fun3dAIM/aimCleanup!\n");
 
 #endif
-
+    fun3dInstance = (aimStorage *) instStore;
+  
     // Clean up fun3dInstance data
-    for ( iIndex = 0; iIndex < numInstance; iIndex++) {
 
-        printf(" Cleaning up fun3dInstance - %d\n", iIndex);
+    // Attribute to index map
+    (void) destroy_mapAttrToIndexStruct(&fun3dInstance->attrMap);
+    //status = destroy_mapAttrToIndexStruct(&fun3dInstance->attrMap);
+    //if (status != CAPS_SUCCESS) return status;
 
-        // Attribute to index map
-        destroy_mapAttrToIndexStruct(&fun3dInstance[iIndex].attrMap);
-        //status = destroy_mapAttrToIndexStruct(&fun3dInstance[iIndex].attrMap);
-        //if (status != CAPS_SUCCESS) return status;
+    // FUN3D project name
+    fun3dInstance->projectName = NULL;
 
-        // FUN3D project name
-        fun3dInstance[iIndex].projectName = NULL;
+    // Pointer to caps input value for scaling pressure during data transfer
+    fun3dInstance->pressureScaleFactor = NULL;
 
-        // Analysis file path/directory
-        fun3dInstance[iIndex].analysisPath = NULL;
+    // Pointer to caps input value for offset pressure during data transfer
+    fun3dInstance->pressureScaleOffset = NULL;
 
-        // Pointer to caps input value for scaling pressure during data transfer
-        fun3dInstance[iIndex].pressureScaleFactor = NULL;
+    // Design information
+    (void) destroy_cfdDesignStruct(&fun3dInstance->design);
 
-        // Pointer to caps input value for offset pressure during data transfer
-        fun3dInstance[iIndex].pressureScaleOffset = NULL;
-
-        // Number of geometric inputs
-        fun3dInstance[iIndex].numGeomIn = 0;
-
-        // Pointer to CAPS geometric in values
-        fun3dInstance[iIndex].geomInVal = NULL;
-    }
-
-    if (fun3dInstance != NULL) EG_free(fun3dInstance);
-    fun3dInstance = NULL;
-    numInstance = 0;
+    EG_free(fun3dInstance);
 }
 
 
 /************************************************************************/
 // CAPS transferring functions
 
-int aimFreeDiscr(capsDiscr *discr)
+void aimFreeDiscrPtr(void *ptrm)
 {
-    int i;
-
 #ifdef DEBUG
-    printf(" fun3dAIM/aimFreeDiscr instance = %d!\n", discr->instance);
+    printf(" fun3dAIM/aimFreeDiscr!\n");
 #endif
 
-    // Free up this capsDiscr
-
-    discr->nPoints = 0; // Points
-
-    if (discr->mapping != NULL) EG_free(discr->mapping);
-    discr->mapping = NULL;
-
-    if (discr->types != NULL) { // Element types
-        for (i = 0; i < discr->nTypes; i++) {
-            if (discr->types[i].gst  != NULL) EG_free(discr->types[i].gst);
-            if (discr->types[i].tris != NULL) EG_free(discr->types[i].tris);
-        }
-
-        EG_free(discr->types);
-    }
-
-    discr->nTypes  = 0;
-    discr->types   = NULL;
-
-    if (discr->elems != NULL) { // Element connectivity
-
-        for (i = 0; i < discr->nElems; i++) {
-            if (discr->elems[i].gIndices != NULL) EG_free(discr->elems[i].gIndices);
-        }
-
-        EG_free(discr->elems);
-    }
-
-    discr->nElems  = 0;
-    discr->elems   = NULL;
-
-    if (discr->ptrm != NULL) EG_free(discr->ptrm); // Extra information to store into the discr void pointer
-    discr->ptrm    = NULL;
-
-
-    discr->nVerts = 0;    // Not currently used
-    discr->verts  = NULL; // Not currently used
-    discr->celem = NULL; // Not currently used
-
-    discr->nDtris = 0; // Not currently used
-    discr->dtris  = NULL; // Not currently used
-
-    return CAPS_SUCCESS;
+    /* free up this capsDiscr user pointer */
+    AIM_FREE(ptrm);
 }
 
-int aimDiscr(char *tname, capsDiscr *discr) {
 
-    int i, body, face; // Indexing
+int aimDiscr(char *tname, capsDiscr *discr)
+{
+
+    int i; // Indexing
 
     int status; // Function return status
 
-    int iIndex; // Instance index
-
     int numBody;
-    int needMesh = (int) true;
 
     // EGADS objects
-    ego tess, *bodies = NULL, *faces = NULL, tempBody;
+    ego *bodies = NULL, *tess = NULL;
 
-    const char   *intents, *string, *capsGroup; // capsGroups strings
+    const char   *intents;
+    capsValue *meshVal;
+
+#ifdef OLD_DISCR_IMPLEMENTATION_TO_REMOVE
+    int body, face; // Indexing
+
+    // EGADS objects
+    ego tess, *faces = NULL, tempBody;
+
+    const char   *string, *capsGroup; // capsGroups strings
 
     // EGADS function returns
     int plen, tlen;
@@ -2121,28 +2144,23 @@ int aimDiscr(char *tname, capsDiscr *discr) {
     int numCAPSGroup = 0, attrIndex = 0, foundAttr = (int) false;
     int *capsGroupList = NULL;
     int dataTransferBodyIndex=-99;
-
-    // Data transfer
-    int  nrow, ncol, rank;
-    void *dataTransfer = NULL;
-    enum capsvType vtype;
-    char *units;
+#endif
 
     // Volume Mesh obtained from meshing AIM
     meshStruct *volumeMesh;
     int numElementCheck = 0;
 
-    iIndex = discr->instance;
+    aimStorage *fun3dInstance;
+
+    fun3dInstance = (aimStorage *) discr->instStore;
+
 #ifdef DEBUG
-    printf(" fun3dAIM/aimDiscr: tname = %s, instance = %d!\n", tname, iIndex);
+    printf(" fun3dAIM/aimDiscr: tname = %s!\n", tname);
 #endif
-
-    if ((iIndex < 0) || (iIndex >= numInstance)) return CAPS_BADINDEX;
-
 
     if (tname == NULL) return CAPS_NOTFOUND;
 
-    if (fun3dInstance[iIndex].dataTransferCheck == (int) false) {
+    if (fun3dInstance->dataTransferCheck == (int) false) {
         printf("The volume is not suitable for data transfer - possibly the volume mesher "
                 "added unaccounted for points\n");
         return CAPS_BADVALUE;
@@ -2151,121 +2169,95 @@ int aimDiscr(char *tname, capsDiscr *discr) {
     // Currently this ONLY works if the capsTranfer lives on single body!
     status = aim_getBodies(discr->aInfo, &intents, &numBody, &bodies);
     if (status != CAPS_SUCCESS) {
-        printf(" fun3dAIM/aimDiscr: %d aim_getBodies = %d!\n", iIndex, status);
+        printf(" fun3dAIM/aimDiscr: aim_getBodies = %d!\n", status);
         return status;
     }
-
-    status = aimFreeDiscr(discr);
-    if (status != CAPS_SUCCESS) return status;
-
-
-    status = aim_getData(discr->aInfo, "Volume_Mesh", &vtype, &rank, &nrow, &ncol, &dataTransfer, &units);
-    if (status != CAPS_SUCCESS){
-        if (status == CAPS_DIRTY) printf(" fun3dAIM: Parent AIMS are dirty\n");
-        else printf(" fun3dAIM: Linking status = %d\n",status);
-
-        printf(" fun3dAIM/aimDiscr: Didn't find a link to a volume mesh (Volume_Mesh) from parent - data transfer isn't possible.\n");
-
-        goto cleanup;
+    if (bodies == NULL) {
+         AIM_ERROR(discr->aInfo, " fun3dAIM/aimDiscr: NULL Bodies!\n");
+        return CAPS_NULLOBJ;
     }
 
-    volumeMesh = (meshStruct *) dataTransfer;
-    if ( volumeMesh->referenceMesh == NULL) {
-        printf(" ERROR: No reference meshes in volume mesh - data transfer isn't possible.\n");
+
+    // Get the mesh Value
+    status = aim_getValue(discr->aInfo, Mesh, ANALYSISIN, &meshVal);
+    AIM_STATUS(discr->aInfo, status);
+
+    if (meshVal->nullVal == IsNull) {
+        AIM_ANALYSISIN_ERROR(discr->aInfo, Mesh, "'Mesh' input must be linked to an output 'Surface_Mesh' or 'Volume_Mesh'");
         status = CAPS_BADVALUE;
         goto cleanup;
     }
 
-    // check if any the meshes have been set
-    for (i = 0; i < numBody; i++) {
-        needMesh = (int) (needMesh && (bodies[numBody+i] == NULL));
+    // Get mesh
+    volumeMesh = (meshStruct *)meshVal->vals.AIMptr;
+    AIM_NOTNULL(volumeMesh, discr->aInfo, status);
+
+    if (volumeMesh->referenceMesh == NULL) {
+        AIM_ERROR(discr->aInfo, "No reference meshes in volume mesh - data transfer isn't possible.\n");
+        status = CAPS_BADVALUE;
+        goto cleanup;
     }
 
-    if (needMesh == (int)true) {
+    if (aim_newGeometry(discr->aInfo) == CAPS_SUCCESS) {
+        // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
+        status = create_CAPSGroupAttrToIndexMap(numBody,
+                                                bodies,
+                                                1, // Only search down to the face level of the EGADS body
+                                                &fun3dInstance->attrMap);
+        AIM_STATUS(discr->aInfo, status);
+    }
 
-        // Get attribute to index mapping
-        status = aim_getData(discr->aInfo, "Attribute_Map", &vtype, &rank, &nrow, &ncol, &dataTransfer, &units);
-        if (status == CAPS_SUCCESS) {
+    // Lets check the volume mesh
 
-            printf(" fun3dAIM/aimDiscr: Found link for attrMap (Attribute_Map) from parent\n");
+    // Do we have an individual surface mesh for each body
+    if (volumeMesh->numReferenceMesh != numBody) {
+        AIM_ERROR(  discr->aInfo, "Number of surface mesh in the linked volume mesh (%d) does not match the number");
+        AIM_ADDLINE(discr->aInfo,"of bodies (%d) - data transfer is NOT possible.", volumeMesh->numReferenceMesh,numBody);
+        status = CAPS_MISMATCH;
+        goto cleanup;
+    }
 
-            status = copy_mapAttrToIndexStruct( (mapAttrToIndexStruct *) dataTransfer, &fun3dInstance[iIndex].attrMap);
-            if (status != CAPS_SUCCESS) goto cleanup;
-        } else {
+    // Check to make sure the volume mesher didn't add any unaccounted for points/faces
+    numElementCheck = 0;
+    for (i = 0; i < volumeMesh->numReferenceMesh; i++) {
+        numElementCheck += volumeMesh->referenceMesh[i].numElement;
+    }
 
-            if (status == CAPS_DIRTY) printf(" fun3dAIM/aimDiscr: Parent AIMS are dirty\n");
-            else printf(" fun3dAIM/aimDiscr: Linking status during attrMap (Attribute_Map) = %d\n",status);
+    if (volumeMesh->meshQuickRef.useStartIndex == (int) false &&
+        volumeMesh->meshQuickRef.useListIndex  == (int) false) {
 
-            printf(" fun3dAIM/aimDiscr: Didn't find a link to attrMap from parent - getting it ourselves\n");
+        status = mesh_retrieveNumMeshElements(volumeMesh->numElement,
+                                              volumeMesh->element,
+                                              Triangle,
+                                              &volumeMesh->meshQuickRef.numTriangle);
+        AIM_STATUS(discr->aInfo, status);
 
-            // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
-            status = create_CAPSGroupAttrToIndexMap(numBody,
-                                                    bodies,
-                                                    1, // Only search down to the face level of the EGADS body
-                                                    &fun3dInstance[iIndex].attrMap);
-            if (status != CAPS_SUCCESS) goto cleanup;
-        }
+        status = mesh_retrieveNumMeshElements(volumeMesh->numElement,
+                                              volumeMesh->element,
+                                              Quadrilateral,
+                                              &volumeMesh->meshQuickRef.numQuadrilateral);
+        AIM_STATUS(discr->aInfo, status);
+    }
 
-        // Lets check the volume mesh
+    if (numElementCheck != (volumeMesh->meshQuickRef.numTriangle +
+                            volumeMesh->meshQuickRef.numQuadrilateral)) {
+        AIM_ERROR(discr->aInfo, "Volume mesher added surface elements - data transfer will NOT be possible.\n");
+        status = CAPS_MISMATCH;
+        goto cleanup;
+    }
 
-        // Do we have an individual surface mesh for each body
-        if (volumeMesh->numReferenceMesh != numBody) {
-            printf("Number of inherited surface mesh in the volume mesh, %d, does not match the number "
-                    "of bodies, %d - data transfer will NOT be possible.\n\n", volumeMesh->numReferenceMesh,numBody);
-            status = CAPS_MISMATCH;
-            goto cleanup;
-        }
+    // To this point is doesn't appear that the volume mesh has done anything bad to our surface mesh(es)
 
-        // Check to make sure the volume mesher didn't add any unaccounted for points/faces
-        numElementCheck = 0;
-        for (i = 0; i < volumeMesh->numReferenceMesh; i++) {
-            numElementCheck += volumeMesh->referenceMesh[i].numElement;
-        }
+    // Lets store away our tessellation now
+    AIM_ALLOC(tess, volumeMesh->numReferenceMesh, ego, discr->aInfo, status);
+    for (i = 0; i < volumeMesh->numReferenceMesh; i++) {
+        tess[i] = volumeMesh->referenceMesh[i].bodyTessMap.egadsTess;
+    }
 
-        if (volumeMesh->meshQuickRef.useStartIndex == (int) false &&
-            volumeMesh->meshQuickRef.useListIndex  == (int) false) {
+    status = mesh_fillDiscr(tname, &fun3dInstance->attrMap, volumeMesh->numReferenceMesh, tess, discr);
+    AIM_STATUS(discr->aInfo, status);
 
-            status = mesh_retrieveNumMeshElements(volumeMesh->numElement,
-                                                  volumeMesh->element,
-                                                  Triangle,
-                                                  &volumeMesh->meshQuickRef.numTriangle);
-            if (status != CAPS_SUCCESS) goto cleanup;
-
-            status = mesh_retrieveNumMeshElements(volumeMesh->numElement,
-                                                  volumeMesh->element,
-                                                  Quadrilateral,
-                                                  &volumeMesh->meshQuickRef.numQuadrilateral);
-            if (status != CAPS_SUCCESS) goto cleanup;
-
-        }
-
-        if (numElementCheck != (volumeMesh->meshQuickRef.numTriangle +
-                                volumeMesh->meshQuickRef.numQuadrilateral)) {
-            printf("Volume mesher added surface elements - data transfer will NOT be possible.\n");
-            status = CAPS_MISMATCH;
-            goto cleanup;
-        }
-
-        // To this point is doesn't appear that the volume mesh has done anything bad to our surface mesh(es)
-
-        // Lets store away our tessellation now
-        for (i = 0; i < volumeMesh->numReferenceMesh; i++) {
-
-            if (aim_newGeometry(discr->aInfo) == CAPS_SUCCESS ) {
-#ifdef DEBUG
-                printf(" fun3dAIM/aimPreAnalysis instance = %d Setting body tessellation number %d!\n", iIndex, i);
-#endif
-
-                status = aim_setTess(discr->aInfo, volumeMesh->referenceMesh[i].bodyTessMap.egadsTess);
-                if (status != CAPS_SUCCESS) {
-                    printf(" aim_setTess return = %d\n", status);
-                    goto cleanup;
-                }
-            }
-        }
-    } // needMesh
-
-
+#ifdef OLD_DISCR_IMPLEMENTATION_TO_REMOVE
     numFaceFound = 0;
     numPoint = numTri = 0;
     // Find any faces with our boundary marker and get how many points and triangles there are
@@ -2275,6 +2267,10 @@ int aimDiscr(char *tname, capsDiscr *discr) {
         if (status != EGADS_SUCCESS) {
             printf(" fun3dAIM: getBodyTopos (Face) = %d for Body %d!\n", status, body);
             return status;
+        }
+        if (faces == NULL) {
+            printf(" fun3dAIM: Faces = NULL Body %d!\n", body);
+            return CAPS_NULLOBJ;
         }
 
         for (face = 0; face < numFace; face++) {
@@ -2286,7 +2282,8 @@ int aimDiscr(char *tname, capsDiscr *discr) {
             if (strcmp(string, tname) != 0) continue;
 
 #ifdef DEBUG
-            printf(" fun3dAIM/aimDiscr: Body %d/Face %d matches %s!\n", body, face+1, tname);
+            printf(" fun3dAIM/aimDiscr: Body %d/Face %d matches %s!\n",
+                   body, face+1, tname);
 #endif
 
 
@@ -2296,18 +2293,19 @@ int aimDiscr(char *tname, capsDiscr *discr) {
                 continue;
             } else {
 
-                status = get_mapAttrToIndexIndex(&fun3dInstance[iIndex].attrMap, capsGroup, &attrIndex);
+                status = get_mapAttrToIndexIndex(&fun3dInstance->attrMap,
+                                                 capsGroup, &attrIndex);
                 if (status != CAPS_SUCCESS) {
-                    printf("capsGroup %s NOT found in attrMap\n",capsGroup);
+                    printf("capsGroup %s NOT found in attrMap\n", capsGroup);
                     continue;
                 } else {
 
                     // If first index create arrays and store index
-                    if (numCAPSGroup == 0) {
-                        numCAPSGroup += 1;
+                    if (capsGroupList == NULL) {
+                        numCAPSGroup  = 1;
                         capsGroupList = (int *) EG_alloc(numCAPSGroup*sizeof(int));
                         if (capsGroupList == NULL) {
-                            status =  EGADS_MALLOC;
+                            status = EGADS_MALLOC;
                             goto cleanup;
                         }
 
@@ -2323,7 +2321,8 @@ int aimDiscr(char *tname, capsDiscr *discr) {
 
                         if (foundAttr == (int) false) {
                             numCAPSGroup += 1;
-                            capsGroupList = (int *) EG_reall(capsGroupList, numCAPSGroup*sizeof(int));
+                            capsGroupList = (int *) EG_reall(capsGroupList,
+                                                             numCAPSGroup*sizeof(int));
                             if (capsGroupList == NULL) {
                                 status =  EGADS_MALLOC;
                                 goto cleanup;
@@ -2336,9 +2335,11 @@ int aimDiscr(char *tname, capsDiscr *discr) {
             }
 
             // Get face tessellation
-            status = EG_getTessFace(bodies[body+numBody], face+1, &plen, &xyz, &uv, &ptype, &pindex, &tlen, &tris, &nei);
+            status = EG_getTessFace(bodies[body+numBody], face+1, &plen, &xyz,
+                                    &uv, &ptype, &pindex, &tlen, &tris, &nei);
             if (status != EGADS_SUCCESS) {
-                printf(" fun3dAIM: EG_getTessFace %d = %d for Body %d!\n", face+1, status, body+1);
+                printf(" fun3dAIM: EG_getTessFace %d = %d for Body %d!\n",
+                       face+1, status, body+1);
                 continue;
             }
 
@@ -2367,17 +2368,16 @@ int aimDiscr(char *tname, capsDiscr *discr) {
         if (faces != NULL) EG_free(faces);
         faces = NULL;
 
-        if (dataTransferBodyIndex >=0) break; // Force that only one body can be used
+        if (dataTransferBodyIndex >= 0) break; // Force that only one body can be used
     }
 
-    if (numFaceFound == 0) {
+    if ((numFaceFound == 0) || (bodyFaceMap == NULL)) {
         printf(" fun3dAIM/aimDiscr: No Faces match %s!\n", tname);
-
         status = CAPS_NOTFOUND;
         goto cleanup;
     }
 
-    if ( numPoint == 0 || numTri == 0) {
+    if (numPoint == 0 || numTri == 0) {
 #ifdef DEBUG
         printf(" fun3dAIM/aimDiscr: ntris = %d, npts = %d!\n", numTri, numPoint);
 #endif
@@ -2385,16 +2385,16 @@ int aimDiscr(char *tname, capsDiscr *discr) {
         goto cleanup;
     }
 
-    if ((dataTransferBodyIndex - 1) > volumeMesh->numReferenceMesh ) {
+    if ((dataTransferBodyIndex - 1) > volumeMesh->numReferenceMesh) {
         printf("Data transfer body index doesn't match number of reference meshes in volume mesh - data transfer isn't possible.\n");
         status = CAPS_MISMATCH;
         goto cleanup;
     }
 
 #ifdef DEBUG
-    printf(" fun3dAIM/aimDiscr: Instance %d, Body Index for data transfer = %d\n", iIndex, dataTransferBodyIndex);
+    printf(" fun3dAIM/aimDiscr: Body Index for data transfer = %d\n",
+           dataTransferBodyIndex);
 #endif
-
 
     // Specify our single element type
     status = EGADS_MALLOC;
@@ -2446,7 +2446,7 @@ int aimDiscr(char *tname, capsDiscr *discr) {
     }
 
     numPoint = 0;
-    numTri = 0;
+    numTri   = 0;
     for (face = 0; face < numFaceFound; face++){
 
         tess = bodies[bodyFaceMap[2*face + 0]-1 + numBody];
@@ -2465,9 +2465,11 @@ int aimDiscr(char *tname, capsDiscr *discr) {
         }
 
         // Get face tessellation
-        status = EG_getTessFace(tess, bodyFaceMap[2*face + 1], &plen, &xyz, &uv, &ptype, &pindex, &tlen, &tris, &nei);
+        status = EG_getTessFace(tess, bodyFaceMap[2*face + 1], &plen, &xyz, &uv,
+                                &ptype, &pindex, &tlen, &tris, &nei);
         if (status != EGADS_SUCCESS) {
-            printf(" fun3dAIM: EG_getTessFace %d = %d for Body %d!\n", bodyFaceMap[2*face + 1], status, bodyFaceMap[2*face + 0]);
+            printf(" fun3dAIM: EG_getTessFace %d = %d for Body %d!\n",
+                   bodyFaceMap[2*face + 1], status, bodyFaceMap[2*face + 0]);
             continue;
         }
 
@@ -2505,19 +2507,22 @@ int aimDiscr(char *tname, capsDiscr *discr) {
             discr->elems[numTri].dIndices    = NULL;
             discr->elems[numTri].eTris.tq[0] = i+1;
 
-            status = EG_localToGlobal(tess, bodyFaceMap[2*face + 1], tris[3*i + 0], &gID);
+            status = EG_localToGlobal(tess, bodyFaceMap[2*face + 1],
+                                      tris[3*i + 0], &gID);
             if (status != EGADS_SUCCESS) goto cleanup;
 
             discr->elems[numTri].gIndices[0] = localStitchedID[gID-1];
             discr->elems[numTri].gIndices[1] = tris[3*i + 0];
 
-            status = EG_localToGlobal(tess, bodyFaceMap[2*face + 1], tris[3*i + 1], &gID);
+            status = EG_localToGlobal(tess, bodyFaceMap[2*face + 1],
+                                      tris[3*i + 1], &gID);
             if (status != EGADS_SUCCESS) goto cleanup;
 
             discr->elems[numTri].gIndices[2] = localStitchedID[gID-1];
             discr->elems[numTri].gIndices[3] = tris[3*i + 1];
 
-            status = EG_localToGlobal(tess, bodyFaceMap[2*face + 1], tris[3*i + 2], &gID);
+            status = EG_localToGlobal(tess, bodyFaceMap[2*face + 1],
+                                      tris[3*i + 2], &gID);
             if (status != EGADS_SUCCESS) goto cleanup;
 
             discr->elems[numTri].gIndices[4] = localStitchedID[gID-1];
@@ -2530,7 +2535,8 @@ int aimDiscr(char *tname, capsDiscr *discr) {
     discr->nPoints = numPoint;
 
 #ifdef DEBUG
-    printf(" fun3dAIM/aimDiscr: ntris = %d, npts = %d!\n", discr->nElems, discr->nPoints);
+    printf(" fun3dAIM/aimDiscr: ntris = %d, npts = %d!\n",
+           discr->nElems, discr->nPoints);
 #endif
 
     // Resize mapping to switched together number of points
@@ -2548,33 +2554,34 @@ int aimDiscr(char *tname, capsDiscr *discr) {
     }
 
 #ifdef DEBUG
-    printf(" fun3dAIM/aimDiscr: Instance = %d, nodeOffSet = %d, dataTransferBodyIndex = %d\n", iIndex, nodeOffSet, dataTransferBodyIndex);
+    printf(" fun3dAIM/aimDiscr: nodeOffSet = %d, dataTransferBodyIndex = %d\n",
+           nodeOffSet, dataTransferBodyIndex);
 #endif
 
     for (i = 0; i < numPoint; i++) {
-
-        storage[i] = globalID[i] + nodeOffSet; //volumeMesh->referenceMesh[dataTransferBodyIndex-1].node[globalID[i]-1].nodeID + nodeOffSet;
-
-        //#ifdef DEBUG
-        //	printf(" fun3dAIM/aimDiscr: Instance = %d, Global Node ID %d\n", iIndex, storage[i]);
-        //#endif
+        storage[i] = globalID[i] + nodeOffSet;
+//volumeMesh->referenceMesh[dataTransferBodyIndex-1].node[globalID[i]-1].nodeID + nodeOffSet;
+//#ifdef DEBUG
+//      printf(" fun3dAIM/aimDiscr: Global Node ID %d\n", storage[i]);
+//#endif
     }
 
     // Save way the attrMap capsGroup list
-    storage[numPoint] = numCAPSGroup;
-    for (i = 0; i < numCAPSGroup; i++) {
-        storage[numPoint+1+i] = capsGroupList[i];
+    if (capsGroupList != NULL) {
+        storage[numPoint] = numCAPSGroup;
+        for (i = 0; i < numCAPSGroup; i++) {
+            storage[numPoint+1+i] = capsGroupList[i];
+        }
     }
-
+#endif
 #ifdef DEBUG
-    printf(" fun3dAIM/aimDiscr: Instance = %d, Finished!!\n", iIndex);
+    printf(" fun3dAIM/aimDiscr: Finished!!\n");
 #endif
 
     status = CAPS_SUCCESS;
 
-    goto cleanup;
-
-    cleanup:
+cleanup:
+#ifdef OLD_DISCR_IMPLEMENTATION_TO_REMOVE
     if (faces != NULL) EG_free(faces);
 
     if (globalID  != NULL) EG_free(globalID);
@@ -2586,115 +2593,30 @@ int aimDiscr(char *tname, capsDiscr *discr) {
     if (status != CAPS_SUCCESS) {
         aimFreeDiscr(discr);
     }
-
+#endif
+    AIM_FREE(tess);
     return status;
 }
 
-int aimLocateElement(capsDiscr *discr, double *params, double *param, int *eIndex,
-        double *bary)
+
+int
+aimLocateElement(capsDiscr *discr, double *params, double *param,
+                 int *bIndex, int *eIndex, double *bary)
 {
-    int    i, in[3], stat, ismall;
-    double we[3], w, smallw = -1.e300;
-
-    if (discr == NULL) return CAPS_NULLOBJ;
-
-    for (ismall = i = 0; i < discr->nElems; i++) {
-        in[0] = discr->elems[i].gIndices[0] - 1;
-        in[1] = discr->elems[i].gIndices[2] - 1;
-        in[2] = discr->elems[i].gIndices[4] - 1;
-        stat  = EG_inTriExact(&params[2*in[0]], &params[2*in[1]], &params[2*in[2]], param, we);
-
-        if (stat == EGADS_SUCCESS) {
-            *eIndex = i+1;
-            bary[0] = we[1];
-            bary[1] = we[2];
-            return CAPS_SUCCESS;
-        }
-
-        w = we[0];
-        if (we[1] < w) w = we[1];
-        if (we[2] < w) w = we[2];
-        if (w > smallw) {
-            ismall = i+1;
-            smallw = w;
-        }
-    }
-
-    /* must extrapolate! */
-    if (ismall == 0) return CAPS_NOTFOUND;
-    in[0] = discr->elems[ismall-1].gIndices[0] - 1;
-    in[1] = discr->elems[ismall-1].gIndices[2] - 1;
-    in[2] = discr->elems[ismall-1].gIndices[4] - 1;
-    EG_inTriExact(&params[2*in[0]], &params[2*in[1]], &params[2*in[2]], param, we);
-
-    *eIndex = ismall;
-    bary[0] = we[1];
-    bary[1] = we[2];
-
-    /*
-  	  printf(" aimLocateElement: extropolate to %d (%lf %lf %lf)  %lf\n", ismall, we[0], we[1], we[2], smallw);
-     */
-    return CAPS_SUCCESS;
+    return aim_locateElement(discr, params, param, bIndex, eIndex, bary);
 }
 
-int aimUsesDataSet(int inst, void *aimInfo, const char *bname,
-                   const char *dname, enum capsdMethod dMethod)
+
+int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
+                int dataRank, double *dataVal, /*@unused@*/ char **units)
 {
-  /*! \page aimUsesDataSetFUN3D data sets consumed by FUN3D
-   *
-   * This function checks if a data set name can be consumed by this aim.
-   * The FUN3D aim can consume "Displacement" and EigenValue data sets for areolastic analysis.
-   */
-
-  int status = CAPS_NOTNEEDED;
-
-  // Modal Aeroelastic properties
-  int eigenIndex = 0;
-  capsValue *Modal_Aeroelastic = NULL;
-  modalAeroelasticStruct   modalAeroelastic;
-
-  if (strcasecmp(dname, "Displacement") == 0) {
-      return CAPS_SUCCESS;
-  }
-
-  aim_getValue(aimInfo, aim_getIndex(aimInfo, "Modal_Aeroelastic", ANALYSISIN), ANALYSISIN, &Modal_Aeroelastic);
-
-  if (Modal_Aeroelastic->nullVal ==  NotNull) {
-
-      status = initiate_modalAeroelasticStruct(&modalAeroelastic);
-      if (status != CAPS_SUCCESS) return status;
-
-      status = cfd_getModalAeroelastic( Modal_Aeroelastic->length,
-                                        Modal_Aeroelastic->vals.tuple,
-                                        &modalAeroelastic);
-      if (status == CAPS_SUCCESS) {
-
-          status = CAPS_NOTNEEDED;
-
-          // check to see if dname matches one of the eigen value names
-          for (eigenIndex = 0; eigenIndex < modalAeroelastic.numEigenValue; eigenIndex++) {
-              if (strcasecmp(dname, modalAeroelastic.eigenValue[eigenIndex].name) == 0) {
-                  status = CAPS_SUCCESS;
-                  break;
-              }
-          }
-      }
-
-      destroy_modalAeroelasticStruct(&modalAeroelastic);
-  }
-
-  return status;
-}
-
-int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRank, double *dataVal, /*@unused@*/ char **units)
-{
-    /*! \page dataTransferFUN3D FUN3D Data Transfer
+    /*! \page dataTransferFUN3D AIM Data Transfer
      *
      * The FUN3D AIM has the ability to transfer surface data (e.g. pressure distributions) to and from the AIM
      * using the conservative and interpolative data transfer schemes in CAPS. Currently these transfers may only
      * take place on triangular meshes.
      *
-     * \section dataFromFUN3D Data transfer from FUN3D
+     * \section dataFromFUN3D Data transfer from FUN3D (FieldOut)
      *
      * <ul>
      *  <li> <B>"Pressure", "P", "Cp", or "CoefficientOfPressure"</B> </li> <br>
@@ -2705,13 +2627,11 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
      *  and "Pressure_Scale_Offset" are AIM inputs (\ref aimInputsFUN3D).
      * </ul>
      *
-     */ // Reset of this block comes from fun3dUtil.c
+     */ // Rest of this block comes from fun3dUtil.c
 
     int status, status2; // Function return status
-    int i, j, dataPoint, capsGroupIndex; // Indexing
-
-    // Current directory path
-    char   currentPath[PATH_MAX];
+    int i, j, dataPoint, capsGroupIndex, bIndex; // Indexing
+    aimStorage *fun3dInstance;
 
     // Aero-Load data variables
     int numVariable;
@@ -2727,7 +2647,7 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
     int variableIndex = -99;
 
     // Variables used in global node mapping
-    int *nodeMap, *storage;
+    int *storage;
     int globalNodeID;
     int found = (int) false;
 
@@ -2736,9 +2656,11 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
     char *filename = NULL; //"pyCAPS_FUN3D_Tetgen_ddfdrive_bndry1.dat";
 
 #ifdef DEBUG
-    printf(" fun3dAIM/aimTransfer name = %s  instance = %d  npts = %d/%d!\n", dataName, discr->instance, numPoint, dataRank);
+    printf(" fun3dAIM/aimTransfer name = %s  npts = %d/%d!\n",
+           dataName, numPoint, dataRank);
 #endif
 
+    fun3dInstance = (aimStorage *) discr->instStore;
 
     if (strcasecmp(dataName, "Pressure") != 0 &&
         strcasecmp(dataName, "P")        != 0 &&
@@ -2751,9 +2673,7 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
 
     //Get the appropriate parts of the tessellation to data
     storage = (int *) discr->ptrm;
-    nodeMap = &storage[0]; // Global indexing on the body
-
-    capsGroupList = &storage[discr->nPoints]; // List of boundary ID (attrMap) in the transfer
+    capsGroupList = &storage[0]; // List of boundary ID (attrMap) in the transfer
 
     // Zero out data
     for (i = 0; i < numPoint; i++) {
@@ -2764,24 +2684,16 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
 
     for (capsGroupIndex = 0; capsGroupIndex < capsGroupList[0]; capsGroupIndex++) {
 
-        (void) getcwd(currentPath, PATH_MAX);
-        if (chdir(fun3dInstance[discr->instance].analysisPath) != 0) {
-#ifdef DEBUG
-            printf(" fun3dAIM/aimTransfer Cannot chdir to %s!\n", fun3dInstance[discr->instance].analysisPath);
-#endif
+        filename = (char *) EG_alloc((strlen(fun3dInstance->projectName) +
+                                      strlen("_ddfdrive_bndry.dat")+7)*sizeof(char));
+        if (filename == NULL) return EGADS_MALLOC;
 
-            return CAPS_DIRERR;
-        }
-
-        filename = (char *) EG_alloc((strlen(fun3dInstance[discr->instance].projectName) +
-                                      strlen("_ddfdrive_bndry.dat") + 7)*sizeof(char));
-
-        sprintf(filename,"%s%s%d%s",fun3dInstance[discr->instance].projectName,
+        sprintf(filename,"%s%s%d%s",fun3dInstance->projectName,
                                     "_ddfdrive_bndry",
                                     capsGroupList[capsGroupIndex+1],
                                     ".dat");
 
-        status = fun3d_readAeroLoad(filename,
+        status = fun3d_readAeroLoad(discr->aInfo, filename,
                                     &numVariable,
                                     &variableName,
                                     &numDataPoint,
@@ -2789,16 +2701,17 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
         // Try body file
         if (status == CAPS_IOERR) {
 
-            filename = (char *) EG_reall(filename, (strlen(fun3dInstance[discr->instance].projectName) +
-                                                    strlen("_ddfdrive_body1.dat") + 5)*sizeof(char));
+            filename = (char *) EG_reall(filename,
+                                         (strlen(fun3dInstance->projectName) +
+                                          strlen("_ddfdrive_body1.dat")+5)*sizeof(char));
 
-            sprintf(filename,"%s%s%s",fun3dInstance[discr->instance].projectName,
+            sprintf(filename,"%s%s%s",fun3dInstance->projectName,
                                       "_ddfdrive_body1",
                                       ".dat");
 
             printf("Instead trying file : %s\n", filename);
 
-            status = fun3d_readAeroLoad(filename,
+            status = fun3d_readAeroLoad(discr->aInfo, filename,
                                         &numVariable,
                                         &variableName,
                                         &numDataPoint,
@@ -2808,8 +2721,6 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
         if (filename != NULL) EG_free(filename);
         filename = NULL;
 
-        // Restore the path we came in with
-        chdir(currentPath);
         if (status != CAPS_SUCCESS) return status;
 
         printf("Number of variables %d\n", numVariable);
@@ -2818,20 +2729,22 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
 
         // Loop through the variable list to find which one is the global node ID variable
         for (i = 0; i < numVariable; i++) {
-            if (strcasecmp("id", variableName[i]) ==0 ) {
+            AIM_NOTNULL(variableName, discr->aInfo, status);
+            if (strcasecmp("id", variableName[i]) == 0) {
                 globalIDIndex = i;
                 break;
             }
         }
 
         if (globalIDIndex == -99) {
-            printf("Global node number variable not found in data file\n");
+            AIM_ERROR(discr->aInfo, "Global node number variable not found in data file\n");
             status = CAPS_NOTFOUND;
-            goto bail;
+            goto cleanup;
         }
 
         // Loop through the variable list to see if we can find the transfer data name
         for (i = 0; i < numVariable; i++) {
+            AIM_NOTNULL(variableName, discr->aInfo, status);
 
             if (strcasecmp(dataName, "Pressure") == 0 ||
                 strcasecmp(dataName, "P")        == 0 ||
@@ -2841,14 +2754,13 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
                 if (dataRank != 1) {
                     printf("Data transfer rank should be 1 not %d\n", dataRank);
                     status = CAPS_BADRANK;
-                    goto bail;
+                    goto cleanup;
                 }
 
-                dataScaleFactor = fun3dInstance[discr->instance].pressureScaleFactor->vals.real;
-                dataScaleOffset = fun3dInstance[discr->instance].pressureScaleOffset->vals.real;
+                dataScaleFactor = fun3dInstance->pressureScaleFactor->vals.real;
+                dataScaleOffset = fun3dInstance->pressureScaleOffset->vals.real;
 
-                //dataUnits = fun3dInstance[discr->instance].pressureScaleFactor->units;
-
+                //dataUnits = fun3dInstance->pressureScaleFactor->units;
                 if (strcasecmp("cp", variableName[i]) == 0) {
                     variableIndex = i;
                     break;
@@ -2859,12 +2771,19 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
         if (variableIndex == -99) {
             printf("Variable %s not found in data file\n", dataName);
             status = CAPS_NOTFOUND;
-            goto bail;
+            goto cleanup;
+        }
+        if (dataMatrix == NULL) {
+            printf("Variable %s daata mtrix is NULL!\n", dataName);
+            status = CAPS_NULLVALUE;
+            goto cleanup;
         }
 
         for (i = 0; i < numPoint; i++) {
 
-            globalNodeID = nodeMap[i];
+            bIndex       = discr->tessGlobal[2*i  ];
+            globalNodeID = discr->tessGlobal[2*i+1] +
+                           discr->bodys[bIndex-1].globalOffset;
 
             found = (int) false;
             for (dataPoint = 0; dataPoint < numDataPoint; dataPoint++) {
@@ -2879,7 +2798,8 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
 
                     // Add something for units - aim_covert()
 
-                    dataVal[dataRank*i+j] = dataMatrix[variableIndex][dataPoint]*dataScaleFactor + dataScaleOffset;
+                    dataVal[dataRank*i+j] = dataMatrix[variableIndex][dataPoint]*dataScaleFactor +
+                                            dataScaleOffset;
                     //printf("DataValue = %f\n",dataVal[dataRank*i+j]);
                     //dataVal[dataRank*i+j] = 99;
 
@@ -2904,237 +2824,72 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint, int dataRa
 
     return CAPS_SUCCESS;
 
-    bail:
-        if (status != CAPS_SUCCESS) printf("Premature exit in fun3DAIM transfer status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS)
+        printf("Premature exit in fun3dAIM transfer status = %d\n", status);
 
-        // Free data matrix
-        if (dataMatrix != NULL) {
-            for (i = 0; i < numVariable; i++) {
-                if (dataMatrix[i] != NULL) EG_free(dataMatrix[i]);
-            }
-
-            EG_free(dataMatrix);
+    // Free data matrix
+    if (dataMatrix != NULL) {
+        for (i = 0; i < numVariable; i++) {
+            if (dataMatrix[i] != NULL) EG_free(dataMatrix[i]);
         }
 
-        // Free variable list
-        status2 = string_freeArray(numVariable, &variableName);
-        if (status2 != CAPS_SUCCESS) return status2;
-
-        return status;
-}
-
-int aimInterpolation(capsDiscr *discr, /*@unused@*/ const char *name, int eIndex,
-                     double *bary, int rank, double *data, double *result)
-{
-    int    in[3], i;
-    double we[3];
-    /*
-	#ifdef DEBUG
-  	  printf(" fun3dAIM/aimInterpolation  %s  instance = %d!\n", name, discr->instance);
-	#endif
-     */
-
-    if ((eIndex <= 0) || (eIndex > discr->nElems)) {
-        printf(" fun3dAIM/Interpolation: eIndex = %d [1-%d]!\n",eIndex, discr->nElems);
+        EG_free(dataMatrix);
     }
 
-    we[0] = 1.0 - bary[0] - bary[1];
-    we[1] = bary[0];
-    we[2] = bary[1];
-    in[0] = discr->elems[eIndex-1].gIndices[0] - 1;
-    in[1] = discr->elems[eIndex-1].gIndices[2] - 1;
-    in[2] = discr->elems[eIndex-1].gIndices[4] - 1;
-    for (i = 0; i < rank; i++){
-        result[i] = data[rank*in[0]+i]*we[0] + data[rank*in[1]+i]*we[1] + data[rank*in[2]+i]*we[2];
-    }
+    // Free variable list
+    status2 = string_freeArray(numVariable, &variableName);
+    if (status2 != CAPS_SUCCESS) return status2;
 
-    return CAPS_SUCCESS;
+    return status;
 }
 
 
-int aimInterpolateBar(capsDiscr *discr, /*@unused@*/ const char *name, int eIndex,
-        double *bary, int rank, double *r_bar, double *d_bar)
+int
+aimInterpolation(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
+                 int eIndex, double *bary, int rank,
+                 double *data, double *result)
 {
-    int    in[3], i;
-    double we[3];
-
-    /*
-	#ifdef DEBUG
-  	  printf(" fun3dAIM/aimInterpolateBar  %s  instance = %d!\n", name, discr->instance);
-	#endif
-     */
-
-    if ((eIndex <= 0) || (eIndex > discr->nElems)) {
-        printf(" fun3dAIM/InterpolateBar: eIndex = %d [1-%d]!\n", eIndex, discr->nElems);
-    }
-
-    we[0] = 1.0 - bary[0] - bary[1];
-    we[1] = bary[0];
-    we[2] = bary[1];
-    in[0] = discr->elems[eIndex-1].gIndices[0] - 1;
-    in[1] = discr->elems[eIndex-1].gIndices[2] - 1;
-    in[2] = discr->elems[eIndex-1].gIndices[4] - 1;
-
-    for (i = 0; i < rank; i++) {
-        /*  result[i] = data[rank*in[0]+i]*we[0] + data[rank*in[1]+i]*we[1] +
-                data[rank*in[2]+i]*we[2];  */
-        d_bar[rank*in[0]+i] += we[0]*r_bar[i];
-        d_bar[rank*in[1]+i] += we[1]*r_bar[i];
-        d_bar[rank*in[2]+i] += we[2]*r_bar[i];
-    }
-
-    return CAPS_SUCCESS;
+#ifdef DEBUG
+    printf(" fun3dAIM/aimInterpolation  %s!\n", name);
+#endif
+    return  aim_interpolation(discr, name, bIndex, eIndex,
+                              bary, rank, data, result);
 }
 
 
-int aimIntegration(capsDiscr *discr, /*@unused@*/ const char *name, int eIndex, int rank,
-        /*@null@*/ double *data, double *result)
+int
+aimInterpolateBar(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
+                  int eIndex, double *bary, int rank,
+                  double *r_bar, double *d_bar)
 {
-    int        i, in[3], stat, ptype, pindex, nBody;
-    double     x1[3], x2[3], x3[3], xyz1[3], xyz2[3], xyz3[3], area;
-    const char *intents;
-    ego        *bodies;
-
-    /*
-	#ifdef DEBUG
-  	  printf(" fun3dAIM/aimIntegration  %s  instance = %d!\n", name, discr->instance);
-	#endif
-     */
-    if ((eIndex <= 0) || (eIndex > discr->nElems)) {
-        printf(" fun3dAIM/aimIntegration: eIndex = %d [1-%d]!\n", eIndex, discr->nElems);
-    }
-
-    stat = aim_getBodies(discr->aInfo, &intents, &nBody, &bodies);
-    if (stat != CAPS_SUCCESS) {
-        printf(" fun3dAIM/aimIntegration: %d aim_getBodies = %d!\n", discr->instance, stat);
-        return stat;
-    }
-
-    /* element indices */
-
-    in[0] = discr->elems[eIndex-1].gIndices[0] - 1;
-    in[1] = discr->elems[eIndex-1].gIndices[2] - 1;
-    in[2] = discr->elems[eIndex-1].gIndices[4] - 1;
-
-    stat = EG_getGlobal(bodies[discr->mapping[2*in[0]]+nBody-1],
-            discr->mapping[2*in[0]+1], &ptype, &pindex, xyz1);
-    if (stat != CAPS_SUCCESS) {
-        printf(" fun3dAIM/aimIntegration: %d EG_getGlobal %d = %d!\n", discr->instance, in[0], stat);
-        return stat;
-    }
-
-    stat = EG_getGlobal(bodies[discr->mapping[2*in[1]]+nBody-1],
-            discr->mapping[2*in[1]+1], &ptype, &pindex, xyz2);
-    if (stat != CAPS_SUCCESS) {
-        printf(" fun3dAIM/aimIntegration: %d EG_getGlobal %d = %d!\n", discr->instance, in[1], stat);
-        return stat;
-    }
-
-    stat = EG_getGlobal(bodies[discr->mapping[2*in[2]]+nBody-1],
-            discr->mapping[2*in[2]+1], &ptype, &pindex, xyz3);
-    if (stat != CAPS_SUCCESS) {
-        printf(" fun3dAIM/aimIntegration: %d EG_getGlobal %d = %d!\n", discr->instance, in[2], stat);
-        return stat;
-    }
-
-    x1[0] = xyz2[0] - xyz1[0];
-    x2[0] = xyz3[0] - xyz1[0];
-    x1[1] = xyz2[1] - xyz1[1];
-    x2[1] = xyz3[1] - xyz1[1];
-    x1[2] = xyz2[2] - xyz1[2];
-    x2[2] = xyz3[2] - xyz1[2];
-
-    //CROSS(x3, x1, x2);
-    cross_DoubleVal(x1, x2, x3);
-
-    //area  = sqrt(DOT(x3, x3))/6.0;      /* 1/2 for area and then 1/3 for sum */
-    area  = sqrt(dot_DoubleVal(x3, x3))/6.0;      /* 1/2 for area and then 1/3 for sum */
-
-    if (data == NULL) {
-        *result = 3.0*area;
-        return CAPS_SUCCESS;
-    }
-
-    for (i = 0; i < rank; i++) {
-        result[i] = (data[rank*in[0]+i] + data[rank*in[1]+i] + data[rank*in[2]+i])*area;
-    }
-
-    return CAPS_SUCCESS;
+#ifdef DEBUG
+    printf(" fun3dAIM/aimInterpolateBar  %s!\n", name);
+#endif
+    return  aim_interpolateBar(discr, name, bIndex, eIndex,
+                               bary, rank, r_bar, d_bar);
 }
 
 
-int aimIntegrateBar(capsDiscr *discr, /*@unused@*/ const char *name, int eIndex, int rank,
-        double *r_bar, double *d_bar)
+int
+aimIntegration(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
+               int eIndex, int rank, double *data, double *result)
 {
-    int        i, in[3], stat, ptype, pindex, nBody;
-    double     x1[3], x2[3], x3[3], xyz1[3], xyz2[3], xyz3[3], area;
-    const char *intents;
-    ego        *bodies;
+#ifdef DEBUG
+    printf(" fun3dAIM/aimIntegration  %s!\n", name);
+#endif
+    return aim_integration(discr, name, bIndex, eIndex, rank,
+                           data, result);
+}
 
-    /*
-	#ifdef DEBUG
-  	  printf(" fun3dAIM/aimIntegrateBar  %s  instance = %d!\n", name, discr->instance);
-	#endif
-     */
 
-    if ((eIndex <= 0) || (eIndex > discr->nElems)) {
-        printf(" fun3dAIM/aimIntegrateBar: eIndex = %d [1-%d]!\n", eIndex, discr->nElems);
-    }
-
-    stat = aim_getBodies(discr->aInfo, &intents, &nBody, &bodies);
-    if (stat != CAPS_SUCCESS) {
-        printf(" fun3dAIM/aimIntegrateBar: %d aim_getBodies = %d!\n", discr->instance, stat);
-        return stat;
-    }
-
-    /* element indices */
-
-    in[0] = discr->elems[eIndex-1].gIndices[0] - 1;
-    in[1] = discr->elems[eIndex-1].gIndices[2] - 1;
-    in[2] = discr->elems[eIndex-1].gIndices[4] - 1;
-    stat = EG_getGlobal(bodies[discr->mapping[2*in[0]]+nBody-1],
-            discr->mapping[2*in[0]+1], &ptype, &pindex, xyz1);
-    if (stat != CAPS_SUCCESS) {
-        printf(" fun3dAIM/aimIntegrateBar: %d EG_getGlobal %d = %d!\n", discr->instance, in[0], stat);
-        return stat;
-    }
-
-    stat = EG_getGlobal(bodies[discr->mapping[2*in[1]]+nBody-1],
-            discr->mapping[2*in[1]+1], &ptype, &pindex, xyz2);
-
-    if (stat != CAPS_SUCCESS) {
-        printf(" fun3dAIM/aimIntegrateBar: %d EG_getGlobal %d = %d!\n", discr->instance, in[1], stat);
-        return stat;
-    }
-
-    stat = EG_getGlobal(bodies[discr->mapping[2*in[2]]+nBody-1],
-            discr->mapping[2*in[2]+1], &ptype, &pindex, xyz3);
-
-    if (stat != CAPS_SUCCESS) {
-        printf(" fun3dAIM/aimIntegrateBar: %d EG_getGlobal %d = %d!\n", discr->instance, in[2], stat);
-        return stat;
-    }
-
-    x1[0] = xyz2[0] - xyz1[0];
-    x2[0] = xyz3[0] - xyz1[0];
-    x1[1] = xyz2[1] - xyz1[1];
-    x2[1] = xyz3[1] - xyz1[1];
-    x1[2] = xyz2[2] - xyz1[2];
-    x2[2] = xyz3[2] - xyz1[2];
-
-    //CROSS(x3, x1, x2);
-    cross_DoubleVal(x1, x2, x3);
-
-    //area  = sqrt(DOT(x3, x3))/6.0;      /* 1/2 for area and then 1/3 for sum */
-    area  = sqrt(dot_DoubleVal(x3, x3))/6.0;      /* 1/2 for area and then 1/3 for sum */
-
-    for (i = 0; i < rank; i++) {
-        /*  result[i] = (data[rank*in[0]+i] + data[rank*in[1]+i] +
-				 data[rank*in[2]+i])*area;  */
-        d_bar[rank*in[0]+i] += area*r_bar[i];
-        d_bar[rank*in[1]+i] += area*r_bar[i];
-        d_bar[rank*in[2]+i] += area*r_bar[i];
-    }
-
-    return CAPS_SUCCESS;
+int
+aimIntegrateBar(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
+                int eIndex, int rank, double *r_bar, double *d_bar)
+{
+#ifdef DEBUG
+    printf(" fun3dAIM/aimIntegrateBar  %s!\n", name);
+#endif
+    return aim_integrateBar(discr, name, bIndex, eIndex, rank,
+                            r_bar, d_bar);
 }

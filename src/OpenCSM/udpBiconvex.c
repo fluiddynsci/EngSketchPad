@@ -12,7 +12,7 @@
 #define EPS06  1.0e-6
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -60,10 +60,7 @@ udpErrorStr(int stat)                   /* (in)  status number */
 {
     char *string;                       /* (out) error message */
 
-    string = EG_alloc(25*sizeof(char));
-    if (string == NULL) {
-        return string;
-    }
+    MALLOC(string, char, 25);
     snprintf(string, 25, "EGADS status = %d", stat);
 
     return string;
@@ -127,10 +124,12 @@ udpExecute(ego  context,                /* (in)  EGADS context */
            char *string[])              /* (out) error message */
 {
     int     status = EGADS_SUCCESS;
-    int     sense[2];
-    double  L, Hup, Rup, Hlo, Rlo, node1[3], node2[3], circ[10], trange[2], data[18];
+    int     iedge, sense[2];
+    double  L, H, R, nodeLE[3], nodeTE[3], circ[10], trange[2], data[18];
     ego     enodes[3], ecurves[2], eedges[2], eloop, eface;
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
     printf("thick(0)       = %f\n", THICK(     0));
@@ -161,19 +160,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         status  = EGADS_RANGERR;
         goto cleanup;
 
-    } else if (fabs(CAMBER(0)) > THICK(0)/2) {
-        printf(" udpExecute: fabs(camber)=%f > thick/2=%f\n", fabs(CAMBER(0)), THICK(0)/2);
-        status  = EGADS_RANGERR;
-        goto cleanup;
-
     }
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 #endif
 
 #ifdef DEBUG
@@ -184,123 +175,160 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 #endif
 
     /* compute the geometry */
-    L   = 0.50;
-    Hup = THICK(0) / 2 + CAMBER(0);
-    Hlo = THICK(0) / 2 - CAMBER(0);
-    Rup = (L*L + Hup*Hup) / (2*Hup);
-    Rlo = (L*L + Hlo*Hlo) / (2*Hlo);
+    for (iedge = 0; iedge < 2; iedge++) {
+        if (iedge == 0) {
+            H = CAMBER(0) + THICK(0) / 2;
+        } else {
+            H = CAMBER(0) - THICK(0) / 2;
+        }
 
-    /* create the upper surface circle */
-    if (fabs(Hup) > EPS06) {
-        circ[0] = L;
-        circ[1] = Hup - Rup;
-        circ[2] = 0;
-        circ[3] = 1;
-        circ[4] = 0;
-        circ[5] = 0;
-        circ[6] = 0;
-        circ[7] = 1;
-        circ[8] = 0;
-        circ[9] = Rup;
+        /* circle which is convex up */
+        if (H > EPS06) {
+            L = 0.50;
+            R = (L*L + H*H) / (2*H);
 
-        status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL, circ, &(ecurves[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
-    } else {
-        circ[0] =  1;
-        circ[1] =  0;
-        circ[2] =  0;
-        circ[3] = -1;
-        circ[4] =  0;
-        circ[5] =  0;
+            circ[0] = L;
+            circ[1] = H - R;
+            circ[2] = 0;
+            circ[3] = 1;
+            circ[4] = 0;
+            circ[5] = 0;
+            circ[6] = 0;
+            circ[7] = 1;
+            circ[8] = 0;
+            circ[9] = R;
 
-        status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, circ, &(ecurves[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
-    }
+            status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL, circ, &(ecurves[iedge]));
+            CHECK_STATUS(EG_makeGeometry);
 
-    /* create the lower surface circle */
-    if (fabs(Hlo) > EPS06) {
-        circ[0] = L;
-        circ[1] = Rlo - Hlo;
-        circ[2] = 0;
-        circ[3] = 1;
-        circ[4] = 0;
-        circ[5] = 0;
-        circ[6] = 0;
-        circ[7] = 1;
-        circ[8] = 0;
-        circ[9] = Rlo;
+        } else if (H < -EPS06) {
+            L = 0.50;
+            R = -(L*L + H*H) / (2*H);
 
-        status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL, circ, &(ecurves[1]));
-        if (status != EGADS_SUCCESS) goto cleanup;
-    } else {
-        circ[0] =  0;
-        circ[1] =  0;
-        circ[2] =  0;
-        circ[3] =  1;
-        circ[4] =  0;
-        circ[5] =  0;
+            circ[0] = L;
+            circ[1] = H + R;
+            circ[2] = 0;
+            circ[3] = 1;
+            circ[4] = 0;
+            circ[5] = 0;
+            circ[6] = 0;
+            circ[7] = 1;
+            circ[8] = 0;
+            circ[9] = R;
 
-        status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, circ, &(ecurves[1]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+            status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL, circ, &(ecurves[iedge]));
+            CHECK_STATUS(EG_makeGeometry);
+
+        } else if (iedge == 0) {
+            circ[0] =  1;
+            circ[1] =  0;
+            circ[2] =  0;
+            circ[3] = -1;
+            circ[4] =  0;
+            circ[5] =  0;
+
+            status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, circ, &(ecurves[iedge]));
+            CHECK_STATUS(EG_makeGeometry);
+
+        } else {
+            circ[0] =  0;
+            circ[1] =  0;
+            circ[2] =  0;
+            circ[3] =  1;
+            circ[4] =  0;
+            circ[5] =  0;
+
+            status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, circ, &(ecurves[iedge]));
+            CHECK_STATUS(EG_makeGeometry);
+        }
     }
 
     /* make Nodes */
-    node1[0] = 0;
-    node1[1] = 0;
-    node1[2] = 0;
+    nodeLE[0] = 0;
+    nodeLE[1] = 0;
+    nodeLE[2] = 0;
 
-    status = EG_makeTopology(context, NULL, NODE, 0, node1, 0, NULL, NULL, &(enodes[0]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    status = EG_makeTopology(context, NULL, NODE, 0, nodeLE, 0, NULL, NULL, &(enodes[0]));
+    CHECK_STATUS(EG_makeTopology);
 
-    node2[0] = 1;
-    node2[1] = 0;
-    node2[2] = 0;
+    nodeTE[0] = 1;
+    nodeTE[1] = 0;
+    nodeTE[2] = 0;
 
-    status = EG_makeTopology(context, NULL, NODE, 0, node2, 0, NULL, NULL, &(enodes[1]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    status = EG_makeTopology(context, NULL, NODE, 0, nodeTE, 0, NULL, NULL, &(enodes[1]));
+    CHECK_STATUS(EG_makeTopology);
 
     enodes[2] = enodes[0];
 
-    /* get the parameter range for upper surface */
-    status = EG_invEvaluate(ecurves[0], node2, &(trange[0]), data);
-    if (status != EGADS_SUCCESS) goto cleanup;
-
-    status = EG_invEvaluate(ecurves[0], node1, &(trange[1]), data);
-    if (status != EGADS_SUCCESS) goto cleanup;
-
-    if (trange[1] < trange[0]) trange[1] += TWOPI;
-
     /* make Edge for upper surface */
-    status = EG_makeTopology(context, ecurves[0], EDGE, TWONODE, trange, 2, &(enodes[1]), NULL, &(eedges[0]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    if (CAMBER(0)+THICK(0)/2 >= 0) {
+        status = EG_invEvaluate(ecurves[0], nodeTE, &(trange[0]), data);
+        CHECK_STATUS(EG_invEvaluate);
 
-    /* get the parameter range for lower surface */
-    status = EG_invEvaluate(ecurves[1], node1, &(trange[0]), data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+        status = EG_invEvaluate(ecurves[0], nodeLE, &(trange[1]), data);
+        CHECK_STATUS(EG_invEvaluate);
 
-    status = EG_invEvaluate(ecurves[1], node2, &(trange[1]), data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+        if (trange[1] < trange[0]) trange[1] += TWOPI;
 
-    if (trange[1] < trange[0]) trange[1] += TWOPI;
+        status = EG_makeTopology(context, ecurves[0], EDGE, TWONODE, trange, 2, &(enodes[1]), NULL, &(eedges[0]));
+        CHECK_STATUS(EG_makeTopology);
+
+        sense[0] = SFORWARD;
+    } else {
+        status = EG_invEvaluate(ecurves[0], nodeTE, &(trange[1]), data);
+        CHECK_STATUS(EG_invEvaluate);
+
+        status = EG_invEvaluate(ecurves[0], nodeLE, &(trange[0]), data);
+        CHECK_STATUS(EG_invEvaluate);
+
+        if (trange[1] < trange[0]) trange[1] += TWOPI;
+
+        status = EG_makeTopology(context, ecurves[0], EDGE, TWONODE, trange, 2, &(enodes[0]), NULL, &(eedges[0]));
+        CHECK_STATUS(EG_makeTopology);
+
+        sense[0] = SREVERSE;
+    }
 
     /* make Edge for lower surface */
-    status = EG_makeTopology(context, ecurves[1], EDGE, TWONODE, trange, 2, &(enodes[0]), NULL, &(eedges[1]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    if (CAMBER(0)-THICK(0)/2 <= 0) {
+        status = EG_invEvaluate(ecurves[1], nodeLE, &(trange[0]), data);
+        CHECK_STATUS(EG_invEvaluate);
+
+        status = EG_invEvaluate(ecurves[1], nodeTE, &(trange[1]), data);
+        CHECK_STATUS(EG_invEvaluate);
+
+        if (trange[1] < trange[0]) trange[1] += TWOPI;
+
+        status = EG_makeTopology(context, ecurves[1], EDGE, TWONODE, trange, 2, &(enodes[0]), NULL, &(eedges[1]));
+        CHECK_STATUS(EG_makeTopology);
+
+        sense[1] = SFORWARD;
+    } else {
+        status = EG_invEvaluate(ecurves[1], nodeTE, &(trange[0]), data);
+        CHECK_STATUS(EG_invEvaluate);
+
+        status = EG_invEvaluate(ecurves[1], nodeLE, &(trange[1]), data);
+        CHECK_STATUS(EG_invEvaluate);
+
+        if (trange[1] < trange[0]) trange[1] += TWOPI;
+
+        status = EG_makeTopology(context, ecurves[1], EDGE, TWONODE, trange, 2, &(enodes[1]), NULL, &(eedges[1]));
+        CHECK_STATUS(EG_makeTopology);
+
+        sense[1] = SREVERSE;
+    }
 
     /* make Loop from these Edges */
-    sense[0] = SFORWARD;
-    sense[1] = SFORWARD;
-
     status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL, 2, eedges, sense, &eloop);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* make Face from the loop */
     status = EG_makeFace(eloop, SFORWARD, NULL, &eface);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeFace);
 
     /* create the FaceBody (which will be returned) */
     status = EG_makeTopology(context, NULL, BODY, FACEBODY, NULL, 1, &eface, NULL, ebody);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* no output value(s) */
 
@@ -340,12 +368,9 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
 {
     int    status = EGADS_SUCCESS;
 
-    int    iudp, judp, nnode, nedge, nface, ipnt, oclass, mtype, nchild, *senses;
-    int    iupper, ilower;
-    double Hup, Hupdot, Hlo, Hlodot, L, Rup, Rupdot, Rlo, Rlodot;
-    double Tup, Tupdot, Tlo, Tlodot, xcup, xcupdot, xclo, xclodot, ycup, ycupdot, yclo, yclodot;
-    double data[18], velup[3], vello[3], yup, ylo, frac;
-    ego    *enodes, *eedges, *efaces, eent, eref, *echilds;
+    int    iudp, judp, ipnt;
+    double H, H_dot, L, R, R_dot;
+    double thbeg, thbeg_dot, thend, thend_dot, s, th, th_dot;
 
 #ifdef DEBUG
     printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f %f)\n",
@@ -364,121 +389,90 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
         return EGADS_NOTMODEL;
     }
 
-    /* find the ego entity */
+    /* velocity of a Node is zero */
     if (entType == OCSM_NODE) {
-        status = EG_getBodyTopos(ebody, NULL, NODE, &nnode, &enodes);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        for (ipnt = 0; ipnt < npnt; ipnt++) {
+            vels[3*ipnt  ] = 0;
+            vels[3*ipnt+1] = 0;
+            vels[3*ipnt+2] = 0;
+        }
 
-        eent = enodes[entIndex-1];
-
-        EG_free(enodes);
-    } else if (entType == OCSM_EDGE) {
-        status = EG_getBodyTopos(ebody, NULL, EDGE, &nedge, &eedges);
-        if (status != EGADS_SUCCESS) goto cleanup;
-
-        eent = eedges[entIndex-1];
-
-        EG_free(eedges);
+    /* velocity of a Face is zero */
     } else if (entType == OCSM_FACE) {
-        status = EG_getBodyTopos(ebody, NULL, FACE, &nface, &efaces);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        for (ipnt = 0; ipnt < npnt; ipnt++) {
+            vels[3*ipnt  ] = 0;
+            vels[3*ipnt+1] = 0;
+            vels[3*ipnt+2] = 0;
+        }
 
-        eent = efaces[entIndex-1];
-
-        EG_free(efaces);
+        /* velocity of the Edges */
     } else {
-        printf("udpSensitivity: bad entType=%d\n", entType);
-        status = EGADS_ATTRERR;
-        goto cleanup;
-    }
-
-    /* compute properties of upper surface */
-    Hup    = THICK(    iudp)/2 + CAMBER(    iudp);
-    Hupdot = THICK_DOT(iudp)/2 + CAMBER_DOT(iudp);
-    if (fabs(Hup) > EPS06) {
-        L       = 0.50;
-        Rup     = (Hup*Hup + L*L) / (2*Hup);
-        Rupdot  = (Hup*Hup - L*L) / (2*Hup*Hup) * Hupdot;
-        xcup    = L;
-        xcupdot = 0;
-        ycup    = Hup    - Rup;
-        ycupdot = Hupdot - Rupdot;
-        iupper  = 1;
-    } else {
-        iupper  = 0;
-    }
-
-    /* compute properties of lower surface */
-    Hlo    = THICK(    iudp)/2 - CAMBER(    iudp);
-    Hlodot = THICK_DOT(iudp)/2 - CAMBER_DOT(iudp);
-    if (fabs(Hlo) > EPS06) {
-        L       = 0.50;
-        Rlo     = (Hlo*Hlo + L*L) / (2*Hlo);
-        Rlodot  = (Hlo*Hlo - L*L) / (2*Hlo*Hlo) * Hlodot;
-        xclo    = L;
-        xclodot = 0;
-        yclo    = Rlo    - Hlo;
-        yclodot = Rlodot - Hlodot;
-        ilower  = 1;
-    } else {
-        ilower  = 0;
-    }
-
-    /* loop through the points */
-    for (ipnt = 0; ipnt < npnt; ipnt++) {
-
-        /* find the physical coordinates */
-        if        (entType == OCSM_NODE) {
-            status = EG_getTopology(eent, &eref, &oclass, &mtype,
-                                    data, &nchild, &echilds, &senses);
-            if (status != EGADS_SUCCESS) goto cleanup;
-        } else if (entType == OCSM_EDGE) {
-            status = EG_evaluate(eent, &(uvs[ipnt]), data);
-            if (status != EGADS_SUCCESS) goto cleanup;
-        } else if (entType == OCSM_FACE) {
-            status = EG_evaluate(eent, &(uvs[2*ipnt]), data);
-            if (status != EGADS_SUCCESS) goto cleanup;
-        }
-
-        /* compute upper and lower airfoil points and sensitivities */
-        if (iupper == 1) {
-            yup      = ycup + sqrt(pow(Rup,2) - pow(data[0]-xcup,2));
-            Tup      = atan2(yup-ycup, data[0]-xcup);
-            Tupdot   = -ycupdot * (data[0]-xcup) / (pow(data[0]-xcup,2) + pow(yup-ycup,2));
-
-            velup[0] = xcupdot + Rupdot * cos(Tup) - Tupdot * Rup * sin(Tup);
-            velup[1] = ycupdot + Rupdot * sin(Tup) + Tupdot * Rup * cos(Tup);
+        if (entIndex == 1) {
+            H     = CAMBER(    iudp) + THICK(    iudp) / 2;
+            H_dot = CAMBER_DOT(iudp) + THICK_DOT(iudp) / 2;
         } else {
-            yup      = 0;
-            velup[0] = 0;
-            velup[1] = 0;
+            H     = CAMBER(    iudp) - THICK(    iudp) / 2;
+            H_dot = CAMBER_DOT(iudp) - THICK_DOT(iudp) / 2;
         }
 
-        if (ilower == 1) {
-            ylo      = yclo - sqrt(pow(Rlo,2) - pow(data[0]-xclo,2));
-            Tlo      = atan2(ylo-yclo, data[0]-xclo);
-            Tlodot   = -yclodot * (data[0]-xclo) / (pow(data[0]-xclo,2) + pow(ylo-yclo,2));
+        /* circle which is convex up */
+        if (H > EPS06) {
+            L = 0.5;
 
-            vello[0] = xclodot + Rlodot * cos(Tlo) - Tlodot * Rlo * sin(Tlo);
-            vello[1] = yclodot + Rlodot * sin(Tlo) + Tlodot * Rlo * cos(Tlo);
+            R     = (H*H + L*L) / (2*H);
+            R_dot = H_dot * (1 - (H*H + L*L) / (2 * H*H));
+
+            thbeg     = atan2(R-H, L);
+            thbeg_dot = (R_dot - H_dot) * L / ((R-H) * (R-H) + L*L);
+
+            thend     = PI - thbeg;
+            thend_dot =    - thbeg_dot;
+
+            for (ipnt = 0; ipnt < npnt; ipnt++) {
+                s = (uvs[ipnt] - thbeg) / (thend - thbeg);
+
+                th     = thbeg     * (1-s) + thend     * s;
+                th_dot = thbeg_dot * (1-s) + thend_dot * s;
+
+                vels[3*ipnt  ] = R_dot * cos(th) - th_dot * R * sin(th);
+                vels[3*ipnt+1] = R_dot * sin(th) + th_dot * R * cos(th) - R_dot + H_dot;
+                vels[3*ipnt+2] = 0;
+            }
+
+        /* circle which is convex down */
+        } else if (H < -EPS06) {
+            L = 0.5;
+
+            R     = -(H*H + L*L) / (2*H);
+            R_dot = -H_dot * (1 - (H*H + L*L) / (2 * H*H));
+
+            thbeg     = PI + atan2(R+H, L);
+            thbeg_dot = (R_dot + H_dot) * L / ((R+H) * (R+H) + L*L);
+
+            thend     = 3*PI - thbeg;
+            thend_dot =      - thbeg_dot;
+
+            for (ipnt = 0; ipnt < npnt; ipnt++) {
+                s = (uvs[ipnt] - thbeg) / (thend - thbeg);
+
+                th     = thbeg     * (1-s) + thend     * s;
+                th_dot = thbeg_dot * (1-s) + thend_dot * s;
+
+                vels[3*ipnt  ] = R_dot * cos(th) - th_dot * R * sin(th);
+                vels[3*ipnt+1] = R_dot * sin(th) + th_dot * R * cos(th) + R_dot + H_dot;
+                vels[3*ipnt+2] = 0;
+            }
+
+        /* straight line */
         } else {
-            ylo      = 0;
-            vello[0] = 0;
-            vello[1] = 0;
+            for (ipnt = 0; ipnt < npnt; ipnt++) {
+                vels[3*ipnt  ] = 0;
+                vels[3*ipnt+1] = 0;
+                vels[3*ipnt+2] = 0;
+            }
         }
-
-        /* take the weighted average */
-        if (fabs(yup) > fabs(ylo)) {
-            frac = (data[1] - ylo) / (yup - ylo);
-        } else {
-            frac = 0.5;
-        }
-
-        vels[3*ipnt  ] = (1-frac) * vello[0] + frac * velup[0];
-        vels[3*ipnt+1] = (1-frac) * vello[1] + frac * velup[1];
-        vels[3*ipnt+2] = 0;
     }
 
-cleanup:
+//cleanup:
     return status;
 }

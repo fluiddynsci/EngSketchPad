@@ -1,7 +1,7 @@
 #
 # Written by Dr. Ryan Durscher AFRL/RQVC
 # 
-# This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3793.
+# This software has been cleared for public release on 27 Oct. 2020, case number 88ABW-2020-3328.
 cdef extern from "egadsTypes.h":
     ctypedef struct ego:
         pass

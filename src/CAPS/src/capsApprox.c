@@ -3,7 +3,7 @@
  *
  *             CAPS Spline Approximate functions
  *
- *      Copyright 2014-2020, Massachusetts Institute of Technology
+ *      Copyright 2014-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -1250,6 +1250,7 @@ int caps_Interpolate2D(capsAprx2D *interp, double *uvx, double *sv,
 
 int caps_Aprx1DFree(/*@only@*/ capsAprx1D *approx)
 {
+  if (approx == NULL) return EGADS_SUCCESS;
   if (approx->interp != NULL) EG_free(approx->interp);
   if (approx->tmap   != NULL) EG_free(approx->tmap);
   approx->interp = NULL;
@@ -1262,6 +1263,7 @@ int caps_Aprx1DFree(/*@only@*/ capsAprx1D *approx)
 
 int caps_Aprx2DFree(/*@only@*/ capsAprx2D *approx)
 {
+  if (approx == NULL) return EGADS_SUCCESS;
   if (approx->interp != NULL) EG_free(approx->interp);
   if (approx->uvmap  != NULL) EG_free(approx->uvmap);
   approx->interp = NULL;

@@ -58,19 +58,25 @@ subtract  none   1   0
 extract  2
 
 select face 1
-    attribute capsGroup $2DSlice # Face needs to marked with a capsGroup - this may not be necessary in the future
+    attribute capsGroup $2DSlice 
+    attribute capsMesh  $2DSlice # Face needs to marked with a capsGroup - this may not be necessary in the future
     
-# Set capsGroup names around boundaries
+# Set capsGroup and capsMesh names around boundaries
 select    edge   1
     attribute capsGroup   $TunnelWall
+    attribute capsMesh    $TunnelWall
 select    edge   2
     attribute capsGroup   $OutFlow
+    attribute capsMesh    $OutFlow
 select    edge   3
     attribute capsGroup   $InFlow
+    attribute capsMesh    $InFlow
 select    edge   4
     attribute capsGroup   $TunnelWall
+    attribute capsMesh    $TunnelWall
 
 select edge 5
     attribute capsGroup $Airfoil
+    attribute capsMesh  $Airfoil
     
 end

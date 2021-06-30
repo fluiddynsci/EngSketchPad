@@ -3,7 +3,7 @@
  *
  *             Lite Base Object Functions
  *
- *      Copyright 2011-2020, Massachusetts Institute of Technology
+ *      Copyright 2011-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -599,6 +599,28 @@ EG_deleteObject(egObject *object)
   
   return EGADS_SUCCESS;
 }
+
+
+__HOST_AND_DEVICE__ int
+EG_getInfo(const egObject *object, int *oclass, int *mtype, egObject **top,
+           egObject **prev, egObject **next)
+{
+  egObject object_, *object_h = &object_;
+
+  if (object == NULL)                 return EGADS_NULLOBJ;
+  EG_GET_OBJECT(object_h, object);
+  if (object_h->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (object_h->oclass == EMPTY)      return EGADS_EMPTY;
+
+  *oclass = object_h->oclass;
+  *mtype  = object_h->mtype;
+  *top    = object_h->topObj;
+  *prev   = object_h->prev;
+  *next   = object_h->next;
+
+  return EGADS_SUCCESS;
+}
+
 
 __HOST_AND_DEVICE__ int
 EG_close(egObject *context)

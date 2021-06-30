@@ -1,7 +1,6 @@
-from __future__ import print_function
 
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import modules
 import os
@@ -23,43 +22,43 @@ parser = argparse.ArgumentParser(description = 'Astros AGARD445.6 Pytest Example
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = ".", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
-# Load CSM file
-geometryScript = os.path.join("..","csmData","feaAGARD445.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
-
 # Create project name
 projectName = "AstrosModalAGARD445"
 
+workDir = str(args.workDir[0]) + projectName
+
+# Load CSM file
+geometryScript = os.path.join("..","csmData","feaAGARD445.csm")
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript, 
+                           outLevel=args.verbosity)
+
 # Change the sweepAngle and span of the Geometry - Demo purposes
-#myProblem.geometry.setGeometryVal("sweepAngle", 5) # From 45 to 5 degrees
-#myProblem.geometry.setGeometryVal("semiSpan", 5)   # From 2.5 ft to 5 ft
+#myProblem.geometry.despmtr.sweepAngle = 5 # From 45 to 5 degrees
+#myProblem.geometry.despmtr.semiSpan   = 5 # From 2.5 ft to 5 ft
 
 # Load astros aim
-myAnalysis = myProblem.loadAIM(aim = "astrosAIM",
-                               altName = "astros",
-                               analysisDir = str(args.workDir[0]) + os.sep + projectName)
+myAnalysis = myProblem.analysis.create(aim = "astrosAIM",
+                                       name = "astros")
 
 # Set project name
-myAnalysis.setAnalysisVal("Proj_Name", projectName)
+myAnalysis.input.Proj_Name = projectName
 
 # Set meshing parameters
-myAnalysis.setAnalysisVal("Edge_Point_Max", 10)
-myAnalysis.setAnalysisVal("Edge_Point_Min", 6)
+myAnalysis.input.Edge_Point_Max = 10
+myAnalysis.input.Edge_Point_Min = 6
 
-myAnalysis.setAnalysisVal("Quad_Mesh", True)
+myAnalysis.input.Quad_Mesh = True
 
-myAnalysis.setAnalysisVal("Tess_Params", [.25,.01,15])
+myAnalysis.input.Tess_Params = [.25,.01,15]
 
 # Set analysis type
-myAnalysis.setAnalysisVal("Analysis_Type", "Modal");
+myAnalysis.input.Analysis_Type = "Modal"
 
 # Set analysis inputs
 eigen = { "extractionMethod"     : "MGIV", # "Lanczos",
@@ -70,7 +69,7 @@ eigen = { "extractionMethod"     : "MGIV", # "Lanczos",
 	      "lanczosMode"          : 2,  # Default - not necesssary
           "lanczosType"          : "DPB"} # Default - not necesssary
 
-myAnalysis.setAnalysisVal("Analysis", ("EigenAnalysis", eigen))
+myAnalysis.input.Analysis = {"EigenAnalysis": eigen}
 
 # Set materials
 mahogany    = {"materialType"        : "orthotropic",
@@ -82,7 +81,7 @@ mahogany    = {"materialType"        : "orthotropic",
                "shearModulusTrans2Z" : 0.00227E6,
                "density"             : 3.5742E-5}
 
-myAnalysis.setAnalysisVal("Material", ("Mahogany", mahogany))
+myAnalysis.input.Material = {"Mahogany": mahogany}
 
 # Set properties
 shell  = {"propertyType" : "Shell",
@@ -91,13 +90,13 @@ shell  = {"propertyType" : "Shell",
           "bendingInertiaRatio" : 1.0, # Default - not necesssary
           "shearMembraneRatio"  : 5.0/6.0} # Default - not necesssary
 
-myAnalysis.setAnalysisVal("Property", ("yatesPlate", shell))
+myAnalysis.input.Property = {"yatesPlate": shell}
 
 # Set constraints
 constraint = {"groupName" : "constEdge",
               "dofConstraint" : 123456}
 
-myAnalysis.setAnalysisVal("Constraint", ("edgeConstraint", constraint))
+myAnalysis.input.Constraint = {"edgeConstraint": constraint}
 
 # Run AIM pre-analysis
 myAnalysis.preAnalysis()
@@ -129,12 +128,9 @@ myAnalysis.postAnalysis()
 
 # Get Eigen-frequencies
 print ("\nGetting results natural frequencies.....")
-natrualFreq = myAnalysis.getAnalysisOutVal("EigenFrequency")
+natrualFreq = myAnalysis.output.EigenFrequency
 
 mode = 1
 for i in natrualFreq:
     print ("Natural freq (Mode {:d}) = ".format(mode) + '{:.2f} '.format(i) + "(Hz)")
     mode += 1
-
-# Close CAPS
-myProblem.closeCAPS()

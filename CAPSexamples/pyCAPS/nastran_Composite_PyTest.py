@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -18,30 +16,29 @@ parser.add_argument('-noAnalysis', action='store_true', default = False, help = 
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
+workDir = os.path.join(str(args.workDir[0]), "NastranCompositeTest")
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","feaCantileverPlate.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load nastran aim
-myProblem.loadAIM(aim = "nastranAIM",
-                  altName = "nastran",
-                  analysisDir = os.path.join(str(args.workDir[0]), "NastranCompositeTest"),
-                  capsIntent = "STRUCTURE")
+myProblem.analysis.create(aim = "nastranAIM",
+                          name = "nastran")
 
 # Set project name so a mesh file is generated
 projectName = "pyCAPS_nastran_Test"
-myProblem.analysis["nastran"].setAnalysisVal("Proj_Name", projectName)
+myProblem.analysis["nastran"].input.Proj_Name = projectName
 
-myProblem.analysis["nastran"].setAnalysisVal("Edge_Point_Max", 10)
+myProblem.analysis["nastran"].input.Edge_Point_Max = 10
 
-myProblem.analysis["nastran"].setAnalysisVal("Quad_Mesh", True)
+myProblem.analysis["nastran"].input.Quad_Mesh = True
 
-myProblem.analysis["nastran"].setAnalysisVal("File_Format", "Small")
+myProblem.analysis["nastran"].input.File_Format = "Small"
 
-myProblem.analysis["nastran"].setAnalysisVal("Mesh_File_Format", "Large")
+myProblem.analysis["nastran"].input.Mesh_File_Format = "Large"
 
 # Set analysis
 eigen = { "extractionMethod"     : "Lanczos",
@@ -49,7 +46,7 @@ eigen = { "extractionMethod"     : "Lanczos",
           "numEstEigenvalue"     : 1,
           "numDesiredEigenvalue" : 4,
           "eigenNormaliztion"    : "MASS"}
-myProblem.analysis["nastran"].setAnalysisVal("Analysis", ("EigenAnalysis", eigen))
+myProblem.analysis["nastran"].input.Analysis = {"EigenAnalysis": eigen}
 
 # Set materials
 unobtainium  = {"youngModulus" : 2.2E6 ,
@@ -60,8 +57,8 @@ madeupium    = {"materialType" : "isotropic",
                 "youngModulus" : 1.2E5 ,
                 "poissonRatio" : .5,
                 "density"      : 7850}
-myProblem.analysis["nastran"].setAnalysisVal("Material", [("Unobtainium", unobtainium),
-                                                          ("Madeupium", madeupium)])
+myProblem.analysis["nastran"].input.Material = {"Unobtainium": unobtainium,
+                                                "Madeupium"  : madeupium}
 
 # Set property
 shell  = {"propertyType"           : "Composite",
@@ -74,13 +71,13 @@ shell  = {"propertyType"           : "Composite",
           "compositeThickness"     : [1.2, 0.5, 2.0],
           "compositeOrientation"   : [30.6, 45, 50.4]}
 
-myProblem.analysis["nastran"].setAnalysisVal("Property", ("plate", shell))
+myProblem.analysis["nastran"].input.Property = {"plate": shell}
 
 # Set constraints
 constraint = {"groupName" : ["plateEdge"],
               "dofConstraint" : 123456}
 
-myProblem.analysis["nastran"].setAnalysisVal("Constraint", ("cantilever", constraint))
+myProblem.analysis["nastran"].input.Constraint = {"cantilever": constraint}
 
 
 # Run AIM pre-analysis
@@ -100,6 +97,3 @@ print ("Done running Nastran!")
 
 # Run AIM post-analysis
 myProblem.analysis["nastran"].postAnalysis()
-
-# Close CAPS
-myProblem.closeCAPS()

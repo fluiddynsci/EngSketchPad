@@ -155,7 +155,7 @@ main(int argc, char *argv[])
         xddm_free(p_xddm);
         return 1;
       }
-      if (type != OCSM_EXTERNAL) continue;
+      if (type != OCSM_DESPMTR) continue;
       if (strcmp(pname, name) == 0) {
         ipmtr = j+1;
         break;
@@ -213,7 +213,7 @@ main(int argc, char *argv[])
         xddm_free(p_xddm);
         return 1;
       }
-      if (type != OCSM_EXTERNAL) continue;
+      if (type != OCSM_DESPMTR) continue;
       if (strcmp(pname, name) == 0) {
         ipmtr = j+1;
         break;

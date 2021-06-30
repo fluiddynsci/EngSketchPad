@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -57,10 +57,7 @@ udpErrorStr(int stat)                   /* (in)  status number */
 {
     char *string;                       /* (out) error message */
 
-    string = EG_alloc(25 * sizeof(char));
-    if (string == NULL) {
-        return string;
-    }
+    MALLOC(string, char, 25);
     snprintf(string, 25, "EGADS status = %d", stat);
 
     return string;
@@ -79,32 +76,28 @@ main(int       argc,                    /* (in)  number of arguments */
 
     /* define a context */
     status = EG_open(&context);
-    printf("EG_open -> status=%d\n", status);
-    if (status < 0) exit(1);
+    CHECK_STATUS(EG_open);
 
     /* call the execute routine */
     status = udpExecute(context, &ebody, &nMesh, &string);
-    printf("udpExecute -> status=%d\n", status);
-    if (status < 0) exit(1);
+    CHECK_STATUS(udpExecute);
 
     EG_free(string);
 
     /* make and dump the model */
     status = EG_makeTopology(context, NULL, MODEL, 0, NULL,
                              1, &ebody, NULL, &emodel);
-    printf("EG_makeTopology -> status=%d\n", status);
-    if (status < 0) exit(1);
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_saveModel(emodel, "pod.egads");
-    printf("EG_saveModel -> status=%d\n", status);
-    if (status < 0) exit(1);
+    CHECK_STATUS(EG_saveModel);
 
     /* cleanup */
     status = EG_deleteObject(emodel);
-    printf("EG_close -> status=%d\n", status);
+    CHECK_STATUS(EG_deleteObject);
 
     status = EG_close(context);
-    printf("EG_close -> status=%d\n", status);
+    CHECK_STATUS(EG_close);
 
     return EXIT_SUCCESS;
 }
@@ -133,10 +126,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     ego     enodes[2], ecurve, eedge, eloop, eref, *echilds, elist[2];
     ego     ewire, esheet;
 
-
 #ifndef UDP
     double  myVolume;
 #endif
+
+    ROUTINE(udpExecute);
 
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
@@ -171,10 +165,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
+    
 #endif
 
 #ifdef DEBUG
@@ -191,10 +183,10 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     node1[0] = LENGTH(0);   node1[1] = 0;  node1[2] = 0;
 
     status = EG_makeTopology(context, NULL, NODE, 0, node0, 0, NULL, NULL, &(enodes[0]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_makeTopology(context, NULL, NODE, 0, node1, 0, NULL, NULL, &(enodes[1]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* make (bezier) Edge 0 */
     header[0] = 0;  // bitFlag
@@ -211,45 +203,46 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     status = EG_makeGeometry(context, CURVE, BEZIER, NULL,
                              header, cp, &ecurve);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     status = EG_invEvaluate(ecurve, node0, &(trange[0]), data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
 
     status = EG_invEvaluate(ecurve, node1, &(trange[1]), data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
 
     elist[0] = enodes[0];
     elist[1] = enodes[1];
     status = EG_makeTopology(context, ecurve, EDGE, TWONODE, trange, 2, elist, NULL, &eedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* make a WireBody */
     sense[0] = SFORWARD;
     status = EG_makeTopology(context, NULL, LOOP, OPEN,
                              NULL, 1, &eedge, sense, &eloop);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                              NULL, 1, &eloop, NULL, &ewire);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* rotate WireBody into SheetBody */
     status = EG_rotate(ewire, +360., axis, &esheet);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_rotate);
 
     /* convert SheetBody into SolidBody */
     status = EG_getTopology(esheet, &eref, &oclass, &mtype, data,
                             &nchild, &echilds, &senses);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     status = EG_makeTopology(context, NULL, BODY, SOLIDBODY,
                              NULL, 1, echilds, NULL, ebody);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
+    if (*ebody == NULL) goto cleanup;   // needed for splint
 
     /* set the output value(s) */
     status = EG_getMassProperties(*ebody, data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getMassProperties);
 
     VOLUME(0) = data[0];
 

@@ -22,12 +22,13 @@ endif
 
 $(LDIR)/hsmAIM.so:	$(ODIR)/hsmAIM.o $(ODIR)/hsmUtils.o $(ODIR)/hsmAdj.o \
 			$(ODIR)/rcm.o $(ODIR)/genrcmi.o \
-			$(LDIR)/libutils.a $(LDIR)/libhsm.a  $(LDIR)/libaimUtil.a
+			$(LDIR)/libutils.a $(LDIR)/libhsm.a $(LDIR)/libaimUtil.a
 			
 	touch $(LDIR)/hsmAIM.so
 	rm $(LDIR)/hsmAIM.so
-	$(FCOMP) $(SOFLGS) -o $(LDIR)/hsmAIM.so \
-		$(ODIR)/hsmAIM.o $(ODIR)/hsmUtils.o $(ODIR)/hsmAdj.o $(ODIR)/rcm.o $(ODIR)/genrcmi.o \
+	$(FCOMP) $(FSOFLG) -o $(LDIR)/hsmAIM.so \
+		$(ODIR)/hsmAIM.o $(ODIR)/hsmUtils.o $(ODIR)/hsmAdj.o \
+		$(ODIR)/rcm.o $(ODIR)/genrcmi.o \
 		 -L$(LDIR) -lutils -laimUtil -locsm \
 		-legads -ludunits2 -lhsm $(FRPATH) $(CPPSLB) $(ESPFLIBS)
 
@@ -61,14 +62,18 @@ $(HSMOBJS): $(HSMINC)
 $(LDIR)/libhsm.a: $(HSMOBJS)
 	$(MAKE) -C src $@
 
+lint:
+	$(LINT) -I../../include -I$(IDIR) -I../utils $(wildcard *.c) -exportlocal -nestcomment -bufferoverflowhigh
+
 cleanAIM:
 	-rm -f $(ODIR)/hsmAIM.o $(ODIR)/hsmUtils.o $(ODIR)/hsmAdj.o $(ODIR)/rcm.o $(ODIR)/genrcmi.o
 
 cleanallAIM:	cleanAIM
 	-rm -f $(LDIR)/hsmAIM.so
 
-dox:
-	(cd doc; doxygen hsmAIM_dox.cfg; cd latex; make; mv refman.pdf HSMAIM.pdf)
+dox: doc/html/index.html
+doc/html/index.html: $(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
+	(cd doc; doxygen hsmAIM_dox.cfg; cd latex; make; mv refman.pdf hsmAIM.pdf)
 
 doxclean:
 	(cd doc; rm -f INPUT; rm -rf html latex; rm -f hsmAIM.tag)

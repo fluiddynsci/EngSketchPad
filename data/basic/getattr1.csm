@@ -50,9 +50,9 @@ patbeg inode  8
     select node inode
         getattr nattr $_nattr_
         ifthen inode eq 1
-            assert nattr 3
+            assert nattr 4
         else
-            assert nattr 2
+            assert nattr 3
         endif
 
         patbeg iattr nattr
@@ -66,9 +66,9 @@ patbeg iedge 12
     select edge iedge
         getattr nattr $_nattr_
         ifthen iedge eq 1
-            assert nattr 4
+            assert nattr 5
         else
-            assert nattr 3
+            assert nattr 4
         endif
 
         patbeg iattr nattr
@@ -81,7 +81,7 @@ patend
 patbeg iface  6
     select face iface
         getattr nattr $_nattr_
-        assert  nattr 6
+        assert  nattr 7
 
         patbeg iattr nattr
             getattr attrName  iattr
@@ -103,7 +103,7 @@ select body 2
 patbeg inode  4
     select node inode
         getattr nattr $_nattr_
-        assert  nattr 2
+        assert  nattr 3
 
         patbeg iattr nattr
             getattr attrName  iattr
@@ -115,7 +115,7 @@ patend
 patbeg iedge 6
     select edge iedge
         getattr nattr $_nattr_
-        assert  nattr 3
+        assert  nattr 4
 
         patbeg iattr nattr
             getattr attrName  iattr
@@ -127,7 +127,7 @@ patend
 patbeg iface  4
     select face iface
         getattr nattr $_nattr_
-        assert  nattr 6
+        assert  nattr 7
 
         patbeg iattr nattr
             getattr attrName  iattr

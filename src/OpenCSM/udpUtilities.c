@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -93,6 +93,10 @@ udpInitialize(int    *nArgs,            /* (out) number of arguments */
                 udps[0].arg[iarg].val = (char   *) EG_alloc(MAX_EXPR_LEN*sizeof(char  ));
                 udps[0].arg[iarg].dot = NULL;
                 if (udps[0].arg[iarg].val == NULL) return EGADS_MALLOC;
+            } else if (argTypes[iarg] == +ATTRFILE) {
+                udps[0].arg[iarg].val = (char   *) EG_alloc(MAX_EXPR_LEN*sizeof(char  ));
+                udps[0].arg[iarg].dot = NULL;
+                if (udps[0].arg[iarg].val == NULL) return EGADS_MALLOC;
             } else if (argTypes[iarg] == +ATTRINT) {
                 udps[0].arg[iarg].val = (int    *) EG_alloc(  sizeof(int   ));
                 udps[0].arg[iarg].dot = NULL;
@@ -130,6 +134,10 @@ udpInitialize(int    *nArgs,            /* (out) number of arguments */
 
     for (iarg = 0; iarg < NUMUDPARGS; iarg++) {
         if        (argTypes[iarg] == +ATTRSTRING) {
+            pchar  = (char   *) (udps[0].arg[iarg].val);
+
+            strcpy(pchar, "");
+        } else if (argTypes[iarg] == +ATTRFILE) {
             pchar  = (char   *) (udps[0].arg[iarg].val);
 
             strcpy(pchar, "");
@@ -226,6 +234,8 @@ udpReset(int flag)                      /* (in)  flag: 0=reset current, 1=close 
 
             if        (argTypes[iarg] == +ATTRSTRING) {
                 strcpy((char*)(udps[0].arg[iarg].val), "");
+            } else if (argTypes[iarg] == +ATTRFILE) {
+                strcpy((char*)(udps[0].arg[iarg].val), "");
             } else if (argTypes[iarg] == +ATTRINT) {
                 int    *p  = (int    *) (udps[0].arg[iarg].val);
 
@@ -308,7 +318,8 @@ udpReset(int flag)                      /* (in)  flag: 0=reset current, 1=close 
 int
 udpSet(char name[],                     /* (in)  argument name */
        void *value,                     /* (in)  pointer to values (can be char* or double*) */
-       int  nvalue)                     /* (in)  number  of values */
+       int  nvalue,                     /* (in)  number  of values */
+       char message[])                  /* (out) error message (if any) */
 {
     int  i, iarg, ivalue;
     char lowername[257];
@@ -316,6 +327,10 @@ udpSet(char name[],                     /* (in)  argument name */
 #ifdef DEBUG
     printf("udpSet(name=%s, nvalue=%d)\n", name, nvalue);
 #endif
+
+    if (message != NULL) {
+        message[0] = '\0';
+    }
 
     if        (name  == NULL) {
         return EGADS_NONAME;
@@ -334,6 +349,20 @@ udpSet(char name[],                     /* (in)  argument name */
             udps[0].arg[iarg].size = nvalue;
 
             if        (argTypes[iarg] == +ATTRSTRING) {
+                char   *p;
+                char   *valueP = (char   *) value;
+
+                #ifdef DEBUG
+                    printf("   value=%s\n", valueP);
+                #endif
+
+                udps[0].arg[iarg].val = (char *) EG_reall(udps[0].arg[iarg].val, (nvalue+1)*sizeof(char  ));
+                if (udps[0].arg[iarg].val == NULL) return EGADS_MALLOC;
+                p = (char   *) (udps[0].arg[iarg].val);
+
+                memcpy(p, valueP, (nvalue+1)*sizeof(char));
+                return EGADS_SUCCESS;
+            } else if (argTypes[iarg] == +ATTRFILE) {
                 char   *p;
                 char   *valueP = (char   *) value;
 
@@ -414,16 +443,35 @@ udpSet(char name[],                     /* (in)  argument name */
         }
     }
 
-    printf(" udpSet: Parameter \"%s\" not known.  should be one of:", name);
-    for (iarg = 0; iarg < NUMUDPARGS; iarg++) {
-        if (argTypes[iarg] == +ATTRSTRING ||
-            argTypes[iarg] == +ATTRINT    ||
-            argTypes[iarg] == +ATTRREAL   ||
-            argTypes[iarg] == +ATTRREALSEN  ) {
-            printf(" %s", argNames[iarg]);
+    if (message != NULL) {
+        snprintf(message, 256, "Parameter \"%s\" not known.  should be one of:", name);
+        for (iarg = 0; iarg < NUMUDPARGS; iarg++) {
+            if (argTypes[iarg] == +ATTRSTRING ||
+                argTypes[iarg] == +ATTRFILE   ||
+                argTypes[iarg] == +ATTRINT    ||
+                argTypes[iarg] == +ATTRREAL   ||
+                argTypes[iarg] == +ATTRREALSEN  ) {
+                strncat(message, " ",            256);
+                strncat(message, argNames[iarg], 256);
+//$$$                snprintf(message, 256, "%s %s", message, argNames[iarg]);
+            }
         }
+
+        printf(" udpSet: %s\n", message);
+    } else {
+        printf(" udpSet: Parameter \"%s\" not known.  should be one of:", name);
+        for (iarg = 0; iarg < NUMUDPARGS; iarg++) {
+            if (argTypes[iarg] == +ATTRSTRING ||
+                argTypes[iarg] == +ATTRFILE   ||
+                argTypes[iarg] == +ATTRINT    ||
+                argTypes[iarg] == +ATTRREAL   ||
+                argTypes[iarg] == +ATTRREALSEN  ) {
+                printf(" %s", argNames[iarg]);
+            }
+        }
+        printf("\n");
     }
-    printf("\n");
+
     return EGADS_INDEXERR;
 }
 
@@ -439,7 +487,8 @@ udpSet(char name[],                     /* (in)  argument name */
 int
 udpGet(ego    ebody,                    /* (in)  Body pointer */
        char   name[],                   /* (in)  argument name */
-       void   *value)                   /* (out) argument value (can be int* or double*) */
+       void   *value,                   /* (out) argument value (can be int* or double*) */
+       char   message[])
 {
     int  i, iudp, judp, iarg;
     char lowername[257];
@@ -447,6 +496,10 @@ udpGet(ego    ebody,                    /* (in)  Body pointer */
 #ifdef DEBUG
     printf("udpGet(ebody=%llx, name=%s)\n", (long long)ebody, name);
 #endif
+
+    if (message != NULL) {
+        message[0] = '\0';
+    }
 
     if (name == NULL) {
         return EGADS_NONAME;
@@ -491,14 +544,29 @@ udpGet(ego    ebody,                    /* (in)  Body pointer */
         }
     }
 
-    printf(" udpGet: Parameter \"%s\" not known.  should be one of:", name);
-    for (iarg = 0; iarg < NUMUDPARGS; iarg++) {
-        if (argTypes[iarg] == -ATTRINT ||
-            argTypes[iarg] == -ATTRREAL  ) {
-            printf(" %s", argNames[iarg]);
+    if (message != NULL) {
+        snprintf(message, 256, "Parameter \"%s\" not known.  should be one of:", name);
+        for (iarg = 0; iarg < NUMUDPARGS; iarg++) {
+            if (argTypes[iarg] == -ATTRINT ||
+                argTypes[iarg] == -ATTRREAL  ) {
+                strncat(message, " ",            256);
+                strncat(message, argNames[iarg], 256);
+//$$$                snprintf(message, 256, "%s %s", message, argNames[iarg]);
+            }
         }
+
+        printf(" udpGet: %s\n", message);
+    } else {
+        printf(" udpGet: Parameter \"%s\" not known.  should be one of:", name);
+        for (iarg = 0; iarg < NUMUDPARGS; iarg++) {
+            if (argTypes[iarg] == -ATTRINT ||
+                argTypes[iarg] == -ATTRREAL  ) {
+                printf(" %s", argNames[iarg]);
+            }
+        }
+        printf("\n");
     }
-    printf("\n");
+
     return EGADS_INDEXERR;
 }
 
@@ -757,7 +825,13 @@ cacheUdp()
     for (iarg = 0; iarg < NUMUDPARGS; iarg++) {
         isize = udps[numUdp].arg[iarg].size = udps[0].arg[iarg].size;
 
-        if (argTypes[iarg] == +ATTRSTRING) {
+        if        (argTypes[iarg] == +ATTRSTRING) {
+            udps[numUdp].arg[iarg].val = (char *) EG_alloc((isize+1)*sizeof(char  ));
+            udps[numUdp].arg[iarg].dot = NULL;
+            if (udps[numUdp].arg[iarg].val == NULL) return EGADS_MALLOC;
+
+            memcpy(udps[numUdp].arg[iarg].val, udps[0].arg[iarg].val, (isize+1)*sizeof(char  ));
+        } else if (argTypes[iarg] == +ATTRFILE) {
             udps[numUdp].arg[iarg].val = (char *) EG_alloc((isize+1)*sizeof(char  ));
             udps[numUdp].arg[iarg].dot = NULL;
             if (udps[numUdp].arg[iarg].val == NULL) return EGADS_MALLOC;

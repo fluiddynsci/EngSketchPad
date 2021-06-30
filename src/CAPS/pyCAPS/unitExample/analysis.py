@@ -45,7 +45,3 @@ fun3d.preAnalysis()
 # Execute post-Analysis   
 fun3d.postAnalysis()
 ##[analysisPreAndPost]
-
-# Close our problems
-print("Closing our problem")
-myProblem.closeCAPS()

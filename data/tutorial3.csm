@@ -1,152 +1,133 @@
 # tutorial3
 # written by John Dannenhoffer
 
-# design parameters associated with fuselage
-#                      x      y    zmin   zmax
-dimension fuse      15  4  1
-despmtr   fuse     " 1.00; -0.40; -0.20;  0.25;\
-                     2.00; -0.60; -0.30;  0.50;\
-                     3.00; -0.60; -0.30;  0.80;\
-                     4.00; -0.60; -0.30;  1.20;\
-                     5.00; -0.60; -0.20;  1.20;\
-                     6.00; -0.60; -0.10;  1.00;\
-                     7.00; -0.60;  0.00;  0.80;\
-                     8.00; -0.50;  0.00;  0.70;\
-                     9.00; -0.40;  0.00;  0.60;\
-                    10.00; -0.30;  0.00;  0.60;\
-                    11.00; -0.30;  0.00;  0.60;\
-                    12.00; -0.30;  0.00;  0.60;\
-                    13.00; -0.30;  0.00;  0.60;\
-                    13.90; -0.30;  0.00;  0.60;\
-                    14.00; -0.30;  0.00;  0.60;"
+# Design Parameters:
+DESPMTR   tire:wid_outer     12.0      # outer width of tire
+DESPMTR   tire:wid_inner     10.0      # inner width of tire
+DESPMTR   tire:fillet         1.0      # fillet rad  of tire
+DESPMTR   tire:diam_outer    30.0      # outer diam  of tire
+DESPMTR   tire:diam_inner    22.0      # inner diam  of tire
+OUTPMTR   tire:volume                  # volume      of tire
 
-dimension  noseList 2  4  1
-despmtr    noseList "0.10; 0; 1; 0;\
-                     0.05; 0; 0; 1"
+DESPMTR   disk:width          1.0      # width  of disk
+DESPMTR   disk:chamfer        0.5      # chamfer radius btwn disk and tire
+OUTPMTR   disk:volume                  # volume of disk
 
-# design parameters associated with wing
-despmtr   series_w  4409
+CFGPMTR   hole:num            5        # number of holes
+DESPMTR   hole:diam_circ      4.0      # diam of circle of holes
+DESPMTR   hole:rad            0.5      # radius of each hole
 
-dimension  wing     3  5  1
+CFGPMTR   spoke:num          10        # number of spokes
+DESPMTR   spoke:rim           1.0      # rim left after spokes cutout
+DESPMTR   spoke:rad           0.2      # radius of each spoke
 
-#                     x       y      z   chord  angle
-despmtr    wing    " 4.00;  0.00;  0.20;  6.00;  0.00;\
-                     7.00;  1.00;  0.20;  3.00;  0.00;\
-                     9.00;  4.60;  0.10;  1.00; 20.00;"
+# sketch of half the cross-section of the tire
+UDPRIM    $/tutorial_sketch1
 
-# design parameters associated with htail
-despmtr   series_h  0406
-despmtr   xroot_h  12.10
-despmtr   zroot_h   0.20
-despmtr   aroot_h   0.00
-despmtr   area_h    7.28
-despmtr   taper_h   0.55
-despmtr   aspect_h  3.70
-despmtr   sweep_h  25.00
-despmtr   dihed_h   3.00
-despmtr   twist_h   2.00
+# move sketch up to correct location and revolve half way around x axis
+TRANSLATE 0   tire:diam_inner/2   0
+REVOLVE   0   0   0   1   0   0   180
 
-set       cbar_h    sqrt(area_h/aspect_h)
-set       span_h    cbar_h*aspect_h
-set       croot_h   (2*cbar_h)/(taper_h+1)
-set       ctip_h    taper_h*croot_h
-set       xtip_h    xroot_h+(span_h/2)*tand(sweep_h)
-set       ytip_h    span_h/2
-set       ztip_h    zroot_h+(span_h/2)*tand(dihed_h)
-set       atip_h    aroot_h+twist_h
+# put an attribute on the Face associated with the tread
+SELECT    FACE   @nbody  6
+ATTRIBUTE myTag  $tread
+ATTRIBUTE _color $magenta
 
-# design parameters associated with vtail
-despmtr   series_v  0404
-despmtr   xroot_v  11.20
-despmtr   zroot_v   0.50
-despmtr   area_v    9.60
-despmtr   taper_v   0.30
-despmtr   aspect_v  3.00
-despmtr   sweep_v  45.00
+# make mirrored copy first in Z and then in X
+RESTORE   .
+MIRROR    0  0  1
+JOIN
 
-set       cbar_v    sqrt(area_v/aspect_v)
-set       span_v    cbar_v*aspect_v
-set       croot_v   (2*cbar_v)/(taper_v+1)
-set       ctip_v    taper_v*croot_v
-set       xtip_v    xroot_v+(span_v/2)*tand(sweep_v)
-set       ztip_v    zroot_v+span_v/2
+RESTORE   .
+MIRROR    1   0   0
+JOIN
 
-# build the fuselage
-mark
-   point     0  0  0
+# store the tire's volume
+SET       tire:volume  @volume
 
-   patbeg    i  fuse.nrow
-      udprim ellipse   ry  abs(fuse[i,2])  rz  (fuse[i,4]-fuse[i,3])/2
-      translate        fuse[i,1]  0            (fuse[i,4]+fuse[i,3])/2
-   patend
-blend     noseList
+# label all Faces as being part of the tire
+SELECT    FACE
+ATTRIBUTE myPart $tire
 
-# build the wing
-mark
-   udprim    naca      Series    series_w
-   rotatez   -wing[3,5]   0   0
-   rotatex   90           0   0
-   scale     wing[3,4]
-   translate wing[3,1]    -wing[3,2]   wing[3,3]
+# create red disk and union with tire
+CYLINDER  -disk:width/2  0  0  \
+          +disk:width/2  0  0  (tire:diam_inner+tire:diam_outer)/4
+ATTRIBUTE myPart $disk
+ATTRIBUTE _color  $red
+UNION
 
-   udprim    naca      Series    series_w
-   rotatez   -wing[2,5]   0   0
-   rotatex   90           0   0
-   scale     wing[2,4]
-   translate wing[2,1]    -wing[2,2]   wing[2,3]
+# (optionally) add blue chamfer between disk and tire
+IFTHEN    disk:chamfer  GT  0
+   CHAMFER   disk:chamfer
+   ATTRIBUTE _color $blue
+ENDIF
 
-   udprim    naca      Series    series_w
-   rotatez   -wing[1,5]   0   0
-   rotatex   90           0   0
-   scale     wing[1,4]
-   translate wing[1,1]    wing[1,2]   wing[1,3]
+# (optionally) drill a pattern of holes
+PATBEG    ihole     hole:num
+   # on axis if one hole
+   IFTHEN    hole:num EQ 1
+      SET   y      0
+      SET   z      0
+   # equally spaced around axis
+   ELSE
+      SET   theta  360*ihole/hole:num
+      SET   y      "hole:diam_circ/2 * cosd(theta)"
+      SET   z      "hole:diam_circ/2 * sind(theta)"
+   ENDIF
 
-   udprim    naca      Series    series_w
-   rotatez   -wing[2,5]   0   0
-   rotatex   90           0   0
-   scale     wing[2,4]
-   translate wing[2,1]    +wing[2,2]   wing[2,3]
+   CYLINDER -disk:width  y  z \
+            +disk:width  y  z  hole:rad
+   ATTRIBUTE myPart $hole
+   SUBTRACT
+PATEND
 
-   udprim    naca      Series    series_w
-   rotatez   -wing[3,5]   0   0
-   rotatex   90           0   0
-   scale     wing[3,4]
-   translate wing[3,1]    +wing[3,2]   wing[3,3]
-rule
-union   # with fuselage
+# save this Body away (but leave copy on stack)
+STORE    SolidModel  0  1
 
-# build the horizontal tail
-mark
-   udprim    naca      Series    series_h
-   rotatez   -atip_h   0         0
-   rotatex   90        0         0
-   scale     ctip_h
-   translate xtip_h   -ytip_h    ztip_h
+# (optionally) add spokes (in cyan)
+IFTHEN    spoke:num GT 0
+   SET    rmin  hole:diam_circ/2+hole:rad+spoke:rim
+   SET    rmax  tire:diam_inner/2-disk:chamfer-spoke:rim
 
-   udprim    naca      Series    series_h
-   rotatez   -aroot_h  0         0
-   rotatex   90        0         0
-   scale     croot_h
-   translate xroot_h   0         zroot_h
+   CYLINDER  -disk:width  0  0  +disk:width  0  0  rmax
+   SUBTRACT
+   SELECT    FACE   @nbody-1  0     # comes from cylinder
+   ATTRIBUTE _color $cyan
 
-   udprim    naca      Series    series_h
-   rotatez   -atip_h   0         0
-   rotatex   90        0         0
-   scale     ctip_h
-   translate xtip_h    ytip_h    ztip_h
-rule
-union   # with wing/fuselage
+   CYLINDER  0  rmin-0.1  0  0  rmax+0.1  0  spoke:rad
+   ATTRIBUTE myPart $spoke
+   ATTRIBUTE _color $cyan
 
-# build  the vertical tail
-mark
-   udprim    naca      Series    series_v
-   scale     croot_v
-   translate xroot_v   0         zroot_v
+   UNION
 
-   udprim    naca      Series    series_v
-   scale     ctip_v
-   translate xtip_v    0         ztip_v
-rule
-union   # with wing/fuselage
+   RESTORE SolidModel
+   CYLINDER  -disk:width  0  0  +disk:width  0  0  rmin
+   INTERSECT
+   SELECT    FACE   @nbody-1  0     # comes from cylinder
+   ATTRIBUTE _color $cyan
+   UNION
 
-end
+   PATBEG    ispoke  spoke:num-1
+      CYLINDER  0  rmin-0.1  0  0  rmax+0.1  0  spoke:rad
+      ATTRIBUTE myPart $spoke
+      ATTRIBUTE _color $cyan
+
+      ROTATEX   360*ispoke/spoke:num  0  0
+      UNION
+   PATEND
+ENDIF
+STORE    SolidModel  0  1
+
+# intersect this SolidModel with a cylinder in order
+#    to find the disk's volume (excluding tire)
+SET      xmax     2*max(tire:wid_outer,tire:wid_inner)
+CYLINDER -xmax  0  0  +xmax  0  0  tire:diam_inner/2
+INTERSECT
+SET      disk:volume  @volume
+STORE    .          # pop Body off stack
+
+# show the final model
+RESTORE          SolidModel
+ATTRIBUTE _name $SolidModel
+
+END

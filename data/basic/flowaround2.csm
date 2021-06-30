@@ -32,34 +32,48 @@ mark
    # extract zmin loop
    restore outer
    select  edge  0  0  6  3  2
+   select  sub   $_nface  2
    extract -@iedge
+
    restore outer
    select  edge  0  0  6  4  1
+   select  sub   $_nface  2
    extract -@iedge
    join
+
    restore outer
    select  edge  0  0  6  5  2
+   select  sub   $_nface  2
    extract -@iedge
    join
+
    restore outer
    select  edge  0  0  6  6  2
+   select  sub   $_nface  2
    extract -@iedge
    join
 
    # extract zmax loop
    restore outer
    select  edge  0  0  6  3  1
+   select  sub   $_nface  2
    extract -@iedge
+
    restore outer
    select  edge  0  0  6  4  2
+   select  sub   $_nface  2
    extract -@iedge
    join
+
    restore outer
    select  edge  0  0  6  5  1
+   select  sub   $_nface  2
    extract -@iedge
    join
+
    restore outer
    select  edge  0  0  6  6  1
+   select  sub   $_nface  2
    extract -@iedge
    join
 rule

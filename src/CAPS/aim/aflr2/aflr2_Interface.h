@@ -2,9 +2,11 @@
 #include "capsTypes.h"  // Bring in CAPS types
 #include "cfdTypes.h"   // Bring in cfd structures
 
-int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
+int aflr2_Surface_Mesh(void *aimInfo,
+                       int Message_Flag, ego bodyIn,
                        meshInputStruct meshInput,
-                       mapAttrToIndexStruct attrMap,
+                       mapAttrToIndexStruct groupMap,
+                       mapAttrToIndexStruct meshMap,
                        int numMeshProp,
                        meshSizingStruct *meshProp,
                        meshStruct *surfaceMesh);

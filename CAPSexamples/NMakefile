@@ -65,16 +65,13 @@ pyCAPStest: all $(COPY)
 
 !IFDEF ESP_BLOC
 
-copy: $(TDIR) $(TDIR)\csmData $(TDIR)\cCAPS $(TDIR)\pyCAPS $(TDIR)\regressionTest \
-      $(TDIR)\regressionTest\datafiles
+copy: $(TDIR) $(TDIR)\csmData $(TDIR)\cCAPS $(TDIR)\pyCAPS $(TDIR)\regressionTest
 	cd $(TDIR)\csmData
 	xcopy $(SDIR)\csmData\*.*                    /Q /Y
 	cd $(TDIR)\pyCAPS
 	xcopy $(SDIR)\pyCAPS\*.*                     /Q /Y
 	cd $(TDIR)\regressionTest
 	xcopy $(SDIR)\regressionTest\*.*             /Q /Y
-	cd $(TDIR)\regressionTest\datafiles
-	xcopy $(SDIR)\regressionTest\datafiles\*.*   /Q /Y
 
 $(TDIR):
 	if not exist $@ mkdir $@
@@ -85,8 +82,6 @@ $(TDIR)\pyCAPS: $(TDIR)
 $(TDIR)\csmData: $(TDIR)
 	if not exist $@ mkdir $@
 $(TDIR)\regressionTest: $(TDIR)
-	if not exist $@ mkdir $@
-$(TDIR)\regressionTest\datafiles: $(TDIR)\regressionTest
 	if not exist $@ mkdir $@
 
 !ENDIF

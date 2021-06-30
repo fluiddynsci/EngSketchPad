@@ -1,9 +1,12 @@
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
 // Tecplot  related utility functions - Written by Dr. Ryan Durscher AFRL/RQVC
 
 #include <string.h>
 #include <stdio.h>
 
 #include "capsTypes.h"  // Bring in CAPS types
+#include "aimUtil.h"
 
 #include "errno.h"
 
@@ -24,17 +27,18 @@
 // Write FEPOINT Tecplot data (compatible with FUN3D) (connectivity is optional) - dataMatrix = [numVariable][numDataPoint],
 // connectMatrix (optional) = [4*numConnect], the formating of the data may be specified through
 // dataFormat = [numVariable] (use capsTypes Integer and Double)- If NULL default is a double
-int tecplot_writeFEPOINT(char *filename,
-                              char *message,
-                              char *zoneTitle,
-                              int numVariable,
-                              char *variableName[],
-                              int numDataPoint,
-                              double **dataMatrix,
-                              int *dataFormat,
-                              int numConnect,
-                              int *connectMatrix,
-                              double *solutionTime) {
+int tecplot_writeFEPOINT(void *aimInfo,
+                         char *filename,
+                         char *message,
+                         char *zoneTitle,
+                         int numVariable,
+                         char *variableName[],
+                         int numDataPoint,
+                         double **dataMatrix,
+                         int *dataFormat,
+                         int numConnect,
+                         int *connectMatrix,
+                         double *solutionTime) {
 
     int i, j; // Indexing
     double time = 0.0;
@@ -54,7 +58,7 @@ int tecplot_writeFEPOINT(char *filename,
     }
 
     // Open file
-    fp = fopen(filename, "w");
+    fp = aim_fopen(aimInfo, filename, "w");
     if (fp == NULL) {
         printf("Unable to open file: %s\n", filename);
         return CAPS_IOERR;

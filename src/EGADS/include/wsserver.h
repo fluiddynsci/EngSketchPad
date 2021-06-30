@@ -5,7 +5,7 @@
  *
  *		WebViewer WebSocket Server Prototypes
  *
- *      Copyright 2011-2020, Massachusetts Institute of Technology
+ *      Copyright 2011-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -64,8 +64,9 @@ __ProtoExt__ int  wv_handShake( wvContext *cntxt );
 __ProtoExt__ int  wv_addArrowHeads( wvContext *cntxt, int index, float size, 
                                     int nHeads, int *heads );
   
-__ProtoExt__ int  wv_setKey( wvContext *context, int nCol, float *colors,
-                             float beg, float end, char *title );
+__ProtoExt__ int  wv_setKey( wvContext *context, int nCol,
+                             /*@null@*/ float *colors, float beg, float end,
+                             /*@null@*/ char *title );
   
 __ProtoExt__ int  wv_thumbNail( wvContext *cntxt, int width, int height,
                                 const unsigned char *image );

@@ -52,7 +52,7 @@ skbeg           0        -.20    -.40
     cirarc      0        0       +.45    0        0-.20    0+.40
     linseg      0        -.20    -.40
 skend
-extrude         0.70      0.00      0.00
+extrude         1.00      0.00      0.00
 name           hole
 
 applycsys holeaxis

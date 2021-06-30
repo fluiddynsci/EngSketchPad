@@ -29,15 +29,15 @@ MARK
    RESTORE   wing
    ROTATEY   90  0  0
    SELECT    face $_flend $*
-      ATTRIBUTE _color $cyan
+      ATTRIBUTE _color $magenta
 
    RESTORE   fuse
    ROTATEY   90  0  0
    SELECT    face $_flend $*
       ATTRIBUTE _color $magenta
-UDPRIM    flend  toler 0.001
+UDPRIM    flend
 
 SELECT    face @nbody 0
-   ATTRIBUTE _color $red
+   ATTRIBUTE _color $cyan
 
 END

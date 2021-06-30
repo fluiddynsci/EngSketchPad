@@ -1,12 +1,12 @@
-# Import other need modules
-from __future__ import print_function
-
 import unittest
+
 import os
+import glob
+import shutil
+
 import argparse
 
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+import pyCAPS
 
 # Setup and read command line options. Please note that this isn't required for pyCAPS
 #parser = argparse.ArgumentParser(description = 'xFoil Pytest Example',
@@ -42,30 +42,43 @@ class Testxfoil_NACA(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-
-        # Initialize capsProblem object
-        cls.myProblem = capsProblem()
-
         # Create working directory variable
-        workDir = "workDir_xfoilNACATest"
+        cls.problemName = "workDir_xfoilNACATest"
         #workDir = os.path.join(str(args.workDir[0]), workDir)
 
-        # Load CSM file
-        cls.myGeometry = cls.myProblem.loadCAPS("../csmData/airfoilSection.csm")
+        cls.cleanUp()
+
+        # Initialize Problem object
+        cls.myProblem = pyCAPS.Problem(problemName = cls.problemName,
+                                       capsFile = os.path.join("..","csmData","airfoilSection.csm"))
 
         # Change a design parameter - area in the geometry
-        cls.myGeometry.setGeometryVal("camber", 0.02)
+        cls.myProblem.geometry.despmtr.camber = 0.02
 
         # Load xfoil aim
-        cls.xfoil = cls.myProblem.loadAIM(aim = "xfoilAIM",
-                                          analysisDir = workDir)
+        cls.xfoil = cls.myProblem.analysis.create(aim = "xfoilAIM")
 
         # Set Mach number, Reynolds number
-        cls.xfoil.setAnalysisVal("Mach", 0.2 )
-        cls.xfoil.setAnalysisVal("Re", 5.0E5 )
-        cls.xfoil.setAnalysisVal("Viscous_Iteration", 100)
+        cls.xfoil.input.Mach = 0.2
+        cls.xfoil.input.Re   = 5.0e5
+        cls.xfoil.input.Viscous_Iteration = 100
 
+    @classmethod
+    def tearDownClass(cls):
+        del cls.xfoil
+        del cls.myProblem
+        cls.cleanUp()
 
+    @classmethod
+    def cleanUp(cls):
+
+        # Remove analysis directories
+        dirs = glob.glob( cls.problemName + '*')
+        for dir in dirs:
+            if os.path.isdir(dir):
+                shutil.rmtree(dir)
+
+#==============================================================================
     def test_alpha_custom_increment(self):
 
         AlphaTrue = [0.0, 3.0, 5.0, 9.0, 11.0, 13.0, 14.0, 15.0]
@@ -74,16 +87,16 @@ class Testxfoil_NACA(unittest.TestCase):
         TranXTrue = [0.7239, 0.5064, 0.3542, 0.0542, 0.034, 0.0263, 0.0242, 0.0226]
 
         # Set custom AoA
-        self.xfoil.setAnalysisVal("Alpha", AlphaTrue)
+        self.xfoil.input.Alpha = AlphaTrue
 
         # run xfoil
         run_xfoil(self.xfoil)
 
         # Retrieve results
-        Alpha = self.xfoil.getAnalysisOutVal("Alpha")
-        Cl    = self.xfoil.getAnalysisOutVal("CL")
-        Cd    = self.xfoil.getAnalysisOutVal("CD")
-        TranX = self.xfoil.getAnalysisOutVal("Transition_Top")
+        Alpha = self.xfoil.output.Alpha
+        Cl    = self.xfoil.output.CL
+        Cd    = self.xfoil.output.CD
+        TranX = self.xfoil.output.Transition_Top
         #print("Alpha = ", Alpha)
         #print("Cl = ", Cl)
         #print("Cd = ", Cd)
@@ -106,9 +119,9 @@ class Testxfoil_NACA(unittest.TestCase):
             self.assertAlmostEqual(TranXTrue[i], TranX[i])
             
         # Unset custom AoA
-        self.xfoil.setAnalysisVal("Alpha", None)
+        self.xfoil.input.Alpha = None
 
-
+#==============================================================================
     def test_alpha_uniform_inrement(self):
 
         AlphaTrue = [1.0 + x * 0.1 for x in range(0, 11)]
@@ -117,16 +130,16 @@ class Testxfoil_NACA(unittest.TestCase):
         TranXTrue = [0.6539, 0.6467, 0.6395, 0.6321, 0.6247, 0.6171, 0.6101, 0.6029, 0.5957, 0.588, 0.5808]
 
         # Set AoA seq
-        self.xfoil.setAnalysisVal("Alpha_Increment", [1.0, 2.0, 0.10])
+        self.xfoil.input.Alpha_Increment = [1.0, 2.0, 0.10]
 
         # run xfoil
         run_xfoil(self.xfoil)
 
         # Retrieve results
-        Alpha = self.xfoil.getAnalysisOutVal("Alpha")
-        Cl    = self.xfoil.getAnalysisOutVal("CL")
-        Cd    = self.xfoil.getAnalysisOutVal("CD")
-        TranX = self.xfoil.getAnalysisOutVal("Transition_Top")
+        Alpha = self.xfoil.output.Alpha
+        Cl    = self.xfoil.output.CL
+        Cd    = self.xfoil.output.CD
+        TranX = self.xfoil.output.Transition_Top
         #print("Alpha = ", Alpha)
         #print("Cl = ", Cl)
         #print("Cd = ", Cd)
@@ -149,8 +162,9 @@ class Testxfoil_NACA(unittest.TestCase):
             self.assertAlmostEqual(TranXTrue[i], TranX[i])
 
         # Unset AoA seq
-        self.xfoil.setAnalysisVal("Alpha_Increment", None)
+        self.xfoil.input.Alpha_Increment = None
 
+#==============================================================================
     def test_Cl(self):
 
         AlphaTrue = -1.308
@@ -159,16 +173,16 @@ class Testxfoil_NACA(unittest.TestCase):
         TranXTrue = 0.8055
 
         # Set custom Cl
-        self.xfoil.setAnalysisVal("CL", 0.1)
+        self.xfoil.input.CL = 0.1
 
         # run xfoil
         run_xfoil(self.xfoil)
 
         # Retrieve results
-        Alpha = self.xfoil.getAnalysisOutVal("Alpha")
-        Cl    = self.xfoil.getAnalysisOutVal("CL")
-        Cd    = self.xfoil.getAnalysisOutVal("CD")
-        TranX = self.xfoil.getAnalysisOutVal("Transition_Top")
+        Alpha = self.xfoil.output.Alpha
+        Cl    = self.xfoil.output.CL
+        Cd    = self.xfoil.output.CD
+        TranX = self.xfoil.output.Transition_Top
         #print("Alpha = ", Alpha)
         #print("Cl = ", Cl)
         #print("Cd = ", Cd)
@@ -180,8 +194,9 @@ class Testxfoil_NACA(unittest.TestCase):
         self.assertAlmostEqual(TranXTrue, TranX)
         
         # Unset custom Cl
-        self.xfoil.setAnalysisVal("CL", None)
+        self.xfoil.input.CL = None
 
+#==============================================================================
     def test_CL_uniform_increment(self):
 
         AlphaTrue = [-2.325, 0.244, 1.943, 3.674, 7.233]
@@ -190,16 +205,16 @@ class Testxfoil_NACA(unittest.TestCase):
         TranXTrue = [0.8596, 0.7076, 0.5848, 0.4581, 0.1206]
 
         # Set Cl seq
-        self.xfoil.setAnalysisVal("CL_Increment", [0.0, 1.0, .25])
+        self.xfoil.input.CL_Increment = [0.0, 1.0, .25]
 
         # run xfoil
         run_xfoil(self.xfoil)
 
         # Retrieve results
-        Alpha = self.xfoil.getAnalysisOutVal("Alpha")
-        Cl    = self.xfoil.getAnalysisOutVal("CL")
-        Cd    = self.xfoil.getAnalysisOutVal("CD")
-        TranX = self.xfoil.getAnalysisOutVal("Transition_Top")
+        Alpha = self.xfoil.output.Alpha
+        Cl    = self.xfoil.output.CL
+        Cd    = self.xfoil.output.CD
+        TranX = self.xfoil.output.Transition_Top
         #print("Alpha = ", Alpha)
         #print("Cl = ", Cl)
         #print("Cd = ", Cd)
@@ -222,8 +237,9 @@ class Testxfoil_NACA(unittest.TestCase):
             self.assertAlmostEqual(TranXTrue[i], TranX[i])
 
         # Unset Cl seq
-        self.xfoil.setAnalysisVal("CL_Increment", None)
+        self.xfoil.input.CL_Increment = None
 
+#==============================================================================
     def test_append(self):
 
         AlphaTrue = [0.0, 3.0]
@@ -232,25 +248,25 @@ class Testxfoil_NACA(unittest.TestCase):
         TranXTrue = [0.7239, 0.5064]
 
         # Set custom AoA
-        self.xfoil.setAnalysisVal("Alpha", 0.0)
+        self.xfoil.input.Alpha = 0.0
 
         # run xfoil
         run_xfoil(self.xfoil)
 
         # Append the polar file if it already exists - otherwise the AIM will delete the file
-        self.xfoil.setAnalysisVal("Append_PolarFile", True)
+        self.xfoil.input.Append_PolarFile = True
 
         # Set custom AoA
-        self.xfoil.setAnalysisVal("Alpha", 3.0)
+        self.xfoil.input.Alpha = 3.0
 
         # run xfoil
         run_xfoil(self.xfoil)
 
         # Retrieve results
-        Alpha = self.xfoil.getAnalysisOutVal("Alpha")
-        Cl    = self.xfoil.getAnalysisOutVal("CL")
-        Cd    = self.xfoil.getAnalysisOutVal("CD")
-        TranX = self.xfoil.getAnalysisOutVal("Transition_Top")
+        Alpha = self.xfoil.output.Alpha
+        Cl    = self.xfoil.output.CL
+        Cd    = self.xfoil.output.CD
+        TranX = self.xfoil.output.Transition_Top
         #print("Alpha = ", Alpha)
         #print("Cl = ", Cl)
         #print("Cd = ", Cd)
@@ -273,41 +289,48 @@ class Testxfoil_NACA(unittest.TestCase):
             self.assertAlmostEqual(TranXTrue[i], TranX[i])
 
         # Unset custom AoA
-        self.xfoil.setAnalysisVal("Alpha", None)
-        self.xfoil.setAnalysisVal("Append_PolarFile", False)
-
-    @classmethod
-    def tearDownClass(cls):
-
-        # Close CAPS - Optional
-        cls.myProblem.closeCAPS()
+        self.xfoil.input.Alpha = None
+        self.xfoil.input.Append_PolarFile = False
 
 
 class Testxfoil_Kulfan(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-
-        # Initialize capsProblem object
-        cls.myProblem = capsProblem()
-
         # Create working directory variable
-        workDir = "workDir_xfoilKulfanTest"
+        cls.problemName = "workDir_xfoilKulfanTest"
         #workDir = os.path.join(str(args.workDir[0]), workDir)
 
+        cls.cleanUp()
+
         # Load CSM file
-        cls.myGeometry = cls.myProblem.loadCAPS("../csmData/kulfanSection.csm")
+        cls.myProblem = pyCAPS.Problem(problemName = cls.problemName,
+                                       capsFile = os.path.join("..","csmData","kulfanSection.csm"))
 
         # Load xfoil aim
-        cls.xfoil = cls.myProblem.loadAIM(aim = "xfoilAIM",
-                                          analysisDir = workDir)
+        cls.xfoil = cls.myProblem.analysis.create(aim = "xfoilAIM")
 
         # Set Mach number, Reynolds number
-        cls.xfoil.setAnalysisVal("Mach", 0.5 )
-        cls.xfoil.setAnalysisVal("Re", 1.0E6 )
-        cls.xfoil.setAnalysisVal("Viscous_Iteration", 100)
+        cls.xfoil.input.Mach = 0.5
+        cls.xfoil.input.Re   = 1.0e6
+        cls.xfoil.input.Viscous_Iteration = 100
 
+    @classmethod
+    def tearDownClass(cls):
+        del cls.xfoil
+        del cls.myProblem
+        cls.cleanUp()
 
+    @classmethod
+    def cleanUp(cls):
+
+        # Remove analysis directories
+        dirs = glob.glob( cls.problemName + '*')
+        for dir in dirs:
+            if os.path.isdir(dir):
+                shutil.rmtree(dir)
+
+#==============================================================================
     def test_alpha_custom_increment(self):
 
         AlphaTrue = [0.0, 3.0, 5.0, 9.0, 11.0, 12.0]
@@ -316,16 +339,16 @@ class Testxfoil_Kulfan(unittest.TestCase):
         TranXTrue = [0.577, 0.4657, 0.3656, 0.0727, 0.0458, 0.0412]
 
         # Set custom AoA
-        self.xfoil.setAnalysisVal("Alpha", AlphaTrue)
+        self.xfoil.input.Alpha = AlphaTrue
 
         # run xfoil
         run_xfoil(self.xfoil)
 
         # Retrieve results
-        Alpha = self.xfoil.getAnalysisOutVal("Alpha")
-        Cl    = self.xfoil.getAnalysisOutVal("CL")
-        Cd    = self.xfoil.getAnalysisOutVal("CD")
-        TranX = self.xfoil.getAnalysisOutVal("Transition_Top")
+        Alpha = self.xfoil.output.Alpha
+        Cl    = self.xfoil.output.CL
+        Cd    = self.xfoil.output.CD
+        TranX = self.xfoil.output.Transition_Top
         #print("Alpha = ", Alpha)
         #print("Cl = ", Cl)
         #print("Cd = ", Cd)
@@ -348,8 +371,9 @@ class Testxfoil_Kulfan(unittest.TestCase):
             self.assertAlmostEqual(TranXTrue[i], TranX[i])
             
         # Unset custom AoA
-        self.xfoil.setAnalysisVal("Alpha", None)
+        self.xfoil.input.Alpha = None
 
+#==============================================================================
     def test_Cl(self):
 
         AlphaTrue = -3.705
@@ -358,16 +382,16 @@ class Testxfoil_Kulfan(unittest.TestCase):
         TranXTrue = 0.7186
 
         # Set custom Cl
-        self.xfoil.setAnalysisVal("CL", 0.1)
+        self.xfoil.input.CL = 0.1
 
         # run xfoil
         run_xfoil(self.xfoil)
 
         # Retrieve results
-        Alpha = self.xfoil.getAnalysisOutVal("Alpha")
-        Cl    = self.xfoil.getAnalysisOutVal("CL")
-        Cd    = self.xfoil.getAnalysisOutVal("CD")
-        TranX = self.xfoil.getAnalysisOutVal("Transition_Top")
+        Alpha = self.xfoil.output.Alpha
+        Cl    = self.xfoil.output.CL
+        Cd    = self.xfoil.output.CD
+        TranX = self.xfoil.output.Transition_Top
         #print("Alpha = ", Alpha)
         #print("Cl = ", Cl)
         #print("Cd = ", Cd)
@@ -379,13 +403,7 @@ class Testxfoil_Kulfan(unittest.TestCase):
         self.assertAlmostEqual(TranXTrue, TranX)
         
         # Unset custom Cl
-        self.xfoil.setAnalysisVal("CL", None)
-
-    @classmethod
-    def tearDownClass(cls):
-
-        # Close CAPS - Optional
-        cls.myProblem.closeCAPS()
+        self.xfoil.input.CL = None
         
 if __name__ == '__main__':
     unittest.main()

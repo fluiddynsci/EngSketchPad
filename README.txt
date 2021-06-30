@@ -1,8 +1,12 @@
                         ESP: The Engineering Sketch Pad
-                             Rev 1.18 -- June 2020
+                             Rev 1.19 -- June 2021
 
 
 0. Warnings!
+
+    If you have been using previous Betas and writing EGADS files with
+    Effective Topology Bodies, you need to delete the files. The internals
+    of the Effective Topology data has changed.
 
     Windows 7 & 8 are no longer supported, only Windows 10 is tested. 
     This also means that older versions of MS Visual Studio are no longer 
@@ -12,12 +16,14 @@
     work, but we strongly advise going to at least Python 3.7. Also, we
     now only support OpenCASCADE at Rev 7.3 or higher. And these must be
     the versions taken from the ESP website (and not from elsewhere). At
-    this point we recommend 7.3.1 and are testing 7.4.1, which you can find 
-    currently in the ESP website subdirectory "otherOCCs".
+    this point we recommend 7.4.1 and are testing 7.5.1.
 
-    Apple's OSX Catalina (10.15) is a REAL problem. You cannot download the
-    distributions using a browser. For instructions on how to get ESP see 
-    OSXcatalina.txt on the web site.
+    Apple's OSX Catalina (10.15) and newer OSs may cause problems. You 
+    may not be able to download the distributions using a browser. For 
+    instructions on how to get ESP see OSXcatalina.txt on the website. Big 
+    Sur (11.x) has not been fully tested, but should work.  At the present 
+    we cannot natively support Apple M1 equipment, but plan to do so for our 
+    next ESP release.
 
 
 1. Prerequisites
@@ -34,10 +40,11 @@
 
     Another prerequisite is a WebGL/Websocket capable Browser. In general 
     these include Mozilla's FireFox, Google Chrome and Apple's Safari. 
-    Internet Explorer/Edge is NOT supported because of a problem in their
-    Websockets implementation.  Also, note that there are some  problems with 
-    Intel Graphics and some WebGL Browsers. For LINUX, "zlib" development is 
-    required.
+    Internet Explorer and legacy versions of Edge are NOT supported because 
+    of a problem in their Websockets implementation. The "Chromium" version
+    of Microsoft Edge is now supported.   Also, note that there are some 
+    problems with Intel Graphics and some WebGL Browsers. For LINUX, "zlib"
+    development is required.
 
     CAPS has a dependency on UDUNITS2, and potentially on Python and other 
     applications. See Section 2.3.
@@ -58,85 +65,45 @@
     include           - location for all ESP header files
     lib               - a directory that will contain libraries, shared objects
                         and DLLs
+    LICENSE.txt       - the GNU Lesser General Public license (LGPL 2.1) text
+    pyESP             - Python bindings
     SLUGS             - the browser code for Slugs (web Slugs client)
     src               - source files (contains EGADS, CAPS, wvServer & OpenCSM)
-    training          - training slides and examples
     udc               - a collection of User Defined Components
     wvClient          - simple examples of Web viewing used by EGADS
 
 1.2 Release Notes
 
-1.2.0 UDUNITS & Windows
-
-    There appears to be a fundamental flaw with the package "expat" (the XML 
-    parser) used by UDUNITS (a CAPS dependency) and Windows' use of drive 
-    letters. "expat" uses the current drive to look for the files to be 
-    included in the unit definitions. This only works if ESP and the place 
-    where you are running a CAPS app are on the same drive. Note: this may be
-    fixed in a future release.
-
 1.2.1 EGADS
 
-    There has been 2 significant updates made to EGADS from Rev 1.17:
+    The significant updates made to EGADS from Rev 1.18 are:
 
-    1) EGADSlite has been refactored in order to support CUDA and GPUs
-    2) The tessellator has been improved in both quality and robustness
+    1) Refactored documentation.
+    2) Effective (virtual) Topology support.
+    3) The ability to save Effective Bodies (EBody) and Tessellation Objects
+       in Model Objects and write them in EGADS files.
+    4) A native Python interface (pyEGADS) written using Python's ctypes 
+       module.
+
+    Note that at this time you cannot use Effective Bodies with EGADSlite.
 
 1.2.2 ESP
 
     In addition to many big fixes (see $ESP_ROOT/src/OpenCSMnotes.txt
-    for a full list), the significant upgrades are:
+    for a full list), the significant upgrades are documented in
+    section 8.1 of ESP-help.html; bug fixes are documented in section
+    8.2 of the same document.
 
-    1) New/updated commands/statements and functions
-     a) Node, Edges, and Faces can now be SELECTed by bounding boxes
-     b) SUBTRACT can now be applied to coplanar SheetBodys
-     c) SCALE can now scale about a scaling center
-     d) SELECT ADD can now add Faces, Edges, or Nodes by index
-     e) SELECT SUB can now subtract entities by index
-     f) GROUP with a negative argument ungroups
-     g) CONNECT generates degenerate Faces when edgeList* contains a zero
-     h) SWEEP can be applied to a FaceBody
-     i) new SSLOPE allows a user to specify the slope at the beginning
-        or end of a SPLINE in a sketch
-     j) COMBINE command now returns a SheetBody if the Shell created is
-        not closed
-     k) SELECTing via attributes has been extended to have attribute
-        values that are strings, integer(s), or real(s)
-   2) New command line arguments
-     a) -skipTess allows a user to skip the tessellation on the Bodys on
-        the stack at the end
-     b) -printStack allows a user to print the constants of the stack
-        after every Branch
-     c) -batch is automatically selected when -skipTess is specified
-   3) New/updated UDPs, UDCs, or UDFs
-     a) applyTparams.udc puts .tParams on Body based upon its size
-     b) calcCG.udc computes the CG of all Bodys on the stack
-     c) dpEllipse is modified to have nedge and thbeg input parameters
-     d) editAttrUdf now allows PATBEG/PATEND statements
-   4) OpenCSM updates
-     a) update default tessellation parameters
-     b) allow UDFs to receive any number of input Bodys (back to Mark
-        or beginning of stack)
-     c) add ocsmUpdateDespmtrs to allow a user to update the DESPMTR
-        values from a file
-     d) add __filename__ to files processed by -loadEgads and -dumpEgads
-     e) remove tmp_OpenCSM files at beginning of ocsmLoad
-     f) Edges that come from Booleans no longer have the Attributes
-        of possibly-coincident Edges in one of the parents
-     g) significantly speed up finishing all Bodys
-   5) ESP updates
-     a) allow user to add an EVALUATE statement from ESP interface
-     b) add CFGPMTR highlighting and hints in ESP
-     c) unpost File or Tool menu if File, Tool, StepThur, Help,
-        UpToDate, or Undo button is pressed
-     d) make groups for at- and at-at-parameters in ESP
-     e) in serveCSM -sensTess, show Face tufts in blue and Edge tufts in red
-     f) add option to ESP to turn on/off all Nodes, Edges, Faces, or Csystems
-     g) allow plotfile to contain triangles (if jmax==-2)
-
-1.2.3 Known issues in v1.18:
+1.2.3 Known issues in v1.19:
 
     Sensitivities for BLENDS with C0 are done by finite differences.
+
+1.2.4 CAPS
+
+    1) Improved error handling in CAPS/AIMs (still a work in progress).
+    2) pyCAPS has been rewritten using Python's ctypes module and the
+       interface has been refactored.
+    3) Formalized process for working with units in Python
 
 
 2. Building the Software
@@ -217,6 +184,9 @@
         C:\> mkdir bin
         C:\> mkdir lib
 
+    Also note that the winEnv script will find the version of Python if in
+    the PATH and on the same drive.
+
 2.3 CAPS Options
 
     CAPS requires the use of the Open Source Project UDUNITS2 for all unit 
@@ -232,35 +202,11 @@
 2.3.1 Python with CAPS (pyCAPS)
 
     Python may be used with CAPS to provide testing, general scripting and
-    demonstration capabilities. The Python development package is required
-    under Linux. The building of pyCAPS is turned on by 2 environment 
-    variables:
-
-    PYTHONINC  is the include path to find the Python includes for building
-    PYTHONLIB  is a description of the location of the Python libraries and
-               the library to use
-
-    The execution of pyCAPS requires a single environment variable:
+    demonstration capabilities. The execution of pyCAPS requires a single 
+    environment variable:
 
     PYTHONPATH is a Python environment variable that needs to have the path
-               $ESP_ROOT/lib included.
-
-    For MACs and LINUX the configuration procedure inserts these environment 
-    variables with the locations it finds by executing the version of Python 
-    available in the shell performing the build. If makeEnv emits any errors
-    related to Python, the resultant environment file(s) will need to be 
-    updated in order to use Python (the automatic procedure has failed).
-
-    For Windows ESPenv.bat must be edited (unless configured from a command 
-    prompt that has both the MSVS and Python environments), the "rem" 
-    removed and the appropriate information set (if Python exists on the 
-    machine). Also note that the bit size (32 or 64) of Python that gets 
-    used on Windows must be consistent with the build of ESP, which is 
-    64bit.
-
-    For Example on Windows (after downloading and installing Python on C:):
-      set PYTHONINC=C:\Python37\include
-      set PYTHONLIB=C:\Python37\Libs\python37.lib
+               $ESP_ROOT/pyESP included.
 
 2.3.2 3rd Party Environment Variables
 
@@ -281,6 +227,36 @@
 
     TETGEN
       TETGEN is the path where the TetGen distribution has been unpacked
+
+    Some of the AIMs have Python embedded. Building these AIMs with
+    Python embedding is enabled by 2 environment variables (the Python 
+    development package is required under Linux):
+    
+    PYTHONINC  is the include path to find the Python includes for building
+    PYTHONLIB  is a description of the location of the Python libraries and
+               the library to use
+
+    The exact same version of Python that was used to compile the embedding
+    must be used when executing Python scripts.
+
+    For MACs and LINUX the configuration procedure inserts these environment 
+    variables with the locations it finds by executing the version of Python 
+    available in the shell performing the build. If makeEnv emits any errors
+    related to Python, the resultant environment file(s) will need to be 
+    updated in order to use Python in the AIMs (the automatic procedure has 
+    failed).
+
+    For Windows ESPenv.bat may need be edited (unless configured from a 
+    command prompt that has both the MSVS and Python environments), the "rem" 
+    removed and the appropriate information set (if Python exists on the 
+    machine). Also note that the bit size (32 or 64) of Python that gets 
+    used on Windows must be consistent with the build of ESP, which is 
+    64bit.
+
+    For Example on Windows (after downloading and installing Python on C:):
+      set PYTHONINC=C:\Python38\include
+      set PYTHONLIB=C:\Python38\Libs\python38.lib
+      set PYTHONPATH=%ESP_ROOT%\lib:%ESP_ROOT%\pyESP
 
 2.3.3 The Cart3D Design Framework
 
@@ -398,20 +374,13 @@
     % python pyCAPSscript.py  (Note: many example Python scripts can be 
                                      found in $ESP_ROOT/CAPSexamples/pyCAPS)
 
-3.5 CAPS Portion of the Training
-
-    The examples and exercises in the $ESP_ROOT/training rely on 3rd party 
-    software. The PreBuilt distributions contain all executables needed to
-    run the CAPS part of the training except for ParaView (which is freely
-    available on the web) and Pointwise. 
-
 
 4.0 Notes on 3rd Party Analyses
 
 4.1 The AFLR suite
 
     Building the AFLR AIMs (AFLR2, AFLR3 and AFLR4) requires AFLR_LIB at
-    10.4.2 or higher. Note that built versions of the so/DLLs can be 
+    10.15.6 or higher. Note that built versions of the so/DLLs can be 
     found in the PreBuilt distributions and should be able to be used with 
     ESP that you build by placing them in the $ESP_ROOT/lib directory.
 
@@ -455,16 +424,16 @@
 4.8 Pointwise
 
     The CAPS connection to Pointwise is now handled internally but requires,
-    at a minimum Pointwise V18.2 R2, but V18.3 R1 is recommended. This setup
+    at a minimum Pointwise V18.2 R2, but V18.4 is recommended. This setup
     performs automatic unstructured meshing. Note that the environment variable 
     CAPS_GLYPH is set by the ESP configure script and points to the Glyph 
     scripts that should be used with CAPS and the current release of Pointwise.
 
 4.9 SU2
 
-    Supported versions are: 4.1.1 (Cardinal), 5.0.0 (Raven), 6.1.0, and 6.2.0
-    (Falcon). SU2 version 6.0 will work except for the use of displacements 
-    in a Fluid/Structure Interaction setting.
+    Supported versions are: 4.1.1 (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) 
+    and 7.1.1 (Blackbird). SU2 version 6.0 will work except for the use of 
+    displacements in a Fluid/Structure Interaction setting.
     
 4.10 xfoil
 

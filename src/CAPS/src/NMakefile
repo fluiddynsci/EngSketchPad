@@ -10,7 +10,7 @@ ODIR  = .
 !ENDIF
 
 OBJS  = capsBase.obj  capsAnalysis.obj capsApprox.obj capsAttr.obj capsAIM.obj \
-	capsBound.obj capsProblem.obj  capsValue.obj  conjGrad.obj \
+	capsBound.obj capsProblem.obj  capsValue.obj  capsUnits.obj  conjGrad.obj \
 	printObject.obj
 
 !IFDEF ESP_BLOC
@@ -70,7 +70,8 @@ caps.res:	caps.rc
 	rc caps
 
 $(OBJS): 	$(IDIR)\capsErrors.h $(IDIR)\capsTypes.h $(IDIR)\prm.h \
-		capsBase.h $(IDIR)\OpenCSM.h $(IDIR)\common.h $(OBJS:.obj=.c)
+		capsFunIDs.h capsBase.h $(IDIR)\OpenCSM.h $(IDIR)\common.h \
+		$(OBJS:.obj=.c)
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) $*.c 
 
 end:

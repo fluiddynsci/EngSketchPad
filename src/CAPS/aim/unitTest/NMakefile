@@ -45,7 +45,7 @@ pyCAPStest: all $(COPY)
 
 copy: $(TDIR) $(TDIR)\csmData $(TDIR)\cCAPS $(TDIR)\pyCAPS $(TDIR)\datafiles
 	cd $(TDIR)\csmData
-	xcopy $(SDIR)\csmData\*.*        /Q /Y
+	xcopy $(SDIR)\csmData\*.csm      /Q /Y
 	cd $(TDIR)\pyCAPS
 	xcopy $(SDIR)\pyCAPS\*.*         /Q /Y
 	xcopy $(SDIR)\pyCAPS\NMakefile   /Q /Y

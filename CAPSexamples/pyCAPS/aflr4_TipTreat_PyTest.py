@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -15,7 +13,7 @@ parser = argparse.ArgumentParser(description = 'AFLR4 Tip Treatment PyTest Examp
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot surface meshes")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
@@ -23,34 +21,32 @@ args = parser.parse_args()
 # Working directory
 workDir = os.path.join(str(args.workDir[0]), "AFLR4TipTreatAnalysisTest")
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
-# Load CSM file and build the geometry explicitly
+# Load CSM file
 geometryScript = os.path.join("..","csmData","tiptreat.csm")
-myGeometry = myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript, 
+                           outLevel=args.verbosity)
 
 # Load AFLR4 aim
-myAnalysis = myProblem.loadAIM(aim = "aflr4AIM",
-                               analysisDir = workDir)
+myAnalysis = myProblem.analysis.create(aim = "aflr4AIM")
 
-# Set AIM verbosity
-myAnalysis.setAnalysisVal("Mesh_Quiet_Flag", True if args.verbosity == 0 else False)
+# Set AIM outLevel
+myAnalysis.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
 
 # Set output grid format since a project name is being supplied - Tecplot  file
-myAnalysis.setAnalysisVal("Mesh_Format", "Tecplot")
+myAnalysis.input.Mesh_Format = "Tecplot"
 
 # Farfield growth factor
-myAnalysis.setAnalysisVal("ff_cdfr", 1.4)
+myAnalysis.input.ff_cdfr = 1.4
 
 # Set maximum and minimum edge lengths relative to capsMeshLength
-myAnalysis.setAnalysisVal("max_scale", 0.2)
-myAnalysis.setAnalysisVal("min_scale", 0.01)
+myAnalysis.input.max_scale = 0.2
+myAnalysis.input.min_scale = 0.01
 
 # Dissable curvature refinement when AFLR4 cannot generate a mesh
-# myAnalysis.setAnalysisVal("Mesh_Gen_Input_String", "auto_mode=0")
+# myAnalysis.input.Mesh_Gen_Input_String = "auto_mode=0"
 
-#myAnalysis.setAnalysisVal("Mesh_Length_Factor", 0.25)
+#myAnalysis.input.Mesh_Length_Factor = 0.25
 
 # Run through a range of geometry configurations and generate surface meshes
 BS = "BS"
@@ -62,18 +58,18 @@ for begFac in begFacs:
     for sharpte in sharptes:
         for cont in conts:
 
-            myGeometry.setGeometryVal("begFac", begFac)
-            myGeometry.setGeometryVal("sharpte", sharpte)
-            myGeometry.setGeometryVal("cont", cont)
+            myProblem.geometry.despmtr.begFac  = begFac
+            myProblem.geometry.cfgpmtr.sharpte = sharpte
+            myProblem.geometry.cfgpmtr.cont    = cont
 
             geom = str(begFac) + BS[sharpte] + str(cont)
 
             # Set project name so a mesh file is generated for each configuration
-            myAnalysis.setAnalysisVal("Proj_Name", "pyCAPS_AFLR4_" + geom + "_Test")
+            myAnalysis.input.Proj_Name = "pyCAPS_AFLR4_" + geom + "_Test"
 
             # Save the gometry configuration
             filename = "wing" + geom + ".egads"
-            myAnalysis.saveGeometry(filename)
+            myAnalysis.geometry.save(filename)
 
             # Run AIM pre-analysis
             myAnalysis.preAnalysis()
@@ -86,4 +82,4 @@ for begFac in begFacs:
             myAnalysis.postAnalysis()
 
             if args.noPlotData == False:
-                myAnalysis.viewGeometry()
+                myAnalysis.geometry.view()

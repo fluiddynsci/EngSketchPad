@@ -1502,7 +1502,7 @@ catend
 catbeg    2
    assert    0   1   0   0
 catend
-box       0   0   0   0   0   0
+cylinder  0   0   0   0   0   0   0
 assert    0   1   0   0
 catbeg    $illegal_value
    assert    1   1   0   0

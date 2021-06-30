@@ -37,11 +37,19 @@ ruled_naca_dot:	$(ODIR)/ruled_naca_dot.o $(ODIR)/pingBodies.o
 $(ODIR)/%.o:	%.c 
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. $< -o $@
 
+test: circle1_dot circle2_dot naca_dot ruled_naca_dot
+	$(VALGRIND_COMMAND) ./circle1_dot
+	$(VALGRIND_COMMAND) ./circle2_dot
+	$(VALGRIND_COMMAND) ./naca_dot
+	$(VALGRIND_COMMAND) ./ruled_naca_dot
+
+
 clean:
 	rm -f $(ODIR)/circle1_dot.o \
 		$(ODIR)/circle2_dot.o \
 		$(ODIR)/naca_dot.o \
-		$(ODIR)/pingBodies.o
+		$(ODIR)/pingBodies.o \
+		$(ODIR)/ruled_naca_dot.o
 
 cleanall:	clean
-	rm -f circle1_dot circle2_dot naca_dot
+	rm -f circle1_dot circle2_dot naca_dot ruled_naca_dot

@@ -37,7 +37,7 @@ $(TDIR)\awave.exe:	$(ODIR)\awave.obj
 	ifort /Fe$(TDIR)\awave.exe $(ODIR)\awave.obj $(FLIBS)
 
 $(ODIR)\awave.obj:	$(AWAVE)
-	ifort /c /O /MD /recursive $(AWAVE) /Fo$(ODIR)\awave.obj
+	ifort /c $(FOPTS) $(AWAVE) /Fo$(ODIR)\awave.obj
 
 clean:
 	-del $(ODIR)\awave.obj $(ODIR)\awaveAIM.obj

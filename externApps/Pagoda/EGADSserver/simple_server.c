@@ -19,9 +19,6 @@
 #include "egads.h"
 
 
-/* entry point NOT in egads.h */
-extern int EG_exportModel(ego mobject, size_t *nbytes, char *stream[]);
-
 
 /***********************************************************************/
 /*                                                                     */

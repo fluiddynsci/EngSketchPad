@@ -1,7 +1,7 @@
 #
 # Written by Dr. Ryan Durscher AFRL/RQVC
 # 
-# This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3793.
+# This software has been cleared for public release on 27 Oct. 2020, case number 88ABW-2020-3328.
 
 cimport cEGADS
 
@@ -127,7 +127,7 @@ cdef extern from "caps.h":
     
     int caps_setAttr( capsObj cobj, const char *name, capsObj aval )
     
-    int caps_deleleAttr( capsObj cobj, char *name )
+    int caps_deleteAttr( capsObj cobj, char *name )
     
     #/* problem functions */
     int caps_open( const char *filename, const char *pname, capsObj *pobject )
@@ -177,7 +177,7 @@ cdef extern from "caps.h":
     int caps_boundInfo( const capsObj object,  capsState *state, int *dim, 
                         double *plims )
     
-    int caps_completeBound( capsObj bobject )
+    int caps_closeBound( capsObj bobject )
     
     int caps_fillVertexSets( capsObj bobject, int *nErr, capsErrs **errors )
 
@@ -231,12 +231,13 @@ cdef extern from "caps.h":
     int caps_setValueShape( capsObj object, int dim,  capsFixed lfixed,
                             capsFixed sfixed,  capsNull ntype )
     
-    int caps_convert( const capsObj object, const char *units, double inp, double *outp )
+    int caps_convert( const capsObj object, const char *inUnits, double inVal, 
+                                            const char *outUnits, double *outVal )
     
     int caps_transferValues( capsObj source,  capstMethod method, 
                              capsObj target, int *nErr, capsErrs **errors )
     
-    int caps_makeLinkage( capsObj link,  capstMethod method,
+    int caps_linkValue( capsObj link,  capstMethod method,
                           capsObj target )
     
 cdef extern from "capsErrors.h":
@@ -278,3 +279,6 @@ cdef extern from "capsErrors.h":
     cdef int CAPS_EXECERR
     cdef int CAPS_CLEAN
     cdef int CAPS_BADINTENT "CAPS_BADINTENT"
+    cdef int CAPS_BADINIT      
+    cdef int CAPS_NOTNEEDED    
+    cdef int CAPS_NOSENSITVTY

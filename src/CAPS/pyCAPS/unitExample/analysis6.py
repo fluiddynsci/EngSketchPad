@@ -1,6 +1,4 @@
-from __future__ import print_function
-
-# Import pyCAPS module (Linux and OSx = pyCAPS.so file; Windows = pyCAPS.pyd file) 
+# Import pyCAPS module
 import pyCAPS
 
 # Instantiate our CAPS problem "myProblem" 
@@ -28,7 +26,3 @@ infoDict = tetgen.getAnalysisInfo(printinfo = False,  infoDict = True)
 
 # Print dictionary 
 print(infoDict)
-
-# Close our problems
-print("Closing our problem")
-myProblem.closeCAPS()

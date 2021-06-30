@@ -1,10 +1,10 @@
 # masstran.csm
 # used for Masstran testing
 
-DESPMTR VIEW:plate 1
-DESPMTR VIEW:box1 1
-DESPMTR VIEW:box2 1
-DESPMTR VIEW:box3 1
+CFGPMTR VIEW:plate 1
+CFGPMTR VIEW:box1 1
+CFGPMTR VIEW:box2 1
+CFGPMTR VIEW:box3 1
 
 IFTHEN VIEW:plate EQ 1
     BOX       0.0  0.0  0.0  2.0  3.0  0.0

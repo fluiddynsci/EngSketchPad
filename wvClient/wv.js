@@ -226,6 +226,16 @@ function wvUpdateUI()
         wv.keyPress = -1;
         wv.dragging = false;
     }
+  
+    // if something is located, post a message
+    if (wv.located != undefined) {
+        postMessage("Located: " + wv.located[0] + " " + wv.located[1] +
+                    " " + wv.located[2]);
+        wv.socketUt.send("Located: " + wv.located[0] + " " + wv.located[1] +
+                         " " + wv.located[2]);
+        wv.located = undefined;
+        wv.locate  = 0;
+    }
 
     // if the tree has not been created but the scene graph (possibly) exists...
     if (wv.sgUpdate == 1 && (wv.sceneGraph !== undefined)) {
@@ -313,6 +323,7 @@ function wvUpdateUI()
             postMessage("N - next scalar");
             postMessage("L - change scalar limits");
             postMessage("q - query at cursor");
+            postMessage("l - ~XYZ  at cursor");
             postMessage("m - set view matrix");
             postMessage("M - current view matrix");
             postMessage("x - view from -X direction");
@@ -350,6 +361,14 @@ function wvUpdateUI()
         // 'L' -- scalar limits
         } else if (wv.keyPress == 76) {
             wv.socketUt.send("limits");
+          
+        // 'l' -- locate
+        } else if (wv.keyPress == 108) {
+            if (wv.locate == 1) {
+                wv.locate = 0;
+            } else {
+                wv.locate = 1;
+            }
         
         // 'm' -- set view matrix
         } else if (wv.keyPress == 109) {

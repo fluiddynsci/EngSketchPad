@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -108,10 +108,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     for (i = 0; i < udps[numUdp].arg[0].size/3; i++) {
@@ -136,11 +133,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         nuknots = udps[numUdp].arg[1].size + 2;
     }
 
-    uknots = (double *) malloc(nuknots*sizeof(double));
-    if (uknots == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(uknots, double, nuknots);
 
     if (udps[numUdp].arg[1].size < 2) {
         uknots[1] = 0;
@@ -161,11 +154,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         nvknots = udps[numUdp].arg[2].size + 2;
     }
 
-    vknots = (double *) malloc(nvknots*sizeof(double));
-    if (vknots == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(vknots, double, nvknots);
 
     if (udps[numUdp].arg[2].size < 2) {
         vknots[1] = 0;
@@ -186,11 +175,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         nwknots = udps[numUdp].arg[3].size + 2;
     }
 
-    wknots = (double *) malloc(nwknots*sizeof(double));
-    if (wknots == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(wknots, double, nwknots);
 
     if (udps[numUdp].arg[3].size < 2) {
         wknots[1] = 0;
@@ -219,11 +204,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     ndata = MAX(MAX(nuknots, nvknots), nwknots);
     ndata = ndata * (2 + 3 * ndata);
 
-    data = (double *) malloc(ndata*sizeof(double));
-    if (wknots == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(data, double, ndata);
 
     /*
                 ^ Y,V
@@ -543,7 +524,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* set the output value(s) */
     status = EG_getMassProperties(*ebody, data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getMassProperties);
 
     AREA(0)   = data[1];
     VOLUME(0) = data[0];

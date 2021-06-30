@@ -106,6 +106,9 @@ int vlm_autoSpaceSpanPanels(int NspanTotal, int numSection, vlmSectionStruct vlm
 
         // just set the total
         vlmSection[sectionIndex1].Nspan = NspanTotal;
+        if (vlmSection[sectionIndex1].Sset == (int)false)
+          vlmSection[sectionIndex1].Sspace = 1; // cosine
+
         return CAPS_SUCCESS;
     }
 
@@ -135,7 +138,7 @@ int vlm_autoSpaceSpanPanels(int NspanTotal, int numSection, vlmSectionStruct vlm
         distLETotal += distLE;
 
         // Modify the spacing parameter based on control surfaces present at each section
-        if (vlmSection[sectionIndex1].Nspan < 2) {
+        if (vlmSection[sectionIndex1].Sset == (int)false) {
 
           numControl[0] = vlmSection[sectionIndex1].numControl;
           numControl[1] = vlmSection[sectionIndex2].numControl;

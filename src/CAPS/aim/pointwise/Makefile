@@ -14,9 +14,11 @@ ODIR  = .
 TDIR  = $(ESP_ROOT)/bin
 endif
 
-
-#default:	$(LDIR)/pointwiseAIM.so $(TDIR)/egads2nmb
+ifdef GELITE
+default:	$(LDIR)/pointwiseAIM.so $(TDIR)/egads2nmb
+else
 default:	$(LDIR)/pointwiseAIM.so
+endif
 
 $(LDIR)/pointwiseAIM.so:	$(ODIR)/pointwiseAIM.o $(ODIR)/hashElement.o \
 			$(LDIR)/libutils.a $(LDIR)/libaimUtil.a
@@ -42,15 +44,19 @@ $(ODIR)/egads2nmb.o:	egads2nmb.c
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. egads2nmb.c \
 		-o $(ODIR)/egads2nmb.o
 
-
-dox:
-	(cd doc; doxygen pointwiseAIM_dox.cfg; cd latex; make; mv refman.pdf pointwiseAIM.pdf)
-
-doxclean:
-	(cd doc; rm -f INPUT; rm -rf html latex; rm -f pointwiseAIM.tag)
+lint:
+	$(LINT) -I../../include -I$(IDIR) -I../utils pointwiseAIM.c hashElement.c -exportlocal -nestcomment -evalorder -retvalother -boolops -shiftimplementation -initallelements
 	
 clean:
 	-rm -f $(ODIR)/egads2nmb.o $(ODIR)/pointwiseAIM.o $(ODIR)/hashElement.o
 
 cleanall:	clean
 	-rm -f $(TDIR)/egads2nmb $(LDIR)/pointwiseAIM.so
+
+dox: doc/html/index.html
+doc/html/index.html: $(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
+	(cd doc; doxygen pointwiseAIM_dox.cfg; cd latex; make; mv refman.pdf pointwiseAIM.pdf)
+
+doxclean:
+	(cd doc; rm -f INPUT; rm -rf html latex; rm -f pointwiseAIM.tag)
+	

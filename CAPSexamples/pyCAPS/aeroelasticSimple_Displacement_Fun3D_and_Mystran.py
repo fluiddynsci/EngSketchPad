@@ -1,198 +1,215 @@
-from __future__ import print_function
+# Import pyCAPS module
+import pyCAPS
 
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import os module
+import os
 
-# Import os module   
-try: 
-    import os
-except:
-    print ("Unable to import os module")
-    raise SystemExit
+# Import argparse module
+import argparse
 
-# Initialize capsProblem object
-myProblem = capsProblem()
+# Setup and read command line options. Please note that this isn't required for pyCAPS
+parser = argparse.ArgumentParser(description = 'Aeroelastic Displacement Fun3D and Mystran Example',
+                                 prog = 'aeroelasticSimple_Displacement_Fun3D_and_Mystran',
+                                 formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
-# Create working directory variable 
-workDir = "AeroelasticSimple_Displacement"
+#Setup the available commandline options
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
+parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot data")
+parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+args = parser.parse_args()
+
+# Create working directory variable
+workDir = os.path.join(str(args.workDir[0]), "AeroelasticSimple_Displacement_fun3d_Mystran")
 
 # Create projectName vairbale
-projectName = "aeroelasticSimple_Displacement"
+projectName = "aeroelasticSimple_Displacement_Fun3D_Mystran"
 
-# Set the number of transfer iterations
-numTransferIteration = 1
-
-# Load CSM file 
+# Load CSM file
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransferSimple.csm")
-myProblem.loadCAPS(geometryScript)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
-# Load AIMs 
-myProblem.loadAIM(aim = "tetgenAIM", 
-                  altName= "tetgen",
-                  analysisDir = workDir + "_FUN3D",
-                  capsIntent = "CFD")
+# Load AIMs
+surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
+                                     name= "egads",
+                                     capsIntent = "CFD")
 
-  
-myProblem.loadAIM(aim = "fun3dAIM", 
-                  altName = "fun3d", 
-                  analysisDir = workDir + "_FUN3D", 
-                  parents = ["tetgen"],
-                  capsIntent = "CFD")
+mesh = myProblem.analysis.create(aim = "tetgenAIM", 
+                                 name= "tetgen",
+                                 capsIntent = "CFD")
 
-myProblem.loadAIM(aim = "mystranAIM", 
-                  altName = "mystran", 
-                  analysisDir = workDir + "_MYSTRAN",
-                  capsIntent = "STRUCTURE")
+mesh.input["Surface_Mesh"].link(surfMesh.output["Surface_Mesh"])
 
-transfers = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
-for i in transfers:
-    myProblem.createDataTransfer(variableName = "Displacement",
-                                 aimSrc = "mystran",
-                                 aimDest ="fun3d",
-                                 transferMethod = "Interpolate", # "Conserve", #, 
-                                 capsBound = i)
+fun3d = myProblem.analysis.create(aim = "fun3dAIM", 
+                                  name = "fun3d", 
+                                  capsIntent = "CFD")
+
+fun3d.input["Mesh"].link(mesh.output["Volume_Mesh"])
+
+mystran = myProblem.analysis.create(aim = "mystranAIM",
+                                    name = "mystran",
+                                    capsIntent = "STRUCTURE")
+
+# Create the data transfer connections
+boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
+for boundName in boundNames:
+    # Create the bound
+    bound = myProblem.bound.create(boundName)
+    
+    # Create the vertex sets on the bound for fun3d and mystran analysis
+    fun3dVset   = bound.vertexSet.create(fun3d)
+    mystranVset = bound.vertexSet.create(mystran)
+
+    # Create displacement data sets
+    fun3d_Displacement   = fun3dVset.dataSet.create("Displacement", pyCAPS.fType.FieldIn)
+    mystran_Displacement = mystranVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+
+    # Link the data set
+    fun3d_Displacement.link(mystran_Displacement, "Interpolate")
+    
+    # Close the bound as complete (cannot create more vertex or data sets)
+    bound.close()
+
+# Set inputs for egads 
+surfMesh.input.Tess_Params = [.05, 0.01, 20.0]
 
 # Set inputs for tetgen 
-myProblem.analysis["tetgen"].setAnalysisVal("Tess_Params", [.05, 0.01, 20.0])
-myProblem.analysis["tetgen"].setAnalysisVal("Preserve_Surf_Mesh", True)
+mesh.input.Preserve_Surf_Mesh = True
+mesh.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
 
 # Set inputs for fun3d
-myProblem.analysis["fun3d"].setAnalysisVal("Proj_Name", projectName)
-myProblem.analysis["fun3d"].setAnalysisVal("Mesh_ASCII_Flag", False)
-myProblem.analysis["fun3d"].setAnalysisVal("Mach", 0.3)
-myProblem.analysis["fun3d"].setAnalysisVal("Equation_Type","compressible")
-myProblem.analysis["fun3d"].setAnalysisVal("Viscous", "inviscid")
-myProblem.analysis["fun3d"].setAnalysisVal("Num_Iter",10)
-myProblem.analysis["fun3d"].setAnalysisVal("CFL_Schedule",[1, 5.0])
-myProblem.analysis["fun3d"].setAnalysisVal("CFL_Schedule_Iter", [1, 40])
-myProblem.analysis["fun3d"].setAnalysisVal("Overwrite_NML", True)
-myProblem.analysis["fun3d"].setAnalysisVal("Restart_Read","off")
+speedofSound = 340.0 # m/s
+refVelocity = 100.0 # m/s
+refDensity = 1.2 # kg/m^3
+
+fun3d.input.Proj_Name = projectName
+fun3d.input.Mesh_ASCII_Flag = False
+fun3d.input.Mach = refVelocity/speedofSound
+fun3d.input.Equation_Type = "compressible"
+fun3d.input.Viscous = "inviscid"
+fun3d.input.Num_Iter = 10
+fun3d.input.CFL_Schedule = [1, 5.0]
+fun3d.input.CFL_Schedule_Iter = [1, 40]
+fun3d.input.Overwrite_NML = True
+fun3d.input.Restart_Read = "off"
 
 inviscid = {"bcType" : "Inviscid", "wallTemperature" : 1.1}
-myProblem.analysis["fun3d"].setAnalysisVal("Boundary_Condition", [("Skin", inviscid),
-                                                                  ("SymmPlane", "SymmetryY"),
-                                                                  ("Farfield","farfield")])
+fun3d.input.Boundary_Condition = {"Skin"     : inviscid,
+                                  "SymmPlane": "SymmetryY",
+                                  "Farfield" : "farfield"}
 
 # Set inputs for mystran
-myProblem.analysis["mystran"].setAnalysisVal("Proj_Name", projectName)
-myProblem.analysis["mystran"].setAnalysisVal("Edge_Point_Max", 10)
-myProblem.analysis["mystran"].setAnalysisVal("Edge_Point_Min", 10)
+mystran.input.Proj_Name = projectName
+mystran.input.Edge_Point_Max = 3
+mystran.input.Edge_Point_Min = 3
 
-myProblem.analysis["mystran"].setAnalysisVal("Quad_Mesh", True)
-myProblem.analysis["mystran"].setAnalysisVal("Tess_Params", [.5, .1, 15])
-myProblem.analysis["mystran"].setAnalysisVal("Analysis_Type", "Static");
+mystran.input.Quad_Mesh = True
+mystran.input.Tess_Params = [.5, .1, 15]
+mystran.input.Analysis_Type = "Static"
 
-madeupium    = {"materialType" : "isotropic", 
-                "youngModulus" : 72.0E9 , 
-                "poissonRatio": 0.33, 
+madeupium    = {"materialType" : "isotropic",
+                "youngModulus" : 72.0E9 ,
+                "poissonRatio" : 0.33,
                 "density" : 2.8E3}
-myProblem.analysis["mystran"].setAnalysisVal("Material", ("Madeupium", madeupium))
+mystran.input.Material = {"Madeupium": madeupium}
 
-skin  = {"propertyType" : "Shell", 
-         "membraneThickness" : 0.06, 
-         "material"        : "madeupium", 
-         "bendingInertiaRatio" : 1.0, # Default           
-         "shearMembraneRatio"  : 5.0/6.0} # Default 
+skin  = {"propertyType" : "Shell",
+         "membraneThickness" : 0.06,
+         "material"        : "madeupium",
+         "bendingInertiaRatio" : 1.0, # Default
+         "shearMembraneRatio"  : 5.0/6.0} # Default
 
-ribSpar  = {"propertyType" : "Shell", 
-            "membraneThickness" : 0.6, 
-            "material"        : "madeupium", 
-            "bendingInertiaRatio" : 1.0, # Default           
-            "shearMembraneRatio"  : 5.0/6.0} # Default 
+ribSpar  = {"propertyType" : "Shell",
+            "membraneThickness" : 0.6,
+            "material"        : "madeupium",
+            "bendingInertiaRatio" : 1.0, # Default
+            "shearMembraneRatio"  : 5.0/6.0} # Default
 
-myProblem.analysis["mystran"].setAnalysisVal("Property", [("Skin", skin),
-                                                          ("Rib_Root", ribSpar)])
+mystran.input.Property = {"Skin"    : skin,
+                          "Rib_Root": ribSpar}
 
-constraint = {"groupName" : "Rib_Root", 
+constraint = {"groupName" : "Rib_Root",
               "dofConstraint" : 123456}
-myProblem.analysis["mystran"].setAnalysisVal("Constraint", ("edgeConstraint", constraint))
+mystran.input.Constraint = {"edgeConstraint": constraint}
 
+# Static uniform pressure load
 load = {"groupName": "Skin", "loadType" : "Pressure", "pressureForce": 1E8}
-myProblem.analysis["mystran"].setAnalysisVal("Load", ("pressureInternal", load ))   
+mystran.input.Load = {"pressureInternal": load}
+
+####### EGADS ########################
+# Run pre/post-analysis for tetgen
+print ("\nRunning PreAnalysis ......", "tetgen")
+surfMesh.preAnalysis()
+
+print ("\nRunning PostAnalysis ......", "tetgen")
+surfMesh.postAnalysis()
+#######################################
+
+####### Tetgen ########################
+# Run pre/post-analysis for tetgen
+print ("\nRunning PreAnalysis ......", "tetgen")
+mesh.preAnalysis()
+
+print ("\nRunning PostAnalysis ......", "tetgen")
+mesh.postAnalysis()
+#######################################
+
+
+####### Mystran #######################
+# Run pre/post-analysis for mystran and execute
+print ("\nRunning PreAnalysis ......", "mystran")
+mystran.preAnalysis()
+
+# Run mystran
+print ("\n\nRunning Mystran......")
+currentDirectory = os.getcwd() # Get our current working directory
+
+os.chdir(mystran.analysisDir) # Move into test directory
+
+os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run fun3d via system call
+
+if os.path.getsize("Info.out") == 0:
+    raise SystemError("Mystran excution failed\n")
+
+os.chdir(currentDirectory) # Move back to top directory
+
+print ("\nRunning PostAnalysis ......", "mystran")
+mystran.postAnalysis()
+#######################################
+
+# Plot the dataTransfer
+for boundName in boundNames:
+    if args.noPlotData == False:
+        try:
+            print ("\tPlotting dataTransfer source......", boundName)
+            myProblem.bound[boundName].vertexSet["mystran"].dataSet["Displacement"].view()
+            print ("\tPlotting dataTransfer destination......")
+            myProblem.bound[boundName].vertexSet["fun3d"].dataSet["Displacement"].view()
+        except ImportError:
+            print("Unable to plot data")
+
+####### Run fun3d ####################
+# Re-run the preAnalysis 
+print ("\nRunning PreAnalysis ......", "fun3d")
+fun3d.preAnalysis()
+
+print ("\n\nRunning FUN3D......")  
+currentDirectory = os.getcwd() # Get our current working directory 
+
+os.chdir(myProblem.analysis[i].analysisDir) # Move into test directory
+
+cmdLineOpt = "--read_surface_from_file --animation_freq -1"
+
+os.system("mpirun -np 5 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
     
-    
-# Run pre/post-analysis for tetgen and fun3d - execute mystran
-aim = ["tetgen", "mystran"]
-for i in aim:
-    print ("\nRunning PreAnalysis ......", i)
-    myProblem.analysis[i].preAnalysis()
+if os.path.getsize("Info.out") == 0: # 
+    raise SystemError("FUN3D excution failed\n")
 
-    if "mystran" in i:
-     
-        # Run mystran
-        print ("\n\nRunning Mystran......")  
-        currentDirectory = os.getcwd() # Get our current working directory 
+os.chdir(currentDirectory) # Move back to top directory
 
-        os.chdir(myProblem.analysis[i].analysisDir) # Move into test directory
-
-        os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run fun3d via system call
-
-        if os.path.getsize("Info.out") == 0: # 
-            print ("Mystran excution failed\n")
-            myProblem.closeCAPS()
-            raise SystemError
-            
-        os.chdir(currentDirectory) # Move back to top directory 
-        
-    if "tetgen" in i:    
-        print ("\nRunning PostAnalysis ......", i)
-        # Run AIM post-analysis
-        myProblem.analysis[i].postAnalysis()
-
-# Run aim pre-analysis, excute codes, and run aim post-analysis
-aim = ["fun3d"]
-for i in aim:
-    print ("\nRunning PreAnalysis ......", i)
-    myProblem.analysis[i].preAnalysis()
-    
-    print ("\nRunning PostAnalysis ......", i)
-    myProblem.analysis[i].postAnalysis()
-
-aim = ["mystran", "fun3d"]
-for i in aim:
-    
-    if "mystran" in i:
-        print ("\nRunning PostAnalysis ......", i)
-        # Run AIM post-analysis
-        myProblem.analysis[i].postAnalysis()
-
-        #Execute the dataTransfer
-        print ("\nExecuting dataTransfer ......")
-        for j in transfers: 
-            myProblem.dataBound[j].executeTransfer()
-           
-            myProblem.dataBound[j].dataSetSrc["Displacement"].viewData() 
-            #myProblem.dataBound[j].viewData("Displacement", filename = j + "Displacement", showImage=False, colormap="Purples")
-            
-    if "fun3d" in i:
-
-        # Peturb fun3d Analysis to make it unclean     
-        myProblem.analysis[i].setAnalysisVal("Mach", 0.3)
-                
-        # Re-run the preAnalysis 
-        print ("\nRunning PreAnalysis ......", i)
-        myProblem.analysis[i].preAnalysis()
-
-        ####### Run fun3d ####################
-        print ("\n\nRunning FUN3D......")  
-        currentDirectory = os.getcwd() # Get our current working directory 
-        
-        os.chdir(myProblem.analysis[i].analysisDir) # Move into test directory
-        
-        cmdLineOpt = "--read_surface_from_file --animation_freq -1"
-    
-        os.system("mpirun -np 5 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
-            
-        if os.path.getsize("Info.out") == 0: # 
-            print ("FUN3D excution failed\n")
-            myProblem.closeCAPS()
-            raise SystemError
-        
-        os.chdir(currentDirectory) # Move back to top directory
-        
-        print ("\nRunning PostAnalysis ......", i)
-        # Run AIM post-analysis
-        myProblem.analysis[i].postAnalysis()
- 
-# Close CAPS 
-myProblem.closeCAPS()
+print ("\nRunning PostAnalysis ......", "fun3d")
+# Run AIM post-analysis
+fun3d.postAnalysis()
+#######################################

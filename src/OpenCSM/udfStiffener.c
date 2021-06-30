@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -95,7 +95,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* check that Model was input that contains one Body */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -108,11 +108,12 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     }
 
     status = EG_getContext(emodel, &context);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     /* check that Model was input that contains one Face */
     status = EG_getBodyTopos(ebodys[0], NULL, FACE, &nface, &efaces);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
+    if (efaces == NULL) goto cleanup;   // needed for splint
 
     if (nface != 1) {
         printf(" udpExecute: input Body should have one Face\n");
@@ -130,7 +131,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         xyz0[2] = BEG(2,0);
 
         status = EG_invEvaluate(efaces[0], xyz0, uv, data);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         ubeg = uv[0];
         vbeg = uv[1];
@@ -149,7 +150,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         xyz0[2] = END(2,0);
 
         status = EG_invEvaluate(efaces[0], xyz0, uv, data);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         uend = uv[0];
         vend = uv[1];
@@ -181,10 +182,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("depth(%d) = %f\n", numUdp, DEPTH(numUdp));
@@ -193,11 +191,11 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* make copy of Face so that Model can be removed */
     status = EG_copyObject(efaces[0], NULL, &eface);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_copyObject);
 
     /* create a Bspline Pcurve on the Face (so that its extents are finite) */
     status = EG_getTopology(eface, &esurf, &oclass, &mtype, data, &nchild, &echilds, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     data[0] = ubeg;
     data[1] = vbeg;
@@ -205,46 +203,46 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     data[3] = vend - vbeg;
 
     status = EG_makeGeometry(context, PCURVE, LINE, esurf, NULL, data, &epcurve);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     status = EG_invEvaluate(epcurve, data, uv, xyz0);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
     trange[0] = uv[0];
 
     data[0] = uend;
     data[1] = vend;
     status = EG_invEvaluate(epcurve, data, uv, xyz1);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
     trange[1] = uv[0];
 
     status = EG_convertToBSplineRange(epcurve, trange, &epcurve2);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_convertToBSplineRange);
 
     /* use the Pcurve to create an Edge (eedges[0]) on the input Face */
     status = EG_otherCurve(esurf, epcurve2, 0, &(ecurves[0]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_otherCurve);
 
     status = EG_evaluate(ecurves[0], &(trange[0]), xyz0);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_evaluate);
 
     status = EG_makeTopology(context, NULL, NODE, 0, xyz0, 0, NULL, NULL, &(enodes[0]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_evaluate(ecurves[0], &(trange[1]), xyz1);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_evaluate);
 
     status = EG_makeTopology(context, NULL, NODE, 0, xyz1, 0, NULL, NULL, &(enodes[1]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_makeTopology(context, ecurves[0], EDGE, TWONODE, trange, 2, enodes, NULL, &(eedges[0]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* find the "normal" direction at the center of the stiffener */
     uv[0] = (ubeg + uend) / 2;
     uv[1] = (vbeg + vend) / 2;
 
     status = EG_evaluate(esurf, uv, data);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_evaluate);
 
     norm[0]  = data[4] * data[8] - data[5] * data[7];
     norm[1]  = data[5] * data[6] - data[3] * data[8];
@@ -260,20 +258,20 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     xform[ 8] = 0;   xform[ 9] = 0;   xform[10] = 1;  xform[11] = norm[2] * DEPTH(numUdp);
 
     status = EG_makeTransform(context, xform, &exform);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTransform);
 
     status = EG_copyObject(ecurves[0], exform, &(ecurves[2]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_copyObject);
 
     status = EG_deleteObject(exform);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_deleteObject);
 
     /* make a new Edge that is "shorter" than copied Edge */
     status = EG_getRange(eedges[0], data, &periodic);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getRange);
     
     status = EG_arcLength(eedges[0], data[0], data[1], &length);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_arcLength);
 
     dt = sqrt(xform[3]*xform[3] + xform[7]*xform[7] + xform[11]*xform[11]) / length
         * (data[1] - data[0]) * tan(ANGLE(numUdp) * PIo180);
@@ -282,29 +280,29 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     trange[1] = data[1] - dt;
 
     status = EG_evaluate(ecurves[2], &(trange[0]), xyz3);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_evaluate);
 
     status = EG_makeTopology(context, NULL, NODE, 0, xyz3, 0, NULL, NULL, &(enodes[3]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_evaluate(ecurves[2], &(trange[1]), xyz2);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_evaluate);
 
     status = EG_makeTopology(context, NULL, NODE, 0, xyz2, 0, NULL, NULL, &(enodes[2]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_invEvaluate(ecurves[2], xyz3, uv, data);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
     trange[0] = uv[0];
 
     status = EG_invEvaluate(ecurves[2], xyz2, uv, data);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
     trange[1] = uv[0];
 
     etemp[0] = enodes[3];
     etemp[1] = enodes[2];
     status = EG_makeTopology(context, ecurves[2], EDGE, TWONODE, trange, 2, etemp, NULL, &(eedges[2]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* make the "angled" Edges at the ends of the stiffener */
     data[0] = xyz0[0];
@@ -315,20 +313,20 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     data[5] = xyz3[2] - xyz0[2];
 
     status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, data, &(ecurves[3]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     status = EG_invEvaluate(ecurves[3], xyz0, uv, data);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
     trange[0] = uv[0];
 
     status = EG_invEvaluate(ecurves[3], xyz3, uv, data);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
     trange[1] = uv[0];
 
     etemp[0] = enodes[0];
     etemp[1] = enodes[3];
     status = EG_makeTopology(context, ecurves[3], EDGE, TWONODE, trange, 2, etemp, NULL, &(eedges[3]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     data[0] = xyz1[0];
     data[1] = xyz1[1];
@@ -338,20 +336,20 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     data[5] = xyz2[2] - xyz1[2];
 
     status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, data, &(ecurves[1]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     status = EG_invEvaluate(ecurves[1], xyz1, uv, data);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
     trange[0] = uv[0];
 
     status = EG_invEvaluate(ecurves[1], xyz2, uv, data);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
     trange[1] = uv[0];
 
     etemp[0] = enodes[1];
     etemp[1] = enodes[2];
     status = EG_makeTopology(context, ecurves[1], EDGE, TWONODE, trange, 2, etemp, NULL, &(eedges[1]));
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* make a loop of the Edges */
     senses2[0] = SFORWARD;
@@ -360,37 +358,38 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     senses2[3] = SREVERSE;
 
     status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL, 4, eedges, senses2, &eloop);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* create a Surface from the Loop (using the overloaded EG_isoCline) */
     status = EG_isoCline(eloop, 0, 0.0, &esurf);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_isoCline);
 
     status = EG_deleteObject(eloop);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_deleteObject);
 
     /* find the PCurves associated with the Edges */
     for (iedge = 0; iedge < 4; iedge++) {
         status = EG_otherCurve(esurf, eedges[iedge], 0.0, &(eedges[iedge+4]));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_otherCurve);
     }
 
     /* make a new Loop and a Face using this Surface */
     status = EG_makeTopology(context, esurf, LOOP, CLOSED, NULL, 4, eedges, senses2, &eloop);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_makeTopology(context, esurf, FACE, SFORWARD, NULL, 1, &eloop, senses2, &eface);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* make a Shell and SheetBody */
     status = EG_makeTopology(context, NULL, SHELL, OPEN, NULL, 1, &eface, NULL, &eshell);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_makeTopology(context, NULL, BODY, SHEETBODY, NULL, 1, &eshell, NULL, ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
+    if (*ebody == NULL) goto cleanup;   // needed for splint
 
     status = EG_attributeAdd(*ebody, "__markFaces__", ATTRSTRING, 1, NULL, NULL, "true");
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_attributeAdd);
 
     /* set the output value (none) */
 

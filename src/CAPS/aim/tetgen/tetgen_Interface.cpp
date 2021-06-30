@@ -1,4 +1,5 @@
 // Tetgen interface functions - Written by Dr. Ryan Durscher AFRL/RQVC
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
 
 #include <vector>
 #include <set>
@@ -140,7 +141,8 @@ static int tetgen_to_MeshStruct(tetgenio *mesh, meshStruct *genUnstrMesh)  {
 extern "C" {
 //#endif
 
-int tetgen_VolumeMesh(meshInputStruct meshInput,
+int tetgen_VolumeMesh(void *aimInfo,
+                      meshInputStruct meshInput,
                       meshStruct *surfaceMesh,
                       meshStruct *volumeMesh)
 {
@@ -298,7 +300,7 @@ int tetgen_VolumeMesh(meshInputStruct meshInput,
     } catch (...){
         printf("Tetgen failed to generate an empty volume mesh......!!!\n");
         printf("  See Tecplot file tetegenDebugSurface.dat for the surface mesh\n");
-        mesh_writeTecplot("tetegenDebugSurface.dat", 1, surfaceMesh, 1.0);
+        mesh_writeTecplot(aimInfo,"tetegenDebugSurface.dat", 1, surfaceMesh, 1.0);
         return -335;
     }
 
@@ -460,7 +462,7 @@ int tetgen_VolumeMesh(meshInputStruct meshInput,
     } catch (...){
         printf("Tetgen failed to generate a volume mesh......!!!\n");
         printf("  See Tecplot file tetegenDebugSurface.dat for the surface mesh\n");
-        mesh_writeTecplot("tetegenDebugSurface.dat", 1, surfaceMesh, 1.0);
+        mesh_writeTecplot(aimInfo,"tetegenDebugSurface.dat", 1, surfaceMesh, 1.0);
         return -335;
     }
 

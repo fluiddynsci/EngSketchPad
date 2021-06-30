@@ -47,6 +47,6 @@ MARK
    RESTORE   iml2
    RESTORE   iml3
 RULE
-SUBTRACT
+SUBTRACT  0  0  -1e-5
 
 END

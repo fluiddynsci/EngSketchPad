@@ -12,7 +12,7 @@ written by John Dannenhoffer
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
       <!--
-          Copyright (C) 2010/2020  John F. Dannenhoffer, III (Syracuse University)
+          Copyright (C) 2010/2021  John F. Dannenhoffer, III (Syracuse University)
 
           This library is free software; you can redistribute it and/or
           modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,7 @@ written by John Dannenhoffer
         -->
 
     <title>
-      ESP (Engineering Sketch Pad, V1.18)
+      ESP (Engineering Sketch Pad, V1.19)
     </title>
 
     <script type="text/javascript" src="WebViewer/webgl-utils.js"> </script>
@@ -43,6 +43,7 @@ written by John Dannenhoffer
       var   main = {};            // object to store main mode
       var   sket = {};            // object to store "sketch"
       var   glov = {};            // object to store "gloves"
+      var   erep = {};            // object to store "ereped"
     </script>
 
     <script type="text/javascript" src="WebViewer/wv-draw.js">     </script>
@@ -55,6 +56,7 @@ written by John Dannenhoffer
     <script type="text/javascript" src="ESP-codemirror.js">        </script>
     <script type="text/javascript" src="ESP-sketch.js">            </script>
     <script type="text/javascript" src="ESP-gloves.js">            </script>
+    <script type="text/javascript" src="ESP-ereped.js">            </script>
     <script type="text/javascript" src="ESP.js">                   </script>
 
     <script>
@@ -89,17 +91,18 @@ written by John Dannenhoffer
       var OCSM_INACTIVE   = 302;
       var OCSM_DEFERRED   = 303;
 
-      var OCSM_EXTERNAL   = 500;
-      var OCSM_CONFIG     = 501;
-      var OCSM_CONSTANT   = 502;
-      var OCSM_INTERNAL   = 503;
-      var OCSN_OUTPUT     = 504;
+      var OCSM_DESPMTR    = 500;
+      var OCSM_CFGPMTR    = 501;
+      var OCSM_CONPMTR    = 502;
+      var OCSM_LOCALVAR   = 503;
+      var OCSM_OUTPMTR    = 504;
       var OCSM_UNKNOWN    = 505;
     </script>
 
     <link rel="stylesheet"    type="text/css"  href="ESP.css"        />
     <link rel="stylesheet"    type="text/css"  href="ESP-sketch.css" />
     <link rel="stylesheet"    type="text/css"  href="ESP-gloves.css" />
+    <link rel="stylesheet"    type="text/css"  href="ESP-ereped.css" />
     <link rel="shortcut icon" type="image/png" href="esp_logo.png"   />
   </head>
 
@@ -117,6 +120,7 @@ written by John Dannenhoffer
             <div id="myToolMenu"                 class="toolMenu-contents">
               <button title="Launch Sketcher"                                   onclick="sket.launch()"   >Sketch     </button>
               <button title="Launch Gloves"                                     onclick="glov.launch()"   >Gloves     </button>
+              <button title="Launch ErepEd"                                     onclick="erep.launch()"   >ErepEd     </button>
             </div>
           </div>
           <div class="doneMenu" id="doneMenu">
@@ -134,6 +138,11 @@ written by John Dannenhoffer
         <br>
           <button title="Build or solve"         type="button" id="solveButton" onclick="cmdSolve()"      >Up to date</button>
           <button title="Undo last action"       type="button" id="undoButton"  onclick="cmdUndo()"       >Undo      </button>
+          <div class="collabMenu">
+            <button id="collabMenuBtn"           class="collabMenuBtn"          onclick="cmdCollab()"     >Collab    </button>
+            <div id="myCollabMenu"               class="collabMenu-contents">
+            </div>
+          </div>
         <br>
           <button title="Home (front) view"      type="button" id="homeButton"  onclick="cmdHome()"       >H         </button>
           <button title="Left side view"         type="button" id="leftButton"  onclick="cmdLeft()"       >L         </button>
@@ -303,7 +312,7 @@ written by John Dannenhoffer
           </tr>
           <tr>
             <td><input type="radio" name="brchType" value="udparg">    udparg    </input></td>
-            <td>                                                                         </td>
+            <td><input type="radio" name="brchType" value="message">   message   </input></td>
             <td>                                                                         </td>
             <td><input type="radio" name="brchType" value="endif">     endif     </input></td>
             <td>                                                                         </td>
@@ -466,16 +475,16 @@ written by John Dannenhoffer
         <div id="editPmtrHeader" hidden>
           <h3>Either select one of these options ...</h3>
           <center>
-            <input type="button" value="Compute sensitivity"     onclick="compSens()">
-            <input type="button" value="Set Design Velocity"     onclick="setVel()">
-            <input type="button" value="Clear Design Velocities" onclick="clrVels()">
-            <input type="button" value="Delete Parameter"        onclick="delPmtr()">
+            <input type="button" value="Compute geom sens"         onclick="compGeomSens()">
+            <input type="button" value="Compute tess sens"         onclick="compTessSens()">
+            <input type="button" value="Clear Design Velocities"   onclick="clrVels()">
+            <input type="button" value="Delete Parameter"          onclick="delPmtr()">
               &nbsp;&nbsp;&nbsp;
-            <input type="button" value="Cancel"                  onclick="editPmtrCancel()">
-            <input type="button" value="OK"                      onclick="editPmtrOk()">
+            <input type="button" value="Cancel"                    onclick="editPmtrCancel()">
+            <input type="button" value="OK"                        onclick="editPmtrOk()">
           </center>
           <hr>
-          <h3>... or edit the current Parameter</h3>
+          <h3>... or edit a value for the current Parameter</h3>
         </div>
         <table>
           <tr>
@@ -483,17 +492,34 @@ written by John Dannenhoffer
             <td  id="pmtrName">-----</td>
           </tr>
         </table>
-        <table id="editPmtrTable">
+        <table id="editPmtrValTable">
           <tr>
             <td> the table goes here</td>
           </tr>
         </table>
+        <div id="editPmtrDot">
+          <h3>... or edit a velocity for the current Parameter</h3>
+          <table id="editPmtrDotTable">
+            <tr>
+              <td> the table goes here</td>
+            </tr>
+          </table>
+        </div>
+      </form>
+
+      <form id="showOutpmtrsForm" onsubmit="return false" hidden>
+        <center>
+          <input type="button" value="OK"     onclick="showOutpmtrsOk()">
+        </center>
+        <hr>
+        <div id="outpmtrsList">
+        </div>
       </form>
 
       <div id="editCsmForm" onsubmit="return false" hidden>
         <center>
           <input type="button" value="Copy"    onclick="cmdEditCopy(wv.codeMirror);">
-          <input type="button" value="Cut"     onclick="cmsEditCut(wv.codeMirror);">
+          <input type="button" value="Cut"     onclick="cmdEditCut(wv.codeMirror);">
           <input type="button" value="Paste"   onclick="cmdEditPaste(wv.codeMirror);"     id="cmdPaste">
             &nbsp;&nbsp;&nbsp;
           <input type="button" value="Search"  onclick="cmdEditFind(wv.codeMirror);">
@@ -532,6 +558,9 @@ written by John Dannenhoffer
       </div>
 
       <div id="glovesStatus", oncontextmenu="return false;" hidden>
+      </div>
+
+      <div id="erepedStatus", oncontextmenu="return false;" hidden>
       </div>
 
       <div id="ESPlogo", oncontextmenu="return false;">

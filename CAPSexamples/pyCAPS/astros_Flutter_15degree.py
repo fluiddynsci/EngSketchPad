@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import modules
 import os
@@ -23,41 +21,41 @@ parser = argparse.ArgumentParser(description = 'Astros Flutter 15degree Example'
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = ".", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
+workDir = os.path.join(str(args.workDir[0]), "AstrosFlutter15Deg")
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","15degreeWing.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load astros aim
-myAnalysis = myProblem.loadAIM(aim = "astrosAIM",
-                               altName = "astros",
-                               analysisDir= os.path.join(str(args.workDir[0]), "AstrosFlutter15Deg") )
+myAnalysis = myProblem.analysis.create(aim = "astrosAIM",
+                                       name = "astros")
 
 # Set project name so a mesh file is generated
 projectName = "astros_flutter_15degree"
-myAnalysis.setAnalysisVal("Proj_Name", projectName)
+myAnalysis.input.Proj_Name = projectName
 
-myAnalysis.setAnalysisVal("Mesh_File_Format", "Free")
-myAnalysis.setAnalysisVal("File_Format", "Small")
+myAnalysis.input.Mesh_File_Format = "Free"
+myAnalysis.input.File_Format = "Small"
 
-myAnalysis.setAnalysisVal("Edge_Point_Max", 8)
+myAnalysis.input.Edge_Point_Max = 8
 
-myAnalysis.setAnalysisVal("Quad_Mesh", True)
+myAnalysis.input.Quad_Mesh = True
 
 # Set analysis type
-myAnalysis.setAnalysisVal("Analysis_Type", "AeroelasticFlutter")
-# myAnalysis.setAnalysisVal("Analysis_Type", "Modal")
+myAnalysis.input.Analysis_Type = "AeroelasticFlutter"
+# myAnalysis.input.Analysis_Type = "Modal"
 
 # Set PARAM Inputs
-myAnalysis.setAnalysisVal("Parameter", [("CONVERT", "MASS,0.00259"),
-                                        ("MFORM","COUPLED")])
+myAnalysis.input.Parameter = {"CONVERT": "MASS,0.00259",
+                              "MFORM": "COUPLED"}
 
 # Set analysis
 flutter = { "analysisType" : "AeroelasticFlutter",
@@ -76,14 +74,14 @@ flutter = { "analysisType" : "AeroelasticFlutter",
             }
 
 
-myAnalysis.setAnalysisVal("Analysis", [("Flutter", flutter)])
+myAnalysis.input.Analysis = {"Flutter": flutter}
 
 # Set materials
 aluminum  = { "youngModulus" : 9.2418E6 , #psi
               "shearModulus" : 3.4993E6 , # psi
               "density"      : 0.1} # lb/in^3
 
-myAnalysis.setAnalysisVal("Material", ("aluminum", aluminum))
+myAnalysis.input.Material = {"aluminum": aluminum}
 
 # Set property
 shell  = {"propertyType"        : "Shell",
@@ -94,21 +92,21 @@ shellEdge  = { "propertyType"        : "Shell",
                "material"            : "aluminum",
                "membraneThickness"   : 0.041/2 }
 
-myAnalysis.setAnalysisVal("Property", [("Edge", shellEdge),
-                                       ("Body", shell)])
+myAnalysis.input.Property = {"Edge": shellEdge,
+                             "Body": shell}
 
 
 # Defined Connections
 connection = { "dofDependent" : 123456,
                "connectionType" : "RigidBody"}
 
-myAnalysis.setAnalysisVal("Connect",("Root", connection))
+myAnalysis.input.Connect = {"Root": connection}
 
 # Set constraints
 constraint = {"groupName" : ["Root_Point"],
               "dofConstraint" : 123456}
 
-myAnalysis.setAnalysisVal("Constraint", ("PointConstraint", constraint))
+myAnalysis.input.Constraint = {"PointConstraint": constraint}
 
 # Aero
 wing = {"groupName"    : "Wing",
@@ -117,7 +115,7 @@ wing = {"groupName"    : "Wing",
 
 # Note the surface name corresponds to the capsBound found in the *.csm file. This links
 # the spline for the aerodynamic surface to the structural model
-myAnalysis.setAnalysisVal("VLM_Surface", ("WingSurface", wing))
+myAnalysis.input.VLM_Surface = {"WingSurface": wing}
 
 # Run AIM pre-analysis
 myAnalysis.preAnalysis()
@@ -146,6 +144,3 @@ print ("Done running Astros!")
 
 # Run AIM post-analysis
 myAnalysis.postAnalysis()
-
-# Close CAPS
-myProblem.closeCAPS()

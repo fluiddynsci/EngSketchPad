@@ -182,7 +182,7 @@ assert    @nnode         8
 assert    @inode        -1
 assert    @igroup        3
 assert    @ibody1        2
-assert    @ibody2        103
+assert    @ibody2        10003
 assert    @xmin          0
 assert    @xmax          0
 assert    @ymin         -1
@@ -211,7 +211,7 @@ assert    @nnode         8
 assert    @inode        -1
 assert    @igroup        3
 assert    @ibody1        2
-assert    @ibody2        205
+assert    @ibody2        20005
 assert    @xmin          2
 assert    @xmax          2
 assert    @ymin         -1
@@ -338,7 +338,7 @@ assert    @nnode         16
 assert    @inode        -1
 assert    @igroup        4
 assert    @ibody1        2
-assert    @ibody2        106
+assert    @ibody2        10006
 assert    @xmin          0
 assert    @xmax          0
 assert    @ymin         -1

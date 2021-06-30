@@ -1,3 +1,5 @@
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
 // Structures for general meshing - Written by Dr. Ryan Durscher AFRL/RQVC
 
 
@@ -10,7 +12,7 @@ typedef enum {UnknownDistribution, EvenDistribution, TanhDistribution } edgeDist
 
 typedef enum {UnknownMeshElement, Node, Line, Triangle, Triangle_6, Quadrilateral, Quadrilateral_8, Tetrahedral, Tetrahedral_10, Pyramid, Prism, Hexahedral} meshElementTypeEnum;
 
-typedef enum {UnknownMeshSubElement, ConcentratedMassElement, BarElement, BeamElement, ShearElement} meshElementSubTypeEnum;
+typedef enum {UnknownMeshSubElement, ConcentratedMassElement, BarElement, BeamElement, ShellElement, ShearElement, MembraneElement} meshElementSubTypeEnum;
 
 typedef enum {UnknownMeshAnalysis, MeshCFD, MeshStructure, MeshOrigami} meshAnalysisTypeEnum;
 //typedef enum {UnknownMeshDimension, TwoDimensional, ThreeDimensional} meshDimensionalityEnum;
@@ -110,7 +112,6 @@ typedef struct {
     int quiet;            // 0 = False , anything else True - No output from mesh generator
     char *outputFormat;   // Mesh output formats - AFLR3, TECPLOT, VTK, SU2
     char *outputFileName; // Filename prefix for mesh
-    char *outputDirectory;// Directory to write mesh to
     int outputASCIIFlag;  // 0 = Binary output, anything else for ASCII
 
     bndCondStruct bndConds; // Structure of boundary conditions
@@ -288,12 +289,16 @@ typedef struct {
     int coordID;
     int propertyID;
 
+    int attrIndex;
+
     int constraintIndex;
     int loadIndex;
     int transferIndex;
 
     int connectIndex;
     int connectLinkIndex;
+
+    int responseIndex;
 
     meshElementSubTypeEnum elementSubType;
 

@@ -1,5 +1,6 @@
-// Structures for general FEA analysis - Written by Dr. Ryan Durscher AFRL/RQVC
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
 
+// Structures for general FEA analysis - Written by Dr. Ryan Durscher AFRL/RQVC
 
 #ifndef FEATYPES_H
 #define FEATYPES_H
@@ -10,7 +11,7 @@
                   // Linear ----------------------------------- Linear
 typedef enum {UnknownMaterial, Isotropic, Anisothotropic, Orthotropic, Anisotropic} materialTypeEnum;
 
-typedef enum {UnknownProperty, ConcentratedMass, Rod, Bar, Beam, Shear, Shell, Composite, Solid} propertyTypeEnum;
+typedef enum {UnknownProperty, ConcentratedMass, Rod, Bar, Beam, Shear, Shell, Composite, Solid, Membrane} propertyTypeEnum;
 
 typedef enum {UnknownConstraint, Displacement, ZeroDisplacement} constraintTypeEnum;
 
@@ -20,11 +21,11 @@ typedef enum {UnknownAnalysis, Modal, Static, Optimization, AeroelasticTrim, Aer
 
 typedef enum {UnknownFileType, SmallField, LargeField, FreeField} feaFileTypeEnum;
 
-typedef enum {UnknownDesignVar, MaterialDesignVar, PropertyDesignVar} feaDesignVariableTypeEnum;
+typedef enum {UnknownDesignVar, MaterialDesignVar, PropertyDesignVar, ElementDesignVar} feaDesignVariableTypeEnum;
 
 typedef enum {UnknownCoordSystem, RectangularCoordSystem, SphericalCoordSystem, CylindricalCoordSystem } feaCoordSystemTypeEnum;
 
-typedef enum {UnknownConnection, Mass, Spring, Damper, RigidBody} feaConnectionTypeEnum;
+typedef enum {UnknownConnection, Mass, Spring, Damper, RigidBody, RigidBodyInterpolate} feaConnectionTypeEnum;
 
 // Indexing of massIntertia in feaPropertyStruct
 typedef enum { I11, I21, I22, I31, I32, I33 } feaMassInertia;
@@ -87,6 +88,14 @@ typedef struct {
     // Mass (scalar) - see spring for additional entries
     double mass;
 
+    // RBE3 - master
+    // int slaveID; // Dependent - use connectivity[1]
+    //int slaveComponent;  - use dofDependent
+    int numMaster; // Independent
+    int *masterIDSet; // [numMaster]
+    double *masterWeighting; // [numMaster]
+    int *masterComponent; // [numMaster]
+
 }feaConnectionStruct;
 
 // Structure to hold coordinate system information
@@ -108,8 +117,29 @@ typedef struct {
 
 }feaCoordSystemStruct;
 
+// Structure to hold design variable relation information
+typedef struct {
+
+    char *name;
+
+    feaDesignVariableTypeEnum relationType;
+
+    int relationID;
+
+    int numDesignVariable;
+    char **designVariableNameSet; // Design variable borrowed references, size = [numDesignVariable]
+ 
+    int fieldPosition; //  Position in card to apply design variable to
+    char *fieldName; // Name of property/material to apply design variable to
+
+    double constantRelationCoeff; // Constant terms of relation
+    double *linearRelationCoeff; // Coefficients of linear relation, size = [numDesignVariable]
+
+} feaDesignVariableRelationStruct;
+
 // Structure to hold design variable information
 typedef struct {
+
     char *name;
 
     feaDesignVariableTypeEnum designVariableType;
@@ -132,6 +162,11 @@ typedef struct {
     int *propertySetID; // List of property IDs
     int *propertySetType; // List of property types corresponding to the propertySetID
 
+    int numElementID; // Number of element ID to apply the design variable to
+    int *elementSetID; // List of element IDs
+    int *elementSetType; // List of element types corresponding to the elementSetID
+    int *elementSetSubType; // List of element subtypes correspoding to the elementSetID
+
     int fieldPosition; //  Position in card to apply design variable to
     char *fieldName; // Name of property/material to apply design variable to
 
@@ -141,6 +176,7 @@ typedef struct {
     double *independVariableWeight; // List of independent variable weights, size[numIndependVariable]
 
     double variableWeight[2]; // Weight to apply to if variable is dependent
+
 } feaDesignVariableStruct;
 
 
@@ -162,8 +198,95 @@ typedef struct {
     int fieldPosition; //  Position in card to apply design variable to
     char *fieldName; // Name of property/material to apply design variable to
 
+
 } feaDesignConstraintStruct;
 
+
+typedef struct {
+
+    int equationID;
+
+    char *name; // Unique name
+
+    int equationArraySize;
+    char **equationArray;
+
+} feaDesignEquationStruct;
+
+typedef struct {
+
+    int responseID;
+
+    char *name; // Unique name
+
+    char *responseType;
+    char *propertyType;
+
+    int region;
+
+    int component; // Component number
+    int itemCode; // Item code
+    int modeNumber; // Mode number
+
+    int lamina; // Lamina number
+    double frequency; // Frequency value
+    double time; // Time value
+    int restraintFlag; // Restraint flag
+
+    int gridID; // Grid ID
+    int propertyID; // Property entry ID
+
+} feaDesignResponseStruct;
+
+typedef struct {
+
+    int equationResponseID; 
+
+    char *name; // Unique name
+
+    char *equationName; // Name of the equation
+
+    int region; // Region identifier for constant screening
+
+    // DESVAR section
+    int numDesignVariable;
+    char **designVariableNameSet; // Design variable names, size = [numDesignVariable]
+
+    // DTABLE section
+    int numConstant;
+    char **constantLabelSet; // Labels of the table constants, size = [numConstant]
+
+    // DRESP1 section
+    int numResponse;
+    char **responseNameSet; // Names of design sensitivity response quantities, size = [numResponse]
+
+    // DNODE section
+    int numGrid;
+    int *gridIDSet; // Grid IDs, size = [numGrid]
+    int *dofNumberSet; // Degree of freedom numbers, size = [numGrid]
+
+    // DRESP2 section
+    int numEquationResponse;
+    char **equationResponseNameSet; // Names of design sensitivity equation response quantities, size = [numEquationResponse]
+
+} feaDesignEquationResponseStruct;
+
+typedef struct {
+
+    int numConstant;
+    char **constantLabel; // size = [numConstant]
+    double *constantValue; // size = [numConstant]
+
+} feaDesignTableStruct;
+
+typedef struct {
+
+    int numParam;
+    char **paramLabel; // size = [numParam]
+    void **paramValue; // size = [numParam]
+    int *paramType; // size = [numParam]
+
+} feaDesignOptParamStruct;
 
 // Structure to hold formatting information relevant to FEA file output
 typedef struct {
@@ -189,7 +312,7 @@ typedef struct {
     double crossSecArea; // Bar cross-sectional area
     double torsionalConst; // Torsional constant
     double torsionalStressReCoeff; // Torsional stress recovery coefficient
-    double massPerLength; // Mass per unit length
+    double massPerLength; // Mass per unit length or Non-structural mass per unit length
 
     // Bar - see rod for additional variables
     double zAxisInertia; // Section moment of inertia about the z axis
@@ -199,9 +322,12 @@ typedef struct {
     double areaShearFactors[2]; // Area factors for shear
     double crossProductInertia; // Section cross-product of inertia
 
+    char *crossSecType; //Type of cross section
+    double crossSecDimension[10]; // Dimensions
+
+    double orientationVec[3]; // Orientation vector
+
     // Shear
-    double shearPanelThickness; // Shear panel thickness
-    double nonStructMassPerArea; // Nonstructural mass per unit area
 
     // Shell
     double membraneThickness;  // Membrane thickness
@@ -210,9 +336,11 @@ typedef struct {
                                //   plate of thickness - default 1.0
     int materialShearID;       // ID number of material for shear - if not specified and shearMembraneRatio > 0 this value defaults to materialID
     double shearMembraneRatio; // Ratio of shear to membrane thickness  - default 5/6
-    double massPerArea;        // Mass per unit area
+    double massPerArea;        // Mass per unit area or Non-structural mass per unit area
     //double neutralPlaneDist[2];// Distances from the neutral plane of the plate to locations where
                                //   stress is calculate
+
+    double zOffsetRel; // Offset from the surface of grid points to the element reference plane
 
     // Composite - more to be added
     //double distanceFromRefPlane; // Distance from reference plane to bottom surface of the element
@@ -242,11 +370,11 @@ typedef struct {
 
     int materialID; // ID number of material
 
-    double youngModulus; // E - Young's Modulus [Longitudinal if distinction is made]
-    double shearModulus; // G - Shear Modulus
-    double poissonRatio; // Poisson's Ratio
-    double density;      // Rho - material mass density
-    double thermalExpCoeff; //Coefficient of thermal expansion
+    double youngModulus;    // E - Young's Modulus [Longitudinal if distinction is made]
+    double shearModulus;    // G - Shear Modulus
+    double poissonRatio;    // Poisson's Ratio
+    double density;         // Rho - material mass density
+    double thermalExpCoeff; // Coefficient of thermal expansion
     double temperatureRef;  // Reference temperature
     double dampingCoeff;    // Damping coefficient
     double yieldAllow;      // yield allowable for the isotropic material, populates tension
@@ -264,6 +392,22 @@ typedef struct {
     int allowType; // 0 for stress, 1 for strain
 
 } feaMaterialStruct;
+
+// Structure to hold FEA unit system
+typedef struct {
+
+    char *length;      // Length unit
+    char *mass;        // Mass unit
+
+    char *pressure;    // Pressure unit
+    char *densityVol;  // Density unit (mass/volume)
+    char *densityArea; // Density unit (mass/area)
+    char *temperature; // Temperature unit
+
+    char *momentOfInertia; // moment of inertia (mass*length^2)
+
+} feaUnitsStruct;
+
 
 // Structure to hold FEA constraints
 typedef struct {
@@ -363,7 +507,7 @@ typedef struct {
 
     // Loads for the analysis
     int numLoad;     // Number of loads in the analysis
-    int *loadSetID; // List of the load IDSs
+    int *loadSetID; // List of the load IDs
 
     // Constraints for the analysis
     int numConstraint;   // Number of constraints in the analysis
@@ -376,6 +520,10 @@ typedef struct {
     // Optimization - constraints
     int numDesignConstraint; // Number of design constraints
     int *designConstraintSetID; // List of design constraint IDs
+
+    // Optimization - design response spanning
+    int numDesignResponse; // Number of design responses
+    int *designResponseSetID; // List of design response IDs
 
     // Eigenvalue
     char *extractionMethod;
@@ -461,9 +609,31 @@ typedef struct {
     int numDesignVariable;
     feaDesignVariableStruct *feaDesignVariable; // size = [numDesignVariable]
 
+    // Optimization - Design variables relations
+    int numDesignVariableRelation;
+    feaDesignVariableRelationStruct *feaDesignVariableRelation; // size = [numDesignVariableRelation]
+
     // Optimization - Design constraints
     int numDesignConstraint;
     feaDesignConstraintStruct *feaDesignConstraint; // size = [numDesignConstraint]
+
+    // Optimization - Equations
+    int numEquation;
+    feaDesignEquationStruct *feaEquation;
+
+    // Optimization - Table Constants
+    feaDesignTableStruct feaDesignTable;
+
+    // Optimization - Table Constants
+    feaDesignOptParamStruct feaDesignOptParam;
+
+    // Optimization - Design Sensitivity Response Quantities
+    int numDesignResponse;
+    feaDesignResponseStruct *feaDesignResponse;
+
+    // Optimization - Design Sensitivity Equation Response Quantities
+    int numEquationResponse;
+    feaDesignEquationResponseStruct *feaEquationResponse;
 
     // Coordinate systems
     int numCoordSystem;

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -84,6 +84,8 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     double         user_time, sys_time, wall_time;
 #endif
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(emodel=%llx)\n", (long long)emodel);
     printf("op(   0) = %s\n", OP(   0));
@@ -106,7 +108,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     /* check that Model was input that contains two or more Bodys */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -125,10 +127,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("op(   %d) = %s\n", numUdp, OP(   numUdp));
@@ -136,9 +135,9 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 #endif
 
     status = EG_getContext(emodel, &context);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
-//$$$    /* return the modfied Model that contains the two input Bodys */
+    /* return the modfied Model that contains the two input Bodys */
 //$$$    *ebody = emodel;
 
 #ifdef DEBUG
@@ -148,35 +147,22 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
     /* get pointer to model */
     status = EG_getUserPointer(context, (void**)(&(modl)));
-    if (status != EGADS_SUCCESS) {
-        printf(" udpExecute: bad return from getUserPointer\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(EG_getUserPointer);
 
     /* the left Body is ebodys[0] */
     
     /* make a Model of the rest of the Bodys in emodel */
 
-    ebodysB = (ego *) EG_alloc((nchild-1)*sizeof(ego));
-    if (ebodysB == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(ebodysB, ego, (nchild-1));
 
     for (i = 1; i < nchild; i++) {
         status = EG_copyObject(ebodys[i], NULL, &(ebodysB[i-1]));
-        if (status != EGADS_SUCCESS) {
-            printf(" udpExecute: could not copy ebodys[%dn]\n", i);
-            goto cleanup;
-        }
+        CHECK_STATUS(EG_copyObject);
     }
 
     status = EG_makeTopology(context, NULL, MODEL, 0, NULL,
                              nchild-1, ebodysB, NULL, &etools);
-    if (status != EGADS_SUCCESS) {
-        printf(" udpExecute: error making etools");
-        goto cleanup;
-    }
+    CHECK_STATUS(EG_makeTopology);
 
     /* perform the ganged boolean operation */
 
@@ -186,10 +172,10 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 #endif
     if (strcmp(OP(0), "SUBTRACT") == 0) {
         status = EG_generalBoolean(ebodys[0], etools, 1, TOLER(0), &eresult);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_generalBoolean);
     } else {
         status = EG_generalBoolean(ebodys[0], etools, 3, TOLER(0), &eresult);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_generalBoolean);
     }
 #ifdef PRINT_TIMES
     gettimeofday(&end_time, NULL);
@@ -206,17 +192,17 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 #endif
 
     status = EG_deleteObject(etools);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_deleteObject);
 
     status = EG_getTopology(eresult, &eref, &oclass, &mtype, 
                             data, &nchild, &echilds, &senses);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     status = EG_copyObject(echilds[0], NULL, ebody);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_copyObject);
 
     status = EG_deleteObject(eresult);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_deleteObject);
 
     if (nchild != 1) {
         printf(" udpExecute: expecting 1 result Body, got %d\n", nchild);

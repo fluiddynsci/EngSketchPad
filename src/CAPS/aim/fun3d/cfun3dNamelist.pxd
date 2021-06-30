@@ -1,3 +1,5 @@
+# This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
 cdef extern from "cfdTypes.h":
     
     cdef enum cfdSurfaceTypeEnum:
@@ -41,7 +43,7 @@ cdef extern from "cfdTypes.h":
 
 
     # Structure to hold CFD boundary condition information
-    ctypedef struct cfdBCsStruct:
+    ctypedef struct cfdBoundaryConditionStruct:
         char             *name   # Name of BCsStruct
-        cfdSurfaceStruct *surfaceProps  # Surface properties for each bc - length of numBCID
-        int              numBCID       # Number of unique BC ids
+        int              numSurfaceProp # Number of unique BC ids
+        cfdSurfaceStruct *surfaceProp   # Surface properties for each bc - length of numSurfaceProp

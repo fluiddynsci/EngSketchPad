@@ -2,11 +2,11 @@ LIBRARY astrosAIM
 EXPORTS
 aimInitialize
 aimInputs
-aimData
 aimPreAnalysis
+aimPostAnalysis
 aimOutputs
 aimCalcOutput
-aimFreeDiscr
+aimFreeDiscrPtr
 aimDiscr
 aimCleanup
 aimLocateElement

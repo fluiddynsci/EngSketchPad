@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -18,7 +16,7 @@ parser = argparse.ArgumentParser(description = 'SU2 and AFLR2 PyTest Example',
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
@@ -99,47 +97,41 @@ S809 = [1.000000,  0.000000,
 for i in range(0, 200-len(S809)):
     S809.append(1.0E6)
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
-# Load CSM file
-geometryScript = os.path.join("..","csmData","cfd2DArbShape.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
-
 # Create working directory variable
 workDir = os.path.join(str(args.workDir[0]), "SU2AFLR2ArbShapeAnalysisTest")
 
+# Load CSM file
+geometryScript = os.path.join("..","csmData","cfd2DArbShape.csm")
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
+
 # Change a design parameter - area in the geometry
-myProblem.geometry.setGeometryVal("xy", S809)
+myProblem.geometry.despmtr.xy = S809
 
 print ("Saving geometry")
-myProblem.geometry.saveGeometry("GenericShape",
-                                directory = workDir,
-                                extension = "egads")
-
-# Set intention - could also be set during .loadAIM
-myProblem.capsIntent = "CFD"
+myProblem.geometry.save("GenericShape", directory = workDir, extension = "egads")
 
 # Load aflr2 aim
-myMesh = myProblem.loadAIM(aim = "aflr2AIM", analysisDir = workDir)
+myMesh = myProblem.analysis.create(aim = "aflr2AIM", name="aflr2")
 
 # Set project name
-myMesh.setAnalysisVal("Proj_Name", projectName)
+myMesh.input.Proj_Name = projectName
 
-myMesh.setAnalysisVal("Mesh_Sizing", [("Airfoil"   , {"numEdgePoints" : 400}),
-                                      ("TunnelWall", {"numEdgePoints" : 50}),
-                                      ("InFlow",     {"numEdgePoints" : 25}),
-                                      ("OutFlow",    {"numEdgePoints" : 25}),
-                                      ("2DSlice",    {"tessParams" : [0.50, .01, 45]})])
+myMesh.input.Mesh_Sizing = {"Airfoil"   : {"numEdgePoints" : 400},
+                            "TunnelWall": {"numEdgePoints" : 50},
+                            "InFlow"    : {"numEdgePoints" : 25},
+                            "OutFlow"   : {"numEdgePoints" : 25},
+                            "2DSlice"   : {"tessParams" : [0.50, .01, 45]}}
 
 # Make quad/tri instead of just quads
-myMesh.setAnalysisVal("Mesh_Gen_Input_String", "mquad=1 mpp=3")
+myMesh.input.Mesh_Gen_Input_String = "mquad=1 mpp=3"
 
 # Set output grid format since a project name is being supplied - Tecplot  file
-myMesh.setAnalysisVal("Mesh_Format", "Tecplot")
+myMesh.input.Mesh_Format = "Tecplot"
 
 # Set verbosity
-myMesh.setAnalysisVal("Mesh_Quiet_Flag", True if args.verbosity == 0 else False)
+myMesh.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
 
 # Run AIM pre-analysis
 myMesh.preAnalysis()
@@ -150,33 +142,34 @@ myMesh.preAnalysis()
 myMesh.postAnalysis()
 
 # Load SU2 aim - child of aflr2 AIM
-su2 = myProblem.loadAIM(aim = "su2AIM",
-                        altName = "su2",
-                        analysisDir = workDir, parents = ["aflr2AIM"])
+su2 = myProblem.analysis.create(aim = "su2AIM",
+                                name = "su2")
+
+su2.input["Mesh"].link(myProblem.analysis["aflr2"].output["Surface_Mesh"])
 
 # Set SU2 Version
-su2.setAnalysisVal("SU2_Version","Falcon")
+su2.input.SU2_Version = "Blackbird"
 
 # Set project name
-su2.setAnalysisVal("Proj_Name", projectName)
+su2.input.Proj_Name = projectName
 
 # Set AoA number
-su2.setAnalysisVal("Alpha", 0.0)
+su2.input.Alpha = 0.0
 
 # Set equation type
-su2.setAnalysisVal("Equation_Type","Compressible")
+su2.input.Equation_Type = "Compressible"
 
 # Set number of iterations
-su2.setAnalysisVal("Num_Iter",10)
+su2.input.Num_Iter = 10
 
 # Set the aim to 2D mode
-su2.setAnalysisVal("Two_Dimensional", True)
+su2.input.Two_Dimensional = True
 
 # Set output file format
-myProblem.analysis["su2"].setAnalysisVal("Output_Format","Tecplot")
+su2.input.Output_Format = "Tecplot"
 
 # Set Mach number
-su2.setAnalysisVal("Mach", 0.4)
+su2.input.Mach = 0.4
 
 # Set boundary conditions
 inviscidBC = {"bcType" : "Inviscid"}
@@ -191,13 +184,13 @@ inflow = {"bcType" : "SubsonicInflow",
           "vVelocity" : 0.0,
           "wVelocity" : 0.0}
 
-su2.setAnalysisVal("Boundary_Condition", [("Airfoil"   , inviscidBC),
-                                          ("TunnelWall", inviscidBC),
-                                          ("InFlow", inflow),
-                                          ("OutFlow",backPressureBC)])
+su2.input.Boundary_Condition = {"Airfoil"   : inviscidBC,
+                                "TunnelWall": inviscidBC,
+                                "InFlow"    : inflow,
+                                "OutFlow"   : backPressureBC}
 
 # Specifcy the boundares used to compute forces
-su2.setAnalysisVal("Surface_Monitor", ["Airfoil"])
+su2.input.Surface_Monitor = ["Airfoil"]
 
 # Run AIM pre-analysis
 su2.preAnalysis()
@@ -218,39 +211,36 @@ su2.postAnalysis()
 
 print ("Total Force - Pressure + Viscous")
 # Get Lift and Drag coefficients
-print ("Cl = " , myProblem.analysis["su2"].getAnalysisOutVal("CLtot"), \
-       "Cd = " , myProblem.analysis["su2"].getAnalysisOutVal("CDtot"))
+print ("Cl = " , myProblem.analysis["su2"].output.CLtot,
+       "Cd = " , myProblem.analysis["su2"].output.CDtot)
 
 # Get Cmz coefficient
-print ("Cmz = " , myProblem.analysis["su2"].getAnalysisOutVal("CMZtot"))
+print ("Cmz = " , myProblem.analysis["su2"].output.CMZtot)
 
 # Get Cx and Cy coefficients
-print ("Cx = " , myProblem.analysis["su2"].getAnalysisOutVal("CXtot"), \
-       "Cy = " , myProblem.analysis["su2"].getAnalysisOutVal("CYtot"))
+print ("Cx = " , myProblem.analysis["su2"].output.CXtot,
+       "Cy = " , myProblem.analysis["su2"].output.CYtot)
 
 print ("Pressure Contribution")
 # Get Lift and Drag coefficients
-print ("Cl_p = " , myProblem.analysis["su2"].getAnalysisOutVal("CLtot_p"), \
-       "Cd_p = " , myProblem.analysis["su2"].getAnalysisOutVal("CDtot_p"))
+print ("Cl_p = " , myProblem.analysis["su2"].output.CLtot_p,
+       "Cd_p = " , myProblem.analysis["su2"].output.CDtot_p)
 
 # Get Cmz coefficient
-print ("Cmz_p = " , myProblem.analysis["su2"].getAnalysisOutVal("CMZtot_p"))
+print ("Cmz_p = " , myProblem.analysis["su2"].output.CMZtot_p)
 
 # Get Cx and Cy coefficients
-print ("Cx_p = " , myProblem.analysis["su2"].getAnalysisOutVal("CXtot_p"), \
-       "Cy_p = " , myProblem.analysis["su2"].getAnalysisOutVal("CYtot_p"))
+print ("Cx_p = " , myProblem.analysis["su2"].output.CXtot_p,
+       "Cy_p = " , myProblem.analysis["su2"].output.CYtot_p)
 
 print ("Viscous Contribution")
 # Get Lift and Drag coefficients
-print ("Cl_v = " , myProblem.analysis["su2"].getAnalysisOutVal("CLtot_v"), \
-       "Cd_v = " , myProblem.analysis["su2"].getAnalysisOutVal("CDtot_v"))
+print ("Cl_v = " , myProblem.analysis["su2"].output.CLtot_v,
+       "Cd_v = " , myProblem.analysis["su2"].output.CDtot_v)
 
 # Get Cmz coefficient
-print ("Cmz_v = " , myProblem.analysis["su2"].getAnalysisOutVal("CMZtot_v"))
+print ("Cmz_v = " , myProblem.analysis["su2"].output.CMZtot_v)
 
 # Get Cx and Cy coefficients
-print ("Cx_v = " , myProblem.analysis["su2"].getAnalysisOutVal("CXtot_v"), \
-       "Cy_v = " , myProblem.analysis["su2"].getAnalysisOutVal("CYtot_v"))
-
-# Close CAPS
-myProblem.closeCAPS()
+print ("Cx_v = " , myProblem.analysis["su2"].output.CXtot_v,
+       "Cy_v = " , myProblem.analysis["su2"].output.CYtot_v)

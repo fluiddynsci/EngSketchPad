@@ -3,7 +3,7 @@
  *
  *             EGADS Tessellation using wv w/ Attribute reporting
  *
- *      Copyright 2011-2020, Massachusetts Institute of Technology
+ *      Copyright 2011-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -50,15 +50,15 @@ typedef struct {
 
 int main(int argc, char *argv[])
 {
-  int          i, j, k, ibody, stat, oclass, mtype, len, ntri, sum;
-  int          nseg, *segs, *senses;
+  int          i, j, k, ibody, stat, oclass, mtype, mbody, len, ntri, sum;
+  int          nattr, nseg, *segs, *senses;
   int          nbody, ngp, atype, alen, quad;
   const int    *tris, *tric, *ptype, *pindex, *ints;
   float        arg, focus[4], color[3];
   double       box[6], size, tol, params[3];
   const double *xyzs, *uvs, *ts, *reals;
   char         gpname[34], *startapp;
-  const char   *OCCrev, *string;
+  const char   *OCCrev, *string, *name, *str;
   ego          context, model, geom, *bodies, *dum;
 #ifdef DISJOINTQUADS
   ego          tess;
@@ -105,13 +105,14 @@ int main(int argc, char *argv[])
   focus[3] = size;
 
   /* get all bodies */
-  stat = EG_getTopology(model, &geom, &oclass, &mtype, NULL, &nbody,
+  stat = EG_getTopology(model, &geom, &oclass, &mbody, NULL, &nbody,
                         &bodies, &senses);
   if (stat != EGADS_SUCCESS) {
     printf(" EG_getTopology = %d\n", stat);
     return 1;
   }
-  printf(" EG_getTopology:     nBodies = %d\n", nbody);
+  printf(" EG_getTopology:     nBodies = %d %d\n", nbody, mbody);
+  if (nbody < mbody) nbody = mbody;
   bodydata = (bodyData *) malloc(nbody*sizeof(bodyData));
   if (bodydata == NULL) {
     printf(" MALLOC Error on Body storage!\n");
@@ -142,26 +143,40 @@ int main(int argc, char *argv[])
 
   /* fill our structure a body at at time */
   for (ibody = 0; ibody < nbody; ibody++) {
-    mtype = 0;
-    EG_getTopology(bodies[ibody], &geom, &oclass,
-                   &mtype, NULL, &j, &dum, &senses);
-    stat = EG_tolerance(bodies[ibody], &tol);
+    bodydata[ibody].body  = NULL;
+    bodydata[ibody].mtype = 0;
+    bodydata[ibody].tess  = NULL;
+    bodydata[ibody].faces = NULL;
+    bodydata[ibody].edges = NULL;
+    stat = EG_getTopology(bodies[ibody], &geom, &oclass, &mtype,
+                          NULL, &j, &dum, &senses);
+    if (stat != EGADS_SUCCESS) continue;
     bodydata[ibody].body  = bodies[ibody];
     bodydata[ibody].mtype = mtype;
     if (mtype == WIREBODY) {
-      printf(" Body %2d:  Type = WireBody   tol = %le\n", ibody+1, tol);
+      printf(" Body %2d:  Type = WireBody ", ibody+1);
     } else if (mtype == FACEBODY) {
-      printf(" Body %2d:  Type = FaceBody   tol = %le\n", ibody+1, tol);
+      printf(" Body %2d:  Type = FaceBody ", ibody+1);
     } else if (mtype == SHEETBODY) {
-      printf(" Body %2d:  Type = SheetBody  tol = %le\n", ibody+1, tol);
+      printf(" Body %2d:  Type = SheetBody", ibody+1);
     } else {
-      printf(" Body %2d:  Type = SolidBody  tol = %le\n", ibody+1, tol);
+      printf(" Body %2d:  Type = SolidBody", ibody+1);
     }
 
-    stat = EG_getBodyTopos(bodies[ibody], NULL, FACE,
-                           &bodydata[ibody].nfaces, &bodydata[ibody].faces);
-    i    = EG_getBodyTopos(bodies[ibody], NULL, EDGE,
-                           &bodydata[ibody].nedges, &bodydata[ibody].edges);
+    if (oclass == EBODY) {
+      stat = EG_getBodyTopos(bodies[ibody], NULL, EFACE,
+                             &bodydata[ibody].nfaces, &bodydata[ibody].faces);
+      i    = EG_getBodyTopos(bodies[ibody], NULL, EEDGE,
+                             &bodydata[ibody].nedges, &bodydata[ibody].edges);
+      printf("  Effective Topology\n");
+    } else {
+      stat = EG_getBodyTopos(bodies[ibody], NULL, FACE,
+                             &bodydata[ibody].nfaces, &bodydata[ibody].faces);
+      i    = EG_getBodyTopos(bodies[ibody], NULL, EDGE,
+                             &bodydata[ibody].nedges, &bodydata[ibody].edges);
+      stat = EG_tolerance(bodies[ibody], &tol);
+      printf("  tol = %le\n", tol);
+    }
     if ((stat != EGADS_SUCCESS) || (i != EGADS_SUCCESS)) {
       printf(" EG_getBodyTopos Face = %d\n", stat);
       printf(" EG_getBodyTopos Edge = %d\n", i);
@@ -170,10 +185,53 @@ int main(int argc, char *argv[])
     printf("           nFaces = %d   nEdges = %d\n", bodydata[ibody].nfaces,
            bodydata[ibody].nedges);
 
-    stat = EG_makeTessBody(bodies[ibody], params, &bodydata[ibody].tess);
-    if (stat != EGADS_SUCCESS) {
-      printf(" EG_makeTessBody %d = %d\n", ibody, stat);
-      continue;
+    /* do we have a tessellation? */
+    if (mbody > 0) {
+      for (i = 0; i < nbody; i++) {
+        if (i == ibody) continue;
+        if (bodies[i]->oclass != TESSELLATION) continue;
+        stat = EG_statusTessBody(bodies[i], &geom, &j, &len);
+        if (stat != EGADS_SUCCESS) {
+          printf(" EG_statusTessBody %d = %d\n", i+1, stat);
+          continue;
+        }
+        if (geom != bodies[ibody]) continue;
+        printf("           Found Tessellation %d for Body %d\n", i+1, ibody+1);
+        stat = EG_copyObject(bodies[i], NULL, &bodydata[ibody].tess);
+        if (stat != EGADS_SUCCESS) {
+          printf(" EG_copyObject %d = %d\n", i+1, stat);
+          continue;
+        } else {
+          nattr = 0;
+          stat  = EG_attributeNum(bodydata[ibody].tess, &nattr);
+          if ((stat == EGADS_SUCCESS) && (nattr != 0)) {
+            for (k = 1; k <= nattr; k++) {
+              stat = EG_attributeGet(bodydata[ibody].tess, k, &name, &atype,
+                                     &alen, &ints, &reals, &str);
+              if (stat != EGADS_SUCCESS) continue;
+              printf("           %s: ", name);
+              if ((atype == ATTRREAL) || (atype == ATTRCSYS)) {
+                for (j = 0; j < alen; j++) printf("%lf ", reals[j]);
+              } else if (atype == ATTRSTRING) {
+                printf("%s", str);
+              } else {
+                for (j = 0; j < alen; j++) printf("%d ", ints[j]);
+              }
+              printf("\n");
+            }
+          }
+        }
+        break;
+      }
+    }
+    if (bodydata[ibody].tess == NULL) {
+      if (mbody > 0)
+        printf("           Tessellating Body %d\n", ibody+1);
+      stat = EG_makeTessBody(bodies[ibody], params, &bodydata[ibody].tess);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EG_makeTessBody %d = %d\n", ibody, stat);
+        continue;
+      }
     }
 #ifdef DISJOINTQUADS
     tess = bodydata[ibody].tess;
@@ -212,7 +270,8 @@ int main(int argc, char *argv[])
 
   /* make the scene */
   for (ngp = sum = stat = ibody = 0; ibody < nbody; ibody++) {
-
+    if (bodydata[ibody].tess == NULL) continue;
+    
     quad = 0;
     stat = EG_attributeRet(bodydata[ibody].tess, ".tessType", &atype,
                            &alen, &ints, &reals, &string);
@@ -346,6 +405,7 @@ int main(int argc, char *argv[])
 
   /* finish up */
   for (ibody = 0; ibody < nbody; ibody++) {
+    if (bodydata[ibody].tess == NULL) continue;
     EG_deleteObject(bodydata[ibody].tess);
     EG_free(bodydata[ibody].edges);
     EG_free(bodydata[ibody].faces);
@@ -362,12 +422,13 @@ int main(int argc, char *argv[])
 
 void browserMessage(/*@unused@*/ void *wsi, char *text, /*@unused@*/ int lena)
 {
-  int          i, j, iBody, ient, stat, nattr, atype, alen;
+  int          i, j, iBody, ient, stat, nattr, atype, alen, oclass, mtype;
+  int          *senses;
   const int    *pints;
   char         tag[5];
   const char   *name, *pstr;
   const double *preals;
-  ego          obj;
+  ego          obj, geom, *objs;
 
   if (strncmp(text,"Picked: ", 8) == 0) {
     iBody = 0;
@@ -379,6 +440,10 @@ void browserMessage(/*@unused@*/ void *wsi, char *text, /*@unused@*/ int lena)
       } else {
         obj = bodydata[iBody-1].edges[ient-1];
       }
+      stat = EG_getTopology(obj, &geom, &oclass, &mtype, NULL, &i, &objs,
+                            &senses);
+      if ((stat == EGADS_SUCCESS) && (geom != NULL))
+        printf("         Geom type = %d\n", geom->mtype);
       nattr = 0;
       stat  = EG_attributeNum(obj, &nattr);
       if ((stat == EGADS_SUCCESS) && (nattr != 0)) {

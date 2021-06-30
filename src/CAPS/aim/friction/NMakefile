@@ -38,7 +38,7 @@ $(TDIR)\friction.exe:	$(ODIR)\friction.obj
 	ifort /Fe$(TDIR)\friction.exe $(ODIR)\friction.obj $(FLIBS)
 
 $(ODIR)\friction.obj:	friction_eja_mod.f
-	ifort /c /O /MD /recursive friction_eja_mod.f /Fo$(ODIR)\friction.obj
+	ifort /c $(FOPTS) friction_eja_mod.f /Fo$(ODIR)\friction.obj
 
 clean:
 	-del $(ODIR)\frictionAIM.obj

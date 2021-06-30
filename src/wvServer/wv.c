@@ -3,7 +3,7 @@
  *
  *		WV server-side functions
  *
- *      Copyright 2011-2020, Massachusetts Institute of Technology
+ *      Copyright 2011-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -20,8 +20,14 @@
 
 #include "wsss.h"
 
+  extern void wv_stringSetOpen(void **set);
+  extern void wv_stringSetClose(void *set);
+  extern void wv_stringSetReset(void *set);
+  extern int  wv_stringSetContains(void *set, const char *str);
+  extern int  wv_stringSetAdd(void *set, const char *str);
+  extern int  wv_stringSetDelete(void *set, const char *str);
 
-  extern int wv_sendBinaryData(void *, unsigned char *, int);
+  extern int  wv_sendBinaryData(void *, unsigned char *, int);
 
 
 /*@null@*/ /*@out@*/ /*@only@*/ void *
@@ -113,6 +119,7 @@ wv_destroyContext(wvContext **context)
   wvContext *cntxt;
 
   cntxt = *context;
+  if (cntxt            == NULL) return;
   if (cntxt->thumbnail != NULL) wv_free(cntxt->thumbnail);
   if (cntxt->colors    != NULL) wv_free(cntxt->colors);
   if (cntxt->title     != NULL) wv_free(cntxt->title);
@@ -121,6 +128,7 @@ wv_destroyContext(wvContext **context)
       wv_freeGPrim(cntxt->gPrims[i]);
     wv_free(cntxt->gPrims);
   }
+  if (cntxt->nameMap != NULL) wv_stringSetClose(cntxt->nameMap);
 
   wv_free(cntxt);
   *context = NULL;
@@ -168,6 +176,8 @@ wv_createContext(int bias, float fov, float zNear, float zFar, float *eye,
   context->tnHeight   = 0;
   context->thumbnail  = NULL;
   context->gPrims     = NULL;
+  context->nameMap    = NULL;
+  wv_stringSetOpen(&context->nameMap);
 
   return context;
 }
@@ -188,6 +198,7 @@ wv_removeAll(wvContext *cntxt)
   if (cntxt->gPrims != NULL)
     for (i = 0; i < cntxt->nGPrim; i++)
       wv_freeGPrim(cntxt->gPrims[i]);
+  wv_stringSetReset(cntxt->nameMap);
   cntxt->nGPrim   = 0;
   cntxt->cleanAll = 1;
 }
@@ -1641,8 +1652,7 @@ wv_addGPrim(wvContext *cntxt, char *name, int gtype, int attrs,
   if (nameLen == 0) return -3;
 
   if (cntxt->gPrims != NULL)
-    for (i = 0; i < cntxt->nGPrim; i++)
-      if (strcmp(name, cntxt->gPrims[i].name) == 0) return -2;
+    if (wv_stringSetContains(cntxt->nameMap, name) != 0) return -2;
 
   nameLen += 4 - nameLen%4;
   nam = (char *) wv_alloc(nameLen*sizeof(char));
@@ -1903,6 +1913,7 @@ wv_addGPrim(wvContext *cntxt, char *name, int gtype, int attrs,
 
   gp->name    = nam;
   gp->nameLen = nameLen;
+  wv_stringSetAdd(cntxt->nameMap, nam);
   /* clean up our used items */
   if (cntxt->keepItems == 0)
     for (i = 0; i < nItems; i++) {
@@ -2119,11 +2130,11 @@ wv_addArrowHeads(wvContext *cntxt, int index, float size,
 
 
 int
-wv_setKey(wvContext *cntxt, int nCol, float *colors, float beg, float end,
-          char *title)
+wv_setKey(wvContext *cntxt, int nCol, /*@null@*/ float *colors, float beg,
+          float end, /*@null@*/ char *title)
 {
-  int  i, titleLen;
-  char *nam;
+  int  i, titleLen = -1;
+  char *nam = NULL;
   
   if (cntxt->colors != NULL) wv_free(cntxt->colors);
   if (cntxt->title  != NULL) wv_free(cntxt->title);
@@ -2138,25 +2149,32 @@ wv_setKey(wvContext *cntxt, int nCol, float *colors, float beg, float end,
   cntxt->tnWidth   = 0;
   cntxt->tnHeight  = 0;
 
-  titleLen  = strlen(title);
-  titleLen += 4 - titleLen%4;
-  nam = (char *) wv_alloc(titleLen*sizeof(char));
-  if (nam == NULL) return -1;
-  cntxt->colors = (float *) wv_alloc(3*nCol*sizeof(float));
-  if (cntxt->colors == NULL) {
-    wv_free(nam);
-    return -1;
+  if (title != NULL) {
+    titleLen  = strlen(title);
+    titleLen += 4 - titleLen%4;
+    nam = (char *) wv_alloc(titleLen*sizeof(char));
+    if (nam == NULL) return -1;
+    for (i = 0; i < titleLen; i++) nam[i] = 0;
+    for (i = 0; i < titleLen; i++) {
+      if (title[i] == 0) break;
+      nam[i] = title[i];
+    }
   }
   
-  for (i = 0; i < titleLen; i++) nam[i] = 0;
-  for (i = 0; i < titleLen; i++) {
-    if (title[i] == 0) break;
-    nam[i] = title[i];
+  if ((nCol > 0) && (colors != NULL)) {
+    cntxt->colors = (float *) wv_alloc(3*nCol*sizeof(float));
+    if (cntxt->colors == NULL) {
+      if (nam != NULL) wv_free(nam);
+      return -1;
+    }
   }
-  for (i = 0; i < 3*nCol; i++) cntxt->colors[i] = colors[i];
+  
+  if (cntxt->colors != NULL) {
+    for (i = 0; i < 3*nCol; i++) cntxt->colors[i] = colors[i];
+    cntxt->nColor = nCol;
+  }
   cntxt->title    = nam;
   cntxt->titleLen = titleLen;
-  cntxt->nColor   = nCol;
   cntxt->lims[0]  = beg;
   cntxt->lims[1]  = end;
   
@@ -2692,7 +2710,6 @@ wv_sendGPrim(void *wsi, wvContext *cntxt, unsigned char *buf, int flag)
     buf[iBuf+6] = 0;
     buf[iBuf+7] = 0;
     iBuf += npack;
-    cntxt->cleanAll = 0;
   }
 
   for (i = 0; i < cntxt->nGPrim; i++) {
@@ -2962,9 +2979,10 @@ wv_prepareForSends(wvContext *cntxt)
 void
 wv_finishSends(wvContext *cntxt)
 {
-  int i, j;
+  int i, j, hit;
   
   cntxt->sent++;
+  cntxt->cleanAll = 0;
   if (cntxt->gPrims == NULL) {
     cntxt->ioAccess = 0;
     return;
@@ -2980,16 +2998,21 @@ wv_finishSends(wvContext *cntxt)
       cntxt->gPrims[i].updateFlg = 0;
   
   /* remove deleted GPrims */
+  hit = 0;
   for (i = cntxt->nGPrim-1; i >= 0; i--) {
     if (cntxt->gPrims[i].updateFlg != (WV_DELETE|WV_DONE)) continue;
+    wv_stringSetDelete(cntxt->nameMap, cntxt->gPrims[i].name);
     wv_freeGPrim(cntxt->gPrims[i]);
+    hit++;
   }
-  for (i = j = 0; j < cntxt->nGPrim; j++) {
-    if (cntxt->gPrims[j].updateFlg == (WV_DELETE|WV_DONE)) continue;
-    cntxt->gPrims[i] = cntxt->gPrims[j];
-    i++;
+  if (hit != 0) {
+    for (i = j = 0; j < cntxt->nGPrim; j++) {
+      if (cntxt->gPrims[j].updateFlg == (WV_DELETE|WV_DONE)) continue;
+      cntxt->gPrims[i] = cntxt->gPrims[j];
+      i++;
+    }
+    cntxt->nGPrim = i;
   }
-  cntxt->nGPrim   = i;
   
   cntxt->ioAccess = 0;
 }

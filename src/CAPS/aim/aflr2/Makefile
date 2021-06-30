@@ -46,10 +46,11 @@ $(LDIR)/aflr2AIM.so:	$(ODIR)/aflr2AIM.o $(ODIR)/aflr2_Interface.o \
 
 $(ODIR)/aflr2AIM.o:	$(ODIR)/aflr2_version aflr2AIM.c $(IDIR)/capsTypes.h \
 			../utils/meshUtils.h
-	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I$(AFLR)/src -I../utils aflr2AIM.c \
-		-o $(ODIR)/aflr2AIM.o
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I$(AFLR)/src \
+		-I../utils aflr2AIM.c -o $(ODIR)/aflr2AIM.o
 
-$(ODIR)/aflr2_Interface.o:	$(ODIR)/aflr2_version aflr2_Interface.c ../utils/meshUtils.h
+$(ODIR)/aflr2_Interface.o:	$(ODIR)/aflr2_version aflr2_Interface.c \
+				../utils/meshUtils.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I$(AFLR)/src \
 		-I../utils aflr2_Interface.c -o $(ODIR)/aflr2_Interface.o
 
@@ -66,14 +67,18 @@ $(OBJS): %.o:	%.c
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I$(AFLR)/src $< -o $@
 endif
 
+lint:
+	$(LINT) -I../../include -I$(IDIR) -I../utils -I$(AFLR)/src $(wildcard *.c) -Dug_free=free -exportlocal -bufferoverflowhigh
+
 clean:
 	-rm -f $(ODIR)/aflr2_Interface.o $(ODIR)/aflr2AIM.o $(ODIR)/aflr2_version $(OBJS)
 
 cleanall:	clean
 	-rm -f $(LDIR)/aflr2AIM.so
 
-dox:
-	(cd doc; doxygen aflr2AIM_dox.cfg; cd latex; make; mv refman.pdf AFLR2AIM.pdf)
+dox: doc/html/index.html
+doc/html/index.html: $(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
+	(cd doc; doxygen aflr2AIM_dox.cfg; cd latex; make; mv refman.pdf aflr2AIM.pdf)
 
 doxclean:
 	(cd doc; rm -f INPUT; rm -rf html latex; rm -f aflr2AIM.tag)

@@ -1,7 +1,7 @@
 #
 # Written by Dr. Ryan Durscher AFRL/RQVC
 # 
-# This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3793.
+# This software has been cleared for public release on 27 Oct. 2020, case number 88ABW-2020-3328.
 
 # Create string object for html for createTree functionality 
 cdef object buildTreeHTML(object jsonFile = None, object jsonData = None, object internetAccess = True):
@@ -301,7 +301,7 @@ cdef object writeTreeHTML(object filename, object jsonFile = None, object jsonDa
     
     if internetAccess is False:
         #try:
-        print "Writing D3 Javascript library - ", os.path.join(os.path.dirname(filename), "d3.v3.min.js")
+        print("Writing D3 Javascript library - ", os.path.join(os.path.dirname(filename), "d3.v3.min.js"))
         fp = open(os.path.join(os.path.dirname(filename), "d3.v3.min.js"), "w")
         fp.write(_strify(_byteify(getD3Script())))
         fp.close()
@@ -355,11 +355,11 @@ cdef object createTree(object dataObj, object showAnalysisGeom, object showInter
     tree = {}
 
     # Analyis object 
-    if isinstance(dataObj, _capsAnalysis):
+    if isinstance(dataObj, capsAnalysis):
         tree = {"name" : dataObj.aimName + " (" + dataObj.officialName + ")", 
                 "children" : [{"name" : "Directory", "children" : checkValue(dataObj.analysisDir)},
                               {"name" : "Parents"  , "children" : checkValue(dataObj.parents)},
-                              {"name" : "Intent"   , "children" : checkValue(dataObj.analysisIntent)},
+                              {"name" : "Intent"   , "children" : checkValue(dataObj.capsIntent)},
                               {"name" : "Inputs"   , "children" : checkValue(None)},
                               {"name" : "Outputs"  , "children" : checkValue(None)},  
                              ]
@@ -412,7 +412,7 @@ cdef object createTree(object dataObj, object showAnalysisGeom, object showInter
                 }
     
     # Bound object 
-    if isinstance(dataObj, _capsBound):
+    if isinstance(dataObj, capsBound):
         tree = {"name" : dataObj.boundName, 
                 "children" : [{"name" : "Source Data Set"      , "children" : checkValue(None)},
                               {"name" : "Destination Data Set" , "children" : checkValue(None)},
@@ -450,7 +450,7 @@ cdef object createTree(object dataObj, object showAnalysisGeom, object showInter
                                                        )
     
     # Geometry object 
-    if isinstance(dataObj, _capsGeometry):
+    if isinstance(dataObj, capsGeometry):
         tree = {"name" : dataObj.geomName, 
                 "children" : [{"name" : "Design Parameters", "children" : checkValue(None)},
                               {"name" : "Local Variables", "children" : checkValue(None)},
@@ -487,16 +487,16 @@ cdef object createTree(object dataObj, object showAnalysisGeom, object showInter
     
     # Problem object 
     if isinstance(dataObj, capsProblem):
-        latest = {"CAPS Intent" : dataObj.capsIntent,
-                  "AIM Count"   : dataObj.aimGlobalCount,
-                  "Analysis Directory" : dataObj.analysisDir
-                  }
+#         latest = {"CAPS Intent" : dataObj.capsIntent,
+#                   "AIM Count"   : dataObj.aimGlobalCount,
+#                   "Analysis Directory" : dataObj.analysisDir
+#                   }
         
         tree = {"name" : "myProblem", 
                 "children" : [{"name" : "Analysis", "children" : checkValue(None)},
                               {"name" : "Geometry", "children" : checkValue(None)},
                               {"name" : "Bound",    "children" : checkValue(None)},
-                              {"name" : "Latest Defaults" , "children" : checkValue(latest)},
+#                               {"name" : "Latest Defaults" , "children" : checkValue(latest)},
                              ]
                 }
         

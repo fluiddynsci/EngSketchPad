@@ -1,8 +1,6 @@
-from __future__ import print_function
-
 ## [import]
-# Import capsProblem from pyCAPS
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -15,39 +13,34 @@ parser = argparse.ArgumentParser(description = 'FRICTION Pytest Example',
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = ".", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# -----------------------------------------------------------------
-# Initialize capsProblem object
-# -----------------------------------------------------------------
-## [initateProblem]
-myProblem = capsProblem()
-## [initateProblem]
+## [localVariable]
+# Create working directory variable
+workDir = os.path.join(str(args.workDir[0]), "FrictionAnalysisTest")
+## [localVariable]
 
 # -----------------------------------------------------------------
 # Load CSM file
 # -----------------------------------------------------------------
 ## [geometry]
 geometryScript = os.path.join("..","csmData","frictionWingTailFuselage.csm")
-myGeometry = myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
-myGeometry.setGeometryVal("area", 10.0)
-## [geometry]
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
-# Create working directory variable
-## [localVariable]
-workDir = os.path.join(str(args.workDir[0]), "FrictionAnalysisTest")
-## [localVariable]
+myProblem.geometry.despmtr.area = 10.0
+## [geometry]
 
 # -----------------------------------------------------------------
 # Load desired aim
 # -----------------------------------------------------------------
 print ("Loading AIM")
 ## [loadAIM]
-myAnalysis = myProblem.loadAIM(	aim = "frictionAIM",
-                                analysisDir = workDir )
+myAnalysis = myProblem.analysis.create( aim = "frictionAIM" )
 ## [loadAIM]
 
 # -----------------------------------------------------------------
@@ -55,10 +48,11 @@ myAnalysis = myProblem.loadAIM(	aim = "frictionAIM",
 # -----------------------------------------------------------------
 print ("Setting Mach & Altitude Values")
 ## [setInputs]
-myAnalysis.setAnalysisVal("Mach", [0.5, 1.5])
+
+myAnalysis.input.Mach = [0.5, 1.5]
 
 # Note: friction wants kft (defined in the AIM) - Automatic unit conversion to kft
-myAnalysis.setAnalysisVal("Altitude", [9000, 18200.0], units= "m")
+myAnalysis.input.Altitude = [9000, 18200.0]*pyCAPS.Unit("m")
 ## [setInputs]
 
 # -----------------------------------------------------------------
@@ -91,15 +85,11 @@ myAnalysis.postAnalysis()
 # Get Output Data from Friction
 # -----------------------------------------------------------------
 ## [output]
-Cdtotal = myAnalysis.getAnalysisOutVal("CDtotal")
-CdForm  = myAnalysis.getAnalysisOutVal("CDform")
-CdFric  = myAnalysis.getAnalysisOutVal("CDfric")
+Cdtotal = myAnalysis.output.CDtotal
+CdForm  = myAnalysis.output.CDform
+CdFric  = myAnalysis.output.CDfric
 ## [output]
 
 print("Total drag =", Cdtotal )
 print("Form drag =", CdForm)
 print("Friction drag =", CdFric)
-# -----------------------------------------------------------------
-# Close CAPS
-# -----------------------------------------------------------------
-myProblem.closeCAPS()

@@ -62,7 +62,7 @@ endif
 ifthen generateWing EQ 1 AND generateFuse EQ 1
    restore   wingWaffle
    restore   fuseWaffle
-   join
+   union
    store     waffle
 elseif generateWing EQ 1
    restore   wingWaffle

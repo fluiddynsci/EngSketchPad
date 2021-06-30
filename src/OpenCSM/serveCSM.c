@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2012/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2012/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -29,18 +29,18 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <math.h>
 #include <time.h>
 #include <unistd.h>
 #include <assert.h>
 
-//#define CHECK_LITE                   // check inverse evaluations
-//#define WRITE_LITE                   // write a .lite file
-//#define SHOW_TUFTS                   // add tufts to sensitivity plots
-#define PLUGS_PRUNE  0                 // if >0, prune points and write new.cloud
-//#define PLUGS_CREATE_CSM_FILES       // create plugs_pass_xx.csm
-//#define PLUGS_CREATE_FINAL_PLOT      // create final.plot
+#define PLUGS_PRUNE             0      // if >0, prune points and write new.cloud
+#define PLUGS_CREATE_CSM_FILES  0      // create plugs_pass_xx.csm files
+#define PLUGS_CREATE_FINAL_PLOT 0      // create final.plot        file
+#define PLUGS_SHOW_SENSITIVITY  0      // show sensitivity in final results via inverse evaluations */
+//#define MIXED_TESS              1      // display mixed tri/quads tessellations
 
 #ifdef WIN32
     #define WIN32_LEAN_AND_MEAN
@@ -49,6 +49,7 @@
 #endif
 
 #include "egads.h"
+#include "emp.h"
 
 #define CINT    const int
 #define CDOUBLE const double
@@ -92,7 +93,10 @@ static void *realloc_temp=NULL;            /* used by RALLOC macro */
 /*                                                                     */
 /***********************************************************************/
 
+#define BlueWhiteRed
+
 /* blue-white-red spectrum */
+#ifdef  BlueWhiteRed
 static float color_map[256*3] =
 { 0.0000, 0.0000, 1.0000,    0.0078, 0.0078, 1.0000,   0.0156, 0.0156, 1.0000,    0.0234, 0.0234, 1.0000,
   0.0312, 0.0312, 1.0000,    0.0391, 0.0391, 1.0000,   0.0469, 0.0469, 1.0000,    0.0547, 0.0547, 1.0000,
@@ -159,72 +163,74 @@ static float color_map[256*3] =
   1.0000, 0.0625, 0.0625,    1.0000, 0.0547, 0.0547,   1.0000, 0.0469, 0.0469,    1.0000, 0.0391, 0.0391,
   1.0000, 0.0312, 0.0312,    1.0000, 0.0234, 0.0234,   1.0000, 0.0156, 0.0156,    1.0000, 0.0078, 0.0078 };
 
-//$$$/* blue-green-red spectrum */
-//$$$static float color_map[256*3] =
-//$$${ 0.0000, 0.0000, 1.0000,    0.0000, 0.0157, 1.0000,   0.0000, 0.0314, 1.0000,    0.0000, 0.0471, 1.0000,
-//$$$  0.0000, 0.0627, 1.0000,    0.0000, 0.0784, 1.0000,   0.0000, 0.0941, 1.0000,    0.0000, 0.1098, 1.0000,
-//$$$  0.0000, 0.1255, 1.0000,    0.0000, 0.1412, 1.0000,   0.0000, 0.1569, 1.0000,    0.0000, 0.1725, 1.0000,
-//$$$  0.0000, 0.1882, 1.0000,    0.0000, 0.2039, 1.0000,   0.0000, 0.2196, 1.0000,    0.0000, 0.2353, 1.0000,
-//$$$  0.0000, 0.2510, 1.0000,    0.0000, 0.2667, 1.0000,   0.0000, 0.2824, 1.0000,    0.0000, 0.2980, 1.0000,
-//$$$  0.0000, 0.3137, 1.0000,    0.0000, 0.3294, 1.0000,   0.0000, 0.3451, 1.0000,    0.0000, 0.3608, 1.0000,
-//$$$  0.0000, 0.3765, 1.0000,    0.0000, 0.3922, 1.0000,   0.0000, 0.4078, 1.0000,    0.0000, 0.4235, 1.0000,
-//$$$  0.0000, 0.4392, 1.0000,    0.0000, 0.4549, 1.0000,   0.0000, 0.4706, 1.0000,    0.0000, 0.4863, 1.0000,
-//$$$  0.0000, 0.5020, 1.0000,    0.0000, 0.5176, 1.0000,   0.0000, 0.5333, 1.0000,    0.0000, 0.5490, 1.0000,
-//$$$  0.0000, 0.5647, 1.0000,    0.0000, 0.5804, 1.0000,   0.0000, 0.5961, 1.0000,    0.0000, 0.6118, 1.0000,
-//$$$  0.0000, 0.6275, 1.0000,    0.0000, 0.6431, 1.0000,   0.0000, 0.6588, 1.0000,    0.0000, 0.6745, 1.0000,
-//$$$  0.0000, 0.6902, 1.0000,    0.0000, 0.7059, 1.0000,   0.0000, 0.7216, 1.0000,    0.0000, 0.7373, 1.0000,
-//$$$  0.0000, 0.7529, 1.0000,    0.0000, 0.7686, 1.0000,   0.0000, 0.7843, 1.0000,    0.0000, 0.8000, 1.0000,
-//$$$  0.0000, 0.8157, 1.0000,    0.0000, 0.8314, 1.0000,   0.0000, 0.8471, 1.0000,    0.0000, 0.8627, 1.0000,
-//$$$  0.0000, 0.8784, 1.0000,    0.0000, 0.8941, 1.0000,   0.0000, 0.9098, 1.0000,    0.0000, 0.9255, 1.0000,
-//$$$  0.0000, 0.9412, 1.0000,    0.0000, 0.9569, 1.0000,   0.0000, 0.9725, 1.0000,    0.0000, 0.9882, 1.0000,
-//$$$  0.0000, 1.0000, 0.9961,    0.0000, 1.0000, 0.9804,   0.0000, 1.0000, 0.9647,    0.0000, 1.0000, 0.9490,
-//$$$  0.0000, 1.0000, 0.9333,    0.0000, 1.0000, 0.9176,   0.0000, 1.0000, 0.9020,    0.0000, 1.0000, 0.8863,
-//$$$  0.0000, 1.0000, 0.8706,    0.0000, 1.0000, 0.8549,   0.0000, 1.0000, 0.8392,    0.0000, 1.0000, 0.8235,
-//$$$  0.0000, 1.0000, 0.8078,    0.0000, 1.0000, 0.7922,   0.0000, 1.0000, 0.7765,    0.0000, 1.0000, 0.7608,
-//$$$  0.0000, 1.0000, 0.7451,    0.0000, 1.0000, 0.7294,   0.0000, 1.0000, 0.7137,    0.0000, 1.0000, 0.6980,
-//$$$  0.0000, 1.0000, 0.6824,    0.0000, 1.0000, 0.6667,   0.0000, 1.0000, 0.6510,    0.0000, 1.0000, 0.6353,
-//$$$  0.0000, 1.0000, 0.6196,    0.0000, 1.0000, 0.6039,   0.0000, 1.0000, 0.5882,    0.0000, 1.0000, 0.5725,
-//$$$  0.0000, 1.0000, 0.5569,    0.0000, 1.0000, 0.5412,   0.0000, 1.0000, 0.5255,    0.0000, 1.0000, 0.5098,
-//$$$  0.0000, 1.0000, 0.4941,    0.0000, 1.0000, 0.4784,   0.0000, 1.0000, 0.4627,    0.0000, 1.0000, 0.4471,
-//$$$  0.0000, 1.0000, 0.4314,    0.0000, 1.0000, 0.4157,   0.0000, 1.0000, 0.4000,    0.0000, 1.0000, 0.3843,
-//$$$  0.0000, 1.0000, 0.3686,    0.0000, 1.0000, 0.3529,   0.0000, 1.0000, 0.3373,    0.0000, 1.0000, 0.3216,
-//$$$  0.0000, 1.0000, 0.3059,    0.0000, 1.0000, 0.2902,   0.0000, 1.0000, 0.2745,    0.0000, 1.0000, 0.2588,
-//$$$  0.0000, 1.0000, 0.2431,    0.0000, 1.0000, 0.2275,   0.0000, 1.0000, 0.2118,    0.0000, 1.0000, 0.1961,
-//$$$  0.0000, 1.0000, 0.1804,    0.0000, 1.0000, 0.1647,   0.0000, 1.0000, 0.1490,    0.0000, 1.0000, 0.1333,
-//$$$  0.0000, 1.0000, 0.1176,    0.0000, 1.0000, 0.1020,   0.0000, 1.0000, 0.0863,    0.0000, 1.0000, 0.0706,
-//$$$  0.0000, 1.0000, 0.0549,    0.0000, 1.0000, 0.0392,   0.0000, 1.0000, 0.0235,    0.0000, 1.0000, 0.0078,
-//$$$  0.0078, 1.0000, 0.0000,    0.0235, 1.0000, 0.0000,   0.0392, 1.0000, 0.0000,    0.0549, 1.0000, 0.0000,
-//$$$  0.0706, 1.0000, 0.0000,    0.0863, 1.0000, 0.0000,   0.1020, 1.0000, 0.0000,    0.1176, 1.0000, 0.0000,
-//$$$  0.1333, 1.0000, 0.0000,    0.1490, 1.0000, 0.0000,   0.1647, 1.0000, 0.0000,    0.1804, 1.0000, 0.0000,
-//$$$  0.1961, 1.0000, 0.0000,    0.2118, 1.0000, 0.0000,   0.2275, 1.0000, 0.0000,    0.2431, 1.0000, 0.0000,
-//$$$  0.2588, 1.0000, 0.0000,    0.2745, 1.0000, 0.0000,   0.2902, 1.0000, 0.0000,    0.3059, 1.0000, 0.0000,
-//$$$  0.3216, 1.0000, 0.0000,    0.3373, 1.0000, 0.0000,   0.3529, 1.0000, 0.0000,    0.3686, 1.0000, 0.0000,
-//$$$  0.3843, 1.0000, 0.0000,    0.4000, 1.0000, 0.0000,   0.4157, 1.0000, 0.0000,    0.4314, 1.0000, 0.0000,
-//$$$  0.4471, 1.0000, 0.0000,    0.4627, 1.0000, 0.0000,   0.4784, 1.0000, 0.0000,    0.4941, 1.0000, 0.0000,
-//$$$  0.5098, 1.0000, 0.0000,    0.5255, 1.0000, 0.0000,   0.5412, 1.0000, 0.0000,    0.5569, 1.0000, 0.0000,
-//$$$  0.5725, 1.0000, 0.0000,    0.5882, 1.0000, 0.0000,   0.6039, 1.0000, 0.0000,    0.6196, 1.0000, 0.0000,
-//$$$  0.6353, 1.0000, 0.0000,    0.6510, 1.0000, 0.0000,   0.6667, 1.0000, 0.0000,    0.6824, 1.0000, 0.0000,
-//$$$  0.6980, 1.0000, 0.0000,    0.7137, 1.0000, 0.0000,   0.7294, 1.0000, 0.0000,    0.7451, 1.0000, 0.0000,
-//$$$  0.7608, 1.0000, 0.0000,    0.7765, 1.0000, 0.0000,   0.7922, 1.0000, 0.0000,    0.8078, 1.0000, 0.0000,
-//$$$  0.8235, 1.0000, 0.0000,    0.8392, 1.0000, 0.0000,   0.8549, 1.0000, 0.0000,    0.8706, 1.0000, 0.0000,
-//$$$  0.8863, 1.0000, 0.0000,    0.9020, 1.0000, 0.0000,   0.9176, 1.0000, 0.0000,    0.9333, 1.0000, 0.0000,
-//$$$  0.9490, 1.0000, 0.0000,    0.9647, 1.0000, 0.0000,   0.9804, 1.0000, 0.0000,    0.9961, 1.0000, 0.0000,
-//$$$  1.0000, 0.9882, 0.0000,    1.0000, 0.9725, 0.0000,   1.0000, 0.9569, 0.0000,    1.0000, 0.9412, 0.0000,
-//$$$  1.0000, 0.9255, 0.0000,    1.0000, 0.9098, 0.0000,   1.0000, 0.8941, 0.0000,    1.0000, 0.8784, 0.0000,
-//$$$  1.0000, 0.8627, 0.0000,    1.0000, 0.8471, 0.0000,   1.0000, 0.8314, 0.0000,    1.0000, 0.8157, 0.0000,
-//$$$  1.0000, 0.8000, 0.0000,    1.0000, 0.7843, 0.0000,   1.0000, 0.7686, 0.0000,    1.0000, 0.7529, 0.0000,
-//$$$  1.0000, 0.7373, 0.0000,    1.0000, 0.7216, 0.0000,   1.0000, 0.7059, 0.0000,    1.0000, 0.6902, 0.0000,
-//$$$  1.0000, 0.6745, 0.0000,    1.0000, 0.6588, 0.0000,   1.0000, 0.6431, 0.0000,    1.0000, 0.6275, 0.0000,
-//$$$  1.0000, 0.6118, 0.0000,    1.0000, 0.5961, 0.0000,   1.0000, 0.5804, 0.0000,    1.0000, 0.5647, 0.0000,
-//$$$  1.0000, 0.5490, 0.0000,    1.0000, 0.5333, 0.0000,   1.0000, 0.5176, 0.0000,    1.0000, 0.5020, 0.0000,
-//$$$  1.0000, 0.4863, 0.0000,    1.0000, 0.4706, 0.0000,   1.0000, 0.4549, 0.0000,    1.0000, 0.4392, 0.0000,
-//$$$  1.0000, 0.4235, 0.0000,    1.0000, 0.4078, 0.0000,   1.0000, 0.3922, 0.0000,    1.0000, 0.3765, 0.0000,
-//$$$  1.0000, 0.3608, 0.0000,    1.0000, 0.3451, 0.0000,   1.0000, 0.3294, 0.0000,    1.0000, 0.3137, 0.0000,
-//$$$  1.0000, 0.2980, 0.0000,    1.0000, 0.2824, 0.0000,   1.0000, 0.2667, 0.0000,    1.0000, 0.2510, 0.0000,
-//$$$  1.0000, 0.2353, 0.0000,    1.0000, 0.2196, 0.0000,   1.0000, 0.2039, 0.0000,    1.0000, 0.1882, 0.0000,
-//$$$  1.0000, 0.1725, 0.0000,    1.0000, 0.1569, 0.0000,   1.0000, 0.1412, 0.0000,    1.0000, 0.1255, 0.0000,
-//$$$  1.0000, 0.1098, 0.0000,    1.0000, 0.0941, 0.0000,   1.0000, 0.0784, 0.0000,    1.0000, 0.0627, 0.0000,
-//$$$  1.0000, 0.0471, 0.0000,    1.0000, 0.0314, 0.0000,   1.0000, 0.0157, 0.0000,    1.0000, 0.0000, 0.0000 };
+/* blue-green-red spectrum */
+#else
+static float color_map[256*3] =
+{ 0.0000, 0.0000, 1.0000,    0.0000, 0.0157, 1.0000,   0.0000, 0.0314, 1.0000,    0.0000, 0.0471, 1.0000,
+  0.0000, 0.0627, 1.0000,    0.0000, 0.0784, 1.0000,   0.0000, 0.0941, 1.0000,    0.0000, 0.1098, 1.0000,
+  0.0000, 0.1255, 1.0000,    0.0000, 0.1412, 1.0000,   0.0000, 0.1569, 1.0000,    0.0000, 0.1725, 1.0000,
+  0.0000, 0.1882, 1.0000,    0.0000, 0.2039, 1.0000,   0.0000, 0.2196, 1.0000,    0.0000, 0.2353, 1.0000,
+  0.0000, 0.2510, 1.0000,    0.0000, 0.2667, 1.0000,   0.0000, 0.2824, 1.0000,    0.0000, 0.2980, 1.0000,
+  0.0000, 0.3137, 1.0000,    0.0000, 0.3294, 1.0000,   0.0000, 0.3451, 1.0000,    0.0000, 0.3608, 1.0000,
+  0.0000, 0.3765, 1.0000,    0.0000, 0.3922, 1.0000,   0.0000, 0.4078, 1.0000,    0.0000, 0.4235, 1.0000,
+  0.0000, 0.4392, 1.0000,    0.0000, 0.4549, 1.0000,   0.0000, 0.4706, 1.0000,    0.0000, 0.4863, 1.0000,
+  0.0000, 0.5020, 1.0000,    0.0000, 0.5176, 1.0000,   0.0000, 0.5333, 1.0000,    0.0000, 0.5490, 1.0000,
+  0.0000, 0.5647, 1.0000,    0.0000, 0.5804, 1.0000,   0.0000, 0.5961, 1.0000,    0.0000, 0.6118, 1.0000,
+  0.0000, 0.6275, 1.0000,    0.0000, 0.6431, 1.0000,   0.0000, 0.6588, 1.0000,    0.0000, 0.6745, 1.0000,
+  0.0000, 0.6902, 1.0000,    0.0000, 0.7059, 1.0000,   0.0000, 0.7216, 1.0000,    0.0000, 0.7373, 1.0000,
+  0.0000, 0.7529, 1.0000,    0.0000, 0.7686, 1.0000,   0.0000, 0.7843, 1.0000,    0.0000, 0.8000, 1.0000,
+  0.0000, 0.8157, 1.0000,    0.0000, 0.8314, 1.0000,   0.0000, 0.8471, 1.0000,    0.0000, 0.8627, 1.0000,
+  0.0000, 0.8784, 1.0000,    0.0000, 0.8941, 1.0000,   0.0000, 0.9098, 1.0000,    0.0000, 0.9255, 1.0000,
+  0.0000, 0.9412, 1.0000,    0.0000, 0.9569, 1.0000,   0.0000, 0.9725, 1.0000,    0.0000, 0.9882, 1.0000,
+  0.0000, 1.0000, 0.9961,    0.0000, 1.0000, 0.9804,   0.0000, 1.0000, 0.9647,    0.0000, 1.0000, 0.9490,
+  0.0000, 1.0000, 0.9333,    0.0000, 1.0000, 0.9176,   0.0000, 1.0000, 0.9020,    0.0000, 1.0000, 0.8863,
+  0.0000, 1.0000, 0.8706,    0.0000, 1.0000, 0.8549,   0.0000, 1.0000, 0.8392,    0.0000, 1.0000, 0.8235,
+  0.0000, 1.0000, 0.8078,    0.0000, 1.0000, 0.7922,   0.0000, 1.0000, 0.7765,    0.0000, 1.0000, 0.7608,
+  0.0000, 1.0000, 0.7451,    0.0000, 1.0000, 0.7294,   0.0000, 1.0000, 0.7137,    0.0000, 1.0000, 0.6980,
+  0.0000, 1.0000, 0.6824,    0.0000, 1.0000, 0.6667,   0.0000, 1.0000, 0.6510,    0.0000, 1.0000, 0.6353,
+  0.0000, 1.0000, 0.6196,    0.0000, 1.0000, 0.6039,   0.0000, 1.0000, 0.5882,    0.0000, 1.0000, 0.5725,
+  0.0000, 1.0000, 0.5569,    0.0000, 1.0000, 0.5412,   0.0000, 1.0000, 0.5255,    0.0000, 1.0000, 0.5098,
+  0.0000, 1.0000, 0.4941,    0.0000, 1.0000, 0.4784,   0.0000, 1.0000, 0.4627,    0.0000, 1.0000, 0.4471,
+  0.0000, 1.0000, 0.4314,    0.0000, 1.0000, 0.4157,   0.0000, 1.0000, 0.4000,    0.0000, 1.0000, 0.3843,
+  0.0000, 1.0000, 0.3686,    0.0000, 1.0000, 0.3529,   0.0000, 1.0000, 0.3373,    0.0000, 1.0000, 0.3216,
+  0.0000, 1.0000, 0.3059,    0.0000, 1.0000, 0.2902,   0.0000, 1.0000, 0.2745,    0.0000, 1.0000, 0.2588,
+  0.0000, 1.0000, 0.2431,    0.0000, 1.0000, 0.2275,   0.0000, 1.0000, 0.2118,    0.0000, 1.0000, 0.1961,
+  0.0000, 1.0000, 0.1804,    0.0000, 1.0000, 0.1647,   0.0000, 1.0000, 0.1490,    0.0000, 1.0000, 0.1333,
+  0.0000, 1.0000, 0.1176,    0.0000, 1.0000, 0.1020,   0.0000, 1.0000, 0.0863,    0.0000, 1.0000, 0.0706,
+  0.0000, 1.0000, 0.0549,    0.0000, 1.0000, 0.0392,   0.0000, 1.0000, 0.0235,    0.0000, 1.0000, 0.0078,
+  0.0078, 1.0000, 0.0000,    0.0235, 1.0000, 0.0000,   0.0392, 1.0000, 0.0000,    0.0549, 1.0000, 0.0000,
+  0.0706, 1.0000, 0.0000,    0.0863, 1.0000, 0.0000,   0.1020, 1.0000, 0.0000,    0.1176, 1.0000, 0.0000,
+  0.1333, 1.0000, 0.0000,    0.1490, 1.0000, 0.0000,   0.1647, 1.0000, 0.0000,    0.1804, 1.0000, 0.0000,
+  0.1961, 1.0000, 0.0000,    0.2118, 1.0000, 0.0000,   0.2275, 1.0000, 0.0000,    0.2431, 1.0000, 0.0000,
+  0.2588, 1.0000, 0.0000,    0.2745, 1.0000, 0.0000,   0.2902, 1.0000, 0.0000,    0.3059, 1.0000, 0.0000,
+  0.3216, 1.0000, 0.0000,    0.3373, 1.0000, 0.0000,   0.3529, 1.0000, 0.0000,    0.3686, 1.0000, 0.0000,
+  0.3843, 1.0000, 0.0000,    0.4000, 1.0000, 0.0000,   0.4157, 1.0000, 0.0000,    0.4314, 1.0000, 0.0000,
+  0.4471, 1.0000, 0.0000,    0.4627, 1.0000, 0.0000,   0.4784, 1.0000, 0.0000,    0.4941, 1.0000, 0.0000,
+  0.5098, 1.0000, 0.0000,    0.5255, 1.0000, 0.0000,   0.5412, 1.0000, 0.0000,    0.5569, 1.0000, 0.0000,
+  0.5725, 1.0000, 0.0000,    0.5882, 1.0000, 0.0000,   0.6039, 1.0000, 0.0000,    0.6196, 1.0000, 0.0000,
+  0.6353, 1.0000, 0.0000,    0.6510, 1.0000, 0.0000,   0.6667, 1.0000, 0.0000,    0.6824, 1.0000, 0.0000,
+  0.6980, 1.0000, 0.0000,    0.7137, 1.0000, 0.0000,   0.7294, 1.0000, 0.0000,    0.7451, 1.0000, 0.0000,
+  0.7608, 1.0000, 0.0000,    0.7765, 1.0000, 0.0000,   0.7922, 1.0000, 0.0000,    0.8078, 1.0000, 0.0000,
+  0.8235, 1.0000, 0.0000,    0.8392, 1.0000, 0.0000,   0.8549, 1.0000, 0.0000,    0.8706, 1.0000, 0.0000,
+  0.8863, 1.0000, 0.0000,    0.9020, 1.0000, 0.0000,   0.9176, 1.0000, 0.0000,    0.9333, 1.0000, 0.0000,
+  0.9490, 1.0000, 0.0000,    0.9647, 1.0000, 0.0000,   0.9804, 1.0000, 0.0000,    0.9961, 1.0000, 0.0000,
+  1.0000, 0.9882, 0.0000,    1.0000, 0.9725, 0.0000,   1.0000, 0.9569, 0.0000,    1.0000, 0.9412, 0.0000,
+  1.0000, 0.9255, 0.0000,    1.0000, 0.9098, 0.0000,   1.0000, 0.8941, 0.0000,    1.0000, 0.8784, 0.0000,
+  1.0000, 0.8627, 0.0000,    1.0000, 0.8471, 0.0000,   1.0000, 0.8314, 0.0000,    1.0000, 0.8157, 0.0000,
+  1.0000, 0.8000, 0.0000,    1.0000, 0.7843, 0.0000,   1.0000, 0.7686, 0.0000,    1.0000, 0.7529, 0.0000,
+  1.0000, 0.7373, 0.0000,    1.0000, 0.7216, 0.0000,   1.0000, 0.7059, 0.0000,    1.0000, 0.6902, 0.0000,
+  1.0000, 0.6745, 0.0000,    1.0000, 0.6588, 0.0000,   1.0000, 0.6431, 0.0000,    1.0000, 0.6275, 0.0000,
+  1.0000, 0.6118, 0.0000,    1.0000, 0.5961, 0.0000,   1.0000, 0.5804, 0.0000,    1.0000, 0.5647, 0.0000,
+  1.0000, 0.5490, 0.0000,    1.0000, 0.5333, 0.0000,   1.0000, 0.5176, 0.0000,    1.0000, 0.5020, 0.0000,
+  1.0000, 0.4863, 0.0000,    1.0000, 0.4706, 0.0000,   1.0000, 0.4549, 0.0000,    1.0000, 0.4392, 0.0000,
+  1.0000, 0.4235, 0.0000,    1.0000, 0.4078, 0.0000,   1.0000, 0.3922, 0.0000,    1.0000, 0.3765, 0.0000,
+  1.0000, 0.3608, 0.0000,    1.0000, 0.3451, 0.0000,   1.0000, 0.3294, 0.0000,    1.0000, 0.3137, 0.0000,
+  1.0000, 0.2980, 0.0000,    1.0000, 0.2824, 0.0000,   1.0000, 0.2667, 0.0000,    1.0000, 0.2510, 0.0000,
+  1.0000, 0.2353, 0.0000,    1.0000, 0.2196, 0.0000,   1.0000, 0.2039, 0.0000,    1.0000, 0.1882, 0.0000,
+  1.0000, 0.1725, 0.0000,    1.0000, 0.1569, 0.0000,   1.0000, 0.1412, 0.0000,    1.0000, 0.1255, 0.0000,
+  1.0000, 0.1098, 0.0000,    1.0000, 0.0941, 0.0000,   1.0000, 0.0784, 0.0000,    1.0000, 0.0627, 0.0000,
+  1.0000, 0.0471, 0.0000,    1.0000, 0.0314, 0.0000,   1.0000, 0.0157, 0.0000,    1.0000, 0.0000, 0.0000 };
+#endif
 
 /***********************************************************************/
 /*                                                                     */
@@ -235,6 +241,7 @@ static float color_map[256*3] =
 /* global variable holding a MODL */
 static void       *modl;               /* pointer to MODL */
 static int        addVerify  = 0;      /* =1 to create .csm_verify file */
+static int        allVels    = 0;      /* =1 to compute Node/Edge/Faces vels */
 static int        batch      = 0;      /* =0 to enable visualization */
 static int        checkMass  = 0;      /* =1 to check mass properties */
 static int        checkPara  = 0;      /* =1 to check for parallelism */
@@ -244,24 +251,36 @@ static int        loadEgads  = 0;      /* =1 to read Bodys instead of creating *
 static int        onormal    = 0;      /* =1 to use orthonormal (not perspective) */
 static int        outLevel   = 1;      /* default output level */
 static int        plotCP     = 0;      /* =1 to plot Bspline control polygons */
-static int        plugs      =-1;      /* >= 0 to run plugs for specified number of passes */
+static int        plugsOn    = 0;      /* =1 to enable PLUGS */
+static int        plugs      = 0;      /* =0  run phase1 only */
+                                       /* <0  run abs(plugs)        passes of phase2 */
+                                       /* >0  run phase 1 and plugs passes of phase2 */
 static int        printStack = 0;      /* =1 to print stack after every command */
-static int        sensTess   = 0;      /* =1 for tessellation sensitivities */
 static int        skipBuild  = 0;      /* =1 to skip initial build */
 static int        skipTess   = 0;      /* -1 to skip tessellation at end of build */
+static int        tessel     = 0;      /* =1 for tessellation sensitivities */
 static int        verify     = 0;      /* =1 to enable verification */
 static char       *filename  = NULL;   /* name of .csm file */
 static char       *vrfyname  = NULL;   /* name of .vfy file */
 static char       *despname  = NULL;   /* name of DESPMTRs file */
 static char       *dictname  = NULL;   /* name of dictionary file */
-static char       *ptrbname  = NULL;   /* name of peerturbation file */
+static char       *dxddname  = NULL;   /* name of despmtr for -dxdd */
+static char       *ptrbname  = NULL;   /* name of perturbation file */
 static char       *eggname   = NULL;   /* name of external grid generator */
 static char       *plotfile  = NULL;   /* name of plotdata file */
+static char       *tessfile  = NULL;   /* name of tessellation file */
 static char       *BDFname   = NULL;   /* name of BDF file to plot */
 
 /* global variables associated with graphical user interface (gui) */
-static wvContext  *cntxt;              /* context for the WebViewer */
+#define MAX_CLIENTS  100
+static wvContext  *cntxt     = NULL;   /* context for the WebViewer */
 static int         port      = 7681;   /* port number */
+static int         serverNum = -1;     /* server number */
+
+/* global variables associated with multiple users */
+static void        *mutex    = NULL;   /* mutex for browserMessage */
+static char        usernames[1024];    /* |-separated list of users */
+static int         hasBall   = 0;      /* index of user with ball */
 
 /* global variables associated with undo */
 #define MAX_UNDOS  100
@@ -271,17 +290,18 @@ static char        **undo_text = NULL;
 
 /* global variables associated with scene graph meta-data */
 #define MAX_METADATA_CHUNK 32000
-static int         sgMetaDataLen= 0;
-static char        *sgMetaData  = NULL;
-static char        *sgTempData  = NULL;
-static char        *sgFocusData = NULL;
+static int         sgMetaDataSize = 0;
+static int         sgMetaDataUsed = 0;
+static char        *sgMetaData    = NULL;
+static char        *sgFocusData   = NULL;
 
 /* global variables associated with updated filelist */
 static int        updatedFilelist = 1;
 static char       *filelist       = NULL;
 
 /* global variables associated with pending errors */
-static int        pendingError = 0;
+static int        pendingError =  0;
+static int        successBuild = -1;
 
 /* global variables associated with sensitivities */
 static int        plotType = 0;
@@ -301,6 +321,9 @@ static float      sgFocus[4];
 static int        max_resp_len = 0;
 static int        response_len = 0;
 static char       *response = NULL;
+static int        max_mesg_len = 0;
+static int        messages_len = 0;
+static char       *messages = NULL;
 
 /* global variables associated with journals */
 static FILE       *jrnl_out = NULL;    /* output journal file */
@@ -314,23 +337,21 @@ static FILE       *jrnl_out = NULL;    /* output journal file */
 /* declarations for high-level routines defined below */
 
 /* declarations for routines defined below */
-static void       addToResponse(char *text);
+static void       addToResponse(char text[]);
+static void       addToSgMetaData(char format[], ...);
 static int        applyDisplacement(modl_T *MODL, int ipmtr);
-       void       browserMessage(void *wsi, char *text, /*@unused@*/ int lena);
+       void       browserMessage(void *wsi, char text[], /*@unused@*/ int lena);
 static int        buildBodys(int buildTo, int *builtTo, int *buildStatus, int *nwarn);
 static int        buildSceneGraph();
 static int        buildSceneGraphBody(int ibody);
 static void       cleanupMemory(int quiet);
-static int        getToken(char *text, int nskip, char sep, char *token);
+static int        getToken(char text[], int nskip, char sep, char token[]);
 static int        maxDistance(modl_T *MODL1, modl_T *MODL2, int ibody, double *dist);
-static int        processBrowserToServer(char *text);
+       void       mesgCallbackFromOpenCSM(char mesg[]);
+static int        processBrowserToServer(char text[]);
+       void       sizeCallbackFromOpenCSM(void *modl, int ipmtr, int nrow, int ncel);
 static void       spec_col(float scalar, float out[]);
-static int        storeUndo(char *cmd, char *arg);
-
-#ifdef  CHECK_LITE
-static int        checkEvals(modl_T *MODL, int ibody);
-#define WRITE_LITE 1
-#endif // CHECK_LITE
+static int        storeUndo(char cmd[], char arg[]);
 
 static int        addToHistogram(double entry, int nhist, double dhist[], int hist[]);
 static int        printHistogram(int nhist, double dhist[], int hist[]);
@@ -340,11 +361,12 @@ static int        checkForGanged(modl_T *MODL);
 static int        checkParallel(modl_T *MODL);
 
 static int        plugsMain(modl_T *MODL, int npass, int ncloud, double cloud[]);
-static int        plugsPhase1(modl_T *modl,            int ibody, int npmtr, int pmtrindx[], int ncloud, double cloud[], double *rmsbest);
-static int        plugsPhase2(modl_T *modl, int npass, int ibody, int npmtr, int pmtrindx[], int ncloud, double cloud[], double *rmsbest);
+static int        plugsPhase1(modl_T *modl,            int ibody, int npmtr, int pmtrindx[], int ncloud, double cloud[], double *rmsbest, /*@null@*/FILE *fp_plugs);
+static int        plugsPhase2(modl_T *modl, int npass, int ibody, int npmtr, int pmtrindx[], int ncloud, double cloud[], double *rmsbest, /*@null@*/FILE *fp_plugs);
 static int        matsol(double A[], double b[], int n, double x[]);
 static int        solsvd(double A[], double b[], int mrow, int ncol, double W[], double x[]);
 static int        tridiag(int n, double a[], double b[], double c[], double d[], double x[]);
+static int        writeTessFile(modl_T *modl, int ibody, char filename[]);
 
 
 /***********************************************************************/
@@ -386,11 +408,10 @@ main(int       argc,                    /* (in)  number of arguments */
     old_totaltime = clock();
 
     /* dynamically allocated array so that everything is on heap (not stack) */
-    sgMetaDataLen = MAX_METADATA_CHUNK;
+    sgMetaDataSize = MAX_METADATA_CHUNK;
 
     MALLOC(dotName,     char, MAX_STRVAL_LEN  );
-    MALLOC(sgMetaData,  char, sgMetaDataLen   );
-    MALLOC(sgTempData,  char, sgMetaDataLen   );
+    MALLOC(sgMetaData,  char, sgMetaDataSize  );
     MALLOC(sgFocusData, char, MAX_STRVAL_LEN  );
     MALLOC(casename,    char, MAX_FILENAME_LEN);
     MALLOC(jrnlname,    char, MAX_FILENAME_LEN);
@@ -399,12 +420,14 @@ main(int       argc,                    /* (in)  number of arguments */
     MALLOC(vrfyname,    char, MAX_FILENAME_LEN);
     MALLOC(despname,    char, MAX_FILENAME_LEN);
     MALLOC(dictname,    char, MAX_FILENAME_LEN);
+    MALLOC(dxddname,    char, MAX_FILENAME_LEN);
     MALLOC(ptrbname,    char, MAX_FILENAME_LEN);
     MALLOC(pmtrname,    char, MAX_FILENAME_LEN);
     MALLOC(dirname,     char, MAX_FILENAME_LEN);
     MALLOC(basename,    char, MAX_FILENAME_LEN);
     MALLOC(eggname,     char, MAX_FILENAME_LEN);
     MALLOC(plotfile,    char, MAX_FILENAME_LEN);
+    MALLOC(tessfile,    char, MAX_FILENAME_LEN);
     MALLOC(BDFname,     char, MAX_FILENAME_LEN);
     MALLOC(text,        char, MAX_STR_LEN     );
 
@@ -417,6 +440,8 @@ main(int       argc,                    /* (in)  number of arguments */
         MALLOC(undo_text[i], char, MAX_NAME_LEN);
     }
 
+    strcpy(usernames, "|");
+
     /* get the flags and casename(s) from the command line */
     casename[ 0] = '\0';
     jrnlname[ 0] = '\0';
@@ -424,17 +449,21 @@ main(int       argc,                    /* (in)  number of arguments */
     vrfyname[ 0] = '\0';
     despname[ 0] = '\0';
     dictname[ 0] = '\0';
+    dxddname[ 0] = '\0';
     ptrbname[ 0] = '\0';
     pmtrname[ 0] = '\0';
     eggname[  0] = '\0';
     plotfile[ 0] = '\0';
+    tessfile[ 0] = '\0';
     BDFname[  0] = '\0';
 
     for (i = 1; i < argc; i++) {
         if        (strcmp(argv[i], "--") == 0) {
             /* ignore (needed for gdb) */
         } else if (strcmp(argv[i], "-addVerify") == 0) {
-            addVerify  = 1;
+            addVerify = 1;
+        } else if (strcmp(argv[i], "-allVels") == 0) {
+            allVels = 1;
         } else if (strcmp(argv[i], "-batch") == 0) {
             batch = 1;
         } else if (strcmp(argv[i], "-checkMass") == 0) {
@@ -457,6 +486,13 @@ main(int       argc,                    /* (in)  number of arguments */
             }
         } else if (strcmp(argv[i], "-dumpEgads") == 0) {
             dumpEgads = 1;
+        } else if (strcmp(argv[i], "-dxdd") == 0) {
+            if (i < argc-1) {
+                STRNCPY(dxddname, argv[++i], MAX_FILENAME_LEN);
+            } else {
+                showUsage = 1;
+                break;
+            }
         } else if (strcmp(argv[i], "-egg") == 0) {
             if (i < argc-1) {
                 STRNCPY(eggname, argv[++i], MAX_FILENAME_LEN);
@@ -513,6 +549,7 @@ main(int       argc,                    /* (in)  number of arguments */
             plotCP = 1;
         } else if (strcmp(argv[i], "-plugs") == 0) {
             if (i < argc-1) {
+                plugsOn = 1;
                 sscanf(argv[++i], "%d", &plugs);
             } else {
                 showUsage = 1;
@@ -534,12 +571,19 @@ main(int       argc,                    /* (in)  number of arguments */
                 showUsage = 1;
                 break;
             }
-        } else if (strcmp(argv[i], "-sensTess") == 0) {
-            sensTess = 1;
+        } else if (strcmp(argv[i], "-tessel") == 0 || strcmp(argv[i], "-sensTess") == 0) {
+            tessel = 1;
         } else if (strcmp(argv[i], "-skipBuild") == 0) {
             skipBuild = 1;
         } else if (strcmp(argv[i], "-skipTess") == 0) {
             skipTess = 1;
+        } else if (strcmp(argv[i], "-tess") == 0) {
+            if (i < argc-1) {
+                STRNCPY(tessfile, argv[++i], MAX_FILENAME_LEN);
+            } else {
+                showUsage = 1;
+                break;
+            }
         } else if (strcmp(argv[i], "-verify") == 0) {
             verify = 1;
         } else if (strcmp(argv[i], "--version") == 0 ||
@@ -565,12 +609,14 @@ main(int       argc,                    /* (in)  number of arguments */
         SPRINT2(0, "serveCSM version %2d.%02d\n", imajor, iminor);
         SPRINT0(0, "proper usage: 'serveCSM [casename[.csm]] [options...]'");
         SPRINT0(0, "   where [options...] = -addVerify");
+        SPRINT0(0, "                        -allVels");
         SPRINT0(0, "                        -batch");
         SPRINT0(0, "                        -checkMass");
         SPRINT0(0, "                        -checkPara");
         SPRINT0(0, "                        -despmtrs despname");
         SPRINT0(0, "                        -dict dictname");
         SPRINT0(0, "                        -dumpEgads");
+        SPRINT0(0, "                        -dxdd despmtr");
         SPRINT0(0, "                        -egg eggname");
         SPRINT0(0, "                        -help  -or-  -h");
         SPRINT0(0, "                        -histDist dist");
@@ -585,9 +631,9 @@ main(int       argc,                    /* (in)  number of arguments */
         SPRINT0(0, "                        -port X");
         SPRINT0(0, "                        -printStack");
         SPRINT0(0, "                        -ptrb ptrbname");
-        SPRINT0(0, "                        -sensTess");
         SPRINT0(0, "                        -skipBuild");
         SPRINT0(0, "                        -skipTess");
+        SPRINT0(0, "                        -tess tessfile");
         SPRINT0(0, "                        -verify");
         SPRINT0(0, "                        -version  -or-  -v  -or-  --version");
         SPRINT0(0, "STOPPING...\a");
@@ -595,8 +641,8 @@ main(int       argc,                    /* (in)  number of arguments */
         goto cleanup;
     }
 
-    /* if you specify skipTess, then batch is automatically enabled */
-    if (skipTess == 1) {
+    /* if you specify -dxdd or -skipTess, then batch is automatically enabled */
+    if (strlen(dxddname) > 0 || skipTess == 1) {
         batch = 1;
     }
 
@@ -606,17 +652,19 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program serveCSM                    *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2020         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2021         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************\n");
 
     SPRINT1(1, "    casename    = %s", casename   );
     SPRINT1(1, "    addVerify   = %d", addVerify  );
+    SPRINT1(1, "    allVels     = %d", allVels    );
     SPRINT1(1, "    batch       = %d", batch      );
     SPRINT1(1, "    checkMass   = %d", checkMass  );
     SPRINT1(1, "    checkPara   = %d", checkPara  );
     SPRINT1(1, "    despmtrs    = %s", despname   );
     SPRINT1(1, "    dictname    = %s", dictname   );
+    SPRINT1(1, "    dxddname    = %s", dxddname   );
     SPRINT1(1, "    dumpEgads   = %d", dumpEgads  );
     SPRINT1(1, "    eggname     = %s", eggname    );
     SPRINT1(1, "    jrnl        = %s", jrnlname   );
@@ -625,15 +673,16 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT1(1, "    outLevel    = %d", outLevel   );
     SPRINT1(1, "    plotfile    = %s", plotfile   );
     SPRINT1(1, "    plotBDF     = %s", BDFname    );
+    SPRINT1(1, "    plugsOn     = %d", plugsOn    );
     SPRINT1(1, "    plugs       = %d", plugs      );
     SPRINT1(1, "    port        = %d", port       );
     SPRINT1(1, "    printStack  = %d", printStack );
     SPRINT1(1, "    ptrbname    = %s", ptrbname   );
-    SPRINT1(1, "    sensTess    = %d", sensTess   );
     SPRINT1(1, "    skipBuild   = %d", skipBuild  );
     SPRINT1(1, "    skipTess    = %d", skipTess   );
+    SPRINT1(1, "    tessfile    = %s", tessfile   );
     SPRINT1(1, "    verify      = %d", verify     );
-    SPRINT1(1, "    ESP_ROOT    = %s", getenv("ESP_ROOT"));
+    SPRINT1(1, "    ESP_ROOT    = %s", /*@ignore@*/getenv("ESP_ROOT")/*@end@*/);
     SPRINT0(1, " ");
 
     plugs_save = plugs;
@@ -641,9 +690,14 @@ main(int       argc,                    /* (in)  number of arguments */
     /* set OCSMs output level */
     (void) ocsmSetOutLevel(outLevel);
 
-    /* allocate nominal response buffer */
+    /* allocate nominal response and messages buffers */
     max_resp_len = 4096;
     MALLOC(response, char, max_resp_len+1);
+    response[0] = '\0';
+
+    max_mesg_len = 4096;
+    MALLOC(messages, char, max_mesg_len+1);
+    messages[0] = '\0';
 
     /* allocate sketch buffer */
     MALLOC(skbuff, char, MAX_STR_LEN);
@@ -730,7 +784,7 @@ main(int       argc,                    /* (in)  number of arguments */
         basename[i-4] = '\0';
 
         /* create the full vrfyname */
-        sprintf(vrfyname, "%s%cverify_%s%c%s.vfy", dirname, SLASH, &(OCC_ver[strlen(OCC_ver)-5]), SLASH, basename);
+        snprintf(vrfyname, MAX_FILENAME_LEN-1, "%s%cverify_%s%c%s.vfy", dirname, SLASH, &(OCC_ver[strlen(OCC_ver)-5]), SLASH, basename);
     } else {
         vrfyname[0] = '\0';
     }
@@ -749,25 +803,34 @@ main(int       argc,                    /* (in)  number of arguments */
         goto cleanup;
     } else if (status < SUCCESS) {
         SPRINT0(0, "ERROR:: problem in ocsmLoad\a");
-        MODL = (modl_T*)modl;
         pendingError = 1;
     } else {
         MODL = (modl_T*)modl;
     }
+
+    SPLINT_CHECK_FOR_NULL(modl);
 
     if (pendingError == 0) {
         status = ocsmLoadDict(modl, dictname);
         if (status < EGADS_SUCCESS) goto cleanup;
     }
 
+    if (pendingError == 0) {
+        status = ocsmRegMesgCB(modl, mesgCallbackFromOpenCSM);
+        if (status < EGADS_SUCCESS) goto cleanup;
+
+        status = ocsmRegSizeCB(modl, sizeCallbackFromOpenCSM);
+        if (status < EGADS_SUCCESS) goto cleanup;
+    }
+
     if (strlen(despname) > 0) {
-        status = ocsmUpdateDespmtrs(MODL, despname);
+        status = ocsmUpdateDespmtrs(modl, despname);
         if (status < EGADS_SUCCESS) goto cleanup;
     }
 
     if (pendingError == 0) {
         MODL = (modl_T *)modl;
-        if (filelist != NULL) free(filelist);
+        if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: ocsmGetFilelist -> status=%d", status);
@@ -810,7 +873,7 @@ main(int       argc,                    /* (in)  number of arguments */
     if (batch == 1 && pendingError == 0) {
         SPRINT0(1, "External Parameter(s):");
         if (outLevel > 0) {
-            status = ocsmPrintPmtrs(MODL, stdout);
+            status = ocsmPrintPmtrs(MODL, "");
             if (status != SUCCESS) {
                 SPRINT1(0, "ERROR:: ocsmPrintPmtrs -> status=%d", status);
             }
@@ -818,7 +881,7 @@ main(int       argc,                    /* (in)  number of arguments */
 
         SPRINT0(1, "Global Attribute(s):");
         if (outLevel > 0) {
-            status = ocsmPrintAttrs(MODL, stdout);
+            status = ocsmPrintAttrs(MODL, "");
             if (status != SUCCESS) {
                 SPRINT1(0, "ERROR:: ocsmPrintAttrs -> status=%d", status);
             }
@@ -842,6 +905,7 @@ main(int       argc,                    /* (in)  number of arguments */
     /* initialize the scene graph meta data */
     if (batch == 0) {
         sgMetaData[ 0] = '\0';
+        sgMetaDataUsed = 0;
         sgFocusData[0] = '\0';
     }
 
@@ -870,33 +934,152 @@ main(int       argc,                    /* (in)  number of arguments */
     if (pendingError == 0) {
         status = buildBodys(0, &builtTo, &buildStatus, &nwarn);
 
-        /* there is an uncaught signal */
-        if (builtTo < 0) {
-            if (batch == 0) {
+        if (status != SUCCESS || buildStatus != SUCCESS || builtTo < 0) {
+            successBuild = -1;
+        } else {
+            successBuild = builtTo;
+        }
+
+        /* interactive mode */
+        if (batch == 0) {
+
+            /* uncaught signal */
+            if (builtTo < 0) {
                 SPRINT2(0, "build() detected \"%s\" at %s",
                         ocsmGetText(buildStatus), MODL->brch[1-builtTo].name);
                 SPRINT0(0, "Configuration only built up to detected error\a");
                 pendingError = -builtTo;
-            } else {
+
+            /* error in ocsmBuild that does not cause a signal to be raised */
+            } else if (buildStatus != SUCCESS) {
+                SPRINT0(0, "build() detected an error that did not raise a signal");
+                SPRINT0(0, "Configuration only built up to detected error\a");
+                pendingError = 299;
+
+            /* error in ocsmcheck */
+            } else if (status != SUCCESS) {
+                SPRINT2(0, "ERROR:: build() detected %d (%s)",
+                        status, ocsmGetText(status));
+            }
+
+        /* batch mode */
+        } else {
+
+            /* uncaught signal */
+            if (builtTo < 0) {
+                status = -999;
+                goto cleanup;
+
+            /* error in ocsmBuild that does not cause a signal to be raised */
+            } else if (buildStatus != SUCCESS) {
+                SPRINT2(0, "ERROR:: build() detected %d (%s)",
+                        buildStatus, ocsmGetText(buildStatus));
+                status = -999;
+                goto cleanup;
+
+            /* error in ocsmCheck */
+            } else if (buildStatus != SUCCESS) {
+                goto cleanup;
+
+            }
+        }
+
+        /* there is an uncaught signal */
+//$$$        if (builtTo < 0) {
+//$$$            if (batch == 0) {
+//$$$                SPRINT2(0, "build() detected \"%s\" at %s",
+//$$$                        ocsmGetText(buildStatus), MODL->brch[1-builtTo].name);
+//$$$                SPRINT0(0, "Configuration only built up to detected error\a");
+//$$$                pendingError = -builtTo;
+//$$$            } else {
+//$$$                status = -999;
+//$$$                goto cleanup;
+//$$$            }
+//$$$
+        /* error in ocsmBuild that does not cause a signal to be raised */
+//$$$        } else if (buildStatus != SUCCESS) {
+//$$$            SPRINT2(0, "ERROR:: build() detected %d (%s)",
+//$$$                    buildStatus, ocsmGetText(buildStatus));
+//$$$            status = -999;
+//$$$            goto cleanup;
+//$$$
+        /* error in ocsmCheck */
+//$$$        } else if (status != SUCCESS) {
+//$$$            if (batch == 0) {
+//$$$                SPRINT2(0, "ERROR:: build() detected %d (%s)",
+//$$$                        status, ocsmGetText(status));
+//$$$            } else {
+//$$$                goto cleanup;
+//$$$            }
+//$$$        }
+
+        /* if the -dxdd option is set, process it now */
+        if (strlen(dxddname) > 0) {
+            int  nbody;
+            char tessfilename[MAX_FILENAME_LEN+1];
+
+            /* for now do not let name include a subscript */
+            if (strchr(dxddname, '[') != NULL ||
+                strchr(dxddname, ']') != NULL   ) {
+                SPRINT1(0, "ERROR:: %s should not include a subscript", dxddname);
                 status = -999;
                 goto cleanup;
             }
 
-        /* error in ocsmBuild that does not cause a signal to be raised */
-        } else if (buildStatus != SUCCESS) {
-            SPRINT2(0, "ERROR:: build() detected %d (%s)",
-                    buildStatus, ocsmGetText(buildStatus));
-            status = -999;
-            goto cleanup;
+            strcpy(tessfilename, dxddname);
+            strcat(tessfilename, ".tess");
 
-        /* error in ocsmCheck */
-        } else if (status != SUCCESS) {
-            if (batch == 0) {
-                SPRINT2(0, "ERROR:: build() detected %d (%s)",
-                        status, ocsmGetText(status));
-            } else {
+            /* set the velocity of the DESPMTR */
+            ipmtr = -1;
+            irow  =  1;
+            icol  =  1;
+            for (jpmtr = 1; jpmtr <= MODL->npmtr; jpmtr++) {
+                if (MODL->pmtr[jpmtr].type == OCSM_DESPMTR       &&
+                    strcmp(MODL->pmtr[jpmtr].name, dxddname) == 0  ) {
+                    ipmtr = jpmtr;
+                    break;
+                }
+            }
+
+            if (ipmtr < 0) {
+                SPRINT1(0, "ERROR:: dxddname=%s not found", dxddname);
+                status = -999;
                 goto cleanup;
             }
+
+            status = ocsmSetVelD(MODL, 0,     0,    0,    0.0);
+            if (status != SUCCESS) {
+                SPRINT1(0, "ERROR:: ocsmSetVelD(clear) -> status=%d\n", status);
+                status = -999;
+                goto cleanup;
+            }
+
+            status = ocsmSetVelD(MODL, ipmtr, irow, icol, 1.0);
+            if (status != SUCCESS) {
+                SPRINT1(0, "ERROR:: ocsmSetVelD(set) -> status=%d\n", status);
+                status = -999;
+                goto cleanup;
+            }
+
+            /* rebuild to propagate the velocities */
+            nbody = 0;
+            status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+            if (status != SUCCESS) {
+                SPRINT1(0, "ERROR:: ocsmBuild -> status=%d\n", status);
+                status = -999;
+                goto cleanup;
+            }
+
+            /* write the .tess file and exit */
+            status = writeTessFile(MODL, MODL->nbody, tessfilename);
+            if (status != SUCCESS) {
+                SPRINT1(0, "ERROR:: writeTessFile -> status=%d\n", status);
+                status = -999;
+                goto cleanup;
+            }
+
+            SPRINT1(0, "==> \"%s\" has been written", tessfilename);
+            goto cleanup;
         }
     }
 
@@ -939,7 +1122,7 @@ main(int       argc,                    /* (in)  number of arguments */
                 goto cleanup;
             }
 
-            status = ocsmFindPmtr(MODL, pmtrname, OCSM_EXTERNAL, irows[ii], icols[ii], &ipmtrs[ii]);
+            status = ocsmFindPmtr(MODL, pmtrname, OCSM_DESPMTR, irows[ii], icols[ii], &ipmtrs[ii]);
             if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: ocsmFindPmtr(%s) detected %d (%s)",
                         pmtrname, status, ocsmGetText(status));
@@ -975,8 +1158,24 @@ main(int       argc,                    /* (in)  number of arguments */
         FREE(ipmtrs);
     }
 
+    /* if there is a tessellation file, read it and overwrite the tessellation
+       of the last Body */
+    if (STRLEN(tessfile) > 0 && pendingError == 0) {
+
+        status = ocsmUpdateTess(MODL, MODL->nbody, tessfile);
+        if (status == SUCCESS) {
+            SPRINT1(1, "--> tessellation updated using \"%s\"", tessfile);
+        } else {
+            SPRINT1(0, "ERROR:: error update tessellation using \"%s\"", tessfile);
+        }
+
+        if (batch == 0) {
+            buildSceneGraph();
+        }
+    }
+
     /* if plugs is on, run it now */
-    if (plugs >= 0) {
+    if (plugsOn > 0 && pendingError == 0) {
         int     npass, ncloud, icloud, jmax;
         char    templine[128];
 
@@ -1008,8 +1207,6 @@ main(int       argc,                    /* (in)  number of arguments */
         if (PLUGS_PRUNE > 0) {
             int    jcloud;
 
-            printf("before pruning, ncloud=%5d\n", ncloud);
-
             for (icloud = 1; icloud < ncloud; icloud++) {
                 for (jcloud = 0; jcloud < icloud; jcloud++) {
                     dist = (cloud[3*icloud  ] - cloud[3*jcloud  ]) * (cloud[3*icloud  ] - cloud[3*jcloud  ])
@@ -1026,9 +1223,9 @@ main(int       argc,                    /* (in)  number of arguments */
                 }
             }
 
-            printf("after  pruning, ncloud=%5d\n", ncloud);
-
             plot_fp = fopen("new.cloud", "w");
+            SPLINT_CHECK_FOR_NULL(plot_fp);
+
             fprintf(plot_fp, "%5d    0 new_cloud\n", ncloud);
             for (icloud = 0; icloud < ncloud; icloud++) {
                 fprintf(plot_fp, "%22.15e %22.15e %22.15e\n",
@@ -1052,6 +1249,9 @@ main(int       argc,                    /* (in)  number of arguments */
         }
 
         FREE(cloud);
+
+        /* enable verification */
+        MODL->verify = verify;
     }
 
     /* process the input journal file if jrnlname exists */
@@ -1093,7 +1293,7 @@ main(int       argc,                    /* (in)  number of arguments */
         }
     }
 
-    if (plugs_save >= 0 && MODL->sigCode < SUCCESS) {
+    if (pendingError == 0 && plugs_save >= 0 && MODL->sigCode < SUCCESS) {
         SPRINT2(0, "ERROR:: build not completed because error %d (%s) was detected",
                 MODL->sigCode, ocsmGetText(MODL->sigCode));
         status = MODL->sigCode;
@@ -1127,8 +1327,15 @@ main(int       argc,                    /* (in)  number of arguments */
 
     /* start the server */
     if (batch == 0) {
+        /* create a lock */
+        mutex = EMP_LockCreate();
+        if (mutex == NULL) {
+            SPRINT0(0, "WARNING:: lock could not be created");
+        }
+        
         status = SUCCESS;
-        if (wv_startServer(port, NULL, NULL, NULL, 0, cntxt) == 0) {
+        serverNum = wv_startServer(port, NULL, NULL, NULL, 0, cntxt);
+        if (serverNum == 0) {
 
             /* stay alive a long as we have a client */
             while (wv_statusServer(0)) {
@@ -1143,6 +1350,11 @@ main(int       argc,                    /* (in)  number of arguments */
                     status++;
                 }
             }
+        }
+
+        /* destroy the lock */
+        if (mutex != NULL) {
+            EMP_LockDestroy(mutex);
         }
     }
 
@@ -1209,7 +1421,7 @@ main(int       argc,                    /* (in)  number of arguments */
         status = ocsmGetPmtr(MODL, ipmtr, &type, &nrow, &ncol, pname);
         CHECK_STATUS(ocsmGetPmtr);
 
-        if (type == OCSM_OUTPUT) {
+        if (type == OCSM_OUTPMTR) {
             if (nrow == 0 && ncol == 0) {
                 status = ocsmGetValuS(MODL, ipmtr, strval);
                 CHECK_STATUS(ocsmGetValuS);
@@ -1222,100 +1434,17 @@ main(int       argc,                    /* (in)  number of arguments */
                         status = ocsmGetValu(MODL, ipmtr, irow, icol, &value, &dot);
                         CHECK_STATUS(ocsmGetValu);
 
-                        SPRINT3(1, "               [%3d,%3d] %11.5f", irow, icol, value);
+                        SPRINT4(1, "               [%3d,%3d] %11.5f %11.5f", irow, icol, value, dot);
                     }
                 }
             } else {
                 status = ocsmGetValu(MODL, ipmtr, 1, 1, &value, &dot);
                 CHECK_STATUS(ocsmGetValu);
 
-                SPRINT2(1, "    %-20s %11.5f", pname, value);
+                SPRINT3(1, "    %-20s %11.5f %11.5f", pname, value, dot);
             }
         }
     }
-
-#ifdef CHECK_LITE
-    /* check inverse evaluations */
-    for (ibody = 1; ibody <= MODL->nbody; ibody++) {
-        if (MODL->body[ibody].onstack != 1) continue;
-
-        if (MODL->body[ibody].botype == OCSM_SOLID_BODY ||
-            MODL->body[ibody].botype == OCSM_SHEET_BODY ||
-            MODL->body[ibody].botype == OCSM_WIRE_BODY    ) {
-
-            SPRINT1(1, "--> Checking inverse evaluations for Body %d", ibody);
-            old_time = clock();
-            status = checkEvals(MODL, ibody);
-            new_time = clock();
-            SPRINT2(1, "==> checkEvals -> status=%d CPUtime=%9.3f sec",
-                    status, (double)(new_time-old_time) / (double)(CLOCKS_PER_SEC));
-        }
-    }
-#endif // CHECK_LITE
-
-#ifdef WRITE_LITE
-    /* write a .lite file */
-    {
-        int    nbody_inmodel;
-        size_t nbytes;
-        char   litename[MAX_FILENAME_LEN], *stream;
-        ego    emodel, *ebodys_inmodel=NULL;
-        FILE   *fp;
-
-        int EG_exportModel(egObject *mobject, size_t *nbytes, char *stream[]);
-
-        nbody_inmodel = 0;
-        for (ibody = 1; ibody <= MODL->nbody; ibody++) {
-            if (MODL->body[ibody].onstack != 1              ) continue;
-            if (MODL->body[ibody].botype  != OCSM_SOLID_BODY) continue;
-            nbody_inmodel++;
-        }
-
-        if (nbody_inmodel > 0) {
-            SPRINT1(1, "creating a Model with %d Bodys", nbody_inmodel);
-
-            MALLOC(ebodys_inmodel, ego, nbody_inmodel);
-
-            nbody_inmodel = 0;
-            for (ibody = 1; ibody <= MODL->nbody; ibody++) {
-                if (MODL->body[ibody].onstack != 1              ) continue;
-                if (MODL->body[ibody].botype  != OCSM_SOLID_BODY) continue;
-
-                status = EG_copyObject(MODL->body[ibody].ebody, NULL, &(ebodys_inmodel[nbody_inmodel++]));
-                CHECK_STATUS(EG_copyObject);
-            }
-
-            status = EG_makeTopology(MODL->context, NULL, MODEL, 0, NULL,
-                                     nbody_inmodel, ebodys_inmodel, NULL, &emodel);
-            CHECK_STATUS(EG_makeTopology);
-
-            /* create the stream */
-            status = EG_exportModel(emodel, &nbytes, &stream);
-            CHECK_STATUS(EG_writeModel);
-
-            /* write the file */
-            STRNCPY(litename, casename, MAX_FILENAME_LEN);
-            strcat( litename, ".lite");
-            SPRINT1(1, "litename=%s", litename);
-
-            fp = fopen(litename, "wb");
-            if (fp == NULL) {
-                status = EGADS_NOTFOUND;
-                CHECK_STATUS(fopen);
-            }
-            fwrite(stream, sizeof(char), nbytes, fp);
-            fclose(fp);
-
-            /* clean up */
-            free(stream);
-
-            status = EG_deleteObject(emodel);
-            CHECK_STATUS(EG_deleteObject);
-
-            FREE(ebodys_inmodel);
-        }
-    }
-#endif // WRITE_LITE
 
     /* special code to analyze the parallelizablility of the build */
     if (checkPara == 1) {
@@ -1360,6 +1489,10 @@ main(int       argc,                    /* (in)  number of arguments */
                 fprintf(vrfy_fp, "   assert  %8d      @itype       0  1\n", 3);
             }
 
+            fprintf(vrfy_fp, "   assert  %8d      @nnode       0  1\n", MODL->body[ibody].nnode);
+            fprintf(vrfy_fp, "   assert  %8d      @nedge       0  1\n", MODL->body[ibody].nedge);
+            fprintf(vrfy_fp, "   assert  %8d      @nface       0  1\n", MODL->body[ibody].nface);
+
             status = EG_getBoundingBox(MODL->body[ibody].ebody, bbox);
             if (status != SUCCESS) {
                 SPRINT2(0, "ERROR:: EG_getBoundingBox(%d) -> status=%d\n", ibody, status);
@@ -1369,10 +1502,6 @@ main(int       argc,                    /* (in)  number of arguments */
             if (status != SUCCESS) {
                 SPRINT2(0, "ERROR:: EG_getMassProperties(%d) -> status=%d\n", ibody, status);
             }
-
-            fprintf(vrfy_fp, "   assert  %8d      @nnode       0  1\n", MODL->body[ibody].nnode);
-            fprintf(vrfy_fp, "   assert  %8d      @nedge       0  1\n", MODL->body[ibody].nedge);
-            fprintf(vrfy_fp, "   assert  %8d      @nface       0  1\n", MODL->body[ibody].nface);
 
             if (MODL->body[ibody].botype == OCSM_SHEET_BODY ||
                 MODL->body[ibody].botype == OCSM_SOLID_BODY   ) {
@@ -1400,32 +1529,29 @@ main(int       argc,                    /* (in)  number of arguments */
                 }
             }
 
-            if        (bbox[3]-bbox[0] < 0.001) {
-                fprintf(vrfy_fp, "   assert %15.7e  @xcg     -.001  1\n", data[2]);
-            } else if (fabs(data[2]) < 1e-10) {
+            if        (fabs(data[2]) < 1e-10) {
                 fprintf(vrfy_fp, "   assert %15.7e  @xcg     0.001  1\n", 0.0);
+            } else if (bbox[3]-bbox[0] < 0.001) {
+                fprintf(vrfy_fp, "   assert %15.7e  @xcg     -.001  1\n", data[2]);
             } else {
                 fprintf(vrfy_fp, "   assert %15.7e  @xcg    %15.7e  1\n", data[2], 0.001*(bbox[3]-bbox[0]));
             }
 
-            if        (bbox[4]-bbox[1] < 0.001) {
-                fprintf(vrfy_fp, "   assert %15.7e  @ycg     -.001  1\n", data[3]);
-            } else if (fabs(data[3]) < 1e-10) {
+            if        (fabs(data[3]) < 1e-10) {
                 fprintf(vrfy_fp, "   assert %15.7e  @ycg     0.001  1\n", 0.0);
+            } else if (bbox[4]-bbox[1] < 0.001) {
+                fprintf(vrfy_fp, "   assert %15.7e  @ycg     -.001  1\n", data[3]);
             } else {
                 fprintf(vrfy_fp, "   assert %15.7e  @ycg    %15.7e  1\n", data[3], 0.001*(bbox[4]-bbox[1]));
             }
 
-            if        (bbox[5]-bbox[2] < 0.001) {
-                fprintf(vrfy_fp, "   assert %15.7e  @zcg     -.001  1\n", data[4]);
-            } else if (fabs(data[4]) < 1e-10) {
+            if        (fabs(data[4]) < 1e-10) {
                 fprintf(vrfy_fp, "   assert %15.7e  @zcg     0.001  1\n", 0.0);
+            } else if (bbox[5]-bbox[2] < 0.001) {
+                fprintf(vrfy_fp, "   assert %15.7e  @zcg     -.001  1\n", data[4]);
             } else {
                 fprintf(vrfy_fp, "   assert %15.7e  @zcg    %15.7e  1\n", data[4], 0.001*(bbox[5]-bbox[2]));
             }
-//$$$            fprintf(vrfy_fp, "   assert %15.7e  @xcg   %15.7e  1\n", data[2], 0.001*MAX(bbox[3]-bbox[0],1));
-//$$$            fprintf(vrfy_fp, "   assert %15.7e  @ycg   %15.7e  1\n", data[3], 0.001*MAX(bbox[4]-bbox[1],1));
-//$$$            fprintf(vrfy_fp, "   assert %15.7e  @zcg   %15.7e  1\n", data[4], 0.001*MAX(bbox[5]-bbox[2],1));
             fprintf(vrfy_fp, "\n");
         }
 
@@ -1435,13 +1561,13 @@ main(int       argc,                    /* (in)  number of arguments */
 
     /* generate a histogram of the distance of plot points to Brep */
     if (histDist > 0 && strlen(plotfile) == 0) {
-        SPRINT0(0, "WARNING:: Cannot choose -histDist without -pnts");
+        SPRINT0(0, "WARNING:: Cannot choose -histDist without -plot");
     } else if (histDist > 0) {
         int     imax, jmax, j, iface, atype, alen, count=0;
         int     ibest, jbest;
         CINT    *tempIlist;
         double  dtest, dbest=0, xbest=0, ybest=0, zbest=0, ubest=0, vbest=0;
-        double  dworst, dultim, xyz_in[3], uv_out[2], xyz_out[3];
+        double  dworst, drms, dultim, xyz_in[3], uv_out[2], xyz_out[3];
         CDOUBLE *tempRlist;
         char    templine[128];
         CCHAR   *tempClist;
@@ -1511,6 +1637,7 @@ main(int       argc,                    /* (in)  number of arguments */
 
             dworst = 0;
             dbest = HUGEQ;
+            drms  = 0;
             xbest = 0;
             ybest = 0;
             zbest = 0;
@@ -1576,6 +1703,7 @@ main(int       argc,                    /* (in)  number of arguments */
                     if (dbest > dworst) {
                         dworst = dbest;
                     }
+                    drms += dbest;
 
                     fprintf(fp_all, "%20.12f %20.12f %20.12f %5d %5d %20.12f %20.12f %20.12f %12.3e\n",
                             xyz_in[0], xyz_in[1], xyz_in[2], ibest, jbest, xbest, ybest, zbest, dbest);
@@ -1594,7 +1722,7 @@ main(int       argc,                    /* (in)  number of arguments */
                     CHECK_STATUS(addToHistogram);
                 }
             }
-            SPRINT1(1, " dworst=%12.3e", dworst);
+            SPRINT2(1, " dworst=%12.3e, drms=%12.3e", dworst, sqrt(drms/imax/jmax));
             if (dworst > dultim) {
                 dultim = dworst;
             }
@@ -1620,27 +1748,66 @@ main(int       argc,                    /* (in)  number of arguments */
     /* free up stoage associated with GUI */
     wv_cleanupServers();
 
+    /* free up undo storage */
+    for (iundo = nundo-1; iundo >= 0; iundo--) {
+        (void) ocsmFree(undo_modl[iundo]);
+    }
+
+    if (undo_text != NULL) {
+        for (i = 0; i <= MAX_UNDOS; i++) {
+            FREE(undo_text[i]);
+        }
+        FREE(undo_text);
+    }
+
+    FREE(undo_modl  );
+
+    nundo = 0;
+
+    /* summary data */
     new_totaltime = clock();
 
     SPRINT1(1, "    Total CPU time = %.3f sec",
             (double)(new_totaltime - old_totaltime) / (double)(CLOCKS_PER_SEC));
 
-    if (nwarn == 0) {
-        SPRINT0(0, "==> serveCSM completed successfully");
+    if (strlen(vrfyname) > 0) {
+        vrfy_fp = fopen(vrfyname, "r");
+        if (vrfy_fp != NULL) {
+            fclose(vrfy_fp);
+
+            if (nwarn == 0) {
+                SPRINT0(0, "==> serveCSM completed successfully");
+            } else {
+                SPRINT1(0, "==> serveCSM completed successfully with %d warnings", nwarn);
+            }
+        } else {
+            if (nwarn == 0) {
+                SPRINT0(0, "==> serveCSM completed successfully with no verification data");
+            } else {
+                SPRINT1(0, "==> serveCSM completed successfully with %d warnings and no verification data", nwarn);
+            }
+        }
     } else {
-        SPRINT1(0, "==> serveCSM completed successfully with %d warnings", nwarn);
+        if (nwarn == 0) {
+            SPRINT0(0, "==> serveCSM completed successfully");
+        } else {
+            SPRINT1(0, "==> serveCSM completed successfully with %d warnings", nwarn);
+        }
     }
 
     status = SUCCESS;
 
 cleanup:
-    if (filelist != NULL) free(filelist);
+    FREE(filelist);
 
     if (jrnl_out != NULL) fclose(jrnl_out);
     jrnl_out = NULL;
 
-    for (iundo = nundo-1; iundo >= 0; iundo--) {
-        (void) ocsmFree(undo_modl[iundo]);
+    if (undo_modl != NULL) {
+        for (iundo = nundo-1; iundo >= 0; iundo--) {
+            (void) ocsmFree(undo_modl[iundo]);
+        }
+        FREE(undo_modl);
     }
 
     if (undo_text != NULL) {
@@ -1652,6 +1819,7 @@ cleanup:
     FREE(undo_modl  );
     FREE(text       );
     FREE(BDFname    );
+    FREE(tessfile   );
     FREE(plotfile   );
     FREE(eggname    );
     FREE(basename   );
@@ -1659,6 +1827,7 @@ cleanup:
     FREE(pmtrname   );
     FREE(ptrbname   );
     FREE(dictname   );
+    FREE(dxddname   );
     FREE(vrfyname   );
     FREE(despname   );
     FREE(filename   );
@@ -1666,7 +1835,6 @@ cleanup:
     FREE(jrnlname   );
     FREE(casename   );
     FREE(sgFocusData);
-    FREE(sgTempData );
     FREE(sgMetaData );
     FREE(dotName    );
 
@@ -1678,6 +1846,7 @@ cleanup:
     FREE(cloud);
 
     FREE(response);
+    FREE(messages);
     FREE(skbuff  );
 
     if (status == -998) {
@@ -1698,26 +1867,75 @@ cleanup:
 /***********************************************************************/
 
 static void
-addToResponse(char   *text)             /* (in)  text to add */
+addToResponse(char   text[])            /* (in)  text to add */
 {
-    int    text_len;
+    int    status=SUCCESS, text_len;
+
+    ROUTINE(addToResponse);
+
+    /* --------------------------------------------------------------- */
 
     text_len = STRLEN(text);
 
     while (response_len+text_len > max_resp_len-2) {
-        max_resp_len +=4096;
+        max_resp_len += 4096;
         SPRINT1(2, "increasing max_resp_len=%d", max_resp_len);
 
-        response = (char*) realloc(response, (max_resp_len+1)*sizeof(char));
-        if (response == NULL) {
-            SPRINT0(0, "ERROR:: error mallocing response");
-            exit(EXIT_FAILURE);
-        }
+        RALLOC(response, char, max_resp_len+1);
     }
 
     strcpy(&(response[response_len]), text);
 
     response_len += text_len;
+
+cleanup:
+    if (status != SUCCESS) {
+        SPRINT0(0, "ERROR:: max_resp_len could not be increased");
+    }
+
+    return;
+}
+
+
+/***********************************************************************/
+/*                                                                     */
+/*   addToSgMetaData - add text to sgMetaData (with buffer length protection) */
+/*                                                                     */
+/***********************************************************************/
+
+static void
+addToSgMetaData(char   format[],        /* (in)  format specifier */
+                 ...)                   /* (in)  variable arguments */
+{
+    int      status=SUCCESS, newchars;
+
+    va_list  args;
+
+    ROUTINE(addToSgMetaData);
+
+    /* --------------------------------------------------------------- */
+
+    /* make sure sgMetaData is big enough */
+    if (sgMetaDataUsed+1024 >= sgMetaDataSize) {
+        sgMetaDataSize += 1024 + MAX_METADATA_CHUNK;
+        RALLOC(sgMetaData, char, sgMetaDataSize);
+    }
+
+    /* set up the va structure */
+    va_start(args, format);
+
+    newchars = vsnprintf(sgMetaData+sgMetaDataUsed, 1024, format, args);
+    sgMetaDataUsed += newchars;
+
+    /* clean up the va structure */
+    va_end(args);
+
+cleanup:
+    if (status != SUCCESS) {
+        SPRINT0(0, "ERROR:: sgMetaData could not be increased");
+    }
+
+    return;
 }
 
 
@@ -1751,7 +1969,7 @@ applyDisplacement(modl_T *MODL,
     status = ocsmGetPmtr(MODL, ipmtr, &type, &nrow, &ncol, name);
     CHECK_STATUS(ocsmGetPmtr);
 
-    if (type != OCSM_EXTERNAL) {
+    if (type != OCSM_DESPMTR) {
         SPRINT0(0, "ERROR:: dds_spec is not an EXTERNAL parameter");
         status = OCSM_INTERNAL_ERROR;
         goto cleanup;
@@ -1894,13 +2112,14 @@ cleanup:
 /***********************************************************************/
 
 void
-browserMessage(void    *wsi,
-               char    *text,
+browserMessage(
+   /*@unused@*/void    *wsi,
+               char    text[],
   /*@unused@*/ int     lena)
 {
     int       status;
 
-    int       sendKeyData;
+    int       sendKeyData, ibody, onstack;
     char      message2[MAX_LINE_LEN];
 
     modl_T    *MODL = (modl_T*)modl;
@@ -1917,18 +2136,25 @@ browserMessage(void    *wsi,
         }
     }
 
+    /* set (or wait and set) lock so that messages do not overlap */
+    if (mutex != NULL) {
+        EMP_LockSet(mutex);
+    }
+
     /* process the Message */
     (void) processBrowserToServer(text);
 
     /* send the response */
-    SPRINT1(2, "<<< server2browser: %s", response);
-    wv_sendText(wsi, response);
+    SPRINT1(2, "\n<<< server2browser: %s", response);
+//    wv_sendText(wsi, response);
+    wv_broadcastText(response);
 
     /* if the sensitivities were just computed, send a message to
        inform the user about the lowest and highest sensitivity values */
     if (sensPost > 0) {
         snprintf(message2, MAX_LINE_LEN-1, "Sensitivities are in the range between %f and %f", sensLo, sensHi);
-        wv_sendText(wsi, message2);
+//        wv_sendText(wsi, message2);
+        wv_broadcastText(message2);
 
         sensPost = 0;
     }
@@ -1938,94 +2164,124 @@ browserMessage(void    *wsi,
     /* send filenames if they have been updated */
     if (updatedFilelist == 1) {
         MODL = (modl_T*) modl;
-        if (filelist != NULL) free(filelist);
+        if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: ocsmGetFilelist -> status=%d", status);
         }
+        SPLINT_CHECK_FOR_NULL(filelist);
 
         snprintf(message2, MAX_LINE_LEN-1, "getFilenames|%s", filelist);
-        SPRINT1(2, "<<< server2browser: getFilenames|%s", filelist);
-        wv_sendText(wsi, message2);
+        SPRINT1(2, "\n<<< server2browser: getFilenames|%s", filelist);
+        wv_broadcastText(message2);
 
         updatedFilelist = 0;
     }
 
     /* send the scene graph meta data if it has not already been sent */
     if (STRLEN(sgMetaData) > 0) {
-        SPRINT1(2, "<<< server2browser: sgData: %s", sgMetaData);
-        wv_sendText(wsi, sgMetaData);
+        SPRINT1(2, "\n<<< server2browser: sgData: %s", sgMetaData);
+        wv_broadcastText(sgMetaData);
 
         /* nullify meta data so that it does not get sent again */
-        sgMetaData[0] = '\0';
-        sendKeyData   = 1;
+        sgMetaData[0]  = '\0';
+        sgMetaDataUsed = 0;
+        sendKeyData    = 1;
     }
 
     if (STRLEN(sgFocusData) > 0) {
-        SPRINT1(2, "<<< server2browser: sgFocus: %s", sgFocusData);
-        wv_sendText(wsi, sgFocusData);
+        SPRINT1(2, "\n<<< server2browser: sgFocus: %s", sgFocusData);
+        wv_broadcastText(sgFocusData);
 
-        /* nullify meta data so that it does not get sent again */
-        sgFocusData[0] = '\0';
         sendKeyData    = 1;
     }
 
     /* either open or close the key */
     if (sendKeyData == 1) {
         if (haveDots >  1) {
-            if (sensTess == 0) {
-                status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Config: d(norm)/d(***)");
+            if (tessel == 0) {
+                status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Geom: d(norm)/d(***)");
             } else {
-                status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Tessel: d(norm)/d(***)");
+                status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Tess: d(norm)/d(***)");
             }
-            SPRINT0(2, "<<< server2browser: setWvKey|on|");
-            wv_sendText(wsi, "setWvKey|on|");
+            SPRINT0(2, "\n<<< server2browser: setWvKey|on|");
+            wv_broadcastText("setWvKey|on|");
         } else if (haveDots == 1) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], dotName         );
-            SPRINT0(2, "<<< server2browser: setWvKey|on|");
-            wv_sendText(wsi, "setWvKey|on|");
+            SPRINT0(2, "\n<<< server2browser: setWvKey|on|");
+            wv_broadcastText("setWvKey|on|");
         } else if (plotType == 1) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Normalized U");
-            wv_sendText(wsi, "setWvKey|on|");
+            wv_broadcastText("setWvKey|on|");
         } else if (plotType == 2) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Normalized V");
-            wv_sendText(wsi, "setWvKey|on|");
+            wv_broadcastText("setWvKey|on|");
         } else if (plotType == 3) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Minimum Curv");
-            wv_sendText(wsi, "setWvKey|on|");
+            wv_broadcastText("setWvKey|on|");
         } else if (plotType == 4) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Maximum Curv");
-            wv_sendText(wsi, "setWvKey|on|");
+            wv_broadcastText("setWvKey|on|");
         } else if (plotType == 5) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Gaussian Curv");
-            wv_sendText(wsi, "setWvKey|on|");
+            wv_broadcastText("setWvKey|on|");
         } else {
             status = wv_setKey(cntxt,   0, NULL,      lims[0], lims[1], NULL            );
-            SPRINT0(2, "<<< server2browser: setWvKey|off|");
-            wv_sendText(wsi, "setWvKey|off|");
+            SPRINT0(2, "\n<<< server2browser: setWvKey|off|");
+            wv_broadcastText("setWvKey|off|");
         }
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: wv_setKet -> status=%d", status);
         }
     }
 
-    /* send an error message if one is pending */
+    /* send an error message (and the messages buffer) if one is pending */
     if (pendingError > 0) {
-        snprintf(response, max_resp_len, "%s",
-                 MODL->sigMesg);
-        pendingError = 0;
+        snprintf(response, max_resp_len, "%s|%s|",
+                 MODL->sigMesg, messages);
 
-        SPRINT1(2, "<<< server2browser: %s", response);
-        wv_sendText(wsi, response);
+        SPRINT1(2, "\n<<< server2browser: %s", response);
+        wv_broadcastText(response);
+
+        pendingError =  0;
+        successBuild = -1;
 
     } else if (pendingError == -1) {
-        snprintf(response, max_resp_len, "ERROR:: could not find Design Velocities; shown as zeros");
-        pendingError = 0;
+        snprintf(response, max_resp_len, "ERROR:: could not find Design Velocities; shown as zeros|%s|",
+            messages);
 
-        SPRINT1(2, "<<< server2browser: %s", response);
-        wv_sendText(wsi, response);
+        SPRINT1(2, "\n<<< server2browser: %s", response);
+        wv_broadcastText(response);
 
+        pendingError =  0;
+        successBuild = -1;
+
+    } else if (successBuild >= 0) {
+        onstack = 0;
+        for (ibody = 1; ibody <= MODL->nbody; ibody++) {
+            onstack += MODL->body[ibody].onstack;
+        }
+
+        snprintf(response, max_resp_len, "build|%d|%d|%s|",
+                 successBuild, onstack, messages);
+
+        SPRINT1(2, "\n<< server2browser: %s", response);
+        wv_broadcastText(response);
+
+        pendingError =  0;
+        successBuild = -1;
     }
+
+    messages[0] = '\0';
+    messages_len = 0;
+
+cleanup:
+    /* release the lock */
+    if (mutex != NULL) {
+        EMP_LockRelease(mutex);
+    }
+    
+    return;
 }
 
 
@@ -2079,8 +2335,8 @@ buildBodys(int     buildTo,             /* (in)  last Branch to execute */
             goto cleanup;
         }
 
-        /* set the verification flag */
-        if (plugs < 0) {
+        /* set the verification flag (but not for original build if Plugs is on) */
+        if (plugsOn == 0) {
             MODL->verify = verify;
         }
 
@@ -2094,11 +2350,21 @@ buildBodys(int     buildTo,             /* (in)  last Branch to execute */
         /* set the skip tessellation flag */
         MODL->tessAtEnd = 1 - skipTess;
 
+        /* set the build erep flag */
+        if (plotType == 6) {
+            MODL->erepAtEnd = 1;
+        } else {
+            MODL->erepAtEnd = 0;
+        }
+
         /* build the Bodys */
         if (skipBuild == 1) {
             SPRINT0(1, "--> skipping initial build");
             skipBuild = 0;
         } else {
+            messages[0] = '\0';
+            messages_len = 0;
+
             nbody        = 0;
             old_time     = clock();
             *buildStatus = ocsmBuild(MODL, buildTo, builtTo, &nbody, NULL);
@@ -2118,7 +2384,7 @@ buildBodys(int     buildTo,             /* (in)  last Branch to execute */
 
             /* print out the Branches */
             if (outLevel > 0 && MODL->sigCode == 0) {
-                status2 = ocsmPrintBrchs(MODL, stdout);
+                status2 = ocsmPrintBrchs(MODL, "");
                 if (status2 != SUCCESS) {
                     SPRINT1(0, "ERROR:: ocsmPrintBrchs -> status=%d", status2);
                 }
@@ -2126,7 +2392,7 @@ buildBodys(int     buildTo,             /* (in)  last Branch to execute */
 
             /* print out the Bodys */
             if (outLevel > 0 && MODL->sigCode == 0) {
-                status2 = ocsmPrintBodys(MODL, stdout);
+                status2 = ocsmPrintBodys(MODL, "");
                 if (status2 != SUCCESS) {
                     SPRINT1(0, "ERROR:: ocsmPrintBodys -> status=%d", status2);
                 }
@@ -2232,23 +2498,27 @@ buildSceneGraph()
     int       ibody, jbody, iface, iedge, inode, iattr, nattr, ipmtr, irc, newStyleQuads, atype, alen;
     int       npnt, ipnt, ntri, itri, igprim, nseg, i, j, k, ij, ij1, ij2, ngrid, ncrod, nctri3, ncquad4;
     int       imax, jmax, ibeg, iend, isw, ise, ine, inw;
-    int       attrs, head[3], nitems;
+    int       attrs, head[3], nitems, nnode, nedge, nface;
     int       oclass, mtype, nchild, *senses, *header;
     int       *segs=NULL, *ivrts=NULL;
-    int        npatch2, ipatch, n1, n2, i1, i2, *Tris;
+    int        npatch2, ipatch, n1, n2, i1, i2, *Tris=NULL;
     CINT      *ptype, *pindx, *tris, *tric, *pvindex, *pbounds;
-    float     color[18], *pcolors, *plotdata=NULL, *segments=NULL, *tuft=NULL;
-    double    bigbox[6], box[6], size, size2=0, xyz_dum[6], *vel, velmag;
-    double    uvlimits[4], ubar, vbar, rcurv;
+    float     color[18], *pcolors=NULL, *plotdata=NULL, *segments=NULL, *tuft=NULL;
+    double    bigbox[6], box[6], size, size2=0, xyz_dum[6], *vel=NULL, velmag;
+    double    uvlimits[4], ubar, vbar, rcurv, xplot, yplot, zplot, fplot;
     double    data[18], normx, normy, normz, axis[18], *cp;
     CDOUBLE   *xyz, *uv, *t;
     char      gpname[MAX_STRVAL_LEN], bname[MAX_NAME_LEN], temp[MAX_FILENAME_LEN];
-    char      text[81], dum[81];
+    char      text[1025], dum[81];
     FILE      *fp;
     ego       ebody, etess, eface, eedge, enode, eref, prev, next, *echilds, esurf;
+    ego       *enodes=NULL, *eedges=NULL, *efaces=NULL;
 
     int       nlist, itype;
     CINT      *tempIlist;
+#if MIXED_TESS
+    CINT      *nquad=NULL;
+#endif
     CDOUBLE   *tempRlist;
     CCHAR     *attrName, *tempClist;
 
@@ -2271,6 +2541,7 @@ buildSceneGraph()
     bigbox[0] = bigbox[1] = bigbox[2] = +HUGEQ;
     bigbox[3] = bigbox[4] = bigbox[5] = -HUGEQ;
 
+    /* use Bodys on stack */
     for (ibody = 1; ibody <= MODL->nbody; ibody++) {
         if (MODL->body[ibody].onstack != 1) continue;
 
@@ -2287,6 +2558,54 @@ buildSceneGraph()
         if (box[3] > bigbox[3]) bigbox[3] = box[3];
         if (box[4] > bigbox[4]) bigbox[4] = box[4];
         if (box[5] > bigbox[5]) bigbox[5] = box[5];
+    }
+
+    /* use any plotdata if it exists */
+    if (plotfile != NULL) {
+        fp = fopen(plotfile, "r");
+        if (fp != NULL) {
+            while (1) {
+                if (fscanf(fp, "%d %d %s", &imax, &jmax, temp) != 3) break;
+
+                if        (imax > 0 && jmax ==  0) {
+                    npnt = imax;
+                } else if (imax > 0 && jmax ==  1) {
+                    npnt = imax;
+                } else if (imax > 0 && jmax == -1) {
+                    npnt = 2 * imax;
+                } else if (imax > 0 && jmax == -2) {
+                    npnt = 3 * imax;
+                } else if (imax > 0 && jmax == -3) {
+                    npnt = 3 * imax;
+                } else if (imax > 0 && jmax == -4) {
+                    npnt = 4 * imax;
+                } else if (imax > 0 && jmax >   0) {
+                    npnt = imax * jmax;
+                } else {
+                    break;
+                }
+
+                for (i = 0; i < npnt; i++) {
+                    if (jmax == -3 || jmax == -4) {
+                        fscanf(fp, "%lf %lf %lf %lf", &xplot, &yplot, &zplot, &fplot);
+                    } else {
+                        fscanf(fp, "%lf %lf %lf",     &xplot, &yplot, &zplot        );
+                    }
+
+                    if (xplot < bigbox[0]) bigbox[0] = xplot;
+                    if (yplot < bigbox[1]) bigbox[1] = yplot;
+                    if (zplot < bigbox[2]) bigbox[2] = zplot;
+                    if (xplot > bigbox[3]) bigbox[3] = xplot;
+                    if (yplot > bigbox[4]) bigbox[4] = yplot;
+                    if (zplot > bigbox[5]) bigbox[5] = zplot;
+                }
+
+                if (feof(fp)) break;
+            }
+
+            fclose(fp);
+            fp = NULL;
+        }
     }
 
                                     size = bigbox[3] - bigbox[0];
@@ -2307,13 +2626,32 @@ buildSceneGraph()
     sensHi = -HUGEQ;
 
     /* initialize the scene graph meta data */
-    STRNCPY(sgMetaData, "sgData|{", sgMetaDataLen);
+    sgMetaData[ 0] = '\0';
+    sgMetaDataUsed = 0;
+
+    addToSgMetaData("sgData|{");
 
     /* loop through the Bodys */
     for (ibody = 1; ibody <= MODL->nbody; ibody++) {
         if (MODL->body[ibody].onstack != 1) continue;
 
-        ebody = MODL->body[ibody].ebody;
+        if (MODL->body[ibody].eebody == NULL) {
+            ebody = MODL->body[ibody].ebody;
+
+            EG_getBodyTopos(ebody, NULL, NODE, &nnode, &enodes);
+            EG_getBodyTopos(ebody, NULL, EDGE, &nedge, &eedges);
+            EG_getBodyTopos(ebody, NULL, FACE, &nface, &efaces);
+
+            printf("Body %d has %d Nodes, %d Edges, and %d Faces\n", ibody, nnode, nedge, nface);
+        } else {
+            ebody = MODL->body[ibody].eebody;
+
+            EG_getBodyTopos(ebody, NULL, NODE,  &nnode, &enodes);
+            EG_getBodyTopos(ebody, NULL, EEDGE, &nedge, &eedges);
+            EG_getBodyTopos(ebody, NULL, EFACE, &nface, &efaces);
+
+            printf("EBody %d has %d Nodes, %d EEdges, and %d EFaces\n", ibody, nnode, nedge, nface);
+        }
 
         /* set up Body name */
         snprintf(bname, MAX_NAME_LEN-1, "Body %d", ibody);
@@ -2346,18 +2684,10 @@ buildSceneGraph()
         }
 
         /* add Node to meta data (if there is room) */
-        if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-            sgMetaDataLen += MAX_METADATA_CHUNK;
-            RALLOC(sgMetaData, char, sgMetaDataLen);
-            RALLOC(sgTempData, char, sgMetaDataLen);
-        }
-
         if (nattr > 0) {
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[",  sgTempData, gpname);
+            addToSgMetaData("\"%s\":[", gpname);
         } else {
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[\"body\",\"%d\"", sgTempData, gpname, ibody);
+            addToSgMetaData("\"%s\":[\"body\",\"%d\"", gpname, ibody);
         }
 
         for (iattr = 1; iattr <= nattr; iattr++) {
@@ -2369,61 +2699,59 @@ buildSceneGraph()
 
             if (itype == ATTRCSYS) continue;
 
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\",\"", sgTempData, attrName);
+            addToSgMetaData("\"%s\",\"", attrName);
 
             if        (itype == ATTRINT) {
                 for (i = 0; i < nlist ; i++) {
-                    STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                    snprintf(sgMetaData, sgMetaDataLen, "%s %d", sgTempData, tempIlist[i]);
+                    addToSgMetaData(" %d", tempIlist[i]);
                 }
             } else if (itype == ATTRREAL) {
                 for (i = 0; i < nlist ; i++) {
-                    STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                    snprintf(sgMetaData, sgMetaDataLen, "%s %f", sgTempData, tempRlist[i]);
+                    addToSgMetaData(" %f", tempRlist[i]);
                 }
             } else if (itype == ATTRSTRING) {
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s %s ", sgTempData, tempClist);
+                addToSgMetaData(" %s ", tempClist);
             }
 
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s\",", sgTempData);
+            addToSgMetaData("\",");
         }
-        sgMetaData[sgMetaDataLen-1] = '\0';
-        STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-        snprintf(sgMetaData, sgMetaDataLen, "%s],", sgTempData);
+        sgMetaDataUsed--;
+        addToSgMetaData("],");
 
-        etess = MODL->body[ibody].etess;
+        if (MODL->body[ibody].eetess == NULL) {
+            etess = MODL->body[ibody].etess;
+        } else {
+            etess = MODL->body[ibody].eetess;
+        }
 
         /* determine if any of the external Parameters have a velocity */
         haveDots   = 0;
         dotName[0] = '\0';
 
         for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
-            if (MODL->pmtr[ipmtr].type == OCSM_EXTERNAL) {
+            if (MODL->pmtr[ipmtr].type == OCSM_DESPMTR) {
                 for (irc = 0; irc < (MODL->pmtr[ipmtr].nrow)*(MODL->pmtr[ipmtr].ncol); irc++) {
                     if (MODL->pmtr[ipmtr].dot[irc] != 0) {
                         if (fabs(MODL->pmtr[ipmtr].dot[irc]-1) < EPS06) {
                             if (haveDots == 0) {
-                                if (sensTess == 0) {
-                                    snprintf(dotName, MAX_STRVAL_LEN-1, "Config: d(norm)/d(%s)", MODL->pmtr[ipmtr].name);
+                                if (tessel == 0) {
+                                    snprintf(dotName, MAX_STRVAL_LEN-1, "Geom: d(norm)/d(%s)", MODL->pmtr[ipmtr].name);
                                 } else {
-                                    snprintf(dotName, MAX_STRVAL_LEN-1, "Tessel: d(norm)/d(%s)", MODL->pmtr[ipmtr].name);
+                                    snprintf(dotName, MAX_STRVAL_LEN-1, "Tess: d(norm)/d(%s)", MODL->pmtr[ipmtr].name);
                                 }
                             } else {
-                                if (sensTess == 0) {
-                                    snprintf(dotName, MAX_STRVAL_LEN-1, "Config: d(norm)/d(***)");
+                                if (tessel == 0) {
+                                    snprintf(dotName, MAX_STRVAL_LEN-1, "Geom: d(norm)/d(***)");
                                 } else {
-                                    snprintf(dotName, MAX_STRVAL_LEN-1, "Tessel: d(norm)/d(***)");
+                                    snprintf(dotName, MAX_STRVAL_LEN-1, "Tess: d(norm)/d(***)");
                                 }
                             }
                             haveDots++;
                         } else if (MODL->pmtr[ipmtr].dot[irc] != 0) {
-                            if (sensTess == 0) {
-                                snprintf(dotName, MAX_STRVAL_LEN-1, "Config: d(norm)/d(***)");
+                            if (tessel == 0) {
+                                snprintf(dotName, MAX_STRVAL_LEN-1, "Geom: d(norm)/d(***)");
                             } else {
-                                snprintf(dotName, MAX_STRVAL_LEN-1, "Tessel: d(norm)/d(***)");
+                                snprintf(dotName, MAX_STRVAL_LEN-1, "Tess: d(norm)/d(***)");
                             }
                             haveDots++;
                         }
@@ -2448,16 +2776,23 @@ buildSceneGraph()
 
         /* determine if new-style quadding */
         newStyleQuads = 0;
-        status = EG_attributeRet(MODL->body[ibody].etess, ".tessType",
+        status = EG_attributeRet(etess, ".tessType",
                                  &atype, &alen, &tempIlist, &tempRlist, &tempClist);
         if (status == SUCCESS) {
+#if MIXED_TESS
+            newStyleQuads = 1;
+            status = EG_attributeRet(etess, ".mixed",
+                                     &atype, &alen, &nquad, &tempRlist, &tempClist);
+            if (status != SUCCESS) newStyleQuads = 0;
+#else
             if (strcmp(tempClist, "Quad") == 0) {
                 newStyleQuads = 1;
             }
+#endif
         }
 
         /* loop through the Faces within the current Body */
-        for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
+        for (iface = 1; iface <= nface; iface++) {
             nitems = 0;
 
             status = EG_getQuads(etess, iface,
@@ -2501,11 +2836,8 @@ buildSceneGraph()
                     nseg += n1 * (n2-1) + n2 * (n1-1);
                 }
 
-                Tris = (int*) malloc(3*ntri*sizeof(int));
-                if (Tris == NULL) goto cleanup;
-
-                segs = (int*) malloc(2*nseg*sizeof(int));
-                if (segs == NULL) goto cleanup;
+                MALLOC(Tris, int, 3*ntri);
+                MALLOC(segs, int, 2*nseg);
 
                 ntri = 0;
                 nseg = 0;
@@ -2554,7 +2886,7 @@ buildSceneGraph()
                 }
                 nitems++;
 
-                free(Tris);
+                FREE(Tris);
 
             /* render the Quadrilaterals if new-style quadding */
             } else if (newStyleQuads == 1) {
@@ -2587,9 +2919,57 @@ buildSceneGraph()
                     }
                 }
 
-                segs = (int*) malloc(2*nseg*sizeof(int));
-                if (segs == NULL) goto cleanup;
+                MALLOC(segs, int, 2*nseg);
 
+#if MIXED_TESS
+                /* create segments between Triangles (bias-1) */
+                nseg = 0;
+                for (itri = 0; itri < ntri-2*nquad[iface-1]; itri++) {
+                    for (k = 0; k < 3; k++) {
+                        if (tric[3*itri+k] < itri+1) {
+                            segs[2*nseg  ] = tris[3*itri+(k+1)%3];
+                            segs[2*nseg+1] = tris[3*itri+(k+2)%3];
+                            nseg++;
+                        }
+                    }
+                }
+
+                /* create segments between Triangles (but not within the pair) (bias-1) */
+                for (; itri < ntri; itri++) {
+                    if (tric[3*itri  ] < itri+2) {
+                        segs[2*nseg  ] = tris[3*itri+1];
+                        segs[2*nseg+1] = tris[3*itri+2];
+                        nseg++;
+                    }
+                    if (tric[3*itri+1] < itri+2) {
+                        segs[2*nseg  ] = tris[3*itri+2];
+                        segs[2*nseg+1] = tris[3*itri  ];
+                        nseg++;
+                    }
+                    if (tric[3*itri+2] < itri+2) {
+                        segs[2*nseg  ] = tris[3*itri  ];
+                        segs[2*nseg+1] = tris[3*itri+1];
+                        nseg++;
+                    }
+                    itri++;
+
+                    if (tric[3*itri  ] < itri) {
+                        segs[2*nseg  ] = tris[3*itri+1];
+                        segs[2*nseg+1] = tris[3*itri+2];
+                        nseg++;
+                    }
+                    if (tric[3*itri+1] < itri) {
+                        segs[2*nseg  ] = tris[3*itri+2];
+                        segs[2*nseg+1] = tris[3*itri  ];
+                        nseg++;
+                    }
+                    if (tric[3*itri+2] < itri) {
+                        segs[2*nseg  ] = tris[3*itri  ];
+                        segs[2*nseg+1] = tris[3*itri+1];
+                        nseg++;
+                    }
+                }
+#else
                 /* create segments between Triangles (but not within the pair) (bias-1) */
                 nseg = 0;
                 for (itri = 0; itri < ntri; itri++) {
@@ -2626,6 +3006,7 @@ buildSceneGraph()
                         nseg++;
                     }
                 }
+#endif
 
                 /* triangles */
                 status = wv_setData(WV_INT32, 3*ntri, (void*)tris, WV_INDICES, &(items[nitems]));
@@ -2665,8 +3046,7 @@ buildSceneGraph()
                     }
                 }
 
-                segs = (int*) malloc(2*nseg*sizeof(int));
-                if (segs == NULL) goto cleanup;
+                MALLOC(segs, int, 2*nseg);
 
                 nseg = 0;
                 for (itri = 0; itri < ntri; itri++) {
@@ -2699,32 +3079,30 @@ buildSceneGraph()
                     goto cleanup;
                 }
 
-                status = EG_getInfo(MODL->body[ibody].face[iface].eface,
+                SPLINT_CHECK_FOR_NULL(efaces);
+                status = EG_getInfo(efaces[iface-1],
                                     &oclass, &mtype, &eref, &prev, &next);
                 if (status != SUCCESS) {
                     SPRINT3(0, "ERROR:: EG_getInfo(%d,%d) -> status=%d", ibody, iface, status);
                     goto cleanup;
                 }
 
-                pcolors = (float *) malloc(3*npnt*sizeof(float));
-                if (pcolors == NULL) {
-                    SPRINT0(0, "MALLOC error");
-                    goto cleanup;
-                }
+                MALLOC(pcolors, float, 3*npnt);
 
-                if (sensTess == 0) {
-                    vel = (double *) malloc(3*npnt*sizeof(double));
-                    if (vel == NULL) {
-                        SPRINT0(0, "MALLOC error");
-                        goto cleanup;
+                if (tessel == 0) {
+                    MALLOC(vel, double, 3*npnt);
+
+                    if (MODL->body[ibody].eebody == NULL) {
+                        status = ocsmGetVel(MODL, ibody, OCSM_FACE, iface, npnt, NULL, vel);
+                    } else {
+                        status = ocsmGetVel(MODL, ibody, OCSM_EFACE, iface, npnt, NULL, vel);
                     }
-
-                    status = ocsmGetVel(MODL, ibody, OCSM_FACE, iface, npnt, NULL, vel);
                     if (status != SUCCESS) {
                         SPRINT3(0, "ERROR:: ocsmGetVel(%d,%d) -> status=%d", ibody, iface, status);
                         goto cleanup;
                     }
                 } else {
+//$$$
                     status = ocsmGetTessVel(MODL, ibody, OCSM_FACE, iface, (const double**)(&vel));
                     if (status != SUCCESS) {
                         SPRINT3(0, "ERROR:: ocsmGetTessVel(%d,%d) -> status=%d", ibody, iface, status);
@@ -2732,60 +3110,7 @@ buildSceneGraph()
                     }
                 }
 
-                /* special plotting of tufts for sensitivities (adjust DESPMTR velocity
-                   to adjust tuft length) */
-#ifdef SHOW_TUFTS
-                if (sensTess == 0) {
-                    float  *ptufts;
-                    int    nitems1=0, attrs1;
-                    char   gpname1[MAX_STRVAL_LEN];
-                    wvData items1[6];
-
-                    ptufts = (float *) malloc(6*npnt*sizeof(float));
-                    if (ptufts == NULL) {
-                        SPRINT0(0, "MALLOC error");
-                        goto cleanup;
-                    }
-
-                    for (ipnt = 0; ipnt < npnt; ipnt++) {
-                        ptufts[6*ipnt  ] = xyz[3*ipnt  ];
-                        ptufts[6*ipnt+1] = xyz[3*ipnt+1];
-                        ptufts[6*ipnt+2] = xyz[3*ipnt+2];
-
-                        ptufts[6*ipnt+3] = xyz[3*ipnt  ] + vel[3*ipnt  ];
-                        ptufts[6*ipnt+4] = xyz[3*ipnt+1] + vel[3*ipnt+1];
-                        ptufts[6*ipnt+5] = xyz[3*ipnt+2] + vel[3*ipnt+2];
-                    }
-
-                    color[0] = 0;
-                    color[1] = 0;
-                    color[2] = 0;
-                    status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items1[nitems1]));
-                    if (status != SUCCESS) {
-                        SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
-                    }
-                    nitems1++;
-
-                    status = wv_setData(WV_REAL32, 2*npnt, (void*)ptufts, WV_VERTICES, &(items1[nitems1]));
-                    if (status != SUCCESS) {
-                        SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
-                    }
-                    wv_adjustVerts(&(items1[nitems1]), sgFocus);
-                    nitems1++;
-
-                    snprintf(gpname1, MAX_STRVAL_LEN-1, "Tufts_%d:%d", ibody, iface);
-                    attrs1 = WV_ON;
-
-                    igprim = wv_addGPrim(cntxt, gpname1, WV_LINE, attrs1, nitems1, items1);
-                    if (igprim < 0) {
-                        SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname1, igprim);
-                    } else {
-                        cntxt->gPrims[igprim].lWidth = 1.0;
-                    }
-
-                    free(ptufts);
-                }
-#endif
+                SPLINT_CHECK_FOR_NULL(vel);
 
                 for (ipnt = 0; ipnt < npnt; ipnt++) {
                     /* correct for NaN */
@@ -2796,8 +3121,9 @@ buildSceneGraph()
                         velmag = 0;
 
                     /* find signed velocity magnitude */
-                    } else if (sensTess == 0) {
-                        status = EG_evaluate(MODL->body[ibody].face[iface].eface, &(uv[2*ipnt]), data);
+                    } else if (tessel == 0) {
+                        SPLINT_CHECK_FOR_NULL(efaces);
+                        status = EG_evaluate(efaces[iface-1], &(uv[2*ipnt]), data);
                         if (status != SUCCESS) {
                             SPRINT3(0, "ERROR:: EG_evaluate(%d,%d) -> srtatus=%d", ibody, iface, status);
                             goto cleanup;
@@ -2836,9 +3162,10 @@ buildSceneGraph()
                 }
                 nitems++;
 
-                free(pcolors);
-                if (sensTess == 0) {
-                    free(vel);
+                FREE(pcolors);
+
+                if (tessel == 0) {
+                    FREE(vel);
                 }
 
             /* smooth colors (normalized U) */
@@ -2851,19 +3178,15 @@ buildSceneGraph()
                     goto cleanup;
                 }
 
-                status = EG_getTopology(MODL->body[ibody].face[iface].eface,
-                                        &eref, &oclass, &mtype, uvlimits,
+                SPLINT_CHECK_FOR_NULL(efaces);
+                status = EG_getTopology(efaces[iface-1], &eref, &oclass, &mtype, uvlimits,
                                         &nchild, &echilds, &senses);
                 if (status != SUCCESS) {
                     SPRINT3(0, "ERROR::EG_getTopology(%d,%d) -> status=%d", ibody, iface, status);
                     goto cleanup;
                 }
 
-                pcolors = (float *) malloc(3*npnt*sizeof(float));
-                if (pcolors == NULL) {
-                    SPRINT0(0, "MALLOC error");
-                    goto cleanup;
-                }
+                MALLOC(pcolors, float, 3*npnt);
 
                 for (ipnt = 0; ipnt < npnt; ipnt++) {
                     ubar = (uv[2*ipnt  ] - uvlimits[0]) / (uvlimits[1] - uvlimits[0]);
@@ -2876,7 +3199,7 @@ buildSceneGraph()
                 }
                 nitems++;
 
-                free(pcolors);
+                FREE(pcolors);
 
             /* smooth colors (normalized V) */
             } else if (plotType == 2) {
@@ -2888,19 +3211,15 @@ buildSceneGraph()
                     goto cleanup;
                 }
 
-                status = EG_getTopology(MODL->body[ibody].face[iface].eface,
-                                        &eref, &oclass, &mtype, uvlimits,
+                SPLINT_CHECK_FOR_NULL(efaces);
+                status = EG_getTopology(efaces[iface-1], &eref, &oclass, &mtype, uvlimits,
                                         &nchild, &echilds, &senses);
                 if (status != SUCCESS) {
                     SPRINT3(0, "ERROR:: EG_getTopology(%d,%d) -> status=%d", ibody, iface, status);
                     goto cleanup;
                 }
 
-                pcolors = (float *) malloc(3*npnt*sizeof(float));
-                if (pcolors == NULL) {
-                    SPRINT0(0, "MALLOC error");
-                    goto cleanup;
-                }
+                MALLOC(pcolors, float, 3*npnt);
 
                 for (ipnt = 0; ipnt < npnt; ipnt++) {
                     vbar = (uv[2*ipnt+1] - uvlimits[2]) / (uvlimits[3] - uvlimits[2]);
@@ -2913,7 +3232,7 @@ buildSceneGraph()
                 }
                 nitems++;
 
-                free(pcolors);
+                FREE(pcolors);
 
             /* smooth colors (minimum Curv) */
             } else if (plotType == 3) {
@@ -2925,15 +3244,11 @@ buildSceneGraph()
                     goto cleanup;
                 }
 
-                pcolors = (float *) malloc(3*npnt*sizeof(float));
-                if (pcolors == NULL) {
-                    SPRINT0(0, "MALLOC error");
-                    goto cleanup;
-                }
+                MALLOC(pcolors, float, 3*npnt);
 
+                SPLINT_CHECK_FOR_NULL(efaces);
                 for (ipnt = 0; ipnt < npnt; ipnt++) {
-                    status = EG_curvature(MODL->body[ibody].face[iface].eface,
-                                          &(uv[2*ipnt]), data);
+                    status = EG_curvature(efaces[iface-1], &(uv[2*ipnt]), data);
                     if (status != SUCCESS) {
                         rcurv = 0;
                     } else {
@@ -2948,7 +3263,7 @@ buildSceneGraph()
                 }
                 nitems++;
 
-                free(pcolors);
+                FREE(pcolors);
 
             /* smooth colors (maximum Curv) */
             } else if (plotType == 4) {
@@ -2960,15 +3275,11 @@ buildSceneGraph()
                     goto cleanup;
                 }
 
-                pcolors = (float *) malloc(3*npnt*sizeof(float));
-                if (pcolors == NULL) {
-                    SPRINT0(0, "MALLOC error");
-                    goto cleanup;
-                }
+                MALLOC(pcolors, float, 3*npnt);
 
+                SPLINT_CHECK_FOR_NULL(efaces);
                 for (ipnt = 0; ipnt < npnt; ipnt++) {
-                    status = EG_curvature(MODL->body[ibody].face[iface].eface,
-                                          &(uv[2*ipnt]), data);
+                    status = EG_curvature(efaces[iface-1], &(uv[2*ipnt]), data);
                     if (status != SUCCESS) {
                         rcurv = 0;
                     } else {
@@ -2983,7 +3294,7 @@ buildSceneGraph()
                 }
                 nitems++;
 
-                free(pcolors);
+                FREE(pcolors);
 
             /* smooth colors (Gaussian Curv) */
             } else if (plotType == 5) {
@@ -2995,15 +3306,11 @@ buildSceneGraph()
                     goto cleanup;
                 }
 
-                pcolors = (float *) malloc(3*npnt*sizeof(float));
-                if (pcolors == NULL) {
-                    SPRINT0(0, "MALLOC error");
-                    goto cleanup;
-                }
+                MALLOC(pcolors, float, 3*npnt);
 
+                SPLINT_CHECK_FOR_NULL(efaces);
                 for (ipnt = 0; ipnt < npnt; ipnt++) {
-                    status = EG_curvature(MODL->body[ibody].face[iface].eface,
-                                          &(uv[2*ipnt]), data);
+                    status = EG_curvature(efaces[iface-1], &(uv[2*ipnt]), data);
                     if (status != SUCCESS) {
                         rcurv = 0;
                     } else if (MIN(fabs(data[0]), fabs(data[4])) < 0.00001 * MAX(fabs(data[0]), fabs(data[4]))) {
@@ -3024,13 +3331,19 @@ buildSceneGraph()
                 }
                 nitems++;
 
-                free(pcolors);
+                FREE(pcolors);
 
             /* constant triangle colors */
             } else {
-                color[0] = RED(  MODL->body[ibody].face[iface].gratt.color);
-                color[1] = GREEN(MODL->body[ibody].face[iface].gratt.color);
-                color[2] = BLUE( MODL->body[ibody].face[iface].gratt.color);
+                if (MODL->body[ibody].eebody == NULL) {
+                    color[0] = RED(  MODL->body[ibody].face[iface].gratt.color);
+                    color[1] = GREEN(MODL->body[ibody].face[iface].gratt.color);
+                    color[2] = BLUE( MODL->body[ibody].face[iface].gratt.color);
+                } else {
+                    color[0] = 0.75;
+                    color[1] = 0.75;
+                    color[2] = 1.00;
+                }
                 status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
                 if (status != SUCCESS) {
                     SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
@@ -3039,9 +3352,15 @@ buildSceneGraph()
             }
 
             /* triangle backface color */
-            color[0] = RED(  MODL->body[ibody].face[iface].gratt.bcolor);
-            color[1] = GREEN(MODL->body[ibody].face[iface].gratt.bcolor);
-            color[2] = BLUE( MODL->body[ibody].face[iface].gratt.bcolor);
+            if (MODL->body[ibody].eebody == NULL) {
+                color[0] = RED(  MODL->body[ibody].face[iface].gratt.bcolor);
+                color[1] = GREEN(MODL->body[ibody].face[iface].gratt.bcolor);
+                color[2] = BLUE( MODL->body[ibody].face[iface].gratt.bcolor);
+            } else {
+                color[0] = 0.50;
+                color[1] = 0.50;
+                color[2] = 0.50;
+            }
             status = wv_setData(WV_REAL32, 1, (void*)color, WV_BCOLOR, &(items[nitems]));
             if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
@@ -3055,12 +3374,18 @@ buildSceneGraph()
             }
             nitems++;
 
-            free(segs);
+            FREE(segs);
 
             /* segment colors */
-            color[0] = RED(  MODL->body[ibody].face[iface].gratt.mcolor);
-            color[1] = GREEN(MODL->body[ibody].face[iface].gratt.mcolor);
-            color[2] = BLUE( MODL->body[ibody].face[iface].gratt.mcolor);
+            if (MODL->body[ibody].eebody == NULL) {
+                color[0] = RED(  MODL->body[ibody].face[iface].gratt.mcolor);
+                color[1] = GREEN(MODL->body[ibody].face[iface].gratt.mcolor);
+                color[2] = BLUE( MODL->body[ibody].face[iface].gratt.mcolor);
+            } else {
+                color[0] = 0;
+                color[1] = 0;
+                color[2] = 0;
+            }
             status = wv_setData(WV_REAL32, 1, (void*)color, WV_LCOLOR, &(items[nitems]));
             if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
@@ -3072,6 +3397,8 @@ buildSceneGraph()
             if (igprim < 0) {
                 SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
             } else {
+                SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                 cntxt->gPrims[igprim].lWidth = 1.0;
             }
 
@@ -3079,8 +3406,8 @@ buildSceneGraph()
                the control polygon (note that the control polygon is not listed in
                ESP as part of the Body, but separately at the bottom) */
             if (plotCP == 1) {
-                status = EG_getTopology(MODL->body[ibody].face[iface].eface,
-                                        &esurf, &oclass, &mtype,
+                SPLINT_CHECK_FOR_NULL(efaces);
+                status = EG_getTopology(efaces[iface-1], &esurf, &oclass, &mtype,
                                         data, &nchild, &echilds, &senses);
 
                 if (status == SUCCESS) {
@@ -3103,8 +3430,7 @@ buildSceneGraph()
                         wv_adjustVerts(&(items[nitems]), sgFocus);
                         nitems++;
 
-                        segs = (int*) malloc(4*header[2]*header[5]*sizeof(int));
-                        if (segs == NULL) goto cleanup;
+                        MALLOC(segs, int, 4*header[2]*header[5]);
                         nseg = 0;
 
                         /* i=constant lines (bias-1) */
@@ -3131,7 +3457,7 @@ buildSceneGraph()
                         }
                         nitems++;
 
-                        free(segs);
+                        FREE(segs);
 
                         /* color */
                         color[0] = 0;   color[1] = 0;   color[2] = 0;
@@ -3150,11 +3476,11 @@ buildSceneGraph()
                 }
             }
 
-            /* if sensTess is set and we are asking for smooth colors
+            /* if tessel is set and we are asking for smooth colors
                (sensitivities) is set, draw tufts, whose length can be changed
                by recomputing sensitivity with a different value for the velocity
                of the Design Parameter.  (note that the tufts cannot be toggled in ESP) */
-            if (sensTess == 1 && haveDots >= 1) {
+            if (tessel == 1 && haveDots >= 1) {
                 status = EG_getTessFace(etess, iface,
                                         &npnt, &xyz, &uv, &ptype, &pindx,
                                         &ntri, &tris, &tric);
@@ -3163,43 +3489,13 @@ buildSceneGraph()
                     goto cleanup;
                 }
 
-//$$$                nitems = 0;
-//$$$
-//$$$                /* name and attributes */
-//$$$                snprintf(gpname, MAX_STRVAL_LEN-1, "PlotPoints: Face_%s:%d_pts", bname, iface);
-//$$$                attrs = WV_ON;
-//$$$
-//$$$                status = wv_setData(WV_REAL64, npnt, (void*)xyz, WV_VERTICES, &(items[nitems]));
-//$$$                if (status != SUCCESS) {
-//$$$                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
-//$$$                }
-//$$$
-//$$$                wv_adjustVerts(&(items[nitems]), sgFocus);
-//$$$                nitems++;
-//$$$
-//$$$                /* point color */
-//$$$                color[0] = 0;   color[1] = 0;   color[2] = 0;
-//$$$
-//$$$                status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
-//$$$                if (status != SUCCESS) {
-//$$$                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
-//$$$                }
-//$$$                nitems++;
-//$$$
-//$$$                /* make graphic primitive for points */
-//$$$                igprim = wv_addGPrim(cntxt, gpname, WV_POINT, attrs, nitems, items);
-//$$$                if (igprim < 0) {
-//$$$                    SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
-//$$$                } else {
-//$$$                    cntxt->gPrims[igprim].pSize = 3.0;
-//$$$                }
-
                 nitems = 0;
 
                 /* name and attributes */
                 snprintf(gpname, MAX_STRVAL_LEN-1, "PlotLine: Face_%d:%d_tufts", ibody, iface);
                 attrs = WV_ON;
 
+//$$$
                 status = ocsmGetTessVel(MODL, ibody, OCSM_FACE, iface, (const double**)(&vel));
                 if (status != SUCCESS) {
                     SPRINT3(0, "ERROR:: ocsmGetTessVel(%d,%d) -> status=%d", ibody, iface, status);
@@ -3207,11 +3503,9 @@ buildSceneGraph()
                 }
 
                 /* create tufts */
-                tuft = (float *) malloc(6*npnt*sizeof(float));
-                if (tuft == NULL) {
-                    SPRINT0(0, "MALLOC error");
-                    goto cleanup;
-                }
+                MALLOC(tuft, float, 6*npnt);
+
+                SPLINT_CHECK_FOR_NULL(vel);
 
                 for (ipnt = 0; ipnt < npnt; ipnt++) {
                     tuft[6*ipnt  ] = xyz[3*ipnt  ];
@@ -3224,7 +3518,7 @@ buildSceneGraph()
 
                 status = wv_setData(WV_REAL32, 2*npnt, (void*)tuft, WV_VERTICES, &(items[nitems]));
 
-                free(tuft);
+                FREE(tuft);
 
                 if (status != SUCCESS) {
                     SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
@@ -3249,25 +3543,18 @@ buildSceneGraph()
             }
 
             /* get Attributes for the Face */
-            eface  = MODL->body[ibody].face[iface].eface;
+            SPLINT_CHECK_FOR_NULL(efaces);
+            eface  = efaces[iface-1];
             status = EG_attributeNum(eface, &nattr);
             if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: EG_attributeNum(%d,%d) -> status=%d", ibody, iface, status);
             }
 
             /* add Face to meta data (if there is room) */
-            if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                sgMetaDataLen += MAX_METADATA_CHUNK;
-                RALLOC(sgMetaData, char, sgMetaDataLen);
-                RALLOC(sgTempData, char, sgMetaDataLen);
-            }
-
             if (nattr > 0) {
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[",  sgTempData, gpname);
+                addToSgMetaData("\"%s\":[",  gpname);
             } else {
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[]", sgTempData, gpname);
+                addToSgMetaData("\"%s\":[]", gpname);
             }
 
             for (iattr = 1; iattr <= nattr; iattr++) {
@@ -3279,34 +3566,28 @@ buildSceneGraph()
 
                 if (itype == ATTRCSYS) continue;
 
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\",\"", sgTempData, attrName);
+                addToSgMetaData("\"%s\",\"", attrName);
 
                 if        (itype == ATTRINT) {
                     for (i = 0; i < nlist ; i++) {
-                        STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                        snprintf(sgMetaData, sgMetaDataLen, "%s %d", sgTempData, tempIlist[i]);
+                        addToSgMetaData(" %d", tempIlist[i]);
                     }
                 } else if (itype == ATTRREAL) {
                     for (i = 0; i < nlist ; i++) {
-                        STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                        snprintf(sgMetaData, sgMetaDataLen, "%s %f", sgTempData, tempRlist[i]);
+                        addToSgMetaData(" %f", tempRlist[i]);
                     }
                 } else if (itype == ATTRSTRING) {
-                    STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                    snprintf(sgMetaData, sgMetaDataLen, "%s %s ", sgTempData, tempClist);
+                    addToSgMetaData(" %s ", tempClist);
                 }
 
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\",", sgTempData);
+                addToSgMetaData("\",");
             }
-            sgMetaData[sgMetaDataLen-1] = '\0';
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s],", sgTempData);
+            sgMetaDataUsed--;
+            addToSgMetaData("],");
         }
 
         /* loop through the Edges within the current Body */
-        for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
+        for (iedge = 1; iedge <= nedge; iedge++) {
             nitems = 0;
 
             /* skip edge if this is a NodeBody */
@@ -3315,6 +3596,22 @@ buildSceneGraph()
             status = EG_getTessEdge(etess, iedge, &npnt, &xyz, &t);
             if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: EG_getTessEdge(%d,%d) -> status=%d", ibody, iedge, status);
+            }
+
+            /* get Edge velocities (for testing) */
+            if (allVels == 1 && haveDots > 0) {
+                MALLOC(vel, double, 3*npnt);
+
+                if (MODL->body[ibody].eebody == NULL) {
+                    status = ocsmGetVel(MODL, ibody, OCSM_EDGE, iedge, npnt, NULL, vel);
+                } else {
+                    status = ocsmGetVel(MODL, ibody, OCSM_EEDGE, iedge, npnt, NULL, vel);
+                }
+                if (status != SUCCESS) {
+                    SPRINT3(0, "ERROR:: ocsmGetVel(ibody=%d, iedge=%d) -> status=%d", ibody, iedge, status);
+                }
+
+                FREE(vel);
             }
 
             /* name and attributes */
@@ -3331,8 +3628,7 @@ buildSceneGraph()
             nitems++;
 
             /* segments (bias-1) */
-            ivrts = (int*) malloc(2*(npnt-1)*sizeof(int));
-            if (ivrts == NULL) goto cleanup;
+            MALLOC(ivrts, int, 2*(npnt-1));
 
             for (ipnt = 0; ipnt < npnt-1; ipnt++) {
                 ivrts[2*ipnt  ] = ipnt + 1;
@@ -3345,12 +3641,18 @@ buildSceneGraph()
             }
             nitems++;
 
-            free(ivrts);
+            FREE(ivrts);
 
             /* line colors */
-            color[0] = RED(  MODL->body[ibody].edge[iedge].gratt.color);
-            color[1] = GREEN(MODL->body[ibody].edge[iedge].gratt.color);
-            color[2] = BLUE( MODL->body[ibody].edge[iedge].gratt.color);
+            if (MODL->body[ibody].eebody == NULL) {
+                color[0] = RED(  MODL->body[ibody].edge[iedge].gratt.color);
+                color[1] = GREEN(MODL->body[ibody].edge[iedge].gratt.color);
+                color[2] = BLUE( MODL->body[ibody].edge[iedge].gratt.color);
+            } else {
+                color[0] = 0;
+                color[1] = 0;
+                color[2] = 0;
+            }
             status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
             if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
@@ -3358,8 +3660,7 @@ buildSceneGraph()
             nitems++;
 
             /* points */
-            ivrts = (int*) malloc(npnt*sizeof(int));
-            if (ivrts == NULL) goto cleanup;
+            MALLOC(ivrts, int, npnt);
 
             for (ipnt = 0; ipnt < npnt; ipnt++) {
                 ivrts[ipnt] = ipnt + 1;
@@ -3371,12 +3672,18 @@ buildSceneGraph()
             }
             nitems++;
 
-            free(ivrts);
+            FREE(ivrts);
 
             /* point colors */
-            color[0] = RED(  MODL->body[ibody].edge[iedge].gratt.mcolor);
-            color[1] = GREEN(MODL->body[ibody].edge[iedge].gratt.mcolor);
-            color[2] = BLUE( MODL->body[ibody].edge[iedge].gratt.mcolor);
+            if (MODL->body[ibody].eebody == NULL) {
+                color[0] = RED(  MODL->body[ibody].edge[iedge].gratt.mcolor);
+                color[1] = GREEN(MODL->body[ibody].edge[iedge].gratt.mcolor);
+                color[2] = BLUE( MODL->body[ibody].edge[iedge].gratt.mcolor);
+            } else {
+                color[0] = 0;
+                color[1] = 0;
+                color[2 ]= 0;
+            }
             status = wv_setData(WV_REAL32, 1, (void*)color, WV_PCOLOR, &(items[nitems]));
             if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
@@ -3388,6 +3695,8 @@ buildSceneGraph()
             if (igprim < 0) {
                 SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
             } else {
+                SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                 /* make line width 2 (does not work for ANGLE) */
                 cntxt->gPrims[igprim].lWidth = 2.0;
 
@@ -3402,17 +3711,18 @@ buildSceneGraph()
                 }
             }
 
-            eedge  = MODL->body[ibody].edge[iedge].eedge;
+            SPLINT_CHECK_FOR_NULL(eedges);
+            eedge  = eedges[iedge-1];
             status = EG_attributeNum(eedge, &nattr);
             if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: EG_attributeNum(%d,%d) -> status=%d", ibody, iedge, status);
             }
 
-            /* if sensTess is set and we are asking for smooth colors
+            /* if tessel is set and we are asking for smooth colors
                (sensitivities) is set, draw tufts, whose length can be changed
                by recomputing sensitivity with a different value for the velocity
                of the Design Parameter.  (note that the tufts cannot be toggled in ESP) */
-            if (sensTess == 1 && haveDots >= 1) {
+            if (tessel == 1 && haveDots >= 1) {
                 status = EG_getTessEdge(etess, iedge,
                                         &npnt, &xyz, &uv);
                 if (status != SUCCESS) {
@@ -3420,55 +3730,20 @@ buildSceneGraph()
                     goto cleanup;
                 }
 
-//$$$                nitems = 0;
-//$$$
-//$$$                /* name and attributes */
-//$$$                snprintf(gpname, MAX_STRVAL_LEN-1, "PlotPoints: Edge_%s:%d_pts", bname, iedge);
-//$$$                attrs = WV_ON;
-//$$$
-//$$$                status = wv_setData(WV_REAL64, npnt, (void*)xyz, WV_VERTICES, &(items[nitems]));
-//$$$                if (status != SUCCESS) {
-//$$$                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
-//$$$                }
-//$$$
-//$$$                wv_adjustVerts(&(items[nitems]), sgFocus);
-//$$$                nitems++;
-//$$$
-//$$$                /* point color */
-//$$$                color[0] = 0;   color[1] = 0;   color[2] = 0;
-//$$$
-//$$$                status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
-//$$$                if (status != SUCCESS) {
-//$$$                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
-//$$$                }
-//$$$                nitems++;
-//$$$
-//$$$                /* make graphic primitive for points */
-//$$$                igprim = wv_addGPrim(cntxt, gpname, WV_POINT, attrs, nitems, items);
-//$$$                if (igprim < 0) {
-//$$$                    SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
-//$$$                } else {
-//$$$                    cntxt->gPrims[igprim].pSize = 3.0;
-//$$$                }
-
                 nitems = 0;
 
                 /* name and attributes */
                 snprintf(gpname, MAX_STRVAL_LEN-1, "PlotLine: Edge_%d:%d_tufts", ibody, iedge);
                 attrs = WV_ON;
 
+//$$$
                 status = ocsmGetTessVel(MODL, ibody, OCSM_EDGE, iedge, (const double**)(&vel));
-                if (status != SUCCESS) {
-                    SPRINT3(0, "ERROR:: ocsmGetTessVel(%d,%d) -> status=%d", ibody, iedge, status);
-                    goto cleanup;
-                }
+                CHECK_STATUS(ocsmGetTessVel);
+
+                SPLINT_CHECK_FOR_NULL(vel);
 
                 /* create tufts */
-                tuft = (float *) malloc(6*npnt*sizeof(float));
-                if (tuft == NULL) {
-                    SPRINT0(0, "MALLOC error");
-                    goto cleanup;
-                }
+                MALLOC(tuft, float, 6*npnt);
 
                 for (ipnt = 0; ipnt < npnt; ipnt++) {
                     tuft[6*ipnt  ] = xyz[3*ipnt  ];
@@ -3481,7 +3756,7 @@ buildSceneGraph()
 
                 status = wv_setData(WV_REAL32, 2*npnt, (void*)tuft, WV_VERTICES, &(items[nitems]));
 
-                free(tuft);
+                FREE(tuft);
 
                 if (status != SUCCESS) {
                     SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
@@ -3507,18 +3782,10 @@ buildSceneGraph()
             }
 
             /* add Edge to meta data (if there is room) */
-            if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                sgMetaDataLen += MAX_METADATA_CHUNK;
-                RALLOC(sgMetaData, char, sgMetaDataLen);
-                RALLOC(sgTempData, char, sgMetaDataLen);
-            }
-
             if (nattr > 0) {
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[",  sgTempData, gpname);
+                addToSgMetaData("\"%s\":[",  gpname);
             } else {
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[]", sgTempData, gpname);
+                addToSgMetaData("\"%s\":[]", gpname);
             }
 
             for (iattr = 1; iattr <= nattr; iattr++) {
@@ -3530,35 +3797,42 @@ buildSceneGraph()
 
                 if (itype == ATTRCSYS) continue;
 
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\",\"", sgTempData, attrName);
+                addToSgMetaData("\"%s\",\"", attrName);
 
                 if        (itype == ATTRINT) {
                     for (i = 0; i < nlist ; i++) {
-                        STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                        snprintf(sgMetaData, sgMetaDataLen, "%s %d", sgTempData, tempIlist[i]);
+                        addToSgMetaData(" %d", tempIlist[i]);
                     }
                 } else if (itype == ATTRREAL) {
                     for (i = 0; i < nlist ; i++) {
-                        STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                        snprintf(sgMetaData, sgMetaDataLen, "%s %f", sgTempData, tempRlist[i]);
+                        addToSgMetaData(" %f", tempRlist[i]);
                     }
                 } else if (itype == ATTRSTRING) {
-                    STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                    snprintf(sgMetaData, sgMetaDataLen, "%s %s ", sgTempData, tempClist);
+                    addToSgMetaData(" %s ", tempClist);
                 }
 
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\",", sgTempData);
+                addToSgMetaData("\",");
             }
-            sgMetaData[sgMetaDataLen-1] = '\0';
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s],", sgTempData);
+            sgMetaDataUsed--;
+            addToSgMetaData("],");
         }
 
         /* loop through the Nodes within the current Body */
-        for (inode = 1; inode <= MODL->body[ibody].nnode; inode++) {
+        for (inode = 1; inode <= nnode; inode++) {
             nitems = 0;
+
+            /* get Node velocities (for testing) */
+            if (allVels == 1 && haveDots > 0) {
+                npnt = 1;
+                MALLOC(vel, double, 3*npnt);
+
+                status = ocsmGetVel(MODL, ibody, OCSM_NODE, inode, npnt, NULL, vel);
+                if (status != SUCCESS) {
+                    SPRINT3(0, "ERROR:: ocsmGetVel(ibody=%d, inode=%d) -> status=%d", ibody, inode, status);
+                }
+
+                FREE(vel);
+            }
 
             /* name and attributes */
             snprintf(gpname, MAX_STRVAL_LEN-1, "%s Node %d", bname, inode);
@@ -3570,13 +3844,14 @@ buildSceneGraph()
                 attrs = 0;
             }
 
-            enode  = MODL->body[ibody].node[inode].enode;
+            SPLINT_CHECK_FOR_NULL(enodes);
+            enode  = enodes[inode-1];
 
             /* two copies of vertex (to get around possible wv limitation) */
             status = EG_getTopology(enode, &eref, &oclass, &mtype,
                                     xyz_dum, &nchild, &echilds, &senses);
             if (status != SUCCESS) {
-                SPRINT3(0, "ERROR:: EG_getTopology(%d,%d) -> status=%d", ibody, iedge, status);
+                SPRINT3(0, "ERROR:: EG_getTopology(%d,%d) -> status=%d", ibody, inode, status);
             }
 
             xyz_dum[3] = xyz_dum[0];
@@ -3594,9 +3869,15 @@ buildSceneGraph()
             /* node color (black) */
             color[0] = 0;   color[1] = 0;   color[2] = 0;
 
-            color[0] = RED(  MODL->body[ibody].node[inode].gratt.color);
-            color[1] = GREEN(MODL->body[ibody].node[inode].gratt.color);
-            color[2] = BLUE( MODL->body[ibody].node[inode].gratt.color);
+            if (MODL->body[ibody].eebody == NULL) {
+                color[0] = RED(  MODL->body[ibody].node[inode].gratt.color);
+                color[1] = GREEN(MODL->body[ibody].node[inode].gratt.color);
+                color[2] = BLUE( MODL->body[ibody].node[inode].gratt.color);
+            } else {
+                color[0] = 0;
+                color[1] = 0;
+                color[2] = 0;
+            }
             status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
             if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
@@ -3608,6 +3889,8 @@ buildSceneGraph()
             if (igprim < 0) {
                 SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
             } else {
+                SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                 cntxt->gPrims[igprim].pSize = 6.0;
             }
 
@@ -3617,18 +3900,10 @@ buildSceneGraph()
             }
 
             /* add Node to meta data (if there is room) */
-            if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                sgMetaDataLen += MAX_METADATA_CHUNK;
-                RALLOC(sgMetaData, char, sgMetaDataLen);
-                RALLOC(sgTempData, char, sgMetaDataLen);
-            }
-
             if (nattr > 0) {
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[",  sgTempData, gpname);
+                addToSgMetaData("\"%s\":[",  gpname);
             } else {
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[]", sgTempData, gpname);
+                addToSgMetaData("\"%s\":[]", gpname);
             }
 
             for (iattr = 1; iattr <= nattr; iattr++) {
@@ -3640,30 +3915,24 @@ buildSceneGraph()
 
                 if (itype == ATTRCSYS) continue;
 
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\",\"", sgTempData, attrName);
+                addToSgMetaData("\"%s\",\"", attrName);
 
                 if        (itype == ATTRINT) {
                     for (i = 0; i < nlist ; i++) {
-                        STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                        snprintf(sgMetaData, sgMetaDataLen, "%s %d", sgTempData, tempIlist[i]);
+                        addToSgMetaData(" %d", tempIlist[i]);
                     }
                 } else if (itype == ATTRREAL) {
                     for (i = 0; i < nlist ; i++) {
-                        STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                        snprintf(sgMetaData, sgMetaDataLen, "%s %f", sgTempData, tempRlist[i]);
+                        addToSgMetaData(" %f", tempRlist[i]);
                     }
                 } else if (itype == ATTRSTRING) {
-                    STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                    snprintf(sgMetaData, sgMetaDataLen, "%s %s ", sgTempData, tempClist);
+                    addToSgMetaData(" %s ", tempClist);
                 }
 
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\",", sgTempData);
+                addToSgMetaData("\",");
             }
-            sgMetaData[sgMetaDataLen-1] = '\0';
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s],", sgTempData);
+            sgMetaDataUsed--;
+            addToSgMetaData("],");
         }
 
         /* loop through the Csystems associated with the current Body */
@@ -3733,6 +4002,8 @@ buildSceneGraph()
             if (igprim < 0) {
                 SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
             } else {
+                SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                 /* make line width 1 */
                 cntxt->gPrims[igprim].lWidth = 1.0;
 
@@ -3745,14 +4016,7 @@ buildSceneGraph()
             }
 
             /* add Csystem to meta data (if there is room) */
-            if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                sgMetaDataLen += MAX_METADATA_CHUNK;
-                RALLOC(sgMetaData, char, sgMetaDataLen);
-                RALLOC(sgMetaData, char, sgMetaDataLen);
-            }
-
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[],", sgTempData, gpname);
+            addToSgMetaData("\"%s\":[],", gpname);
         }
     }
 
@@ -3764,14 +4028,14 @@ buildSceneGraph()
     attrs = 0;
 
     /* vertices */
-    axis[ 0] = 2 * bigbox[0] - bigbox[3];   axis[ 1] = 0;   axis[ 2] = 0;
-    axis[ 3] = 2 * bigbox[3] - bigbox[0];   axis[ 4] = 0;   axis[ 5] = 0;
+    axis[ 0] = MIN(2*bigbox[0]-bigbox[3], 0);   axis[ 1] = 0;   axis[ 2] = 0;
+    axis[ 3] = MAX(2*bigbox[3]-bigbox[0], 0);   axis[ 4] = 0;   axis[ 5] = 0;
 
-    axis[ 6] = 0;   axis[ 7] = 2 * bigbox[1] - bigbox[4];   axis[ 8] = 0;
-    axis[ 9] = 0;   axis[10] = 2 * bigbox[4] - bigbox[1];   axis[11] = 0;
+    axis[ 6] = 0;   axis[ 7] = MIN(2*bigbox[1]-bigbox[4], 0);   axis[ 8] = 0;
+    axis[ 9] = 0;   axis[10] = MAX(2*bigbox[4]-bigbox[1], 0);   axis[11] = 0;
 
-    axis[12] = 0;   axis[13] = 0;   axis[14] = 2 * bigbox[2] - bigbox[5];
-    axis[15] = 0;   axis[16] = 0;   axis[17] = 2 * bigbox[5] - bigbox[2];
+    axis[12] = 0;   axis[13] = 0;   axis[14] = MIN(2*bigbox[2]-bigbox[5], 0);
+    axis[15] = 0;   axis[16] = 0;   axis[17] = MAX(2*bigbox[5]-bigbox[2], 0);
     status = wv_setData(WV_REAL64, 6, (void*)axis, WV_VERTICES, &(items[nitems]));
     if (status != SUCCESS) {
         SPRINT1(0, "ERROR:: wv_setData(axis) -> status=%d", status);
@@ -3793,10 +4057,14 @@ buildSceneGraph()
     if (igprim < 0) {
         SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
     } else {
+        SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
         cntxt->gPrims[igprim].lWidth = 1.0;
     }
 
     /* extra plotting data */
+    SPLINT_CHECK_FOR_NULL(plotfile);
+
     if (STRLEN(plotfile) > 0) {
         fp = fopen(plotfile, "r");
         if (fp == NULL) {
@@ -3810,7 +4078,7 @@ buildSceneGraph()
         while (1) {
             if (fscanf(fp, "%d %d %s", &imax, &jmax, temp) != 3) break;
 
-            /* points */
+            /* points (imax=npts, jmax=0) */
             if (imax > 0 && jmax == 0) {
                 SPRINT2(1, "    plotting %d points (%s)", imax, temp);
                 nitems = 0;
@@ -3819,8 +4087,7 @@ buildSceneGraph()
                 snprintf(gpname, MAX_STRVAL_LEN-1, "PlotPoints: %.114s", temp);
 
                 /* read the plotdata */
-                plotdata = (float*) malloc(3*imax*sizeof(float));
-                if (plotdata == NULL) goto cleanup;
+                MALLOC(plotdata, float, 3*imax);
 
                 for (i = 0; i < imax; i++) {
                     fscanf(fp, "%f %f %f", &plotdata[3*i  ],
@@ -3834,8 +4101,7 @@ buildSceneGraph()
                     SPRINT1(0, "ERROR:: wv_setData(plotdata) -> status=%d", status);
                 }
 
-                free(plotdata);
-                plotdata = NULL;
+                FREE(plotdata);
 
                 wv_adjustVerts(&(items[nitems]), sgFocus);
                 nitems++;
@@ -3854,20 +4120,15 @@ buildSceneGraph()
                 if (igprim < 0) {
                     SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
                 } else {
+                    SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                     cntxt->gPrims[igprim].pSize = 3.0;
                 }
 
                 /* add plotdata to meta data (if there is room) */
-                if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                    sgMetaDataLen += MAX_METADATA_CHUNK;
-                    RALLOC(sgMetaData, char, sgMetaDataLen);
-                    RALLOC(sgTempData, char, sgMetaDataLen);
-                }
+                addToSgMetaData("\"%s\":[],", gpname);
 
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[],", sgTempData, gpname);
-
-            /* polyline */
+            /* polyline (imax=npnt, jmax=1) */
             } else if (imax > 1 && jmax == 1) {
                 SPRINT2(1, "    plotting line with %d points (%s)", imax, temp);
                 nitems = 0;
@@ -3876,8 +4137,7 @@ buildSceneGraph()
                 snprintf(gpname, MAX_STRVAL_LEN-1, "PlotLine: %.116s", temp);
 
                 /* read the plotdata */
-                plotdata = (float*) malloc(3*imax*sizeof(float));
-                if (plotdata == NULL) goto cleanup;
+                MALLOC(plotdata, float, 3*imax);
 
                 for (i = 0; i < imax; i++) {
                     fscanf(fp, "%f %f %f", &plotdata[3*i  ],
@@ -3886,10 +4146,7 @@ buildSceneGraph()
                 }
 
                 /* create the segments */
-                nseg     = imax - 1;
-                segments = (float*) malloc(6*nseg*sizeof(float));
-                if (segments == NULL) goto cleanup;
-
+                MALLOC(segments, float, 6*(imax-1));
                 nseg = 0;
 
                 for (i = 0; i < imax-1; i++) {
@@ -3904,16 +4161,14 @@ buildSceneGraph()
                     nseg++;
                 }
 
-                free(plotdata);
-                plotdata = NULL;
+                FREE(plotdata);
 
                 status = wv_setData(WV_REAL32, 2*nseg, (void*)segments, WV_VERTICES, &(items[nitems]));
                 if (status != SUCCESS) {
                     SPRINT1(0, "ERROR:: wv_setData(segments) -> status=%d", status);
                 }
 
-                free(segments);
-                segments = NULL;
+                FREE(segments);
 
                 wv_adjustVerts(&(items[nitems]), sgFocus);
                 nitems++;
@@ -3932,20 +4187,15 @@ buildSceneGraph()
                 if (igprim < 0) {
                     SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
                 } else {
+                    SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                     cntxt->gPrims[igprim].lWidth = 1.0;
                 }
 
                 /* add plotdata to meta data (if there is room) */
-                if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                    sgMetaDataLen += MAX_METADATA_CHUNK;
-                    RALLOC(sgMetaData, char, sgMetaDataLen);
-                    RALLOC(sgTempData, char, sgMetaDataLen);
-                }
+                addToSgMetaData("\"%s\":[],", gpname);
 
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[],", sgTempData, gpname);
-
-            /* many line segments */
+            /* many line segments (imax=nseg, jmax=-1) */
             } else if (imax > 0 && jmax == -1) {
                 SPRINT2(1, "    plotting %d lines with 2 points each (%s)", imax, temp);
                 nitems = 0;
@@ -3954,8 +4204,7 @@ buildSceneGraph()
                 snprintf(gpname, MAX_STRVAL_LEN-1, "PlotLine: %.116s", temp);
 
                 /* read the plotdata */
-                plotdata = (float*) malloc(6*imax*sizeof(float));
-                if (plotdata == NULL) goto cleanup;
+                MALLOC(plotdata, float, 6*imax);
 
                 for (i = 0; i < imax; i++) {
                     fscanf(fp, "%f %f %f", &plotdata[6*i  ],
@@ -3971,8 +4220,7 @@ buildSceneGraph()
                     SPRINT1(0, "ERROR:: wv_setData(plotdata) -> status=%d", status);
                 }
 
-                free(plotdata);
-                plotdata = NULL;
+                FREE(plotdata);
 
                 wv_adjustVerts(&(items[nitems]), sgFocus);
                 nitems++;
@@ -3991,33 +4239,23 @@ buildSceneGraph()
                 if (igprim < 0) {
                     SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
                 } else {
+                    SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                     cntxt->gPrims[igprim].lWidth = 1.0;
                 }
 
                 /* add plotdata to meta data (if there is room) */
-                if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                    sgMetaDataLen += MAX_METADATA_CHUNK;
-                    RALLOC(sgMetaData, char, sgMetaDataLen);
-                    RALLOC(sgTempData, char, sgMetaDataLen);
-                }
+                addToSgMetaData("\"%s\":[],", gpname);
 
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[],", sgTempData, gpname);
-
-            /* many triangles */
+            /* many triangles (imax=ntri, jmax=-2) */
             } else if (imax > 0 && jmax == -2) {
                 SPRINT2(1, "    plotting %d triangles (%s)", imax, temp);
                 nitems = 0;
 
                 /* name */
                 snprintf(gpname, MAX_STRVAL_LEN-1, "PlotTris: %.114s", temp);
-                printf("gpname=%s\n", gpname);
 
-                plotdata = (float*) malloc(9*imax*sizeof(float));
-                if (plotdata == NULL) {
-                    SPRINT0(0, "MALLOC error");
-                    goto cleanup;
-                }
+                MALLOC(plotdata, float, 9*imax);
 
                 for (ij = 0; ij < imax; ij++) {
                     fscanf(fp, "%f %f %f %f %f %f %f %f %f", &plotdata[9*ij  ],
@@ -4037,8 +4275,7 @@ buildSceneGraph()
                     SPRINT1(0, "ERROR:: wv_setData(plotdata) -> status=%d", status);
                 }
 
-                free(plotdata);
-                plotdata = NULL;
+                FREE(plotdata);
 
                 wv_adjustVerts(&(items[nitems-1]), sgFocus);
 
@@ -4057,11 +4294,7 @@ buildSceneGraph()
                 }
 
                 /* triangle sides */
-                segs = (int*) malloc(6*imax*sizeof(int));
-                if (segs == NULL) {
-                    SPRINT0(0, "MALLOC error");
-                    goto cleanup;
-                }
+                MALLOC(segs, int, 6*imax);
 
                 /* build up the sides (bias-1) */
                 for (ij = 0; ij < imax; ij++) {
@@ -4078,7 +4311,7 @@ buildSceneGraph()
                     SPRINT1(0, "ERROR:: wv_setData(segs) -> status=%d", status);
                 }
 
-                free(segs);
+                FREE(segs);
 
                 /* triangle side color */
                 color[0] = 1;   color[1] = 0;   color[2] = 0;
@@ -4095,16 +4328,133 @@ buildSceneGraph()
                }
 
                 /* add plotdata to meta data (if there is room) */
-                if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                    sgMetaDataLen += MAX_METADATA_CHUNK;
-                    RALLOC(sgMetaData, char, sgMetaDataLen);
-                    RALLOC(sgTempData, char, sgMetaDataLen);
+                addToSgMetaData("\"%s\":[],", gpname);
+
+            /* filled Triangles (imax=ntri, jmax=-3) */
+            } else if (imax > 1 && jmax == -3) {
+                SPRINT2(1, "   plotting %d filled triangles (%s)", imax, temp);
+                nitems = 0;
+
+                /* name */
+                snprintf(gpname, MAX_STRVAL_LEN-1, "PlotTris: %.11s", temp);
+
+                /* read the plotdata */
+                MALLOC(plotdata, float, 12*imax);
+
+                for (i = 0; i < imax; i++) {
+                    fscanf(fp, "%f %f %f %f %f %f %f %f %f %f %f %f",
+                           &plotdata[9*i  ], &plotdata[9*i+1], &plotdata[9*i+2], &plotdata[9*imax+3*i  ],
+                           &plotdata[9*i+3], &plotdata[9*i+4], &plotdata[9*i+5], &plotdata[9*imax+3*i+1],
+                           &plotdata[9*i+6], &plotdata[9*i+7], &plotdata[9*i+8], &plotdata[9*imax+3*i+2]);
                 }
 
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[],", sgTempData, gpname);
+                status = wv_setData(WV_REAL32, 3*imax, (void*)plotdata, WV_VERTICES, &(items[nitems]));
+                if (status != SUCCESS) {
+                    SPRINT1(0, "ERROR:: wv_setData(plotdata) -> status=%d", status);
+                }
 
-            /* grid */
+                wv_adjustVerts(&(items[nitems]), sgFocus);
+                nitems++;
+
+                /* function values */
+                MALLOC(pcolors, float, 9*imax);
+
+                lims[0] = -1;  lims[1] = +1;
+                for (i = 0; i < imax; i++) {
+                    spec_col(plotdata[9*imax+3*i  ], &(pcolors[9*i  ]));
+                    spec_col(plotdata[9*imax+3*i+1], &(pcolors[9*i+3]));
+                    spec_col(plotdata[9*imax+3*i+2], &(pcolors[9*i+6]));
+                }
+
+                status = wv_setData(WV_REAL32, 3*imax, (void*)pcolors, WV_COLORS, &(items[nitems]));
+                if (status != SUCCESS) {
+                    SPRINT2(0, "ERROR:: wv_setData(%s) -> status=%d", temp, status);
+                }
+                nitems++;
+
+                FREE(pcolors);
+                FREE(plotdata);
+
+                /* make graphic primitive */
+                attrs = WV_ON | WV_SHADING;
+                igprim = wv_addGPrim(cntxt, gpname, WV_TRIANGLE, attrs, nitems, items);
+                if (igprim < 0) {
+                    SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
+                }
+
+                /* add plotdata to meta data (if there is room) */
+                addToSgMetaData("\"%s\":[],", gpname);
+
+            /* filled Quads (imax=nquad, jmax=-4) */
+            } else if (imax > 1 && jmax == -4) {
+                SPRINT2(1, "   plotting %d filled quads (%s)", imax, temp);
+                nitems = 0;
+
+                /* name */
+                snprintf(gpname, MAX_STRVAL_LEN-1, "PlotTris: %.11s", temp);
+
+                /* read the plotdata */
+                MALLOC(plotdata, float, 24*imax);
+
+                for (i = 0; i < imax; i++) {
+                    fscanf(fp, "%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f",
+                           &plotdata[18*i   ], &plotdata[18*i+ 1], &plotdata[18*i+ 2], &plotdata[18*imax+6*i  ],
+                           &plotdata[18*i+ 3], &plotdata[18*i+ 4], &plotdata[18*i+ 5], &plotdata[18*imax+6*i+1],
+                           &plotdata[18*i+ 6], &plotdata[18*i+ 7], &plotdata[18*i+ 8], &plotdata[18*imax+6*i+2],
+                           &plotdata[18*i+ 9], &plotdata[18*i+10], &plotdata[18*i+11], &plotdata[18*imax+6*i+3]);
+
+                    plotdata[18*i+12] = plotdata[18*i  ];
+                    plotdata[18*i+13] = plotdata[18*i+1];
+                    plotdata[18*i+14] = plotdata[18*i+2];
+                    plotdata[18*i+15] = plotdata[18*i+6];
+                    plotdata[18*i+16] = plotdata[18*i+7];
+                    plotdata[18*i+17] = plotdata[18*i+8];
+
+                    plotdata[18*imax+6*i+4] = plotdata[18*imax+6*i  ];
+                    plotdata[18*imax+6*i+5] = plotdata[18*imax+6*i+2];
+                }
+
+                status = wv_setData(WV_REAL32, 6*imax, (void*)plotdata, WV_VERTICES, &(items[nitems]));
+                if (status != SUCCESS) {
+                    SPRINT1(0, "ERROR:: wv_setData(plotdata) -> status=%d", status);
+                }
+
+                wv_adjustVerts(&(items[nitems]), sgFocus);
+                nitems++;
+
+                /* function values */
+                MALLOC(pcolors, float, 18*imax);
+
+                lims[0] = -1;  lims[1] = +1;
+                for (i = 0; i < imax; i++) {
+                    spec_col(plotdata[18*imax+6*i  ], &(pcolors[18*i   ]));
+                    spec_col(plotdata[18*imax+6*i+1], &(pcolors[18*i+ 3]));
+                    spec_col(plotdata[18*imax+6*i+2], &(pcolors[18*i+ 6]));
+                    spec_col(plotdata[18*imax+6*i+3], &(pcolors[18*i+ 9]));
+                    spec_col(plotdata[18*imax+6*i+4], &(pcolors[18*i+12]));
+                    spec_col(plotdata[18*imax+6*i+5], &(pcolors[18*i+15]));
+                }
+
+                status = wv_setData(WV_REAL32, 6*imax, (void*)pcolors, WV_COLORS, &(items[nitems]));
+                if (status != SUCCESS) {
+                    SPRINT2(0, "ERROR:: wv_setData(%s) -> status=%d", temp, status);
+                }
+                nitems++;
+
+                FREE(pcolors);
+                FREE(plotdata);
+
+                /* make graphic primitive */
+                attrs = WV_ON | WV_SHADING;
+                igprim = wv_addGPrim(cntxt, gpname, WV_TRIANGLE, attrs, nitems, items);
+                if (igprim < 0) {
+                    SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
+                }
+
+                /* add plotdata to meta data (if there is room) */
+                addToSgMetaData("\"%s\":[],", gpname);
+
+            /* grid (imax, jmax) */
             } else if (imax > 1 && jmax > 1) {
                 SPRINT3(1, "    plotting grid with %dx%d points (%s)", imax, jmax, temp);
                 nitems = 0;
@@ -4113,8 +4463,7 @@ buildSceneGraph()
                 snprintf(gpname, MAX_STRVAL_LEN-1, "PlotGrid: %.116s", temp);
 
                 /* read the plotdata */
-                plotdata = (float*) malloc(3*imax*jmax*sizeof(float));
-                if (plotdata == NULL) goto cleanup;
+                MALLOC(plotdata, float, 3*imax*jmax);
 
                 for (ij = 0; ij < imax*jmax; ij++) {
                     fscanf(fp, "%f %f %f", &plotdata[3*ij  ],
@@ -4123,9 +4472,8 @@ buildSceneGraph()
                 }
 
                 /* create the segments */
-                nseg     = imax * (jmax-1) + (imax-1) * jmax;
-                segments = (float*) malloc(6*nseg*sizeof(float));
-                if (segments == NULL) goto cleanup;
+                nseg = imax * (jmax-1) + (imax-1) * jmax;
+                MALLOC(segments, float, 6*nseg);
 
                 nseg = 0;
 
@@ -4165,16 +4513,14 @@ buildSceneGraph()
                 }
 #endif
 
-                free(plotdata);
-                plotdata = NULL;
+                FREE(plotdata);
 
                 status = wv_setData(WV_REAL32, 2*nseg, (void*)segments, WV_VERTICES, &(items[nitems]));
                 if (status != SUCCESS) {
                     SPRINT1(0, "ERROR:: wv_setData(segments) -> status=%d", status);
                 }
 
-                free(segments);
-                segments = NULL;
+                FREE(segments);
 
                 wv_adjustVerts(&(items[nitems]), sgFocus);
                 nitems++;
@@ -4193,18 +4539,13 @@ buildSceneGraph()
                 if (igprim < 0) {
                     SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
                 } else {
+                    SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                     cntxt->gPrims[igprim].lWidth = 1.0;
                 }
 
                 /* add plotdata to meta data (if there is room) */
-                if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                    sgMetaDataLen += MAX_METADATA_CHUNK;
-                    RALLOC(sgMetaData, char, sgMetaDataLen);
-                    RALLOC(sgTempData, char, sgMetaDataLen);
-                }
-
-                STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-                snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[],", sgTempData, gpname);
+                addToSgMetaData("\"%s\":[],", gpname);
 
             /* unknown type */
             } else {
@@ -4246,8 +4587,7 @@ buildSceneGraph()
             goto cleanup;
         }
 
-        plotdata = (float*) malloc(3*ngrid*sizeof(float));
-        if (plotdata == NULL) goto cleanup;
+        MALLOC(plotdata, float, 3*ngrid);
 
         nitems = 0;
 
@@ -4291,18 +4631,13 @@ buildSceneGraph()
         if (igprim < 0) {
             SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
         } else {
+            SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
             cntxt->gPrims[igprim].pSize = 3.0;
         }
 
         /* add plotdata to meta data (if there is room) */
-        if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-            sgMetaDataLen += MAX_METADATA_CHUNK;
-            RALLOC(sgMetaData, char, sgMetaDataLen);
-            RALLOC(sgTempData, char, sgMetaDataLen);
-        }
-
-        STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-        snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[],", sgTempData, gpname);
+        addToSgMetaData("\"%s\":[],", gpname);
 
         /* count the number of CRODs in the file */
         rewind(fp);
@@ -4318,8 +4653,7 @@ buildSceneGraph()
         SPRINT1(1, "   there are %d CRODs", ncrod);
 
         if (ncrod > 0) {
-            segments = (float *) malloc(6*ncrod*sizeof(float));
-            if (segments == NULL) goto cleanup;
+            MALLOC(segments, float, 6*ncrod);
 
             rewind(fp);
             i = 0;
@@ -4353,8 +4687,7 @@ buildSceneGraph()
                 SPRINT1(0, "ERROR:: wv_setData(segments) -> status=%d", status);
             }
 
-            free(segments);
-            segments = NULL;
+            FREE(segments);
 
             wv_adjustVerts(&(items[nitems]), sgFocus);
             nitems++;
@@ -4373,18 +4706,13 @@ buildSceneGraph()
             if (igprim < 0) {
                 SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
             } else {
+                SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                 cntxt->gPrims[igprim].lWidth = 1.0;
             }
 
             /* add plotdata to meta data (if there is room) */
-            if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                sgMetaDataLen += MAX_METADATA_CHUNK;
-                RALLOC(sgMetaData, char, sgMetaDataLen);
-                RALLOC(sgTempData, char, sgMetaDataLen);
-            }
-
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[],", sgTempData, gpname);
+            addToSgMetaData("\"%s\":[],", gpname);
         }
 
         /* count the number of CTRI3s in the file */
@@ -4401,8 +4729,7 @@ buildSceneGraph()
         SPRINT1(1, "   there are %d CTRI3s", nctri3);
 
         if (nctri3 > 0) {
-            segments = (float *) malloc(18*nctri3*sizeof(float));
-            if (segments == NULL) goto cleanup;
+            MALLOC(segments, float, 18*nctri3);
 
             rewind(fp);
             i = 0;
@@ -4452,8 +4779,7 @@ buildSceneGraph()
                 SPRINT1(0, "ERROR:: wv_setData(segments) -> status=%d", status);
             }
 
-            free(segments);
-            segments = NULL;
+            FREE(segments);
 
             wv_adjustVerts(&(items[nitems]), sgFocus);
             nitems++;
@@ -4472,18 +4798,13 @@ buildSceneGraph()
             if (igprim < 0) {
                 SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
             } else {
+                SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                 cntxt->gPrims[igprim].lWidth = 1.0;
             }
 
             /* add plotdata to meta data (if there is room) */
-            if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                sgMetaDataLen += MAX_METADATA_CHUNK;
-                RALLOC(sgMetaData, char, sgMetaDataLen);
-                RALLOC(sgTempData, char, sgMetaDataLen);
-            }
-
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[],", sgTempData, gpname);
+            addToSgMetaData("\"%s\":[],", gpname);
         }
 
         /* count the number of CQUAD4s in the file */
@@ -4500,8 +4821,7 @@ buildSceneGraph()
         SPRINT1(1, "   there are %d CQUAD4s", ncquad4);
 
         if (ncquad4 > 0) {
-            segments = (float *) malloc(24*ncquad4*sizeof(float));
-            if (segments == NULL) goto cleanup;
+            MALLOC(segments, float, 24*ncquad4);
 
             rewind(fp);
             i = 0;
@@ -4559,8 +4879,7 @@ buildSceneGraph()
                 SPRINT1(0, "ERROR:: wv_setData(segments) -> status=%d", status);
             }
 
-            free(segments);
-            segments = NULL;
+            FREE(segments);
 
             wv_adjustVerts(&(items[nitems]), sgFocus);
             nitems++;
@@ -4579,35 +4898,36 @@ buildSceneGraph()
             if (igprim < 0) {
                 SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
             } else {
+                SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
                 cntxt->gPrims[igprim].lWidth = 1.0;
             }
 
             /* add plotdata to meta data (if there is room) */
-            if (STRLEN(sgMetaData) >= sgMetaDataLen-1000) {
-                sgMetaDataLen += MAX_METADATA_CHUNK;
-                RALLOC(sgMetaData, char, sgMetaDataLen);
-                RALLOC(sgTempData, char, sgMetaDataLen);
-            }
-
-            STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-            snprintf(sgMetaData, sgMetaDataLen, "%s\"%s\":[],", sgTempData, gpname);
+            addToSgMetaData("\"%s\":[],", gpname);
         }
 
-        free(plotdata);
-        plotdata = NULL;
+        FREE(plotdata);
 
         fclose(fp);
     }
 
     /* finish the scene graph meta data */
-    sgMetaData[sgMetaDataLen-1] = '\0';
-    STRNCPY( sgTempData, sgMetaData, sgMetaDataLen);
-    snprintf(sgMetaData, sgMetaDataLen, "%s}", sgTempData);
+    sgMetaDataUsed--;
+    addToSgMetaData("}");
 
 cleanup:
-    if (plotdata != NULL) free(plotdata);
-    if (segments != NULL) free(segments);
+    if (enodes != NULL) EG_free(enodes);
+    if (eedges != NULL) EG_free(eedges);
+    if (efaces != NULL) EG_free(efaces);
 
+    FREE(plotdata);
+    FREE(pcolors );
+    FREE(segments);
+    FREE(segs    );
+    FREE(ivrts   );
+    FREE(tuft    );
+    FREE(Tris    );
 
     return status;
 }
@@ -4624,13 +4944,15 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
 {
     int       status = SUCCESS;         /* return status */
 
-    int       iface, iedge, atype, alen, attrs, head[3];
+    int       iface, iedge, inode, atype, alen, attrs, head[3];
     int       npnt, ipnt, ntri, itri, igprim, nseg, k;
     int       *segs=NULL, *ivrts=NULL;
     CINT      *ptype, *pindx, *tris, *tric;
     float     color[18];
     CDOUBLE   *xyz, *uv, *t;
+    double    xyz_dum[6];
     char      gpname[MAX_STRVAL_LEN];
+    ego       etess;
 
     CINT      *tempIlist;
     CDOUBLE   *tempRlist;
@@ -4647,18 +4969,21 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
     /* remove any graphic primitives that already exist */
     wv_removeAll(cntxt);
 
+    etess = MODL->body[ibody].etess;
+
     /* tessellate Body if not already tessellated */
-    if (MODL->body[ibody].etess == NULL) {
+    if (etess == NULL) {
         status = EG_attributeRet(MODL->body[ibody].ebody, "_tParams",
                                  &atype, &alen, &tempIlist, &tempRlist, &tempClist);
 
         if (status == SUCCESS && atype == ATTRREAL && alen == 3) {
             status = EG_makeTessBody(MODL->body[ibody].ebody, (double*)tempRlist,
-                                     &(MODL->body[ibody].etess));
+                                     &(etess));
         } else {
             SPRINT1(0, "ERROR:: cannot tessellate ibody %d", ibody);
         }
     }
+    SPLINT_CHECK_FOR_NULL(etess);
 
     /* loop through the Faces within the current Body */
     for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
@@ -4668,7 +4993,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
         attrs = WV_ON | WV_ORIENTATION;
 
         /* render the Triangles */
-        status = EG_getTessFace(MODL->body[ibody].etess, iface,
+        status = EG_getTessFace(etess, iface,
                                 &npnt, &xyz, &uv, &ptype, &pindx,
                                 &ntri, &tris, &tric);
         if (status != SUCCESS) {
@@ -4697,8 +5022,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
         }
 
         assert (nseg > 0);
-        segs = (int*) malloc(2*nseg*sizeof(int));
-        if (segs == NULL) goto cleanup;
+        MALLOC(segs, int, 2*nseg);
 
         nseg = 0;
         for (itri = 0; itri < ntri; itri++) {
@@ -4729,7 +5053,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
             SPRINT1(0, "ERROR:: wv_setData(segs) -> status=%d", status);
         }
 
-        free(segs);
+        FREE(segs);
 
         /* segment colors */
         color[0] = 0;   color[1] = 0;   color[2] = 0;
@@ -4743,13 +5067,15 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
         if (igprim < 0) {
             SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
         } else {
+            SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
             cntxt->gPrims[igprim].lWidth = 1.0;
         }
     }
 
     /* loop through the Edges within the current Body */
     for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
-        status = EG_getTessEdge(MODL->body[ibody].etess, iedge, &npnt, &xyz, &t);
+        status = EG_getTessEdge(etess, iedge, &npnt, &xyz, &t);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: EG_getTessEdge -> status=%d", status);
         }
@@ -4767,8 +5093,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
         wv_adjustVerts(&(items[0]), sgFocus);
 
         /* segments (bias-1) */
-        ivrts = (int*) malloc(2*(npnt-1)*sizeof(int));
-        if (ivrts == NULL) goto cleanup;
+        MALLOC(ivrts, int, 2*(npnt-1));
 
         for (ipnt = 0; ipnt < npnt-1; ipnt++) {
             ivrts[2*ipnt  ] = ipnt + 1;
@@ -4780,7 +5105,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
             SPRINT1(0, "ERROR:: wv_setData(ivrts) -> status=%d", status);
         }
 
-        free(ivrts);
+        FREE(ivrts);
 
         /* line colors */
         color[0] = 0;   color[1] = 1;   color[2] = 0;
@@ -4790,8 +5115,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
         }
 
         /* points */
-        ivrts = (int*) malloc(npnt*sizeof(int));
-        if (ivrts == NULL) goto cleanup;
+        MALLOC(ivrts, int, npnt);
 
         for (ipnt = 0; ipnt < npnt; ipnt++) {
             ivrts[ipnt] = ipnt + 1;
@@ -4802,7 +5126,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
             SPRINT1(0, "ERROR:: wv_setData(ivrts) -> status=%d", status);
         }
 
-        free(ivrts);
+        FREE(ivrts);
 
         /* point colors */
         color[0] = 0;   color[1] = 0;   color[2] = 0;
@@ -4816,6 +5140,8 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
         if (igprim < 0) {
             SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
         } else {
+            SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
             /* make line width 2 (does not work for ANGLE) */
             cntxt->gPrims[igprim].lWidth = 2.0;
 
@@ -4831,6 +5157,48 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
         }
     }
 
+    /* if ibody is a NodeBody, draw the Node */
+    if (MODL->body[ibody].botype == OCSM_NODE_BODY) {
+        inode = 1;
+
+        /* name and attributes */
+        snprintf(gpname, MAX_STRVAL_LEN-1, "Node %d", inode);
+        attrs = WV_ON;
+
+        /* vertices */
+        xyz_dum[0] = MODL->body[ibody].node[inode].x;
+        xyz_dum[1] = MODL->body[ibody].node[inode].y;
+        xyz_dum[2] = MODL->body[ibody].node[inode].z;
+        xyz_dum[3] = MODL->body[ibody].node[inode].x;
+        xyz_dum[4] = MODL->body[ibody].node[inode].y;
+        xyz_dum[5] = MODL->body[ibody].node[inode].z;
+
+        status = wv_setData(WV_REAL64, 2, (void*)xyz_dum, WV_VERTICES, &(items[0]));
+        if (status != SUCCESS) {
+            SPRINT1(0, "ERROR:: wv_setData(xyz) -> status=%d", status);
+        }
+
+        wv_adjustVerts(&(items[0]), sgFocus);
+
+        /* point colors */
+        color[0] = 0;   color[1] = 0;   color[2] = 0;
+        status = wv_setData(WV_REAL32, 1, (void*)color, WV_PCOLOR, &(items[1]));
+        if (status != SUCCESS) {
+            SPRINT1(0, "ERROR:: wv_setData(color) -> status=%d", status);
+        }
+
+        /* make graphic primitive */
+        igprim = wv_addGPrim(cntxt, gpname, WV_POINT, attrs, 2, items);
+        if (igprim < 0) {
+            SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
+        } else {
+            SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
+
+            /* make point size 5 */
+            cntxt->gPrims[igprim].pSize  = 5.0;
+        }
+    }
+
     /* draw Edges for last SheetBody or SolidBody */
     ibody = MODL->nbody;
     while (ibody > 1) {
@@ -4843,10 +5211,11 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
     }
 
     if (ibody > 0) {
+        etess = MODL->body[ibody].etess;
 
         /* loop through the Edges within the current Body */
         for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
-            status = EG_getTessEdge(MODL->body[ibody].etess, iedge, &npnt, &xyz, &t);
+            status = EG_getTessEdge(etess, iedge, &npnt, &xyz, &t);
             if (status != SUCCESS) {
                 SPRINT1(0, "ERROR:: EG_getTessEdge -> status=%d", status);
             }
@@ -4864,8 +5233,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
             wv_adjustVerts(&(items[0]), sgFocus);
 
             /* segments (bias-1) */
-            ivrts = (int*) malloc(2*(npnt-1)*sizeof(int));
-            if (ivrts == NULL) goto cleanup;
+            MALLOC(ivrts, int, 2*(npnt-1));
 
             for (ipnt = 0; ipnt < npnt-1; ipnt++) {
                 ivrts[2*ipnt  ] = ipnt + 1;
@@ -4877,7 +5245,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
                 SPRINT1(0, "ERROR:: wv_setData(ivrts) -> status=%d", status);
             }
 
-            free(ivrts);
+            FREE(ivrts);
 
             /* line colors */
             color[0] = 0.5;   color[1] = 0.5;   color[2] = 0.5;
@@ -4887,8 +5255,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
             }
 
             /* points */
-            ivrts = (int*) malloc(npnt*sizeof(int));
-            if (ivrts == NULL) goto cleanup;
+            MALLOC(ivrts, int, npnt);
 
             for (ipnt = 0; ipnt < npnt; ipnt++) {
                 ivrts[ipnt] = ipnt + 1;
@@ -4899,7 +5266,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
                 SPRINT1(0, "ERROR:: wv_setData(ivrts) -> status=%d", status);
             }
 
-            free(ivrts);
+            FREE(ivrts);
 
             /* point colors */
             color[0] = 0;   color[1] = 0;   color[2] = 0;
@@ -4951,7 +5318,7 @@ cleanupMemory(int    quiet)             /* (in)  =1 for no messages */
     status = ocsmFree(MODL);
     SPRINT2(1, "--> ocsmFree() -> status=%d (%s)", status, ocsmGetText(status));
 
-    /* remove tmp files (if they exist) and cleanup udp storage */
+    /* clean up the udp storage */
     status = ocsmFree(NULL);
     SPRINT2(1, "--> ocsmFree(NULL) -> status=%d (%s)", status, ocsmGetText(status));
 
@@ -4975,12 +5342,14 @@ cleanupMemory(int    quiet)             /* (in)  =1 for no messages */
 /***********************************************************************/
 
 static int
-getToken(char   *text,                  /* (in)  full text */
+getToken(char   text[],                 /* (in)  full text */
          int    nskip,                  /* (in)  tokens to skip */
          char   sep,                    /* (in)  separator character */
-         char   *token)                 /* (out) token */
+         char   token[])                /* (out) token */
 {
     int    lentok, i, count, iskip;
+
+    /* --------------------------------------------------------------- */
 
     token[0] = '\0';
     lentok   = 0;
@@ -5266,22 +5635,61 @@ cleanup:
 
 /***********************************************************************/
 /*                                                                     */
+/*   mesgCallbackFromOpenCSM - post a message from OpenCSM             */
+/*                                                                     */
+/***********************************************************************/
+
+void
+mesgCallbackFromOpenCSM(char mesg[])    /* (in)  message */
+{
+    int  status=SUCCESS;
+
+    ROUTINE(mesgCallbackFromOpenCSM);
+
+    /* --------------------------------------------------------------- */
+
+    /* make sure the messages buffer is big enough */
+    if (messages_len+strlen(mesg) > max_mesg_len-2) {
+        max_mesg_len += 4096;
+        SPRINT1(2, "increasing max_mesg_len=%d", max_mesg_len);
+
+        RALLOC(messages, char, max_mesg_len+1);
+    }
+
+    /* add the current message to the messages buffer */
+    strcat(messages, mesg);
+    strcat(messages, "\n");
+
+    messages_len += strlen(mesg);
+
+cleanup:
+    if (status != SUCCESS) {
+        SPRINT0(0, "ERROR:: max_mesg_len could not be increased");
+    }
+
+    return;
+}
+
+
+/***********************************************************************/
+/*                                                                     */
 /*   processBrowserToServer - process the message from client and create the response */
 /*                                                                     */
 /***********************************************************************/
 
 static int
-processBrowserToServer(char    *text)
+processBrowserToServer(char    text[])
 {
     int       status = SUCCESS;
 
     int       i, ibrch, itype, nlist, builtTo, buildStatus, ichar, iundo;
     int       ipmtr, jpmtr, nrow, ncol, irow, icol, index, iattr, actv, itemp;
     int       itoken1, itoken2, itoken3, ibody, onstack, direction=1, nwarn;
+    int       nclient;
     CINT      *tempIlist;
-    double    scale;
+    double    scale, dihedral;
     CDOUBLE   *tempRlist;
-    char      *pEnd, bname[33];
+    char      *pEnd, bname[MAX_NAME_LEN+1];
     CCHAR     *tempClist;
 
     char      *name=NULL,  *type=NULL, *valu=NULL;
@@ -5304,40 +5712,34 @@ processBrowserToServer(char    *text)
 
     /* --------------------------------------------------------------- */
 
-    name     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    type     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    valu     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    arg1     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    arg2     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    arg3     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    arg4     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    arg5     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    arg6     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    arg7     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    arg8     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    arg9     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    entry    = (char *) malloc(MAX_STR_LEN*sizeof(char));
-    temp     = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    temp2    = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    matrix   = (char *) malloc(MAX_EXPR_LEN*sizeof(char));
-    begs     = (char *) malloc(MAX_TOKN_LEN*sizeof(char));
-    vars     = (char *) malloc(MAX_TOKN_LEN*sizeof(char));
-    cons     = (char *) malloc(MAX_TOKN_LEN*sizeof(char));
-    segs     = (char *) malloc(MAX_TOKN_LEN*sizeof(char));
-    vars_out = (char *) malloc(MAX_TOKN_LEN*sizeof(char));
+    MALLOC(name,     char, MAX_EXPR_LEN);
+    MALLOC(type,     char, MAX_EXPR_LEN);
+    MALLOC(valu,     char, MAX_EXPR_LEN);
+    MALLOC(arg1,     char, MAX_EXPR_LEN);
+    MALLOC(arg2,     char, MAX_EXPR_LEN);
+    MALLOC(arg3,     char, MAX_EXPR_LEN);
+    MALLOC(arg4,     char, MAX_EXPR_LEN);
+    MALLOC(arg5,     char, MAX_EXPR_LEN);
+    MALLOC(arg6,     char, MAX_EXPR_LEN);
+    MALLOC(arg7,     char, MAX_EXPR_LEN);
+    MALLOC(arg8,     char, MAX_EXPR_LEN);
+    MALLOC(arg9,     char, MAX_EXPR_LEN);
+    MALLOC(entry,    char, MAX_STR_LEN);
+    MALLOC(temp,     char, MAX_EXPR_LEN);
+    MALLOC(temp2,    char, MAX_EXPR_LEN);
+    MALLOC(matrix,   char, MAX_EXPR_LEN);
+    MALLOC(begs,     char, MAX_TOKN_LEN);
+    MALLOC(vars,     char, MAX_TOKN_LEN);
+    MALLOC(cons,     char, MAX_TOKN_LEN);
+    MALLOC(segs,     char, MAX_TOKN_LEN);
+    MALLOC(vars_out, char, MAX_TOKN_LEN);
 
-    if (name  == NULL || type == NULL || valu  == NULL ||
-        arg1  == NULL || arg2 == NULL || arg3  == NULL ||
-        arg4  == NULL || arg5 == NULL || arg6  == NULL ||
-        arg7  == NULL || arg8 == NULL || arg9  == NULL ||
-        entry == NULL || temp == NULL || temp2 == NULL || matrix == NULL ||
-        begs  == NULL || vars == NULL || cons  == NULL ||
-        segs  == NULL || vars_out == NULL                ) {
-        SPRINT0(0, "ERROR:: error mallocing arrays in processBrowserToServer");
-        exit(EXIT_FAILURE);
+    /* show message, except if one associated with syncing multiple clients */
+    if (strncmp(text, "xform|",      6) != 0 &&
+        strncmp(text, "lastPoint|", 10) != 0 &&
+        strncmp(text, "toggle|",     7) != 0   ) {
+        SPRINT1(1, "\n>>> browser2server(text=%s)", text);
     }
-
-    SPRINT1(1, ">>> browser2server(text=%s)", text);
 
     /* initialize the response */
     response_len = 0;
@@ -5349,8 +5751,113 @@ processBrowserToServer(char    *text)
     /* "identify|" */
     } else if (strncmp(text, "identify|", 9) == 0) {
 
+        nclient = wv_nClientServer(serverNum);
+        printf("********************************************\n");
+        printf("server %d has %d clients\n", serverNum, nclient);
+        printf("********************************************\n");
+
         /* build the response */
-        snprintf(response, max_resp_len, "identify|serveCSM|");
+        snprintf(response, max_resp_len, "identify|serveCSM|%d|", nclient);
+        response_len = STRLEN(response);
+
+    /* "userName|name|passTo|" */
+    } else if (strncmp(text, "userName|", 9) == 0) {
+
+        /* extract arguments */
+        getToken(text, 1, '|', arg1);
+        getToken(text, 2, '|', arg2);
+
+        /* if second argument is *closed*, then remove user from usernames */
+        if (strcmp(arg2, "*closed*") == 0) {
+            strcpy(temp, usernames);
+            strcpy(usernames, "|");
+            for (i = 1; i < MAX_CLIENTS; i++) {
+                getToken(temp, i, '|', arg3);
+
+                /* end of users */
+                if (STRLEN(arg3) <= 0) {
+                    break;
+
+                /* this user should be removed */
+                } else if (strcmp(arg3, arg1) == 0) {
+
+                    /* if this user has the ball, give it to first user in list */
+                    if (i-1 == hasBall) {
+                        hasBall = 0;
+
+                    /* if the user with the ball is "above" the user to
+                       be removed, decrement hasBall */
+                    } else if (i <= hasBall) {
+                        hasBall--;
+                    }
+
+                /* user still exists */
+                } else {
+                    strncat(usernames, arg3, 1023);
+                    strncat(usernames, "|",  1023);
+                }
+            }
+
+        /* otherwise add new user if not already in list */
+        } else {
+            snprintf(temp, MAX_EXPR_LEN,  "|%s|", arg1);
+            if (strstr(usernames, temp) == 0) {
+                strncat(usernames, arg1, 1023);
+                strncat(usernames, "|",  1023);
+            }
+        }
+
+        SPLINT_CHECK_FOR_NULL(usernames);
+
+        /* update the browser with the ball if second argument is not blank */
+        if (strlen(arg2) > 0) {
+            for (i = 1; i < MAX_CLIENTS; i++) {
+                getToken(usernames, i, '|', arg3);
+                if (strcmp(arg2, arg3) == 0) {
+                    hasBall = i-1;
+                    break;
+                }
+            }
+        }
+
+        /* inform all browsers of changes */
+        snprintf(response, max_resp_len, "userName|%d%s", hasBall, usernames);
+        response_len = STRLEN(response);
+
+    /* "xform|width|height|scale|matrix|" */
+    } else if (strncmp(text, "xform|", 6) == 0) {
+
+        snprintf(response, max_resp_len, "%s", text);
+        response_len = STRLEN(response);
+
+    /* "lastPoint|x|y|z|" or "lastPoint|off|" */
+    } else if (strncmp(text, "lastPoint|", 10) == 0) {
+
+        snprintf(response, max_resp_len, "%s", text);
+        response_len = STRLEN(response);
+
+    /* "toggle|inode|icol|state|" */
+    } else if (strncmp(text, "toggle|", 7) == 0) {
+
+        snprintf(response, max_resp_len, "%s", text);
+        response_len = STRLEN(response);
+
+    /* "resetMode|" */
+    } else if (strncmp(text, "resetMode|", 10) == 0) {
+
+        snprintf(response, max_resp_len, "%s", text);
+        response_len = STRLEN(response);
+
+    /* "sendState|" */
+    } else if (strncmp(text, "sendState|", 10) == 0) {
+
+        snprintf(response, max_resp_len, "%s", text);
+        response_len = STRLEN(response);
+
+    /* "message|text|" */
+    } else if (strncmp(text, "message|", 8) == 0) {
+
+        snprintf(response, max_resp_len, "%s", text);
         response_len = STRLEN(response);
 
     /* "nextStep|0|" */
@@ -5368,17 +5875,20 @@ processBrowserToServer(char    *text)
 
         /* find next/previous SheetBody or SolidBody */
         if        (direction == +1 || direction == -1) {
-            curStep += direction;
+            curStep  += direction;
         } else if (direction == +2) {
-            curStep = MODL->nbody;
+            curStep   = MODL->nbody;
+            direction = -1;
         } else if (direction == -2) {
-            curStep = 1;
+            curStep   = 1;
+            direction = +1;
         } else {
-            curStep = 0;
+            curStep   = 0;
         }
 
         while (curStep > 0 && curStep <= MODL->nbody) {
-            if (MODL->body[curStep].botype == OCSM_WIRE_BODY  ||
+            if (MODL->body[curStep].botype == OCSM_NODE_BODY  ||
+                MODL->body[curStep].botype == OCSM_WIRE_BODY  ||
                 MODL->body[curStep].botype == OCSM_SHEET_BODY ||
                 MODL->body[curStep].botype == OCSM_SOLID_BODY   ) {
                 buildSceneGraphBody(curStep);
@@ -5422,7 +5932,7 @@ processBrowserToServer(char    *text)
         /* constant Parameters first */
         if (MODL != NULL) {
             for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
-                if (MODL->pmtr[ipmtr].type != OCSM_CONSTANT) continue;
+                if (MODL->pmtr[ipmtr].type != OCSM_CONPMTR) continue;
 
                 if (strlen(response) > 10) {
                     addToResponse(",");
@@ -5464,8 +5974,8 @@ processBrowserToServer(char    *text)
 
             /* external and configuration Parameters second */
             for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
-                if (MODL->pmtr[ipmtr].type != OCSM_EXTERNAL &&
-                    MODL->pmtr[ipmtr].type != OCSM_CONFIG     ) continue;
+                if (MODL->pmtr[ipmtr].type != OCSM_DESPMTR &&
+                    MODL->pmtr[ipmtr].type != OCSM_CFGPMTR   ) continue;
 
                 if (strlen(response) > 10) {
                     addToResponse(",");
@@ -5507,8 +6017,8 @@ processBrowserToServer(char    *text)
 
             /* internal Parameters last */
             for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
-                if (MODL->pmtr[ipmtr].type != OCSM_INTERNAL &&
-                    MODL->pmtr[ipmtr].type != OCSM_OUTPUT     ) continue;
+                if (MODL->pmtr[ipmtr].type != OCSM_LOCALVAR &&
+                    MODL->pmtr[ipmtr].type != OCSM_OUTPMTR  ) continue;
 
                 /* skip if string-valued */
                 if (MODL->pmtr[ipmtr].nrow == 0 || MODL->pmtr[ipmtr].ncol == 0) {
@@ -5538,12 +6048,13 @@ processBrowserToServer(char    *text)
                     }
                 }
 
+                index = 0;
                 for (irow = 1; irow <= MODL->pmtr[ipmtr].nrow; irow++) {
                     for (icol = 1; icol <= MODL->pmtr[ipmtr].ncol; icol++) {
                         if (irow < MODL->pmtr[ipmtr].nrow || icol < MODL->pmtr[ipmtr].ncol) {
-                            snprintf(entry, MAX_STR_LEN, "0,");
+                            snprintf(entry, MAX_STR_LEN, "%lg,", MODL->pmtr[ipmtr].dot[index++]);
                         } else {
-                            snprintf(entry, MAX_STR_LEN, "0]");
+                            snprintf(entry, MAX_STR_LEN, "%lg]", MODL->pmtr[ipmtr].dot[index++]);
                         }
                         addToResponse(entry);
                     }
@@ -5578,7 +6089,7 @@ processBrowserToServer(char    *text)
         }
 
         /* build the response */
-        status = ocsmNewPmtr(MODL, name, OCSM_EXTERNAL, nrow, ncol);
+        status = ocsmNewPmtr(MODL, name, OCSM_DESPMTR, nrow, ncol);
 
         if (status == SUCCESS) {
             ipmtr = MODL->npmtr;
@@ -5640,6 +6151,7 @@ processBrowserToServer(char    *text)
 
             if (getToken(text, 4, '|', arg4)) {
                 status = ocsmSetValu(MODL, ipmtr, irow, icol, arg4);
+                printf("ocsmSetValu -> status=%d\n", status);
                 if (status != SUCCESS) {
                     SPRINT5(0, "ERROR:: ocsmSetValu(%d,%d,%d,%s) detected: %s",
                             ipmtr, irow, icol, arg4, ocsmGetText(status));
@@ -5649,15 +6161,16 @@ processBrowserToServer(char    *text)
             }
 
             /* build the response */
+            printf("before building response -> status=%d\n", status);
             if (status == SUCCESS) {
                 snprintf(response, max_resp_len, "setPmtr|");
             } else {
-                snprintf(response, max_resp_len, "ERROR:: setPmtr(%d,%d,%d,%s) detected: %s",
-                         ipmtr, irow, icol, arg4, ocsmGetText(status));
+                snprintf(response, max_resp_len, "setPmtr|ERROR:: %s",
+                         ocsmGetText(status));
             }
         } else {
-            snprintf(response, max_resp_len, "ERROR:: setPmtr(%s) detected: %s",
-                     arg1, ocsmGetText(OCSM_NAME_NOT_FOUND));
+            snprintf(response, max_resp_len, "setPmtr|ERROR:: %s",
+                     ocsmGetText(OCSM_NAME_NOT_FOUND));
         }
         response_len = STRLEN(response);
 
@@ -5712,13 +6225,24 @@ processBrowserToServer(char    *text)
         status = ocsmSave(MODL, "autosave.csm");
         SPRINT1(2, "ocsmSave(autosave.csm) -> status=%d", status);
 
-    /* "clrVels|" */
+    /* "clrVels|mode|" */
     } else if (strncmp(text, "clrVels|", 8) == 0) {
 
         /* write journal entry */
         if (jrnl_out != NULL) {
             fprintf(jrnl_out, "%s\n", text);
             fflush( jrnl_out);
+        }
+
+        /* extract argument */
+        getToken(text, 1, '|', arg1);
+
+        if (strcmp(arg1, ".") == 0) {
+            // do not change tessel flag
+        } else if (strcmp(arg1, "tess") == 0) {
+            tessel = 1;
+        } else {                        // default is geometry sensitivities
+            tessel = 0;
         }
 
         status = ocsmSetVelD(MODL, 0, 0, 0, 0.0);
@@ -6274,12 +6798,6 @@ processBrowserToServer(char    *text)
             SPRINT1(0, "ERROR:: ocsmFree -> status=%d", status);
         }
 
-//$$$        /* remove temp files and clean udp cache */
-//$$$        status = ocsmFree(NULL);
-//$$$        if (status != SUCCESS) {
-//$$$            SPRINT1(0, "ERROR:: ocsmFree -> status=%d", status);
-//$$$        }
-
         /* load an empty MODL */
         filename[0] = '\0';
         status = ocsmLoad(filename, &modl);
@@ -6288,7 +6806,7 @@ processBrowserToServer(char    *text)
         }
 
         MODL = (modl_T *)modl;
-        if(filelist != NULL) free(filelist);
+        if(filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: ocsmGetFilelist -> status=%d", status);
@@ -6299,6 +6817,12 @@ processBrowserToServer(char    *text)
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: ocsmLoadDict -> status=%d", status);
         }
+
+        status = ocsmRegMesgCB(modl, mesgCallbackFromOpenCSM);
+        if (status < EGADS_SUCCESS) goto cleanup;
+
+        status = ocsmRegSizeCB(modl, sizeCallbackFromOpenCSM);
+        if (status < EGADS_SUCCESS) goto cleanup;
 
         if (strlen(despname) > 0) {
             status = ocsmUpdateDespmtrs(MODL, despname);
@@ -6343,18 +6867,12 @@ processBrowserToServer(char    *text)
             SPRINT1(0, "ERROR:: ocsmFree -> status=%d", status);
         }
 
-//$$$        /* remove temp files and clean udp cache */
-//$$$        status = ocsmFree(NULL);
-//$$$        if (status != SUCCESS) {
-//$$$            SPRINT1(0, "ERROR:: ocsmFree -> status=%d", status);
-//$$$        }
-
         /* load the new MODL */
         status = ocsmLoad(filename, &modl);
         if (status != SUCCESS) {
             MODL = (modl_T *) modl;
 
-            snprintf(response, max_resp_len, "%s",
+            snprintf(response, max_resp_len, "%s||",
                      MODL->sigMesg);
 
             buildSceneGraph();
@@ -6367,6 +6885,12 @@ processBrowserToServer(char    *text)
                         dictname, ocsmGetText(status));
             }
 
+            status = ocsmRegMesgCB(modl, mesgCallbackFromOpenCSM);
+            if (status < EGADS_SUCCESS) goto cleanup;
+
+            status = ocsmRegSizeCB(modl, sizeCallbackFromOpenCSM);
+            if (status < EGADS_SUCCESS) goto cleanup;
+
             if (strlen(despname) > 0) {
                 status = ocsmUpdateDespmtrs(MODL, despname);
                 if (status < EGADS_SUCCESS) goto cleanup;
@@ -6375,22 +6899,24 @@ processBrowserToServer(char    *text)
             status = buildBodys(0, &builtTo, &buildStatus, &nwarn);
 
             if (status != SUCCESS || buildStatus != SUCCESS) {
-                snprintf(response, max_resp_len, "%s",
-                         MODL->sigMesg);
-
+                snprintf(response, max_resp_len, "%s|%s|",
+                         MODL->sigMesg, messages);
             } else {
                 onstack = 0;
                 for (ibody = 1; ibody <= MODL->nbody; ibody++) {
                     onstack += MODL->body[ibody].onstack;
                 }
 
-                snprintf(response, max_resp_len, "build|%d|%d|",
-                         abs(builtTo), onstack);
+                snprintf(response, max_resp_len, "build|%d|%d|%s|",
+                         abs(builtTo), onstack, messages);
             }
+
+            messages[0] = '\0';
+            messages_len = 0;
         }
 
         MODL = (modl_T*)modl;
-        if (filelist != NULL) free(filelist);
+        if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: ocsmGetFilelist -> status=%d", status);
@@ -6433,11 +6959,12 @@ processBrowserToServer(char    *text)
         }
 
         MODL = (modl_T *)modl;
-        if (filelist != NULL) free(filelist);
+        if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: ocsmGetFilelist -> status=%d", status);
         }
+        SPLINT_CHECK_FOR_NULL(filelist);
         updatedFilelist = 0;
 
         /* build the response */
@@ -6497,6 +7024,7 @@ processBrowserToServer(char    *text)
 
         /* open the casefile and overwrite */
         fp = fopen(subfilename, "w");
+        SPLINT_CHECK_FOR_NULL(fp);
 
         ichar = 14;
         while (text[ichar++] != '|') {
@@ -6512,6 +7040,7 @@ processBrowserToServer(char    *text)
 
     /* "setCsmFileMid|" */
     } else if (strncmp(text, "setCsmFileMid|", 14) == 0) {
+        SPLINT_CHECK_FOR_NULL(fp);
 
         ichar = 14;
         while (text[ichar] != '\0') {
@@ -6520,6 +7049,7 @@ processBrowserToServer(char    *text)
 
     /* "setCsmFileEnd|" */
     } else if (strncmp(text, "setCsmFileEnd|", 14) == 0) {
+        SPLINT_CHECK_FOR_NULL(fp);
 
         fclose(fp);
         fp = NULL;
@@ -6533,8 +7063,11 @@ processBrowserToServer(char    *text)
         if (status != SUCCESS) {
             MODL = (modl_T *) modl;
 
-            snprintf(response, max_resp_len, "%s",
+            snprintf(response, max_resp_len, "%s||",
                      MODL->sigMesg);
+
+            /* clear any previous builds from the scene graph */
+            buildSceneGraph();
         } else {
             MODL = (modl_T *) modl;
 
@@ -6542,6 +7075,12 @@ processBrowserToServer(char    *text)
             if (status != SUCCESS) {
                 SPRINT1(0, "ERROR:: ocsmLoadDict -> status=%d", status);
             }
+
+            status = ocsmRegMesgCB(modl, mesgCallbackFromOpenCSM);
+            if (status < EGADS_SUCCESS) goto cleanup;
+
+            status = ocsmRegSizeCB(modl, sizeCallbackFromOpenCSM);
+            if (status < EGADS_SUCCESS) goto cleanup;
 
             if (strlen(despname) > 0) {
                 status = ocsmUpdateDespmtrs(MODL, despname);
@@ -6567,14 +7106,108 @@ processBrowserToServer(char    *text)
             MODL->context = saved_MODL->context;
 
             /* starting at the beginning of the Branches, mark the Branch
-               as not dirty of it has same type as the saved_MODL */
+               as  dirty if its type, name, arguements (except tmp_OpenCSM_),
+               or attributes differ from the saved_MODL */
             for (ibrch = 1; ibrch <= MODL->nbrch; ibrch++) {
                 MODL->brch[ibrch].dirty = 0;
+
                 if (ibrch > saved_MODL->nbrch) {
                     MODL->brch[ibrch].dirty = 1;
-                    break;
+                    goto recycle_message;
                 } else if (MODL->brch[ibrch].type != saved_MODL->brch[ibrch].type) {
                     MODL->brch[ibrch].dirty = 1;
+                    goto recycle_message;
+                } else if (strcmp(MODL->brch[ibrch].name, saved_MODL->brch[ibrch].name) != 0) {
+                    MODL->brch[ibrch].dirty = 1;
+                    goto recycle_message;
+                } else if (MODL->brch[ibrch].narg != saved_MODL->brch[ibrch].narg) {
+                    MODL->brch[ibrch].dirty = 1;
+                    goto recycle_message;
+                }
+
+                if (MODL->brch[ibrch].narg >= 1) {
+                    if (strcmp(MODL->brch[ibrch].arg1, saved_MODL->brch[ibrch].arg1) != 0) {
+                        MODL->brch[ibrch].dirty = 1;
+                        goto recycle_message;
+                    }
+                }
+                if (MODL->brch[ibrch].narg >= 2) {
+                    if (strcmp(MODL->brch[ibrch].arg2, saved_MODL->brch[ibrch].arg2) != 0) {
+                        MODL->brch[ibrch].dirty = 1;
+                        goto recycle_message;
+                    }
+                }
+                if (MODL->brch[ibrch].narg >= 3) {
+                    if        (MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(MODL->brch[ibrch].arg3, "tmp_OpenCSM_", 12) != 0) {
+                    } else if (MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(MODL->brch[ibrch].arg3, "tmp_OpenCSM_", 12) != 0) {
+                    } else if (strcmp(MODL->brch[ibrch].arg3, saved_MODL->brch[ibrch].arg3) != 0) {
+                        MODL->brch[ibrch].dirty = 1;
+                        goto recycle_message;
+                    }
+                }
+                if (MODL->brch[ibrch].narg >= 4) {
+                    if (strcmp(MODL->brch[ibrch].arg4, saved_MODL->brch[ibrch].arg4) != 0) {
+                        MODL->brch[ibrch].dirty = 1;
+                        goto recycle_message;
+                    }
+                }
+                if (MODL->brch[ibrch].narg >= 5) {
+                    if        (MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(MODL->brch[ibrch].arg5, "tmp_OpenCSM_", 12) != 0) {
+                    } else if (MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(MODL->brch[ibrch].arg5, "tmp_OpenCSM_", 12) != 0) {
+                    } else if (strcmp(MODL->brch[ibrch].arg5, saved_MODL->brch[ibrch].arg5) != 0) {
+                        MODL->brch[ibrch].dirty = 1;
+                        goto recycle_message;
+                    }
+                }
+                if (MODL->brch[ibrch].narg >= 6) {
+                    if (strcmp(MODL->brch[ibrch].arg6, saved_MODL->brch[ibrch].arg6) != 0) {
+                        MODL->brch[ibrch].dirty = 1;
+                        goto recycle_message;
+                    }
+                }
+                if (MODL->brch[ibrch].narg >= 7) {
+                    if        (MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(MODL->brch[ibrch].arg7, "tmp_OpenCSM_", 12) != 0) {
+                    } else if (MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(MODL->brch[ibrch].arg7, "tmp_OpenCSM_", 12) != 0) {
+                    } else if (strcmp(MODL->brch[ibrch].arg7, saved_MODL->brch[ibrch].arg7) != 0) {
+                        MODL->brch[ibrch].dirty = 1;
+                        goto recycle_message;
+                    }
+                }
+                if (MODL->brch[ibrch].narg >= 8) {
+                    if (strcmp(MODL->brch[ibrch].arg8, saved_MODL->brch[ibrch].arg8) != 0) {
+                        MODL->brch[ibrch].dirty = 1;
+                        goto recycle_message;
+                    }
+                }
+                if (MODL->brch[ibrch].narg >= 9) {
+                    if        (MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(MODL->brch[ibrch].arg9, "tmp_OpenCSM_", 12) != 0) {
+                    } else if (MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(MODL->brch[ibrch].arg9, "tmp_OpenCSM_", 12) != 0) {
+                    } else if (strcmp(MODL->brch[ibrch].arg9, saved_MODL->brch[ibrch].arg9) != 0) {
+                        MODL->brch[ibrch].dirty = 1;
+                        goto recycle_message;
+                    }
+                }
+
+                if (MODL->brch[ibrch].nattr != saved_MODL->brch[ibrch].nattr) {
+                    MODL->brch[ibrch].dirty = 1;
+                } else {
+                    for (iattr = 0; iattr < MODL->brch[ibrch].nattr; iattr++) {
+                        if        (strcmp(MODL->brch[ibrch].attr[iattr].name, saved_MODL->brch[ibrch].attr[iattr].name) != 0) {
+                            MODL->brch[ibrch].dirty = 1;
+                            goto recycle_message;
+                        } else if (strcmp(MODL->brch[ibrch].attr[iattr].defn, saved_MODL->brch[ibrch].attr[iattr].defn) != 0) {
+                            MODL->brch[ibrch].dirty = 1;
+                            goto recycle_message;
+                        } else if (MODL->brch[ibrch].attr[iattr].type != saved_MODL->brch[ibrch].attr[iattr].type) {
+                            MODL->brch[ibrch].dirty = 1;
+                            goto recycle_message;
+                        }
+                    }
+                }
+
+            recycle_message:
+                if (MODL->brch[ibrch].dirty > 0) {
+                    SPRINT1(1, "    recycling disabled starting at Branch %d because of file differences", ibrch);
                     break;
                 }
             }
@@ -6583,7 +7216,7 @@ processBrowserToServer(char    *text)
         }
 
         MODL = (modl_T*)modl;
-        if (filelist != NULL) free(filelist);
+        if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: ocsmGetFilelist -> status=%d", status);
@@ -6626,17 +7259,20 @@ processBrowserToServer(char    *text)
         status = buildBodys(ibrch, &builtTo, &buildStatus, &nwarn);
 
         if (status != SUCCESS || buildStatus != SUCCESS) {
-            snprintf(response, max_resp_len, "%s",
-                     MODL->sigMesg);
+            snprintf(response, max_resp_len, "%s|%s|",
+                     MODL->sigMesg, messages);
         } else {
             onstack = 0;
             for (ibody = 1; ibody <= MODL->nbody; ibody++) {
                 onstack += MODL->body[ibody].onstack;
             }
 
-            snprintf(response, max_resp_len, "build|%d|%d|",
-                     abs(builtTo), onstack);
+            snprintf(response, max_resp_len, "build|%d|%d|%s|",
+                     abs(builtTo), onstack, messages);
         }
+
+        messages[0] = '\0';
+        messages_len = 0;
 
         /* disable -loadEgads */
         loadEgads = 0;
@@ -6689,11 +7325,7 @@ processBrowserToServer(char    *text)
         if (itemp > max_resp_len) {
             max_resp_len = itemp + 1;
 
-            response = (char*) realloc(response, (max_resp_len+1)*sizeof(char));
-            if (response == NULL) {
-                SPRINT0(0, "ERROR:: error mallocing response");
-                exit(EXIT_FAILURE);
-            }
+            RALLOC(response, char, max_resp_len+1);
         }
 
         if (status != SUCCESS) {
@@ -6853,6 +7485,36 @@ processBrowserToServer(char    *text)
             response_len = STRLEN(response);
         }
 
+    /* "makeEBody|ibody|dihedral|ents|" */
+    } else if (strncmp(text, "makeEBody|", 10) == 0) {
+
+        /* extract arguments */
+        ibody    = 0;
+        dihedral = 0;
+        if (getToken(text, 1, '|', arg1)) ibody    = strtol(arg1, &pEnd, 10);
+        if (getToken(text, 2, '|', arg2)) dihedral = strtod(arg2, &pEnd);
+        getToken(text, 3, '|', arg3);
+
+        /* make or delete the EBody */
+        if (strcmp(arg3, ".") == 0) {
+            status = ocsmMakeEBody(MODL, ibody, dihedral, NULL);
+        } else {
+            status = ocsmMakeEBody(MODL, ibody, dihedral, arg3);
+        }
+
+        /* update the scene graph before the response */
+        if (status == SUCCESS && batch == 0) {
+            buildSceneGraph();
+        }
+
+        /* build the response */
+        if (status == SUCCESS) {
+            snprintf(response, max_resp_len, "makeEBody|");
+        } else {
+            snprintf(response, max_resp_len, "makeEBody|ERROR:: unable to make EBody(s) status=%d", status);
+        }
+        response_len = STRLEN(response);
+
     /* "setLims|type|lo|hi|" */
     } else if (strncmp(text, "setLims|", 8) == 0) {
 
@@ -6861,11 +7523,24 @@ processBrowserToServer(char    *text)
         if (getToken(text, 2, '|', arg2)) lims[0]  = strtod(arg2, &pEnd);
         if (getToken(text, 3, '|', arg3)) lims[1]  = strtod(arg3, &pEnd);
 
+        /* handle special case of Ereps */
+        if (plotType < 6) {
+            if (MODL->erepAtEnd == 1) {
+                status = buildBodys(0, &builtTo, &buildStatus, &nwarn);
+                if (status != SUCCESS) goto cleanup;
+            }
+        } else {
+            if (MODL->erepAtEnd == 0) {
+                status = buildBodys(0, &builtTo, &buildStatus, &nwarn);
+                if (status != SUCCESS) goto cleanup;
+            }
+        }
+
         /* build the response */
         snprintf(response, max_resp_len, "setLims|");
         response_len = STRLEN(response);
 
-        /* update the scene graph */
+        /* update the scene graph (after clearing the meta data) */
         if (batch == 0) {
             buildSceneGraph();
         }
@@ -6917,29 +7592,224 @@ processBrowserToServer(char    *text)
     status = SUCCESS;
 
 cleanup:
-    free(vars_out);
-    free(segs);
-    free(cons);
-    free(vars);
-    free(begs);
-    free(matrix);
-    free(temp2);
-    free(temp);
-    free(entry);
-    free(arg9);
-    free(arg8);
-    free(arg7);
-    free(arg6);
-    free(arg5);
-    free(arg4);
-    free(arg3);
-    free(arg2);
-    free(arg1);
-    free(valu);
-    free(type);
-    free(name);
+    FREE(vars_out);
+    FREE(segs);
+    FREE(cons);
+    FREE(vars);
+    FREE(begs);
+    FREE(matrix);
+    FREE(temp2);
+    FREE(temp);
+    FREE(entry);
+    FREE(arg9);
+    FREE(arg8);
+    FREE(arg7);
+    FREE(arg6);
+    FREE(arg5);
+    FREE(arg4);
+    FREE(arg3);
+    FREE(arg2);
+    FREE(arg1);
+    FREE(valu);
+    FREE(type);
+    FREE(name);
 
     return status;
+}
+
+
+/***********************************************************************/
+/*                                                                     */
+/*   sizeCallbackFromOpenCSM - change size of a DESPMTR                */
+/*                                                                     */
+/***********************************************************************/
+
+void
+sizeCallbackFromOpenCSM(void   *Modl,   /* (in)  pointer to MODL */
+                        int    ipmtr,   /* (in)  Parameter index (bias-1) */
+                        int    nrow,    /* (in)  new number of rows */
+                        int    ncol)    /* (in)  new number of columns */
+{
+
+    int    status=SUCCESS, irow, icol, index;
+
+    char   *entry=NULL;
+
+    modl_T *MODL = (modl_T*)Modl;
+
+    ROUTINE(sizeCallbackFromOpenCSM);
+
+    /* --------------------------------------------------------------- */
+
+    /* check that Modl is not NULL */
+    if (MODL == NULL) {
+        goto cleanup;
+    }
+
+    if (ipmtr >= 1 && ipmtr <= MODL->npmtr) {
+        SPRINT3(2, "Size of %s changed to (%d,%d)", MODL->pmtr[ipmtr].name, nrow, ncol);
+    }
+
+    /* no further processor if webViewer is no up yet */
+    if (cntxt == NULL) {
+        SPRINT0(2, "WebViewer not up yet");
+        goto cleanup;
+    }
+
+    MALLOC(entry, char, MAX_STR_LEN);
+
+    /* build the response in JSON format */
+    snprintf(response, max_resp_len, "getPmtrs|[");
+    response_len = STRLEN(response);
+
+    /* constant Parameters first */
+    if (MODL != NULL) {
+        for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
+            if (MODL->pmtr[ipmtr].type != OCSM_CONPMTR) continue;
+
+            if (strlen(response) > 10) {
+                addToResponse(",");
+            }
+
+            snprintf(entry, MAX_STR_LEN, "{\"name\":\"%s\",\"type\":%d,\"nrow\":%d,\"ncol\":%d,\"value\":[",
+                     MODL->pmtr[ipmtr].name,
+                     MODL->pmtr[ipmtr].type,
+                     MODL->pmtr[ipmtr].nrow,
+                     MODL->pmtr[ipmtr].ncol);
+            addToResponse(entry);
+
+            index = 0;
+            for (irow = 1; irow <= MODL->pmtr[ipmtr].nrow; irow++) {
+                for (icol = 1; icol <= MODL->pmtr[ipmtr].ncol; icol++) {
+                    if (irow < MODL->pmtr[ipmtr].nrow || icol < MODL->pmtr[ipmtr].ncol) {
+                        snprintf(entry, MAX_STR_LEN, "%lg,", MODL->pmtr[ipmtr].value[index++]);
+                    } else {
+                        snprintf(entry, MAX_STR_LEN, "%lg],\"dot\":[", MODL->pmtr[ipmtr].value[index++]);
+                    }
+                    addToResponse(entry);
+                    }
+            }
+
+            index = 0;
+            for (irow = 1; irow <= MODL->pmtr[ipmtr].nrow; irow++) {
+                for (icol = 1; icol <= MODL->pmtr[ipmtr].ncol; icol++) {
+                    if (irow < MODL->pmtr[ipmtr].nrow || icol < MODL->pmtr[ipmtr].ncol) {
+                        snprintf(entry, MAX_STR_LEN, "%lg,", MODL->pmtr[ipmtr].dot[index++]);
+                    } else {
+                        snprintf(entry, MAX_STR_LEN, "%lg]", MODL->pmtr[ipmtr].dot[index++]);
+                    }
+                    addToResponse(entry);
+                }
+            }
+
+            addToResponse("}");
+        }
+
+        /* external and configuration Parameters second */
+        for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
+            if (MODL->pmtr[ipmtr].type != OCSM_DESPMTR &&
+                MODL->pmtr[ipmtr].type != OCSM_CFGPMTR   ) continue;
+
+            if (strlen(response) > 10) {
+                addToResponse(",");
+            }
+
+            snprintf(entry, MAX_STR_LEN, "{\"name\":\"%s\",\"type\":%d,\"nrow\":%d,\"ncol\":%d,\"value\":[",
+                     MODL->pmtr[ipmtr].name,
+                     MODL->pmtr[ipmtr].type,
+                     MODL->pmtr[ipmtr].nrow,
+                     MODL->pmtr[ipmtr].ncol);
+            addToResponse(entry);
+
+            index = 0;
+            for (irow = 1; irow <= MODL->pmtr[ipmtr].nrow; irow++) {
+                for (icol = 1; icol <= MODL->pmtr[ipmtr].ncol; icol++) {
+                    if (irow < MODL->pmtr[ipmtr].nrow || icol < MODL->pmtr[ipmtr].ncol) {
+                        snprintf(entry, MAX_STR_LEN, "%lg,", MODL->pmtr[ipmtr].value[index++]);
+                    } else {
+                        snprintf(entry, MAX_STR_LEN, "%lg],\"dot\":[", MODL->pmtr[ipmtr].value[index++]);
+                    }
+                    addToResponse(entry);
+                }
+            }
+
+            index = 0;
+            for (irow = 1; irow <= MODL->pmtr[ipmtr].nrow; irow++) {
+                for (icol = 1; icol <= MODL->pmtr[ipmtr].ncol; icol++) {
+                    if (irow < MODL->pmtr[ipmtr].nrow || icol < MODL->pmtr[ipmtr].ncol) {
+                        snprintf(entry, MAX_STR_LEN, "%lg,", MODL->pmtr[ipmtr].dot[index++]);
+                    } else {
+                        snprintf(entry, MAX_STR_LEN, "%lg]", MODL->pmtr[ipmtr].dot[index++]);
+                    }
+                    addToResponse(entry);
+                }
+            }
+
+            addToResponse("}");
+        }
+
+        /* internal Parameters last */
+        for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
+            if (MODL->pmtr[ipmtr].type != OCSM_LOCALVAR &&
+                MODL->pmtr[ipmtr].type != OCSM_OUTPMTR  ) continue;
+
+            /* skip if string-valued */
+            if (MODL->pmtr[ipmtr].nrow == 0 || MODL->pmtr[ipmtr].ncol == 0) {
+                continue;
+            }
+
+            if (strlen(response) > 10) {
+                addToResponse(",");
+            }
+
+            snprintf(entry, MAX_STR_LEN, "{\"name\":\"%s\",\"type\":%d,\"nrow\":%d,\"ncol\":%d,\"value\":[",
+                     MODL->pmtr[ipmtr].name,
+                     MODL->pmtr[ipmtr].type,
+                     MODL->pmtr[ipmtr].nrow,
+                     MODL->pmtr[ipmtr].ncol);
+            addToResponse(entry);
+
+            index = 0;
+            for (irow = 1; irow <= MODL->pmtr[ipmtr].nrow; irow++) {
+                for (icol = 1; icol <= MODL->pmtr[ipmtr].ncol; icol++) {
+                    if (irow < MODL->pmtr[ipmtr].nrow || icol < MODL->pmtr[ipmtr].ncol) {
+                        snprintf(entry, MAX_STR_LEN, "%lg,", MODL->pmtr[ipmtr].value[index++]);
+                    } else {
+                        snprintf(entry, MAX_STR_LEN, "%lg],\"dot\":[", MODL->pmtr[ipmtr].value[index++]);
+                    }
+                    addToResponse(entry);
+                }
+            }
+
+            for (irow = 1; irow <= MODL->pmtr[ipmtr].nrow; irow++) {
+                for (icol = 1; icol <= MODL->pmtr[ipmtr].ncol; icol++) {
+                    if (irow < MODL->pmtr[ipmtr].nrow || icol < MODL->pmtr[ipmtr].ncol) {
+                        snprintf(entry, MAX_STR_LEN, "0,");
+                    } else {
+                        snprintf(entry, MAX_STR_LEN, "0]");
+                    }
+                    addToResponse(entry);
+                }
+            }
+
+            addToResponse("}");
+        }
+        addToResponse("]");
+    }
+
+    /* send to browsers */
+    SPRINT1(2, "\n<<< server2browser: %s", response);
+    wv_broadcastText(response);
+
+    response[0]  = '\0';
+    response_len = 0;
+
+cleanup:
+    FREE(entry);
+
+    if (status != SUCCESS) {
+        SPRINT1(1, "sizeCallbackFromOpenCSM -> status=%d", status);
+    }
 }
 
 
@@ -6955,6 +7825,8 @@ spec_col(float  scalar,
 {
     int   indx;
     float frac;
+
+    /* --------------------------------------------------------------- */
 
     if (lims[0] == lims[1]) {
         color[0] = 0.0;
@@ -6993,8 +7865,8 @@ spec_col(float  scalar,
 /***********************************************************************/
 
 static int
-storeUndo(char   *cmd,                  /* (in)  current command */
-          char   *arg)                  /* (in)  current argument */
+storeUndo(char   cmd[],                 /* (in)  current command */
+          char   arg[])                 /* (in)  current argument */
 {
     int       status = SUCCESS;         /* return status */
 
@@ -7039,102 +7911,6 @@ cleanup:
 
     return status;
 }
-
-#ifdef CHECK_LITE
-
-/***********************************************************************/
-/*                                                                     */
-/*   checkEvals - check inverse evaluations                            */
-/*                                                                     */
-/***********************************************************************/
-
-static int
-checkEvals(modl_T *myModl,              /* (in)  pointer to MODL */
-           int    ibody)                /* (in)  Body index (bias-1) */
-{
-    int       status = SUCCESS;         /* return status */
-
-    int       iface, npnt, ntri, ipnt;
-    CINT      *ptype, *pindx, *tris, *tric;
-    double    uv_best[2], xyz_best[3], toler, dist;
-    CDOUBLE   *xyz, *uv;
-    modl_T    *MODL = (modl_T*)myModl;
-
-    ROUTINE(checkEvals);
-
-    /* --------------------------------------------------------------- */
-
-    /* check for valid inputs */
-    if (MODL == NULL) {
-        status = OCSM_NOT_MODL_STRUCTURE;
-        goto cleanup;
-    } else if (ibody < 1 || ibody > MODL->nbody) {
-        status = OCSM_ILLEGAL_BODY_INDEX;
-        goto cleanup;
-    }
-
-    /* loop through all the Faces */
-    for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
-        status = EG_getTessFace(MODL->body[ibody].etess, iface,
-                                &npnt, &xyz, &uv, &ptype, &pindx,
-                                &ntri, &tris, &tric);
-        CHECK_STATUS(EG_getTessFace);
-
-        SPRINT2x(1, "    Face %5d (npnt=%5d) ", iface, npnt);
-
-        /* Face tolerance is used to determine when to flag errors */
-        status = EG_getTolerance(MODL->body[ibody].face[iface].eface, &toler);
-        CHECK_STATUS(EG_getTolerance);
-
-        /* loop through all the interior points in the Face */
-        for (ipnt = 0; ipnt < npnt; ipnt++) {
-            if (ipnt%1000 == 0) {
-                SPRINT0x(1, "|");
-            } else if (ipnt%100 == 0) {
-                SPRINT0x(1, ".");
-            }
-            if (ptype[ipnt] >= 0) continue;
-
-            /* compare inverse evaluation with point in tessellation (which, by
-               definition, should be exactly on the surface) */
-            status = EG_invEvaluate(MODL->body[ibody].face[iface].eface,
-                                    (double*)&(xyz[3*ipnt]), uv_best, xyz_best);
-            CHECK_STATUS(EG_invEvaluate);
-
-            /* check EG_invEvaluate followed by EG_evaluate */
-            {
-                double xyz_best2[18];
-                status = EG_evaluate(MODL->body[ibody].face[iface].eface, uv_best, xyz_best2);
-
-                if (fabs(xyz_best[0]-xyz_best2[0]) > 1e-6 ||
-                    fabs(xyz_best[1]-xyz_best2[1]) > 1e-6 ||
-                    fabs(xyz_best[2]-xyz_best2[2]) > 1e-6   ) {
-                    SPRINT0(0, "=====error in EG_invEvaluate followed by EG_evaluate=====");
-                    SPRINT2(0, "uv_best  =%10.5f %10.5f",        uv_best[  0], uv_best[  1]);
-                    SPRINT3(0, "xyz_in   =%10.5f %10.5f %10.5f", xyz[3*ipnt], xyz[3*ipnt+1], xyz[3*ipnt+2]);
-                    SPRINT3(0, "xyz_best =%10.5f %10.5f %10.5f", xyz_best[ 0], xyz_best[ 1], xyz_best[ 2]);
-                    SPRINT3(0, "xyz_best2=%10.5f %10.5f %10.5f", xyz_best2[0], xyz_best2[1], xyz_best2[2]);
-                    SPRINT0(0, "=========================================================");
-                }
-            }
-
-            dist = sqrt((xyz[3*ipnt  ]-xyz_best[0]) * (xyz[3*ipnt  ]-xyz_best[0])
-                       +(xyz[3*ipnt+1]-xyz_best[1]) * (xyz[3*ipnt+1]-xyz_best[1])
-                       +(xyz[3*ipnt+2]-xyz_best[2]) * (xyz[3*ipnt+2]-xyz_best[2]));
-            if (dist > 100*toler) {
-                SPRINT6(1, "\n    iface=%3d, ipnt=%5d, dist=%12.4e, xyz in=%10.4f %10.4f %10.4f",
-                        iface, ipnt, dist, xyz[3*ipnt], xyz[3*ipnt+1], xyz[3*ipnt+2]);
-                SPRINT3(1, "                                                 out=%10.4f %10.4f %10.4f",
-                        xyz_best[0], xyz_best[1], xyz_best[2]);
-            }
-        }
-        SPRINT0(1, " ");
-    }
-
-cleanup:
-    return status;
-}
-#endif // CHECK_LITE
 
 
 /***********************************************************************/
@@ -7729,8 +8505,9 @@ plugsMain(modl_T *MODL,                 /* (in)  pointer to MODL */
 
     int     npmtr, ipmtr, ibody, jbody;
     int     *pmtrindx=NULL;
-    double rms;
+    double  rms;
     clock_t old_time, new_time;
+    FILE    *fp_plugs=NULL;
 
     ROUTINE(plugsMain);
 
@@ -7746,13 +8523,13 @@ plugsMain(modl_T *MODL,                 /* (in)  pointer to MODL */
     SPRINT1(0,   "PLUGS with %d points in the cloud", ncloud);
     SPRINT0(0,   "===================================\n");
 
-    /* get array that will cetrainly be big enough */
+    /* get array that will certainly be big enough */
     MALLOC(pmtrindx, int, MODL->npmtr);
 
     /* make a list of the DESPMTRs that will be varied */
     npmtr = 0;
     for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
-        if (MODL->pmtr[ipmtr].type == OCSM_EXTERNAL) {
+        if (MODL->pmtr[ipmtr].type == OCSM_DESPMTR) {
             if (MODL->pmtr[ipmtr].nrow != 1 ||
                 MODL->pmtr[ipmtr].ncol != 1   ) {
                 SPRINT3(0, "ERROR:: DESPMTR %s is (%d*%d) and must be a scalar",
@@ -7767,6 +8544,24 @@ plugsMain(modl_T *MODL,                 /* (in)  pointer to MODL */
 
             npmtr++;
         }
+    }
+
+    /* open plugs history file and write header */
+    fp_plugs = fopen("plugs.hist", "w");
+
+    if (fp_plugs != NULL) {
+        fprintf(fp_plugs, " pass iter");
+        for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
+            fprintf(fp_plugs, " %11s", MODL->pmtr[pmtrindx[ipmtr]].name);
+        }
+        fprintf(fp_plugs, "        rms\n");
+        fflush( fp_plugs);
+
+        fprintf(fp_plugs, " %4d %4d", -1, 0);
+        for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
+            fprintf(fp_plugs, " %11.5f", MODL->pmtr[pmtrindx[ipmtr]].value[0]);
+        }
+        fprintf(fp_plugs, "\n");
     }
 
     /* ensure that there is only one Body on the stack */
@@ -7786,36 +8581,55 @@ plugsMain(modl_T *MODL,                 /* (in)  pointer to MODL */
     old_time = clock();
 
     /* change design parameters to get correct bounding box */
-    SPRINT0(0, "\nPLUGS phase1: match bounding boxes\n");
-    status = plugsPhase1(MODL, ibody, npmtr, pmtrindx, ncloud, cloud, &rms);
-    CHECK_STATUS(plugsPhase1);
+    if (npass >= 0) {
+        SPRINT0(0, "\nPLUGS phase1: match bounding boxes\n");
+        status = plugsPhase1(MODL, ibody, npmtr, pmtrindx, ncloud, cloud, &rms, fp_plugs);
+        CHECK_STATUS(plugsPhase1);
+    } else {
+        SPRINT0(0, "\nPLUGS phase1: skipped\n");
+    }
 
     /* change design parameters to match points in cloud */
-    if (npass > 0) {
+    if (npass != 0) {
         SPRINT0(0, "\nPLUGS phase2: match cloud points");
-        status = plugsPhase2(MODL, npass, ibody, npmtr, pmtrindx, ncloud, cloud, &rms);
+        status = plugsPhase2(MODL, abs(npass), ibody, npmtr, pmtrindx, ncloud, cloud, &rms, fp_plugs);
         CHECK_STATUS(plugsPhase2);
     }
 
     new_time = clock();
 
-    /* print final DESPMTRs */
-    npmtr = 0;
-    for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
-        if (MODL->pmtr[ipmtr].type == OCSM_EXTERNAL) {
-            SPRINT3(1, "final  DESPMTR %3d: %20s = %10.5f",
-                    npmtr, MODL->pmtr[ipmtr].name, MODL->pmtr[ipmtr].value[0]);
-
-            npmtr++;
-        }
+    /* close the history file */
+    if (fp_plugs != NULL) {
+        fclose(fp_plugs);
+        fp_plugs = NULL;
     }
+
+    /* print final DESPMTRs and write a file that can be read by ocsmUpdateDespmtrs */
+    fp_plugs = fopen("plugs.despmtrs", "w");
+
+    if (fp_plugs != NULL) {
+        npmtr = 0;
+        for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
+            if (MODL->pmtr[ipmtr].type == OCSM_DESPMTR) {
+                SPRINT3(1, "final  DESPMTR %3d: %20s = %10.5f",
+                        npmtr, MODL->pmtr[ipmtr].name, MODL->pmtr[ipmtr].value[0]);
+
+                fprintf(fp_plugs, "%-32s %15.8f\n", MODL->pmtr[ipmtr].name, MODL->pmtr[ipmtr].value[0]);
+
+                npmtr++;
+            }
+        }
+
+        fclose(fp_plugs);
+    }
+
     SPRINT1(1, "final  rms distance to cloud               %10.5f", rms);
 
     SPRINT1(1, "\n==> PLUGS total CPUtime=%9.3f sec",
             (double)(new_time-old_time) / (double)(CLOCKS_PER_SEC));
 
     /* tell user how to get configuration with updated DESPMTRs */
-    SPRINT0(0, "\nHit \"Up to date\" to show results of PLUGS\n");
+    SPRINT0(1, "\nHit \"Up to date\" to show results of PLUGS\n");
 
     /* reset the plugs flag so that verification will be reanabled */
     plugs = -1;
@@ -7840,7 +8654,8 @@ plugsPhase1(modl_T *MODL,               /* (in)  pointer to MODL */
             int    pmtrindx[],          /* (in)  indices of DESPMTRs */
             int    ncloud,              /* (in)  number of points in cloud */
             double cloud[],             /* (in)  array  of points in cloud */
-            double *rmsbest)            /* (out) best rms distance to cloud */
+            double *rmsbest,            /* (out) best rms distance to cloud */
+  /*@null@*/FILE   *fp_plugs)           /* (in)  file pointer to history file */
 {
     int    status = SUCCESS;            /* return status */
 
@@ -8145,6 +8960,19 @@ plugsPhase1(modl_T *MODL,               /* (in)  pointer to MODL */
             lambda   = MAX(1.0e-10, lambda/2);
             SPRINT1(1, "  accepted: lambda=%10.3e", lambda);
 
+            /* store history */
+            if (fp_plugs != NULL) {
+                fprintf(fp_plugs, " %4d %4d", -1, iter);
+                for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
+                    status = ocsmGetValu(MODL, pmtrindx[ipmtr], 1, 1, &value, &dot);
+                    CHECK_STATUS(ocsmGetPmtr);
+
+                    fprintf(fp_plugs, " %11.5f", value);
+                }
+                fprintf(fp_plugs, "%11.5f\n", rms);
+                fflush(fp_plugs);
+            }
+
             /* check for convergence */
             idone = 1;
             for (ierr = 0; ierr < 6; ierr++) {
@@ -8199,17 +9027,18 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
             int    pmtrindx[],          /* (in)  indices of DESPMTRs */
             int    ncloud,              /* (in)  number of points in cloud */
             double cloud[],             /* (in)  array  of points in cloud */
-            double *rmsbest)            /* (out) best rms distance to cloud */
+            double *rmsbest,            /* (out) best rms distance to cloud */
+  /*@null@*/FILE   *fp_plugs)           /* (in)  FILE pointer to history file */
 {
     int    status = SUCCESS;            /* return status */
 
     int     iface, icloud, ipmtr, jpmtr, npnt, ntri, itri, ip0, ip1, ip2;
-    int     nerr, nvar, ivar, count, unclass, ireclass, ipass, iter, niter=50;
-    int     nbody, builtTo, oldOutLevel, periodic, ibest, scaleDiag;
+    int     nerr, nvar, ivar, count, unclass, reclass, ireclass, ipass, restart, iter, niter=50;
+    int     nbody, builtTo, oldOutLevel, periodic, ibest, scaleDiag, naccept, iperturb;
     int     *face=NULL, *prevface=NULL;
     CINT    *ptype, *pindx, *tris, *tric;
-    double  bbox[6], bbox_cloud[6], dtest, value, dot, lbound, ubound, rms, data[18];
-    double  dmax, lambda, uvrange[4], dbest, scaleFact;
+    double  bbox_cloud[6], dtest, value, dot, lbound, ubound, rms, data[18], rmsperturb, valperturb;
+    double  dmax, lambda, uvrange[4], dbest, scaleFact, uv_guess[2], xyz_guess[3];
     double  *dist=NULL, *uvface=NULL, *velface=NULL;
     double  *beta=NULL, *delta=NULL, *qerr=NULL, *qerrbest=NULL, *ajac=NULL;
     double  *atri=NULL, *btri=NULL, *ctri=NULL, *dtri=NULL, *xtri=NULL;
@@ -8217,6 +9046,7 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
     double  *pmtrbest=NULL, *pmtrlast=NULL;
     CDOUBLE *xyz, *uv;
     clock_t old_time, new_time;
+    FILE    *fp2;
 
     ROUTINE(plugsPhase2);
 
@@ -8236,7 +9066,7 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
     /* get necessary arrays */
     MALLOC(face,     int,      ncloud    );     // Face associated with each cloud point (bias-1)
     MALLOC(prevface, int,      ncloud    );     // Face associated on previous pass
-    MALLOC(dist,     double,   ncloud    );     // min dist from each clous to tessellation
+    MALLOC(dist,     double,   ncloud    );     // min dist from each cloud to tessellation
     MALLOC(uvface,   double, 2*ncloud    );     // temp (u,v) for ocsmGetVel
     MALLOC(velface,  double, 3*ncloud    );     // temp vel   from ocsmGetVel
 
@@ -8267,7 +9097,7 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
         pmtrlast[ipmtr] = pmtrbest[ipmtr];
     }
 
-    /* find the bounding box of the cloud */
+    /* find the bounding box of the cloud (needed for classification) */
     bbox_cloud[0] = cloud[0];
     bbox_cloud[1] = cloud[1];
     bbox_cloud[2] = cloud[2];
@@ -8285,21 +9115,31 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
     }
 
     /* create .csm files to show progress at end of each pass */
-#ifdef PLUGS_CREATE_CSM_FILES
-    if (1) {
+    if (PLUGS_CREATE_CSM_FILES == 1) {
         char tempname[256];
 
-        sprintf(tempname, "plugs_pass_%02d.csm", 0);
+        snprintf(tempname, MAX_FILENAME_LEN-1, "plugs_pass_%02d.csm", 0);
         (void) ocsmSave(MODL, tempname);
     }
-#endif
 
     /* make multiple passes, since we can only really figure out which
        Face each cloud point is associated with when we get to a converged
        solution */
+    restart = 0;
     for (ipass = 1; ipass <= npass; ipass++) {
-        SPRINT2(1, "\nStarting pass %d (of %d) of phase2\n", ipass, npass);
+
+        /* note: odd printout is to always print pass number
+           so as to void Jenkins timeouts */
+        SPRINT0(1, "  ");
+        SPRINT2(0, "Starting pass %d (of %d) of phase2", ipass, npass);
+        SPRINT0(1, "  ");
         old_time = clock();
+
+        /* rebuild and evaluate the new objective function */
+        nbody = 0;
+        oldOutLevel = ocsmSetOutLevel(0);
+        status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+        (void) ocsmSetOutLevel(oldOutLevel);
 
         /* only classify points that are within 0.25 of the bounding box size */
         dmax = 0.25 * MAX(MAX(bbox_cloud[3]-bbox_cloud[0],
@@ -8307,9 +9147,30 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                               bbox_cloud[5]-bbox_cloud[2]);
 
         /* associate each cloud point with the closest tessellation point */
-        for (icloud = 0; icloud < ncloud; icloud++) {
-            face[icloud] = 0;
-            dist[icloud] = dmax;
+        if (ipass == 1) {
+            for (icloud = 0; icloud < ncloud; icloud++) {
+                face[  icloud  ] = 0;
+                dist[  icloud  ] = dmax * dmax;
+                beta[2*icloud  ] = 0;
+                beta[2*icloud+1] = 0;
+            }
+        } else {
+            for (icloud = 0; icloud < ncloud; icloud++) {
+                iface = face[icloud];
+                if (iface > 0) {
+                    status = EG_evaluate(MODL->body[ibody].face[iface].eface, &(beta[2*icloud]), data);
+                    CHECK_STATUS(EG_evaluate);
+
+                    dist[icloud] = (cloud[3*icloud  ]-data[0]) * (cloud[3*icloud  ]-data[0])
+                                 + (cloud[3*icloud+1]-data[1]) * (cloud[3*icloud+1]-data[1])
+                                 + (cloud[3*icloud+2]-data[2]) * (cloud[3*icloud+2]-data[2]);
+                } else {
+                    face[  icloud  ] = 0;
+                    dist[  icloud  ] = dmax * dmax;
+                    beta[2*icloud  ] = 0;
+                    beta[2*icloud+1] = 0;
+                }
+            }
         }
 
         for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
@@ -8317,9 +9178,6 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                                     &npnt, &xyz, &uv, &ptype, &pindx,
                                     &ntri, &tris, &tric);
             CHECK_STATUS(EG_getFaceTess);
-
-            status = EG_getBoundingBox(MODL->body[ibody].face[iface].eface, bbox);
-            CHECK_STATUS(EG_getBoundingBox);
 
             for (icloud = 0; icloud < ncloud; icloud++) {
 
@@ -8333,9 +9191,9 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                     data[1] = (xyz[3*ip0+1] + xyz[3*ip1+1] + xyz[3*ip2+1]) / 3;
                     data[2] = (xyz[3*ip0+2] + xyz[3*ip1+2] + xyz[3*ip2+2]) / 3;
 
-                    dtest = sqrt((cloud[3*icloud  ]-data[0])*(cloud[3*icloud  ]-data[0])
-                                +(cloud[3*icloud+1]-data[1])*(cloud[3*icloud+1]-data[1])
-                                +(cloud[3*icloud+2]-data[2])*(cloud[3*icloud+2]-data[2]));
+                    dtest = (cloud[3*icloud  ]-data[0]) * (cloud[3*icloud  ]-data[0])
+                          + (cloud[3*icloud+1]-data[1]) * (cloud[3*icloud+1]-data[1])
+                          + (cloud[3*icloud+2]-data[2]) * (cloud[3*icloud+2]-data[2]);
                     if (dtest < dist[icloud]) {
                         face[  icloud  ] = iface;
                         dist[  icloud  ] = dtest;
@@ -8370,9 +9228,9 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 for (icloud = 0; icloud < ncloud; icloud++) {
                     if (face[icloud] == iface) continue;
 
-                    dtest = (data[0]-cloud[3*icloud  ]) * (data[0]-cloud[3*icloud  ])
-                          + (data[1]-cloud[3*icloud+1]) * (data[1]-cloud[3*icloud+1])
-                          + (data[2]-cloud[3*icloud+2]) * (data[2]-cloud[3*icloud+2]);
+                    dtest = (cloud[3*icloud  ]-data[0]) * (cloud[3*icloud  ]-data[0])
+                          + (cloud[3*icloud+1]-data[1]) * (cloud[3*icloud+1]-data[1])
+                          + (cloud[3*icloud+2]-data[2]) * (cloud[3*icloud+2]-data[2]);
                     if (dtest < dbest) {
                         ibest = icloud;
                         dbest = dtest;
@@ -8380,8 +9238,9 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 }
 
                 face[  ibest  ] = iface;
-                beta[2*ibest  ] = (uvrange[0] + uvrange[1]) / 2;
-                beta[2*ibest+1] = (uvrange[2] + uvrange[3]) / 2;
+                dist[  ibest  ] = dbest;
+                beta[2*ibest  ] = uvrange[0];
+                beta[2*ibest+1] = uvrange[1];
 
                 SPRINT2(1, "WARNING:: reclassifying cloud point %5d to be associated with Face %d", ibest, iface);
             }
@@ -8402,20 +9261,33 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
         }
         SPRINT1(1, "Unclassified %5d cloud points", unclass);
 
+        for (icloud = 0; icloud < ncloud; icloud++) {
+            dist[icloud] = sqrt(dist[icloud]);
+        }
+
         /* if the faceID associated with all cloud points are the same as
            the previous pass, we are done */
+        reclass = 0;
         if (ipass > 1) {
-            count = 0;
             for (icloud = 0; icloud < ncloud; icloud++) {
                 if (face[icloud] != prevface[icloud]) {
-                    SPRINT3(2, "   cloud point %5d has been reclassified (%3d to %3d)", icloud, prevface[icloud], face[icloud]);
-                    count++;
+                    if (reclass < 20) {
+                        SPRINT6(1, "    cloud point %5d (%10.5f, %10.5f, %10.5f) was reclassified (%3d to %3d)",
+                                icloud, cloud[3*icloud], cloud[3*icloud+1], cloud[3*icloud+2], prevface[icloud], face[icloud]);
+                    }
+                    reclass++;
                 }
             }
-            if (unclass == 0 && count == 0) {
-                SPRINT0(1, "\nPhase2 passes converged because points are classified same as previous pass\n");
+            if (reclass >= 20) {
+                SPRINT1(1, "    ... too many to list (%d total)", reclass);
+            }
+            if (restart == 0 && unclass == 0 && reclass == 0) {
+                SPRINT0(0, "\n    Phase2 passes converged because points are classified same as previous pass\n");
                 break;
             }
+            restart = 0;
+        } else {
+            reclass = ncloud;
         }
 
         /* remember Face associations for next time */
@@ -8470,6 +9342,7 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
         lambda    = 1;
         scaleDiag = 0;
         scaleFact = 1;
+        naccept   = 0;
 
         /* levenberg-marquardt iterations */
         for (iter = 0; iter < niter; iter++) {
@@ -8522,11 +9395,6 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 }
 
                 /* initialize matrices */
-                for (icloud = 0; icloud < ncloud; icloud++) {
-                    dtri[2*icloud  ] = 0;
-                    dtri[2*icloud+1] = 0;
-                }
-
                 for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
                     for (jpmtr = 0; jpmtr < npmtr; jpmtr++) {
                         mat[ipmtr*npmtr+jpmtr] = 0;
@@ -8543,10 +9411,12 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                         atri[2*icloud  ] = 0;
                         btri[2*icloud  ] = 1;
                         ctri[2*icloud  ] = 0;
+                        dtri[2*icloud  ] = 0;
 
                         atri[2*icloud+1] = 0;
                         btri[2*icloud+1] = 1;
                         ctri[2*icloud+1] = 0;
+                        dtri[2*icloud+1] = 0;
                     } else {
                         status = EG_evaluate(MODL->body[ibody].face[iface].eface, &(beta[2*icloud]), data);
                         CHECK_STATUS(EG_evaluate);
@@ -8554,16 +9424,16 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                         atri[2*icloud  ] =  0;
                         btri[2*icloud  ] = (data[3] * data[3] + data[4] * data[4] + data[5] * data[5]) * (1 + lambda);
                         ctri[2*icloud  ] =  data[3] * data[6] + data[4] * data[7] + data[5] * data[8];
-                        dtri[2*icloud  ] += data[3] * qerr[3*icloud  ]
-                                          + data[4] * qerr[3*icloud+1]
-                                          + data[5] * qerr[3*icloud+2];
+                        dtri[2*icloud  ] =  data[3] * qerr[3*icloud  ]
+                                         +  data[4] * qerr[3*icloud+1]
+                                         +  data[5] * qerr[3*icloud+2];
 
                         atri[2*icloud+1] =  data[3] * data[6] + data[4] * data[7] + data[5] * data[8];
                         btri[2*icloud+1] = (data[6] * data[6] + data[7] * data[7] + data[8] * data[8]) * (1 + lambda);
                         ctri[2*icloud+1] =  0;
-                        dtri[2*icloud+1] += data[6] * qerr[3*icloud  ]
-                                          + data[7] * qerr[3*icloud+1]
-                                          + data[8] * qerr[3*icloud+2];
+                        dtri[2*icloud+1] =  data[6] * qerr[3*icloud  ]
+                                         +  data[7] * qerr[3*icloud+1]
+                                         +  data[8] * qerr[3*icloud+2];
                     }
 
                     /* full matrix for DESPMTRs */
@@ -8584,6 +9454,9 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
                     mat[ipmtr*npmtr+ipmtr] *= (1 + lambda);
                 }
+
+            /* we have just REJECTed a change, so only the diagonal must be scaled
+               because of a new lambda */
             } else {
                 for (icloud = 0; icloud < ncloud; icloud++) {
                     btri[2*icloud  ] *= scaleFact;
@@ -8620,7 +9493,8 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 }
             }
             if (dmax < EPS06 && lambda <= 1) {
-                SPRINT2(1, "Phase 2 converged for pass %d (delta-max=%10.3e)", ipass, dmax);
+                SPRINT5(0, "    Pass %2d converged, dmax=%10.3e,     rmsbest=%10.3e, reclass=%5d, unclass=%5d",
+                        ipass, dmax, *rmsbest, reclass, unclass);
                 break;
             }
 
@@ -8701,8 +9575,22 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 }
                 *rmsbest  = rms;
                 scaleDiag = 0;
+                naccept++;
                 lambda    = MAX(1.0e-10, lambda/2);
                 SPRINT1(1, "  accepted: lambda=%10.3e", lambda);
+
+                /* store history */
+                if (fp_plugs != NULL) {
+                    fprintf(fp_plugs, " %4d %4d", ipass, iter);
+                    for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
+                        status = ocsmGetValu(MODL, pmtrindx[ipmtr], 1, 1, &value, &dot);
+                        CHECK_STATUS(ocsmGetPmtr);
+
+                        fprintf(fp_plugs, " %11.5f", value);
+                    }
+                    fprintf(fp_plugs, "%11.5f\n", rms);
+                    fflush( fp_plugs);
+                }
 
             /* otherwise reject the step and increase lambda
                (making it more steepest-descent-like) */
@@ -8730,9 +9618,15 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
 
             /* if lambda gets very big, stop iterations */
             if (lambda > 100) {
-                SPRINT2(1, "Phase 2 (pass %d) has stalled, lambda=%10.3e", ipass, lambda);
+                SPRINT5(0, "    Pass %2d has stalled, lambda=%10.3e, rmsbest=%10.3e, reclass=%5d, unclass=%5d",
+                        ipass, lambda, *rmsbest, reclass, unclass);
                 break;
             }
+        }
+
+        if (iter >= niter-1) {
+            SPRINT4(0, "    Pass %2d ran out of iterations,          rmsbest=%10.3e, reclass=%5d, unclass=%5d",
+                    ipass, *rmsbest, reclass, unclass);
         }
 
         /* if the last build was a rejection, rebuild with the best */
@@ -8759,87 +9653,226 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
         }
 
         new_time = clock();
-        SPRINT2(1, "Phase 2 (pass %d) CPUtime=%9.3f sec", ipass,
+        SPRINT2(1, "Phase 2 (pass %2d) CPUtime=%9.3f sec", ipass,
                 (double)(new_time-old_time)/(double)(CLOCKS_PER_SEC));
 
         /* create .csm files to show progress at end of each pass */
-#ifdef PLUGS_CREATE_CSM_FILES
-        if (1) {
+        if (PLUGS_CREATE_CSM_FILES == 1) {
             char tempname[256];
 
-            sprintf(tempname, "plugs_pass_%02d.csm", ipass);
+            snprintf(tempname, MAX_FILENAME_LEN-1, "plugs_pass_%02d.csm", ipass);
             (void) ocsmSave(MODL, tempname);
         }
-#endif
 
         /* create final.plot to show how close cloud is to final surface at
            the end of this pass */
-#ifdef PLUGS_CREATE_FINAL_PLOT
-        if (1) {
-            FILE  *fp2;
+        if (PLUGS_CREATE_FINAL_PLOT == 1 || naccept == 0) {
             fp2 = fopen("final.plot", "w");
 
-            count = 0;
-            for (icloud = 0; icloud < ncloud; icloud++) {
-                if (face[icloud] == 0) count++;
-            }
-
-            if (count > 0) {
-                fprintf(fp2, "%5d%5d Unclassified_cloud_points\n", count, 0);
-
-                for (icloud = 0; icloud < ncloud; icloud++) {
-                    if (face[icloud] == 0) {
-                        fprintf(fp2, " %9.5f %9.5f %9.5f\n", cloud[3*icloud], cloud[3*icloud+1], cloud[3*icloud+2]);
-                    }
-                }
-            }
-
-            for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
+            if (fp2 != NULL) {
                 count = 0;
                 for (icloud = 0; icloud < ncloud; icloud++) {
-                    if (face[icloud] == iface) count++;
+                    if (face[icloud] == 0) count++;
                 }
 
                 if (count > 0) {
-                    fprintf(fp2, "%5d%5d Face_%d_cloud_points\n", count, 0, iface);
+                    fprintf(fp2, "%5d%5d Unclassified_cloud_points\n", count, 0);
 
                     for (icloud = 0; icloud < ncloud; icloud++) {
-                        if (face[icloud] == iface) {
+                        if (face[icloud] == 0) {
                             fprintf(fp2, " %9.5f %9.5f %9.5f\n", cloud[3*icloud], cloud[3*icloud+1], cloud[3*icloud+2]);
                         }
                     }
                 }
-            }
 
-            for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
-                count = 0;
-                for (icloud = 0; icloud < ncloud; icloud++) {
-                    if (face[icloud] == iface) count++;
-                }
-
-                if (count > 0) {
-                    fprintf(fp2, "%5d%5d Face_%d_distances\n", count, -1, iface);
-
+                for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
+                    count = 0;
                     for (icloud = 0; icloud < ncloud; icloud++) {
-                        if (face[icloud] == iface) {
-                            status = EG_evaluate(MODL->body[ibody].face[iface].eface, &(beta[2*icloud]), data);
-                            CHECK_STATUS(EG_evaluate);
+                        if (face[icloud] == iface) count++;
+                    }
 
-                            fprintf(fp2, " %9.5f %9.5f %9.5f\n", cloud[3*icloud], cloud[3*icloud+1], cloud[3*icloud+2]);
-                            fprintf(fp2, " %9.5f %9.5f %9.5f\n", data[0],         data[1],           data[2]          );
+                    if (count > 0) {
+                        fprintf(fp2, "%5d%5d Face_%d_cloud_points\n", count, 0, iface);
+
+                        for (icloud = 0; icloud < ncloud; icloud++) {
+                            if (face[icloud] == iface) {
+                                fprintf(fp2, " %9.5f %9.5f %9.5f\n", cloud[3*icloud], cloud[3*icloud+1], cloud[3*icloud+2]);
+                            }
                         }
                     }
                 }
-            }
 
-            fprintf(fp2, "%5d%5d end\n", 0, 0);
-            fclose(fp2);
+                for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
+                    count = 0;
+                    for (icloud = 0; icloud < ncloud; icloud++) {
+                        if (face[icloud] == iface) count++;
+                    }
+
+                    if (count > 0) {
+                        fprintf(fp2, "%5d%5d Face_%d_distances\n", count, -1, iface);
+
+                        for (icloud = 0; icloud < ncloud; icloud++) {
+                            if (face[icloud] == iface) {
+                                status = EG_evaluate(MODL->body[ibody].face[iface].eface, &(beta[2*icloud]), data);
+                                CHECK_STATUS(EG_evaluate);
+
+                                fprintf(fp2, " %9.5f %9.5f %9.5f\n", cloud[3*icloud], cloud[3*icloud+1], cloud[3*icloud+2]);
+                                fprintf(fp2, " %9.5f %9.5f %9.5f\n", data[0],         data[1],           data[2]          );
+                            }
+                        }
+                    }
+                }
+
+                fprintf(fp2, "%5d%5d end\n", 0, 0);
+                fclose(fp2);
+            }
         }
-#endif
+
+        /* if none of the LM itertions were accepted, check if perturbing a DESPMTR will allow us to restart */
+        if (naccept == 0) {
+            SPRINT0(0, "\n    ERROR:: no LM iterations were accepted, so checking if any perturbations will be better\n");
+
+            /* get the baseline */
+            nbody = 0;
+            oldOutLevel = ocsmSetOutLevel(0);
+            status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+            CHECK_STATUS(ocsmBuild);
+            (void) ocsmSetOutLevel(oldOutLevel);
+
+            rms = 0;
+            for (icloud = 0; icloud < ncloud; icloud++) {
+                iface       = face[  icloud  ];
+                uv_guess[0] = beta[2*icloud  ];
+                uv_guess[1] = beta[2*icloud+1];
+
+                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                CHECK_STATUS(EG_invEvaluateGuess);
+
+                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+            }
+            rms = sqrt(rms / (3*ncloud));
+
+            SPRINT1(0, "    baseline                     rms=%12.5e\n", rms);
+            iperturb   = 0;
+            rmsperturb = rms;
+            valperturb = HUGEQ;
+
+            /* now pertrub each of the DESPMTRs, one at a time, and compute the rms by inverse evaluations */
+            for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
+
+                status = ocsmGetBnds(MODL, pmtrindx[ipmtr], 1, 1, &lbound, &ubound);
+                CHECK_STATUS(ocsmGetBnds);
+
+                /* decrease by 5% */
+                if (pmtrbest[ipmtr] > 0) {
+                    value = MAX(pmtrbest[ipmtr]/1.05, lbound);
+                } else {
+                    value = MIN(pmtrbest[ipmtr]/1.05, ubound);
+                }
+                status = ocsmSetValuD(MODL, pmtrindx[ipmtr], 1, 1, value);
+                CHECK_STATUS(ocsmSetValuD);
+
+                nbody = 0;
+                oldOutLevel = ocsmSetOutLevel(0);
+                status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+                CHECK_STATUS(ocsmBuild);
+                (void) ocsmSetOutLevel(oldOutLevel);
+
+                rms = 0;
+                for (icloud = 0; icloud < ncloud; icloud++) {
+                    iface       = face[  icloud  ];
+                    uv_guess[0] = beta[2*icloud  ];
+                    uv_guess[1] = beta[2*icloud+1];
+
+                    status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                    CHECK_STATUS(EG_invEvaluateGuess);
+
+                    rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                         + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                         + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                }
+                rms = sqrt(rms / (3*ncloud));
+
+                SPRINT4(1, "    ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/best=%10.5f", ipmtr, value, rms, rms/rmsperturb);
+
+                if (rms < rmsperturb) {
+                    iperturb   = -ipmtr;
+                    rmsperturb = rms;
+                    valperturb = value;
+                }
+
+                /* increase by 5% */
+                if (pmtrbest[ipmtr] > 0) {
+                    value = MIN(pmtrbest[ipmtr]*1.05, ubound);
+                } else {
+                    value = MAX(pmtrbest[ipmtr]*1.05, lbound);
+                }
+                status = ocsmSetValuD(MODL, pmtrindx[ipmtr], 1, 1, value);
+                CHECK_STATUS(ocsmSetValuD);
+
+                nbody = 0;
+                oldOutLevel = ocsmSetOutLevel(0);
+                status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+                CHECK_STATUS(ocsmBuild);
+                (void) ocsmSetOutLevel(oldOutLevel);
+
+                rms = 0;
+                for (icloud = 0; icloud < ncloud; icloud++) {
+                    iface       = face[  icloud  ];
+                    uv_guess[0] = beta[2*icloud  ];
+                    uv_guess[1] = beta[2*icloud+1];
+
+                    status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                    CHECK_STATUS(EG_invEvaluateGuess);
+
+                    rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                        + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                        + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                }
+                rms = sqrt(rms / (3*ncloud));
+
+                SPRINT4(1, "    ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/best=%10.5f\n", ipmtr, value, rms, rms/rmsperturb);
+
+                if (rms < rmsperturb) {
+                    iperturb   = +ipmtr;
+                    rmsperturb = rms;
+                    valperturb = value;
+                }
+
+                /* set back to nominal value */
+                status = ocsmSetValuD(MODL, pmtrindx[ipmtr], 1, 1, pmtrbest[ipmtr]);
+                CHECK_STATUS(ocsmSetValuD);
+            }
+
+            if (iperturb > 0) {
+                pmtrbest[+iperturb] = valperturb;
+
+                status = ocsmSetValuD(MODL, pmtrindx[+iperturb], 1, 1, pmtrbest[+iperturb]);
+                CHECK_STATUS(ocsmSetValuD);
+
+                SPRINT2(1, "    restarting with ipmtr=%2d perturbed to %12.5f", +iperturb, pmtrbest[+iperturb]);
+
+                restart = 1;
+            } else if (iperturb < 0) {
+                pmtrbest[-iperturb] = valperturb;
+
+                SPRINT2(1, "    restarting with ipmtr=%2d perturbed to %12.5f", -iperturb, pmtrbest[-iperturb]);
+
+                status = ocsmSetValuD(MODL, pmtrindx[-iperturb], 1, 1, pmtrbest[-iperturb]);
+                CHECK_STATUS(ocsmSetValuD);
+
+                restart = 1;
+            } else {
+                SPRINT0(1, "    no perturbation succeeded, so stopping");
+
+                break;
+            }
 
         /* if the DESPMTRs are essentially the same on last two passes and all
            cloud points are classified, we are done */
-        if (ipass > 0) {
+        } else if (ipass > 0) {
             dmax = 0;
             for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
                 if (fabs(pmtrbest[ipmtr]-pmtrlast[ipmtr]) > dmax) {
@@ -8847,8 +9880,9 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 }
             }
 
-            if (unclass == 0 && dmax < 1.0e-4) {
-                SPRINT1(1, "\nPhase2 passes converged because maximum DESPMTR change is %10.3e\n", dmax);
+            if (unclass == 0 && dmax < 1.0e-5) {
+                SPRINT3(0, "\n    Phase2 passes converged because maximum DESPMTR change is %10.3e, reclass=%5d, unclass=%5d\n",
+                        dmax, reclass, unclass);
                 break;
             }
         }
@@ -8863,6 +9897,180 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
     for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
         status = ocsmSetValuD(MODL, pmtrindx[ipmtr], 1, 1, pmtrbest[ipmtr]);
         CHECK_STATUS(ocsmSetValuD);
+    }
+
+    /* find the sensitivity of the objective function to perturbations in
+       the various DESPMTRs */
+    if (PLUGS_SHOW_SENSITIVITY == 1) {
+        double rmsuv, baseline;
+
+        rms = 0;
+        for (icloud = 0; icloud < ncloud; icloud++) {
+            rms += qerr[3*icloud]*qerr[3*icloud] + qerr[3*icloud+1]*qerr[3*icloud+1] + qerr[3*icloud+2]*qerr[3*icloud+2];
+        }
+        rms = sqrt(rms / (3*ncloud));
+
+        /* baseline rms by inverse evaluations */
+        nbody = 0;
+        oldOutLevel = ocsmSetOutLevel(0);
+        status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+        (void) ocsmSetOutLevel(oldOutLevel);
+
+        rms = 0;
+        rmsuv = 0;
+        for (icloud = 0; icloud < ncloud; icloud++) {
+            iface       = face[  icloud  ];
+            uv_guess[0] = beta[2*icloud  ];
+            uv_guess[1] = beta[2*icloud+1];
+
+            status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+            CHECK_STATUS(EG_invEvaluateGuess);
+
+            rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                 + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                 + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+            rmsuv += (uv_guess[0]-beta[2*icloud  ]) * (uv_guess[0]-beta[2*icloud  ])
+                   + (uv_guess[1]-beta[2*icloud+1]) * (uv_guess[1]-beta[2*icloud+1]);
+        }
+        rms = sqrt(rms / (3*ncloud));
+        rmsuv = sqrt(rmsuv / (2*ncloud));
+
+        SPRINT2(1, "baseline                     rms=%12.5e, rmsuv=%12.5e\n", rms, rmsuv);
+        baseline = rms;
+
+        /* now pertrub each of the DESPMTRs, one at a time, and compute the rms by inverse evaluations */
+        for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
+
+            /* decrease by 5% */
+            if (pmtrbest[ipmtr] > 0) {
+                value = MAX(pmtrbest[ipmtr]/1.05, lbound);
+            } else {
+                value = MIN(pmtrbest[ipmtr]/1.05, ubound);
+            }
+            status = ocsmSetValuD(MODL, pmtrindx[ipmtr], 1, 1, value);
+            CHECK_STATUS(ocsmSetValuD);
+
+            nbody = 0;
+            oldOutLevel = ocsmSetOutLevel(0);
+            status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+            (void) ocsmSetOutLevel(oldOutLevel);
+
+            rms = 0;
+            for (icloud = 0; icloud < ncloud; icloud++) {
+                iface       = face[  icloud  ];
+                uv_guess[0] = beta[2*icloud  ];
+                uv_guess[1] = beta[2*icloud+1];
+
+                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                CHECK_STATUS(EG_invEvaluateGuess);
+
+                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+            }
+            rms = sqrt(rms / (3*ncloud));
+
+            SPRINT4(1, "ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/baseline=%10.5f", ipmtr, value, rms, rms/baseline);
+
+            /* decrease by 1% */
+            if (pmtrbest[ipmtr] > 0) {
+                value = MAX(pmtrbest[ipmtr]/1.01, lbound);
+            } else {
+                value = MIN(pmtrbest[ipmtr]/1.01, ubound);
+            }
+            status = ocsmSetValuD(MODL, pmtrindx[ipmtr], 1, 1, value);
+            CHECK_STATUS(ocsmSetValuD);
+
+            nbody = 0;
+            oldOutLevel = ocsmSetOutLevel(0);
+            status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+            (void) ocsmSetOutLevel(oldOutLevel);
+
+            rms = 0;
+            for (icloud = 0; icloud < ncloud; icloud++) {
+                iface       = face[  icloud  ];
+                uv_guess[0] = beta[2*icloud  ];
+                uv_guess[1] = beta[2*icloud+1];
+
+                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                CHECK_STATUS(EG_invEvaluateGuess);
+
+                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+            }
+            rms = sqrt(rms / (3*ncloud));
+
+            SPRINT4(1, "ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/baseline=%10.5f", ipmtr, value, rms, rms/baseline);
+
+            SPRINT4(1, "ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/baseline=%10.5f", ipmtr, pmtrbest[ipmtr], baseline, 1.0);
+
+            /* increase by 1% */
+            if (pmtrbest[ipmtr] > 0) {
+                value = MIN(pmtrbest[ipmtr]*1.01, ubound);
+            } else {
+                value = MAX(pmtrbest[ipmtr]*1.01, lbound);
+            }
+            status = ocsmSetValuD(MODL, pmtrindx[ipmtr], 1, 1, value);
+            CHECK_STATUS(ocsmSetValuD);
+
+            nbody = 0;
+            oldOutLevel = ocsmSetOutLevel(0);
+            status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+            (void) ocsmSetOutLevel(oldOutLevel);
+
+            rms = 0;
+            for (icloud = 0; icloud < ncloud; icloud++) {
+                iface       = face[  icloud  ];
+                uv_guess[0] = beta[2*icloud  ];
+                uv_guess[1] = beta[2*icloud+1];
+
+                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                CHECK_STATUS(EG_invEvaluateGuess);
+
+                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+            }
+            rms = sqrt(rms / (3*ncloud));
+
+            SPRINT4(1, "ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/baseline=%10.5f", ipmtr, value, rms, rms/baseline);
+
+            /* increase by 5% */
+            if (pmtrbest[ipmtr] > 0) {
+                value = MIN(pmtrbest[ipmtr]*1.05, ubound);
+            } else {
+                value = MAX(pmtrbest[ipmtr]*1.05, lbound);
+            }
+            status = ocsmSetValuD(MODL, pmtrindx[ipmtr], 1, 1, value);
+            CHECK_STATUS(ocsmSetValuD);
+
+            nbody = 0;
+            oldOutLevel = ocsmSetOutLevel(0);
+            status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+            (void) ocsmSetOutLevel(oldOutLevel);
+
+            rms = 0;
+            for (icloud = 0; icloud < ncloud; icloud++) {
+                iface       = face[  icloud  ];
+                uv_guess[0] = beta[2*icloud  ];
+                uv_guess[1] = beta[2*icloud+1];
+
+                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                CHECK_STATUS(EG_invEvaluateGuess);
+
+                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+            }
+            rms = sqrt(rms / (3*ncloud));
+
+            SPRINT4(1, "ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/baseline=%10.5f\n", ipmtr, value, rms, rms/baseline);
+
+            /* set back to nominal value */
+            status = ocsmSetValuD(MODL, pmtrindx[ipmtr], 1, 1, pmtrbest[ipmtr]);
+            CHECK_STATUS(ocsmSetValuD);
+        }
     }
 
 cleanup:
@@ -9415,5 +10623,89 @@ cleanup:
     FREE(p);
     FREE(q);
 
+    return status;
+}
+
+
+/*
+ ************************************************************************
+ *                                                                      *
+ *   writeTessFile - write ASCII .tess file                             *
+ *                                                                      *
+ ************************************************************************
+ */
+
+/*
+ * NOTE: this is a duplicate of a routine in OpenCSM.c
+ */
+
+static int
+writeTessFile(modl_T *MODL,             /* (in)  pointer to MODL */
+              int    ibody,             /* (in)  Body index (1->MODL->nbody) */
+              char   Filename[])        /* (in)  filename */
+{
+    int    status = SUCCESS;            /* (out) return status */
+
+    int     inode, iedge, iface, npnt, ipnt, ntri, itri;
+    CINT    *ptype, *pindx, *tris, *tric;
+    CDOUBLE *xyz, *uv;
+    FILE    *fp;
+
+    ROUTINE(writeTessFile);
+
+    /* --------------------------------------------------------------- */
+
+    fp = fopen(Filename, "w");
+    if (fp == NULL) {
+        status = OCSM_FILE_NOT_FOUND;
+        goto cleanup;
+    }
+
+    fprintf(fp, "%8d %8d %8d\n",
+            MODL->body[ibody].nnode,
+            MODL->body[ibody].nedge,
+            MODL->body[ibody].nface);
+
+    for (inode = 1; inode <= MODL->body[ibody].nnode; inode++) {
+        fprintf(fp, "%22.15e %22.15e %22.15e\n",
+                MODL->body[ibody].node[inode].x,
+                MODL->body[ibody].node[inode].y,
+                MODL->body[ibody].node[inode].z);
+    }
+
+    for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
+        status = EG_getTessEdge(MODL->body[ibody].etess, iedge,
+                                &npnt, &xyz, &uv);
+        CHECK_STATUS(EG_getTessEdge);
+
+        fprintf(fp, "%8d\n", npnt);
+        for (ipnt = 0; ipnt < npnt; ipnt++) {
+            fprintf(fp, "%22.15e %22.15e %22.15e %22.15e\n",
+                    xyz[3*ipnt], xyz[3*ipnt+1], xyz[3*ipnt+2], uv[ipnt]);
+        }
+    }
+
+    for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
+        status = EG_getTessFace(MODL->body[ibody].etess, iface,
+                                &npnt, &xyz, &uv, &pindx, &ptype,
+                                &ntri, &tris, &tric);
+        CHECK_STATUS(EG_getTessFace);
+
+        fprintf(fp, "%8d %8d\n", npnt, ntri);
+        for (ipnt = 0; ipnt < npnt; ipnt++) {
+            fprintf(fp, "%22.15e %22.15e %22.15e %22.15e %22.15e %8d %8d\n",
+                    xyz[3*ipnt], xyz[3*ipnt+1], xyz[3*ipnt+2],
+                    uv[ 2*ipnt], uv[ 2*ipnt+1], ptype[ipnt], pindx[ipnt]);
+        }
+        for (itri = 0; itri < ntri; itri++) {
+            fprintf(fp, "%8d %8d %8d %8d %8d %8d\n",
+                    tris[3*itri], tris[3*itri+1], tris[3*itri+2],
+                    tric[3*itri], tric[3*itri+1], tric[3*itri+2]);
+        }
+    }
+
+    fclose(fp);
+
+cleanup:
     return status;
 }

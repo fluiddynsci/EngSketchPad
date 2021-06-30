@@ -47,7 +47,3 @@ valueDict = fun3d.getAnalysisOutVal()
 
 print("Variable Dict = ", valueDict)
 ##[analysisOutValueGetAll]
-
-# Close our problems
-print("Closing our problem")
-myProblem.closeCAPS()

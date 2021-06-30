@@ -18,8 +18,9 @@ expectPythonSuccess ()
     echo "=================================================" | tee -a $LOGFILE
     local status
     set -x
+    rm -rf ${1%.py}
     echo "$1 test;" | tee -a $LOGFILE
-    time $VALGRIND_COMMAND python $1 -verbosity=0 -workDir=$2 $3  | tee -a $LOGFILE; status=${PIPESTATUS[0]}
+    time $VALGRIND_COMMAND python -u $1 -verbosity=0 $2  | tee -a $LOGFILE; status=${PIPESTATUS[0]}
     set +x
     if [[ $status == 0 ]]; then
     echo | tee -a $LOGFILE
@@ -45,8 +46,9 @@ expectPythonFailure ()
     echo "=================================================" | tee -a $LOGFILE
     local status
     set -x
+    rm -rf ${1%.py}
     echo "$1 test;" | tee -a $LOGFILE
-    time $VALGRIND_COMMAND python $1 -verbosity=0 -workDir=$2 $3 | tee -a $LOGFILE; status=${PIPESTATUS[0]}
+    time $VALGRIND_COMMAND python -u $1 -verbosity=0 $2 | tee -a $LOGFILE; status=${PIPESTATUS[0]}
     set +x
     if [[ $status == 0 ]]; then
     echo | tee -a $LOGFILE
@@ -85,12 +87,6 @@ touch $LOGFILE
 # Move into the pyCAPS directory
 cd ../pyCAPS
 
-export capsPythonRegDir=runDirectory
-if [[ -d "$cRegDir" ]]; then
-    rm -rf $cRegDir
-fi
-mkdir -p $capsPythonRegDir
-
 ######### Execute pyTest examples ########
 
 TYPE="ALL"
@@ -112,44 +108,51 @@ fi
 if [ "$TYPE" == "MINIMAL" ]; then
     echo "Running.... MINIMAL PyTests"
 
-    if [ "`which avl`" != "" ]; then
-         expectPythonSuccess "avl_PyTest.py" $capsPythonRegDir
+    if [[ "`which avl`" != "" ]]; then
+         expectPythonSuccess "avl_PyTest.py"
     else
         notRun="$notRun\navl"
     fi
 
-    if [ "`which xfoil`" != "" ]; then
-        expectPythonSuccess "xfoil_PyTest.py" $capsPythonRegDir -noPlotData
+    if [[ "`which xfoil`" != "" ]]; then
+        expectPythonSuccess "xfoil_PyTest.py" -noPlotData
     else
         notRun="$notRun\nxfoil"
     fi
 
-    if [ "`which awave`" != "" ]; then
-        expectPythonSuccess "awave_PyTest.py" $capsPythonRegDir
+    if [[ "`which awave`" != "" ]]; then
+        expectPythonSuccess "awave_PyTest.py"
     else
         notRun="$notRun\nawave"
     fi
 
-    if [ -f $ESP_ROOT/lib/aflr2AIM.$EXT ]; then
-        expectPythonSuccess "aflr2_PyTest.py" $capsPythonRegDir
+    if [[ -f $ESP_ROOT/lib/aflr2AIM.$EXT ]]; then
+        expectPythonSuccess "aflr2_PyTest.py"
     else
         notRun="$notRun\nAFLR"
     fi
 
     if [[ "`which delaundo`" != "" || "`which delaundo.exe`" != "" ]]; then
-        expectPythonSuccess "delaundo_PyTest.py" $capsPythonRegDir
+        expectPythonSuccess "delaundo_PyTest.py"
     else
         notRun="$notRun\ndelaundo"
     fi
 
-    if [ "$ASTROS_ROOT" != "" ]; then
-        expectPythonSuccess "astros_ThreeBar_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_Flutter_15degree.py" $capsPythonRegDir
+    if [[ "$ASTROS_ROOT" != "" ]]; then
+        expectPythonSuccess "astros_ThreeBar_PyTest.py"
+        expectPythonSuccess "astros_Flutter_15degree.py"
     else
         notRun="$notRun\nAstros"
     fi
 
-    expectPythonSuccess "masstran_PyTest.py" $capsPythonRegDir
+    expectPythonSuccess "masstran_PyTest.py"
+
+    ######  HSM ###### 
+    if [[ -f $ESP_ROOT/lib/hsmAIM.$EXT ]]; then
+        expectPythonSuccess "hsm_SingleLoadCase_PyTest.py"
+    else
+        notRun="$notRun\nHSM"
+    fi 
 
     testsRan=1
 fi
@@ -159,47 +162,47 @@ if [[ "$TYPE" == "LINEARAERO" || "$TYPE" == "ALL" ]]; then
     echo "Running.... LINEARAERO PyTests"
     
     ###### AVL ######
-    if [ "`which avl`" != "" ]; then
-        expectPythonSuccess "avl_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "avl_AutoSpan_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "avl_DesignSweep_PyTest.py" $capsPythonRegDir -noPlotData
-        expectPythonSuccess "avl_ControlSurf_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "avl_EigenValue_PyTest.py" $capsPythonRegDir
+    if [[ "`which avl`" != "" ]]; then
+        expectPythonSuccess "avl_PyTest.py"
+        expectPythonSuccess "avl_AutoSpan_PyTest.py"
+        expectPythonSuccess "avl_DesignSweep_PyTest.py" -noPlotData
+        expectPythonSuccess "avl_ControlSurf_PyTest.py"
+        expectPythonSuccess "avl_EigenValue_PyTest.py"
     else
         notRun="$notRun\navl"
     fi
     
     ###### awave ######
-    if [ "`which awave`" != "" ]; then
-        expectPythonSuccess "awave_PyTest.py" $capsPythonRegDir
+    if [[ "`which awave`" != "" ]]; then
+        expectPythonSuccess "awave_PyTest.py"
     else
         notRun="$notRun\nawave"
     fi
     
     ###### friction ######
-    if [ "`which friction`" != "" ]; then
-        expectPythonSuccess "friction_PyTest.py" $capsPythonRegDir
+    if [[ "`which friction`" != "" ]]; then
+        expectPythonSuccess "friction_PyTest.py"
     else
         notRun="$notRun\nfriction"
     fi
     
     ###### tsFoil ######
     if [[ "`which tsfoil`" != "" && "$OS" != "Windows_NT" ]]; then
-        expectPythonSuccess "tsfoil_PyTest.py" $capsPythonRegDir
+        expectPythonSuccess "tsfoil_PyTest.py"
     else
         notRun="$notRun\ntsfoil"
     fi
     
     ###### XFoil ######
-    if [ "`which xfoil`" != "" ]; then
-       expectPythonSuccess "xfoil_PyTest.py" $capsPythonRegDir -noPlotData
+    if [[ "`which xfoil`" != "" ]]; then
+       expectPythonSuccess "xfoil_PyTest.py" -noPlotData
     else
         notRun="$notRun\nxfoil"
     fi
 
     ###### AutoLink with awave, friction, and avl ######
     if [[ "`which awave`" != "" && "`which friction`" != "" && "`which avl`" != "" ]]; then
-        expectPythonSuccess "autoLink_Pytest.py" $capsPythonRegDir -noPlotData
+        expectPythonSuccess "autoLink_Pytest.py" -noPlotData
     fi
 
     testsRan=1
@@ -210,41 +213,40 @@ if [[ "$TYPE" == "MESH" || "$TYPE" == "ALL" ]]; then
     echo "Running.... MESH PyTests"
 
     # EGADS Tess
-    expectPythonSuccess "egadsTess_PyTest.py" $capsPythonRegDir
-    expectPythonSuccess "egadsTess_Spheres_Quad_PyTest.py" $capsPythonRegDir
-    expectPythonSuccess "egadsTess_Nose_Quad_PyTest.py" $capsPythonRegDir
+    expectPythonSuccess "egadsTess_PyTest.py"
+    expectPythonSuccess "egadsTess_Spheres_Quad_PyTest.py"
+    expectPythonSuccess "egadsTess_Nose_Quad_PyTest.py"
  
     # Example of controlling quading
-    expectPythonSuccess "quading_Pytest.py" $capsPythonRegDir
+    expectPythonSuccess "quading_Pytest.py"
     
     # AFLR
     if [[ -f $ESP_ROOT/lib/aflr2AIM.$EXT && \
           -f $ESP_ROOT/lib/aflr3AIM.$EXT && \
           -f $ESP_ROOT/lib/aflr4AIM.$EXT ]]; then
-        expectPythonSuccess "aflr2_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "aflr3_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "aflr4_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "aflr4_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "aflr4_Symmetry_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "aflr4_Generic_Missile.py" $capsPythonRegDir
-        expectPythonSuccess "aflr4_TipTreat_PyTest.py" $capsPythonRegDir -noPlotData
+        expectPythonSuccess "aflr2_PyTest.py"
+        expectPythonSuccess "aflr4_PyTest.py"
+        expectPythonSuccess "aflr4_Symmetry_PyTest.py"
+        expectPythonSuccess "aflr4_Generic_Missile.py"
+        expectPythonSuccess "aflr4_TipTreat_PyTest.py" -noPlotData
+        expectPythonSuccess "aflr4_and_aflr3_PyTest.py"
     
-        if [ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]; then
-            expectPythonSuccess "aflr4_and_Tetgen_PyTest.py" $capsPythonRegDir
-            expectPythonSuccess "aflr4_tetgen_Regions_PyTest.py" $capsPythonRegDir
+        if [[ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]]; then
+            expectPythonSuccess "aflr4_and_Tetgen_PyTest.py"
+            expectPythonSuccess "aflr4_tetgen_Regions_PyTest.py"
         fi
     else
         notRun="$notRun\nAFLR"
     fi
     
     # Tetgen
-    if [ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]; then
-        expectPythonSuccess "tetgen_PyTest.py" $capsPythonRegDir
+    if [[ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]]; then
+        expectPythonSuccess "tetgen_PyTest.py"
 
         # TODO: Sort out why this hangs on windoze...
         if [ "$OS" != "Windows_NT" ]; then
-            expectPythonSuccess "tetgen_Holes_PyTest.py" $capsPythonRegDir
-            expectPythonSuccess "tetgen_Regions_PyTest.py" $capsPythonRegDir
+            expectPythonSuccess "tetgen_Holes_PyTest.py"
+            expectPythonSuccess "tetgen_Regions_PyTest.py"
         fi
     else
         notRun="$notRun\nTetGen"
@@ -252,15 +254,15 @@ if [[ "$TYPE" == "MESH" || "$TYPE" == "ALL" ]]; then
    
     # Delaundo 
     if [[ "`which delaundo`" != "" || "`which delaundo.exe`" != "" ]]; then
-        expectPythonSuccess "delaundo_PyTest.py" $capsPythonRegDir
+        expectPythonSuccess "delaundo_PyTest.py"
     else
         notRun="$notRun\ndelaundo"
     fi
 
     # pointwise
     if [[ "`which pointwise`" != "" && -f $ESP_ROOT/lib/pointwiseAIM.$EXT ]]; then
-        expectPythonSuccess "pointwise_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "pointwise_Symmetry_PyTest.py" $capsPythonRegDir
+        expectPythonSuccess "pointwise_PyTest.py"
+        expectPythonSuccess "pointwise_Symmetry_PyTest.py"
     else
         notRun="$notRun\nPointwise"
     fi
@@ -273,49 +275,53 @@ if [[ "$TYPE" == "CFD" || "$TYPE" == "ALL" ]]; then
     echo "Running.... CFD PyTests"
     
     if [ "$SU2_RUN" != "" ] && [ "$OS" != "Windows_NT" ]; then
-        if [ -f $ESP_ROOT/lib/aflr2AIM.$EXT && \ 
-             -f $ESP_ROOT/lib/aflr3AIM.$EXT ]; then
-            expectPythonSuccess "su2_and_AFLR2_NodeDist_PyTest.py" $capsPythonRegDir
-            expectPythonSuccess "su2_and_AFLR2_PyTest.py" $capsPythonRegDir
-            expectPythonSuccess "su2_and_AFLR3_PyTest.py" $capsPythonRegDir
-            expectPythonSuccess "su2_and_AFLR4_AFLR3_PyTest.py" $capsPythonRegDir
+        if [[ -f $ESP_ROOT/lib/aflr2AIM.$EXT ]]; then
+            expectPythonSuccess "su2_and_AFLR2_NodeDist_PyTest.py"
+            expectPythonSuccess "su2_and_AFLR2_PyTest.py"
+        fi
+        if [[ -f $ESP_ROOT/lib/aflr3AIM.$EXT && 
+              -f $ESP_ROOT/lib/aflr4AIM.$EXT ]]; then
+            expectPythonSuccess "su2_and_AFLR4_AFLR3_PyTest.py"
         fi
         if [[ "`which delaundo`" != "" || "`which delaundo.exe`" != "" ]]; then
-            expectPythonSuccess "su2_and_Delaundo_PyTest.py" $capsPythonRegDir
+            expectPythonSuccess "su2_and_Delaundo_PyTest.py"
         fi
-        if [ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]; then
-            expectPythonSuccess "su2_and_Tetgen_PyTest.py" $capsPythonRegDir
-            expectPythonSuccess "su2_X43a_PyTest.py" $capsPythonRegDir
+        if [[ "`which pointwise`" != "" ]]; then
+            expectPythonSuccess "su2_and_pointwise_PyTest.py"
+        fi
+        if [[ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]]; then
+            expectPythonSuccess "su2_and_Tetgen_PyTest.py"
+            expectPythonSuccess "su2_X43a_PyTest.py"
         fi
     else
         notRun="$notRun\nSU2"
     fi
    
-    if [ "`which flowCart`" != "" ]; then
+    if [[ "`which flowCart`" != "" ]]; then
         ulimit -s unlimited || true # Cart3D requires unlimited stack size
-        expectPythonSuccess "cart_PyTest.py" $capsPythonRegDir
+        expectPythonSuccess "cart_PyTest.py"
     else
         notRun="$notRun\nCart3D"
     fi
 
-    if [ "`which nodet_mpi`" != "" ]; then
-        if [ -f $ESP_ROOT/lib/aflr2AIM.$EXT && \
-             -f $ESP_ROOT/lib/aflr3AIM.$EXT && \
-             -f $ESP_ROOT/lib/aflr4AIM.$EXT ]; then
-            expectPythonSuccess "fun3d_and_AFLR2_NodeDist_PyTest.py" $capsPythonRegDir
-            expectPythonSuccess "fun3d_and_AFLR2_PyTest.py" $capsPythonRegDir
-            expectPythonSuccess "fun3d_and_AFLR4_AFLR3_PyTest.py" $capsPythonRegDir
+    if [[ "`which nodet_mpi`" != "" ]]; then
+        if [[ -f $ESP_ROOT/lib/aflr2AIM.$EXT &&
+              -f $ESP_ROOT/lib/aflr3AIM.$EXT &&
+              -f $ESP_ROOT/lib/aflr4AIM.$EXT ]]; then
+            expectPythonSuccess "fun3d_and_AFLR2_NodeDist_PyTest.py"
+            expectPythonSuccess "fun3d_and_AFLR2_PyTest.py"
+            expectPythonSuccess "fun3d_and_AFLR4_AFLR3_PyTest.py"
         fi
         if [[ "`which delaundo`" != "" || "`which delaundo.exe`" != "" ]]; then
-            expectPythonSuccess "fun3d_and_Delaundo_PyTest.py" $capsPythonRegDir
+            expectPythonSuccess "fun3d_and_Delaundo_PyTest.py"
         fi
-        if [ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]; then
-            expectPythonSuccess "fun3d_and_Tetgen_AlphaSweep_PyTest.py" $capsPythonRegDir
-            expectPythonSuccess "fun3d_and_Tetgen_PyTest.py" $capsPythonRegDir
+        if [[ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]]; then
+            expectPythonSuccess "fun3d_and_Tetgen_AlphaSweep_PyTest.py"
+            expectPythonSuccess "fun3d_and_Tetgen_PyTest.py"
         fi
-        expectPythonSuccess "fun3d_and_egadsTess_ArbShape_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "fun3d_and_egadsTess_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "fun3d_PyTest.py" $capsPythonRegDir
+        expectPythonSuccess "fun3d_and_egadsTess_ArbShape_PyTest.py"
+        expectPythonSuccess "fun3d_and_egadsTess_PyTest.py"
+        expectPythonSuccess "fun3d_PyTest.py"
     else
         notRun="$notRun\nFun3D"
     fi
@@ -328,72 +334,72 @@ if [[ "$TYPE" == "STRUCTURE" || "$TYPE" == "ALL" ]]; then
     echo "Running.... STRUCTURE PyTests"
 
     ###### masstran ######
-    expectPythonSuccess "masstran_PyTest.py" $capsPythonRegDir
-    expectPythonSuccess "masstran_AGARD445_PyTest.py" $capsPythonRegDir
+    expectPythonSuccess "masstran_PyTest.py"
+    expectPythonSuccess "masstran_AGARD445_PyTest.py"
 
     ######  HSM ###### 
-    if [ -f $ESP_ROOT/lib/hsmAIM.$EXT  ]; then
-        expectPythonSuccess "hsm_SingleLoadCase_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "hsm_CantileverPlate_PyTest.py" $capsPythonRegDir
+    if [[ -f $ESP_ROOT/lib/hsmAIM.$EXT ]]; then
+        expectPythonSuccess "hsm_SingleLoadCase_PyTest.py"
+        expectPythonSuccess "hsm_CantileverPlate_PyTest.py"
     else
         notRun="$notRun\nHSM"
     fi 
 
     ###### Astros ######
-    if [ "$ASTROS_ROOT" != "" ]; then
-        expectPythonSuccess "astros_Aeroelastic_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_AGARD445_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_Composite_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_CompositeWingFreq_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_Flutter_15degree.py" $capsPythonRegDir
-        expectPythonSuccess "astros_MultipleLoadCase_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_SingleLoadCase_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_ThreeBarFreq_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_ThreeBarLinkDesign_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_ThreeBarMultiLoad_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_ThreeBar_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "astros_Trim_15degree.py" $capsPythonRegDir
+    if [[ "$ASTROS_ROOT" != "" ]]; then
+        expectPythonSuccess "astros_Aeroelastic_PyTest.py"
+        expectPythonSuccess "astros_AGARD445_PyTest.py"
+        expectPythonSuccess "astros_Composite_PyTest.py"
+        expectPythonSuccess "astros_CompositeWingFreq_PyTest.py"
+        expectPythonSuccess "astros_Flutter_15degree.py"
+        expectPythonSuccess "astros_MultipleLoadCase_PyTest.py"
+        expectPythonSuccess "astros_PyTest.py"
+        expectPythonSuccess "astros_SingleLoadCase_PyTest.py"
+        expectPythonSuccess "astros_ThreeBarFreq_PyTest.py"
+        expectPythonSuccess "astros_ThreeBarLinkDesign_PyTest.py"
+        expectPythonSuccess "astros_ThreeBarMultiLoad_PyTest.py"
+        expectPythonSuccess "astros_ThreeBar_PyTest.py"
+        expectPythonSuccess "astros_Trim_15degree.py"
  
         # TODO: Create these examples
-        #expectPythonSuccess "astros_CompositeWingDesign_PyTest.py" $capsPythonRegDir
-        #expectPythonSuccess "astros_OptimizationMultiLoad_PyTest.py" $capsPythonRegDir
-        #expectPythonSuccess "astros_ThreeBarDesign_PyTest.py" $capsPythonRegDir
+        #expectPythonSuccess "astros_CompositeWingDesign_PyTest.py"
+        #expectPythonSuccess "astros_OptimizationMultiLoad_PyTest.py"
+        #expectPythonSuccess "astros_ThreeBarDesign_PyTest.py"
     else
         notRun="$notRun\nAstros"
     fi
 
     ###### Nastran ######
-    if [ "`which nastran`" != "" ]; then
-        expectPythonSuccess "nastran_Aeroelastic_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_AGARD445_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_Composite_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_CompositeWingDesign_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_CompositeWingFreq_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_Flutter_15degree.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_MultiLoadCase_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_OptimizationMultiLoad_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_SingleLoadCase_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_ThreeBarDesign_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_ThreeBarFreq_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_ThreeBarLinkDesign_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_ThreeBarMultiLoad_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_ThreeBar_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "nastran_Trim_15degree.py" $capsPythonRegDir
+    if [[ "`which nastran`" != "" ]]; then
+        expectPythonSuccess "nastran_Aeroelastic_PyTest.py"
+        expectPythonSuccess "nastran_AGARD445_PyTest.py"
+        expectPythonSuccess "nastran_Composite_PyTest.py"
+        expectPythonSuccess "nastran_CompositeWingDesign_PyTest.py"
+        expectPythonSuccess "nastran_CompositeWingFreq_PyTest.py"
+        expectPythonSuccess "nastran_Flutter_15degree.py"
+        expectPythonSuccess "nastran_MultiLoadCase_PyTest.py"
+        expectPythonSuccess "nastran_OptimizationMultiLoad_PyTest.py"
+        expectPythonSuccess "nastran_PyTest.py"
+        expectPythonSuccess "nastran_SingleLoadCase_PyTest.py"
+        expectPythonSuccess "nastran_ThreeBarDesign_PyTest.py"
+        expectPythonSuccess "nastran_ThreeBarFreq_PyTest.py"
+        expectPythonSuccess "nastran_ThreeBarLinkDesign_PyTest.py"
+        expectPythonSuccess "nastran_ThreeBarMultiLoad_PyTest.py"
+        expectPythonSuccess "nastran_ThreeBar_PyTest.py"
+        expectPythonSuccess "nastran_Trim_15degree.py"
     else
         notRun="$notRun\nNastran"
     fi
 
     ###### Mystran ######
-    if [ "`which mystran.exe`" != "" ]; then
+    if [[ "`which mystran.exe`" != "" ]]; then
         if [[ "$OS" != "Windows_NT" ]]; then
             # Mystran runs out of heap memory on windows running this example
-            expectPythonSuccess "mystran_PyTest.py" $capsPythonRegDir
+            expectPythonSuccess "mystran_PyTest.py"
         fi
-        expectPythonSuccess "mystran_AGARD445_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "mystran_SingleLoadCase_PyTest.py" $capsPythonRegDir
-        expectPythonSuccess "mystran_MultiLoadCase_PyTest.py" $capsPythonRegDir
+        expectPythonSuccess "mystran_AGARD445_PyTest.py"
+        expectPythonSuccess "mystran_SingleLoadCase_PyTest.py"
+        expectPythonSuccess "mystran_MultiLoadCase_PyTest.py"
     else
         notRun="$notRun\nMystran"
     fi
@@ -406,33 +412,28 @@ if [[ "$TYPE" == "AEROELASTIC" || "$TYPE" == "ALL" ]]; then
     echo "Running.... AEROELASTIC PyTests"
 
     ###### Astros ######
-    if [ "$ASTROS_ROOT" != "" ] && [ "$SU2_RUN" != "" ] && [ "$OS" != "Windows_NT" ]; then
+    if [[ "$ASTROS_ROOT" != "" && "$SU2_RUN" != "" && "$OS" != "Windows_NT" ]]; then
         # SU2 6.0.0 on Windows is no longer supported
-        expectPythonSuccess "aeroelasticSimple_Pressure_SU2_and_Astros.py" $capsPythonRegDir -noPlotData
-        expectPythonSuccess "aeroelasticSimple_Displacement_SU2_and_Astros.py" $capsPythonRegDir -noPlotData
-        expectPythonSuccess "aeroelasticSimple_Iterative_SU2_and_Astros.py" $capsPythonRegDir
+        expectPythonSuccess "aeroelasticSimple_Pressure_SU2_and_Astros.py" -noPlotData
+        expectPythonSuccess "aeroelasticSimple_Displacement_SU2_and_Astros.py" -noPlotData
+        expectPythonSuccess "aeroelasticSimple_Iterative_SU2_and_Astros.py"
 
-        expectPythonSuccess "aeroelastic_Iterative_SU2_and_Astros.py" $capsPythonRegDir
+        expectPythonSuccess "aeroelastic_Iterative_SU2_and_Astros.py"
     else
         notRun="$notRun\nAstros"
     fi
 
     ###### Mystran ######
-    if [ "`which mystran.exe`" != "" ] && [ "$SU2_RUN" != "" ] && [ "$OS" != "Windows_NT" ]; then
+    if [[ "`which mystran.exe`" != "" && "$SU2_RUN" != "" && "$OS" != "Windows_NT" ]]; then
         # SU2 6.0.0 on Windows does not work with displacements
-        expectPythonSuccess "aeroelasticSimple_Pressure_SU2_and_Mystran.py" $capsPythonRegDir -noPlotData
-        expectPythonSuccess "aeroelasticSimple_Displacement_SU2_and_Mystran.py" $capsPythonRegDir -noPlotData
-        expectPythonSuccess "aeroelasticSimple_Iterative_SU2_and_Mystran.py" $capsPythonRegDir
+        expectPythonSuccess "aeroelasticSimple_Pressure_SU2_and_Mystran.py" -noPlotData
+        expectPythonSuccess "aeroelasticSimple_Displacement_SU2_and_Mystran.py" -noPlotData
+        expectPythonSuccess "aeroelasticSimple_Iterative_SU2_and_Mystran.py"
     else
-        notRun="$notRun\nMystran"
+        notRun="$notRun\nMystran and SU2"
     fi
 
     testsRan=1
-fi
-
-# Cleanup if we have success
-if [[ $stat == 0 ]]; then
-    rm -fr $capsPythonRegDir
 fi
 
 echo ""

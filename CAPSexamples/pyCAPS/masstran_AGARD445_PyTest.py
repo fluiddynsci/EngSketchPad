@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import modules
 import os
@@ -15,29 +13,31 @@ parser = argparse.ArgumentParser(description = 'Masstran AGARD445.6 Pytest Examp
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = ".", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
+# Create working directory variable
+workDir = os.path.join(str(args.workDir[0]), "masstranAGARD445")
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","feaAGARD445.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load astros aim
-myAnalysis = myProblem.loadAIM(aim = "masstranAIM",
-                               altName = "masstran")
+myAnalysis = myProblem.analysis.create(aim = "masstranAIM",
+                                       name = "masstran")
 
 # Set meshing parameters
-myAnalysis.setAnalysisVal("Edge_Point_Max", 10)
-myAnalysis.setAnalysisVal("Edge_Point_Min", 6)
+myAnalysis.input.Edge_Point_Max = 10
+myAnalysis.input.Edge_Point_Min = 6
 
-myAnalysis.setAnalysisVal("Quad_Mesh", True)
+myAnalysis.input.Quad_Mesh = True
 
-myAnalysis.setAnalysisVal("Tess_Params", [.25,.01,15])
+myAnalysis.input.Tess_Params = [.25,.01,15]
 
 # Set materials
 mahogany    = {"materialType"        : "orthotropic",
@@ -49,7 +49,7 @@ mahogany    = {"materialType"        : "orthotropic",
                "shearModulusTrans2Z" : 0.00227E6,
                "density"             : 3.5742E-5}
 
-myAnalysis.setAnalysisVal("Material", ("Mahogany", mahogany))
+myAnalysis.input.Material = {"Mahogany": mahogany}
 
 # Set properties
 shell  = {"propertyType" : "Shell",
@@ -58,7 +58,7 @@ shell  = {"propertyType" : "Shell",
           "bendingInertiaRatio" : 1.0, # Default - not necesssary
           "shearMembraneRatio"  : 5.0/6.0} # Default - not necesssary
 
-myAnalysis.setAnalysisVal("Property", ("yatesPlate", shell))
+myAnalysis.input.Property = {"yatesPlate": shell}
 
 # Run AIM pre-analysis
 myAnalysis.preAnalysis()
@@ -68,18 +68,18 @@ myAnalysis.postAnalysis()
 
 # Get mass properties
 print ("\nGetting results mass properties.....\n")
-Area     = myAnalysis.getAnalysisOutVal("Area")
-Mass     = myAnalysis.getAnalysisOutVal("Mass")
-Centroid = myAnalysis.getAnalysisOutVal("Centroid")
-CG       = myAnalysis.getAnalysisOutVal("CG")
-Ixx      = myAnalysis.getAnalysisOutVal("Ixx")
-Iyy      = myAnalysis.getAnalysisOutVal("Iyy")
-Izz      = myAnalysis.getAnalysisOutVal("Izz")
-Ixy      = myAnalysis.getAnalysisOutVal("Ixy")
-Ixz      = myAnalysis.getAnalysisOutVal("Ixz")
-Iyz      = myAnalysis.getAnalysisOutVal("Iyz")
-I        = myAnalysis.getAnalysisOutVal("I_Vector")
-II       = myAnalysis.getAnalysisOutVal("I_Tensor")
+Area     = myAnalysis.output.Area
+Mass     = myAnalysis.output.Mass
+Centroid = myAnalysis.output.Centroid
+CG       = myAnalysis.output.CG
+Ixx      = myAnalysis.output.Ixx
+Iyy      = myAnalysis.output.Iyy
+Izz      = myAnalysis.output.Izz
+Ixy      = myAnalysis.output.Ixy
+Ixz      = myAnalysis.output.Ixz
+Iyz      = myAnalysis.output.Iyz
+I        = myAnalysis.output.I_Vector
+II       = myAnalysis.output.I_Tensor
 
 print("Area     ", Area)
 print("Mass     ", Mass)
@@ -93,6 +93,3 @@ print("Ixz      ", Ixz)
 print("Iyz      ", Iyz)
 print("I        ", I)
 print("II       ", II)
-
-# Close CAPS
-myProblem.closeCAPS()

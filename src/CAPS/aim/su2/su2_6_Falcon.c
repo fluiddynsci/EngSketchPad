@@ -10,13 +10,27 @@
 #include "su2Utils.h"  // Bring in su2 utility header
 
 // Write SU2 configuration file for version Falcon (6.2)
-int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *aimInputs, cfdBCsStruct bcProps, int withMotion) {
+int su2_writeCongfig_Falcon(void *aimInfo, capsValue *aimInputs,
+                            cfdBoundaryConditionStruct bcProps, int withMotion)
+{
 
     int status; // Function return status
 
     int i; // Indexing
 
     int stringLength;
+
+    // units
+    const char *length=NULL;
+    const char *mass=NULL;
+    const char *temperature=NULL;
+    const char *force=NULL;
+    const char *pressure=NULL;
+    const char *density=NULL;
+    const char *speed=NULL;
+    const char *viscosity=NULL;
+    const char *area=NULL;
+    double real=1.0;
 
     // For SU2 boundary tagging
     int counter;
@@ -26,9 +40,8 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     char fileExt[] = ".cfg";
 
     printf("Write SU2 configuration file for version \"Falcon\"\n");
-    stringLength = strlen(analysisPath)
-                   + 1
-                   + strlen(aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string)
+    stringLength = 1
+                   + strlen(aimInputs[Proj_Name-1].vals.string)
                    + strlen(fileExt);
 
     filename = (char *) EG_alloc((stringLength +1)*sizeof(char));
@@ -37,16 +50,10 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
         goto cleanup;
     }
 
-    strcpy(filename, analysisPath);
-    #ifdef WIN32
-        strcat(filename, "\\");
-    #else
-        strcat(filename, "/");
-    #endif
-    strcat(filename, aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    strcpy(filename, aimInputs[Proj_Name-1].vals.string);
     strcat(filename, fileExt);
 
-    fp = fopen(filename,"w");
+    fp = aim_fopen(aimInfo, filename,"w");
     if (fp == NULL) {
         status =  CAPS_IOERR;
         goto cleanup;
@@ -55,7 +62,7 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
     fprintf(fp,"%%                                                                              %%\n");
     fprintf(fp,"%% SU2 configuration file                                                       %%\n");
-    fprintf(fp,"%% Created by SU2AIM for Project: \"%s\"\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"%% Created by SU2AIM for Project: \"%s\"\n", aimInputs[Proj_Name-1].vals.string);
     fprintf(fp,"%% File Version 6.2.0 \"Falcon\"                                                 %%\n");
     fprintf(fp,"%%                                                                              %%\n");
     fprintf(fp,"%% Please report bugs/comments/suggestions to NBhagat1@UDayton.edu              %%\n");
@@ -67,8 +74,8 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%% Physical governing equations (EULER, NAVIER_STOKES,\n");
     fprintf(fp,"%%                               WAVE_EQUATION, HEAT_EQUATION, FEM_ELASTICITY,\n");
     fprintf(fp,"%%                               POISSON_EQUATION)\n");
-    string_toUpperCase(aimInputs[aim_getIndex(aimInfo, "Physical_Problem",  ANALYSISIN)-1].vals.string);
-    fprintf(fp,"PHYSICAL_PROBLEM= %s\n", aimInputs[aim_getIndex(aimInfo, "Physical_Problem",  ANALYSISIN)-1].vals.string);
+    string_toUpperCase(aimInputs[Physical_Problem-1].vals.string);
+    fprintf(fp,"PHYSICAL_PROBLEM= %s\n", aimInputs[Physical_Problem-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Specify turbulence model (NONE, SA, SA_NEG, SST, SA_E, SA_COMP, SA_E_COMP)\n");
@@ -84,8 +91,8 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"MATH_PROBLEM= DIRECT\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Regime type (COMPRESSIBLE, INCOMPRESSIBLE)\n");
-    string_toUpperCase( aimInputs[aim_getIndex(aimInfo, "Equation_Type",  ANALYSISIN)-1].vals.string );
-    fprintf(fp,"REGIME_TYPE= %s\n", aimInputs[aim_getIndex(aimInfo, "Equation_Type",  ANALYSISIN)-1].vals.string);
+    string_toUpperCase(aimInputs[Equation_Type-1].vals.string);
+    fprintf(fp,"REGIME_TYPE= %s\n", aimInputs[Equation_Type-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Axisymmetric simulation, only compressible flows (NO, YES)\n");
@@ -108,8 +115,23 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%% United States customary units (US): ( inches, slug, Rankines, lbf = slug ft/s^2,\n");
     fprintf(fp,"%%                                       psf = lbf/ft^2, Density = slug/ft^3,\n");
     fprintf(fp,"%%                                       Speed = ft/s, Equiv. Area = ft^2 )\n");
-    string_toUpperCase(aimInputs[aim_getIndex(aimInfo, "Unit_System",  ANALYSISIN)-1].vals.string);
-    fprintf(fp,"SYSTEM_MEASUREMENTS= %s\n", aimInputs[aim_getIndex(aimInfo, "Unit_System",  ANALYSISIN)-1].vals.string);
+    string_toUpperCase(aimInputs[Unit_System-1].vals.string);
+    fprintf(fp,"SYSTEM_MEASUREMENTS= %s\n", aimInputs[Unit_System-1].vals.string);
+
+    if (aimInputs[Freestream_Pressure-1].units != NULL) {
+        // Get the units based on the Unit_System
+        status = su2_unitSystem(aimInputs[Unit_System-1].vals.string,
+                                &length,
+                                &mass,
+                                &temperature,
+                                &force,
+                                &pressure,
+                                &density,
+                                &speed,
+                                &viscosity,
+                                &area);
+        AIM_STATUS(aimInfo, status);
+    }
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% ------------------------------- DES Parameters ------------------------------%%\n");
@@ -123,15 +145,15 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%% -------------------- COMPRESSIBLE FREE-STREAM DEFINITION --------------------%%\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Mach number (non-dimensional, based on the free-stream values)\n");
-    fprintf(fp,"MACH_NUMBER= %f\n", aimInputs[aim_getIndex(aimInfo, "Mach",  ANALYSISIN)-1].vals.real);
+    fprintf(fp,"MACH_NUMBER= %f\n", aimInputs[Mach-1].vals.real);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Angle of attack (degrees, only for compressible flows)\n");
-    fprintf(fp,"AOA= %f\n", aimInputs[aim_getIndex(aimInfo, "Alpha",  ANALYSISIN)-1].vals.real);
+    fprintf(fp,"AOA= %f\n", aimInputs[Alpha-1].vals.real);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Side-slip angle (degrees, only for compressible flows)\n");
-    fprintf(fp,"SIDESLIP_ANGLE= %f\n", aimInputs[aim_getIndex(aimInfo, "Beta",  ANALYSISIN)-1].vals.real);
+    fprintf(fp,"SIDESLIP_ANGLE= %f\n", aimInputs[Beta-1].vals.real);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Init option to choose between Reynolds (default) or thermodynamics quantities\n");
@@ -143,21 +165,27 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"FREESTREAM_OPTION= TEMPERATURE_FS\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Free-stream pressure (101325.0 N/m^2, 2116.216 psf by default)\n");
-    if (aimInputs[aim_getIndex(aimInfo, "Freestream_Pressure",  ANALYSISIN)-1].nullVal == NotNull) {
-        fprintf(fp,"FREESTREAM_PRESSURE= %f\n", aimInputs[aim_getIndex(aimInfo, "Freestream_Pressure",  ANALYSISIN)-1].vals.real);
+    if (aimInputs[Freestream_Pressure-1].nullVal == NotNull) {
+        status = aim_convert(aimInfo, 1, aimInputs[Freestream_Pressure-1].units, &aimInputs[Freestream_Pressure-1].vals.real,
+                                         pressure, &real);
+        AIM_STATUS(aimInfo, status);
+        fprintf(fp,"FREESTREAM_PRESSURE= %f\n", real);
     } else {
         fprintf(fp,"FREESTREAM_PRESSURE= 101325.0\n");
     }
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Free-stream temperature (288.15 K, 518.67 R by default)\n");
-    if (aimInputs[aim_getIndex(aimInfo, "Freestream_Temperature",  ANALYSISIN)-1].nullVal == NotNull) {
-        fprintf(fp,"FREESTREAM_TEMPERATURE= %f\n", aimInputs[aim_getIndex(aimInfo, "Freestream_Temperature",  ANALYSISIN)-1].vals.real);
+    if (aimInputs[Freestream_Temperature-1].nullVal == NotNull) {
+        status = aim_convert(aimInfo, 1, aimInputs[Freestream_Temperature-1].units, &aimInputs[Freestream_Temperature-1].vals.real,
+                                         temperature, &real);
+        AIM_STATUS(aimInfo, status);
+        fprintf(fp,"FREESTREAM_TEMPERATURE= %f\n", real);
     }
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Reynolds number (non-dimensional, based on the free-stream values)\n");
-    fprintf(fp,"REYNOLDS_NUMBER= %e\n", aimInputs[aim_getIndex(aimInfo, "Re",  ANALYSISIN)-1].vals.real);
+    fprintf(fp,"REYNOLDS_NUMBER= %e\n", aimInputs[Re-1].vals.real);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Reynolds length (1 m, 1 inch by default)\n");
@@ -166,22 +194,31 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%% -------------------- INCOMPRESSIBLE FREE-STREAM DEFINITION ------------------%%\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Free-stream density (1.2886 Kg/m^3, 0.0025 slug/ft^3 by default)\n");
-    if (aimInputs[aim_getIndex(aimInfo, "Freestream_Density",  ANALYSISIN)-1].nullVal == NotNull) {
-        fprintf(fp,"FREESTREAM_DENSITY= %f\n", aimInputs[aim_getIndex(aimInfo, "Freestream_Density",  ANALYSISIN)-1].vals.real);
+    if (aimInputs[Freestream_Density-1].nullVal == NotNull) {
+        status = aim_convert(aimInfo, 1, aimInputs[Freestream_Density-1].units, &aimInputs[Freestream_Density-1].vals.real,
+                                         density, &real);
+        AIM_STATUS(aimInfo, status);
+        fprintf(fp,"FREESTREAM_DENSITY= %f\n", real);
     }
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Free-stream velocity (1.0 m/s, 1.0 ft/s by default)\n");
-    if (aimInputs[aim_getIndex(aimInfo, "Freestream_Velocity",  ANALYSISIN)-1].nullVal == NotNull) {
-        fprintf(fp,"FREESTREAM_VELOCITY= (%f, 0.0, 0.0) \n", aimInputs[aim_getIndex(aimInfo, "Freestream_Velocity",  ANALYSISIN)-1].vals.real);
+    if (aimInputs[Freestream_Velocity-1].nullVal == NotNull) {
+        status = aim_convert(aimInfo, 1, aimInputs[Freestream_Velocity-1].units, &aimInputs[Freestream_Velocity-1].vals.real,
+                                         speed, &real);
+        AIM_STATUS(aimInfo, status);
+        fprintf(fp,"FREESTREAM_VELOCITY= (%f, 0.0, 0.0) \n", real);
     } else {
         fprintf(fp,"FREESTREAM_VELOCITY= (1.0, 0.0, 0.0)\n");
     }
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Free-stream viscosity (1.853E-5 N s/m^2, 3.87E-7 lbf s/ft^2 by default)\n");
-    if (aimInputs[aim_getIndex(aimInfo, "Freestream_Viscosity",  ANALYSISIN)-1].nullVal == NotNull) {
-        fprintf(fp,"FREESTREAM_VISCOSITY= %e\n", aimInputs[aim_getIndex(aimInfo, "Freestream_Viscosity",  ANALYSISIN)-1].vals.real);
+    if (aimInputs[Freestream_Viscosity-1].nullVal == NotNull) {
+        status = aim_convert(aimInfo, 1, aimInputs[Freestream_Viscosity-1].units, &aimInputs[Freestream_Viscosity-1].vals.real,
+                                         viscosity, &real);
+        AIM_STATUS(aimInfo, status);
+        fprintf(fp,"FREESTREAM_VISCOSITY= %e\n", real);
     }
 
     fprintf(fp,"%%\n");
@@ -205,10 +242,10 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%% ---------------------- REFERENCE VALUE DEFINITION ---------------------------%%\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Reference origin for moment computation (m or in)\n");
-    if (aimInputs[aim_getIndex(aimInfo, "Moment_Center",  ANALYSISIN)-1].nullVal == NotNull) {
-        fprintf(fp,"REF_ORIGIN_MOMENT_X= %f\n", aimInputs[aim_getIndex(aimInfo, "Moment_Center",  ANALYSISIN)-1].vals.reals[0]);
-        fprintf(fp,"REF_ORIGIN_MOMENT_Y= %f\n", aimInputs[aim_getIndex(aimInfo, "Moment_Center",  ANALYSISIN)-1].vals.reals[1]);
-        fprintf(fp,"REF_ORIGIN_MOMENT_Z= %f\n", aimInputs[aim_getIndex(aimInfo, "Moment_Center",  ANALYSISIN)-1].vals.reals[2]);
+    if (aimInputs[Moment_Center-1].nullVal == NotNull) {
+        fprintf(fp,"REF_ORIGIN_MOMENT_X= %f\n", aimInputs[Moment_Center-1].vals.reals[0]);
+        fprintf(fp,"REF_ORIGIN_MOMENT_Y= %f\n", aimInputs[Moment_Center-1].vals.reals[1]);
+        fprintf(fp,"REF_ORIGIN_MOMENT_Z= %f\n", aimInputs[Moment_Center-1].vals.reals[2]);
 
     } else {
 
@@ -219,8 +256,11 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Reference length for moment non-dimensional coefficients (m or in)\n");
-    if (aimInputs[aim_getIndex(aimInfo, "Moment_Length",  ANALYSISIN)-1].nullVal == NotNull) {
-        fprintf(fp,"REF_LENGTH= %f\n", aimInputs[aim_getIndex(aimInfo, "Moment_Length",  ANALYSISIN)-1].vals.real);
+    if (aimInputs[Moment_Length-1].nullVal == NotNull) {
+        status = aim_convert(aimInfo, 1, aimInputs[Moment_Length-1].units, &aimInputs[Moment_Length-1].vals.real,
+                                         length, &real);
+        AIM_STATUS(aimInfo, status);
+        fprintf(fp,"REF_LENGTH= %f\n", real);
     } else {
         fprintf(fp,"REF_LENGTH= 1.00\n");
     }
@@ -228,8 +268,11 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Reference area for non-dimensional force coefficients (0 implies automatic\n");
     fprintf(fp,"%% calculation) (m^2 or in^2)\n");
-    if (aimInputs[aim_getIndex(aimInfo, "Reference_Area",  ANALYSISIN)-1].nullVal == NotNull) {
-        fprintf(fp,"REF_AREA= %f\n", aimInputs[aim_getIndex(aimInfo, "Reference_Area",  ANALYSISIN)-1].vals.real);
+    if (aimInputs[Reference_Area-1].nullVal == NotNull) {
+        status = aim_convert(aimInfo, 1, aimInputs[Reference_Area-1].units, &aimInputs[Reference_Area-1].vals.real,
+                                         area, &real);
+        AIM_STATUS(aimInfo, status);
+        fprintf(fp,"REF_AREA= %f\n", real);
     } else {
         fprintf(fp,"REF_AREA= 1.00\n");
     }
@@ -240,8 +283,8 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Flow non-dimensionalization (DIMENSIONAL, FREESTREAM_PRESS_EQ_ONE,\n");
     fprintf(fp,"%%                              FREESTREAM_VEL_EQ_MACH, FREESTREAM_VEL_EQ_ONE)\n");
-    string_toUpperCase(aimInputs[aim_getIndex(aimInfo, "Reference_Dimensionalization",  ANALYSISIN)-1].vals.string);
-    fprintf(fp,"REF_DIMENSIONALIZATION= %s\n", aimInputs[aim_getIndex(aimInfo, "Reference_Dimensionalization",  ANALYSISIN)-1].vals.string);
+    string_toUpperCase(aimInputs[Reference_Dimensionalization-1].vals.string);
+    fprintf(fp,"REF_DIMENSIONALIZATION= %s\n", aimInputs[Reference_Dimensionalization-1].vals.string);
 
     fprintf(fp,"\n");
     fprintf(fp,"%%\n");
@@ -331,12 +374,12 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%% Moving wall boundary marker(s) (NONE = no marker, ignored for RIGID_MOTION)\n");
     fprintf(fp,"MARKER_MOVING= (" );
     counter = 0;
-    for (i = 0; i < bcProps.numBCID ; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Inviscid ||
-            bcProps.surfaceProps[i].surfaceType == Viscous) {
+    for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Inviscid ||
+            bcProps.surfaceProp[i].surfaceType == Viscous) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }
@@ -519,12 +562,12 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"MARKER_EULER= (" );
 
     counter = 0; // Euler boundary
-    for (i = 0; i < bcProps.numBCID; i++) {
+    for (i = 0; i < bcProps.numSurfaceProp; i++) {
 
-        if (bcProps.surfaceProps[i].surfaceType == Inviscid) {
+        if (bcProps.surfaceProp[i].surfaceType == Inviscid) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }
@@ -538,13 +581,13 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"MARKER_HEATFLUX= (");
 
     counter = 0; // Viscous boundary w/ heat flux
-    for (i = 0; i < bcProps.numBCID; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Viscous &&
-            bcProps.surfaceProps[i].wallTemperatureFlag == (int) true &&
-            bcProps.surfaceProps[i].wallTemperature < 0) {
+    for (i = 0; i < bcProps.numSurfaceProp; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Viscous &&
+            bcProps.surfaceProp[i].wallTemperatureFlag == (int) true &&
+            bcProps.surfaceProp[i].wallTemperature < 0) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d, %f", bcProps.surfaceProps[i].bcID, bcProps.surfaceProps[i].wallHeatFlux);
+            fprintf(fp," %d, %f", bcProps.surfaceProp[i].bcID, bcProps.surfaceProp[i].wallHeatFlux);
 
             counter += 1;
         }
@@ -558,13 +601,13 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"MARKER_ISOTHERMAL= (");
 
     counter = 0; // Viscous boundary w/ isothermal wall
-    for (i = 0; i < bcProps.numBCID; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Viscous &&
-            bcProps.surfaceProps[i].wallTemperatureFlag == (int) true &&
-            bcProps.surfaceProps[i].wallTemperature >= 0) {
+    for (i = 0; i < bcProps.numSurfaceProp; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Viscous &&
+            bcProps.surfaceProp[i].wallTemperatureFlag == (int) true &&
+            bcProps.surfaceProp[i].wallTemperature >= 0) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d, %f", bcProps.surfaceProps[i].bcID, bcProps.surfaceProps[i].wallTemperature);
+            fprintf(fp," %d, %f", bcProps.surfaceProp[i].bcID, bcProps.surfaceProp[i].wallTemperature);
 
             counter += 1;
         }
@@ -577,11 +620,11 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"MARKER_FAR= (" );
 
     counter = 0; // Farfield boundary
-    for (i = 0; i < bcProps.numBCID; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Farfield) {
+    for (i = 0; i < bcProps.numSurfaceProp; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Farfield) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }
@@ -594,11 +637,11 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"MARKER_SYM= (" );
 
     counter = 0; // Symmetry boundary
-    for (i = 0; i < bcProps.numBCID; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Symmetry) {
+    for (i = 0; i < bcProps.numSurfaceProp; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Symmetry) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }
@@ -632,16 +675,16 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"MARKER_INLET= ( ");
 
     counter = 0; // Subsonic Inflow
-    for (i = 0; i < bcProps.numBCID ; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == SubsonicInflow) {
+    for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == SubsonicInflow) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d, %f, %f, %f, %f, %f", bcProps.surfaceProps[i].bcID,
-                                                  bcProps.surfaceProps[i].totalTemperature,
-                                                  bcProps.surfaceProps[i].totalPressure,
-                                                  bcProps.surfaceProps[i].uVelocity,
-                                                  bcProps.surfaceProps[i].vVelocity,
-                                                  bcProps.surfaceProps[i].wVelocity);
+            fprintf(fp," %d, %f, %f, %f, %f, %f", bcProps.surfaceProp[i].bcID,
+                                                  bcProps.surfaceProp[i].totalTemperature,
+                                                  bcProps.surfaceProp[i].totalPressure,
+                                                  bcProps.surfaceProp[i].uVelocity,
+                                                  bcProps.surfaceProp[i].vVelocity,
+                                                  bcProps.surfaceProp[i].wVelocity);
             counter += 1;
         }
     }
@@ -655,13 +698,13 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"MARKER_OUTLET= ( ");
 
     counter = 0; // Outlet boundary
-    for (i = 0; i < bcProps.numBCID ; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == BackPressure ||
-            bcProps.surfaceProps[i].surfaceType == SubsonicOutflow) {
+    for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == BackPressure ||
+            bcProps.surfaceProp[i].surfaceType == SubsonicOutflow) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d, %f", bcProps.surfaceProps[i].bcID,
-                                    bcProps.surfaceProps[i].staticPressure);
+            fprintf(fp," %d, %f", bcProps.surfaceProp[i].bcID,
+                                    bcProps.surfaceProp[i].staticPressure);
 
             counter += 1;
         }
@@ -825,12 +868,12 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"MARKER_PLOTTING= (" );
 
     counter = 0; // Surface marker
-    for (i = 0; i < bcProps.numBCID ; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Inviscid ||
-            bcProps.surfaceProps[i].surfaceType == Viscous) {
+    for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Inviscid ||
+            bcProps.surfaceProp[i].surfaceType == Viscous) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }
@@ -868,7 +911,7 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"NUM_METHOD_GRAD= GREEN_GAUSS\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% CFL number (initial value for the adaptive CFL number)\n");
-    fprintf(fp,"CFL_NUMBER= %f\n", aimInputs[aim_getIndex(aimInfo, "CFL_Number",  ANALYSISIN)-1].vals.real);
+    fprintf(fp,"CFL_NUMBER= %f\n", aimInputs[CFL_Number-1].vals.real);
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Adaptive CFL number (NO, YES)\n");
     fprintf(fp,"CFL_ADAPT= NO\n");
@@ -979,7 +1022,7 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%% -------------------------- MULTIGRID PARAMETERS -----------------------------%%\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Multi-grid levels (0 = no multi-grid)\n");
-    fprintf(fp,"MGLEVEL= %d\n", aimInputs[aim_getIndex(aimInfo, "MultiGrid_Level",  ANALYSISIN)-1].vals.integer);
+    fprintf(fp,"MGLEVEL= %d\n", aimInputs[MultiGrid_Level-1].vals.integer);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Multi-grid cycle (V_CYCLE, W_CYCLE, FULLMG_CYCLE)\n");
@@ -1004,8 +1047,8 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Convective numerical method (JST, LAX-FRIEDRICH, CUSP, ROE, AUSM, HLLC,\n");
     fprintf(fp,"%%                              TURKEL_PREC, MSW)\n");
-    string_toUpperCase(aimInputs[aim_getIndex(aimInfo, "Convective_Flux",  ANALYSISIN)-1].vals.string);
-    fprintf(fp,"CONV_NUM_METHOD_FLOW= %s\n", aimInputs[aim_getIndex(aimInfo, "Convective_Flux",  ANALYSISIN)-1].vals.string);
+    string_toUpperCase(aimInputs[Convective_Flux-1].vals.string);
+    fprintf(fp,"CONV_NUM_METHOD_FLOW= %s\n", aimInputs[Convective_Flux-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Roe Low Dissipation function for Hybrid RANS/LES simulations (FD, NTS, NTS_DUCROS)\n");
@@ -1142,15 +1185,15 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"DV_MARKER= (");
 
     // default to all inviscid and viscous surfaces if Surface_Deform is not set
-    if (aimInputs[aim_getIndex(aimInfo, "Surface_Deform", ANALYSISIN)-1].nullVal == IsNull) {
+    if (aimInputs[Surface_Deform-1].nullVal == IsNull) {
 
         counter = 0;
-        for (i = 0; i < bcProps.numBCID ; i++) {
-            if (bcProps.surfaceProps[i].surfaceType == Inviscid ||
-                bcProps.surfaceProps[i].surfaceType == Viscous) {
+        for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+            if (bcProps.surfaceProp[i].surfaceType == Inviscid ||
+                bcProps.surfaceProp[i].surfaceType == Viscous) {
 
                 if (counter > 0) fprintf(fp, ",");
-                fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+                fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
                 counter += 1;
             }
@@ -1192,7 +1235,7 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"DV_VALUE= 0.01\n");
     fprintf(fp,"%%\n");
     if ( withMotion == (int) false ) fprintf(fp, "%% ");
-    fprintf(fp,"DV_FILENAME=%s_motion.dat\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"DV_FILENAME=%s_motion.dat\n", aimInputs[Proj_Name-1].vals.string);
 
     fprintf(fp,"\n");
 
@@ -1282,7 +1325,7 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%% --------------------------- CONVERGENCE PARAMETERS --------------------------%%\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Number of total iterations\n");
-    fprintf(fp,"EXT_ITER= %d\n", aimInputs[aim_getIndex(aimInfo, "Num_Iter",  ANALYSISIN)-1].vals.integer);
+    fprintf(fp,"EXT_ITER= %d\n", aimInputs[Num_Iter-1].vals.integer);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Convergence criteria (CAUCHY, RESIDUAL)\n");
@@ -1290,7 +1333,7 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"CONV_CRITERIA= RESIDUAL\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Residual reduction (order of magnitude with respect to the initial value)\n");
-    fprintf(fp,"RESIDUAL_REDUCTION= %d\n", aimInputs[aim_getIndex(aimInfo, "Residual_Reduction",  ANALYSISIN)-1].vals.integer);
+    fprintf(fp,"RESIDUAL_REDUCTION= %d\n", aimInputs[Residual_Reduction-1].vals.integer);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Min value of the residual (log10 of the residual)\n");
@@ -1314,14 +1357,14 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%% ------------------------- INPUT/OUTPUT INFORMATION --------------------------%%\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Mesh input file\n");
-    fprintf(fp,"MESH_FILENAME= %s.su2\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"MESH_FILENAME= %s.su2\n", aimInputs[Proj_Name-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Mesh input file format (SU2, CGNS)\n");
     fprintf(fp,"MESH_FORMAT= SU2\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Mesh output file\n");
-    fprintf(fp,"MESH_OUT_FILENAME= %s.su2\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"MESH_OUT_FILENAME= %s.su2\n", aimInputs[Proj_Name-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Restart flow input file\n");
@@ -1332,27 +1375,27 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Output file format (TECPLOT, TECPLOT_BINARY, PARAVIEW,\n");
     fprintf(fp,"%%                     FIELDVIEW, FIELDVIEW_BINARY)\n");
-    string_toUpperCase(aimInputs[aim_getIndex(aimInfo, "Output_Format",  ANALYSISIN)-1].vals.string);
-    fprintf(fp,"OUTPUT_FORMAT= %s\n", aimInputs[aim_getIndex(aimInfo, "Output_Format",  ANALYSISIN)-1].vals.string);
+    string_toUpperCase(aimInputs[Output_Format-1].vals.string);
+    fprintf(fp,"OUTPUT_FORMAT= %s\n", aimInputs[Output_Format-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Output file convergence history (w/o extension)\n");
-    fprintf(fp,"CONV_FILENAME= history_%s\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"CONV_FILENAME= history_%s\n", aimInputs[Proj_Name-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Output file with the forces breakdown\n");
-    fprintf(fp,"BREAKDOWN_FILENAME= forces_breakdown_%s.dat\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"BREAKDOWN_FILENAME= forces_breakdown_%s.dat\n", aimInputs[Proj_Name-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Output file restart flow\n");
-    fprintf(fp,"RESTART_FLOW_FILENAME= restart_flow_%s.dat\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"RESTART_FLOW_FILENAME= restart_flow_%s.dat\n", aimInputs[Proj_Name-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Output file restart adjoint\n");
     fprintf(fp,"%% RESTART_ADJ_FILENAME= restart_adj.dat\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Output file flow (w/o extension) variables\n");
-    fprintf(fp,"VOLUME_FLOW_FILENAME= flow_%s\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"VOLUME_FLOW_FILENAME= flow_%s\n", aimInputs[Proj_Name-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Output file adjoint (w/o extension) variables\n");
@@ -1365,7 +1408,7 @@ int su2_writeCongfig_Falcon(void *aimInfo, const char *analysisPath, capsValue *
     fprintf(fp,"%% GRAD_OBJFUNC_FILENAME= of_grad.dat\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Output file surface flow coefficient (w/o extension)\n");
-    fprintf(fp,"SURFACE_FLOW_FILENAME= surface_flow_%s\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"SURFACE_FLOW_FILENAME= surface_flow_%s\n", aimInputs[Proj_Name-1].vals.string);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Output file surface adjoint coefficient (w/o extension)\n");

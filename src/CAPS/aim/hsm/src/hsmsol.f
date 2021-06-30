@@ -158,8 +158,8 @@ c---- residuals and Jacobians in cartesian basis
       real resc_vars(irtot,ivtot,nddim,kdim)
 
 c---- residuals and Jacobians in b1,b2,bn projection basis
-      real resp0(irtot,10501)
-      real dvp0(irtot,10501)
+      real resp0(irtot,kdim)
+      real dvp0(irtot,kdim)
 
       real resp(irtot,kdim)
       real resp_dvp(irtot,irtot,nddim,kdim)

@@ -86,8 +86,9 @@ STORE     Wing 0 0
 
 # Wing 1 - Restore
 RESTORE   Wing 0
-    ATTRIBUTE capsGroup $Wing1
-    ATTRIBUTE _name $Wing1
+    ATTRIBUTE capsGroup    $Wing1
+    ATTRIBUTE capsMesh     $Wing1
+    ATTRIBUTE _name        $Wing1
     ATTRIBUTE AFLR4_Cmp_ID 1
     ATTRIBUTE AFLR4_Edge_Refinement_Weight 1
 ## [attribute]
@@ -96,6 +97,7 @@ RESTORE   Wing 0
 # Wing 2 -  Restore and scale, translate
 RESTORE   Wing 0
     ATTRIBUTE capsGroup         $Wing2
+    ATTRIBUTE capsMesh          $Wing2
     ATTRIBUTE _name             $Wing2
     ATTRIBUTE AFLR4_Scale_Factor 10
     ATTRIBUTE AFLR4_Cmp_ID       2
@@ -108,10 +110,12 @@ RESTORE   Wing 0
 ## [farfield]
 SPHERE    0   0   0   80
     ATTRIBUTE capsGroup   $Farfield
+    ATTRIBUTE capsMesh    $Farfield
     ATTRIBUTE _name       $Farfield
     ATTRIBUTE AFLR_GBC    $FARFIELD_UG3_GBC
     ATTRIBUTE AFLR4_Cmp_ID 3
     ATTRIBUTE capsMeshLength  cmean #Charachteristic length for meshing
+    ATTRIBUTE .tParam "30.;5.;30;"
 ## [farfield]
 
 ## [closeCSM]

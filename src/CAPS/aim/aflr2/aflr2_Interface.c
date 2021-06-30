@@ -8,6 +8,7 @@
 
 #include "egads.h"     // Bring in EGADS
 
+#include "aimUtil.h"
 #include "meshUtils.h" // Collection of helper functions for meshing
 #include "cfdUtils.h"  // Collection of helper functions for cfd analysis
 #include "miscUtils.h"
@@ -21,9 +22,11 @@ char xplt_Case_Name[133];
 
 //#define AFLR2_BOUNDARY_LAYER
 
-static INT_ egads_eval_bedge (mapAttrToIndexStruct *attrMap,
-                              INT_ idef, ego tess, int *ix, int *iy, INT_ *nbedge, INT_2D ** inibe,
-                              INT_1D **Bnd_Edge_ID_Flag, DOUBLE_2D ** x)
+static INT_
+egads_eval_bedge(mapAttrToIndexStruct *groupMap, mapAttrToIndexStruct *meshMap,
+                 INT_ idef, ego tess, int *ix, int *iy, INT_ *nbedge,
+                 INT_2D ** inibe, INT_1D **Bnd_Edge_ID_Flag,
+                 INT_1D **Bnd_Edge_Mesh_ID_Flag, DOUBLE_2D ** x)
 {
 
   /*
@@ -62,7 +65,7 @@ static INT_ egads_eval_bedge (mapAttrToIndexStruct *attrMap,
     INT_         ierr;
     int          cnt, i, iloop, iedge, index, last, mtype, oclass,
                  n, nloop, nedge, *sen, *senses, status;
-    int          attrIndex;
+    int          groupIndex, meshIndex;
 
     double       range[2], uvbox[4];
 
@@ -72,10 +75,11 @@ static INT_ egads_eval_bedge (mapAttrToIndexStruct *attrMap,
 
     int tessStatus, numPoints, numEdge, numFace;
     ego body, *bodyFaces = NULL, *bodyEdges = NULL;
-    const char *groupName = NULL;
+    const char *groupName = NULL, *meshName=NULL;
 
     // 2D mesh checks
-    int xMeshConstant = (int) true, yMeshConstant = (int) true, zMeshConstant= (int) true;
+    int xMeshConstant = (int) true, yMeshConstant = (int) true;
+    int zMeshConstant = (int) true;
 
     // Get body from tessellation
     status = EG_statusTessBody(tess, &body, &tessStatus, &numPoints);
@@ -86,30 +90,34 @@ static INT_ egads_eval_bedge (mapAttrToIndexStruct *attrMap,
 
     // Get edges
     status = EG_getBodyTopos(body, NULL, EDGE, &numEdge, &bodyEdges);
-    if (status != EGADS_SUCCESS) {
-        status =  -status;
+    if ((status != EGADS_SUCCESS) || (bodyEdges == NULL)) {
+        status = -status;
+        if (status == 0) status = 999;
         goto cleanup;
     }
 
     // Get faces
     status = EG_getBodyTopos(body, NULL, FACE, &numFace, &bodyFaces);
-    if (status != EGADS_SUCCESS) {
-        status =  -status;
+    if ((status != EGADS_SUCCESS) || (bodyFaces == NULL)) {
+        status = -status;
+        if (status == 0) status = 999;
         goto cleanup;
     }
 
     status = EG_getTopology(bodyFaces[idef-1], &geom, &oclass, &mtype, uvbox,
                             &nloop, &loops, &senses);
-    if (status != EGADS_SUCCESS) {
-        status =  -status;
+    if ((status != EGADS_SUCCESS) || (loops == NULL)) {
+        status = -status;
+        if (status == 0) status = 999;
         goto cleanup;
     }
 
     for (cnt = iloop = 0; iloop < nloop; iloop++) {
         status = EG_getTopology(loops[iloop], &geom, &oclass, &mtype,
                                 NULL, &nedge, &edges, &senses);
-        if (status != EGADS_SUCCESS) {
-            status =  -status;
+        if ((status != EGADS_SUCCESS) || (edges == NULL)) {
+            status = -status;
+            if (status == 0) status = 999;
             goto cleanup;
         }
 
@@ -117,7 +125,7 @@ static INT_ egads_eval_bedge (mapAttrToIndexStruct *attrMap,
             status = EG_getTopology(edges[iedge], &geom, &oclass,
                                     &mtype, range, &n, &nodes, &sen);
             if (status != EGADS_SUCCESS) {
-                status =  -status;
+                status = -status;
                 goto cleanup;
             }
 
@@ -130,8 +138,9 @@ static INT_ egads_eval_bedge (mapAttrToIndexStruct *attrMap,
             }
 
             status = EG_getTessEdge(tess, index, &n, &xyzs, &ts);
-            if (status != EGADS_SUCCESS) {
-                status =  -status;
+            if ((status != EGADS_SUCCESS) || (xyzs == NULL)) {
+                status = -status;
+                if (status == 0) status = 999;
                 goto cleanup;
             }
 
@@ -193,20 +202,22 @@ static INT_ egads_eval_bedge (mapAttrToIndexStruct *attrMap,
 
     *nbedge = cnt;
 
-    *inibe            = (INT_2D *)    ug_malloc (&ierr, ((*nbedge)+1) * sizeof (INT_2D));
-    *Bnd_Edge_ID_Flag = (INT_1D *)    ug_malloc (&ierr, ((*nbedge)+1) * sizeof (INT_1D));
-    *x                = (DOUBLE_2D *) ug_malloc (&ierr, ((*nbedge)+1) * sizeof (DOUBLE_2D));
+    *inibe                 = (INT_2D *) ug_malloc (&ierr, ((*nbedge)+1) * sizeof (INT_2D));
+    *Bnd_Edge_ID_Flag      = (INT_1D *) ug_malloc (&ierr, ((*nbedge)+1) * sizeof (INT_1D));
+    *Bnd_Edge_Mesh_ID_Flag = (INT_1D *) ug_malloc (&ierr, ((*nbedge)+1) * sizeof (INT_1D));
+    *x                  = (DOUBLE_2D *) ug_malloc (&ierr, ((*nbedge)+1) * sizeof (DOUBLE_2D));
 
     if (ierr) {
-        ug_error_message ("*** ERROR 104111 : unable to allocate required memory ***");
+        ug_error_message("*** ERROR 104111 : unable to allocate required memory ***");
         return 104111;
     }
 
     for (cnt = iloop = 0; iloop < nloop; iloop++) {
         status = EG_getTopology(loops[iloop], &geom, &oclass, &mtype,
                                 NULL, &nedge, &edges, &senses);
-        if (status != EGADS_SUCCESS) {
-            status =  -status;
+        if ((status != EGADS_SUCCESS) || (edges == NULL)) {
+            status = -status;
+            if (status == 0) status = 999;
             goto cleanup;
         }
 
@@ -228,9 +239,11 @@ static INT_ egads_eval_bedge (mapAttrToIndexStruct *attrMap,
                 goto cleanup;
             }
 
+/*@-nullpass@*/
             status = retrieve_CAPSGroupAttr(bodyEdges[index-1], &groupName);
+/*@-nullpass@*/
             if (status == EGADS_SUCCESS) {
-                status = get_mapAttrToIndexIndex(attrMap, groupName, &attrIndex);
+                status = get_mapAttrToIndexIndex(groupMap, groupName, &groupIndex);
                 if (status != CAPS_SUCCESS) {
                     printf("\tNo capsGroup \"%s\" not found in attribute map\n", groupName);
                     goto cleanup;
@@ -242,16 +255,28 @@ static INT_ egads_eval_bedge (mapAttrToIndexStruct *attrMap,
                 goto cleanup;
             } else goto cleanup;
 
+            status = retrieve_CAPSMeshAttr(bodyEdges[index-1], &meshName);
+            if (status == EGADS_SUCCESS) {
+                status = get_mapAttrToIndexIndex(meshMap, meshName, &meshIndex);
+                if (status != CAPS_SUCCESS) {
+                    printf("\tNo capsMesh \"%s\" not found in attribute map\n", meshName);
+                    goto cleanup;
+                }
+            } else {
+                meshIndex = -1;
+            }
 
             status = EG_getTessEdge(tess, index, &n, &xyzs, &ts);
-            if (status != EGADS_SUCCESS) {
-                status =  -status;
+            if ((status != EGADS_SUCCESS) || (xyzs == NULL)) {
+                status = -status;
+                if (status == 0) status = 999;
                 goto cleanup;
             }
 
             for (i = 0; i < n-1; i++, cnt++) {
 
-                (*Bnd_Edge_ID_Flag)[cnt+1] = attrIndex;
+                (*Bnd_Edge_ID_Flag)[cnt+1] = groupIndex;
+                (*Bnd_Edge_Mesh_ID_Flag)[cnt+1] = meshIndex;
 
                 if (senses[iedge] == 1) {
                     (*x)[cnt+1][0] = xyzs[3*i+*ix];
@@ -291,11 +316,13 @@ static INT_ egads_eval_bedge (mapAttrToIndexStruct *attrMap,
 }
 
 
-int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
+int aflr2_Surface_Mesh(void *aimInfo,
+                       int Message_Flag, ego bodyIn,
                        meshInputStruct meshInput,
-                       mapAttrToIndexStruct attrMap,
-                       int numMeshProp,
-                       meshSizingStruct *meshProp,
+                       mapAttrToIndexStruct groupMap,
+                       mapAttrToIndexStruct meshMap,
+                       /*@unused@*/ int numMeshProp,
+                       /*@unused@*/ meshSizingStruct *meshProp,
                        meshStruct *surfaceMesh)
 {
 
@@ -320,6 +347,7 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
 
     INT_1D *Bnd_Edge_Grid_BC_Flag = NULL;
     INT_1D *Bnd_Edge_ID_Flag = NULL;
+    INT_1D *Bnd_Edge_Mesh_ID_Flag = NULL;
     INT_1D *Bnd_Edge_Error_Flag  =  NULL;
     INT_2D *Bnd_Edge_Connectivity = NULL;
     INT_3D *Tria_Connectivity = NULL;
@@ -389,7 +417,7 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
     }
 
     // extract the boundary tessellation from the egads body
-    status = egads_eval_bedge (&attrMap, 1, tess, &ix, &iy, &Number_of_Bnd_Edges, &Bnd_Edge_Connectivity, &Bnd_Edge_ID_Flag, &Coordinates);
+    status = egads_eval_bedge (&groupMap, &meshMap, 1, tess, &ix, &iy, &Number_of_Bnd_Edges, &Bnd_Edge_Connectivity, &Bnd_Edge_ID_Flag, &Bnd_Edge_Mesh_ID_Flag, &Coordinates);
     if (status != CAPS_SUCCESS) goto cleanup; // Add error code
 
     Number_of_Nodes = Number_of_Bnd_Edges;
@@ -397,7 +425,7 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
 //#define DUMP_TECPLOT_DEBUG_FILE
 #ifdef DUMP_TECPLOT_DEBUG_FILE
     {
-        FILE *fp = fopen("aflr2_debug.dat", "w");
+        FILE *fp = aim_fopen(aimInfo, "aflr2_debug.dat", "w");
         fprintf(fp, "VARIABLES = X, Y, ID\n");
 
         fprintf(fp, "ZONE N=%d, E=%d, F=FEPOINT, ET=LINESEG\n", Number_of_Nodes, Number_of_Bnd_Edges);
@@ -476,11 +504,13 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
         for (i = 1; i <= Number_of_Bnd_Edges; i++) {
 
             //If they don't match continue
-            if (Bnd_Edge_ID_Flag[i] != meshProp[propIndex].attrIndex) continue;
+            if (Bnd_Edge_Mesh_ID_Flag[i] != meshProp[propIndex].attrIndex) continue;
 
             // Set boundary layer spacing
-            Initial_Normal_Spacing[Bnd_Edge_Connectivity[i][0]] = meshProp[propIndex].boundaryLayerSpacing*capsMeshLength;
-            Initial_Normal_Spacing[Bnd_Edge_Connectivity[i][1]] = meshProp[propIndex].boundaryLayerSpacing*capsMeshLength;
+            Initial_Normal_Spacing[Bnd_Edge_Connectivity[i][0]] =
+                        meshProp[propIndex].boundaryLayerSpacing*capsMeshLength;
+            Initial_Normal_Spacing[Bnd_Edge_Connectivity[i][1]] =
+                        meshProp[propIndex].boundaryLayerSpacing*capsMeshLength;
         }
     }
 #endif //AFLR2_BOUNDARY_LAYER
@@ -488,7 +518,7 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
 
     // Initialize and setup AFLR2 input parameter structure
 
-    ug_set_prog_param_n_dim (2);
+    ug_set_prog_param_code (2);
 
     ug_set_prog_param_function1 (ug_initialize_aflr_param);
     ug_set_prog_param_function1 (ug_gq_initialize_param); // optional
@@ -552,6 +582,11 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
                                    &Source_Spacing,
                                    &Source_Metric);
     if (status != CAPS_SUCCESS) goto cleanup; // Add error code
+    AIM_NOTNULL(Coordinates          , aimInfo, status);
+    AIM_NOTNULL(Tria_Connectivity    , aimInfo, status);
+    AIM_NOTNULL(Quad_Connectivity    , aimInfo, status);
+    AIM_NOTNULL(Bnd_Edge_ID_Flag     , aimInfo, status);
+    AIM_NOTNULL(Bnd_Edge_Connectivity, aimInfo, status);
 
     surfaceMesh->meshType = Surface2DMesh;
     surfaceMesh->meshQuickRef.numTriangle      = Number_of_Trias;
@@ -567,7 +602,7 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
     // Nodes
     surfaceMesh->numNode = Number_of_Nodes;
 
-    surfaceMesh->node = (meshNodeStruct *) EG_alloc(surfaceMesh->numNode*sizeof(meshNodeStruct));
+    AIM_ALLOC(surfaceMesh->node , surfaceMesh->numNode, meshNodeStruct, aimInfo, status);
 
     // Initiate nodes
     for (i = 0; i < surfaceMesh->numNode; i++) {
@@ -580,7 +615,7 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
 
     // Allocate and initialize all elements
     surfaceMesh->numElement = Number_of_Trias + Number_of_Quads + Number_of_Bnd_Edges;
-    surfaceMesh->element = (meshElementStruct *) EG_alloc(surfaceMesh->numElement*sizeof(meshElementStruct));
+    AIM_ALLOC(surfaceMesh->element, surfaceMesh->numElement, meshElementStruct, aimInfo, status);
 
     // Initiate all elements
     for (i = 0; i < surfaceMesh->numElement; i++) {
@@ -591,7 +626,6 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
     // Initiate triangle elements
     for (i = 0; i < Number_of_Trias; i++) {
         elementIndex = i;
-
         surfaceMesh->element[elementIndex].elementType = Triangle;
 
         status = mesh_allocMeshElementConnectivity(&surfaceMesh->element[elementIndex]);
@@ -622,6 +656,7 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
 
         surfaceMesh->element[elementIndex].elementID = elementIndex+1;
         surfaceMesh->element[elementIndex].markerID = faceAttr;
+
     }
 
     for (i = 0; i < Number_of_Bnd_Edges; i++) {
@@ -642,40 +677,39 @@ int aflr2_Surface_Mesh(int Message_Flag, ego bodyIn,
 
     status = CAPS_SUCCESS;
 
-    goto cleanup;
+cleanup:
+    (void) EG_deleteObject(tess);
 
-    cleanup:
-        (void) EG_deleteObject(tess);
+    EG_free(meshInputString);
+    EG_free(bodyFaces);
 
-        EG_free(meshInputString);
-        EG_free(bodyFaces);
+    //Free the arguments
+    ug_free_argv (prog_argv);
 
-        //Free the arguments
-        ug_free_argv (prog_argv);
+    ug_free(Bnd_Edge_Grid_BC_Flag);
+    ug_free(Bnd_Edge_ID_Flag);
+    ug_free(Bnd_Edge_Mesh_ID_Flag);
+    ug_free(Bnd_Edge_Error_Flag);
+    ug_free(Bnd_Edge_Connectivity);
+    ug_free(Tria_Connectivity);
+    ug_free(Quad_Connectivity);
 
-        ug_free(Bnd_Edge_Grid_BC_Flag);
-        ug_free(Bnd_Edge_ID_Flag);
-        ug_free(Bnd_Edge_Error_Flag);
-        ug_free(Bnd_Edge_Connectivity);
-        ug_free(Tria_Connectivity);
-        ug_free(Quad_Connectivity);
+    ug_free(Coordinates);
+    ug_free(Initial_Normal_Spacing);
 
-        ug_free(Coordinates);
-        ug_free(Initial_Normal_Spacing);
+    ug_free(BG_Bnd_Edge_Grid_BC_Flag);
+    ug_free(BG_Bnd_Edge_ID_Flag);
+    ug_free(BG_Bnd_Edge_Connectivity);
+    ug_free(BG_Tria_Neighbors);
+    ug_free(BG_Tria_Connectivity);
 
-        ug_free(BG_Bnd_Edge_Grid_BC_Flag);
-        ug_free(BG_Bnd_Edge_ID_Flag);
-        ug_free(BG_Bnd_Edge_Connectivity);
-        ug_free(BG_Tria_Neighbors);
-        ug_free(BG_Tria_Connectivity);
+    ug_free(BG_Spacing);
+    ug_free(BG_Coordinates);
+    ug_free(BG_Metric);
 
-        ug_free(BG_Spacing);
-        ug_free(BG_Coordinates);
-        ug_free(BG_Metric);
+    ug_free(Source_Spacing);
+    ug_free(Source_Coordinates);
+    ug_free(Source_Metric);
 
-        ug_free(Source_Spacing);
-        ug_free(Source_Coordinates);
-        ug_free(Source_Metric);
-
-        return status;
+    return status;
 }

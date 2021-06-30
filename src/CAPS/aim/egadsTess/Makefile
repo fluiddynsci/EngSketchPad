@@ -24,6 +24,9 @@ $(ODIR)/egadsTessAIM.o:	egadsTessAIM.c $(IDIR)/capsTypes.h \
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils egadsTessAIM.c \
 		-o $(ODIR)/egadsTessAIM.o
 
+lint:
+	$(LINT) -I../../include -I$(IDIR) -I../utils $(wildcard *.c) -uniondef -exportlocal
+
 clean:
 	-rm $(ODIR)/egadsTessAIM.o
 
@@ -31,7 +34,8 @@ cleanall:	clean
 	-rm $(LDIR)/egadsTessAIM.so
 
 	
-dox:
+dox: doc/html/index.html
+doc/html/index.html: $(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
 	(cd doc; doxygen egadsTessAIM_dox.cfg; cd latex; make; mv refman.pdf egadsTessAIM.pdf)
 
 doxclean:

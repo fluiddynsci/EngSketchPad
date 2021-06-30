@@ -1,24 +1,19 @@
-from __future__ import print_function
-
-from pyCAPS import capsProblem
+import pyCAPS
 
 # Instantiate our CAPS problem "myProblem" 
-print("Initiating capsProblem")
-myProblem = capsProblem()
-
-print("Loading file into our capsProblem")
-myGeometry = myProblem.loadCAPS("case.csm")
+print("Loading file into our Problem")
+myProblem = pyCAPS.Problem(problemName="skeletonExample",
+                           capsFile="case.csm")
 
 # Load our skeletal aim 
-skel = myProblem.loadAIM(aim = "skeletonAIM", analysisDir = ".",   
-                         capsIntent = "CFD")
+skel = myProblem.analysis.create(aim = "skeletonAIM")
 
 ##[analysisValueSetandGet]
 # Get current value of our first input
-value = skel.getAnalysisVal("skeletonAIMin")
+value = skel.input.skeletonAIMin
 print("Default skeletonAIMin =", value)
-skel.setAnalysisVal("skeletonAIMin", 6.0)
-value = skel.getAnalysisVal("skeletonAIMin")
+skel.input.skeletonAIMin = 6.0
+value = skel.input.skeletonAIMin
 print("Current skeletonAIMin =", value)
 
 ##[analysisPreAndPost]
@@ -31,10 +26,6 @@ skel.preAnalysis()
 skel.postAnalysis()
 
 # Get an output
-value = skel.getAnalysisOutVal("skeletonAIMout")
+value = skel.output.skeletonAIMout
 print("Computed skeletonAIMout =", value)
 ##[analysisPreAndPost]
-
-# Close our problems
-print("Closing our problem")
-myProblem.closeCAPS()

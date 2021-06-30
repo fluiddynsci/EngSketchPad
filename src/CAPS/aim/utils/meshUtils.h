@@ -1,3 +1,5 @@
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
 // Mesh related utility functions - Written by Dr. Ryan Durscher AFRL/RQVC
 
 #include "meshTypes.h"  // Bring in mesh structures
@@ -17,6 +19,8 @@ int mesh_bodyTessellation(ego tess, mapAttrToIndexStruct *attrMap,
                           int *numNodes, double *xyzCoord[],
                           int *numTriFace, int *triFaceConn[], int *triFaceCompID[], int *triFaceTopoID[],
                           int *numBndEdge, int *bndEdgeConn[], int *bndEdgeCompID[], int *bndEdgeTopoID[],
+                          int *numNodeEle, int *nodeEleConn[], int *nodeEleCompID[], int *nodeEleTopoID[],
+                          int *twoDMesh,
                           int *tessFaceQuadMap,
                           int *numQuadFace, int *quadFaceConn[], int *quadFaceCompID[], int *quadFaceTopoID[]);
 
@@ -38,7 +42,8 @@ int mesh_modifyBodyTess(int numMeshProp,
                         int numBody,
                         ego bodies[]);
 
-int write_MAPBC(char *fname,
+int write_MAPBC(void *aimInfo,
+                char *fname,
                 int numBnds,
                 int *bndIds,
                 int *bndVals);
@@ -49,7 +54,7 @@ void get_Surface_Norm(double p1[3],
                       double norm[3]);
 
 // Populate bndCondStruct boundary condition information - Boundary condition values get filled with 99
-int populate_bndCondStruct_from_bcPropsStruct(cfdBCsStruct *bcProps,
+int populate_bndCondStruct_from_bcPropsStruct(cfdBoundaryConditionStruct *bcProps,
                                               bndCondStruct *bndConds);
 
 // Populate bndCondStruct boundary condition information from attribute map - Boundary condition values get filled with 99
@@ -232,24 +237,28 @@ int mesh_copyMeshStruct( meshStruct *in, meshStruct *out );
 int mesh_combineMeshStruct(int numMesh, meshStruct mesh[], meshStruct *combineMesh );
 
 // Write a mesh contained in the mesh structure in AFLR3 format (*.ugrid, *.lb8.ugrid, *.b8.ugrid)
-int mesh_writeAFLR3(char *fname,
+int mesh_writeAFLR3(void *aimInfo,
+                    char *fname,
                     int asciiFlag, // 0 for binary, anything else for ascii
                     meshStruct *mesh,
                     double scaleFactor); // Scale factor for coordinates
 
 // Read a mesh into the mesh structure from an AFLR3 format (*.ugrid, *.lb8.ugrid, *.b8.ugrid)
-int mesh_readAFLR3(char *fname,
+int mesh_readAFLR3(void *aimInfo,
+                   char *fname,
                    meshStruct *mesh,
                    double scaleFactor) ;// Scale factor for coordinates
 
 // Write a mesh contained in the mesh structure in VTK format (*.vtk)
-int mesh_writeVTK(char *fname,
+int mesh_writeVTK(void *aimInfo,
+                  char *fname,
                   int asciiFlag, // 0 for binary, anything else for ascii
                   meshStruct *mesh,
                   double scaleFactor); // Scale factor for coordinates
 
 // Write a mesh contained in the mesh structure in SU2 format (*.su2)
-int mesh_writeSU2(char *fname,
+int mesh_writeSU2(void *aimInfo,
+                  char *fname,
                   int asciiFlag, // 0 for binary, anything else for ascii
                   meshStruct *mesh,
                   int numBnds,
@@ -257,14 +266,16 @@ int mesh_writeSU2(char *fname,
                   double scaleFactor); // Scale factor for coordinates
 
 // Write a mesh contained in the mesh structure in NASTRAN format (*.bdf)
-int mesh_writeNASTRAN(char *fname,
+int mesh_writeNASTRAN(void *aimInfo,
+                      char *fname,
                       int asciiFlag, // 0 for binary, anything else for ascii
                       meshStruct *nasMesh,
                       feaFileTypeEnum gridFileType,
                       double scaleFactor); // Scale factor for coordinates
 
 // Write a mesh contained in the mesh structure in Astros format (*.bdf)
-int mesh_writeAstros(char *fname,
+int mesh_writeAstros(void *aimInfo,
+                     char *fname,
                      int asciiFlag, // 0 for binary, anything else for ascii
                      meshStruct *mesh,
                      feaFileTypeEnum gridFileType,
@@ -272,13 +283,15 @@ int mesh_writeAstros(char *fname,
                      double scaleFactor); // Scale factor for coordinates
 
 // Write a mesh contained in the mesh structure in STL format (*.stl)
-int mesh_writeSTL(char *fname,
+int mesh_writeSTL(void *aimInfo,
+                  char *fname,
                   int asciiFlag, // 0 for binary, anything else for ascii
                   meshStruct *mesh,
                   double scaleFactor); // Scale factor for coordinates
 
 // Write a mesh contained in the mesh structure in Tecplot format (*.dat)
-int mesh_writeTecplot(const char *fname,
+int mesh_writeTecplot(void *aimInfo,
+                      const char *fname,
                       int asciiFlag,
                       meshStruct *mesh,
                       double scaleFactor); // Scale factor for coordinates
@@ -288,22 +301,24 @@ int mesh_writeTecplot(const char *fname,
 //	x[0] y[0] x y coordinates
 //	x[1] y[1]
 //	 ...  ...
-int mesh_writeAirfoil(char *fname,
+int mesh_writeAirfoil(void *aimInfo,
+                      char *fname,
                       int asciiFlag,
                       meshStruct *mesh,
                       double scaleFactor); // Scale factor for coordinates
 
 // Write a mesh contained in the mesh structure in FAST mesh format (*.msh)
-int mesh_writeFAST(char *fname,
+int mesh_writeFAST(void *aimInfo,
+                   char *fname,
                    int asciiFlag,
                    meshStruct *mesh,
                    double scaleFactor); // Scale factor for coordinates
 
 // Write a mesh contained in the mesh structure in Abaqus mesh format (*_Mesh.inp)
-int mesh_writeAbaqus(char *fname,
+int mesh_writeAbaqus(void *aimInfo,
+                     char *fname,
                      int asciiFlag,
                      meshStruct *mesh,
-                     mapAttrToIndexStruct *attrMap, // Mapping between element sets and property IDs
                      double scaleFactor); // Scale factor for coordinates
 
 // Extrude a surface mesh a single unit the length of extrusionLength - return a
@@ -331,6 +346,35 @@ int mesh_createIgnoreMesh(meshStruct *mesh, meshStruct *meshIgnore);
 
 // Changes the analysisType of a mesh
 int mesh_setAnalysisType(meshAnalysisTypeEnum analysisType, meshStruct *mesh);
+
+// Find meshNodeStructs with `isMatch` function
+// Returns array of borrowed pointers
+int mesh_findNodes(meshStruct *mesh, 
+                   int (*isMatch)(meshNodeStruct *, void *), 
+                   void *isMatchArg, 
+                   int *numFound, 
+                   meshNodeStruct ***foundSet);
+
+// Find meshElementStructs with `isMatch` function
+// Returns array of borrowed pointers
+int mesh_findElements(meshStruct *mesh, 
+                      int (*isMatch)(meshElementStruct *, void *), 
+                      void *isMatchArg, 
+                      int *numFound, 
+                      meshElementStruct ***foundSet);
+
+// Find meshElementStructs with given groupName(s)
+// Returns array of borrowed pointers
+int mesh_findGroupElements(meshStruct *mesh,
+                      mapAttrToIndexStruct *attrMap, 
+                      int numGroupName, 
+                      char **groupName, 
+                      int *numGroupElement, 
+                      meshElementStruct ***groupElementSet);
+
+// General routine to do fill up a AIM capsDiscr data structure
+int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
+                   int numBody, ego *tess, capsDiscr *discr);
 
 #ifdef __cplusplus
 }

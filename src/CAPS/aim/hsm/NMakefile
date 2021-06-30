@@ -28,7 +28,8 @@ $(LDIR)\hsmAIM.dll:	$(ODIR)\hsmAIM.obj $(ODIR)\hsmUtils.obj \
 	link /out:$(LDIR)\hsmAIM.dll /dll /def:hsmAIM.def \
 		$(ODIR)\hsmAIM.obj $(ODIR)\hsmUtils.obj $(ODIR)\hsmAdj.obj \
 		$(ODIR)\rcm.obj $(ODIR)\genrcmi.obj /LIBPATH:$(LDIR) \
-		utils.lib aimUtil.lib ocsm.lib egads.lib udunits2.lib hsm.lib
+		utils.lib aimUtil.lib ocsm.lib egads.lib udunits2.lib hsm.lib \
+		/NODEFAULTLIB:LIBCMT
 	$(MCOMP) /manifest $(LDIR)\hsmAIM.dll.manifest \
 		/outputresource:$(LDIR)\hsmAIM.dll;2
 

@@ -3,7 +3,7 @@
  *
  *             Base Object Functions
  *
- *      Copyright 2014-2020, Massachusetts Institute of Technology
+ *      Copyright 2014-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -16,35 +16,285 @@
 #ifdef WIN32
 /* needs Advapi32.lib & Ws2_32.lib */
 #include <Windows.h>
-#define getpid   _getpid
-#define snprintf _snprintf
+#define getpid     _getpid
+#define snprintf   _snprintf
+#define strcasecmp  stricmp
+#define access     _access
+#define PATH_MAX   _MAX_PATH
+#define F_OK       0
 #else
 #include <unistd.h>
+#include <dirent.h>
+#include <limits.h>
+#include <sys/stat.h>
 #endif
 
 #include "udunits.h"
 
 #include "capsTypes.h"
+#include "capsFunIDs.h"
 #include "capsAIM.h"
+
+/* OpenCSM Defines & Includes */
+#include "common.h"
+#include "OpenCSM.h"
 
 
 #define STRING(a)       #a
 #define STR(a)          STRING(a)
 
-static char *CAPSprop[2] = {STR(CAPSPROP),
-                        "\nCAPSprop: Copyright 2014-2020 MIT. All Rights Reserved."};
+static char  *CAPSprop[2] = {STR(CAPSPROP),
+                   "\nCAPSprop: Copyright 2014-2021 MIT. All Rights Reserved."};
 
-extern /*@null@*/ /*@only@*/
-       char *EG_strdup(/*@null@*/ const char *str);
+/*@-incondefs@*/
+extern void ut_free(/*@only@*/ ut_unit* const unit);
+/*@+incondefs@*/
 
+extern /*@null@*/ /*@only@*/ char *EG_strdup(/*@null@*/ const char *str);
+
+extern void caps_jrnlWrite(capsProblem *problem, capsObject *obj, int status,
+                           int nargs, capsJrnl *args, CAPSLONG sNum0,
+                           CAPSLONG sNum);
+extern int  caps_jrnlRead(capsProblem *problem, capsObject *obj, int nargs,
+                          capsJrnl *args, CAPSLONG *sNum, int *status);
 extern int  caps_filter(capsProblem *problem, capsAnalysis *analysis);
 extern int  caps_Aprx1DFree(/*@only@*/ capsAprx1D *approx);
 extern int  caps_Aprx2DFree(/*@only@*/ capsAprx2D *approx);
+extern int  caps_build(capsObject *pobject, int *nErr, capsErrs **errors);
+extern int  caps_dumpGeomVals(capsProblem *problem, int flag);
+extern int  caps_writeProblem(const capsObject *pobject);
+extern void caps_freeFList(capsObject *obj);
+
+/* used internally */
+int caps_freeError(/*@only@*/ capsErrs *errs);
 
 
 
-void
-caps_getStaticStrings(char ***signature, char **pID, char **user)
+#ifdef WIN32
+static int caps_flipSlash(const char *src, char *back)
+{
+  int len, i;
+  
+  len = strlen(src);
+  if (len >= PATH_MAX) return EGADS_INDEXERR;
+  
+  for (i = 0; i <= len; i++)
+    if (src[i] == '/') {
+      back[i] = '\\';
+    } else {
+      back[i] = src[i];
+    }
+  
+  return EGADS_SUCCESS;
+}
+#endif
+
+
+static int caps_statFileX(const char *path)
+{
+  int   stat;
+#ifdef WIN32
+  DWORD dwAttr;
+#else
+  DIR   *dr;
+#endif
+
+/*@-unrecog@*/
+  stat = access(path, F_OK);
+/*@+unrecog@*/
+  if (stat == -1) return EGADS_NOTFOUND;
+
+  /* are we a directory */
+#ifdef WIN32
+  dwAttr = GetFileAttributes(path);
+  if ((dwAttr != (DWORD) -1) && ((dwAttr & FILE_ATTRIBUTE_DIRECTORY) != 0))
+    return EGADS_OUTSIDE;
+#else
+  dr = opendir(path);
+  if (dr != NULL) {
+    closedir(dr);
+    return EGADS_OUTSIDE;
+  }
+#endif
+
+  return EGADS_SUCCESS;
+}
+
+
+int caps_statFile(const char *path)
+{
+#ifdef WIN32
+  int  stat;
+  char back[PATH_MAX];
+
+  stat = caps_flipSlash(path, back);
+  if (stat != EGADS_SUCCESS) return stat;
+  return caps_statFileX(back);
+#else
+  return caps_statFileX(path);
+#endif
+}
+
+
+int caps_rmFile(const char *path)
+{
+#ifdef WIN32
+  int  stat;
+  char back[PATH_MAX];
+
+  stat = caps_flipSlash(path, back);
+  if (stat != EGADS_SUCCESS) return stat;
+  if (_unlink(back) == -1) return EGADS_NOTFOUND;
+#else
+  if ( unlink(path) == -1) return EGADS_NOTFOUND;
+#endif
+
+  return EGADS_SUCCESS;
+}
+
+
+int caps_rmDir(const char *path)
+{
+  int  stat;
+/*@-unrecog@*/
+  char cmd[PATH_MAX+13];
+/*@+unrecog@*/
+#ifdef WIN32
+  char back[PATH_MAX];
+
+  stat = caps_flipSlash(path, back);
+  if (stat != EGADS_SUCCESS) return stat;
+  stat = caps_statFileX(back);
+  if (stat != EGADS_OUTSIDE) return EGADS_NOTFOUND;
+  snprintf(cmd, PATH_MAX+13, "rmdir /Q /S %s", path);
+  fflush(NULL);
+#else
+  stat = caps_statFileX(path);
+  if (stat != EGADS_OUTSIDE) return EGADS_NOTFOUND;
+  snprintf(cmd, PATH_MAX+13, "rm -rf %s", path);
+#endif
+  stat = system(cmd);
+  if ((stat == -1) || (stat == 127)) return EGADS_REFERCE;
+  
+  return EGADS_SUCCESS;
+}
+
+
+int caps_mkDir(const char *path)
+{
+  int  stat;
+#ifdef WIN32
+  char back[PATH_MAX];
+
+  stat = caps_flipSlash(path, back);
+  if (stat != EGADS_SUCCESS)  return stat;
+  stat = caps_statFileX(back);
+  if (stat != EGADS_NOTFOUND) return EGADS_EXISTS;
+  stat = mkdir(back);
+#else
+  stat = caps_statFileX(path);
+  if (stat != EGADS_NOTFOUND) return EGADS_EXISTS;
+  stat = mkdir(path, 0777);
+#endif
+  if (stat == -1) return EGADS_NOTFOUND;
+
+  return EGADS_SUCCESS;
+}
+
+
+int caps_cpFile(const char *src, const char *dst)
+{
+  int  stat;
+  char cmd[2*PATH_MAX+10];
+#ifdef WIN32
+  char sback[PATH_MAX], dback[PATH_MAX];
+
+  stat = caps_flipSlash(src, sback);
+  if (stat != EGADS_SUCCESS)  return stat;
+  stat = caps_statFileX(sback);
+  if (stat != EGADS_SUCCESS)  return EGADS_NOTFOUND;
+  stat = caps_flipSlash(dst, dback);
+  if (stat != EGADS_SUCCESS)  return stat;
+  stat = caps_statFileX(dback);
+  if (stat != EGADS_NOTFOUND) return EGADS_NOTFOUND;
+  snprintf(cmd, 2*PATH_MAX+10, "copy /Y %s %s", sback, dback);
+  fflush(NULL);
+#else
+  stat = caps_statFileX(src);
+  if (stat != EGADS_SUCCESS)  return EGADS_NOTFOUND;
+  stat = caps_statFileX(dst);
+  if (stat != EGADS_NOTFOUND) return EGADS_NOTFOUND;
+  snprintf(cmd, 2*PATH_MAX+10, "cp %s %s", src, dst);
+#endif
+  stat = system(cmd);
+  if (stat != 0) return EGADS_REFERCE;
+  
+  return EGADS_SUCCESS;
+}
+
+
+int caps_cpDir(const char *src, const char *dst)
+{
+  int  stat;
+  char cmd[2*PATH_MAX+20];
+#ifdef WIN32
+  char sback[PATH_MAX], dback[PATH_MAX];
+
+  stat = caps_flipSlash(src, sback);
+  if (stat != EGADS_SUCCESS)  return stat;
+  stat = caps_statFileX(sback);
+  if (stat != EGADS_OUTSIDE)  return EGADS_NOTFOUND;
+  stat = caps_flipSlash(dst, dback);
+  if (stat != EGADS_SUCCESS)  return stat;
+  stat = caps_statFileX(dback);
+  if (stat != EGADS_NOTFOUND) return EGADS_NOTFOUND;
+  snprintf(cmd, 2*PATH_MAX+20, "xcopy %s %s /I /E /Q /Y", sback, dback);
+  fflush(NULL);
+#else
+  stat = caps_statFileX(src);
+  if (stat != EGADS_OUTSIDE)  return EGADS_NOTFOUND;
+  stat = caps_statFileX(dst);
+  if (stat != EGADS_NOTFOUND) return EGADS_NOTFOUND;
+  snprintf(cmd, 2*PATH_MAX+20, "cp -R -p %s %s", src, dst);
+#endif
+  stat = system(cmd);
+  if (stat != 0) return EGADS_REFERCE;
+  
+  return EGADS_SUCCESS;
+}
+
+
+int caps_rename(const char *src, const char *dst)
+{
+  int  stat;
+#ifdef WIN32
+  char sback[PATH_MAX], dback[PATH_MAX];
+  
+  stat = caps_flipSlash(src, sback);
+  if (stat != EGADS_SUCCESS)  return stat;
+  stat = caps_statFileX(sback);
+  if (stat == EGADS_NOTFOUND) return stat;
+  stat = caps_flipSlash(dst, dback);
+  if (stat != EGADS_SUCCESS)  return stat;
+  stat = caps_statFileX(dback);
+  if (stat != EGADS_NOTFOUND) {
+    if (stat == EGADS_SUCCESS) {
+      caps_rmFile(dback);
+    } else {
+      caps_rmDir(dback);
+    }
+  }
+  stat = rename(sback, dback);
+#else
+  stat = rename(src,   dst);
+#endif
+  if (stat != 0) return CAPS_DIRERR;
+  
+  return EGADS_SUCCESS;
+}
+
+
+void caps_getStaticStrings(char ***signature, char **pID, char **user)
 {
 #ifdef WIN32
   int     len;
@@ -76,8 +326,7 @@ caps_getStaticStrings(char ***signature, char **pID, char **user)
 }
 
 
-void
-caps_fillDateTime(short *datetime)
+void caps_fillDateTime(short *datetime)
 {
 #ifdef WIN32
   SYSTEMTIME sysTime;
@@ -117,8 +366,7 @@ caps_fillDateTime(short *datetime)
 }
 
 
-void
-caps_fillLengthUnits(capsProblem *problem, ego body, char **lunits)
+void caps_fillLengthUnits(capsProblem *problem, ego body, char **lunits)
 {
   int          status, atype, alen;
   const int    *aints;
@@ -152,8 +400,7 @@ caps_fillLengthUnits(capsProblem *problem, ego body, char **lunits)
 }
 
 
-void
-caps_geomOutUnits(char *name, /*@null@*/ char *lunits, char **units)
+void caps_geomOutUnits(char *name, /*@null@*/ char *lunits, char **units)
 {
   int         i, len;
   static char *names[21] = {"@xmin", "@xmax", "@ymin", "@ymax", "@zmin",
@@ -181,8 +428,7 @@ caps_geomOutUnits(char *name, /*@null@*/ char *lunits, char **units)
 }
 
 
-int
-caps_makeTuple(int n, capsTuple **tuple)
+int caps_makeTuple(int n, capsTuple **tuple)
 {
   int       i;
   capsTuple *tmp;
@@ -200,8 +446,7 @@ caps_makeTuple(int n, capsTuple **tuple)
 }
 
 
-void
-caps_freeTuple(int n, /*@only@*/ capsTuple *tuple)
+void caps_freeTuple(int n, /*@only@*/ capsTuple *tuple)
 {
   int i;
   
@@ -214,9 +459,16 @@ caps_freeTuple(int n, /*@only@*/ capsTuple *tuple)
 }
 
 
-void
-caps_freeOwner(capsOwn *own)
+void caps_freeOwner(capsOwn *own)
 {
+  int i;
+  
+  if (own->lines != NULL) {
+    for (i = 0; i < own->nLines; i++) EG_free(own->lines[i]);
+    EG_free(own->lines);
+    own->lines = NULL;
+  }
+  own->nLines = 0;
   if (own->pname != NULL) {
     EG_free(own->pname);
     own->pname = NULL;
@@ -232,8 +484,7 @@ caps_freeOwner(capsOwn *own)
 }
 
 
-void
-caps_freeAttrs(egAttrs **attrx)
+void caps_freeAttrs(egAttrs **attrx)
 {
   int     i;
   egAttrs *attrs;
@@ -263,42 +514,48 @@ caps_freeAttrs(egAttrs **attrx)
 }
 
 
-void
-caps_freeValueObjects(int vflag, int nObjs, capsObject **objects)
+void caps_freeValueObjects(int vflag, int nObjs, capsObject **objects)
 {
-  int       i;
+  int       i, j;
   capsValue *value, *vArray;
 
   if (objects == NULL) return;
   vArray = (capsValue *) objects[0]->blind;
 
   for (i = 0; i < nObjs; i++) {
-
+    /* remove any journal read pointers */
+    caps_freeFList(objects[i]);
     /* clean up any allocated data arrays */
     value = (capsValue *) objects[i]->blind;
     if (value != NULL) {
       objects[i]->blind = NULL;
       if ((value->type == Boolean) || (value->type == Integer)) {
         if (value->length > 1) EG_free(value->vals.integers);
-      } else if (value->type == Double) {
+      } else if ((value->type == Double) || (value->type == DoubleDeriv)) {
         if (value->length > 1) EG_free(value->vals.reals);
       } else if (value->type == String) {
-        if (value->vals.string != NULL) EG_free(value->vals.string);
+        EG_free(value->vals.string);
       } else if (value->type == Tuple) {
         caps_freeTuple(value->length, value->vals.tuple);
       } else {
-        if (value->length > 1) {
-          caps_freeValueObjects(vflag, value->length, value->vals.objects);
-          EG_free(value->vals.objects);
-        } else {
-          caps_freeValueObjects(vflag, 1, &value->vals.object);
-        }
+        /* pointer type -- nothing should be done here... */
       }
-      if (value->units != NULL) EG_free(value->units);
+      if (value->units   != NULL) EG_free(value->units);
+      if (value->partial != NULL) EG_free(value->partial);
+      if (value->dots    != NULL) {
+        for (j = 0; j < value->ndot; j++) {
+          if (value->dots[j].name != NULL) EG_free(value->dots[j].name);
+          if (value->dots[j].dot  != NULL) EG_free(value->dots[j].dot);
+        }
+        EG_free(value->dots);
+      }
       if (vflag == 1) EG_free(value);
     }
     
     /* cleanup and invalidate the object */
+    for (j = 0; j < objects[i]->nHistory; j++)
+      caps_freeOwner(&objects[i]->history[j]);
+    if (objects[i]->history != NULL) EG_free(objects[i]->history);
     caps_freeAttrs(&objects[i]->attrs);
     caps_freeOwner(&objects[i]->last);
     objects[i]->magicnumber = 0;
@@ -312,24 +569,132 @@ caps_freeValueObjects(int vflag, int nObjs, capsObject **objects)
 }
 
 
-void
-caps_freeAnalysis(int flag, /*@only@*/ capsAnalysis *analysis)
+static void caps_freeEleType(capsEleType *eletype)
 {
-  int i;
+  eletype->nref  = 0;
+  eletype->ndata = 0;
+  eletype->ntri  = 0;
+  eletype->nmat  = 0;
+
+  EG_free(eletype->gst);
+  eletype->gst = NULL;
+  EG_free(eletype->dst);
+  eletype->dst = NULL;
+  EG_free(eletype->matst);
+  eletype->matst = NULL;
+  EG_free(eletype->tris);
+  eletype->tris = NULL;
+}
+
+
+void caps_freeDiscr(capsDiscr *discr)
+{
+  int           i;
+  capsBodyDiscr *discBody = NULL;
+
+  /* free up this capsDiscr */
+
+  EG_free(discr->verts);
+  discr->verts = NULL;
+  EG_free(discr->celem);
+  discr->celem = NULL;
+  EG_free(discr->dtris);
+  discr->dtris = NULL;
+
+  discr->nPoints = 0;
+  discr->nVerts  = 0;
+  discr->nDtris  = 0;
+
+  /* free Types */
+  if (discr->types != NULL) {
+    for (i = 0; i < discr->nTypes; i++)
+      caps_freeEleType(discr->types + i);
+    EG_free(discr->types);
+    discr->types = NULL;
+  }
+  discr->nTypes = 0;
+
+  EG_free(discr->tessGlobal);
+  discr->tessGlobal = NULL;
+
+  /* free Body discretizations */
+  for (i = 0; i < discr->nBodys; i++) {
+    discBody = &discr->bodys[i];
+    EG_free(discBody->elems);
+    EG_free(discBody->gIndices);
+    EG_free(discBody->dIndices);
+    EG_free(discBody->poly);
+  }
+  EG_free(discr->bodys);
+  discr->bodys  = NULL;
+  discr->nBodys = 0;
+
+  /* aim must free discr->ptrm */
+  if (discr->ptrm != NULL)
+    printf(" CAPS Warning: discr->ptrm is not NULL (caps_freeDiscr)!\n");
+}
+
+
+void caps_freeAnalysis(int flag, /*@only@*/ capsAnalysis *analysis)
+{
+  int         i, j, state, npts;
+  const char  *eType[4] = {"Info",
+                           "Warning",
+                           "Error",
+                           "Possible Developer Error"};
+  ego body;
+  capsProblem *problem;
 
   if (analysis == NULL) return;
+  
+  problem = analysis->info.problem;
+  if (analysis->instStore != NULL)
+    aim_cleanup(problem->aimFPTR, analysis->loadName, analysis->instStore);
   for (i = 0; i < analysis->nField; i++) EG_free(analysis->fields[i]);
   EG_free(analysis->fields);
   EG_free(analysis->ranks);
+  EG_free(analysis->fInOut);
   if (analysis->intents  != NULL) EG_free(analysis->intents);
   if (analysis->loadName != NULL) EG_free(analysis->loadName);
+  if (analysis->unitSys  != NULL) EG_free(analysis->unitSys);
+  if (analysis->fullPath != NULL) EG_free(analysis->fullPath);
   if (analysis->path     != NULL) EG_free(analysis->path);
-  if (analysis->parents  != NULL) EG_free(analysis->parents);
-  if (analysis->bodies   != NULL) {
-    for (i = 0; i < analysis->nBody; i++)
-      if (analysis->bodies[i+analysis->nBody] != NULL)
-        EG_deleteObject(analysis->bodies[i+analysis->nBody]);
-    EG_free(analysis->bodies);
+  if (analysis->bodies   != NULL) EG_free(analysis->bodies);
+
+  if (analysis->tess != NULL) {
+    for (j = 0; j < analysis->nTess; j++)
+      if (analysis->tess[j] != NULL) {
+        /* delete the body in the tessellation if not on the OpenCSM stack */
+        body = NULL;
+        if (j >= analysis->nBody) {
+          (void) EG_statusTessBody(analysis->tess[j], &body, &state, &npts);
+        }
+        EG_deleteObject(analysis->tess[j]);
+        analysis->tess[j] = NULL;
+        if (body != NULL) EG_deleteObject(body);
+      }
+    EG_free(analysis->tess);
+    analysis->tess   = NULL;
+    analysis->nTess  = 0;
+  }
+
+  if (analysis->info.errs.errors != NULL) {
+    printf(" Note: Lost AIM Communication ->\n");
+    for (i = 0; i < analysis->info.errs.nError; i++) {
+      for (j = 0; j < analysis->info.errs.errors[i].nLines; j++) {
+        if (j == 0) {
+          printf("   %s: %s\n", eType[analysis->info.errs.errors[i].eType],
+                 analysis->info.errs.errors[i].lines[j]);
+        } else {
+          printf("            %s\n", analysis->info.errs.errors[i].lines[j]);
+        }
+        EG_free(analysis->info.errs.errors[i].lines[j]);
+      }
+      EG_free(analysis->info.errs.errors[i].lines);
+    }
+    EG_free(analysis->info.errs.errors);
+    analysis->info.errs.nError = 0;
+    analysis->info.errs.errors = NULL;
   }
   if (flag == 1) return;
 
@@ -344,8 +709,7 @@ caps_freeAnalysis(int flag, /*@only@*/ capsAnalysis *analysis)
 }
 
 
-int
-caps_makeObject(capsObject **objs)
+int caps_makeObject(capsObject **objs)
 {
   capsObject *objects;
 
@@ -356,11 +720,15 @@ caps_makeObject(capsObject **objs)
   objects->magicnumber = CAPSMAGIC;
   objects->type        = UNUSED;
   objects->subtype     = NONE;
-  objects->sn          = 0;
   objects->name        = NULL;
   objects->attrs       = NULL;
   objects->blind       = NULL;
+  objects->flist       = NULL;
   objects->parent      = NULL;
+  objects->nHistory    = 0;
+  objects->history     = NULL;
+  objects->last.nLines = 0;
+  objects->last.lines  = NULL;
   objects->last.pname  = NULL;
   objects->last.pID    = NULL;
   objects->last.user   = NULL;
@@ -376,11 +744,10 @@ int
 caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
 {
   char             *chars;
-  int              *ints, j;
+  int              *ints, j, slen;
   double           *reals;
   enum capsBoolean *bools;
   capsValue        *value;
-  capsObject       **objs;
   capsTuple        *tuple;
   
   *val  = NULL;
@@ -389,14 +756,19 @@ caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
   if (value == NULL) return EGADS_MALLOC;
   value->length  = len;
   value->type    = type;
-  value->nrow    = value->ncol   = value->dim = value->pIndex = 0;
+  value->nrow    = value->ncol   = value->dim = 0;
+  value->index   = value->pIndex = 0;
   value->lfixed  = value->sfixed = Fixed;
   value->nullVal = NotAllowed;
   value->units   = NULL;
   value->link    = NULL;
   value->limits.dlims[0] = value->limits.dlims[1] = 0.0;
   value->linkMethod      = Copy;
- 
+  value->gInType         = 0;
+  value->partial         = NULL;
+  value->ndot            = 0;
+  value->dots            = NULL;
+
   if (data == NULL) {
     value->nullVal = IsNull;
     if (type == Boolean) {
@@ -421,7 +793,7 @@ caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
         }
         for (j = 0; j < value->length; j++) value->vals.integers[j] = 0;
       }
-    } else if (type == Double) {
+    } else if ((type == Double) || (type == DoubleDeriv)) {
       if (value->length <= 1) {
         value->vals.real = 0.0;
       } else {
@@ -433,14 +805,12 @@ caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
         for (j = 0; j < value->length; j++) value->vals.reals[j] = 0.0;
       }
     } else if (type == String) {
-      if (len <= 0) value->length = 1;
-      value->vals.string = (char *) EG_alloc(value->length*sizeof(char));
+      value->vals.string = (char *) EG_alloc(2*value->length*sizeof(char));
       if (value->vals.string == NULL) {
         EG_free(value);
         return EGADS_MALLOC;
       }
-      for (j = 0; j < value->length; j++) value->vals.string[j] = 0;
-      if (value->length == 1) value->length = 2;
+      for (j = 0; j < 2*value->length; j++) value->vals.string[j] = 0;
     } else if (type == Tuple) {
       value->vals.tuple = NULL;
       if (len > 0) {
@@ -452,19 +822,11 @@ caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
         }
       }
     } else {
-      if (value->length <= 1) {
-        value->vals.object = NULL;
-      } else {
-        value->vals.objects = (capsObject **)
-                              EG_alloc(value->length*sizeof(capsObject *));
-        if (value->vals.objects == NULL) {
-          EG_free(value);
-          return EGADS_MALLOC;
-        }
-        for (j = 0; j < value->length; j++) value->vals.objects[j] = NULL;
-      }
+      value->vals.AIMptr = NULL;
     }
+    
   } else {
+    
     if (type == Boolean) {
       bools = (enum capsBoolean *) data;
       if (value->length == 1) {
@@ -489,7 +851,7 @@ caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
         }
         for (j = 0; j < value->length; j++) value->vals.integers[j] = ints[j];
       }
-    } else if (type == Double) {
+    } else if ((type == Double) || (type == DoubleDeriv)) {
       reals = (double *) data;
       if (value->length == 1) {
         value->vals.real = reals[0];
@@ -503,14 +865,14 @@ caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
       }
     } else if (type == String) {
       chars = (char *) data;
-      value->length      = strlen(chars)+1;
-      value->vals.string = (char *) EG_alloc(value->length*sizeof(char));
+      for (slen = j = 0; j < value->length; j++)
+        slen += strlen(chars + slen)+1;
+      value->vals.string = (char *) EG_alloc(slen*sizeof(char));
       if (value->vals.string == NULL) {
         EG_free(value);
         return EGADS_MALLOC;
       }
-      for (j = 0; j < value->length; j++) value->vals.string[j] = chars[j];
-      if (value->length == 1) value->length = 2;
+      for (j = 0; j < slen; j++) value->vals.string[j] = chars[j];
     } else if (type == Tuple) {
       value->vals.tuple = NULL;
       if (len > 0) {
@@ -537,18 +899,7 @@ caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
         }
       }
     } else {
-      objs = (capsObject **) data;
-      if (value->length == 1) {
-        value->vals.object = objs[0];
-      } else {
-        value->vals.objects = (capsObject **)
-        EG_alloc(value->length*sizeof(capsObject *));
-        if (value->vals.objects == NULL) {
-          EG_free(value);
-          return EGADS_MALLOC;
-        }
-        for (j = 0; j < value->length; j++) value->vals.objects[j] = objs[j];
-      }
+      value->vals.AIMptr = (void *) data;
     }
   }
   if (value->length > 1) value->dim = Vector;
@@ -559,9 +910,10 @@ caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
 
 
 int
-caps_findProblem(const capsObject *object, capsObject **pobject)
+caps_findProblem(const capsObject *object, int funID, capsObject **pobject)
 {
-  capsObject *pobj;
+  capsObject  *pobj;
+  capsProblem *problem;
   
   *pobject = NULL;
   if (object == NULL) return CAPS_NULLOBJ;
@@ -571,101 +923,132 @@ caps_findProblem(const capsObject *object, capsObject **pobject)
     if (pobj->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
     if (pobj->type        == PROBLEM) {
       if (pobj->blind == NULL) return CAPS_NULLBLIND;
+      if (funID != 9999) {
+        problem  = (capsProblem *) pobj->blind;
+        problem->funID = funID;
+      }
       *pobject = pobj;
       return CAPS_SUCCESS;
     }
     pobj = pobj->parent;
   } while (pobj != NULL);
-  
+
   return CAPS_NOTPROBLEM;
 }
 
 
-int
-caps_makeSimpleErr(/*@null@*/ capsObject *object, const char *line1,
-                   /*@null@*/ const char *line2, /*@null@*/ const char *line3,
-                   /*@null@*/ const char *line4, capsErrs **errs)
+void
+caps_makeSimpleErr(/*@null@*/ capsObject *object, enum capseType type,
+                   const char *line1, /*@null@*/ const char *line2,
+                   /*@null@*/ const char *line3, capsErrs **errs)
 {
-  int      i;
-  capsErrs *error;
+  int       i, index = 0;
+  capsError *tmp;
+  capsErrs  *error;
   
-  *errs = NULL;
-  error = (capsErrs *) EG_alloc(sizeof(capsErrs));
-  if (error == NULL) return EGADS_MALLOC;
-  error->nError = 1;
-  error->errors = (capsError *) EG_alloc(sizeof(capsError));
-  if (error->errors == NULL) {
-    EG_free(error);
-    return EGADS_MALLOC;
+  if (*errs == NULL) {
+    error = (capsErrs *) EG_alloc(sizeof(capsErrs));
+    if (error == NULL) return;
+    error->nError = 1;
+    error->errors = (capsError *) EG_alloc(sizeof(capsError));
+    if (error->errors == NULL) {
+      EG_free(error);
+      return;
+    }
+  } else {
+    error = *errs;
+    i     = error->nError;
+    tmp   = (capsError *) EG_reall(error->errors, (i+1)*sizeof(capsError));
+    if (tmp == NULL) return;
+    error->errors = tmp;
+    error->nError = i+1;
+    index         = i;
   }
   
   i = 0;
   if (line1 != NULL) i++;
   if (line2 != NULL) i++;
   if (line3 != NULL) i++;
-  if (line4 != NULL) i++;
-  error->errors->errObj = object;
-  error->errors->nLines = i;
-  error->errors->lines  = NULL;
+  error->errors[index].errObj = object;
+  error->errors[index].index  = 0;
+  error->errors[index].eType  = type;
+  error->errors[index].nLines = i;
+  error->errors[index].lines  = NULL;
   if (i != 0) {
-    error->errors->lines = (char **) EG_alloc(i*sizeof(char *));
-    if (error->errors->lines == NULL) {
-      EG_free(error->errors);
-      EG_free(error);
-      return EGADS_MALLOC;
-    }
+    error->errors[index].lines = (char **) EG_alloc(i*sizeof(char *));
+    if (error->errors[index].lines == NULL) return;
     i = 0;
     if (line1 != NULL) {
-      error->errors->lines[i] = EG_strdup(line1);
+      error->errors[index].lines[i] = EG_strdup(line1);
       i++;
     }
     if (line2 != NULL) {
-      error->errors->lines[i] = EG_strdup(line2);
+      error->errors[index].lines[i] = EG_strdup(line2);
       i++;
     }
-    if (line3 != NULL) {
-      error->errors->lines[i] = EG_strdup(line3);
-      i++;
-    }
-    if (line4 != NULL) {
-      error->errors->lines[i] = EG_strdup(line4);
-      i++;
-    }
+    if (line3 != NULL) error->errors[index].lines[i] = EG_strdup(line3);
   }
   
   *errs = error;
-  return CAPS_SUCCESS;
 }
 
 
 /************************* CAPS exposed functions ****************************/
 
 
+void
+caps_revision(int *major, int *minor)
+{
+  *major = CAPSMAJOR;
+  *minor = CAPSMINOR;
+}
+
+
 int
-caps_info(const capsObject *object, char **name, enum capsoType *type,
+caps_info(capsObject *object, char **name, enum capsoType *type,
           enum capssType *subtype, capsObject **link, capsObject **parent,
           capsOwn *last)
 {
-  int        i, stat;
-  capsValue  *value;
-  capsObject *pobj;
+  int         i, stat, ret;
+  CAPSLONG    sNum;
+  capsValue   *value;
+  capsProblem *problem;
+  capsObject  *pobj;
+  capsJrnl    args[2];
   
-  *name      = NULL;
-  *type      = UNUSED;
-  *subtype   = NONE;
-  *link      = *parent     = NULL;
-  last->user = last->pname = last->pID = NULL;
+  *name        = NULL;
+  *type        = UNUSED;
+  *subtype     = NONE;
+  *link        = *parent     = NULL;
+  last->nLines = 0;
+  last->lines  = NULL;
+  last->user   = last->pname = last->pID = NULL;
   for (i = 0; i < 6; i++) last->datetime[i] = 0;
 
   if (object              == NULL)      return CAPS_NULLOBJ;
   if (object->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
   if (object->blind       == NULL)      return CAPS_NULLBLIND;
-
-  stat     = caps_findProblem(object, &pobj);
+  stat     = caps_findProblem(object, CAPS_INFO, &pobj);
+  if (stat != CAPS_SUCCESS) return stat;
+  problem  = (capsProblem *) pobj->blind;
+  
   *type    = object->type;
   *subtype = object->subtype;
   *name    = object->name;
   *parent  = object->parent;
+  
+  args[0].type = jObject;
+  args[1].type = jOwn;
+  stat         = caps_jrnlRead(problem, object, 2, args, &sNum, &ret);
+  if (stat == CAPS_JOURNALERR) return stat;
+  if (stat == CAPS_JOURNAL) {
+    if (ret == CAPS_SUCCESS) {
+      *link = args[0].members.obj;
+      *last = args[1].members.own;
+    }
+    return ret;
+  }
+  
   if (object->type == VALUE) {
     value  = (capsValue *) object->blind;
     *link  = value->link;
@@ -677,39 +1060,55 @@ caps_info(const capsObject *object, char **name, enum capsoType *type,
       last->pID   = pobj->last.pID;
     }
   } else {
-    last->pname = object->last.pname;
-    last->user  = object->last.user;
-    last->pID   = object->last.pID;
+    if (object->last.nLines > 0) {
+      last->lines  = (char **) EG_alloc(object->last.nLines*sizeof(char *));
+      if (last->lines != NULL) {
+        for (i = 0; i < object->last.nLines; i++)
+          last->lines[i] = EG_strdup(object->last.lines[i]);
+        last->nLines = object->last.nLines;
+      }
+    }
+    last->pname  = object->last.pname;
+    last->user   = object->last.user;
+    last->pID    = object->last.pID;
   }
   last->sNum = object->last.sNum;
   for (i = 0; i < 6; i++) last->datetime[i] = object->last.datetime[i];
+  
+  args[0].members.obj = *link;
+/*@-nullret@*/
+  args[1].members.own = *last;
+/*@+nullret@*/
+  caps_jrnlWrite(problem, object, CAPS_SUCCESS, 2, args, problem->sNum,
+                 problem->sNum);
   
   return CAPS_SUCCESS;
 }
 
 
-int
-caps_size(const capsObject *object, enum capsoType type, enum capssType stype,
-          int *size)
+static int
+caps_sizeX(capsObject *object, enum capsoType type, enum capssType stype,
+           int *size, int *nErr, capsErrs **errors)
 {
   int           i, status;
   egAttrs       *attrs;
   capsObject    *pobject;
   capsProblem   *problem;
-  capsValue     *value;
   capsAnalysis  *analysis;
   capsBound     *bound;
   capsVertexSet *vertexSet;
-  
-  *size = 0;
-  if (object              == NULL)      return CAPS_NULLOBJ;
-  if (object->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
-  if (object->blind       == NULL)      return CAPS_NULLBLIND;
+
+  *nErr   = 0;
+  *errors = NULL;
+  *size   = 0;
   
   if (object->type == PROBLEM) {
   
     problem = (capsProblem *) object->blind;
     if (type == BODIES) {
+      /* make sure geometry is up-to-date */
+      status = caps_build((capsObject *) object, nErr, errors);
+      if ((status != CAPS_SUCCESS) && (status != CAPS_CLEAN)) return status;
       *size = problem->nBodies;
     } else if (type == ATTRIBUTES) {
       attrs = object->attrs;
@@ -727,16 +1126,15 @@ caps_size(const capsObject *object, enum capsoType type, enum capssType stype,
     
   } else if (object->type == VALUE) {
 
-    value = (capsValue *) object->blind;
     if (type == ATTRIBUTES) {
       attrs = object->attrs;
       if (attrs != NULL) *size = attrs->nattrs;
-    } else if ((type == VALUE) && (value->type == Value)) {
-      *size = value->length;
     }
     
   } else if (object->type == ANALYSIS) {
-    
+
+    status = caps_findProblem(object, CAPS_SIZE, &pobject);
+    if (status != CAPS_SUCCESS) return status;
     analysis = (capsAnalysis *) object->blind;
     if (type == ATTRIBUTES) {
       attrs = object->attrs;
@@ -745,8 +1143,11 @@ caps_size(const capsObject *object, enum capsoType type, enum capssType stype,
       if (stype == ANALYSISIN)  *size = analysis->nAnalysisIn;
       if (stype == ANALYSISOUT) *size = analysis->nAnalysisOut;
     } else if (type == BODIES) {
-      pobject = (capsObject *) object->parent;
-      if (pobject->blind == NULL) return CAPS_NULLBLIND;
+
+      /* make sure geometry is up-to-date */
+      status = caps_build(pobject, nErr, errors);
+      if ((status != CAPS_SUCCESS) && (status != CAPS_CLEAN)) return status;
+
       problem = (capsProblem *) pobject->blind;
       if ((problem->nBodies > 0) && (problem->bodies != NULL)) {
         if (analysis->bodies == NULL) {
@@ -786,18 +1187,61 @@ caps_size(const capsObject *object, enum capsoType type, enum capssType stype,
     }
 
   }
-  
+
   return CAPS_SUCCESS;
 }
 
 
 int
-caps_childByIndex(const capsObject *object, enum capsoType type,
-                  enum capssType stype, int index, capsObject **child)
+caps_size(capsObject *object, enum capsoType type, enum capssType stype,
+          int *size, int *nErr, capsErrs **errors)
+{
+  int         status, ret;
+  CAPSLONG    sNum;
+  capsObject  *pobject;
+  capsProblem *problem;
+  capsJrnl    args[3];
+
+  *nErr   = 0;
+  *errors = NULL;
+  *size   = 0;
+  if (object              == NULL)      return CAPS_NULLOBJ;
+  if (object->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
+  if (object->blind       == NULL)      return CAPS_NULLBLIND;
+  status = caps_findProblem(object, CAPS_SIZE, &pobject);
+  if (status != CAPS_SUCCESS)           return status;
+  problem = (capsProblem *) pobject->blind;
+  
+  args[0].type = jInteger;
+  args[1].type = jInteger;
+  args[2].type = jErr;
+  status       = caps_jrnlRead(problem, object, 3, args, &sNum, &ret);
+  if (status == CAPS_JOURNALERR) return status;
+  if (status == CAPS_JOURNAL) {
+    *size   = args[0].members.integer;
+    *nErr   = args[1].members.integer;
+    *errors = args[2].members.errs;
+    return ret;
+  }
+  
+  sNum = problem->sNum;
+  ret  = caps_sizeX(object, type, stype, size, nErr, errors);
+  if (ret == CAPS_SUCCESS) {
+    args[0].members.integer = *size;
+    args[1].members.integer = *nErr;
+    args[2].members.errs    = *errors;
+  }
+  caps_jrnlWrite(problem, object, ret, 3, args, sNum, problem->sNum);
+  
+  return ret;
+}
+
+
+static int
+caps_childByIndX(capsObject *object, capsProblem *problem, enum capsoType type,
+                 enum capssType stype, int index, capsObject **child)
 {
   int           i, j;
-  capsProblem   *problem;
-  capsValue     *value;
   capsAnalysis  *analysis;
   capsBound     *bound;
   capsVertexSet *vertexSet;
@@ -809,8 +1253,7 @@ caps_childByIndex(const capsObject *object, enum capsoType type,
   if (index               <= 0)         return CAPS_RANGEERR;
   
   if (object->type == PROBLEM) {
-    
-    problem = (capsProblem *) object->blind;
+
     if (type == VALUE) {
       if (stype == GEOMETRYIN) {
         if (index > problem->nGeomIn)   return CAPS_RANGEERR;
@@ -834,15 +1277,6 @@ caps_childByIndex(const capsObject *object, enum capsoType type,
     } else if (type == BOUND) {
       if (index  > problem->nBound)     return CAPS_RANGEERR;
       *child = problem->bounds[index-1];
-    }
-    
-  } else if (object->type == VALUE) {
-    
-    value = (capsValue *) object->blind;
-    if ((type == VALUE) && (value->type == Value)) {
-      if (index > value->length)        return CAPS_RANGEERR;
-      if (value->length == 1) *child = value->vals.object;
-      if (value->length != 1) *child = value->vals.objects[index-1];
     }
     
   } else if (object->type == ANALYSIS) {
@@ -884,6 +1318,41 @@ caps_childByIndex(const capsObject *object, enum capsoType type,
 }
 
 
+int
+caps_childByIndex(capsObject *object, enum capsoType type, enum capssType stype,
+                  int index, capsObject **child)
+{
+  int         status, ret;
+  CAPSLONG    sNum;
+  capsObject  *pobject;
+  capsProblem *problem;
+  capsJrnl    args[1];
+  
+  *child = NULL;
+  if (object              == NULL)      return CAPS_NULLOBJ;
+  if (object->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
+  if (object->blind       == NULL)      return CAPS_NULLBLIND;
+  if (index               <= 0)         return CAPS_RANGEERR;
+
+  status = caps_findProblem(object, CAPS_CHILDBYINDEX, &pobject);
+  if (status != CAPS_SUCCESS) return status;
+  problem = (capsProblem *) pobject->blind;
+  
+  args[0].type = jObject;
+  status       = caps_jrnlRead(problem, object, 1, args, &sNum, &ret);
+  if (status == CAPS_JOURNALERR) return status;
+  if (status == CAPS_JOURNAL) {
+    *child = args[0].members.obj;
+    return ret;
+  }
+  
+  ret = caps_childByIndX(object, problem, type, stype, index, child);
+  args[0].members.obj = *child;
+  caps_jrnlWrite(problem, object, ret, 1, args, problem->sNum, problem->sNum);
+  
+  return ret;
+}
+
 
 static int
 caps_findByName(const char *name, int len, capsObject **objs,
@@ -907,14 +1376,16 @@ caps_findByName(const char *name, int len, capsObject **objs,
 
 
 int
-caps_childByName(const capsObject *object, enum capsoType type,
-                 enum capssType stype, const char *name, capsObject **child)
+caps_childByName(capsObject *object, enum capsoType type, enum capssType stype,
+                 const char *name, capsObject **child)
 {
-  capsObject    **objs;
+  int           stat, ret;
+  CAPSLONG      sNum;
+  capsObject    *pobject;
   capsProblem   *problem;
-  capsValue     *value;
   capsAnalysis  *analysis;
   capsVertexSet *vertexSet;
+  capsJrnl      args[1];
   
   *child = NULL;
   if (object              == NULL)      return CAPS_NULLOBJ;
@@ -922,72 +1393,97 @@ caps_childByName(const capsObject *object, enum capsoType type,
   if (object->blind       == NULL)      return CAPS_NULLBLIND;
   if (name                == NULL)      return CAPS_NULLNAME;
   
+  stat = caps_findProblem(object, CAPS_CHILDBYINDEX, &pobject);
+  if (stat != CAPS_SUCCESS) return stat;
+  problem = (capsProblem *) pobject->blind;
+  
+  args[0].type = jObject;
+  stat         = caps_jrnlRead(problem, object, 1, args, &sNum, &ret);
+  if (stat == CAPS_JOURNALERR) return stat;
+  if (stat == CAPS_JOURNAL) {
+    *child = args[0].members.obj;
+    return ret;
+  }
+  
   if (object->type == PROBLEM) {
     
-    problem = (capsProblem *) object->blind;
     if (type == VALUE) {
-      if (stype == GEOMETRYIN)
-        return caps_findByName(name, problem->nGeomIn,
-                                     problem->geomIn,  child);
-      if (stype == GEOMETRYOUT)
-        return caps_findByName(name, problem->nGeomOut,
-                                     problem->geomOut, child);
-      if (stype == BRANCH)
-        return caps_findByName(name, problem->nBranch,
-                                     problem->branchs, child);
-      if (stype == PARAMETER)
-        return caps_findByName(name, problem->nParam,
-                                     problem->params,  child);
+      if (stype == GEOMETRYIN) {
+        ret = caps_findByName(name, problem->nGeomIn,
+                                    problem->geomIn,  child);
+        goto retrn;
+      }
+      if (stype == GEOMETRYOUT) {
+        ret = caps_findByName(name, problem->nGeomOut,
+                                    problem->geomOut, child);
+        goto retrn;
+      }
+      if (stype == BRANCH) {
+        ret = caps_findByName(name, problem->nBranch,
+                                    problem->branchs, child);
+        goto retrn;
+      }
+      if (stype == PARAMETER) {
+        ret = caps_findByName(name, problem->nParam,
+                                    problem->params,  child);
+        goto retrn;
+      }
     } else if (type == ANALYSIS) {
-      return caps_findByName(name, problem->nAnalysis,
-                                   problem->analysis,  child);
+      ret = caps_findByName(name, problem->nAnalysis,
+                                  problem->analysis,  child);
+      goto retrn;
     } else if (type == BOUND) {
-      return caps_findByName(name, problem->nBound,
-                                   problem->bounds,    child);
-    }
-    
-  } else if (object->type == VALUE) {
-    
-    value = (capsValue *) object->blind;
-    if ((type == VALUE) && (value->type == Value)) {
-      if (value->length == 1) objs = &value->vals.object;
-      if (value->length != 1) objs =  value->vals.objects;
-      return caps_findByName(name, value->length, objs, child);
+      ret = caps_findByName(name, problem->nBound,
+                                  problem->bounds,    child);
+      goto retrn;
     }
     
   } else if (object->type == ANALYSIS) {
     
     analysis = (capsAnalysis *) object->blind;
     if (type == VALUE) {
-      if (stype == ANALYSISIN)
-        return caps_findByName(name, analysis->nAnalysisIn,
-                                     analysis->analysisIn,  child);
+      if (stype == ANALYSISIN) {
+        ret = caps_findByName(name, analysis->nAnalysisIn,
+                                    analysis->analysisIn,  child);
+        goto retrn;
+      }
       if (stype == ANALYSISOUT) {
-        return caps_findByName(name, analysis->nAnalysisOut,
-                                     analysis->analysisOut, child);
+        ret = caps_findByName(name, analysis->nAnalysisOut,
+                                    analysis->analysisOut, child);
+        goto retrn;
       }
     }
     
   } else if (object->type == VERTEXSET) {
     
     vertexSet = (capsVertexSet *) object->blind;
-    if (type == DATASET)
-      return caps_findByName(name, vertexSet->nDataSets,
-                                   vertexSet->dataSets, child);
+    if (type == DATASET) {
+      ret = caps_findByName(name, vertexSet->nDataSets,
+                                  vertexSet->dataSets, child);
+      goto retrn;
+    }
     
   }
+  ret = CAPS_NOTFOUND;
 
-  return CAPS_NOTFOUND;
+retrn:
+  args[0].members.obj = *child;
+  caps_jrnlWrite(problem, object, ret, 1, args, problem->sNum, problem->sNum);
+  
+  return ret;
 }
 
 
 int
-caps_bodyByIndex(const capsObject *object, int index, ego *body, char **lunits)
+caps_bodyByIndex(capsObject *object, int index, ego *body, char **lunits)
 {
-  int          i, ind, status;
+  int          i, status, ret, oclass, mtype, *senses;
+  CAPSLONG     sNum;
   capsObject   *pobject;
   capsProblem  *problem;
   capsAnalysis *analysis;
+  capsJrnl     args[2];
+  ego          ref, *bodies;
   
   *body   = NULL;
   *lunits = NULL;
@@ -996,52 +1492,75 @@ caps_bodyByIndex(const capsObject *object, int index, ego *body, char **lunits)
   if ((object->type        != PROBLEM) &&
       (object->type        != ANALYSIS)) return CAPS_BADTYPE;
   if  (object->blind       == NULL)      return CAPS_NULLBLIND;
+
+  status = caps_findProblem(object, CAPS_BODYBYINDEX, &pobject);
+  if (status != CAPS_SUCCESS) return status;
+  problem = (capsProblem *) pobject->blind;
   
+  args[0].type   = jEgos;
+  args[1].type   = jString;
+  status         = caps_jrnlRead(problem, object, 2, args, &sNum, &ret);
+  if (status == CAPS_JOURNALERR) return status;
+  if (status == CAPS_JOURNAL) {
+    status = EG_getTopology(args[0].members.model, &ref, &oclass, &mtype, NULL,
+                            &i, &bodies, &senses);
+    if (status != EGADS_SUCCESS) {
+      printf(" CAPS Warning: EG_getTopology = %d (caps_bodyByIndex)\n", status);
+    } else {
+      *body = bodies[0];
+    }
+    *lunits = args[1].members.string;
+    return ret;
+  }
+  
+  status = CAPS_RANGEERR;
   if (object->type == PROBLEM) {
     
-    if (index               <= 0)        return CAPS_RANGEERR;
-    problem = (capsProblem *) object->blind;
-    if (index > problem->nBodies)        return CAPS_RANGEERR;
-  
+    if (index               <= 0) goto done;
+    if (index > problem->nBodies) goto done;
     *body   = problem->bodies[index-1];
     *lunits = problem->lunits[index-1];
     
   } else {
     
-    if (index             == 0)          return CAPS_RANGEERR;
+    if (index             <= 0) goto done;
     analysis = (capsAnalysis *) object->blind;
-    pobject  = (capsObject *) object->parent;
-    if (pobject->blind == NULL)          return CAPS_NULLBLIND;
-    problem = (capsProblem *) pobject->blind;
     if ((problem->nBodies > 0) && (problem->bodies != NULL)) {
       if (analysis->bodies == NULL) {
         status = caps_filter(problem, analysis);
-        if (status != CAPS_SUCCESS) return status;
+        if (status != CAPS_SUCCESS) goto done;
+        status = CAPS_RANGEERR;
       }
-      ind = index;
-      if (ind < 0) ind = -index;
-      if (ind > analysis->nBody)         return CAPS_RANGEERR;
-      *body = analysis->bodies[ind-1];
+      if (index > analysis->nBody) goto done;
+      *body = analysis->bodies[index-1];
       for (i = 0; i < problem->nBodies; i++)
         if (*body == problem->bodies[i]) {
           *lunits = problem->lunits[i];
           break;
         }
-      if (index < 0) *body = analysis->bodies[analysis->nBody + ind-1];
     }
     
   }
   
-  return CAPS_SUCCESS;
+  status = CAPS_SUCCESS;
+  
+done:
+  args[0].members.model  = *body;
+  args[1].members.string = *lunits;
+  caps_jrnlWrite(problem, object, status, 2, args, problem->sNum, problem->sNum);
+  
+  return status;
 }
 
 
 int
 caps_ownerInfo(const capsOwn owner, char **pname, char **pID, char **userID,
-               short *datetime, CAPSLONG *sNum)
+               int *nLines, char ***lines, short *datetime, CAPSLONG *sNum)
 {
   int i;
   
+  *nLines = owner.nLines;
+  *lines  = owner.lines;
   *pname  = owner.pname;
   *pID    = owner.pID;
   *userID = owner.user;
@@ -1053,8 +1572,10 @@ caps_ownerInfo(const capsOwn owner, char **pname, char **pID, char **userID,
 
 
 int
-caps_setOwner(const capsObject *pobject, const char *pname, capsOwn *owner )
+caps_setOwner(const capsObject *pobject, const char *pname,
+              int nLines, char **lines, capsOwn *owner)
 {
+  int         i;
   char        **signature;
   capsProblem *problem;
 
@@ -1065,10 +1586,20 @@ caps_setOwner(const capsObject *pobject, const char *pname, capsOwn *owner )
   if (pname                == NULL)      return CAPS_NULLNAME;
   problem = (capsProblem *) pobject->blind;
 
+  problem->funID = CAPS_SETOWNER;
   problem->sNum++;
   caps_getStaticStrings(&signature, &owner->pID, &owner->user);
-  owner->pname = EG_strdup(pname);
-  owner->sNum  = problem->sNum;
+  owner->nLines = 0;
+  owner->lines  = NULL;
+  if (nLines > 0) {
+    owner->lines = (char **) EG_alloc(nLines*sizeof(char *));
+    if (owner->lines != NULL) {
+      for (i = 0; i < nLines; i++) owner->lines[i] = EG_strdup(lines[i]);
+      owner->nLines = nLines;
+    }
+  }
+  owner->pname  = EG_strdup(pname);
+  owner->sNum   = problem->sNum;
   caps_fillDateTime(owner->datetime);
   return CAPS_SUCCESS;
 }
@@ -1077,7 +1608,8 @@ caps_setOwner(const capsObject *pobject, const char *pname, capsOwn *owner )
 int
 caps_delete(capsObject *object)
 {
-  int           i, j, k;
+  int           i, j, k, status, callID;
+  char          filename[PATH_MAX], temp[PATH_MAX];
   capsObject    *pobject;
   capsProblem   *problem;
   capsValue     *value;
@@ -1085,6 +1617,7 @@ caps_delete(capsObject *object)
   capsAnalysis  *analysis;
   capsVertexSet *vertexSet;
   capsDataSet   *dataSet;
+  FILE          *fp;
   
   if  (object              == NULL)      return CAPS_NULLOBJ;
   if  (object->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
@@ -1093,33 +1626,43 @@ caps_delete(capsObject *object)
   if ((object->type        == VALUE) &&
       (object->subtype     != USER))     return CAPS_BADTYPE;
   if  (object->blind       == NULL)      return CAPS_NULLBLIND;
-  
+
+  status = caps_findProblem(object, 9999, &pobject);
+  if (status != CAPS_SUCCESS) return status;
+  problem = (capsProblem *) pobject->blind;
+  callID  = problem->funID;
+  problem->funID = CAPS_DELETE;
+  caps_freeFList(object);
+
   /* clean up any allocated data arrays */
   if (object->type == VALUE) {
-    
     value = (capsValue *) object->blind;
     object->blind = NULL;
     if ((value->type == Boolean) || (value->type == Integer)) {
       if (value->length > 1) EG_free(value->vals.integers);
-    } else if (value->type == Double) {
+    } else if ((value->type == Double) || (value->type == DoubleDeriv)) {
       if (value->length > 1) EG_free(value->vals.reals);
     } else if (value->type == String) {
-      if (value->length > 1) EG_free(value->vals.string);
+      EG_free(value->vals.string);
     } else if (value->type == Tuple) {
       caps_freeTuple(value->length, value->vals.tuple);
     } else {
-      if (value->length > 1) EG_free(value->vals.objects);
+      /* Pointer -- do nothing */
     }
-    if (value->units != NULL) EG_free(value->units);
+    if (value->units   != NULL) EG_free(value->units);
+    if (value->partial != NULL) EG_free(value->partial);
+    if (value->dots    != NULL) {
+      for (i = 0; i < value->ndot; i++) {
+        if (value->dots[i].name != NULL) EG_free(value->dots[i].name);
+        if (value->dots[i].dot  != NULL) EG_free(value->dots[i].dot);
+      }
+      EG_free(value->dots);
+    }
     EG_free(value);
     
   } else {
-    
-    pobject = object->parent;
-    if (pobject == NULL) return CAPS_NULLOBJ;
-    problem = (capsProblem *) pobject->blind;
-    if (problem == NULL) return CAPS_NULLBLIND;
-    bound   = (capsBound *) object->blind;
+
+    bound = (capsBound *)    object->blind;
     if (bound->curve   != NULL) caps_Aprx1DFree(bound->curve);
     if (bound->surface != NULL) caps_Aprx2DFree(bound->surface);
     if (bound->lunits  != NULL) EG_free(bound->lunits);
@@ -1139,14 +1682,15 @@ caps_delete(capsObject *object)
         if (vertexSet->dataSets[j]->blind       == NULL)      continue;
 
         dataSet = (capsDataSet *) vertexSet->dataSets[j]->blind;
-        for (k = 0; k < dataSet->nHist; k++)
-          caps_freeOwner(&dataSet->history[k]);
         if (dataSet->data    != NULL) EG_free(dataSet->data);
         if (dataSet->units   != NULL) EG_free(dataSet->units);
-        if (dataSet->history != NULL) EG_free(dataSet->history);
         if (dataSet->startup != NULL) EG_free(dataSet->startup);
         EG_free(dataSet);
         
+        for (k = 0; k < vertexSet->dataSets[j]->nHistory; k++)
+          caps_freeOwner(&vertexSet->dataSets[j]->history[k]);
+        if (vertexSet->dataSets[j]->history != NULL)
+          EG_free(vertexSet->dataSets[j]->history);
         caps_freeAttrs(&vertexSet->dataSets[j]->attrs);
         caps_freeOwner(&vertexSet->dataSets[j]->last);
         vertexSet->dataSets[j]->magicnumber = 0;
@@ -1158,6 +1702,10 @@ caps_delete(capsObject *object)
       vertexSet->dataSets = NULL;
       EG_free(vertexSet);
 
+      for (k = 0; k < bound->vertexSet[i]->nHistory; k++)
+        caps_freeOwner(&bound->vertexSet[i]->history[k]);
+      if (bound->vertexSet[i]->history != NULL)
+        EG_free(bound->vertexSet[i]->history);
       caps_freeAttrs(&bound->vertexSet[i]->attrs);
       caps_freeOwner(&bound->vertexSet[i]->last);
       bound->vertexSet[i]->magicnumber = 0;
@@ -1168,11 +1716,46 @@ caps_delete(capsObject *object)
     EG_free(bound->vertexSet);
     bound->vertexSet = NULL;
     EG_free(bound);
-  
+
+    /* remove the bound from the list of bounds in the problem */
+    for (i = j = 0; i < problem->nBound; i++) {
+      if (problem->bounds[i] == object) continue;
+      problem->bounds[j++] = problem->bounds[i];
+    }
+    problem->nBound--;
+    
+    if (callID != CAPS_CLOSE) {
+#ifdef WIN32
+      snprintf(filename, PATH_MAX, "%s\\capsRestart\\bound.txt", problem->root);
+      snprintf(temp,     PATH_MAX, "%s\\capsRestart\\xxTempxx",  problem->root);
+#else
+      snprintf(filename, PATH_MAX, "%s/capsRestart/bound.txt",   problem->root);
+      snprintf(temp,     PATH_MAX, "%s/capsRestart/xxTempxx",    problem->root);
+#endif
+      fp = fopen(temp, "w");
+      if (fp == NULL) {
+        printf(" CAPS Warning: Cannot open %s (caps_delete)\n", filename);
+      } else {
+        fprintf(fp, "%d %d\n", problem->nBound, problem->mBound);
+        if (problem->bounds != NULL)
+          for (i = 0; i < problem->nBound; i++) {
+            bound = (capsBound *) problem->bounds[i]->blind;
+            j = 0;
+            if (bound != NULL) j = bound->index;
+            fprintf(fp, "%d %s\n", j, problem->bounds[i]->name);
+          }
+        fclose(fp);
+        status = caps_rename(temp, filename);
+        if (status != CAPS_SUCCESS)
+          printf(" CAPS Warning: Cannot rename %s!\n", filename);
+      }
+    }
   }
   
   /* cleanup and invalidate the object */
   
+  for (i = 0; i < object->nHistory; i++) caps_freeOwner(&object->history[i]);
+  if (object->history != NULL) EG_free(object->history);
   caps_freeAttrs(&object->attrs);
   caps_freeOwner(&object->last);
   object->magicnumber = 0;
@@ -1185,7 +1768,7 @@ caps_delete(capsObject *object)
 
 
 int
-caps_errorInfo(capsErrs *errs, int eIndex, capsObject **errObj,
+caps_errorInfo(capsErrs *errs, int eIndex, capsObject **errObj, int *eType,
                int *nLines, char ***lines)
 {
   *errObj = NULL;
@@ -1194,6 +1777,7 @@ caps_errorInfo(capsErrs *errs, int eIndex, capsObject **errObj,
   if ((eIndex < 1) || (eIndex > errs->nError)) return CAPS_BADINDEX;
   
   *errObj = errs->errors[eIndex-1].errObj;
+  *eType  = errs->errors[eIndex-1].eType;
   *nLines = errs->errors[eIndex-1].nLines;
   *lines  = errs->errors[eIndex-1].lines;
   return CAPS_SUCCESS;
@@ -1205,14 +1789,418 @@ caps_freeError(/*@only@*/ capsErrs *errs)
 {
   int i, j;
   
-  for (i = 0; i < errs->nError; i++)
-    for (j = 0; j < errs->errors[i].nLines; j++)
+  if (errs == NULL) return CAPS_SUCCESS;
+  for (i = 0; i < errs->nError; i++) {
+    for (j = 0; j < errs->errors[i].nLines; j++) {
       EG_free(errs->errors[i].lines[j]);
+    }
+
+    EG_free(errs->errors[i].lines);
+  }
   
   EG_free(errs->errors);
   errs->nError = 0;
   errs->errors = NULL;
   EG_free(errs);
+
+  return CAPS_SUCCESS;
+}
+
+
+int
+caps_writeParameters(const capsObject *pobject, char *filename)
+{
+  capsProblem *problem;
+  
+  if (pobject              == NULL)       return CAPS_NULLOBJ;
+  if (pobject->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
+  if (pobject->type        != PROBLEM)    return CAPS_BADTYPE;
+  if (pobject->subtype     != PARAMETRIC) return CAPS_BADTYPE;
+  if (pobject->blind       == NULL)       return CAPS_NULLBLIND;
+  if (filename             == NULL)       return CAPS_NULLNAME;
+  problem = (capsProblem *) pobject->blind;
+  problem->funID = CAPS_WRITEPARAMETERS;
+  
+  /* ignore if restarting */
+  if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;
+  if (problem->stFlag == 4)               return CAPS_SUCCESS;
+  
+  return ocsmSaveDespmtrs(problem->modl, filename);
+}
+
+
+int
+caps_readParameters(const capsObject *pobject, char *filename)
+{
+  int         i, j, k, n, type, nrow, ncol, fill, status;
+  char        name[MAX_NAME_LEN];
+  double      real, dot, *reals;
+  capsObject  *object;
+  capsProblem *problem;
+  capsValue   *value;
+  
+  if (pobject              == NULL)       return CAPS_NULLOBJ;
+  if (pobject->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
+  if (pobject->type        != PROBLEM)    return CAPS_BADTYPE;
+  if (pobject->subtype     != PARAMETRIC) return CAPS_BADTYPE;
+  if (pobject->blind       == NULL)       return CAPS_NULLBLIND;
+  if (filename             == NULL)       return CAPS_NULLNAME;
+  problem = (capsProblem *) pobject->blind;
+  problem->funID = CAPS_READPARAMETERS;
+  
+  /* ignore if restarting */
+  if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;
+  if (problem->stFlag == 4)               return CAPS_SUCCESS;
+  
+  status  = ocsmUpdateDespmtrs(problem->modl, filename);
+  if (status < SUCCESS) {
+    printf(" CAPS Error: ocsmSaveDespmtrs = %d (caps_readParameters)!\n",
+           status);
+    return status;
+  }
+  
+  /* need to reload all GeomIn Values */
+
+  problem->sNum += 1;
+  for (i = 0; i < problem->nGeomIn; i++) {
+    object = problem->geomIn[i];
+    if (object              == NULL)      continue;
+    if (object->magicnumber != CAPSMAGIC) continue;
+    if (object->type        != VALUE)     continue;
+    if (object->blind       == NULL)      continue;
+    value = (capsValue *) object->blind;
+    if (value               == NULL)      continue;
+    if (value->type         != Double)    continue;
+    status = ocsmGetPmtr(problem->modl, value->pIndex, &type,
+                         &nrow, &ncol, name);
+    if (status              != SUCCESS)   continue;
+    fill = 0;
+
+    /* has the shape changed? */
+    if ((nrow != value->nrow) || (ncol != value->ncol)) {
+      reals = NULL;
+      if (nrow*ncol != 1) {
+        reals = (double *) EG_alloc(nrow*ncol*sizeof(double));
+        if (reals == NULL) {
+          printf(" CAPS Warning: %s resize %d %d Malloc(caps_readParameters)\n",
+                 object->name, nrow, ncol);
+          continue;
+        }
+      }
+      if (value->length != 1) EG_free(value->vals.reals);
+      value->length = nrow*ncol;
+      value->nrow   = nrow;
+      value->ncol   = ncol;
+      if (value->length != 1) value->vals.reals = reals;
+      fill = 1;
+    }
+    
+    /* check if values changed */
+    if (fill == 0) {
+      reals = value->vals.reals;
+      if (value->length == 1) reals = &value->vals.real;
+      for (n = k = 0; k < nrow; k++) {
+        for (j = 0; j < ncol; j++, n++) {
+          status = ocsmGetValu(problem->modl, value->pIndex, k+1, j+1,
+                               &real, &dot);
+          if (status != SUCCESS) {
+            printf(" CAPS Warning: %s GetValu[%d,%d] = %d (caps_readParameters)\n",
+                   object->name, k+1, j+1, status);
+            continue;
+          }
+          if (real != reals[n]) {
+            fill = 1;
+            break;
+          }
+        }
+        if (fill == 1) break;
+      }
+    }
+    
+    /* refill the values */
+    if (fill == 0) continue;
+    reals = value->vals.reals;
+    if (value->length == 1) reals = &value->vals.real;
+    for (n = k = 0; k < nrow; k++)
+      for (j = 0; j < ncol; j++, n++)
+        ocsmGetValu(problem->modl, value->pIndex, k+1, j+1, &reals[n], &dot);
+    
+    caps_freeOwner(&object->last);
+    object->last.sNum = problem->sNum;
+    caps_fillDateTime(object->last.datetime);
+  }
+  status = caps_dumpGeomVals(problem, 1);
+  if (status != CAPS_SUCCESS)
+    printf(" CAPS Warning: caps_dumpGeomVals = %d (caps_readParameters)\n",
+           status);
+  status = caps_writeProblem(pobject);
+  if (status != CAPS_SUCCESS)
+    printf(" CAPS Warning: caps_writeProblem = %d (caps_readParameters)\n",
+           status);
+  
+  return status;
+}
+
+
+static int
+caps_writeGeometrX(capsObject *object, int flag, const char *filename,
+                   int *nErr, capsErrs **errors)
+{
+  int          i, j, nBody, nTess=0, len, idot, stat;
+  ego          context, model, *bodies, *tess, *newBodies;
+  capsObject   *pobject;
+  capsProblem  *problem;
+  capsAnalysis *analysis;
+  FILE         *fp;
+  
+  *nErr    = 0;
+  *errors  = NULL;
+
+  stat = caps_findProblem(object, CAPS_WRITEGEOMETRY, &pobject);
+  if (stat != CAPS_SUCCESS) return stat;
+  
+  /* find the extension */
+  len = strlen(filename);
+  for (idot = len-1; idot > 0; idot--)
+    if (filename[idot] == '.') break;
+  if (idot == 0) return CAPS_BADNAME;
+/*@-unrecog@*/
+  if ((strcasecmp(&filename[idot],".iges")  != 0) &&
+      (strcasecmp(&filename[idot],".igs")   != 0) &&
+      (strcasecmp(&filename[idot],".step")  != 0) &&
+      (strcasecmp(&filename[idot],".stp")   != 0) &&
+      (strcasecmp(&filename[idot],".brep")  != 0) &&
+      (strcasecmp(&filename[idot],".egads") != 0)) return CAPS_BADNAME;
+/*@+unrecog@*/
+  if (strcasecmp(&filename[idot],".egads") == 0)
+    if ((flag != 0) && (flag != 1)) return CAPS_RANGEERR;
+  
+  /* make sure geometry is up-to-date */
+  stat = caps_build(pobject, nErr, errors);
+  if ((stat != CAPS_SUCCESS) && (stat != CAPS_CLEAN)) return stat;
+
+  if (object->type == PROBLEM) {
+    problem  = (capsProblem *) object->blind;
+    nBody    = problem->nBodies;
+    bodies   = problem->bodies;
+    tess     = NULL;
+  } else {
+    analysis = (capsAnalysis *) object->blind;
+    problem  = (capsProblem *) pobject->blind;
+    if (analysis->bodies == NULL) {
+      stat = caps_filter(problem, analysis);
+      if (stat != CAPS_SUCCESS) return stat;
+    }
+    nBody    = analysis->nBody;
+    bodies   = analysis->bodies;
+    tess     = analysis->tess;
+  }
+  context    = problem->context;
+  
+  if ((nBody <= 0) || (bodies == NULL)) return CAPS_NOBODIES;
+
+  /* remove existing file (if any) */
+  fp = fopen(filename, "r");
+  if (fp != NULL) {
+    fclose(fp);
+    caps_rmFile(filename);
+  }
+  
+  if (nBody == 1 && (tess == NULL || flag == 0)) {
+    stat =  EG_saveModel(bodies[0], filename);
+    if (stat != EGADS_SUCCESS) {
+      printf(" CAPS Error: EG_saveModel = %d (caps_writeGeometry)!\n", stat);
+      return stat;
+    }
+  } else {
+    newBodies = (ego *) EG_alloc(2*nBody*sizeof(ego));
+    if (newBodies == NULL) {
+      printf(" CAPS Error: MALLOC on %d Bodies (caps_writeGeometry)!\n", nBody);
+      return EGADS_MALLOC;
+    }
+    for (i = 0; i < nBody; i++) {
+      stat = EG_copyObject(bodies[i], NULL, &newBodies[i]);
+      if (stat != EGADS_SUCCESS) {
+        printf(" CAPS Error: EG_copyObject %d/%d = %d (caps_writeGeometry)!\n",
+               i+1, nBody, stat);
+        for (j = 0; j < i; j++) EG_deleteObject(newBodies[j]);
+        EG_free(newBodies);
+        return stat;
+      }
+    }
+
+    nTess = 0;
+    if ((strcasecmp(&filename[idot],".egads") == 0) &&
+        (tess != NULL) &&
+        (flag == 1)) {
+      for (i = nBody; i < 2*nBody; i++) {
+        if (tess[i-nBody] == NULL) continue;
+        stat = EG_copyObject(tess[i-nBody], newBodies[i-nBody],
+                             &newBodies[nBody+nTess++]);
+        if (stat != EGADS_SUCCESS) {
+          printf(" CAPS Error: EG_copyObject %d/%d = %d (caps_writeGeometry)!\n",
+                 i+1, 2*nBody, stat);
+          for (j = 0; j < i; j++) EG_deleteObject(newBodies[j]);
+          EG_free(newBodies);
+          return stat;
+        }
+      }
+    }
+
+    /* make a Model */
+    stat = EG_makeTopology(context, NULL, MODEL, nBody+nTess, NULL, nBody,
+                           newBodies, NULL, &model);
+    EG_free(newBodies);
+    if (stat != EGADS_SUCCESS) {
+      printf(" CAPS Error: EG_makeTopology %d = %d (caps_writeGeometry)!\n",
+             nBody, stat);
+      return stat;
+    }
+    stat = EG_saveModel(model, filename);
+    EG_deleteObject(model);
+    if (stat != EGADS_SUCCESS) {
+      printf(" CAPS Error: EG_saveModel = %d (caps_writeGeometry)!\n", stat);
+      return stat;
+    }
+  }
+
+  return CAPS_SUCCESS;
+}
+
+
+int
+caps_writeGeometry(capsObject *object, int flag, const char *filename,
+                   int *nErr, capsErrs **errors)
+{
+  int         stat, ret;
+  CAPSLONG    sNum;
+  capsObject  *pobject;
+  capsProblem *problem;
+  capsJrnl    args[2];
+  
+  *nErr    = 0;
+  *errors  = NULL;
+  if  (object              == NULL)      return CAPS_NULLOBJ;
+  if  (object->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
+  if ((object->type        != PROBLEM) &&
+      (object->type        != ANALYSIS)) return CAPS_BADTYPE;
+  if  (object->blind       == NULL)      return CAPS_NULLBLIND;
+  if  (filename            == NULL)      return CAPS_NULLNAME;
+
+  stat = caps_findProblem(object, CAPS_WRITEGEOMETRY, &pobject);
+  if (stat != CAPS_SUCCESS) return stat;
+  problem = (capsProblem *) pobject->blind;
+  
+  args[0].type = jInteger;
+  args[1].type = jErr;
+  stat         = caps_jrnlRead(problem, object, 2, args, &sNum, &ret);
+  if (stat == CAPS_JOURNALERR) return stat;
+  if (stat == CAPS_JOURNAL) {
+    *nErr   = args[0].members.integer;
+    *errors = args[1].members.errs;
+    return ret;
+  }
+  
+  sNum = problem->sNum;
+  ret  = caps_writeGeometrX(object, flag, filename, nErr, errors);
+  args[0].members.integer = *nErr;
+  args[1].members.errs    = *errors;
+  caps_jrnlWrite(problem, object, ret, 2, args, sNum, problem->sNum);
+  
+  return ret;
+}
+
+
+int
+caps_getHistory(capsObject *object, int *nHist, capsOwn **history)
+{
+  int         status, ret;
+  CAPSLONG    sNum;
+  capsObject  *pobject;
+  capsProblem *problem;
+  capsJrnl    args[1];
+
+  *nHist   = 0;
+  *history = NULL;
+  if (object              == NULL)         return CAPS_NULLOBJ;
+  if (object->magicnumber != CAPSMAGIC)    return CAPS_BADOBJECT;
+  if (object->type        != DATASET)      return CAPS_BADTYPE;
+  if (object->blind       == NULL)         return CAPS_NULLBLIND;
+  status = caps_findProblem(object, CAPS_GETHISTORY, &pobject);
+  if (status              != CAPS_SUCCESS) return status;
+  problem = (capsProblem *) pobject->blind;
+
+  args[0].type = jOwns;
+  status       = caps_jrnlRead(problem, object, 1, args, &sNum, &ret);
+  if (status == CAPS_JOURNALERR) return status;
+  if (status == CAPS_JOURNAL) {
+    if (ret == CAPS_SUCCESS) {
+      *nHist   = args[0].num;
+      *history = args[0].members.owns;
+    }
+    return ret;
+  }
+
+  *nHist   = object->nHistory;
+  *history = object->history;
+
+  args[0].num          = *nHist;
+  args[0].members.owns = *history;
+  caps_jrnlWrite(problem, object, CAPS_SUCCESS, 1, args, problem->sNum,
+                 problem->sNum);
+
+  return CAPS_SUCCESS;
+}
+
+
+int
+caps_addHistory(capsObject *object, capsOwn history)
+{
+  int         i, status, nLines;
+  char        **lines;
+  capsObject  *pobject;
+  capsProblem *problem;
+  capsOwn     *tmp;
+
+  if (object              == NULL)         return CAPS_NULLOBJ;
+  if (object->magicnumber != CAPSMAGIC)    return CAPS_BADOBJECT;
+  if (object->type        != DATASET)      return CAPS_BADTYPE;
+  if (object->blind       == NULL)         return CAPS_NULLBLIND;
+  status = caps_findProblem(object, CAPS_ADDHISTORY, &pobject);
+  if (status              != CAPS_SUCCESS) return status;
+  problem = (capsProblem *) pobject->blind;
+
+  /* ignore if restarting */
+  if (problem->stFlag == CAPS_JOURNALERR)  return CAPS_JOURNALERR;
+  if (problem->stFlag == 4)                return CAPS_SUCCESS;
+
+  /* make the room */
+  if (object->history == NULL) {
+    object->nHistory = 0;
+    object->history  = (capsOwn *) EG_alloc(sizeof(capsOwn));
+    if (object->history == NULL)           return EGADS_MALLOC;
+  } else {
+    tmp = (capsOwn *) EG_reall( object->history,
+                               (object->nHistory+1)*sizeof(capsOwn));
+    if (tmp == NULL) return EGADS_MALLOC;
+    object->history = tmp;
+  }
+  
+  nLines = 0;
+  lines  = NULL;
+  if (history.nLines > 0) {
+    nLines = history.nLines;
+    lines  = (char **) EG_alloc(nLines*sizeof(char *));
+    if (lines == NULL) return EGADS_MALLOC;
+    for (i = 0; i < nLines; i++) lines[i] = EG_strdup(history.lines[i]);
+  }
+  object->history[object->nHistory]        = history;
+  object->history[object->nHistory].nLines = nLines;
+  object->history[object->nHistory].lines  = lines;
+  object->history[object->nHistory].pname  = EG_strdup(history.pname);
+  object->history[object->nHistory].pID    = EG_strdup(history.pID);
+  object->history[object->nHistory].user   = EG_strdup(history.user);
+  object->nHistory += 1;
 
   return CAPS_SUCCESS;
 }

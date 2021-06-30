@@ -30,7 +30,7 @@ patbeg    iseg  twist.size
    ifthen    iseg gt 1
       rotatey   180+twist[iseg]  0  0
       applycsys mycsys  @nbody-2
-      union     0  0  -0.00001
+      union     0  0  -0.0001
    endif
 patend
 

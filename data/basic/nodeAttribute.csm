@@ -16,7 +16,7 @@ TRANSLATE 1  0  0
 # check that Node now at (3,0,0) has the attribute
 SELECT    NODE  3  0  0
 GETATTR   nattr $_nattr_
-ASSERT    nattr 3                       # _nodeID, _nedge, and myNode
+ASSERT    nattr 4                       # _nodeID, _nedge, __trace__, and myNode
 PATBEG    iattr nattr
     GETATTR  aname  iattr
 PATEND
@@ -24,7 +24,7 @@ PATEND
 # check that Node now at (2,0,0) does not have the attribute
 SELECT    NODE  2  0  0
 GETATTR   nattr $_nattr_
-ASSERT    nattr 2                       # _nodeID and _nedge
+ASSERT    nattr 3                       # _nodeID, _nedge, and __trace__
 PATBEG    iattr nattr
     GETATTR  aname  iattr
 PATEND

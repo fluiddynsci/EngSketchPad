@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module   
 import os
@@ -22,9 +20,6 @@ parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help 
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
 # Create working directory variable 
 workDir = os.path.join(str(args.workDir[0]), "AeroelasticModal_FM")
 
@@ -33,78 +28,98 @@ projectName = "aeroelasticModal"
 
 # Load CSM file 
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransferSimple.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load AIMs 
-mesh = myProblem.loadAIM(aim = "tetgenAIM", 
-                         altName= "tetgen",
-                         analysisDir = workDir + "_FUN3D",
-                         capsIntent = "CFD")
+surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
+                                     name= "egads",
+                                     capsIntent = "CFD")
 
-  
-fluid = myProblem.loadAIM(aim = "fun3dAIM", 
-                          altName = "fun3d", 
-                          analysisDir = workDir + "_FUN3D", 
-                          parents = [mesh.aimName],
-                          capsIntent = "CFD")
+mesh = myProblem.analysis.create(aim = "tetgenAIM", 
+                                 name= "tetgen",
+                                 capsIntent = "CFD")
 
-structure = myProblem.loadAIM(aim = "mystranAIM", 
-                              altName = "mystran", 
-                              analysisDir = workDir + "_MYSTRAN",
-                              capsIntent = "STRUCTURE")
+mesh.input["Surface_Mesh"].link(surfMesh.output["Surface_Mesh"])
+
+fluid = myProblem.analysis.create(aim = "fun3dAIM", 
+                                  name = "fun3d", 
+                                  capsIntent = "CFD")
+
+fluid.input["Mesh"].link(mesh.output["Volume_Mesh"])
+
+structure = myProblem.analysis.create(aim = "mystranAIM", 
+                                      name = "mystran", 
+                                      capsIntent = "STRUCTURE")
 
 # Create an array of EigenVector names 
 numEigenVector = 4
-eigenVector = []
+eigenVectors = []
 for i in range(numEigenVector):
-    eigenVector.append("EigenVector_" + str(i+1))
+    eigenVectors.append("EigenVector_" + str(i+1))
     
-transfers = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
-for i in transfers:
-    myProblem.createDataTransfer(variableName = eigenVector,
-                                 aimSrc = ["mystran"]*len(eigenVector),
-                                 aimDest =["fun3d"]*len(eigenVector), 
-                                 #transferMethod = , #["Conserve"] # Auto-assign Interpolate
-                                 capsBound = i)
+boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
+for boundName in boundNames:
+    # Create the bound
+    bound = myProblem.bound.create(boundName)
+    
+    # Create the vertex sets on the bound for fun3d and astros analysis
+    fluidVset     = bound.vertexSet.create(fluid)
+    structureVset = bound.vertexSet.create(structure)
+    
+    # Create eigenVector data sets
+    for eigenVector in eigenVectors:
+        fluid_eigenVector     = fluidVset.dataSet.create(eigenVector, pyCAPS.fType.FieldIn)
+        structure_eigenVector = structureVset.dataSet.create(eigenVector, pyCAPS.fType.FieldOut)
+
+        # Link the data sets
+        fluid_eigenVector.link(structure_eigenVector, "Conserve")
+    
+    # Close the bound as complete (cannot create more vertex or data sets)
+    bound.close()
+
+# Set inputs for egads 
+surfMesh.input.Tess_Params = [.05, 0.01, 20.0]
 
 # Set inputs for tetgen 
-mesh.setAnalysisVal("Tess_Params", [.05, 0.01, 20.0])
-mesh.setAnalysisVal("Preserve_Surf_Mesh", True)
+mesh.input.Preserve_Surf_Mesh = True
+mesh.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
 
 # Set inputs for fun3d
 speedofSound = 340.0 # m/s
 refVelocity = 100.0 # m/s
 refDensity = 1.2 # kg/m^3
 
-fluid.setAnalysisVal("Proj_Name", projectName)
-fluid.setAnalysisVal("Mesh_ASCII_Flag", False)
-fluid.setAnalysisVal("Mach", refVelocity/speedofSound)
-fluid.setAnalysisVal("Equation_Type","compressible")
-fluid.setAnalysisVal("Viscous", "inviscid")
-fluid.setAnalysisVal("Num_Iter",10)
-fluid.setAnalysisVal("Time_Accuracy","2ndorderOPT")
-fluid.setAnalysisVal("Time_Step",0.001*speedofSound)
-fluid.setAnalysisVal("Num_Subiter", 30)
-fluid.setAnalysisVal("Temporal_Error",0.01)
+fluid.input.Proj_Name = projectName
+fluid.input.Mesh_ASCII_Flag = False
+fluid.input.Mach = refVelocity/speedofSound
+fluid.input.Equation_Type = "compressible"
+fluid.input.Viscous = "inviscid"
+fluid.input.Num_Iter = 10
+fluid.input.Time_Accuracy = "2ndorderOPT"
+fluid.input.Time_Step = 0.001*speedofSound
+fluid.input.Num_Subiter = 30
+fluid.input.Temporal_Error = 0.01
 
-fluid.setAnalysisVal("CFL_Schedule",[1, 5.0])
-fluid.setAnalysisVal("CFL_Schedule_Iter", [1, 40])
-fluid.setAnalysisVal("Overwrite_NML", True)
-fluid.setAnalysisVal("Restart_Read","off")
+fluid.input.CFL_Schedule = [1, 5.0]
+fluid.input.CFL_Schedule_Iter = [1, 40]
+fluid.input.Overwrite_NML = True
+fluid.input.Restart_Read = "off"
 
 inviscid = {"bcType" : "Inviscid", "wallTemperature" : 1.1}
-fluid.setAnalysisVal("Boundary_Condition", [("Skin", inviscid),
-                                            ("SymmPlane", "SymmetryY"),
-                                            ("Farfield","farfield")])
+fluid.input.Boundary_Condition = {"Skin"     : inviscid,
+                                  "SymmPlane": "SymmetryY",
+                                  "Farfield" : "farfield"}
 
 # Set inputs for mystran
-structure.setAnalysisVal("Proj_Name", projectName)
-structure.setAnalysisVal("Edge_Point_Max", 10)
+structure.input.Proj_Name = projectName
+structure.input.Edge_Point_Max = 10
 
-structure.setAnalysisVal("Quad_Mesh", True)
-structure.setAnalysisVal("Tess_Params", [.5, .1, 15])
+structure.input.Quad_Mesh = True
+structure.input.Tess_Params = [.5, .1, 15]
 
-structure.setAnalysisVal("Analysis_Type", "Modal");
+structure.input.Analysis_Type = "Modal"
 
 eigen = { "extractionMethod"     : "MGIV", # "Lanczos",   
           "frequencyRange"       : [0.1, 200], 
@@ -114,14 +129,14 @@ eigen = { "extractionMethod"     : "MGIV", # "Lanczos",
           "lanczosMode"          : 2,  # Default - not necesssary
           "lanczosType"          : "DPB"} # Default - not necesssary
 
-structure.setAnalysisVal("Analysis", ("EigenAnalysis", eigen))
+structure.input.Analysis = {"EigenAnalysis": eigen}
 
 
 madeupium    = {"materialType" : "isotropic", 
                 "youngModulus" : 72.0E9 , 
                 "poissonRatio": 0.33, 
                 "density" : 2.8E3}
-structure.setAnalysisVal("Material", ("Madeupium", madeupium))
+structure.input.Material = {"Madeupium": madeupium}
 
 skin  = {"propertyType" : "Shell", 
          "membraneThickness" : 0.0015, 
@@ -135,12 +150,21 @@ ribSpar  = {"propertyType" : "Shell",
             "bendingInertiaRatio" : 1.0, # Default           
             "shearMembraneRatio"  : 5.0/6.0} # Default 
 
-structure.setAnalysisVal("Property", [("Skin", skin),
-                                      ("Rib_Root", ribSpar)])
+structure.input.Property = {"Skin"    : skin,
+                            "Rib_Root": ribSpar}
 
 constraint = {"groupName" : "Rib_Root", 
               "dofConstraint" : 123456}
-structure.setAnalysisVal("Constraint", ("edgeConstraint", constraint))
+structure.input.Constraint = {"edgeConstraint": constraint}
+
+####### EGADS ########################
+# Run pre/post-analysis for egads
+print ("\nRunning PreAnalysis ......", "egads")
+surfMesh.preAnalysis()
+
+print ("\nRunning PostAnalysis ......", "egads")
+surfMesh.postAnalysis()
+#######################################
 
 ####### Tetgen ########################
 # Run pre/post-analysis for tetgen
@@ -151,9 +175,6 @@ print ("\nRunning PostAnalysis ......", "tetgen")
 mesh.postAnalysis()
 #######################################
 
-# Populate vertex sets in the bounds after the mesh generation is copleted
-for j in transfers:
-    myProblem.dataBound[j].fillVertexSets()
 
 ####### Mystrean #######################
 # Run pre/post-analysis for mystran and execute
@@ -170,7 +191,6 @@ os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run fun3d via sys
 
 if os.path.getsize("Info.out") == 0: # 
     print ("Mystran excution possibly failed\n")
-    #myProblem.closeCAPS()
 
 os.chdir(currentDirectory) # Move back to top directory 
 
@@ -180,22 +200,13 @@ print ("\nRunning PostAnalysis ......", "mystran")
 structure.postAnalysis()
 #######################################
 
-#Execute the dataTransfer
-print ("\nExecuting dataTransfer ......")
-for j in transfers:
-    for eigenName in eigenVector:
-        myProblem.dataBound[j].executeTransfer(eigenName)
-        #myProblem.dataBound[j].dataSetSrc[eigenName].viewData()
-        #myProblem.dataBound[j].viewData()
-    #myProblem.dataBound[j].writeTecplot(myProblem.analysis[i].analysisDir + "/Data")
-
 # Retrive natural frequencies from the structural analysis
-naturalFreq = structure.getAnalysisOutVal("EigenRadian") # rads/s
-mass = structure.getAnalysisOutVal("EigenGeneralMass")
+naturalFreq = structure.output.EigenRadian # rads/s
+mass = structure.output.EigenGeneralMass
 
 ####### FUN3D ###########################
-modalTuple = [] # Build up Modal Aeroelastic tuple  
-for j in eigenVector:
+modalTuple = {} # Build up Modal Aeroelastic dict  
+for j in eigenVectors:
     modeNum = int(j.strip("EigenVector_"))
     #print "ModeNumber = ", modeNum 
     
@@ -204,13 +215,13 @@ for j in eigenVector:
              "generalMass" : mass[modeNum-1], 
              "generalVelocity" : 0.1}
     #print value
-    modalTuple.append((j,value))
+    modalTuple[j] = value
     
 # Add Eigen information in fun3d     
-fluid.setAnalysisVal("Modal_Aeroelastic", modalTuple)
-fluid.setAnalysisVal("Modal_Ref_Velocity", refVelocity)
-fluid.setAnalysisVal("Modal_Ref_Dynamic_Pressure", 0.5*refDensity*refVelocity*refVelocity)
-fluid.setAnalysisVal("Modal_Ref_Length", 1.0)
+fluid.input.Modal_Aeroelastic = modalTuple
+fluid.input.Modal_Ref_Velocity = refVelocity
+fluid.input.Modal_Ref_Dynamic_Pressure = 0.5*refDensity*refVelocity*refVelocity
+fluid.input.Modal_Ref_Length = 1.0
         
 # Run the preAnalysis 
 print ("\nRunning PreAnalysis ......", "fun3d")
@@ -236,6 +247,3 @@ os.chdir(currentDirectory) # Move back to top directory
 print ("\nRunning PostAnalysis ......", "fun3d")
 # Run AIM post-analysis
 fluid.postAnalysis()
-
-# Close CAPS 
-myProblem.closeCAPS()

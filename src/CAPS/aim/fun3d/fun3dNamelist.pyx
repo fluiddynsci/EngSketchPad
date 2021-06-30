@@ -1,3 +1,8 @@
+# This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
+# Cython declarations
+# cython: language_level=3
+
 # Import Cython *.pxds 
 cimport cCAPS
 cimport cfun3dNamelist
@@ -7,30 +12,40 @@ cimport cAIMUtil
 try:
     from cpython.version cimport PY_MAJOR_VERSION
 except: 
-    print "Error: Unable to import cpython.version"
+    print("Error: Unable to import cpython.version")
 #    raise ImportError
 
 # Import Python modules
 try:
     import sys
 except:
-    print "\tUnable to import sys module - Try ' pip install sys '"
+    print("\tUnable to import sys module - Try ' pip install sys '")
 #    raise ImportError
 
 try:
     import os
 except:
-    print "\tUnable to import os module - Try ' pip install os '"
+    print("\tUnable to import os module - Try ' pip install os '")
 #    raise ImportError
 
 try:
     import f90nml
 except:
-    print "\tUnable to import f90nml module - Try ' pip install f90nml '"
+    print("\tUnable to import f90nml module - Try ' pip install f90nml '")
 #    raise ImportError
 
+cdef extern from *:
+    """
+    #if defined(WIN32)
+      #define PATH_MAX _MAX_PATH
+    #else
+      #include <limits.h>
+    #endif
+    """
+    const int PATH_MAX
+
 # Handles all byte to uni-code and and byte conversion. 
-def _str(data,ignore_dicts = False):
+def _str(data,ignore_dicts = False, lower = True):
         
     if PY_MAJOR_VERSION >= 3:
         if isinstance(data, bytes):
@@ -43,64 +58,57 @@ def _str(data,ignore_dicts = False):
                     _str(key,ignore_dicts=True): _str(value, ignore_dicts=True)
                     for key, value in data.iteritems()
                     }
-    return data
+    return data.lower() if lower else data
 
- 
-def read_fun3d_nml(alt_dir = None):
+
+def read_fun3d_nml(fname):
 #############################################################
 ### Read and evaluate fun3d namelist ########################
 #############################################################    
-    
-    if alt_dir is None:
-        fname = 'fun3d.nml'
-    else: 
-        fname = os.path.join(_str(alt_dir), 'fun3d.nml')
-        
+
     if os.path.isfile(fname):
-        print '\n\tReading fun3d.nml .....'
+        print('\n\tReading ' + fname + ' .....')
         # Read namelist
         nml = f90nml.read(fname)
         nml.row_major=False
         return nml
     else:
-        print "\t" + fname + " not found!"
+        print("\t" + fname + " not found!")
 
     return (None)
 
-def write_fun3d_nml(nml, alt_dir = None):
+def write_fun3d_nml(nml,fname):
 #############################################################
 ### Write an arbitary namelist to file ######################
 #############################################################
-    
-    if alt_dir is None:
-        nml.write("fun3d.nml", force=True)
-    else:
-        name = os.path.join(_str(alt_dir), 'fun3d.nml')
-        nml.write(name, force= True)
+
+    nml.write(fname, force=True)
         
 cdef public int fun3d_writeNMLPython(void *aimInfo, 
-                                     const char *analysisPath, 
                                      cCAPS.capsValue *aimInputs, 
-                                     cfun3dNamelist.cfdBCsStruct bcProps) except -1:
+                                     cfun3dNamelist.cfdBoundaryConditionStruct bcProps) except -1:
     
     cdef:
-        int index = 0
-        
+        char aimFile[PATH_MAX]
+    
+    cAIMUtil.aim_file(aimInfo, b'fun3d.nml', aimFile)
+    fname = _str(aimFile, lower=False)
+
     nml = None
     
     # Load fun3d namelis - if Overwrite_NML is true create a new namelist 
     index = cAIMUtil.aim_getIndex(aimInfo, "Overwrite_NML",cCAPS.ANALYSISIN)-1
     if aimInputs[index].vals.integer == cCAPS.false:
-        nml = read_fun3d_nml(analysisPath)
+        nml = read_fun3d_nml(fname)
     else:
-        print "\tOverwrite_NML is set to 'True' - a new namelist will be created"
+        print("\tOverwrite_NML is set to 'True' - a new namelist will be created")
         
     # Create a new namelist if no namelist is found  
     if nml is None:
         nml = f90nml.Namelist()
-        print "\tCreating namelist"
+        print("\tCreating namelist")
     else:    
-        print "\tAppending namelist"
+        print("\tAppending namelist")
     
     # Go through varible options/namelists
     
@@ -270,98 +278,98 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
         nml['force_moment_integ_properties']['z_moment_center'] = aimInputs[index].vals.reals[2]
 
     # &boundary_conditions
-    for i in range(bcProps.numBCID):
+    for i in range(bcProps.numSurfaceProp):
         if 'boundary_conditions' not in nml:
             nml['boundary_conditions'] = f90nml.Namelist()
         
-        index = bcProps.surfaceProps[i].bcID-1
+        index = bcProps.surfaceProp[i].bcID-1
         
-        length = bcProps.surfaceProps[i].bcID
+        length = bcProps.surfaceProp[i].bcID
         
         # Wall Temperature 
-        if bcProps.surfaceProps[i].wallTemperatureFlag == cCAPS.true:
+        if bcProps.surfaceProp[i].wallTemperatureFlag == cCAPS.true:
             
             if 'wall_temperature' not in nml['boundary_conditions']:
                 nml['boundary_conditions']['wall_temperature'] = [None]*length
             else: 
-                if bcProps.surfaceProps[i].bcID > len(nml['boundary_conditions']['wall_temperature']):
+                if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temperature']):
                     for n in range(len(nml['boundary_conditions']['wall_temperature']), length):
                         nml['boundary_conditions']['wall_temperature'].append(None)
                              
             if 'wall_temp_flag' not in nml['boundary_conditions']:
                 nml['boundary_conditions']['wall_temp_flag'] = [None]*length
             else:
-                if bcProps.surfaceProps[i].bcID > len(nml['boundary_conditions']['wall_temp_flag']):
+                if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temp_flag']):
                     for n in range(len(nml['boundary_conditions']['wall_temp_flag']), length):
                         nml['boundary_conditions']['wall_temp_flag'].append(None)
                         
-            nml['boundary_conditions']['wall_temperature'][index] = bcProps.surfaceProps[i].wallTemperature
+            nml['boundary_conditions']['wall_temperature'][index] = bcProps.surfaceProp[i].wallTemperature
             nml['boundary_conditions']['wall_temp_flag'][index] = True
             
         # Total pressure and temperature 
-        if bcProps.surfaceProps[i].surfaceType == cfun3dNamelist.SubsonicInflow:
+        if bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicInflow:
 
             if 'total_pressure_ratio' not in nml['boundary_conditions']:
                 nml['boundary_conditions']['total_pressure_ratio'] = [None]*length
             else: 
-                if bcProps.surfaceProps[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):
+                if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):
                     for n in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):
                         nml['boundary_conditions']['total_pressure_ratio'].append(None)
                              
-            nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProps[i].totalPressure
+            nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProp[i].totalPressure
         
             if 'total_temperature_ratio' not in nml['boundary_conditions']:
                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length
             else: 
-                if bcProps.surfaceProps[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):
+                if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):
                     for n in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):
                         nml['boundary_conditions']['total_temperature_ratio'].append(None)
                              
-            nml['boundary_conditions']['total_temperature_ratio'][index] = bcProps.surfaceProps[i].totalTemperature
+            nml['boundary_conditions']['total_temperature_ratio'][index] = bcProps.surfaceProp[i].totalTemperature
         
 
         # Static pressure 
-        if (bcProps.surfaceProps[i].surfaceType == cfun3dNamelist.BackPressure or
-            bcProps.surfaceProps[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
+        if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.BackPressure or
+            bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
 
             if 'static_pressure_ratio' not in nml['boundary_conditions']:
                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length
             else: 
-                if bcProps.surfaceProps[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):
+                if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):
                     for n in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):
                         nml['boundary_conditions']['static_pressure_ratio'].append(None)
                              
-            nml['boundary_conditions']['static_pressure_ratio'][index] = bcProps.surfaceProps[i].staticPressure
+            nml['boundary_conditions']['static_pressure_ratio'][index] = bcProps.surfaceProp[i].staticPressure
 
         # Mach number 
-        if (bcProps.surfaceProps[i].surfaceType == cfun3dNamelist.MachOutflow or
-            bcProps.surfaceProps[i].surfaceType == cfun3dNamelist.MassflowOut):
+        if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MachOutflow or
+            bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
 
             if 'mach_bc' not in nml['boundary_conditions']:
                 nml['boundary_conditions']['mach_bc'] = [None]*length
             else: 
-                if bcProps.surfaceProps[i].bcID > len(nml['boundary_conditions']['mach_bc']):
+                if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):
                     for n in range(len(nml['boundary_conditions']['mach_bc']), length):
                         nml['boundary_conditions']['mach_bc'].append(None)
                              
-            nml['boundary_conditions']['mach_bc'][index] = bcProps.surfaceProps[i].machNumber
+            nml['boundary_conditions']['mach_bc'][index] = bcProps.surfaceProp[i].machNumber
         
         # Massflow
-        if (bcProps.surfaceProps[i].surfaceType == cfun3dNamelist.MassflowIn or
-            bcProps.surfaceProps[i].surfaceType == cfun3dNamelist.MassflowOut):
+        if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowIn or
+            bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
 
             if 'massflow' not in nml['boundary_conditions']:
                 nml['boundary_conditions']['massflow'] = [None]*length
             else: 
-                if bcProps.surfaceProps[i].bcID > len(nml['boundary_conditions']['massflow']):
+                if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['massflow']):
                     for n in range(len(nml['boundary_conditions']['massflow']), length):
                         nml['boundary_conditions']['massflow'].append(None)
                              
-            nml['boundary_conditions']['massflow'][index] = bcProps.surfaceProps[i].massflow
+            nml['boundary_conditions']['massflow'][index] = bcProps.surfaceProp[i].massflow
 
     # &noninertial_reference_frame
     if (aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Rate", cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull or
-       aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Center",cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull):
+        aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Center",cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull):
                                    
         if 'noninertial_reference_frame' not in nml:
             nml['noninertial_reference_frame'] = f90nml.Namelist()
@@ -381,4 +389,4 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
         nml['noninertial_reference_frame']['rotation_rate_z'] = aimInputs[index].vals.reals[2]
           
     # Write new namelist
-    write_fun3d_nml(nml, analysisPath)
+    write_fun3d_nml(nml,fname)

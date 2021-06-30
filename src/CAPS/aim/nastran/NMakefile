@@ -20,7 +20,7 @@ $(LDIR)\nastranAIM.dll:	$(ODIR)\nastranAIM.obj $(LDIR)\utils.lib
 		$(LDIR)\nastranAIM.exp
 	 link /out:$(LDIR)\nastranAIM.dll /dll /def:nastranAIM.def \
 		$(ODIR)\nastranAIM.obj /LIBPATH:$(LDIR) utils.lib aimUtil.lib \
-		ocsm.lib egads.lib udunits2.lib
+		ocsm.lib egads.lib udunits2.lib $(PYTHONLIB)
 	$(MCOMP) /manifest $(LDIR)\nastranAIM.dll.manifest \
 		/outputresource:$(LDIR)\nastranAIM.dll;2
 

@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -111,6 +111,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     double  dxytol = 1.0e-6;
     ego     enodes[4], eedges[3], ecurve, eline, eloop, eface, enew;
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
     printf("thkcode(0) = %s\n", THKCODE(0));
@@ -245,10 +247,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("thkcode(%d) = %s\n", numUdp, THKCODE(numUdp));
@@ -264,12 +263,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* mallocs required by Windows compiler */
     npnt = 128;
-    xairfoil = (double*)malloc(npnt*sizeof(double));
-    yairfoil = (double*)malloc(npnt*sizeof(double));
-    if (xairfoil == NULL || yairfoil == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(xairfoil, double, npnt);
+    MALLOC(yairfoil, double, npnt);
 
     /* call naca456 */
 #ifdef WIN32
@@ -309,11 +304,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* mallocs required by Windows compiler */
     npnt = nairfoil;
-    pts = (double*)malloc(3*npnt*sizeof(double));
-    if (pts == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(pts, double, 3*npnt);
 
     for (ipnt = 0; ipnt < npnt; ipnt++) {
         pts[3*ipnt  ] = xairfoil[ipnt];
@@ -331,7 +322,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[2] = pts[3*ipnt+2];
         status = EG_makeTopology(context, NULL, NODE, 0,
                                  data, 0, NULL, NULL, &(enodes[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* create Node at trailing edge */
         ipnt = npnt - 1;
@@ -340,13 +331,13 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[2] = pts[3*ipnt+2];
         status = EG_makeTopology(context, NULL, NODE, 0,
                                  data, 0, NULL, NULL, &(enodes[1]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* create spline curve from LE to TE */
         sizes[0] = nle + 1;
         sizes[1] = 0;
         status = EG_approximate(context, 0, dxytol, sizes, &(pts[3*nle]), &ecurve);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_approximate);
 
         /* make Edge for camberline */
         ipnt = nle;
@@ -354,27 +345,27 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[1] = pts[3*ipnt+1];
         data[2] = pts[3*ipnt+2];
         status = EG_invEvaluate(ecurve, data, &(tdata[0]), result);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         status = EG_getRange(ecurve, range, &periodic);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getRange);
         tdata[1] = range[1];
 
         status = EG_makeTopology(context, ecurve, EDGE, TWONODE,
                                  tdata, 2, &(enodes[0]), NULL, &(eedges[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* create loop of the Edges */
         sense[0] = SFORWARD;
 
         status = EG_makeTopology(context, NULL, LOOP, OPEN,
                                  NULL, 1, eedges, sense, &eloop);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* create the WireBody (which will be returned) */
         status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                                  NULL, 1, &eloop, NULL, ebody);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
     /* create FaceBody of the airfoil */
     } else {
@@ -394,7 +385,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[2] = pts[3*ipnt+2];
         status = EG_makeTopology(context, NULL, NODE, 0,
                                  data, 0, NULL, NULL, &(enodes[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* create Node at leading edge */
         ipnt = nle;
@@ -403,7 +394,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[2] = pts[3*ipnt+2];
         status = EG_makeTopology(context, NULL, NODE, 0,
                                  data, 0, NULL, NULL, &(enodes[1]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* if a blunt trailing edge, create Node at lower trailing edge */
         if (bluntte) {
@@ -413,7 +404,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
             data[2] = pts[3*ipnt+2];
             status = EG_makeTopology(context, NULL, NODE, 0,
                                      data, 0, NULL, NULL, &(enodes[2]));
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_makeTopology);
 
             enodes[3] = enodes[0];
         } else {
@@ -424,11 +415,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         sizes[0] = npnt;
         sizes[1] = 0;
         status = EG_approximate(context, 0, dxytol, sizes, pts, &ecurve);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_approximate);
 
         /* make Edge for upper surface */
         status = EG_getRange(ecurve, range, &periodic);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getRange);
         tdata[0] = range[0];
 
         ipnt = nle;
@@ -436,11 +427,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[1] = pts[3*ipnt+1];
         data[2] = pts[3*ipnt+2];
         status = EG_invEvaluate(ecurve, data, &(tdata[1]), result);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         status = EG_makeTopology(context, ecurve, EDGE, TWONODE,
                                  tdata, 2, &(enodes[0]), NULL, &(eedges[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make Edge for lower surface */
         ipnt = nle;
@@ -448,15 +439,15 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         data[1] = pts[3*ipnt+1];
         data[2] = pts[3*ipnt+2];
         status = EG_invEvaluate(ecurve, data, &(tdata[0]), result);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         status = EG_getRange(ecurve, range, &periodic);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getRange);
         tdata[1] = range[1];
 
         status = EG_makeTopology(context, ecurve, EDGE, TWONODE,
                                  tdata, 2, &(enodes[1]), NULL, &(eedges[1]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* if a blunt trailing edge, create line segment at trailing edge */
         if (bluntte) {
@@ -468,21 +459,21 @@ udpExecute(ego  context,                /* (in)  EGADS context */
             data[4] = pts[1] - data[1];
             data[5] = pts[2] - data[2];
             status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, data, &eline);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_makeGeometry);
 
             /* make Edge for this line */
             status = EG_invEvaluate(eline, data, &(tdata[0]), result);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_invEvaluate);
 
             data[0] = pts[0];
             data[1] = pts[1];
             data[2] = pts[2];
             status = EG_invEvaluate(eline, data, &(tdata[1]), result);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_invEvaluate);
 
             status = EG_makeTopology(context, eline, EDGE, TWONODE,
                                      tdata, 2, &(enodes[2]), NULL, &(eedges[2]));
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_makeTopology);
         }
 
         /* create loop of the edges Edges */
@@ -497,21 +488,21 @@ udpExecute(ego  context,                /* (in)  EGADS context */
             status = EG_makeTopology(context, NULL, LOOP, CLOSED,
                                      NULL, 2, eedges, sense, &eloop);
         }
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make Face from the loop */
         status = EG_makeFace(eloop, SFORWARD, NULL, &eface);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeFace);
 
         /* find the direction of the Face normal */
         status = EG_getRange(eface, range, &periodic);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getRange);
 
         range[0] = (range[0] + range[1]) / 2;
         range[1] = (range[2] + range[3]) / 2;
 
         status = EG_evaluate(eface, range, eval);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_evaluate);
 
         norm[0] = eval[4] * eval[8] - eval[5] * eval[7];
         norm[1] = eval[5] * eval[6] - eval[3] * eval[8];
@@ -520,14 +511,14 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         /* if the normal is not positive, flip the Face */
         if (norm[2] < 0) {
             status = EG_flipObject(eface, &enew);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_flipObject);
             eface = enew;
         }
 
         /* create the FaceBody (which will be returned) */
         status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                                  NULL, 1, &eface, sense, ebody);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
     }
 
     /* set the output value(s) */

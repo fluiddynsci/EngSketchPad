@@ -38,6 +38,6 @@ store     forebody
    rule 1
 
    restore   forebody
-union     0  0  1e-5
+union     0  0  -1e-5
 
 end

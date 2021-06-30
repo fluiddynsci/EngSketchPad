@@ -33,7 +33,17 @@ $(TDIR)/awave:	$(ODIR)/awave.o
 	$(FCOMP) -o $(TDIR)/awave $(ODIR)/awave.o
 
 $(ODIR)/awave.o:	$(AWAVE)
+ifeq ($(EFCOMP),ifort)
 	$(FCOMP) -c $(FOPTS) $(AWAVE) -o $(ODIR)/awave.o
+else
+	$(FCOMP) -c $(FOPTS) -std=legacy $(AWAVE) -o $(ODIR)/awave.o
+endif
+
+lint:
+	$(LINT) -I../../include -I$(IDIR) -I../utils $(wildcard *.c) -uniondef -exportlocal -nullpass -evalorder
+
+cppcheck:
+	cppcheck -I../../include -I$(ESP_ROOT)/include -I../utils .
 
 clean:
 	-rm -f $(ODIR)/awave.o $(ODIR)/awaveAIM.o
@@ -41,8 +51,12 @@ clean:
 cleanall:	clean
 	-rm -f $(LDIR)/awaveAIM.so $(TDIR)/awave
 
-dox:
-	(cd doc; doxygen awaveAIM_dox.cfg; cd latex; make; mv refman.pdf AWAVEAIM.pdf)
+dox: doc/html/index.html
+doc/html/index.html: \
+				../../examples/pyCAPS/awave_PyTest.py \
+				../../examples/csmData/awaveWingTailFuselage.csm \
+				$(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
+	(cd doc; doxygen awaveAIM_dox.cfg; cd latex; make; mv refman.pdf awaveAIM.pdf)
 
 doxclean:
 	(cd doc; rm -f INPUT; rm -rf html latex; rm -f awaveAIM.tag)	

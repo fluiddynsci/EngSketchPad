@@ -1,6 +1,6 @@
 #======================================#
 # automatically generated verification #
-# OpenCSM  1.18      OpenCASCADE 7.3.1 #
+# OpenCSM  1.19      OpenCASCADE 7.3.1 #
 #======================================#
 select    body 3
    assert         3      @itype       0  1

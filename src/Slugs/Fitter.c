@@ -14,7 +14,7 @@
  */
 
 /*
- * Copyright (C) 2012/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2012/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -49,6 +49,10 @@
 #define  MAX(A,B)   (((A) < (B)) ? (B) : (A))
 #define  SQR(A)     ((A) * (A))
 
+#ifndef  DEBUG
+    #define  DEBUG 0
+#endif
+
 #ifdef GRAFIC
     #include "grafic.h"
 #endif
@@ -62,53 +66,55 @@
  */
 
 typedef struct {
-    int       m;
-    int       bitflag;
-    double    *XYZcloud;
-    double    *Tcloud;
+    int       bitflag;        /* 1=ordered, 2=uPeriodic, 8=intGiven */
 
-    int       n;
-    double    *cp;
-    double    *f;
+    int       m;              /* number of points in cloud */
+    double    *XYZcloud;      /* array  of points in cloud (normalized) */
+    double    *Tcloud;        /* (t)    of points in cloud */
 
-    int       iter;
-    double    lambda;
+    int       n;              /* number of control points */
+    double    *cp;            /* array  of control points (normalized) */
+    double    *srat;          /* stretching ratio between initial cp's */
+    double    *f;             /* objective function components:
+                                 3*(m)   distances between cloud and surface
+                                +3*(n-2) relative smoothness measure */
 
-    double    scale;
-    double    xavg;
-    double    yavg;
-    double    zavg;
+    int       iter;           /* number of iterations so far */
+    double    lambda;         /* LM switching parameter */
 
-    int       *MMi;
-    double    *MMd;
+    double    scale;          /* scale factor of inputs */
+    double    xavg;           /* average x    of inputs */
+    double    yavg;           /* average y    of inputs */
+    double    zavg;           /* average z    of inputs */
 
-    FILE      *fp;
+    FILE      *fp;            /* file pointer for outputs (or NULL) */
 } fit1d_T;
 
 typedef struct {
-    int       m;
-    int       bitflag;
-    double    *XYZcloud;
-    double    *UVcloud;
+    int       bitflag;        /* 2=uPeriodic, 4=vPeriodic, 8=intGiven */
 
-    int       nu;
-    int       nv;
-    double    *cp;
-    double    *f;
+    int       m;              /* number of points in cloud */
+    double    *XYZcloud;      /* array  of points in cloud */
+    double    *UVcloud;       /* (u,v)  if points in cloud */
 
-    int       iter;
-    double    lambda;
+    int       nu;             /* number of control points in u direction */
+    int       nv;             /* number of control points in v direction */
+    double    *cp;            /* array  of control points */
+    double    *f;             /* objective function components:
+                                 3*(m)           distances between cloud and surface
+                                +3*(nu-2)*(nv-2) relative smoothness measure */
 
-    double    scale;
-    double    xavg;
-    double    yavg;
-    double    zavg;
+    int       iter;           /* number of iterations so far */
+    double    lambda;         /* LM switching parameter */
 
-    int       *MMi;
-    double    *MMd;
-    int       *mask;
+    double    scale;          /* scale factor of inputs */
+    double    xavg;           /* average x    of inputs */
+    double    yavg;           /* average y    of inputs */
+    double    zavg;           /* average z    of inputs */
 
-    FILE      *fp;
+    int       *mask;          /* mask for smoothing vectors */
+
+    FILE      *fp;            /* file pointer for outputs (or NULL) */
 } fit2d_T;
 
 /*
@@ -173,7 +179,7 @@ typedef struct {
  */
 
 static int    fit1d_objf(fit1d_T *fit1d, double smooth, double Tcloud[],
-                         double cp[], double f[]);
+                         double cp[], double srat[], double f[]);
 static int    fit2d_objf(fit2d_T *fit2d, double smooth, double UVcloud[],
                          double cp[], double f[]);
 static int    eval1dBspline(double T, int n, double cp[], double XYZ[],
@@ -182,11 +188,9 @@ static int    eval2dBspline(double U, double V, int nu, int nv, double P[], doub
                             /*@null@*/double dXYZdU[], /*@null@*/double dXYZdV[], /*@null@*/double dXYZdP[]);
 static int    cubicBsplineBases(int ncp, double t, double N[], double dN[]);
 static int    interp1d(double T, int ntab, double Ttab[], double XYZtab[], double XYZ[]);
-static int    solveSparse(double SAv[], int SAi[], double b[], double x[],
-                          int itol, double *errmax, int *iter);
-static int    findIndex(int irow, int icol, int SAi[]);
 static double L2norm(double f[], int n);
 static double Linorm(double f[], int n);
+static int    matsol(double A[], double b[], int n, double x[]);
 
 #ifdef GRAFIC
     static void   plotCurve_image(int*, void*, void*, void*, void*, void*,
@@ -216,15 +220,16 @@ fit1dCloud(int    m,                    /* (in)  number of points in cloud */
            double *maxf,                /* (out) maximum distance between cloud and fit */
  /*@null@*/double *dotmin,              /* (out) minimum normalized dot product of control polygon */
  /*@null@*/int    *nmin,                /* (out) minimum number of cloud points in any interval */
-           int    *numiter,             /* (out) number of iterations executed */
+           int    *numiter,             /* (in)  if >0, number of iterations allowed */
+                                        /* (out) number of iterations executed */
  /*@null@*/FILE   *fp)                  /* (in)  file for progress outputs (or NULL) */
 {
     int    status = FIT_SUCCESS;        /* (out)  return status */
 
-    int    iter, niter=100;
-    double toler=EPS06;
+    int    iter, accept, niter=100;
+    double old_normf, old_maxf, toler=EPS06;
 
-    void    *myContext = NULL;
+    void    *myContext;
 
     ROUTINE(fit1dCloud);
 
@@ -234,8 +239,20 @@ fit1dCloud(int    m,                    /* (in)  number of points in cloud */
         fprintf(fp, "enter fit1dCloud(bitflag=%d, m=%d, n=%d)\n", bitflag, m, n);
     }
 
-    assert (m > 1);                     // needed to avoid clang warning
-    assert (n > 2);                     // needed to avoid clang warning
+    if (m <= 1 || XYZcloud == NULL) {
+        status = FIT_EMPTYCLOUD;
+        goto cleanup;
+    } else if (n <= 2 || cp == NULL) {
+        status = FIT_NCP;
+        goto cleanup;
+    } else if (smooth < 0 || smooth > 1) {
+        status = FIT_SMOOTH;
+        goto cleanup;
+    }
+
+    if (*numiter > 0) {
+        niter = *numiter;
+    }
 
     /* default returns */
     *normf   = EPS12;
@@ -253,16 +270,22 @@ fit1dCloud(int    m,                    /* (in)  number of points in cloud */
         for (iter = 0; iter < niter; iter++) {
             (*numiter)++;
 
-            status = fit1d_step(myContext, smooth, normf, maxf);
+            old_normf = *normf;
+            old_maxf  = *maxf;
+
+            status = fit1d_step(myContext, smooth, normf, maxf, &accept);
             CHECK_STATUS(fit1d_step);
 
             /* check for convergence */
-            if (*normf < toler && iter > 10) {
+            if (accept == 1 && fabs(*normf-old_normf) < toler && fabs(*maxf-old_maxf) < toler) {
                 if (fp != NULL) {
                     fprintf(fp, "converged in %d itertions\n", iter);
+                    fprintf(fp, "final     normf=%10.4e, maxf=%10.4e\n", *normf, *maxf);
                 }
                 break;
-
+            } else if (accept == 0) {
+                *normf = old_normf;
+                *maxf  = old_maxf;
             }
 
             /* reduce smoothing for next step */
@@ -275,8 +298,6 @@ fit1dCloud(int    m,                    /* (in)  number of points in cloud */
     CHECK_STATUS(fit1d_done);
 
 cleanup:
-    fit1d_free(myContext);
-
     return status;
 }
 
@@ -303,8 +324,9 @@ fit1d_init(int     m,                   /* (in)  number of points in cloud */
     int    status = FIT_SUCCESS;        /* (out)  return status */
 
     int    ordered=0, uPeriodic=0, intGiven=0;
-    int    nvar, ivar, jvar, nobj, np, j, k, next, indx;
-    double frac, xmin, xmax, ymin, ymax, zmin, zmax;
+    int    nobj, j, k;
+    double frac, xmin, xmax, ymin, ymax, zmin, zmax, del1, del2;
+    double dbest, dtest, v0[3], v1[3], dot;
     double xa, ya, za, xb, yb, zb, tt, xx, yy, zz;
 
     fit1d_T *fit1d=NULL;
@@ -318,7 +340,16 @@ fit1d_init(int     m,                   /* (in)  number of points in cloud */
     if ((bitflag & 8) != 0) intGiven  = 1;
 
     /* periodic is not implemented (yet) */
-    assert (uPeriodic == 0);
+    if (uPeriodic == 1) {
+        status = FIT_BITFLAG;
+        goto cleanup;
+    } else if (m <= 1 || XYZcloud == NULL) {
+        status = FIT_EMPTYCLOUD;
+        goto cleanup;
+    } else if (n <= 2 || cp == NULL) {
+        status = FIT_NCP;
+        goto cleanup;
+    }
 
     /* get a fit1d structure */
     MALLOC(fit1d, fit1d_T, 1);
@@ -328,17 +359,19 @@ fit1d_init(int     m,                   /* (in)  number of points in cloud */
     fit1d->XYZcloud = NULL;
     fit1d->Tcloud   = NULL;
 
-    MALLOC(fit1d->XYZcloud, double, 3*fit1d->m);
-    MALLOC(fit1d->Tcloud,   double,   fit1d->m);
-
     fit1d->bitflag  = bitflag;
 
     fit1d->n        = n;
     fit1d->cp       = NULL;
+    fit1d->srat     = NULL;
     fit1d->f        = NULL;
 
-    MALLOC(fit1d->cp, double,            3*fit1d->n  );
-    MALLOC(fit1d->f,  double, 3*fit1d->m+3*fit1d->n-6);
+    MALLOC(fit1d->XYZcloud, double, 3*fit1d->m);
+    MALLOC(fit1d->Tcloud,   double,   fit1d->m);
+
+    MALLOC(fit1d->cp,   double,            3*fit1d->n  );
+    MALLOC(fit1d->srat, double,              fit1d->n  );
+    MALLOC(fit1d->f,    double, 3*fit1d->m+3*fit1d->n-6);
 
     fit1d->iter     = 0;
     fit1d->lambda   = 1;
@@ -347,9 +380,6 @@ fit1d_init(int     m,                   /* (in)  number of points in cloud */
     fit1d->xavg     = 0;
     fit1d->yavg     = 0;
     fit1d->zavg     = 0;
-
-    fit1d->MMi      = NULL;
-    fit1d->MMd      = NULL;
 
     fit1d->fp       = fp;
 
@@ -384,6 +414,17 @@ fit1d_init(int     m,                   /* (in)  number of points in cloud */
     if (cp[3*n-1] < zmin) zmin = cp[3*n-1];
     if (cp[3*n-1] > zmax) zmax = cp[3*n-1];
 
+    if (intGiven == 1) {
+        for (j = 1; j < fit1d->n-1; j++) {
+            if (cp[3*j  ] < xmin) xmin = cp[3*j  ];
+            if (cp[3*j  ] > xmax) xmax = cp[3*j  ];
+            if (cp[3*j+1] < ymin) ymin = cp[3*j+1];
+            if (cp[3*j+1] > ymax) ymax = cp[3*j+1];
+            if (cp[3*j+2] < zmin) zmin = cp[3*j+2];
+            if (cp[3*j+2] > zmax) zmax = cp[3*j+2];
+        }
+    }
+
     /* normalize input data */
                                   fit1d->scale = xmax - xmin;
     if (ymax-ymin > fit1d->scale) fit1d->scale = ymax - ymin;
@@ -414,13 +455,75 @@ fit1d_init(int     m,                   /* (in)  number of points in cloud */
     fit1d->cp[3*n-2] = (cp[3*n-2] - fit1d->yavg) / fit1d->scale;
     fit1d->cp[3*n-1] = (cp[3*n-1] - fit1d->zavg) / fit1d->scale;
 
+    if (intGiven == 1) {
+        for (j = 1; j < fit1d->n-1; j++) {
+            fit1d->cp[3*j  ] = (cp[3*j  ] - fit1d->xavg) / fit1d->scale;
+            fit1d->cp[3*j+1] = (cp[3*j+1] - fit1d->yavg) / fit1d->scale;
+            fit1d->cp[3*j+2] = (cp[3*j+2] - fit1d->zavg) / fit1d->scale;
+        }
+    }
+
     /* number of design variables, objectives, and interior control points*3 */
-    nvar =     fit1d->m + 3 * (fit1d->n - 2);
     nobj = 3 * fit1d->m + 3 * (fit1d->n - 2);
-    np   =                3 * (fit1d->n - 2);
+
+    /* initialize the spacing ratios */
+    for (j = 0; j < fit1d->n; j++) {
+        fit1d->srat[j] = 0;
+    }
+
+    if (intGiven == 1) {
+        /* determine the spacing ratio, which will be used to hold cp
+           spacing if interior points are given */
+        for (j = 1; j < fit1d->n-1; j++) {
+            del1 = SQR(cp[3*j-3] - cp[3*j  ]) + SQR(cp[3*j-2] - cp[3*j+1]) + SQR(cp[3*j-1] - cp[3*j+2]);
+            del2 = SQR(cp[3*j+3] - cp[3*j  ]) + SQR(cp[3*j+4] - cp[3*j+1]) + SQR(cp[3*j+5] - cp[3*j+2]);
+            fit1d->srat[j] = 0.5 - del1 / (del1 + del2);
+        }
+
+        /* for each point in the cloud, assign the value of t
+           that is associated with the closest control point */
+        for (k = 0; k < fit1d->m; k++) {
+            fit1d->Tcloud[k] = 0;
+            dbest = 1e20;
+
+            for (j = 0; j < fit1d->n; j++) {
+                dtest = SQR(XYZcloud[3*k  ] - cp[3*j  ])
+                      + SQR(XYZcloud[3*k+1] - cp[3*j+1])
+                      + SQR(XYZcloud[3*k+2] - cp[3*j+2]);
+
+                if (dtest < dbest) {
+                    frac = (double)(j) / (double)(fit1d->n-1);
+                    v0[0] = XYZcloud[3*k  ] - cp[3*j  ];
+                    v0[1] = XYZcloud[3*k+1] - cp[3*j+1];
+                    v0[2] = XYZcloud[3*k+2] - cp[3*j+2];
+
+                    if (j > 0) {
+                        v1[0] = cp[3*j-3] - cp[3*j  ];
+                        v1[1] = cp[3*j-2] - cp[3*j+1];
+                        v1[2] = cp[3*j-1] - cp[3*j+2];
+                        dot   = v0[0] * v1[0] + v0[1] * v1[1] + v0[2] * v1[2];
+                        if (dot > 0) {
+                            frac -= MIN(0.5, dot);
+                        }
+                    }
+                    if (j < fit1d->n-1) {
+                        v1[0] = cp[3*j+4] - cp[3*j  ];
+                        v1[1] = cp[3*j+5] - cp[3*j+1];
+                        v1[2] = cp[3*j+6] - cp[3*j+2];
+                        dot   = v0[0] * v1[0] + v0[1] * v1[1] + v0[2] * v1[2];
+                        if (dot > 0) {
+                            frac += MIN(0.5, dot);
+                        }
+                    }
+                    fit1d->Tcloud[k] = frac * (double)(fit1d->n - 3);
+
+                    dbest = dtest;
+                }
+            }
+        }
 
     /* if fit1d->m < 3, then assume that the linear spline is the best fit */
-    if (fit1d->m < 3) {
+    } else if (fit1d->m < 3) {
         for (j = 1; j < fit1d->n-1; j++) {
             frac = (double)(j) / (double)(fit1d->n-1);
 
@@ -453,11 +556,8 @@ fit1d_init(int     m,                   /* (in)  number of points in cloud */
 
     } else {
 
-        /* intGiven==0 -> interiors are given by user */
-        if (intGiven == 1) {
-
         /* ordered == 0 -> linear interpolation of control points from boundries */
-        } else if (ordered  == 0) {
+        if (ordered  == 0) {
             for (j = 1; j < fit1d->n-1; j++) {
                 frac = (double)(j) / (double)(fit1d->n-1);
 
@@ -497,7 +597,7 @@ fit1d_init(int     m,                   /* (in)  number of points in cloud */
     }
 
     /* compute the initial objective function */
-    status = fit1d_objf(fit1d, smooth, fit1d->Tcloud, fit1d->cp, fit1d->f);
+    status = fit1d_objf(fit1d, smooth, fit1d->Tcloud, fit1d->cp, fit1d->srat, fit1d->f);
     CHECK_STATUS(fit1d_objf);
 
     /* compute and report the norm of the objective function */
@@ -507,43 +607,20 @@ fit1d_init(int     m,                   /* (in)  number of points in cloud */
         fprintf(fit1d->fp, "initial   normf=%10.4e, maxf=%10.4e\n", *normf, *maxf);
     }
 
-    /* set up sparse matricies */
-    indx = fit1d->m + 7 * np + 2 * fit1d->m * np + 1;
-    MALLOC(fit1d->MMi, int,    indx);
-    MALLOC(fit1d->MMd, double, indx);
-
-    /* store indicies for each row of the matrix */
-    next = nvar+1;
-
-    for (ivar = 0; ivar < fit1d->m; ivar++) {
-        fit1d->MMi[ivar] = next;
-        for (jvar = fit1d->m; jvar < nvar; jvar++) {
-            fit1d->MMi[next++] = jvar;
-        }
-    }
-
-    for (ivar = fit1d->m; ivar < nvar; ivar++) {
-        fit1d->MMi[ivar] = next;
-        for (jvar = 0; jvar < fit1d->m; jvar++) {
-            fit1d->MMi[next++] = jvar;
-        }
-        if (ivar-9 >= fit1d->m) fit1d->MMi[next++] = ivar-9;
-        if (ivar-6 >= fit1d->m) fit1d->MMi[next++] = ivar-6;
-        if (ivar-3 >= fit1d->m) fit1d->MMi[next++] = ivar-3;
-        if (ivar+3 <  nvar    ) fit1d->MMi[next++] = ivar+3;
-        if (ivar+6 <  nvar    ) fit1d->MMi[next++] = ivar+6;
-        if (ivar+9 <  nvar    ) fit1d->MMi[next++] = ivar+9;
-    }
-
-    fit1d->MMi[nvar] = next;
-
-    /* make sure we did not overflow matrix */
-    assert (next <= indx);
-
     /* return the fit1d structure (as the context) */
     *context = (void *)fit1d;
 
 cleanup:
+    if (status != FIT_SUCCESS && fit1d != NULL) {
+        FREE(fit1d->XYZcloud);
+        FREE(fit1d->Tcloud  );
+        FREE(fit1d->cp      );
+        FREE(fit1d->srat    );
+        FREE(fit1d->f       );
+
+        FREE(fit1d);
+    }
+
     return status;
 }
 
@@ -559,28 +636,35 @@ int
 fit1d_step(void    *context,            /* (in)  context */
            double  smooth,              /* (in)  control net smoothing parameter */
            double  *normf,              /* (out) RMS of distances between cloud and fit */
-           double  *maxf)               /* (out) maximum distance between cloud and fit */
+           double  *maxf,               /* (out) maximum distance between cloud and fit */
+           int     *accept)             /* (out) =1 if step was accepted */
 {
     int    status = FIT_SUCCESS;        /* (out)  return status */
 
-    int    nvar, ivar, jvar, nobj, iobj, i, j, k, next, itol, maxiter, uPeriodic=0;
+    int    nvar, ivar, jvar, nobj, iobj, i, j, k, next, uPeriodic=0;
 
-    double normfnew, maxfnew, errmax, tempw3, tempw2, tempw1, tempc, tempe1, tempe2, tempe3;
+    double normfnew, maxfnew, tempw3=0, tempw2=0, tempw1=0, tempc, tempe1, tempe2, tempe3;
     double delta0, delta1, delta2;
     double XYZ[3], dXYZdT[3], *dXYZdP=NULL;
     double *cpnew=NULL, *beta=NULL, *betanew=NULL, *delta=NULL;
-    double *rhs=NULL, *fnew=NULL;
+    double *fnew=NULL;
 
     fit1d_T *fit1d = (fit1d_T *) context;
 
-#define MM(I,J)   fit1d->MMd[findIndex(I,J,fit1d->MMi)]
+    int    nn = 3 * (fit1d->n - 2);
+    double *AA=NULL, *BB=NULL, *CC=NULL, *DD=NULL, *EE=NULL;
+
+#define A(K)      AA[(K)]
+#define B(K,I)    BB[(K)*nn+(I)]
+#define C(I,J)    CC[(I)*nn+(J)]
+#define D(K)      DD[(K)]
+#define E(K)      EE[(K)]
 
     ROUTINE(fit1d_step);
 
     /* --------------------------------------------------------------- */
 
-    assert (fit1d->m > 2);
-    assert (fit1d->n > 2);
+    *accept = 0;
 
     (fit1d->iter)++;
 
@@ -595,7 +679,6 @@ fit1d_step(void    *context,            /* (in)  context */
     MALLOC(beta,    double, nvar);
     MALLOC(delta,   double, nvar);
     MALLOC(betanew, double, nvar);
-    MALLOC(rhs,     double, nvar);
 
     MALLOC(fnew,    double, nobj);
 
@@ -611,59 +694,74 @@ fit1d_step(void    *context,            /* (in)  context */
         beta[next++] = fit1d->cp[3*j+1];
         beta[next++] = fit1d->cp[3*j+2];
     }
-    assert (next == nvar);
+    assert(next == nvar);
 
-    /* initialize */
-    for (jvar = 0; jvar < nvar; jvar++) {
-        rhs[jvar] = 0;
+    /*
+          trans(J) * J =  [   A      B ]      trans(J) * Q =  [ D ]
+                          [            ]                      [   ]
+                          [trans(B)  C ]                      [ E ]
+    */
+    MALLOC(AA, double, fit1d->m   );
+    MALLOC(BB, double, fit1d->m*nn);
+    MALLOC(CC, double, nn      *nn);
+    MALLOC(DD, double, fit1d->m   );
+    MALLOC(EE, double,          nn);
+
+    for (i = 1; i < fit1d->n-1; i++) {
+        for (j = 1; j < fit1d->n-1; j++) {
+            C(3*i-3,3*j-3) = 0;
+            C(3*i-2,3*j-3) = 0;
+            C(3*i-1,3*j-3) = 0;
+
+            C(3*i-3,3*j-2) = 0;
+            C(3*i-2,3*j-2) = 0;
+            C(3*i-1,3*j-2) = 0;
+
+            C(3*i-3,3*j-1) = 0;
+            C(3*i-2,3*j-1) = 0;
+            C(3*i-1,3*j-1) = 0;
+        }
+
+        E(3*i-3) = 0;
+        E(3*i-2) = 0;
+        E(3*i-1) = 0;
     }
 
-    /* add entries for top-left, top-right, and bottom-left parts of MM and the rhs */
+    /* create top-left (A) and top-right (B) parts of JtJ and top part (D) of JtQ */
     for (k = 0; k < fit1d->m; k++) {
         status = eval1dBspline(beta[k], fit1d->n, fit1d->cp, XYZ, dXYZdT, dXYZdP);
         CHECK_STATUS(eval1dBspline);
 
-        /* top-left part of MM */
-        MM(k,k) = dXYZdT[0] * dXYZdT[0] + dXYZdT[1] * dXYZdT[1] + dXYZdT[2] * dXYZdT[2];
+        /* top-left (A) part of JtJ */
+        A(k) = dXYZdT[0] * dXYZdT[0] + dXYZdT[1] * dXYZdT[1] + dXYZdT[2] * dXYZdT[2];
 
-        /* top-right and bottom-left parts of MM */
+        /* top-right (B) part of JtJ */
         for (j = 1; j < fit1d->n-1; j++) {
-            i = fit1d->m + 3 * j - 3;
-
-            MM(k,i  ) = dXYZdT[0] * dXYZdP[j];
-            MM(k,i+1) = dXYZdT[1] * dXYZdP[j];
-            MM(k,i+2) = dXYZdT[2] * dXYZdP[j];
-
-            MM(i  ,k) = MM(k,i  );
-            MM(i+1,k) = MM(k,i+1);
-            MM(i+2,k) = MM(k,i+2);
+            B(k,3*j-3) = dXYZdT[0] * dXYZdP[j];
+            B(k,3*j-2) = dXYZdT[1] * dXYZdP[j];
+            B(k,3*j-1) = dXYZdT[2] * dXYZdP[j];
         }
 
-        /* rhs (negative needed since f = (XYZ_spline - XYZ_cloud) */
-        rhs[k] = - dXYZdT[0] * fit1d->f[3*k] - dXYZdT[1] * fit1d->f[3*k+1] - dXYZdT[2] * fit1d->f[3*k+2];
+        /* top part (D) of JtQ (negative needed since f = (XYZ_spline - XYZ_cloud) */
+        D(k) = - dXYZdT[0] * fit1d->f[3*k] - dXYZdT[1] * fit1d->f[3*k+1] - dXYZdT[2] * fit1d->f[3*k+2];
 
         for (ivar = 1; ivar < fit1d->n-1; ivar++) {
-            rhs[fit1d->m+3*ivar-3] -= dXYZdP[ivar] * fit1d->f[3*k  ];
-            rhs[fit1d->m+3*ivar-2] -= dXYZdP[ivar] * fit1d->f[3*k+1];
-            rhs[fit1d->m+3*ivar-1] -= dXYZdP[ivar] * fit1d->f[3*k+2];
+            E(3*ivar-3) -= dXYZdP[ivar] * fit1d->f[3*k  ];
+            E(3*ivar-2) -= dXYZdP[ivar] * fit1d->f[3*k+1];
+            E(3*ivar-1) -= dXYZdP[ivar] * fit1d->f[3*k+2];
         }
     }
 
-    /* add entried for bottom-right part of matrix */
+    /* create bottom-right (C) part of JtJ */
     for (j = 1; j < fit1d->n-1; j++) {
-        ivar = fit1d->m + 3 * (j - 1);
+        jvar = 3 * (j - 1);
 
         if        (j == 1) {
-            tempw3 =  0;      // needed to avoid warning
-            tempw2 =  0;      // needed to avoid warning
-            tempw1 =  0;      // needed to avoid warning
             tempc  =  5;
             tempe1 = -4;
             tempe2 =  1;
             tempe3 =  0;
         } else if (j == 2) {
-            tempw3 =  0;      // needed to avoid warning
-            tempw2 =  0;      // needed to avoid warning
             tempw1 = -4;
             tempc  =  6;
             tempe1 = -4;
@@ -674,17 +772,12 @@ fit1d_step(void    *context,            /* (in)  context */
             tempw2 =  1;
             tempw1 = -4;
             tempc  =  5;
-            tempe1 =  0;      // needed to avoid warning
-            tempe2 =  0;      // needed to avoid warning
-            tempe3 =  0;      // needed to avoid warning
         } else if (j == fit1d->n-3) {
             tempw3  = 0;
             tempw2 =  1;
             tempw1 = -4;
             tempc  =  6;
             tempe1 = -4;
-            tempe2 =  0;      // needed to avoid warning
-            tempe3 =  0;      // needed to avoid warning
         } else {
             tempw3 =  0;
             tempw2 =  1;
@@ -709,90 +802,120 @@ fit1d_step(void    *context,            /* (in)  context */
         }
 
         if (j > 3   ) {
-            MM(ivar,  ivar- 9) = tempw3;
-            MM(ivar+1,ivar- 8) = tempw3;
-            MM(ivar+2,ivar- 7) = tempw3;
+            C(jvar,  jvar- 9) = tempw3;
+            C(jvar+1,jvar- 8) = tempw3;
+            C(jvar+2,jvar- 7) = tempw3;
         }
 
         if (j > 2   ) {
-            MM(ivar,  ivar- 6) = tempw2;
-            MM(ivar+1,ivar- 5) = tempw2;
-            MM(ivar+2,ivar- 4) = tempw2;
+            C(jvar,  jvar- 6) = tempw2;
+            C(jvar+1,jvar- 5) = tempw2;
+            C(jvar+2,jvar- 4) = tempw2;
         }
 
         if (j > 1   ) {
-            MM(ivar,  ivar- 3) = tempw1;
-            MM(ivar+1,ivar- 2) = tempw1;
-            MM(ivar+2,ivar- 1) = tempw1;
+            C(jvar,  jvar- 3) = tempw1;
+            C(jvar+1,jvar- 2) = tempw1;
+            C(jvar+2,jvar- 1) = tempw1;
         }
 
         if (1) {
-            MM(ivar,  ivar   ) = tempc ;
-            MM(ivar+1,ivar+ 1) = tempc ;
-            MM(ivar+2,ivar+ 2) = tempc ;
+            C(jvar,  jvar   ) = tempc ;
+            C(jvar+1,jvar+ 1) = tempc ;
+            C(jvar+2,jvar+ 2) = tempc ;
         }
 
         if (j < fit1d->n-2) {
-            MM(ivar  ,ivar+ 3) = tempe1;
-            MM(ivar+1,ivar+ 4) = tempe1;
-            MM(ivar+2,ivar+ 5) = tempe1;
+            C(jvar  ,jvar+ 3) = tempe1;
+            C(jvar+1,jvar+ 4) = tempe1;
+            C(jvar+2,jvar+ 5) = tempe1;
         }
 
         if (j < fit1d->n-3) {
-            MM(ivar,  ivar+ 6) = tempe2;
-            MM(ivar+1,ivar+ 7) = tempe2;
-            MM(ivar+2,ivar+ 8) = tempe2;
+            C(jvar,  jvar+ 6) = tempe2;
+            C(jvar+1,jvar+ 7) = tempe2;
+            C(jvar+2,jvar+ 8) = tempe2;
         }
 
         if (j < fit1d->n-4) {
-            MM(ivar,  ivar+ 9) = tempe3;
-            MM(ivar+1,ivar+10) = tempe3;
-            MM(ivar+2,ivar+11) = tempe3;
+            C(jvar,  jvar+ 9) = tempe3;
+            C(jvar+1,jvar+10) = tempe3;
+            C(jvar+2,jvar+11) = tempe3;
         }
     }
 
-    /* add entries for rhs associated with smoothing the control net */
+    /* create bottom (E) part of JtQ */
     for (j = 1; j < fit1d->n-1; j++) {
         ivar = 3 * fit1d->m + 3 * j - 3;
-        jvar =     fit1d->m + 3 * j - 3;
 
-        rhs[jvar  ] -= 2 * smooth * fit1d->f[ivar  ];
-        rhs[jvar+1] -= 2 * smooth * fit1d->f[ivar+1];
-        rhs[jvar+2] -= 2 * smooth * fit1d->f[ivar+2];
+        E(3*j-3) -= 2 * smooth * fit1d->f[ivar  ];
+        E(3*j-2) -= 2 * smooth * fit1d->f[ivar+1];
+        E(3*j-1) -= 2 * smooth * fit1d->f[ivar+2];
 
         if (j > 1) {
-            rhs[jvar  ] += smooth * fit1d->f[ivar-3];
-            rhs[jvar+1] += smooth * fit1d->f[ivar-2];
-            rhs[jvar+2] += smooth * fit1d->f[ivar-1];
+            E(3*j-3) += smooth * fit1d->f[ivar-3];
+            E(3*j-2) += smooth * fit1d->f[ivar-2];
+            E(3*j-1) += smooth * fit1d->f[ivar-1];
         }
 
         if (j < fit1d->n-2) {
-            rhs[jvar  ] += smooth * fit1d->f[ivar+3];
-            rhs[jvar+1] += smooth * fit1d->f[ivar+4];
-            rhs[jvar+2] += smooth * fit1d->f[ivar+5];
+            E(3*j-3) += smooth * fit1d->f[ivar+3];
+            E(3*j-2) += smooth * fit1d->f[ivar+4];
+            E(3*j-1) += smooth * fit1d->f[ivar+5];
         }
     }
 
-    /* multiply diagonals of MM by (1 + lambda)  */
-    for (ivar = 0; ivar < nvar; ivar++) {
-        fit1d->MMd[ivar] *= (1 + fit1d->lambda);
+    /* multiply diagonals of JtJ by (1 + lambda)  */
+    for (k = 0; k < fit1d->m; k++) {
+        A(k) *= (1 + fit1d->lambda);
+    }
 
-        if (fabs(fit1d->MMd[ivar]) < EPS12) {
-            fit1d->MMd[ivar] = EPS12;
-            rhs[       ivar] = 0;
+    for (j = 1; j < fit1d->n-1; j++) {
+        C(3*j-3,3*j-3) *= (1 + fit1d->lambda);
+        C(3*j-2,3*j-2) *= (1 + fit1d->lambda);
+        C(3*j-1,3*j-1) *= (1 + fit1d->lambda);
+    }
+
+    /* update:  C = C - trans(B) * inv(A) * B
+       update:  E = E - trans(B) * inv(A) * D  */
+    for (k = 0; k < fit1d->m; k++) {
+        for (i = 1; i < fit1d->n-1; i++) {
+            for (j = 1; j < fit1d->n-1; j++) {
+                C(3*i-3,3*j-3) -= B(k,3*i-3) / A(k) * B(k,3*j-3);
+                C(3*i-2,3*j-3) -= B(k,3*i-2) / A(k) * B(k,3*j-3);
+                C(3*i-1,3*j-3) -= B(k,3*i-1) / A(k) * B(k,3*j-3);
+
+                C(3*i-3,3*j-2) -= B(k,3*i-3) / A(k) * B(k,3*j-2);
+                C(3*i-2,3*j-2) -= B(k,3*i-2) / A(k) * B(k,3*j-2);
+                C(3*i-1,3*j-2) -= B(k,3*i-1) / A(k) * B(k,3*j-2);
+
+                C(3*i-3,3*j-1) -= B(k,3*i-3) / A(k) * B(k,3*j-1);
+                C(3*i-2,3*j-1) -= B(k,3*i-2) / A(k) * B(k,3*j-1);
+                C(3*i-1,3*j-1) -= B(k,3*i-1) / A(k) * B(k,3*j-1);
+            }
+
+            E(3*i-3) -= B(k,3*i-3) / A(k) * D(k);
+            E(3*i-2) -= B(k,3*i-2) / A(k) * D(k);
+            E(3*i-1) -= B(k,3*i-1) / A(k) * D(k);
         }
     }
 
-    /* solve matrix equation (via biconjugate gradient technique) */
-    itol    = 1;
-    errmax  = EPS12;
-    maxiter = 2 * nvar;
-    for (ivar = 0; ivar < nvar; ivar++) {
-        delta[ivar] = 0;
-    }
+    /* solve for the second part of beta (the control points) */
+    status = matsol(CC, EE, nn, &(delta[fit1d->m]));
+    CHECK_STATUS(matsol);
 
-    status = solveSparse(fit1d->MMd, fit1d->MMi, rhs, delta, itol, &errmax, &maxiter);
-    CHECK_STATUS(solveSparse);
+    /* solve for the first part of beta (the parametric coordinates) */
+    for (k = 0; k < fit1d->m; k++) {
+        delta[k] = D(k);
+
+        for (i = 1; i < fit1d->n-1;i++) {
+            delta[k] -= B(k,3*i-3) * delta[fit1d->m+3*i-3]
+                      + B(k,3*i-2) * delta[fit1d->m+3*i-2]
+                      + B(k,3*i-1) * delta[fit1d->m+3*i-1];
+        }
+
+        delta[k] /= A(k);
+    }
 
     /* find the temporary new beta (and clip the Tclouds) */
     for (ivar = 0; ivar < nvar; ivar++) {
@@ -822,10 +945,10 @@ fit1d_step(void    *context,            /* (in)  context */
         }
     }
     assert (next == nvar);
-    assert (fit1d->n > 2);
 
     /* apply periodicity condition by making sure first and last
        intervals are the same */
+#ifndef __clang_analyzer__
     if ((fit1d->bitflag & 2) != 0) uPeriodic = 1;
 
     if (uPeriodic == 1) {
@@ -841,15 +964,16 @@ fit1d_step(void    *context,            /* (in)  context */
         cpnew[3*fit1d->n-5] += delta1;
         cpnew[3*fit1d->n-4] += delta2;
     }
+#endif
 
     /* compute the objective function based upon the new beta */
-    status = fit1d_objf(fit1d, smooth, betanew, cpnew, fnew);
+    status = fit1d_objf(fit1d, smooth, betanew, cpnew, fit1d->srat, fnew);
     CHECK_STATUS(fit1d_obj);
 
     maxfnew  = Linorm(fnew, 3*fit1d->m);
     normfnew = L2norm(fnew, nobj) / sqrt(nobj);
     if (fit1d->iter%10 == 0 && fit1d->fp != NULL) {
-        fprintf(fit1d->fp, "iter=%4d normf=%10.4e maxf=%10.4e  ", fit1d->iter, normfnew, maxfnew);
+        fprintf(fit1d->fp, "iter=%4d normf=%10.4e, maxf=%10.4e  ", fit1d->iter, normfnew, maxfnew);
     }
 
     /* if this was a better step, accept it and decrease
@@ -869,11 +993,14 @@ fit1d_step(void    *context,            /* (in)  context */
             fit1d->cp[3*j+1] = cpnew[3*j+1];
             fit1d->cp[3*j+2] = cpnew[3*j+2];
         }
+#ifndef __clang_analyzer__
         for (iobj = 0; iobj < nobj; iobj++) {
             fit1d->f[iobj] = fnew[iobj];
         }
-        *normf = normfnew;
-        *maxf  = maxfnew;
+#endif
+        *normf  = normfnew;
+        *maxf   = maxfnew;
+        *accept = 1;
 
     /* otherwise do not take the step and increase lambda (making it
        more steepest-descent-like) */
@@ -886,13 +1013,22 @@ fit1d_step(void    *context,            /* (in)  context */
 
 cleanup:
     FREE(fnew   );
-    FREE(rhs    );
     FREE(betanew);
     FREE(delta  );
     FREE(beta   );
     FREE(cpnew  );
     FREE(dXYZdP );
-#undef MM
+
+    FREE(AA);
+    FREE(BB);
+    FREE(CC);
+    FREE(DD);
+    FREE(EE);
+#undef A
+#undef B
+#undef C
+#undef D
+#undef E
 
     return status;
 }
@@ -987,43 +1123,19 @@ fit1d_done(void    *context,            /* (in)  context */
     *normf *= fit1d->scale;
     *maxf  *= fit1d->scale;
 
+    /* remove temporary storage from fit1d structure */
+    FREE(fit1d->XYZcloud);
+    FREE(fit1d->Tcloud  );
+    FREE(fit1d->cp      );
+    FREE(fit1d->srat    );
+    FREE(fit1d->f       );
+
+    FREE(fit1d);
+
 cleanup:
     FREE(nper);
 
     return status;
-}
-
-
-/*
- ************************************************************************
- *                                                                      *
- *   fit1d_free - free up memory associated with curve fitter           *
- *                                                                      *
- ************************************************************************
- */
-void
-fit1d_free(void    *context)            /* (in)  context */
-{
-    fit1d_T *fit1d = (fit1d_T *) context;
-
-    ROUTINE(fit1d_free);
-
-    /* --------------------------------------------------------------- */
-
-    /* remove temporary storage from fit1d structure */
-    if (fit1d != NULL) {
-        FREE(fit1d->XYZcloud);
-        FREE(fit1d->Tcloud  );
-        FREE(fit1d->cp      );
-        FREE(fit1d->f       );
-        FREE(fit1d->MMd     );
-        FREE(fit1d->MMi     );
-
-        FREE(fit1d);
-    }
-
-//cleanup:
-    return;
 }
 
 
@@ -1039,6 +1151,7 @@ fit1d_objf(fit1d_T *fit1d,              /* (in)  pointer to fit1d structure */
            double  smooth,              /* (in)  smoothing parameter */
            double  Tcloud[],            /* (in)  current T parameters */
            double  cp[],                /* (in)  current control points */
+           double  srat[],              /* (in)  relative spacing ratio of inputs */
            double  f[])                 /* (out) objective functions */
 {
     int    status = FIT_SUCCESS;        /* (out)  return status */
@@ -1062,9 +1175,9 @@ fit1d_objf(fit1d_T *fit1d,              /* (in)  pointer to fit1d structure */
     }
 
     for (j = 1; j < fit1d->n-1; j++) {
-        f[next++] = smooth * (2 * cp[3*j  ] - cp[3*j-3] - cp[3*j+3]);
-        f[next++] = smooth * (2 * cp[3*j+1] - cp[3*j-2] - cp[3*j+4]);
-        f[next++] = smooth * (2 * cp[3*j+2] - cp[3*j-1] - cp[3*j+5]);
+        f[next++] = smooth * (2 * cp[3*j  ] - (1+srat[j]) * cp[3*j-3] - (1-srat[j]) * cp[3*j+3]);
+        f[next++] = smooth * (2 * cp[3*j+1] - (1+srat[j]) * cp[3*j-2] - (1-srat[j]) * cp[3*j+4]);
+        f[next++] = smooth * (2 * cp[3*j+2] - (1+srat[j]) * cp[3*j-1] - (1-srat[j]) * cp[3*j+5]);
     }
 
 cleanup:
@@ -1092,15 +1205,16 @@ fit2dCloud(int    m,                    /* (in)  number of points in cloud */
            double *normf,               /* (out) RMS of distances between cloud and fit */
            double *maxf,                /* (out) maximum distance between cloud and fit */
  /*@null@*/int    *nmin,                /* (out) minimum number of cloud points in any interval */
-           int    *numiter,             /* (out) number of iterations executed */
+           int    *numiter,             /* (in)  if >-, number of iterations allowed */
+                                        /* (out) number of iterations executed */
  /*@null@*/FILE   *fp)                  /* (in)  file for progress outputs (or NULL) */
 {
     int    status = FIT_SUCCESS;        /* (out)  return status */
 
-    int    iter, niter=100;
-    double toler=EPS06;
+    int    iter, accept, niter=100;
+    double old_normf, old_maxf, toler=EPS06;
 
-    void    *myContext = NULL;
+    void    *myContext;
 
     ROUTINE(fit2dCloud);
 
@@ -1110,9 +1224,20 @@ fit2dCloud(int    m,                    /* (in)  number of points in cloud */
         fprintf(fp, "enter fit2dCloud(m=%d, bitflag=%d, nu=%d, nv=%d)\n", m, bitflag, nu, nv);
     }
 
-    assert (m  > 1);                    // needed to avoid clang warning
-    assert (nu > 2);                    // needed to avoid clang warning
-    assert (nv > 2);                    // needed to avoid clang warning
+    if (m <= 1 || XYZcloud == NULL) {
+        status = FIT_EMPTYCLOUD;
+        goto cleanup;
+    } else if (nu <= 2 || nv <= 2 || cp == NULL) {
+        status = FIT_NCP;
+        goto cleanup;
+    } else if (smooth < 0 || smooth > 1) {
+        status = FIT_SMOOTH;
+        goto cleanup;
+    }
+
+    if (*numiter > 0) {
+        niter = *numiter;
+    }
 
     /* default returns */
     *normf   = EPS12;
@@ -1131,15 +1256,22 @@ fit2dCloud(int    m,                    /* (in)  number of points in cloud */
         for (iter = 0; iter < niter; iter++) {
             (*numiter)++;
 
-            status = fit2d_step(myContext, smooth, normf, maxf);
+            old_normf = *normf;
+            old_maxf  = *maxf;
+
+            status = fit2d_step(myContext, smooth, normf, maxf, &accept);
             CHECK_STATUS(fit2d_step);
 
             /* check for convergence */
-            if (*normf < toler && iter > 10) {
+            if (accept == 1 && fabs(*normf-old_normf) < toler && fabs(*maxf-old_maxf) < toler) {
                 if (fp != NULL) {
                     fprintf(fp, "converged in %d itertions\n", iter);
+                    fprintf(fp, "final     normf=%10.4e, maxf=%10.4e\n", *normf, *maxf);
                 }
                 break;
+            } else if (accept == 0) {
+                *normf = old_normf;
+                *maxf  = old_maxf;
             }
 
             /* reduce smoothing for next step */
@@ -1152,8 +1284,6 @@ fit2dCloud(int    m,                    /* (in)  number of points in cloud */
     CHECK_STATUS(fit2d_done);
 
 cleanup:
-    fit2d_free(myContext);
-
     return status;
 }
 
@@ -1181,7 +1311,7 @@ fit2d_init(int     m,                   /* (in)  number of points in cloud */
     int    status = FIT_SUCCESS;        /* (out)  return status */
 
     int    uPeriodic=0, vPeriodic=0, intGiven=0;
-    int    nvar, nobj, nmask, i, j, k, next, ivar, jvar;
+    int    nobj, nmask, i, j, k, ivar, jvar;
     double fraci, fracj, dbest, dtest;
     double xmin, xmax, ymin, ymax, zmin, zmax;
 
@@ -1195,11 +1325,15 @@ fit2d_init(int     m,                   /* (in)  number of points in cloud */
 
     if ((bitflag & 2) != 0) uPeriodic = 1;
     if ((bitflag & 4) != 0) vPeriodic = 1;
+#ifndef __clang_analyzer__
     if ((bitflag & 8) != 0) intGiven  = 1;
+#endif
 
     /* periodic is not implemented (yet) */
-    assert (uPeriodic == 0);
-    assert (vPeriodic == 0);
+    if (uPeriodic == 1 || vPeriodic == 1) {
+        status = FIT_BITFLAG;
+        goto cleanup;
+    }
 
     /* cannot be both U and V periodic */
     if (uPeriodic == 1 && vPeriodic == 1) {
@@ -1210,25 +1344,23 @@ fit2d_init(int     m,                   /* (in)  number of points in cloud */
     /* get a fit2d structure */
     MALLOC(fit2d, fit2d_T, 1);
 
-    /* return the fit2d structure (as the context) */
-    *context = (void*)fit2d;
-
     /* initialize the fit2d structure */
     fit2d->m        = m;
     fit2d->XYZcloud = NULL;
     fit2d->UVcloud  = NULL;
-
-    MALLOC(fit2d->XYZcloud, double, 3*fit2d->m);
-    MALLOC(fit2d->UVcloud,  double, 2*fit2d->m);
 
     fit2d->nu       = nu;
     fit2d->nv       = nv;
     fit2d->cp       = NULL;
     fit2d->f        = NULL;
 
+    MALLOC(fit2d->XYZcloud, double, 3*fit2d->m);
+    MALLOC(fit2d->UVcloud,  double, 2*fit2d->m);
+
     MALLOC(fit2d->cp, double,            3*fit2d->nu*fit2d->nv);
     MALLOC(fit2d->f,  double, 3*fit2d->m+3*fit2d->nu*fit2d->nv);    /* a little too big */
 
+    fit2d->bitflag  = bitflag;
     fit2d->iter     = 0;
     fit2d->lambda   = 1;
 
@@ -1237,8 +1369,6 @@ fit2d_init(int     m,                   /* (in)  number of points in cloud */
     fit2d->yavg     = 0;
     fit2d->zavg     = 0;
 
-    fit2d->MMi      = NULL;
-    fit2d->MMd      = NULL;
     fit2d->mask     = NULL;
 
     fit2d->fp       = fp;
@@ -1291,11 +1421,13 @@ fit2d_init(int     m,                   /* (in)  number of points in cloud */
     }
 
     /* number of design variables and objectives */
-    nvar  = 2 * fit2d->m + 3 * (fit2d->nu - 2) * (fit2d->nv - 2);
     nobj  = 3 * fit2d->m + 3 * (fit2d->nu - 2) * (fit2d->nv - 2);
     nmask =                    (fit2d->nu - 2) * (fit2d->nv - 2);
 
+    assert (nmask > 0);
+
     /* bilinear interpolate control points from boundaries */
+#ifndef __clang_analyzer__
     if (intGiven == 0) {
         for (j = 1; j < fit2d->nv-1; j++) {
             for (i =  1; i < fit2d->nu-1; i++) {
@@ -1332,11 +1464,41 @@ fit2d_init(int     m,                   /* (in)  number of points in cloud */
             }
         }
     }
+#endif
+
+    /* debug prints */
+    if (DEBUG) {
+        for (j = 0; j < fit2d->nv; j++) {
+            printf("X %3d: ", j);
+            for (i = 0; i < fit2d->nu; i++) {
+                printf("%10.5f ", fit2d->cp[IJ(i,j,0)]);
+            }
+            printf("\n");
+        }
+        printf("\n");
+        for (j = 0; j < fit2d->nv; j++) {
+            printf("Y %3d: ", j);
+            for (i = 0; i < fit2d->nu; i++) {
+                printf("%10.5f ", fit2d->cp[IJ(i,j,1)]);
+            }
+            printf("\n");
+        }
+        printf("\n");
+        for (j = 0; j < fit2d->nv; j++) {
+            printf("Z %3d: ", j);
+            for (i = 0; i < fit2d->nu; i++) {
+                printf("%10.5f ", fit2d->cp[IJ(i,j,2)]);
+            }
+        printf("\n");
+        }
+        printf("\n");
+    }
 
     /* for each point in the cloud, assign the values of "u" and "v"
        that are associated with the closest interior control point.
        note: only interior control points are used since corner points
        can cause problems */
+#ifndef __clang_analyzer__
     for (k = 0; k < fit2d->m; k++) {
         fit2d->UVcloud[2*k  ] = 0;
         fit2d->UVcloud[2*k+1] = 0;
@@ -1344,9 +1506,15 @@ fit2d_init(int     m,                   /* (in)  number of points in cloud */
 
         for (j = 1; j < fit2d->nv-1; j++) {
             for (i = 1; i < fit2d->nu-1; i++) {
-                dtest = SQR(fit2d->XYZcloud[3*k  ] - fit2d->cp[IJ(i,j,0)])
-                      + SQR(fit2d->XYZcloud[3*k+1] - fit2d->cp[IJ(i,j,1)])
-                      + SQR(fit2d->XYZcloud[3*k+2] - fit2d->cp[IJ(i,j,2)]);
+                if (intGiven == 1) {
+                    dtest = SQR(       XYZcloud[3*k  ] -        cp[IJ(i,j,0)])
+                          + SQR(       XYZcloud[3*k+1] -        cp[IJ(i,j,1)])
+                          + SQR(       XYZcloud[3*k+2] -        cp[IJ(i,j,2)]);
+                } else {
+                    dtest = SQR(fit2d->XYZcloud[3*k  ] - fit2d->cp[IJ(i,j,0)])
+                          + SQR(fit2d->XYZcloud[3*k+1] - fit2d->cp[IJ(i,j,1)])
+                          + SQR(fit2d->XYZcloud[3*k+2] - fit2d->cp[IJ(i,j,2)]);
+                }
                 if (dtest < dbest) {
                     fit2d->UVcloud[2*k  ] = (double)(i) / (double)(fit2d->nu-1) * (double)(fit2d->nu-3);
                     fit2d->UVcloud[2*k+1] = (double)(j) / (double)(fit2d->nv-1) * (double)(fit2d->nv-3);
@@ -1355,6 +1523,7 @@ fit2d_init(int     m,                   /* (in)  number of points in cloud */
             }
         }
     }
+#endif
 
     /* compute the initial objective function */
     status = fit2d_objf(fit2d, smooth, fit2d->UVcloud, fit2d->cp, fit2d->f);
@@ -1364,88 +1533,7 @@ fit2d_init(int     m,                   /* (in)  number of points in cloud */
     *maxf  = Linorm(fit2d->f, 3*fit2d->m);
     *normf = L2norm(fit2d->f, nobj) / sqrt(nobj);
     if (fit2d->fp != NULL) {
-        fprintf(fit2d->fp, "initial   normf=%10.4e maxf=%10.4e\n", *normf, *maxf);
-    }
-
-    /* set up sparse matrix storage */
-    next = 4 * fit2d->m                                          // upper left
-         + 6 * fit2d->m *    (fit2d->nu-2) *    (fit2d->nv-2)    // upper right
-         + 6 * fit2d->m *    (fit2d->nu-2) *    (fit2d->nv-2)    // lower left
-         + 3            * SQR(fit2d->nu-2) * SQR(fit2d->nv-2)    // lower right
-         + 1;
-
-    MALLOC(fit2d->MMi, int,    next);
-    MALLOC(fit2d->MMd, double, next);
-
-    next = nvar + 1;
-    ivar = 0;
-    for (k = 0; k < fit2d->m; k++) {
-        fit2d->MMi[ivar  ] = next;
-        fit2d->MMi[next++] = ivar + 1;
-        jvar = 2 * fit2d->m;
-        for (j = 1; j < fit2d->nv-1; j++) {
-            for (i = 1; i < fit2d->nu-1; i++) {
-                fit2d->MMi[next++] = jvar++;
-                fit2d->MMi[next++] = jvar++;
-                fit2d->MMi[next++] = jvar++;
-            }
-        }
-        ivar++;
-
-        fit2d->MMi[ivar  ] = next;
-        fit2d->MMi[next++] = ivar - 1;
-        jvar = 2 * fit2d->m;
-        for (j = 1; j < fit2d->nv-1; j++) {
-            for (i = 1; i < fit2d->nu-1; i++) {
-                fit2d->MMi[next++] = jvar++;
-                fit2d->MMi[next++] = jvar++;
-                fit2d->MMi[next++] = jvar++;
-            }
-        }
-        ivar++;
-    }
-
-    while (ivar < nvar) {
-        fit2d->MMi[ivar] = next;
-        for (k = 0; k < fit2d->m; k++) {
-            fit2d->MMi[next++] = 2 * k;
-            fit2d->MMi[next++] = 2 * k + 1;
-        }
-        jvar = 2 * fit2d->m;
-        while (jvar < nvar) {
-            if (ivar != jvar) fit2d->MMi[next++] = jvar;
-            jvar += 3;
-        }
-        ivar++;
-
-        fit2d->MMi[ivar] = next;
-        for (k = 0; k < fit2d->m; k++) {
-            fit2d->MMi[next++] = 2 * k;
-            fit2d->MMi[next++] = 2 * k + 1;
-        }
-        jvar = 2 * fit2d->m + 1;
-        while (jvar < nvar) {
-            if (ivar != jvar) fit2d->MMi[next++] = jvar;
-            jvar += 3;
-        }
-        ivar++;
-
-        fit2d->MMi[ivar] = next;
-        for (k = 0; k < fit2d->m; k++) {
-            fit2d->MMi[next++] = 2 * k;
-            fit2d->MMi[next++] = 2 * k + 1;
-        }
-        jvar = 2 * fit2d->m + 2;
-        while (jvar < nvar) {
-            if (ivar != jvar) fit2d->MMi[next++] = jvar;
-            jvar += 3;
-        }
-        ivar++;
-    }
-    fit2d->MMi[ivar] = next;
-
-    for (i = 0; i < next; i++) {
-        fit2d->MMd[i] = 0;
+        fprintf(fit2d->fp, "initial   normf=%10.4e, maxf=%10.4e\n", *normf, *maxf);
     }
 
     /* create MASK array, which contains the smoothing vectors */
@@ -1481,7 +1569,35 @@ fit2d_init(int     m,                   /* (in)  number of points in cloud */
         }
     }
 
+    /* debug prints */
+    if (DEBUG) {
+        for (ivar = 0; ivar < nmask; ivar++) {
+            for (jvar = 0; jvar < nmask; jvar++) {
+                if (MASK(ivar,jvar) == 0) {
+                    printf("  . ");
+                } else {
+                    printf("%3d ", MASK(ivar,jvar));
+                }
+                if (jvar%(fit2d->nv-2) == fit2d->nv-3) printf("| ");
+            }
+            printf("\n");
+            if (ivar%(fit2d->nu-2) == fit2d->nu-3) printf("\n");
+        }
+    }
+
+    /* return the fit2d structure (as the context) */
+    *context = (void*)fit2d;
+
 cleanup:
+    if (status != FIT_SUCCESS && fit2d != NULL) {
+        FREE(fit2d->XYZcloud);
+        FREE(fit2d->UVcloud );
+        FREE(fit2d->cp      );
+        FREE(fit2d->f       );
+
+        FREE(fit2d);
+    }
+
     return status;
 }
 
@@ -1497,35 +1613,43 @@ int
 fit2d_step(void    *context,            /* (in)  context */
            double  smooth,              /* (in)  control net smoothing parameter */
            double  *normf,              /* (out) RMS of distances between cloud and fit */
-           double  *maxf)               /* (out) maximum distance between cloud and fit */
+           double  *maxf,               /* (out) maximum distance between cloud and fit */
+           int     *accept)             /* (out) =1 if step was accepted */
 {
     int    status = FIT_SUCCESS;        /* (out)  return status */
 
-    int    nvar, ivar, jvar, nobj, iobj, nmask, i, j, k, next, itol, maxiter;
+    int    nvar, ivar, jvar, nobj, iobj, nmask, i, j, k, next;
     int    ii, jj, ij;
-    double normfnew, maxfnew, errmax, sum;
+    double normfnew, maxfnew, sum, fact, sum0, sum1;
     double XYZ[3], dXYZdU[3], dXYZdV[3], *dXYZdP=NULL;
     double *cpnew=NULL, *beta=NULL, *betanew=NULL, *delta=NULL;
-    double *rhs=NULL, *fnew=NULL;
-
-#define MM(I,J)   fit2d->MMd[findIndex(I,J,fit2d->MMi)]
+    double *fnew=NULL;
 
     fit2d_T *fit2d = (fit2d_T *) context;
+
+    int   nn = 3 * (fit2d->nu - 2) * (fit2d->nv - 2);
+    double *AA=NULL, *BB=NULL, *CC=NULL, *DD=NULL, *EE=NULL;
+
+#define A(K,I)    AA[2*(K)+(I)]
+#define B(K,IJ)   BB[(K)*nn+(IJ)]
+#define C(I,J)    CC[(I)*nn+(J)]
+#define D(K)      DD[(K)]
+#define E(K)      EE[(K)]
 
     ROUTINE(fit2d_step);
 
     /* --------------------------------------------------------------- */
 
-    assert (fit2d->m    > 2);
-    assert (fit2d->nu   > 2);
-    assert (fit2d->nv   > 2);
+    *accept = 0;
 
     (fit2d->iter)++;
 
     /* number of design variables and objectives */
     nvar  = 2 * fit2d->m + 3 * (fit2d->nu - 2) * (fit2d->nv - 2);
     nobj  = 3 * fit2d->m + 3 * (fit2d->nu - 2) * (fit2d->nv - 2);
+#ifndef __clang_analyzer__
     nmask =                    (fit2d->nu - 2) * (fit2d->nv - 2);
+#endif
 
     /* allocate all temporary arrays */
     MALLOC(dXYZdP,  double,   fit2d->nu*fit2d->nv);
@@ -1534,7 +1658,6 @@ fit2d_step(void    *context,            /* (in)  context */
     MALLOC(beta,    double, nvar);
     MALLOC(delta,   double, nvar);
     MALLOC(betanew, double, nvar);
-    MALLOC(rhs,     double, nvar);
 
     MALLOC(fnew,    double, nobj);
 
@@ -1553,92 +1676,103 @@ fit2d_step(void    *context,            /* (in)  context */
             beta[next++] = fit2d->cp[IJ(i,j,2)];
         }
     }
-    assert (next == nvar);
+    assert(next == nvar);
 
-    /* initialize */
-    for (ivar = 0; ivar < nvar; ivar++) {
-        rhs[ivar] = 0;
+    /*
+          trans(J) * J =  [   A      B ]      trans(J) * Q =  [ D ]
+                          [            ]                      [   ]
+                          [trans(B)  C ]                      [ E ]
+    */
+    MALLOC(AA, double, (2*fit2d->m)*(2 ));
+    MALLOC(BB, double, (2*fit2d->m)*(nn));
+    MALLOC(CC, double, (  nn      )*(nn));
+    MALLOC(DD, double, (2*fit2d->m)     );
+    MALLOC(EE, double,              (nn));
+
+    for (i = 0; i < nn; i++) {
+        for (j = 0; j < nn; j++) {
+            C(i,j) = 0;
+        }
+        E(i) = 0;
     }
 
-    /* add entries for top-left, top-right, and bottom-left parts of MM and the rhs */
+    /* create top-left (A) and top-right (B) parts of JtJ and top part (D) of JtQ */
     for (k = 0; k < fit2d->m; k++) {
-        ivar = 2 * k;
-
         status = eval2dBspline(beta[2*k], beta[2*k+1], fit2d->nu, fit2d->nv, fit2d->cp,
                                XYZ, dXYZdU, dXYZdV, dXYZdP);
         CHECK_STATUS(eval2dBspline);
 
-        /* top-left */
-        MM(ivar  ,ivar  ) = dXYZdU[0] * dXYZdU[0] + dXYZdU[1] * dXYZdU[1] + dXYZdU[2] * dXYZdU[2];
-        MM(ivar+1,ivar  ) = dXYZdV[0] * dXYZdU[0] + dXYZdV[1] * dXYZdU[1] + dXYZdV[2] * dXYZdU[2];
-        MM(ivar  ,ivar+1) = dXYZdU[0] * dXYZdV[0] + dXYZdU[1] * dXYZdV[1] + dXYZdU[2] * dXYZdV[2];
-        MM(ivar+1,ivar+1) = dXYZdV[0] * dXYZdV[0] + dXYZdV[1] * dXYZdV[1] + dXYZdV[2] * dXYZdV[2];
+        /* top-left (A) part of JtJ */
+        A(2*k  ,0) = dXYZdU[0] * dXYZdU[0] + dXYZdU[1] * dXYZdU[1] + dXYZdU[2] * dXYZdU[2];
+        A(2*k  ,1) = dXYZdU[0] * dXYZdV[0] + dXYZdU[1] * dXYZdV[1] + dXYZdU[2] * dXYZdV[2];
+        A(2*k+1,0) = dXYZdV[0] * dXYZdV[0] + dXYZdV[1] * dXYZdV[1] + dXYZdV[2] * dXYZdV[2];
+        A(2*k+1,1) = dXYZdV[0] * dXYZdU[0] + dXYZdV[1] * dXYZdU[1] + dXYZdV[2] * dXYZdU[2];
 
-        /* rhs (negative needed since f = (XYZ_spline - XYZ_cloud) */
-        rhs[ivar  ] -= dXYZdU[0] * fit2d->f[3*k] + dXYZdU[1] * fit2d->f[3*k+1] + dXYZdU[2] * fit2d->f[3*k+2];
-        rhs[ivar+1] -= dXYZdV[0] * fit2d->f[3*k] + dXYZdV[1] * fit2d->f[3*k+1] + dXYZdV[2] * fit2d->f[3*k+2];
-
-        /* top-right and (symmetric) bottom-left */
-        jvar = 2 * fit2d->m;
+        /* top-right (B) part of JtJ */
+        jvar = 0;
         for (j = 1; j < fit2d->nv-1; j++) {
             for (i = 1; i < fit2d->nu-1; i++) {
                 ij = i + j * fit2d->nu;
-                MM(ivar  ,jvar  ) = dXYZdU[0] * dXYZdP[ij];
-                MM(ivar  ,jvar+1) = dXYZdU[1] * dXYZdP[ij];
-                MM(ivar  ,jvar+2) = dXYZdU[2] * dXYZdP[ij];
 
-                MM(ivar+1,jvar  ) = dXYZdV[0] * dXYZdP[ij];
-                MM(ivar+1,jvar+1) = dXYZdV[1] * dXYZdP[ij];
-                MM(ivar+1,jvar+2) = dXYZdV[2] * dXYZdP[ij];
+                B(2*k  ,jvar  ) = dXYZdU[0] * dXYZdP[ij];
+                B(2*k  ,jvar+1) = dXYZdU[1] * dXYZdP[ij];
+                B(2*k  ,jvar+2) = dXYZdU[2] * dXYZdP[ij];
 
-                MM(jvar  ,ivar  ) = MM(ivar  ,jvar  );
-                MM(jvar+1,ivar  ) = MM(ivar  ,jvar+1);
-                MM(jvar+2,ivar  ) = MM(ivar  ,jvar+2);
-
-                MM(jvar  ,ivar+1) = MM(ivar+1,jvar  );
-                MM(jvar+1,ivar+1) = MM(ivar+1,jvar+1);
-                MM(jvar+2,ivar+1) = MM(ivar+1,jvar+2);
-
-                rhs[jvar  ] -= dXYZdP[ij] * fit2d->f[3*k  ];
-                rhs[jvar+1] -= dXYZdP[ij] * fit2d->f[3*k+1];
-                rhs[jvar+2] -= dXYZdP[ij] * fit2d->f[3*k+2];
+                B(2*k+1,jvar  ) = dXYZdV[0] * dXYZdP[ij];
+                B(2*k+1,jvar+1) = dXYZdV[1] * dXYZdP[ij];
+                B(2*k+1,jvar+2) = dXYZdV[2] * dXYZdP[ij];
 
                 jvar += 3;
             }
         }
-    }
 
-    /* add entries for bottom-right part of MM */
-    for (jvar = 2*fit2d->m; jvar < nvar; jvar+=3) {
-        for (ivar = 2*fit2d->m; ivar < nvar; ivar+=3) {
-            MM(ivar  ,jvar  ) = 0;
-            MM(ivar+1,jvar+1) = 0;
-            MM(ivar+2,jvar+2) = 0;
+        /* top part (D) of JtQ (negative needed since f = (XYZ_spline - XYZ_cloud) */
+        D(2*k  ) = - dXYZdU[0] * fit2d->f[3*k] - dXYZdU[1] * fit2d->f[3*k+1] - dXYZdU[2] * fit2d->f[3*k+2];
+        D(2*k+1) = - dXYZdV[0] * fit2d->f[3*k] - dXYZdV[1] * fit2d->f[3*k+1] - dXYZdV[2] * fit2d->f[3*k+2];
+
+#ifndef __clang_analyzer__
+        jvar = 0;
+        for (j = 1; j < fit2d->nv-1; j++) {
+            for (i = 1; i < fit2d->nu-1; i++) {
+                ij = i + j * fit2d->nu;
+
+                E(jvar  ) -= dXYZdP[ij] * fit2d->f[3*k  ];
+                E(jvar+1) -= dXYZdP[ij] * fit2d->f[3*k+1];
+                E(jvar+2) -= dXYZdP[ij] * fit2d->f[3*k+2];
+
+                jvar += 3;
+            }
         }
+#endif
     }
 
+    /* create bottom-right (C) part of JtJ */
     for (k = 0; k < fit2d->m; k++) {
         status = eval2dBspline(beta[2*k], beta[2*k+1], fit2d->nu, fit2d->nv,
                                fit2d->cp, XYZ, dXYZdU, dXYZdV, dXYZdP);
         CHECK_STATUS(eval2dBspline);
 
-        ivar = 2 * fit2d->m;
+#ifndef __clang_analyzer__
+        ivar = 0;
         for (j = 1; j < fit2d->nv-1; j++) {
             for (i = 1; i < fit2d->nu-1; i++) {
-                jvar = 2 * fit2d->m;
+                jvar = 0;
                 for (jj = 1; jj < fit2d->nv-1; jj++) {
                     for (ii = 1; ii < fit2d->nu-1; ii++) {
-                        MM(ivar  ,jvar  ) += dXYZdP[i+j*fit2d->nu] * dXYZdP[ii+jj*fit2d->nu];
-                        MM(ivar+1,jvar+1) += dXYZdP[i+j*fit2d->nu] * dXYZdP[ii+jj*fit2d->nu];
-                        MM(ivar+2,jvar+2) += dXYZdP[i+j*fit2d->nu] * dXYZdP[ii+jj*fit2d->nu];
+                        C(ivar  ,jvar  ) += dXYZdP[i+j*fit2d->nu] * dXYZdP[ii+jj*fit2d->nu];
+                        C(ivar+1,jvar+1) += dXYZdP[i+j*fit2d->nu] * dXYZdP[ii+jj*fit2d->nu];
+                        C(ivar+2,jvar+2) += dXYZdP[i+j*fit2d->nu] * dXYZdP[ii+jj*fit2d->nu];
+
                         jvar += 3;
                     }
                 }
                 ivar += 3;
             }
         }
+#endif
     }
 
+#ifndef __clang_analyzer__
     for (jvar = 2*fit2d->m; jvar < nvar; jvar+=3) {
         for (ivar = 2*fit2d->m; ivar < nvar; ivar+=3) {
 
@@ -1650,16 +1784,17 @@ fit2d_step(void    *context,            /* (in)  context */
                 sum += MASK(i,k) * MASK(j,k);
             }
 
-            MM(ivar  ,jvar  ) += smooth * smooth * sum;
-            MM(ivar+1,jvar+1) += smooth * smooth * sum;
-            MM(ivar+2,jvar+2) += smooth * smooth * sum;
+            C(ivar-2*fit2d->m  ,jvar-2*fit2d->m  ) += smooth * smooth * sum;
+            C(ivar-2*fit2d->m+1,jvar-2*fit2d->m+1) += smooth * smooth * sum;
+            C(ivar-2*fit2d->m+2,jvar-2*fit2d->m+2) += smooth * smooth * sum;
         }
     }
 
+    /* create bottom (E) part of JtQ */
     for (iobj = 3*fit2d->m; iobj < nobj; iobj+=3) {
-        for (ivar = 2*fit2d->m; ivar < nvar; ivar+=3) {
+        for (ivar = 0; ivar < nn; ivar+=3) {
 
-            i = (ivar - 2 * fit2d->m) / 3;
+            i = (ivar               ) / 3;
             j = (iobj - 3 * fit2d->m) / 3;
 
             sum = 0;
@@ -1667,37 +1802,65 @@ fit2d_step(void    *context,            /* (in)  context */
                 sum += MASK(i,k) * MASK(j,k);
             }
 
-#ifndef __clang_analyzer__
-            rhs[ivar  ] -= smooth * MASK(i,j) * fit2d->f[iobj  ];
-            rhs[ivar+1] -= smooth * MASK(i,j) * fit2d->f[iobj+1];
-            rhs[ivar+2] -= smooth * MASK(i,j) * fit2d->f[iobj+2];
-#endif
+            E(ivar  ) -= smooth * MASK(i,j) * fit2d->f[iobj  ];
+            E(ivar+1) -= smooth * MASK(i,j) * fit2d->f[iobj+1];
+            E(ivar+2) -= smooth * MASK(i,j) * fit2d->f[iobj+2];
         }
     }
-
+#endif
 
     /* multiply diagonals of JtJ by (1 + lambda) */
-    for (ivar = 0; ivar < nvar; ivar++) {
-        fit2d->MMd[ivar] *= (1 + fit2d->lambda);
+    for (k = 0; k < fit2d->m; k++) {
+        A(2*k  ,0) *= (1 + fit2d->lambda);
+        A(2*k+1,0) *= (1 + fit2d->lambda);
+    }
 
-        if (fabs(fit2d->MMd[ivar]) < EPS12) {
-            fit2d->MMd[ivar] = EPS12;
-            rhs[       ivar] = 0;
+    for (i = 0; i < nn; i++) {
+        C(i,i) *= (1 + fit2d->lambda);
+    }
+
+    /* update:  C = C - trans(B) * inv(A) * B
+       update:  E = E - trans(B) * inv(A) * D  */
+#ifndef __clang_analyzer__
+    for (k = 0; k < fit2d->m; k++) {
+        fact = 1 / (A(2*k,1) * A(2*k,1) - A(2*k,0) * A(2*k+1,0));
+
+        for (i = 0; i < nn; i++) {
+            for (j = 0; j < nn; j++) {
+                C(i,j) -= (B(2*k  ,j) * (A(2*k,1) * B(2*k+1,i) - A(2*k+1,0) * B(2*k  ,i))
+                         + B(2*k+1,j) * (A(2*k,1) * B(2*k  ,i) - A(2*k  ,0) * B(2*k+1,i))) * fact;
+            }
+
+            E(i)       -= (D(2*k  )   * (A(2*k,1) * B(2*k+1,i) - A(2*k+1,0) * B(2*k  ,i))
+                         + D(2*k+1)   * (A(2*k,1) * B(2*k  ,i) - A(2*k  ,0) * B(2*k+1,i))) * fact;
         }
     }
+#endif
 
-    /* solve matrix equation (via biconjugate gradient technique) */
-    itol    = 1;
-    errmax  = EPS12;
-    maxiter = 2 * nvar;
-    for (ivar = 0; ivar < nvar; ivar++) {
-        delta[ivar] = 0;
+    /* solve for the second part of beta (the control points) */
+    status = matsol(CC, EE, nn, &(delta[2*fit2d->m]));
+    CHECK_STATUS(matsol);
+
+    /* solve for the first part of beta (the parametric coordinates) */
+    for (k = 0; k < fit2d->m; k++) {
+        fact = 1 / (A(2*k,1) * A(2*k,1) - A(2*k,0) * A(2*k+1,0));
+
+        sum0 = - D(2*k  );
+        sum1 = - D(2*k+1);
+
+#ifndef __clang_analyzer__
+        for (i = 0; i < nn; i++) {
+            sum0 += B(2*k  ,i) * delta[2*fit2d->m+i];
+            sum1 += B(2*k+1,i) * delta[2*fit2d->m+i];
+        }
+#endif
+
+        delta[2*k  ] = (A(2*k+1,0) * sum0 - A(2*k,1) * sum1) * fact;
+        delta[2*k+1] = (A(2*k  ,0) * sum1 - A(2*k,1) * sum0) * fact;
     }
 
-    status = solveSparse(fit2d->MMd, fit2d->MMi, rhs, delta, itol, &errmax, &maxiter);
-    CHECK_STATUS(solveSparse);
-
     /* find the temporary new beta (and clip the UVclouds) */
+#ifndef __clang_analyzer__
     for (ivar = 0; ivar < nvar; ivar++) {
         betanew[ivar] = beta[ivar] + delta[ivar];
         if (ivar < 2*fit2d->m) {
@@ -1707,6 +1870,7 @@ fit2d_step(void    *context,            /* (in)  context */
             if (ivar%2 == 1 && betanew[ivar] > fit2d->nv-3) betanew[ivar] = fit2d->nv-3;
         }
     }
+#endif
 
     /* extract the temporary control points from betanew */
     next = 2 * fit2d->m;
@@ -1737,7 +1901,7 @@ fit2d_step(void    *context,            /* (in)  context */
     maxfnew  = Linorm(fnew, 3*fit2d->m);
     normfnew = L2norm(fnew, nobj) / sqrt(nobj);
     if (fit2d->iter%10 == 0 && fit2d->fp != NULL) {
-        fprintf(fit2d->fp, "iter=%4d normf=%10.4e maxf=%10.4e  ", fit2d->iter, normfnew, maxfnew);
+        fprintf(fit2d->fp, "iter=%4d normf=%10.4e, maxf=%10.4e  ", fit2d->iter, normfnew, maxfnew);
     }
 
     /* if this was a better step, accept it and decrease
@@ -1749,10 +1913,12 @@ fit2d_step(void    *context,            /* (in)  context */
         }
 
         /* save new design variables, control points, and objective function */
+#ifndef __clang_analyzer__
         for (k = 0; k < fit2d->m; k++) {
             fit2d->UVcloud[2*k  ] = betanew[2*k  ];
             fit2d->UVcloud[2*k+1] = betanew[2*k+1];
         }
+#endif
         for (j = 0; j < fit2d->nv; j++) {
             for (i = 0; i < fit2d->nu; i++) {
                 fit2d->cp[IJ(i,j,0)] = cpnew[IJ(i,j,0)];
@@ -1760,11 +1926,14 @@ fit2d_step(void    *context,            /* (in)  context */
                 fit2d->cp[IJ(i,j,2)] = cpnew[IJ(i,j,2)];
             }
         }
+#ifndef __clang_analyzer__
         for (iobj = 0; iobj < nobj; iobj++) {
             fit2d->f[iobj] = fnew[iobj];
         }
-        *normf = normfnew;
-        *maxf  = maxfnew;
+#endif
+        *normf  = normfnew;
+        *maxf   = maxfnew;
+        *accept = 1;
 
     /* otherwise do not take the step and increase lambda (making it
        more steepest-descent-like) */
@@ -1777,15 +1946,24 @@ fit2d_step(void    *context,            /* (in)  context */
 
 cleanup:
     FREE(fnew   );
-    FREE(rhs    );
     FREE(betanew);
     FREE(delta  );
     FREE(beta   );
     FREE(cpnew  );
     FREE(dXYZdP );
 
-#undef MM
 #undef MASK
+
+    FREE(AA);
+    FREE(BB);
+    FREE(CC);
+    FREE(DD);
+    FREE(EE);
+#undef A
+#undef B
+#undef C
+#undef D
+#undef E
 
     return status;
 }
@@ -1794,7 +1972,7 @@ cleanup:
 /*
  ************************************************************************
  *                                                                      *
- *   fit2d_done - clean up after B-splnie surface fitter                *
+ *   fit2d_done - clean up after B-spline surface fitter                *
  *                                                                      *
  ************************************************************************
  */
@@ -1864,44 +2042,19 @@ fit2d_done(void    *context,            /* (in)  context */
     *normf *= fit2d->scale;
     *maxf  *= fit2d->scale;
 
+    /* remove temporary storage from fit2d structure */
+    FREE(fit2d->XYZcloud);
+    FREE(fit2d->UVcloud );
+    FREE(fit2d->cp      );
+    FREE(fit2d->f       );
+    FREE(fit2d->mask    );
+
+    FREE(fit2d);
+
 cleanup:
     FREE(nper);
 
     return status;
-}
-
-
-/*
- ************************************************************************
- *                                                                      *
- *   fit2d_free - free up data associated with surface fitter           *
- *                                                                      *
- ************************************************************************
- */
-void
-fit2d_free(void    *context)            /* (in)  context */
-{
-    fit2d_T *fit2d = (fit2d_T *) context;
-
-    ROUTINE(fit2d_free);
-
-    /* --------------------------------------------------------------- */
-
-    /* remove temporary storage from fit2d structure */
-    if (fit2d != NULL) {
-        FREE(fit2d->XYZcloud);
-        FREE(fit2d->UVcloud );
-        FREE(fit2d->cp      );
-        FREE(fit2d->f       );
-        FREE(fit2d->MMd     );
-        FREE(fit2d->MMi     );
-        FREE(fit2d->mask    );
-
-        FREE(fit2d);
-    }
-
-//cleanup:
-    return;
 }
 
 
@@ -1928,6 +2081,7 @@ fit2d_objf(fit2d_T *fit2d,              /* (in)  pointer to fit2d structure */
 
     /* --------------------------------------------------------------- */
 
+#ifndef __clang_analyzer__
     next = 0;
 
     for (k = 0; k < fit2d->m; k++) {
@@ -1955,6 +2109,7 @@ fit2d_objf(fit2d_T *fit2d,              /* (in)  pointer to fit2d structure */
                                                         +     cp[IJ(i-1,j+1,2)] +     cp[IJ(i+1,j+1,2)]);
         }
     }
+#endif
 
 cleanup:
     return status;
@@ -2061,8 +2216,8 @@ eval2dBspline(double U,                 /* (in)  first  independent variable */
 
     /* --------------------------------------------------------------- */
 
-    assert (nu > 3);
-    assert (nv > 3);
+    assert(nu > 3);
+    assert(nv > 3);
 
     XYZ[0] = 0;
     XYZ[1] = 0;
@@ -2259,325 +2414,6 @@ cleanup:
 /*
  ************************************************************************
  *                                                                      *
- *   solveSparse - solve: A * x = b  using biconjugate gradient method  *
- *                                                                      *
- ************************************************************************
- */
-static int
-solveSparse(double SAv[],               /* (in)  sparse array values */
-            int    SAi[],               /* (in)  sparse array indices */
-            double b[],                 /* (in)  rhs vector */
-            double x[],                 /* (in)  guessed result vector */
-                                        /* (out) result vector */
-            int    itol,                /* (in)  stopping criterion */
-            double *errmax,             /* (in)  convergence tolerance */
-                                        /* (out) estimated error at convergence */
-            int    *iter)               /* (in)  maximum number of iterations */
-                                        /* (out) number of iterations taken */
-{
-    int    status = FIT_SUCCESS;        /* (out) return status */
-
-    int    n, i, j, k, itmax;
-    double tol, ak, akden, bk, bknum, bkden=1, bnorm, dxnorm, xnorm, znorm_old, znorm=0;
-    double *p=NULL, *pp=NULL, *r=NULL, *rr=NULL, *z=NULL, *zz=NULL;
-
-    ROUTINE(solveSparse);
-
-    /* --------------------------------------------------------------- */
-
-    tol   = *errmax;
-    itmax = *iter;
-
-    n = SAi[0] - 1;
-
-    MALLOC(p,  double, n);
-    MALLOC(pp, double, n);
-    MALLOC(r,  double, n);
-    MALLOC(rr, double, n);
-    MALLOC(z,  double, n);
-    MALLOC(zz, double, n);
-
-    /* make sure none of the diagonals are very small */
-    for (i = 0; i < n; i++) {
-        if (fabs(SAv[i]) < EPS14) {
-            printf("ERROR:: cannot solve since SAv[%d]=%10.3e\n", i, SAv[i]);
-            status = -1;
-            goto cleanup;
-        }
-    }
-
-    /* calculate initial residual */
-    *iter = 0;
-
-    /* r = A * x  */
-    for (i = 0; i < n; i++) {
-        r[i] = SAv[i] * x[i];
-
-        for (k = SAi[i]; k < SAi[i+1]; k++) {
-            r[i] += SAv[k] * x[SAi[k]];
-        }
-    }
-
-    for (j = 0; j < n; j++) {
-        r[ j] = b[j] - r[j];
-        rr[j] = r[j];
-    }
-
-    if (itol == 1) {
-        bnorm = L2norm(b, n);
-
-        for (j = 0; j < n; j++) {
-            z[j] = r[j] / SAv[j];
-        }
-    } else if (itol == 2) {
-        for (j = 0; j < n; j++) {
-            z[j] = b[j] / SAv[j];
-        }
-
-        bnorm = L2norm(z, n);
-
-        for (j = 0; j < n; j++) {
-            z[j] = r[j] / SAv[j];
-        }
-    } else {
-        for (j = 0; j < n; j++) {
-            z[j] = b[j] / SAv[j];
-        }
-
-        bnorm = L2norm(z, n);
-
-        for (j = 0; j < n; j++) {
-            z[j] = r[j] / SAv[j];
-        }
-
-        znorm = L2norm(z, n);
-    }
-
-    /* main iteration loop */
-    for (*iter = 0; *iter < itmax; (*iter)++) {
-
-        for (j = 0; j < n; j++) {
-            zz[j] = rr[j] / SAv[j];
-        }
-
-        /* calculate coefficient bk and direction vectors p and pp */
-        bknum = 0;
-        for (j = 0; j < n; j++) {
-            bknum += z[j] * rr[j];
-        }
-
-        if (*iter == 0) {
-            for (j = 0; j < n; j++) {
-                p[ j] = z[ j];
-                pp[j] = zz[j];
-            }
-        } else {
-            bk = bknum / bkden;
-
-            for (j = 0; j < n; j++) {
-                p[ j] = bk * p[ j] + z[ j];
-                pp[j] = bk * pp[j] + zz[j];
-            }
-        }
-
-        /* calculate coefficient ak, new iterate x, and new residuals r and rr */
-        bkden = bknum;
-
-        /* z = A * p  */
-        for (i = 0; i < n; i++) {
-            z[i] = SAv[i] * p[i];
-
-            for (k = SAi[i]; k < SAi[i+1]; k++) {
-                z[i] += SAv[k] * p[SAi[k]];
-            }
-        }
-
-        akden = 0;
-        for (j = 0; j < n; j++) {
-            akden += z[j] * pp[j];
-        }
-
-        ak = bknum / akden;
-
-        /* zz = transpose(A) * pp  */
-        for (i = 0; i < n; i++) {
-            zz[i] = SAv[i] * pp[i];
-        }
-
-        for (i = 0; i < n; i++) {
-            for (k = SAi[i]; k < SAi[i+1]; k++) {
-                j = SAi[k];
-                zz[j] += SAv[k] * pp[i];
-            }
-        }
-
-        for (j = 0; j < n; j++) {
-            x[ j] += ak * p[ j];
-            r[ j] -= ak * z[ j];
-            rr[j] -= ak * zz[j];
-        }
-
-        /* solve Abar * z = r */
-        for (j = 0; j < n; j++) {
-            z[j] = r[j] / SAv[j];
-        }
-
-        /* compute and check stopping criterion */
-        if (itol == 1) {
-            *errmax = L2norm(r, n) / bnorm;
-        } else if (itol == 2) {
-            *errmax = L2norm(z, n) / bnorm;
-        } else {
-            znorm_old = znorm;
-            znorm = L2norm(z, n);
-            if (fabs(znorm_old-znorm) > (EPS14)*znorm) {
-                dxnorm = fabs(ak) * L2norm(p, n);
-                *errmax  = znorm / fabs(znorm_old-znorm) * dxnorm;
-            } else {
-                *errmax = znorm / bnorm;
-                continue;
-            }
-
-            xnorm = L2norm(x, n);
-            if (*errmax <= xnorm/2) {
-                *errmax /= xnorm;
-            } else {
-                *errmax = znorm / bnorm;
-                continue;
-            }
-        }
-
-        /* exit if converged */
-        if (*errmax <= tol) break;
-    }
-
-cleanup:
-    FREE(p );
-    FREE(pp);
-    FREE(r );
-    FREE(rr);
-    FREE(z );
-    FREE(zz);
-
-    return status;
-}
-
-
-/*
- ************************************************************************
- *                                                                      *
- *   findIndex - find index in sparse matrix storage (or -1)            *
- *                                                                      *
- ************************************************************************
- */
-static int
-findIndex(int    irow,                  /* (in)  row index */
-          int    icol,                  /* (in)  column index */
-          int    SAi[])                 /* (in)  index array */
-{
-    int index = -1;                     /* (out) index in SAv (or -1 if error) */
-
-    int    nrow, ileft, irite, imid, count;
-
-    ROUTINE(findIndex);
-
-    /* --------------------------------------------------------------- */
-
-    /* sparse matrix storage scheme described in Numerical Recipes
-       (written bias-0)
-
-                   0  1  2  3  4
-                   v  v  v  v  v
-
-       example:  [ 3  0  1  0  0 ]  <- 0
-                 [ 0  4  0  0  0 ]  <- 1
-                 [ 0  7  5  9  0 ]  <- 2
-                 [ 0  0  0  0  2 ]  <- 3
-                 [ 0  0  0  6  5 ]  <- 4
-
-        k       0  1  2  3  4  5  6  7  8  9 10
-        SAi[k]  6  7  7  9 10 11  2  1  3  4  3
-        SAd[k]  3  4  5  0  5  x  1  7  9  2  6
-
-        * Locations 0 to N-1 of SAd store A's diagonal matrix elements, in order.
-          (Note that diagonal elements are stored even if they are zero; this is at
-          most a slight storage inefficiency, since diagonal elements are nonzero
-          in most realistic applications.)
-        * Location N of SAd is not used and can be set arbitrarily.
-        * Entries in SAd at locations > N contain A's off-diagonal values, ordered
-          by rows and, within each row, ordered by columns.
-
-        * Locations 0 to N-1 of SAi stores the index of the array SAd
-          that contains the first off-diagonal element of the corresponding row of
-          the matrix.  (If there are no off-diagonal elements for that row, it is
-          one greater than the index in SAd of the most recently stored element of a
-          previous row.)
-        * Location 0 of SAi is always equal to N+1.  (It can be read to determine N)
-        * Location N of SAi is one greater than the index in SAd of the last
-          off-diagonal element of the last row.   (It can be read to determine the
-          number of nonzero elements in the matrix, or the number of elements in the
-          arrays SAd and SAi.)
-        * Entries in SAi at locations > N contain the column number of the
-          corresponding element in SAd.
-    */
-
-    /* number of rows and columns */
-    nrow = SAi[0] - 1;
-
-    /* check for valid inputs */
-    if (irow < 0 || irow >= nrow || icol < 0 || icol >= nrow) goto cleanup;
-
-    /* diagonal element */
-    if (irow == icol) {
-        index = irow;
-        goto cleanup;
-    }
-
-    /* off-diagonal element */
-    ileft = SAi[irow  ];
-    irite = SAi[irow+1] - 1;
-
-    if        (SAi[ileft] == icol) {
-        index = ileft;
-        goto cleanup;
-    } else if (SAi[irite] == icol) {
-        index = irite;
-        goto cleanup;
-    }
-
-    /* binary search to find index between ileft and irite */
-    for (count = 0; count < nrow; count++) {
-        imid = (ileft + irite) / 2;
-
-        /* found */
-        if (SAi[imid] == icol) {
-            index = imid;
-            goto cleanup;
-
-        /* not found */
-        } else if (ileft == irite) {
-            index = -1;
-            goto cleanup;
-
-        /* halve interval */
-        } else if (SAi[imid] < icol) {
-            ileft = imid;
-        } else {
-            irite = imid;
-        }
-    }
-
-    /* we could not find a suitable index */
-    index = -1;
-
-cleanup:
-    return index;
-}
-
-
-/*
- ************************************************************************
- *                                                                      *
  *   L2norm - L2-norm of vector                                         *
  *                                                                      *
  ************************************************************************
@@ -2597,9 +2433,11 @@ L2norm(double f[],                      /* (in)  vector */
     /* L2-norm */
     L2norm = 0;
 
+#ifndef __clang_analyzer__
     for (i = 0; i < n; i++) {
         L2norm += f[i] * f[i];
     }
+#endif
 
     L2norm = sqrt(L2norm);
 
@@ -2631,17 +2469,107 @@ Linorm(double f[],                      /* (in)  vector */
     /* Linfinity-norm */
     Linorm = 0;
 
+#ifndef __clang_analyzer__
     for (i = 0; i < n; i+=3) {
         temp = f[i] * f[i] + f[i+1] * f[i+1] + f[i+2] * f[i+2];
         if (temp > Linorm) {
             Linorm = temp;
         }
     }
+#endif
 
     Linorm = sqrt(Linorm);
 
 //cleanup:
     return Linorm;
+}
+
+
+/*
+ ************************************************************************
+ *                                                                      *
+ *   matsol - Gaussian elimination with partial pivoting                *
+ *                                                                      *
+ ************************************************************************
+ */
+
+static int
+matsol(double    A[],                   /* (in)  matrix to be solved (stored rowwise) */
+                                        /* (out) upper-triangular form of matrix */
+       double    b[],                   /* (in)  right hand side */
+                                        /* (out) right-hand side after swapping */
+       int       n,                     /* (in)  size of matrix */
+       double    x[])                   /* (out) solution of A*x=b */
+{
+    int       status = FIT_SUCCESS;     /* (out) return status */
+
+    int       ir, jc, kc, imax;
+    double    amax, swap, fact;
+
+    ROUTINE(matsol);
+
+    /* --------------------------------------------------------------- */
+
+    /* reduce each column of A */
+    for (kc = 0; kc < n; kc++) {
+
+        /* find pivot element */
+        imax = kc;
+        amax = fabs(A[kc*n+kc]);
+
+        for (ir = kc+1; ir < n; ir++) {
+            if (fabs(A[ir*n+kc]) > amax) {
+                imax = ir;
+                amax = fabs(A[ir*n+kc]);
+            }
+        }
+
+        /* check for possibly-singular matrix (ie, near-zero pivot) */
+        if (amax < EPS12) {
+            status = FIT_SINGULAR;
+            goto cleanup;
+        }
+
+        /* if diagonal is not pivot, swap rows in A and b */
+        if (imax != kc) {
+            for (jc = 0; jc < n; jc++) {
+                swap         = A[kc  *n+jc];
+                A[kc  *n+jc] = A[imax*n+jc];
+                A[imax*n+jc] = swap;
+            }
+
+            swap    = b[kc  ];
+            b[kc  ] = b[imax];
+            b[imax] = swap;
+        }
+
+        /* row-reduce part of matrix to the bottom of and right of [kc,kc] */
+        for (ir = kc+1; ir < n; ir++) {
+            fact = A[ir*n+kc] / A[kc*n+kc];
+
+            for (jc = kc+1; jc < n; jc++) {
+                A[ir*n+jc] -= fact * A[kc*n+jc];
+            }
+
+            b[ir] -= fact * b[kc];
+
+            A[ir*n+kc] = 0;
+        }
+    }
+
+    /* back-substitution pass */
+    x[n-1] = b[n-1] / A[(n-1)*n+(n-1)];
+
+    for (jc = n-2; jc >= 0; jc--) {
+        x[jc] = b[jc];
+        for (kc = jc+1; kc < n; kc++) {
+            x[jc] -= A[jc*n+kc] * x[kc];
+        }
+        x[jc] /= A[jc*n+jc];
+    }
+
+cleanup:
+    return status;
 }
 
 
@@ -3169,4 +3097,3 @@ plotSurface_image(int    *ifunct,
 //cleanup:
 }
 #endif
-

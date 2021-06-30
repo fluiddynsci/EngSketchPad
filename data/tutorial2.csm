@@ -1,95 +1,92 @@
-# ../data/tutorial2.csm written by ocsmSave (v1.18)
+# tutorial2
+# written by John Dannenhoffer
 
-# Constant, Design, and Output Parameters:
-despmtr   length       4.00000
-despmtr   height       3.00000
-despmtr   thick       0.50000
-despmtr   slot       2.00000
-despmtr   depth       3.00000
-despmtr   rad       0.50000
-despmtr   filrad       0.10000
+# Design Parameters:
+DESPMTR   tire:width         12.0      # width of tire
+DESPMTR   tire:diam_outer    30.0      # outer diam  of tire
+DESPMTR   tire:diam_inner    22.0      # inner diam  of tire
+OUTPMTR   tire:volume                  # volume      of tire
 
-# Global Attributes:
+DESPMTR   disk:width          1.0      # width  of disk
+DESPMTR   disk:chamfer        0.5      # chamfer radius btwn disk and tire
+OUTPMTR   disk:volume                  # volume of disk
 
-# Branches:
-skbeg     0   0   0   1
-   skvar     xy   0.000000;0.000000;0.000000;4.000000;0.000000;0.000000;4.000000;3.000000;0.000000;3.000000;3.000000;0.000000;3.000000;0.500000;0.000000;1.000000;0.500000;0.000000;1.000000;3.000000;0.000000;0.000000;3.000000;0.000000;
-   skcon     X   1   -1  0
-   skcon     Y   1   -1  0
-   skcon     H   1   2  0
-   skcon     V   4   5  0
-   skcon     H   5   6  0
-   skcon     V   6   7  0
-   skcon     H   7   8  0
-   skcon     V   8   1  0
-   skcon     L   1   2  length
-   skcon     L   8   1  height
-   skcon     L   2   3  height
-   skcon     L   3   4  ::L[7]
-   skcon     L   6   7  height-thick
-   skcon     L   5   6  slot
-   skcon     P   2   -1  0
-   skcon     A   3   -1  90
-   linseg    ::x[2]   ::y[2]   0
-   linseg    ::x[3]   ::y[3]   0
-   linseg    ::x[4]   ::y[4]   0
-   linseg    ::x[5]   ::y[5]   0
-   linseg    ::x[6]   ::y[6]   0
-   linseg    ::x[7]   ::y[7]   0
-   linseg    ::x[8]   ::y[8]   0
-   linseg    ::x[1]   ::y[1]   0
-skend     0
-extrude   0   0   depth
-fillet    filrad   6;7;7;8;   0
-skbeg     0   0   0   1
-   skvar     xy   0.000000;0.000000;0.000000;0.500000;0.000000;0.000000;0.500000;1.000000;0.500000;-0.500000;1.000000;0.000000;-0.500000;0.000000;0.500000;
-   skcon     X   1   -1  0
-   skcon     Y   1   -1  0
-   skcon     H   1   2  0
-   skcon     H   3   4  0
-   skcon     H   5   1  0
-   skcon     L   5   1  rad
-   skcon     L   1   2  rad
-   skcon     R   2   3  rad
-   skcon     T   5   -1  0
-   skcon     T   2   -1  0
-   skcon     T   4   -1  0
-   skcon     T   3   -1  0
-   linseg    ::x[2]   ::y[2]   0
-   arc       ::x[3]   ::y[3]   0   ::d[3]   xy
-   linseg    ::x[4]   ::y[4]   0
-   arc       ::x[5]   ::y[5]   0   ::d[5]   xy
-   linseg    ::x[1]   ::y[1]   0
-skend     0
-rotatey   90   0   0
-translate 0   height-3*rad   depth/2
-extrude   length/2   0   0
-subtract  none   1   0
-chamfer   filrad   0   0
-skbeg     0   0   0   1
-   skvar     xy   0.000000;0.000000;0.000000;0.750000;0.000000;0.000000;0.000000;0.750000;0.000000;-1.500000;0.750000;0.000000;-1.500000;0.000000;0.000000;-0.750000;0.000000;0.000000;
-   skcon     X   1   -1  0
-   skcon     Y   1   -1  0
-   skcon     H   1   2  0
-   skcon     H   3   4  0
-   skcon     V   4   5  0
-   skcon     H   5   6  0
-   skcon     H   6   1  0
-   skcon     L   5   6  depth/4
-   skcon     L   6   1  depth/4
-   skcon     L   1   2  depth/4
-   skcon     L   3   4  depth/2
-   skcon     L   4   5  depth/4
-   linseg    ::x[2]   ::y[2]   0
-   bezier    ::x[3]   ::y[3]   0
-   bezier    ::x[4]   ::y[4]   0
-   bezier    ::x[5]   ::y[5]   0
-   bezier    ::x[6]   ::y[6]   0
-   linseg    ::x[1]   ::y[1]   0
-skend     0
-rotatey   90   0   0
-translate length   height-3*rad   depth/2
-extrude   -length/2   0   0
-subtract  none   1   0
+CFGPMTR   hole:num            5        # number of holes
+DESPMTR   hole:diam_circ      4.0      # diam of circle of holes
+DESPMTR   hole:rad            0.5      # radius of each hole
 
-end
+# half the cross-section of the tire
+BOX       0   tire:diam_inner/2  0  tire:width/2  (tire:diam_outer-tire:diam_inner)/2  0
+
+# half way around x axis
+REVOLVE   0   0   0   1   0   0   180
+
+# put an attribute on the Face associated with the tread
+SELECT    FACE   @nbody  6
+ATTRIBUTE myTag  $tread
+ATTRIBUTE _color $magenta
+
+# make mirrored copy first in Z and then in X
+RESTORE   .
+MIRROR    0  0  1
+JOIN
+
+RESTORE   .
+MIRROR    1   0   0
+JOIN
+
+# store the tire's volume
+SET       tire:volume  @volume
+
+# label all Faces as being part of the tire
+SELECT    FACE
+ATTRIBUTE myPart $tire
+
+# create red disk and union with tire
+CYLINDER  -disk:width/2  0  0  \
+          +disk:width/2  0  0  (tire:diam_inner+tire:diam_outer)/4
+ATTRIBUTE myPart $disk
+ATTRIBUTE _color  $red
+UNION
+
+# (optionally) add blue chamfer between disk and tire
+IFTHEN    disk:chamfer  GT  0
+   CHAMFER   disk:chamfer
+   ATTRIBUTE _color $blue
+ENDIF
+
+# (optionally) drill a pattern of holes
+PATBEG    ihole     hole:num
+   # on axis if one hole
+   IFTHEN    hole:num EQ 1
+      SET   y      0
+      SET   z      0
+   # equally spaced around axis
+   ELSE
+      SET   theta  360*ihole/hole:num
+      SET   y      "hole:diam_circ/2 * cosd(theta)"
+      SET   z      "hole:diam_circ/2 * sind(theta)"
+   ENDIF
+
+   CYLINDER -disk:width  y  z \
+            +disk:width  y  z  hole:rad
+   ATTRIBUTE myPart $hole
+   SUBTRACT
+PATEND
+
+# save this Body away (but leave copy on stack)
+STORE    SolidModel  0  1
+
+# intersect this SolidModel with a cylinder in order
+#    to find the disk's volume (excluding tire)
+SET      xmax     2*tire:width
+CYLINDER -xmax  0  0  +xmax  0  0  tire:diam_inner/2
+INTERSECT
+SET      disk:volume  @volume
+STORE    .          # pop Body off stack
+
+# show the final model
+RESTORE          SolidModel
+ATTRIBUTE _name $SolidModel
+
+END

@@ -3,18 +3,19 @@
  *
  *             EGADS Tessellation AIM
  *
+ *      This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
  */
 
 /*!\mainpage Introduction
  *
  * \section overviewEgadsTess EGADS Tessellation AIM Overview
- * A module in the Computational Aircraft Prototype Syntheses (CAPS) has been developed to interact .....
- *
+ * A module in the Computational Aircraft Prototype Syntheses (CAPS) has been developed to interact internal meshing
+ * capability for the EGADS library.
  *
  * An outline of the AIM's inputs and outputs are provided in \ref aimInputsEgadsTess and \ref aimOutputsEgadsTess, respectively.
  *
- * Details of the AIM's shareable data structures are outlined in \ref sharableDataEgadsTess if connecting this AIM to other AIMs in a
- * parent-child like manner.
+ * \section clearanceEgadsTess Clearance Statement
+ *  This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
  *
  */
 
@@ -26,23 +27,40 @@
 #include "aimUtil.h"
 
 #include "meshUtils.h"       // Collection of helper functions for meshing
-#include "cfdUtils.h"        // Collection of helper functions for cfd analysis
-#include "feaUtils.h"        // Collection of helper functions for fea analysis
-#include "miscUtils.h"       // Collection of helper functions for miscellaneous analysis
+#include "miscUtils.h"
+#include "deprecateUtils.h"
 
 #ifdef WIN32
-#define getcwd      _getcwd
 #define strcasecmp  stricmp
 #define strncasecmp _strnicmp
-#define PATH_MAX    _MAX_PATH
-#else
-#include <unistd.h>
-#include <limits.h>
 #endif
 
 
-#define NUMINPUT 11 // Number of mesh inputs
-#define NUMOUT    3 // Number of outputs
+enum aimInputs
+{
+  Proj_Name = 1,               /* index is 1-based */
+  Mesh_Length_Factor,
+  Tess_Params,
+  Mesh_Format,
+  Mesh_ASCII_Flag,
+  Edge_Point_Min,
+  Edge_Point_Max,
+  Mesh_Sizing,
+  Mesh_Elements,
+  Multiple_Mesh,
+  TFI_Templates,
+  NUMINPUT = TFI_Templates     /* Total number of inputs */
+};
+
+enum aimOutputs
+{
+  Done = 1,                    /* index is 1-based */
+  NumberOfElement,
+  NumberOfNode,
+  Surface_Mesh,
+  NUMOUT = Surface_Mesh        /* Total number of outputs */
+};
+
 
 #define MXCHAR  255
 
@@ -58,110 +76,104 @@ typedef struct {
     meshInputStruct meshInput;
 
     // Attribute to index map
-    mapAttrToIndexStruct attrMap;
+    mapAttrToIndexStruct groupMap;
+
+    mapAttrToIndexStruct meshMap;
 
 } aimStorage;
 
-static aimStorage *egadsInstance = NULL;
-static int         numInstance  = 0;
 
-static int destroy_aimStorage(int iIndex) {
+static int destroy_aimStorage(aimStorage *egadsInstance)
+{
 
     int i; // Indexing
 
     int status; // Function return status
 
     // Destroy meshInput
-    status = destroy_meshInputStruct(&egadsInstance[iIndex].meshInput);
+    status = destroy_meshInputStruct(&egadsInstance->meshInput);
     if (status != CAPS_SUCCESS)
-      printf("Status = %d, egadsTessAIM instance %d, meshInput cleanup!!!\n",
-             status, iIndex);
+      printf("Status = %d, egadsTessAIM meshInput cleanup!!!\n", status);
 
     // Destroy surface mesh allocated arrays
-    for (i = 0; i < egadsInstance[iIndex].numSurface; i++) {
-        status = destroy_meshStruct(&egadsInstance[iIndex].surfaceMesh[i]);
+    for (i = 0; i < egadsInstance->numSurface; i++) {
+        status = destroy_meshStruct(&egadsInstance->surfaceMesh[i]);
         if (status != CAPS_SUCCESS)
-          printf("Status = %d, egadsTessAIM instance %d, surfaceMesh cleanup!!!\n",
-                 status, iIndex);
+          printf("Status = %d, egadsTessAIM surfaceMesh cleanup!!!\n", status);
     }
-    egadsInstance[iIndex].numSurface = 0;
+    egadsInstance->numSurface = 0;
 
-    if (egadsInstance[iIndex].surfaceMesh != NULL)
-      EG_free(egadsInstance[iIndex].surfaceMesh);
-    egadsInstance[iIndex].surfaceMesh = NULL;
+    if (egadsInstance->surfaceMesh != NULL) EG_free(egadsInstance->surfaceMesh);
+    egadsInstance->surfaceMesh = NULL;
 
     // Destroy attribute to index map
-    status = destroy_mapAttrToIndexStruct(&egadsInstance[iIndex].attrMap);
+    status = destroy_mapAttrToIndexStruct(&egadsInstance->groupMap);
     if (status != CAPS_SUCCESS)
-      printf("Status = %d, egadsTessAIM instance %d, attributeMap cleanup!!!\n",
-             status, iIndex);
+      printf("Status = %d, egadsTessAIM attributeMap cleanup!!!\n", status);
+
+    status = destroy_mapAttrToIndexStruct(&egadsInstance->meshMap);
+    if (status != CAPS_SUCCESS)
+      printf("Status = %d, egadsTessAIM attributeMap cleanup!!!\n", status);
     return CAPS_SUCCESS;
 }
 
 
-
 /* ********************** Exposed AIM Functions ***************************** */
 
-int aimInitialize(/*@unused@*/ int ngIn, /*@unused@*/ capsValue *gIn,
-                  int *qeFlag, /*@unused@*/ /*@null@*/ const char *unitSys,
-                  int *nIn, int *nOut, int *nFields,
-                  char ***fnames, int **ranks)
+int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
+                  /*@unused@*/ void **instStore, /*@unused@*/ int *major,
+                  /*@unused@*/ int *minor, int *nIn, int *nOut,
+                  int *nFields, char ***fnames, int **franks, int **fInOut)
 {
     int status; // Function return status
-    int flag;   // query/execute flag
 
-    aimStorage *tmp;
+    aimStorage *egadsInstance=NULL;
 
 #ifdef DEBUG
-    printf("\n egadsTessAIM/aimInitialize   ngIn = %d!\n", ngIn);
+    printf("\n egadsTessAIM/aimInitialize   inst = %d!\n", inst);
 #endif
-
-    flag     = *qeFlag;
-
-    // AIM executes itself
-    *qeFlag  = 1;
 
     // Specify the number of analysis input and out "parameters"
     *nIn     = NUMINPUT;
     *nOut    = NUMOUT;
-    if (flag == 1) return CAPS_SUCCESS;
+    if (inst == -1) return CAPS_SUCCESS;
 
-    /* specify the field variables this analysis can generate */
+    /* specify the field variables this analysis can generate and consume */
     *nFields = 0;
-    *ranks   = NULL;
     *fnames  = NULL;
+    *franks  = NULL;
+    *fInOut  = NULL;
 
-    // Allocate aflrInstance
-    if (egadsInstance == NULL) {
-        egadsInstance = (aimStorage *) EG_alloc(sizeof(aimStorage));
-        if (egadsInstance == NULL) return EGADS_MALLOC;
-    } else {
-        tmp = (aimStorage *) EG_reall(egadsInstance, (numInstance+1)*sizeof(aimStorage));
-        if (tmp == NULL) return EGADS_MALLOC;
-        egadsInstance = tmp;
-    }
+    // Allocate egadsInstance
+    AIM_ALLOC(egadsInstance, 1, aimStorage, aimInfo, status);
+    *instStore = egadsInstance;
 
-    // Set initial values for aflrInstance //
+    // Set initial values for egadsInstance //
 
     // Container for surface meshes
-    egadsInstance[numInstance].surfaceMesh = NULL;
-    egadsInstance[numInstance].numSurface = 0;
+    egadsInstance->surfaceMesh = NULL;
+    egadsInstance->numSurface = 0;
 
     // Container for attribute to index map
-    status = initiate_mapAttrToIndexStruct(&egadsInstance[numInstance].attrMap);
-    if (status != CAPS_SUCCESS) return status;
+    status = initiate_mapAttrToIndexStruct(&egadsInstance->groupMap);
+    AIM_STATUS(aimInfo, status);
+
+    status = initiate_mapAttrToIndexStruct(&egadsInstance->meshMap);
+    AIM_STATUS(aimInfo, status);
 
     // Container for mesh input
-    status = initiate_meshInputStruct(&egadsInstance[numInstance].meshInput);
+    status = initiate_meshInputStruct(&egadsInstance->meshInput);
+    AIM_STATUS(aimInfo, status);
 
-    // Increment number of instances
-    numInstance += 1;
+cleanup:
+    if (status != CAPS_SUCCESS) AIM_FREE(*instStore);
 
-    return (numInstance-1);
+    return status;
 }
 
-int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
-              char **ainame, capsValue *defval)
+
+int aimInputs(/*@unused@*/ void *aimStore, /*@unused@*/ void *aimInfo,
+              int index, char **ainame, capsValue *defval)
 {
 
     /*! \page aimInputsEgadsTess AIM Inputs
@@ -169,13 +181,12 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
      * through the AIM interface.
      */
 
-
 #ifdef DEBUG
-    printf(" egadsTessAIM/aimInputs instance = %d  index = %d!\n", inst, index);
+    printf(" egadsTessAIM/aimInputs index = %d!\n", index);
 #endif
 
     // Meshing Inputs
-    if (index == 1) {
+    if (index == Proj_Name) {
         *ainame              = EG_strdup("Proj_Name"); // If NULL a volume grid won't be written by the AIM
         defval->type         = String;
         defval->nullVal      = IsNull;
@@ -188,7 +199,7 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          * This corresponds to the output name of the mesh. If left NULL, the mesh is not written to a file.
          */
 
-    } else if (index == 2) {
+    } else if (index == Mesh_Length_Factor) {
         *ainame              = EG_strdup("Mesh_Length_Factor");
         defval->type         = Double;
         defval->dim          = Scalar;
@@ -204,16 +215,15 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          * Reference_Length scales Tess_Params[0] and Tess_Params[1] in both aimInputs and Mesh_Sizing
          */
 
-    } else if (index == 3) {
+    } else if (index == Tess_Params) {
         *ainame               = EG_strdup("Tess_Params");
         defval->type          = Double;
         defval->dim           = Vector;
-        defval->length        = 3;
         defval->nrow          = 3;
         defval->ncol          = 1;
         defval->units         = NULL;
         defval->lfixed        = Fixed;
-        defval->vals.reals    = (double *) EG_alloc(defval->length*sizeof(double));
+        defval->vals.reals    = (double *) EG_alloc(defval->nrow*sizeof(double));
         if (defval->vals.reals != NULL) {
             defval->vals.reals[0] = 0.10;
             defval->vals.reals[1] = 0.01;
@@ -233,7 +243,7 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          * between triangle facets (or Edge segment tangents for a WIREBODY tessellation), note that a
          * zero ignores this phase
          */
-    } else if (index == 4) {
+    } else if (index == Mesh_Format) {
         *ainame               = EG_strdup("Mesh_Format");
         defval->type          = String;
         defval->vals.string   = EG_strdup("AFLR3"); // TECPLOT, VTK, AFLR3, STL, AF, FAST, NASTRAN
@@ -251,7 +261,7 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          * <br>x[1] y[1]
          * <br>...  ...
          */
-    } else if (index == 5) {
+    } else if (index == Mesh_ASCII_Flag) {
         *ainame               = EG_strdup("Mesh_ASCII_Flag");
         defval->type          = Boolean;
         defval->vals.integer  = true;
@@ -261,7 +271,7 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          * Output mesh in ASCII format, otherwise write a binary file if applicable.
          */
 
-    } else if (index == 6) {
+    } else if (index == Edge_Point_Min) {
         *ainame               = EG_strdup("Edge_Point_Min");
         defval->type          = Integer;
         defval->vals.integer  = 0;
@@ -275,11 +285,10 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          * Minimum number of points on an edge including end points to use when creating a surface mesh (min 2).
          */
 
-    } else if (index == 7) {
+    } else if (index == Edge_Point_Max) {
         *ainame               = EG_strdup("Edge_Point_Max");
         defval->type          = Integer;
         defval->vals.integer  = 0;
-        defval->length        = 1;
         defval->lfixed        = Fixed;
         defval->nrow          = 1;
         defval->ncol          = 1;
@@ -290,7 +299,7 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          * Maximum number of points on an edge including end points to use when creating a surface mesh (min 2).
          */
 
-    } else if (index == 8) {
+    } else if (index == Mesh_Sizing) {
         *ainame              = EG_strdup("Mesh_Sizing");
         defval->type         = Tuple;
         defval->nullVal      = IsNull;
@@ -304,7 +313,7 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          * See \ref meshSizingProp for additional details.
          */
 
-    } else if (index == 9) {
+    } else if (index == Mesh_Elements) {
         *ainame              = EG_strdup("Mesh_Elements");
         defval->type         = String;
         defval->nullVal      = NotNull;
@@ -319,7 +328,7 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          *  - "Mixed" - Quad elements for four-sided faces with TFI, triangle elements otherwise (deprecated)
          */
 
-    } else if (index == 10) {
+    } else if (index == Multiple_Mesh) {
         *ainame               = EG_strdup("Multiple_Mesh");
         defval->type          = Boolean;
         defval->vals.integer  = (int) true;
@@ -329,10 +338,10 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          * If set to True (default) a surface mesh will be generated and output (given "Proj_Name" is set) for each body.
          * When set to False only a single surface
          * mesh will be created. Note, this only affects the mesh when writing to a
-         * file (no effect on sharable data \ref sharableDataEgadsTess) .
+         * file.
          */
 
-    } else if (index == 11) {
+    } else if (index == TFI_Templates) {
         *ainame               = EG_strdup("TFI_Templates");
         defval->type          = Boolean;
         defval->vals.integer  = (int) true;
@@ -343,64 +352,12 @@ int aimInputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimInfo, int index,
          * structured triangulations on FACEs with 3 or 4 "sides" with similar opposing vertex counts.
          */
     }
-    /*if (index != 1){
-        // Link variable(s) to parent(s) if available
-        status = aim_link(aimInfo, *ainame, ANALYSISIN, defval);
-        //printf("Status = %d: Var Index = %d, Type = %d, link = %lX\n", status, index, defval->type, defval->link);
-    }*/
-
-#if NUMINPUT != 11
-#error "NUMINPUT is inconsistent with the list of inputs"
-#endif
 
     return CAPS_SUCCESS;
 }
 
-int aimData(int iIndex, const char *name, enum capsvType *vtype,
-            int *rank, int *nrow, int *ncol, void **data, char **units)
-{
-    /*! \page sharableDataEgadsTess AIM Shareable Data
-     * The egadsTess AIM has the following shareable data types/values with its children AIMs if they are so inclined.
-     * - <B> Surface_Mesh</B> <br>
-     * The returned surface mesh after egadsTess execution is complete in meshStruct (see meshTypes.h) format.
-     * - <B> Attribute_Map</B> <br>
-     * An index mapping between capsGroups found on the geometry in mapAttrToIndexStruct (see miscTypes.h) format.
-     */
 
-#ifdef DEBUG
-    printf(" egadsTessAIM/aimData instance = %d  name = %s!\n", inst, name);
-#endif
-
-    // The returned surface mesh from egadsTess
-
-/*@-unrecog@*/
-    if (strcasecmp(name, "Surface_Mesh") == 0){
-        *vtype = Value;
-        *rank = *nrow = 1;
-        *ncol  = egadsInstance[iIndex].numSurface;
-        *data  = egadsInstance[iIndex].surfaceMesh;
-        *units = NULL;
-
-        return CAPS_SUCCESS;
-    }
-
-    // Share the attribute map
-    if (strcasecmp(name, "Attribute_Map") == 0){
-        *vtype = Value;
-        *rank  = *nrow = *ncol = 1;
-        *data  = &egadsInstance[iIndex].attrMap;
-        *units = NULL;
-
-        return CAPS_SUCCESS;
-    }
-/*@+unrecog@*/
-
-    return CAPS_NOTFOUND;
-
-}
-
-int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
-                   capsValue *aimInputs, capsErrs **errs)
+int aimPreAnalysis(void *aimStore, void *aimInfo, capsValue *aimInputs)
 {
 
     int status; // Status return
@@ -408,6 +365,7 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
     int i, bodyIndex; // Indexing
 
     int numNodeTotal = 0, numElemTotal = 0;
+    aimStorage *egadsInstance;
 
     // Body parameters
     const char *intents;
@@ -421,7 +379,7 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
     // Mesh attribute parameters
     int numMeshProp = 0;
     meshSizingStruct *meshProp = NULL;
-    const char *Mesh_Elements = NULL;
+    const char *MeshElements = NULL;
 
     // Combined mesh
     meshStruct combineMesh;
@@ -429,9 +387,6 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
     // File output
     char *filename = NULL;
     char bodyNumber[11];
-
-    // NULL out errors
-    *errs = NULL;
 
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
@@ -441,8 +396,7 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
     if (status != CAPS_SUCCESS) return status;
 
 #ifdef DEBUG
-    printf(" egadsTessAIM/aimPreAnalysis instance = %d  numBody = %d!\n",
-           iIndex, numBody);
+    printf(" egadsTessAIM/aimPreAnalysis numBody = %d!\n", numBody);
 #endif
 
     if ((numBody <= 0) || (bodies == NULL)) {
@@ -458,68 +412,69 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
 #endif
         return CAPS_SOURCEERR;
     }
+    egadsInstance = (aimStorage *) aimStore;
 
     // Cleanup previous aimStorage for the instance in case this is the second time through preAnalysis for the same instance
-    status = destroy_aimStorage(iIndex);
+    status = destroy_aimStorage(egadsInstance);
     if (status != CAPS_SUCCESS) {
-        if (status != CAPS_SUCCESS)
-          printf("Status = %d, egadsTessAIM instance %d, aimStorage cleanup!!!\n",
-                 status, iIndex);
+        printf("Status = %d, egadsTessAIM aimStorage cleanup!!!\n", status);
         return status;
-    }
-
-    // Remove any previous tessellation object
-    for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++) {
-        if (bodies[bodyIndex+numBody] != NULL) {
-            EG_deleteObject(bodies[bodyIndex+numBody]);
-            bodies[bodyIndex+numBody] = NULL;
-        }
     }
 
     // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
     status = create_CAPSGroupAttrToIndexMap(numBody,
                                             bodies,
-                                            2,
-                                            &egadsInstance[iIndex].attrMap);
+                                            3,
+                                            &egadsInstance->groupMap);
+    if (status != CAPS_SUCCESS) return status;
+
+    status = create_CAPSMeshAttrToIndexMap(numBody,
+                                           bodies,
+                                           3,
+                                           &egadsInstance->meshMap);
     if (status != CAPS_SUCCESS) return status;
 
     // Allocate surfaceMesh from number of bodies
-    egadsInstance[iIndex].numSurface = numBody;
-    egadsInstance[iIndex].surfaceMesh = (meshStruct *) EG_alloc(egadsInstance[iIndex].numSurface*sizeof(meshStruct));
-    if (egadsInstance[iIndex].surfaceMesh == NULL) {
-        egadsInstance[iIndex].numSurface = 0;
+    egadsInstance->numSurface  = numBody;
+    egadsInstance->surfaceMesh = (meshStruct *)
+                         EG_alloc(egadsInstance->numSurface*sizeof(meshStruct));
+    if (egadsInstance->surfaceMesh == NULL) {
+        egadsInstance->numSurface = 0;
         return EGADS_MALLOC;
     }
 
     // Initiate surface meshes
     for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++){
-        status = initiate_meshStruct(&egadsInstance[iIndex].surfaceMesh[bodyIndex]);
+        status = initiate_meshStruct(&egadsInstance->surfaceMesh[bodyIndex]);
         if (status != CAPS_SUCCESS) return status;
     }
 
-    // Setup meshing input structure -> -1 because aim_getIndex is 1 bias
+    // Setup meshing input structure
 
     // Project Name
-    if (aimInputs[aim_getIndex(aimInfo, "Proj_Name", ANALYSISIN)-1].nullVal != IsNull) {
-        egadsInstance[iIndex].meshInput.outputFileName =
-                                    EG_strdup(aimInputs[aim_getIndex(aimInfo, "Proj_Name", ANALYSISIN)-1].vals.string);
-        if (egadsInstance[iIndex].meshInput.outputFileName == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (aimInputs[Proj_Name-1].nullVal != IsNull) {
+        egadsInstance->meshInput.outputFileName =
+                                  EG_strdup(aimInputs[Proj_Name-1].vals.string);
+        if (egadsInstance->meshInput.outputFileName == NULL) {
+            status = EGADS_MALLOC;
+            goto cleanup;
+        }
     }
 
     // Mesh Format
-    egadsInstance[iIndex].meshInput.outputFormat =
-                                    EG_strdup(aimInputs[aim_getIndex(aimInfo, "Mesh_Format", ANALYSISIN)-1].vals.string);
-    if (egadsInstance[iIndex].meshInput.outputFormat == NULL) { status = EGADS_MALLOC; goto cleanup; }
-
-    // Output directory
-    egadsInstance[iIndex].meshInput.outputDirectory = EG_strdup(analysisPath);
-    if (egadsInstance[iIndex].meshInput.outputDirectory == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    egadsInstance->meshInput.outputFormat =
+                                EG_strdup(aimInputs[Mesh_Format-1].vals.string);
+    if (egadsInstance->meshInput.outputFormat == NULL) {
+        status = EGADS_MALLOC;
+        goto cleanup;
+    }
 
     // ASCII flag
-    egadsInstance[iIndex].meshInput.outputASCIIFlag  = aimInputs[aim_getIndex(aimInfo, "Mesh_ASCII_Flag", ANALYSISIN)-1].vals.integer;
+    egadsInstance->meshInput.outputASCIIFlag =
+                                      aimInputs[Mesh_ASCII_Flag-1].vals.integer;
 
     // Reference length for meshing
-    meshLenFac = aimInputs[aim_getIndex(aimInfo, "Mesh_Length_Factor", ANALYSISIN)-1].vals.real;
+    meshLenFac = aimInputs[Mesh_Length_Factor-1].vals.real;
 
     status = check_CAPSMeshLength(numBody, bodies, &capsMeshLength);
 
@@ -558,14 +513,17 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
 
     refLen = meshLenFac*capsMeshLength;
 
-    // Get Tessellation parameters -Tess_Params -> -1 because of aim_getIndex 1 bias
-    egadsInstance[iIndex].meshInput.paramTess[0] = aimInputs[aim_getIndex(aimInfo, "Tess_Params", ANALYSISIN)-1].vals.reals[0]; // Gets multiplied by bounding box size
-    egadsInstance[iIndex].meshInput.paramTess[1] = aimInputs[aim_getIndex(aimInfo, "Tess_Params", ANALYSISIN)-1].vals.reals[1]; // Gets multiplied by bounding box size
-    egadsInstance[iIndex].meshInput.paramTess[2] = aimInputs[aim_getIndex(aimInfo, "Tess_Params", ANALYSISIN)-1].vals.reals[2];
+    // Get Tessellation parameters -Tess_Params
+    egadsInstance->meshInput.paramTess[0] =
+                 aimInputs[Tess_Params-1].vals.reals[0]; // Gets multiplied by bounding box size
+    egadsInstance->meshInput.paramTess[1] =
+                 aimInputs[Tess_Params-1].vals.reals[1]; // Gets multiplied by bounding box size
+    egadsInstance->meshInput.paramTess[2] =
+                 aimInputs[Tess_Params-1].vals.reals[2];
 
     // Max and min number of points
-    if (aimInputs[aim_getIndex(aimInfo, "Edge_Point_Min", ANALYSISIN)-1].nullVal != IsNull) {
-        minEdgePoint = aimInputs[aim_getIndex(aimInfo, "Edge_Point_Min", ANALYSISIN)-1].vals.integer;
+    if (aimInputs[Edge_Point_Min-1].nullVal != IsNull) {
+        minEdgePoint = aimInputs[Edge_Point_Min-1].vals.integer;
         if (minEdgePoint < 2) {
           printf("**********************************************************\n");
           printf("Edge_Point_Min = %d must be greater or equal to 2\n", minEdgePoint);
@@ -575,8 +533,8 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
         }
     }
 
-    if (aimInputs[aim_getIndex(aimInfo, "Edge_Point_Max", ANALYSISIN)-1].nullVal != IsNull) {
-        maxEdgePoint = aimInputs[aim_getIndex(aimInfo, "Edge_Point_Max", ANALYSISIN)-1].vals.integer;
+    if (aimInputs[Edge_Point_Max-1].nullVal != IsNull) {
+        maxEdgePoint = aimInputs[Edge_Point_Max-1].vals.integer;
         if (maxEdgePoint < 2) {
           printf("**********************************************************\n");
           printf("Edge_Point_Max = %d must be greater or equal to 2\n", maxEdgePoint);
@@ -589,39 +547,43 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
     if (maxEdgePoint >= 2 && minEdgePoint >= 2 && minEdgePoint > maxEdgePoint) {
       printf("**********************************************************\n");
       printf("Edge_Point_Max must be greater or equal Edge_Point_Min\n");
-      printf("Edge_Point_Max = %d, Edge_Point_Min = %d\n",maxEdgePoint,minEdgePoint);
+      printf("Edge_Point_Max = %d, Edge_Point_Min = %d\n", maxEdgePoint, minEdgePoint);
       printf("**********************************************************\n");
       status = CAPS_BADVALUE;
       goto cleanup;
     }
 
     // Get mesh sizing parameters
-    if (aimInputs[aim_getIndex(aimInfo, "Mesh_Sizing", ANALYSISIN)-1].nullVal != IsNull) {
+    if (aimInputs[Mesh_Sizing-1].nullVal != IsNull) {
 
-        status = mesh_getSizingProp(aimInputs[aim_getIndex(aimInfo, "Mesh_Sizing", ANALYSISIN)-1].length,
-                                    aimInputs[aim_getIndex(aimInfo, "Mesh_Sizing", ANALYSISIN)-1].vals.tuple,
-                                    &egadsInstance[iIndex].attrMap,
+        status = deprecate_SizingAttr(aimInputs[Mesh_Sizing-1].length,
+                                      aimInputs[Mesh_Sizing-1].vals.tuple,
+                                      &egadsInstance->meshMap,
+                                      &egadsInstance->groupMap);
+        if (status != CAPS_SUCCESS) return status;
+
+        status = mesh_getSizingProp(aimInputs[Mesh_Sizing-1].length,
+                                    aimInputs[Mesh_Sizing-1].vals.tuple,
+                                    &egadsInstance->meshMap,
                                     &numMeshProp,
                                     &meshProp);
         if (status != CAPS_SUCCESS) return status;
     }
 
     // Get mesh element types
-    Mesh_Elements = aimInputs[aim_getIndex(aimInfo, "Mesh_Elements", ANALYSISIN)-1].vals.string;
+    MeshElements = aimInputs[Mesh_Elements-1].vals.string;
 
-/*@-unrecog@*/
-         if ( strncasecmp(Mesh_Elements,"Tri",3)   == 0 ) { quadMesh = 0; }
-    else if ( strncasecmp(Mesh_Elements,"Quad",4)  == 0 ) { quadMesh = 1; }
-    else if ( strncasecmp(Mesh_Elements,"Mixed",3) == 0 ) { quadMesh = 2; }
+         if ( strncasecmp(MeshElements,"Tri",3)   == 0 ) { quadMesh = 0; }
+    else if ( strncasecmp(MeshElements,"Quad",4)  == 0 ) { quadMesh = 1; }
+    else if ( strncasecmp(MeshElements,"Mixed",3) == 0 ) { quadMesh = 2; }
     else {
-        printf("Error: Unknown Mesh_Elements = \"%s\"\n", Mesh_Elements);
+        printf("Error: Unknown Mesh_Elements = \"%s\"\n", MeshElements);
         printf("       Shoule be one of \"Tri\", \"Quad\", or \"Mixed\"\n");
         status = CAPS_BADVALUE;
         goto cleanup;
     }
-/*@+unrecog@*/
 
-    if (aimInputs[aim_getIndex(aimInfo, "TFI_Templates", ANALYSISIN)-1].vals.integer == (int)false) {
+    if (aimInputs[TFI_Templates-1].vals.integer == (int) false) {
         for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++){
             // Disable TFI and templates
             status = EG_attributeAdd(bodies[bodyIndex], ".qParams", ATTRSTRING,
@@ -638,8 +600,8 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
                                   maxEdgePoint,
                                   quadMesh,
                                   &refLen,
-                                  egadsInstance[iIndex].meshInput.paramTess,
-                                  egadsInstance[iIndex].attrMap,
+                                  egadsInstance->meshInput.paramTess,
+                                  egadsInstance->meshMap,
                                   numBody,
                                   bodies);
 /*@+nullpass@*/
@@ -664,118 +626,118 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
 
         status = mesh_surfaceMeshEGADSBody(bodies[bodyIndex],
                                            refLen,
-                                           egadsInstance[iIndex].meshInput.paramTess,
+                                           egadsInstance->meshInput.paramTess,
                                            quadMesh,
-                                           &egadsInstance[iIndex].attrMap,
-                                           &egadsInstance[iIndex].surfaceMesh[bodyIndex]);
+                                           &egadsInstance->groupMap,
+                                           &egadsInstance->surfaceMesh[bodyIndex]);
         if (status != CAPS_SUCCESS) {
             printf("Problem during surface meshing of body %d\n", bodyIndex+1);
             goto cleanup;
         }
 
-        status = aim_setTess(aimInfo, egadsInstance[iIndex].surfaceMesh[bodyIndex].bodyTessMap.egadsTess);
+        status = aim_newTess(aimInfo,
+                             egadsInstance->surfaceMesh[bodyIndex].bodyTessMap.egadsTess);
         if (status != CAPS_SUCCESS) {
             printf(" aim_setTess return = %d\n", status);
             goto cleanup;
         }
 
-        printf("Number of nodes = %d\n", egadsInstance[iIndex].surfaceMesh[bodyIndex].numNode);
-        printf("Number of elements = %d\n", egadsInstance[iIndex].surfaceMesh[bodyIndex].numElement);
+        printf("Number of nodes    = %d\n", egadsInstance->surfaceMesh[bodyIndex].numNode);
+        printf("Number of elements = %d\n", egadsInstance->surfaceMesh[bodyIndex].numElement);
 
-        if (egadsInstance[iIndex].surfaceMesh[bodyIndex].meshQuickRef.useStartIndex == (int) true ||
-            egadsInstance[iIndex].surfaceMesh[bodyIndex].meshQuickRef.useListIndex  == (int) true) {
+        if (egadsInstance->surfaceMesh[bodyIndex].meshQuickRef.useStartIndex == (int) true ||
+            egadsInstance->surfaceMesh[bodyIndex].meshQuickRef.useListIndex  == (int) true) {
 
-            printf("Number of tris = %d\n", egadsInstance[iIndex].surfaceMesh[bodyIndex].meshQuickRef.numTriangle);
-            printf("Number of quad = %d\n", egadsInstance[iIndex].surfaceMesh[bodyIndex].meshQuickRef.numQuadrilateral);
+            printf("Number of node elements          = %d\n",
+                   egadsInstance->surfaceMesh[bodyIndex].meshQuickRef.numNode);
+            printf("Number of line elements          = %d\n",
+                   egadsInstance->surfaceMesh[bodyIndex].meshQuickRef.numLine);
+            printf("Number of triangle elements      = %d\n",
+                   egadsInstance->surfaceMesh[bodyIndex].meshQuickRef.numTriangle);
+            printf("Number of quadrilateral elements = %d\n",
+                   egadsInstance->surfaceMesh[bodyIndex].meshQuickRef.numQuadrilateral);
         }
 
-        numNodeTotal += egadsInstance[iIndex].surfaceMesh[bodyIndex].numNode;
-        numElemTotal += egadsInstance[iIndex].surfaceMesh[bodyIndex].numElement;
+        numNodeTotal += egadsInstance->surfaceMesh[bodyIndex].numNode;
+        numElemTotal += egadsInstance->surfaceMesh[bodyIndex].numElement;
     }
     //if (quiet == (int)false ) {
     printf("----------------------------\n");
-    printf("Total number of nodes = %d\n", numNodeTotal);
+    printf("Total number of nodes    = %d\n", numNodeTotal);
     printf("Total number of elements = %d\n", numElemTotal);
     //}
 
 
-    if (egadsInstance[iIndex].meshInput.outputFileName != NULL) {
+    if (egadsInstance->meshInput.outputFileName != NULL) {
 
         // We need to combine the mesh
-        if (aimInputs[aim_getIndex(aimInfo, "Multiple_Mesh", ANALYSISIN)-1].vals.integer == (int) false) {
+        if (aimInputs[Multiple_Mesh-1].vals.integer == (int) false) {
 
-            status = mesh_combineMeshStruct(egadsInstance[iIndex].numSurface,
-                                            egadsInstance[iIndex].surfaceMesh,
+            status = mesh_combineMeshStruct(egadsInstance->numSurface,
+                                            egadsInstance->surfaceMesh,
                                             &combineMesh);
 
             if (status != CAPS_SUCCESS) goto cleanup;
 
-            filename = (char *) EG_alloc((strlen(egadsInstance[iIndex].meshInput.outputFileName) +
-                                          strlen(egadsInstance[iIndex].meshInput.outputDirectory)+2)*sizeof(char));
+            filename = (char *) EG_alloc((strlen(egadsInstance->meshInput.outputFileName) +
+                                          2)*sizeof(char));
 
             if (filename == NULL) goto cleanup;
 
-            strcpy(filename, egadsInstance[iIndex].meshInput.outputDirectory);
+            strcpy(filename, egadsInstance->meshInput.outputFileName);
 
-            #ifdef WIN32
-                strcat(filename, "\\");
-            #else
-                strcat(filename, "/");
-            #endif
+            if (strcasecmp(egadsInstance->meshInput.outputFormat, "AFLR3") == 0) {
 
-            strcat(filename, egadsInstance[iIndex].meshInput.outputFileName);
-
-            if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "AFLR3") == 0) {
-
-                status = mesh_writeAFLR3(filename,
-                                         egadsInstance[iIndex].meshInput.outputASCIIFlag,
+                status = mesh_writeAFLR3(aimInfo, filename,
+                                         egadsInstance->meshInput.outputASCIIFlag,
                                          &combineMesh,
                                          1.0);
 
-            } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "VTK") == 0) {
+            } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "VTK") == 0) {
 
-                status = mesh_writeVTK(filename,
-                                       egadsInstance[iIndex].meshInput.outputASCIIFlag,
+                status = mesh_writeVTK(aimInfo, filename,
+                                       egadsInstance->meshInput.outputASCIIFlag,
                                        &combineMesh,
                                        1.0);
 
-            } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "Tecplot") == 0) {
+            } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "Tecplot") == 0) {
 
-                status = mesh_writeTecplot(filename,
-                                           egadsInstance[iIndex].meshInput.outputASCIIFlag,
+                status = mesh_writeTecplot(aimInfo, filename,
+                                           egadsInstance->meshInput.outputASCIIFlag,
                                            &combineMesh,
                                            1.0);
 
-            } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "STL") == 0) {
+            } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "STL") == 0) {
 
-                status = mesh_writeSTL(filename,
-                                       egadsInstance[iIndex].meshInput.outputASCIIFlag,
+                status = mesh_writeSTL(aimInfo, filename,
+                                       egadsInstance->meshInput.outputASCIIFlag,
                                        &combineMesh,
                                        1.0);
 
-            } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "Airfoil") == 0) {
+            } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "Airfoil") == 0) {
 
-                status = mesh_writeAirfoil(filename,
-                                           egadsInstance[iIndex].meshInput.outputASCIIFlag,
+                status = mesh_writeAirfoil(aimInfo, filename,
+                                           egadsInstance->meshInput.outputASCIIFlag,
                                            &combineMesh,
                                            1.0);
 
-            } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "FAST") == 0) {
+            } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "FAST") == 0) {
 
-                status = mesh_writeFAST(filename,
-                                        egadsInstance[iIndex].meshInput.outputASCIIFlag,
+                status = mesh_writeFAST(aimInfo, filename,
+                                        egadsInstance->meshInput.outputASCIIFlag,
                                         &combineMesh,
                                         1.0);
 
-            } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "Nastran") == 0) {
+            } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "Nastran") == 0) {
 
-                status = mesh_writeNASTRAN(filename,
-                                           egadsInstance[iIndex].meshInput.outputASCIIFlag,
+                status = mesh_writeNASTRAN(aimInfo, filename,
+                                           egadsInstance->meshInput.outputASCIIFlag,
                                            &combineMesh,
                                            FreeField,
                                            1.0);
             } else {
-                printf("Unrecognized mesh format, \"%s\", the mesh will not be written out\n", egadsInstance[iIndex].meshInput.outputFormat);
+                printf("Unrecognized mesh format, \"%s\", the mesh will not be written out\n",
+                       egadsInstance->meshInput.outputFormat);
             }
 
             if (filename != NULL) EG_free(filename);
@@ -785,91 +747,81 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
 
         } else {
 
-            for (bodyIndex = 0; bodyIndex < egadsInstance[iIndex].numSurface; bodyIndex++) {
+            for (bodyIndex = 0; bodyIndex < egadsInstance->numSurface; bodyIndex++) {
 
-                if (egadsInstance[iIndex].numSurface > 1) {
+                if (egadsInstance->numSurface > 1) {
 /*@-bufferoverflowhigh@*/
                     sprintf(bodyNumber, "%d", bodyIndex);
 /*@+bufferoverflowhigh@*/
-                    filename = (char *) EG_alloc((strlen(egadsInstance[iIndex].meshInput.outputFileName)  +
-                                                  strlen(egadsInstance[iIndex].meshInput.outputDirectory) +
-                                                  2 +
-                                                  strlen("_Surf_") +
-                                                  strlen(bodyNumber))*sizeof(char));
+                    filename = (char *) EG_alloc((strlen(egadsInstance->meshInput.outputFileName)  +
+                                                  2 + strlen("_Surf_") + strlen(bodyNumber))*sizeof(char));
                 } else {
-                    filename = (char *) EG_alloc((strlen(egadsInstance[iIndex].meshInput.outputFileName) +
-                                                  strlen(egadsInstance[iIndex].meshInput.outputDirectory)+2)*sizeof(char));
+                    filename = (char *) EG_alloc((strlen(egadsInstance->meshInput.outputFileName) +
+                                                  2)*sizeof(char));
 
                 }
 
                 if (filename == NULL) goto cleanup;
 
-                strcpy(filename, egadsInstance[iIndex].meshInput.outputDirectory);
+                strcpy(filename, egadsInstance->meshInput.outputFileName);
 
-                #ifdef WIN32
-                    strcat(filename, "\\");
-                #else
-                    strcat(filename, "/");
-                #endif
-
-                strcat(filename, egadsInstance[iIndex].meshInput.outputFileName);
-
-                if (egadsInstance[iIndex].numSurface > 1) {
+                if (egadsInstance->numSurface > 1) {
                     strcat(filename,"_Surf_");
                     strcat(filename, bodyNumber);
                 }
 
-                if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "AFLR3") == 0) {
+                if (strcasecmp(egadsInstance->meshInput.outputFormat, "AFLR3") == 0) {
 
-                    status = mesh_writeAFLR3(filename,
-                                             egadsInstance[iIndex].meshInput.outputASCIIFlag,
-                                             &egadsInstance[iIndex].surfaceMesh[bodyIndex],
+                    status = mesh_writeAFLR3(aimInfo, filename,
+                                             egadsInstance->meshInput.outputASCIIFlag,
+                                             &egadsInstance->surfaceMesh[bodyIndex],
                                              1.0);
 
-                } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "VTK") == 0) {
+                } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "VTK") == 0) {
 
-                    status = mesh_writeVTK(filename,
-                                            egadsInstance[iIndex].meshInput.outputASCIIFlag,
-                                            &egadsInstance[iIndex].surfaceMesh[bodyIndex],
+                    status = mesh_writeVTK(aimInfo, filename,
+                                            egadsInstance->meshInput.outputASCIIFlag,
+                                            &egadsInstance->surfaceMesh[bodyIndex],
                                             1.0);
 
-                } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "Tecplot") == 0) {
+                } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "Tecplot") == 0) {
 
-                    status = mesh_writeTecplot(filename,
-                                               egadsInstance[iIndex].meshInput.outputASCIIFlag,
-                                               &egadsInstance[iIndex].surfaceMesh[bodyIndex],
+                    status = mesh_writeTecplot(aimInfo, filename,
+                                               egadsInstance->meshInput.outputASCIIFlag,
+                                               &egadsInstance->surfaceMesh[bodyIndex],
                                                1.0);
 
-                } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "STL") == 0) {
+                } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "STL") == 0) {
 
-                    status = mesh_writeSTL(filename,
-                                           egadsInstance[iIndex].meshInput.outputASCIIFlag,
-                                           &egadsInstance[iIndex].surfaceMesh[bodyIndex],
+                    status = mesh_writeSTL(aimInfo, filename,
+                                           egadsInstance->meshInput.outputASCIIFlag,
+                                           &egadsInstance->surfaceMesh[bodyIndex],
                                            1.0);
 
-                } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "Airfoil") == 0) {
+                } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "Airfoil") == 0) {
 
-                    status = mesh_writeAirfoil(filename,
-                                               egadsInstance[iIndex].meshInput.outputASCIIFlag,
-                                               &egadsInstance[iIndex].surfaceMesh[bodyIndex],
+                    status = mesh_writeAirfoil(aimInfo, filename,
+                                               egadsInstance->meshInput.outputASCIIFlag,
+                                               &egadsInstance->surfaceMesh[bodyIndex],
                                                1.0);
 
-                } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "FAST") == 0) {
+                } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "FAST") == 0) {
 
-                    status = mesh_writeFAST(filename,
-                                            egadsInstance[iIndex].meshInput.outputASCIIFlag,
-                                            &egadsInstance[iIndex].surfaceMesh[bodyIndex],
+                    status = mesh_writeFAST(aimInfo, filename,
+                                            egadsInstance->meshInput.outputASCIIFlag,
+                                            &egadsInstance->surfaceMesh[bodyIndex],
                                             1.0);
 
-                } else if (strcasecmp(egadsInstance[iIndex].meshInput.outputFormat, "Nastran") == 0) {
+                } else if (strcasecmp(egadsInstance->meshInput.outputFormat, "Nastran") == 0) {
 
-                    status = mesh_writeNASTRAN(filename,
-                                               egadsInstance[iIndex].meshInput.outputASCIIFlag,
-                                               &egadsInstance[iIndex].surfaceMesh[bodyIndex],
+                    status = mesh_writeNASTRAN(aimInfo, filename,
+                                               egadsInstance->meshInput.outputASCIIFlag,
+                                               &egadsInstance->surfaceMesh[bodyIndex],
                                                FreeField,
                                                1.0);
                 } else {
-                    printf("Unrecognized mesh format, \"%s\", the mesh will not be written out\n", egadsInstance[iIndex].meshInput.outputFormat);
+                    printf("Unrecognized mesh format, \"%s\", the mesh will not be written out\n",
+                           egadsInstance->meshInput.outputFormat);
                 }
 
                 if (filename != NULL) EG_free(filename);
@@ -887,8 +839,7 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
     cleanup:
 
         if (status != CAPS_SUCCESS)
-          printf("Error: egadsTessAIM (instance = %d) status %d\n",
-                 iIndex, status);
+          printf("Error: egadsTessAIM status %d\n", status);
 
         if (meshProp != NULL) {
 
@@ -905,20 +856,35 @@ int aimPreAnalysis(int iIndex, void *aimInfo, const char *analysisPath,
 }
 
 
-int aimOutputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimStruc,
+/* the execution code from above should be moved here */
+int aimExecute(/*@unused@*/ void *aimStore, /*@unused@*/ void *aimStruc, int *state)
+{
+  *state = 0;
+  return CAPS_SUCCESS;
+}
+
+
+/* no longer optional and needed for restart */
+int aimPostAnalysis(/*@unused@*/ void *aimStore, /*@unused@*/ void *aimStruc,
+                    /*@unused@*/ int restart,    /*@unused@*/ capsValue *inputs)
+{
+  return CAPS_SUCCESS;
+}
+
+
+int aimOutputs(/*@unused@*/ void *aimStore, /*@unused@*/ void *aimStruc,
                 /*@unused@*/ int index, char **aoname, capsValue *form)
 {
     /*! \page aimOutputsEgadsTess AIM Outputs
      * The following list outlines the EGADS Tessellation AIM outputs available through the AIM interface.
      */
+    int status = CAPS_SUCCESS;
 
 #ifdef DEBUG
-    printf(" egadsTessAIM/aimOutputs instance = %d  index = %d!\n", inst, index);
+    printf(" egadsTessAIM/aimOutputs index = %d!\n", index);
 #endif
 
-    int output = 0;
-
-    if (index == ++output) {
+    if (index == Done) {
         *aoname = EG_strdup("Done");
         form->type = Boolean;
         form->vals.integer = (int) false;
@@ -928,7 +894,7 @@ int aimOutputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimStruc,
          * True if a surface mesh was created on all surfaces, False if not.
          */
 
-    } if (index == ++output) {
+    } else if (index == NumberOfElement) {
         *aoname = EG_strdup("NumberOfElement");
         form->type = Integer;
         form->vals.integer = 0;
@@ -938,7 +904,7 @@ int aimOutputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimStruc,
          * Number of elements in the surface mesh
          */
 
-    } if (index == ++output) {
+    } else if (index == NumberOfNode) {
         *aoname = EG_strdup("NumberOfNode");
         form->type = Integer;
         form->vals.integer = 0;
@@ -947,41 +913,57 @@ int aimOutputs(/*@unused@*/ int iIndex, /*@unused@*/ void *aimStruc,
          * - <B> NumberOfNode </B> <br>
          * Number of vertices in the surface mesh
          */
+
+    } else if (index == Surface_Mesh) {
+        *aoname           = AIM_NAME(Surface_Mesh);
+        form->type        = Pointer;
+        form->dim         = Vector;
+        form->lfixed      = Change;
+        form->sfixed      = Change;
+        form->vals.AIMptr = NULL;
+        form->nullVal     = IsNull;
+        AIM_STRDUP(form->units, "meshStruct", aimStruc, status);
+
+        /*! \page aimOutputsEgadsTess
+         * - <B> Surface_Mesh </B> <br>
+         * The surface mesh for a link.
+         */
+
+    } else {
+        status = CAPS_BADINDEX;
+        AIM_STATUS(aimStruc, status, "Unknown output index %d!", index);
     }
 
+    AIM_NOTNULL(*aoname, aimStruc, status);
 
-    if (output != NUMOUT) {
-        printf("DEVELOPER ERROR: NUMOUT %d != %d\n", NUMOUT, output);
-        return CAPS_BADINDEX;
-    }
-
-    return CAPS_SUCCESS;
+cleanup:
+    if (status != CAPS_SUCCESS) AIM_FREE(*aoname);
+    return status;
 }
 
+
 // See if a surface mesh was generated for each body
-int aimCalcOutput(int iIndex, /*@unused@*/ void *aimInfo,
-                  /*@unused@*/ const char *apath, /*@unused@*/ int index,
-                  capsValue *val, capsErrs **errors)
+int aimCalcOutput(void *aimStore, /*@unused@*/ void *aimInfo, int index,
+                  capsValue *val)
 {
     int status = CAPS_SUCCESS;
     int surf; // Indexing
     int numElement, numNodes, nElem;
+    aimStorage *egadsInstance;
 
 #ifdef DEBUG
-    printf(" egadsTessAIM/aimCalcOutput instance = %d  index = %d!\n",
-           inst, index);
+    printf(" egadsTessAIM/aimCalcOutput index = %d!\n", index);
 #endif
+    egadsInstance = (aimStorage *) aimStore;
 
-    *errors = NULL;
-
-    if (aim_getIndex(aimInfo, "Done", ANALYSISOUT) == index) {
+    if (Done == index) {
 
         val->vals.integer = (int) false;
 
         // Check to see if surface meshes was generated
-        for (surf = 0; surf < egadsInstance[iIndex].numSurface; surf++ ) {
+        for (surf = 0; surf < egadsInstance->numSurface; surf++ ) {
 
-            if (egadsInstance[iIndex].surfaceMesh[surf].numElement != 0) {
+            if (egadsInstance->surfaceMesh[surf].numElement != 0) {
 
                 val->vals.integer = (int) true;
 
@@ -993,21 +975,21 @@ int aimCalcOutput(int iIndex, /*@unused@*/ void *aimInfo,
             }
         }
 
-    } else if (aim_getIndex(aimInfo, "NumberOfElement", ANALYSISOUT) == index) {
+    } else if (NumberOfElement == index) {
 
         // Count the total number of surface elements
         numElement = 0;
-        for (surf = 0; surf < egadsInstance[iIndex].numSurface; surf++ ) {
+        for (surf = 0; surf < egadsInstance->numSurface; surf++ ) {
 
-            status = mesh_retrieveNumMeshElements(egadsInstance[iIndex].surfaceMesh[surf].numElement,
-                                                  egadsInstance[iIndex].surfaceMesh[surf].element,
+            status = mesh_retrieveNumMeshElements(egadsInstance->surfaceMesh[surf].numElement,
+                                                  egadsInstance->surfaceMesh[surf].element,
                                                   Triangle,
                                                   &nElem);
             if (status != CAPS_SUCCESS) goto cleanup;
             numElement += nElem;
 
-            status = mesh_retrieveNumMeshElements(egadsInstance[iIndex].surfaceMesh[surf].numElement,
-                                                  egadsInstance[iIndex].surfaceMesh[surf].element,
+            status = mesh_retrieveNumMeshElements(egadsInstance->surfaceMesh[surf].numElement,
+                                                  egadsInstance->surfaceMesh[surf].element,
                                                   Quadrilateral,
                                                   &nElem);
             if (status != CAPS_SUCCESS) goto cleanup;
@@ -1016,48 +998,49 @@ int aimCalcOutput(int iIndex, /*@unused@*/ void *aimInfo,
 
         val->vals.integer = numElement;
 
-    } else if (aim_getIndex(aimInfo, "NumberOfNode", ANALYSISOUT) == index) {
+    } else if (NumberOfNode == index) {
 
         // Count the total number of surface vertices
         numNodes = 0;
-        for (surf = 0; surf < egadsInstance[iIndex].numSurface; surf++ ) {
-            numNodes += egadsInstance[iIndex].surfaceMesh[surf].numNode;
+        for (surf = 0; surf < egadsInstance->numSurface; surf++ ) {
+            numNodes += egadsInstance->surfaceMesh[surf].numNode;
         }
 
         val->vals.integer = numNodes;
-    } else {
-        printf("DEVELOPER ERROR: Unknown output index %d\n", index);
-        return CAPS_BADINDEX;
-    }
 
-cleanup:
+    } else if (Surface_Mesh == index) {
 
-    return CAPS_SUCCESS;
+         // Return the surface meshes
+         val->nrow        = egadsInstance->numSurface;
+         val->vals.AIMptr = egadsInstance->surfaceMesh;
+
+     } else {
+
+         status = CAPS_BADINDEX;
+         AIM_STATUS(aimInfo, status, "Unknown output index %d!", index);
+
+     }
+
+ cleanup:
+
+     return status;
 }
 
-void aimCleanup()
-{
-    int iIndex; // Indexing
 
-    int status; // Returning status
+void aimCleanup(void *aimStore)
+{
+    int        status;
+    aimStorage *egadsInstance;
 
 #ifdef DEBUG
     printf(" egadsTessAIM/aimClenup!\n");
 #endif
+    egadsInstance = (aimStorage *) aimStore;
+    if (egadsInstance == NULL) return;
 
-    // Clean up egadsInstance data
-    for ( iIndex = 0; iIndex < numInstance; iIndex++) {
+    status = destroy_aimStorage(egadsInstance);
+    if (status != CAPS_SUCCESS)
+        printf("Status = %d, egadsTessAIM aimStorage cleanup!!!\n", status);
 
-        printf(" Cleaning up egadsInstance - %d\n", iIndex);
-
-        status = destroy_aimStorage(iIndex);
-        if (status != CAPS_SUCCESS)
-          printf("Status = %d, egadsTessAIM instance %d, aimStorage cleanup!!!\n",
-                 status, iIndex);
-    }
-
-    if (egadsInstance != NULL) EG_free(egadsInstance);
-    egadsInstance = NULL;
-    numInstance = 0;
-
+    EG_free(egadsInstance);
 }

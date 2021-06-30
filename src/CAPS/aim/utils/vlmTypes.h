@@ -1,3 +1,5 @@
+// This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
+
 // Structures for vortex lattice analysis - Written by Dr. Ryan Durscher AFRL/RQVC
 
 #ifndef VLMTYPES_H
@@ -45,6 +47,7 @@ typedef struct {
 
     int    Nspan;   // number of spanwise vortices (elements)
     double Sspace;  // spanwise point distribution
+    int    Sset;    // spanwise point distribution set by user
 
     int numControl;
     vlmControlStruct *vlmControl;
@@ -72,6 +75,8 @@ typedef struct {
 
     int numSection; // Number of sections that make up the surface
     vlmSectionStruct *vlmSection; // Section information
+
+    char *surfaceType;
 
 } vlmSurfaceStruct;
 

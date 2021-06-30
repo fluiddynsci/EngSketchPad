@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import myProblem class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -21,29 +19,28 @@ args = parser.parse_args()
 # Create working directory variable
 workDir = os.path.join(str(args.workDir[0]), "AVLControlAnalsyisTest")
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
 # Load CSM file
 geometryScript = os.path.join("..","csmData","avlWingTail.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Change a design parameter - area in the geometry
-myProblem.geometry.setGeometryVal("area", 10.0)
+myProblem.geometry.despmtr.area = 10.0
 
 # Load desired aim
 print ("Loading AIM")
-myAnalysis = myProblem.loadAIM(aim = "avlAIM", analysisDir = workDir)
+myAnalysis = myProblem.analysis.create(aim = "avlAIM")
 
 print ("Setting design parameters")
 
 # Set new Mach/Alt parameters
-myAnalysis.setAnalysisVal("Mach", 0.5)
-myAnalysis.setAnalysisVal("Alpha", 1.0)
-myAnalysis.setAnalysisVal("Beta", 0.0)
-myAnalysis.setAnalysisVal("RollRate", 0.0)
-myAnalysis.setAnalysisVal("PitchRate", 0.0)
-myAnalysis.setAnalysisVal("YawRate", 0.0)
+myAnalysis.input.Mach      = 0.5
+myAnalysis.input.Alpha     = 1.0
+myAnalysis.input.Beta      = 0.0
+myAnalysis.input.RollRate  = 0.0
+myAnalysis.input.PitchRate = 0.0
+myAnalysis.input.YawRate   = 0.0
 
 wing = {"groupName"    : "Wing",
         "numChord"     : 8,
@@ -56,7 +53,7 @@ tail = {"numChord"     : 8,
         "numSpanTotal" : 12,
         "spaceSpan"    : 1.0}
 
-myAnalysis.setAnalysisVal("AVL_Surface", [("Wing", wing), ("Vertical_Tail", tail)])
+myAnalysis.input.AVL_Surface = {"Wing": wing, "Vertical_Tail": tail}
 
 
 # Set control surface parameters
@@ -67,11 +64,11 @@ flapTE = {"controlGain"    : 1.0,
           "deflectionAngle" : 15.0}
 
 
-myAnalysis.setAnalysisVal("AVL_Control", [("WingRightLE", flapLE),
-                                          ("WingRightTE", flapTE),
-                                         #("WingLeftLE", flapLE), # Don't change anything
-                                         #("WingLeftTE", flapTE)
-                                          ("Tail"  , flapTE)])
+myAnalysis.input.AVL_Control = {"WingRightLE": flapLE,
+                                "WingRightTE": flapTE,
+                               #"WingLeftLE": flapLE, # Don't change anything
+                               #"WingLeftTE": flapTE
+                                "Tail"      : flapTE}
 
 # Run AIM pre-analysis
 myAnalysis.preAnalysis()
@@ -89,36 +86,33 @@ os.chdir(currentDirectory) # Move back to working directory
 myAnalysis.postAnalysis()
 
 # Get Output Data from AVL
-print ("Alpha  " + str(myAnalysis.getAnalysisOutVal("Alpha")))
-print ("Beta   " + str(myAnalysis.getAnalysisOutVal("Beta")))
-print ("Mach   " + str(myAnalysis.getAnalysisOutVal("Mach")))
-print ("pb/2V  " + str(myAnalysis.getAnalysisOutVal("pb/2V")))
-print ("qc/2V  " + str(myAnalysis.getAnalysisOutVal("qc/2V")))
-print ("rb/2V  " + str(myAnalysis.getAnalysisOutVal("rb/2V")))
-print ("p'b/2V " + str(myAnalysis.getAnalysisOutVal("p'b/2V")))
-print ("r'b/2V " + str(myAnalysis.getAnalysisOutVal("r'b/2V")))
-print ("CXtot  " + str(myAnalysis.getAnalysisOutVal("CXtot")))
-print ("CYtot  " + str(myAnalysis.getAnalysisOutVal("CYtot")))
-print ("CZtot  " + str(myAnalysis.getAnalysisOutVal("CZtot")))
-print ("Cltot  " + str(myAnalysis.getAnalysisOutVal("Cltot")))
-print ("Cmtot  " + str(myAnalysis.getAnalysisOutVal("Cmtot")))
-print ("Cntot  " + str(myAnalysis.getAnalysisOutVal("Cntot")))
-print ("Cl'tot " + str(myAnalysis.getAnalysisOutVal("Cl'tot")))
-print ("Cn'tot " + str(myAnalysis.getAnalysisOutVal("Cn'tot")))
-print ("CLtot  " + str(myAnalysis.getAnalysisOutVal("CLtot")))
-print ("CDtot  " + str(myAnalysis.getAnalysisOutVal("CDtot")))
-print ("CDvis  " + str(myAnalysis.getAnalysisOutVal("CDvis")))
-print ("CLff   " + str(myAnalysis.getAnalysisOutVal("CLff")))
-print ("CYff   " + str(myAnalysis.getAnalysisOutVal("CYff")))
-print ("CDind  " + str(myAnalysis.getAnalysisOutVal("CDind")))
-print ("CDff   " + str(myAnalysis.getAnalysisOutVal("CDff")))
-print ("e      " + str(myAnalysis.getAnalysisOutVal("e")))
+print ("Alpha  " + str(myAnalysis.output["Alpha" ].value))
+print ("Beta   " + str(myAnalysis.output["Beta"  ].value))
+print ("Mach   " + str(myAnalysis.output["Mach"  ].value))
+print ("pb/2V  " + str(myAnalysis.output["pb/2V" ].value))
+print ("qc/2V  " + str(myAnalysis.output["qc/2V" ].value))
+print ("rb/2V  " + str(myAnalysis.output["rb/2V" ].value))
+print ("p'b/2V " + str(myAnalysis.output["p'b/2V"].value))
+print ("r'b/2V " + str(myAnalysis.output["r'b/2V"].value))
+print ("CXtot  " + str(myAnalysis.output["CXtot" ].value))
+print ("CYtot  " + str(myAnalysis.output["CYtot" ].value))
+print ("CZtot  " + str(myAnalysis.output["CZtot" ].value))
+print ("Cltot  " + str(myAnalysis.output["Cltot" ].value))
+print ("Cmtot  " + str(myAnalysis.output["Cmtot" ].value))
+print ("Cntot  " + str(myAnalysis.output["Cntot" ].value))
+print ("Cl'tot " + str(myAnalysis.output["Cl'tot"].value))
+print ("Cn'tot " + str(myAnalysis.output["Cn'tot"].value))
+print ("CLtot  " + str(myAnalysis.output["CLtot" ].value))
+print ("CDtot  " + str(myAnalysis.output["CDtot" ].value))
+print ("CDvis  " + str(myAnalysis.output["CDvis" ].value))
+print ("CLff   " + str(myAnalysis.output["CLff"  ].value))
+print ("CYff   " + str(myAnalysis.output["CYff"  ].value))
+print ("CDind  " + str(myAnalysis.output["CDind" ].value))
+print ("CDff   " + str(myAnalysis.output["CDff"  ].value))
+print ("e      " + str(myAnalysis.output["e"     ].value))
 
-Cl = myAnalysis.getAnalysisOutVal("CLtot")
-Cd = myAnalysis.getAnalysisOutVal("CDtot")
-
-# Close CAPS
-myProblem.closeCAPS()
+Cl = myAnalysis.output["CLtot"].value
+Cd = myAnalysis.output["CDtot"].value
 
 # Check assertation
 assert abs(Cl-0.61999) <= 1E-3 and abs(Cd-0.02984) <= 1E-3

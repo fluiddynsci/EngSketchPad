@@ -2,7 +2,6 @@ LIBRARY pointwiseAIM
 EXPORTS
 aimInitialize
 aimCleanup
-aimData
 aimInputs
 aimPreAnalysis
 aimPostAnalysis

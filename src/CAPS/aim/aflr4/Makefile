@@ -50,11 +50,15 @@ EGADS_INC_FILES   = $(wildcard $(IDIR)/egads*.h)
 #UG3_FILES = $(wildcard $(AFLR)/src/ug3/*.c)
 #UG3_OBJS  = $(subst $(AFLR)/src/ug3,$(ODIR),$(UG3_FILES:.c=.o))
 
+#VPATH      += $(AFLR)/src/dgeom
+#DGEOM_FILES = $(wildcard $(AFLR)/src/dgeom/*.c)
+#DGEOM_OBJS  = $(subst $(AFLR)/src/dgeom,$(ODIR),$(DGEOM_FILES:.c=.o))
+
 #VPATH              += $(AFLR)/src/surf_auto_cpp
 #SURF_AUTO_CPP_FILES = $(wildcard $(AFLR)/src/surf_auto_cpp/*.cpp)
 #SURF_AUTO_CPP_OBJS  = $(subst $(AFLR)/src/surf_auto_cpp,$(ODIR),$(SURF_AUTO_CPP_FILES:.cpp=.o))
 
-OBJS=$(EGADS_AFLR4_OBJS) $(AFLR4_OBJS) $(SURF_AUTO_OBJS) $(UG3_OBJS)
+OBJS=$(EGADS_AFLR4_OBJS) $(AFLR4_OBJS) $(SURF_AUTO_OBJS) $(UG3_OBJS) $(DGEOM_OBJS)
 #OBJSP=$(SURF_AUTO_CPP_OBJS)
 ###############################################################################
 
@@ -94,14 +98,18 @@ $(ODIR)/%.o: %.cpp $(ODIR)/aflr4_version
 	$(CXX) -c $(CPPOPT) $(DEFINE) -I$(AFLR)/src $< -o $@
 endif
 
+lint:
+	$(LINT) -I../../include -I$(IDIR) $(wildcard *.c) -I../utils -I$(AFLR)/src -exportlocal
+
 clean:
 	-rm -f $(ODIR)/aflr4_Interface.o $(ODIR)/aflr4AIM.o $(ODIR)/aflr4_version $(OBJS) $(OBJSP)
 
 cleanall:	clean
 	-rm -f $(LDIR)/aflr4AIM.so
 
-dox:
-	(cd doc; doxygen aflr4AIM_dox.cfg; cd latex; make; mv refman.pdf AFLR4AIM.pdf)
+dox: doc/html/index.html
+doc/html/index.html: $(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
+	(cd doc; doxygen aflr4AIM_dox.cfg; cd latex; make; mv refman.pdf aflr4AIM.pdf)
 
 doxclean:
 	(cd doc; rm -f INPUT; rm -rf html latex; rm -f aflr4AIM.tag)

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -74,11 +74,17 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     void    *modl=NULL;
     int     buildTo, builtTo, nbody, count, i, j, k, ipmtr, found, myUdp;
+    int     ibody, jbody, nnode, inode, nedge, iedge, nface, iface;
+    int     attrtype, attrlen;
     int     outLevel=0;
+    CINT    *tempIlist;
     double  mprop[14];
     char    temp[256];
+    ego     *enodes=NULL, *eedges=NULL, *efaces=NULL;
     void    *save_modl;
     modl_T  *MODL;
+
+    ROUTINE(udpExecute);
 
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
@@ -94,10 +100,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* remember pointer to calling progrm's modl */
     status = EG_getUserPointer(context, (void**)(&(save_modl)));
-    if (status != EGADS_SUCCESS) {
-        printf(" udpExecute: bad return from getUserPointer\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(EG_getUserPointer);
 
     /* default return values */
     *ebody  = NULL;
@@ -128,10 +131,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
     myUdp = numUdp;
 
@@ -149,10 +149,9 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* load the .csm file */
     status = ocsmLoad(FILENAME(myUdp), &modl);
-    if (status < 0) {
-        printf(" udpExecute: problem during ocsmLoad\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(ocsmLoad);
+
+    SPLINT_CHECK_FOR_NULL(modl);
 
     MODL = (modl_T *)modl;
 
@@ -177,7 +176,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
         found = 0;
         for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
-            if (strcmp(MODL->pmtr[ipmtr].name, temp) == 0 && MODL->pmtr[ipmtr].type == OCSM_EXTERNAL) {
+            if (strcmp(MODL->pmtr[ipmtr].name, temp) == 0 && MODL->pmtr[ipmtr].type == OCSM_DESPMTR) {
                 MODL->pmtr[ipmtr].value[0] = PMTRVALUE(myUdp,i);
                 MODL->pmtr[ipmtr].dot[  0] = 0;
                 found = 1;
@@ -196,17 +195,90 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     buildTo = 0;
     nbody   = 0;
     status = ocsmBuild(modl, buildTo, &builtTo, &nbody, NULL);
-    if (status < 0) {
-        printf(" udpExecute: problem during ocsmBuild\n");
+    CHECK_STATUS(ocsmBuild);
+
+    ibody = -1;
+    for (jbody = MODL->nbody; jbody >= 1; jbody++) {
+        if (MODL->body[jbody].onstack == 1) {
+            ibody = jbody;
+            break;
+        }
+    }
+
+    if (ibody <= 0) {
+        printf(" udpExecute: no Bodys were left on stack\n");
+        status = EGADS_NOTBODY;
         goto cleanup;
     }
 
     /* make a copy of the last Body on the stack */
     status = EG_copyObject(MODL->body[MODL->nbody].ebody, NULL, ebody);
-    if (status != EGADS_SUCCESS) {
-        printf(" udpExecute: problem duringEG_copyObject\n");
-        goto cleanup;
+    CHECK_STATUS(EG_copyObject);
+
+    SPLINT_CHECK_FOR_NULL(*ebody);
+
+    /* remove _hist and __trace__ attributes (for now), which means
+       that we will not be able to track sensitivities for the Body
+       created by the .csm file */
+    status = EG_getBodyTopos(*ebody, NULL, NODE, &nnode, &enodes);
+    printf("nnode=%d\n", nnode);
+    CHECK_STATUS(EG_getBodyTopos);
+
+    SPLINT_CHECK_FOR_NULL(enodes);
+
+    for (inode = 0; inode < nnode; inode++) {
+        status = EG_attributeRet(enodes[inode], "__trace__",
+                                 &attrtype, &attrlen, &tempIlist, NULL, NULL);
+        if (status == SUCCESS) {
+            status = EG_attributeDel(enodes[inode], "__trace__");
+            CHECK_STATUS(EG_attributeDel);
+        }
     }
+
+    EG_free(enodes);   
+
+    status = EG_getBodyTopos(*ebody, NULL, EDGE, &nedge, &eedges);
+    printf("nedge=%d\n", nedge);
+    CHECK_STATUS(EG_getBodyTopos);
+
+    SPLINT_CHECK_FOR_NULL(eedges);
+
+    for (iedge = 0; iedge < nedge; iedge++) {
+        status = EG_attributeRet(eedges[iedge], "__trace__",
+                                 &attrtype, &attrlen, &tempIlist, NULL, NULL);
+        if (status == SUCCESS) {
+            status = EG_attributeDel(eedges[iedge], "__trace__");
+            CHECK_STATUS(EG_attributeDel);
+        }
+    }
+
+    EG_free(eedges);
+
+    status = EG_getBodyTopos(*ebody, NULL, FACE, &nface, &efaces);
+    printf("nface=%d\n", nface);
+    CHECK_STATUS(EG_getBodyTopos);
+
+    SPLINT_CHECK_FOR_NULL(efaces);
+
+    for (iface = 0; iface < nface; iface++) {
+        status = EG_attributeRet(efaces[iface], "_hist",
+                                 &attrtype, &attrlen, &tempIlist, NULL, NULL);
+        if (status == SUCCESS) {
+            status = EG_attributeDel(efaces[iface], "_hist");
+            CHECK_STATUS(EG_attributeDel);
+        }
+    }
+
+    for (iface = 0; iface < nface; iface++) {
+        status = EG_attributeRet(efaces[iface], "__trace__",
+                                 &attrtype, &attrlen, &tempIlist, NULL, NULL);
+        if (status == SUCCESS) {
+            status = EG_attributeDel(efaces[iface], "__trace__");
+            CHECK_STATUS(EG_attributeDel);
+        }
+    }
+
+    EG_free(efaces);
 
     if (outLevel > 0) {
         printf("<<< returning from diversion to \"%s\"\n\n", FILENAME(myUdp));
@@ -214,14 +286,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* restore user data to original modl */
     status = EG_setUserPointer(context, save_modl);
-    if (status != EGADS_SUCCESS) {
-        printf(" udpExecute: problem reseting user pointer\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(EG_setUserPointer);
 
     /* set the output value(s) */
     status = EG_getMassProperties(*ebody, mprop);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getMassProperties);
 
     VOLUME(0) = mprop[0];
 

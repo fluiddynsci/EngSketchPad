@@ -56,11 +56,16 @@ int hsm_Adjacency(meshStruct *feaMesh,
     }
 
     *xadj_out = NULL;
-    *adj_out = NULL;
+    *adj_out  = NULL;
 
     ncol    = (int * ) EG_alloc(feaMesh->numNode*sizeof(int ));
     columns = (int **) EG_alloc(feaMesh->numNode*sizeof(int*));
-    memset(ncol   , 0, feaMesh->numNode*sizeof(int));
+    if ((ncol == NULL) || (columns == NULL)) {
+        if (ncol    != NULL) EG_free(ncol);
+        if (columns != NULL) EG_free(columns);
+        return EGADS_MALLOC;
+    }
+    memset(ncol,    0, feaMesh->numNode*sizeof(int));
     memset(columns, 0, feaMesh->numNode*sizeof(int*));
 
     // Loop through the elements
@@ -126,6 +131,7 @@ int hsm_Adjacency(meshStruct *feaMesh,
 
     // populate the pointer array so the adjacency can be allocated
     xadj = (int *) EG_alloc((feaMesh->numNode+1)*sizeof(int));
+    if (xadj == NULL) { status = EGADS_MALLOC; goto cleanup; }
     memset(xadj, 0, (feaMesh->numNode+1)*sizeof(int));
     *maxAdjacency = 0;
 
@@ -137,6 +143,7 @@ int hsm_Adjacency(meshStruct *feaMesh,
     }
 
     adj = (int *) EG_alloc(xadj[feaMesh->numNode]*sizeof(int));
+    if (adj == NULL) { status = EGADS_MALLOC; goto cleanup; }
     memset(adj, 0, (xadj[feaMesh->numNode]-1)*sizeof(int));
 
     // populate the adjacency
@@ -148,7 +155,7 @@ int hsm_Adjacency(meshStruct *feaMesh,
 
 //#define WRITE_MATRIX_MARKET
 #ifdef WRITE_MATRIX_MARKET
-    FILE *file = fopen("A.mtx", "w");
+    FILE *file = aim_fopen(aimInfo, "A.mtx", "w");
 
     //Write the banner
     fprintf(file, "%%%%MatrixMarket matrix coordinate real general\n");

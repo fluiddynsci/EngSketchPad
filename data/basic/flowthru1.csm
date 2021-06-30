@@ -33,9 +33,12 @@ restore outer
 mark
    restore outer
    select  edge  0  0  6  5  2
+   select  sub   $_nface  2
    extract -@iedge
+
    restore outer
    select  edge  0  0  6  5  1
+   select  sub   $_nface  2
    extract -@iedge
 rule
 union               # produces SheetBody
@@ -44,9 +47,12 @@ union               # produces SheetBody
 mark
    restore outer
    select  edge  0  0  6  6  2
+   select  sub   $_nface  2
    extract -@iedge
+
    restore outer
    select  edge  0  0  6  6  1
+   select  sub   $_nface  2
    extract -@iedge
 rule
 union               # produces SheetBody
@@ -55,9 +61,12 @@ union               # produces SheetBody
 mark
    restore outer
    select  edge  0  0  6  3  2
+   select  sub   $_nface  2
    extract -@iedge
+
    restore outer
    select  edge  0  0  6  3  1
+   select  sub   $_nface  2
    extract -@iedge
 rule
 union               # produces SheetBody
@@ -66,9 +75,12 @@ union               # produces SheetBody
 mark
    restore outer
    select  edge  0  0  6  4  1
+   select  sub   $_nface  2
    extract -@iedge
+
    restore outer
    select  edge  0  0  6  4  2
+   select  sub   $_nface  2
    extract -@iedge
 rule
 combine             # combine is used here to promote to SolidBody

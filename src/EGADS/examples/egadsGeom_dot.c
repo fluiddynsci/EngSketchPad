@@ -101,9 +101,9 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
       if (status != EGADS_SUCCESS) goto cleanup;
 
       /* compute the configuration velocity based on finite difference */
-      fd_dot[0] = (p2[0] - p1[0])/dtime - p2[3]*(uv2[2*n] - uv1[2*n])/dtime - p2[6]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
-      fd_dot[1] = (p2[1] - p1[1])/dtime - p2[4]*(uv2[2*n] - uv1[2*n])/dtime - p2[7]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
-      fd_dot[2] = (p2[2] - p1[2])/dtime - p2[5]*(uv2[2*n] - uv1[2*n])/dtime - p2[8]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
+      fd_dot[0] = (p2[0] - p1[0])/dtime - p1[3]*(uv2[2*n] - uv1[2*n])/dtime - p1[6]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
+      fd_dot[1] = (p2[1] - p1[1])/dtime - p1[4]*(uv2[2*n] - uv1[2*n])/dtime - p1[7]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
+      fd_dot[2] = (p2[2] - p1[2])/dtime - p1[5]*(uv2[2*n] - uv1[2*n])/dtime - p1[8]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
 
       for (d = 0; d < 3; d++) {
         if (fabs(p1_dot[d] - fd_dot[d]) > ftol) {
@@ -144,9 +144,9 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
       if (status != EGADS_SUCCESS) goto cleanup;
 
       /* compute the configuration velocity based on finite difference */
-      fd_dot[0] = (p2[0] - p1[0])/dtime - p2[3]*(t2[n] - t1[n])/dtime;
-      fd_dot[1] = (p2[1] - p1[1])/dtime - p2[4]*(t2[n] - t1[n])/dtime;
-      fd_dot[2] = (p2[2] - p1[2])/dtime - p2[5]*(t2[n] - t1[n])/dtime;
+      fd_dot[0] = (p2[0] - p1[0])/dtime - p1[3]*(t2[n] - t1[n])/dtime;
+      fd_dot[1] = (p2[1] - p1[1])/dtime - p1[4]*(t2[n] - t1[n])/dtime;
+      fd_dot[2] = (p2[2] - p1[2])/dtime - p1[5]*(t2[n] - t1[n])/dtime;
 
       for (d = 0; d < 3; d++) {
         if (fabs(p1_dot[d] - fd_dot[d]) > etol) {
@@ -242,7 +242,7 @@ pingBodiesExtern(ego tess1, ego ebody2, double dtime, int iparam, const char *sh
 
   status = EG_statusTessBody( tess1, &ebody1, &oclass, &mtype );
   if (status != EGADS_SUCCESS) goto cleanup;
-  
+
   /* get the Edges from the Body */
   status = EG_getBodyTopos(ebody1, NULL, EDGE, &nedge, &eedges1);
   if (status != EGADS_SUCCESS) goto cleanup;
@@ -706,7 +706,7 @@ setLineBody_dot( const double *x0,     /* (in)  coordinates of the first point  
   tdata_dot[0] = 0;
   tdata_dot[1] = (data[3]*data_dot[3] + data[4]*data_dot[4] + data[5]*data_dot[5])/tdata[1];
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -828,7 +828,7 @@ makeCircleBody( ego context,         /* (in)  EGADS context    */
   data[3] = xax[0];   /* x-axis */
   data[4] = xax[1];
   data[5] = xax[2];
-  data[6] = yax[0];  /* y-axis */
+  data[6] = yax[0];   /* y-axis */
   data[7] = yax[1];
   data[8] = yax[2];
   data[9] = r;        /* radius */
@@ -916,7 +916,7 @@ setCircleBody_dot( const double *xcent,     /* (in)  Center          */
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* set the Circle data and velocity */
@@ -1093,7 +1093,7 @@ makeEllipseBody( ego context,         /* (in)  EGADS context     */
   double data[11], tdata[2];
   ego    eellipse, eedge, enode, eloop;
 
-  /* create the Circle */
+  /* create the Ellipse */
   data[ 0] = xcent[0]; /* center */
   data[ 1] = xcent[1];
   data[ 2] = xcent[2];
@@ -1179,7 +1179,7 @@ setEllipseBody_dot( const double *xcent,     /* (in)  Center                */
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* set the sensitivity of the Node */
@@ -1347,7 +1347,7 @@ makeParabolaBody( ego context,       /* (in)  EGADS context    */
   double data[10], tdata[2];
   ego    eparabola, eedge, enodes[2], eloop;
 
-  /* create the Circle */
+  /* create the Parabola */
   data[0] = xcent[0]; /* center */
   data[1] = xcent[1];
   data[2] = xcent[2];
@@ -1438,7 +1438,7 @@ setParabolaBody_dot( const double *xcent,   /* (in)  Center          */
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* set the Circle data and velocity */
@@ -1607,7 +1607,7 @@ makeHyperbolaBody( ego context,         /* (in)  EGADS context     */
   double data[11], tdata[2];
   ego    ehyperbola, eedge, enodes[2], eloop;
 
-  /* create the Circle */
+  /* create the Hyperbola */
   data[ 0] = xcent[0]; /* center */
   data[ 1] = xcent[1];
   data[ 2] = xcent[2];
@@ -1703,7 +1703,7 @@ setHyperbolaBody_dot( const double *xcent,     /* (in)  Center                */
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* set the Circle data and velocity */
@@ -1996,14 +1996,14 @@ setOffsetCurveBody_dot( const double *x0,        /* (in)  coordinates of the fir
   status = EG_setGeometry_dot(eline, CURVE, LINE, NULL, data, data_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  /* set the t-range sensitivity */
+  /* set the Edge t-range sensitivity */
   tdata[0] = 0;
   tdata[1] = sqrt(data[3]*data[3] + data[4]*data[4] + data[5]*data[5]);
 
   tdata_dot[0] = 0;
   tdata_dot[1] = (data[3]*data_dot[3] + data[4]*data_dot[4] + data[5]*data_dot[5])/tdata[1];
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* set the offset curve velocity */
@@ -2230,7 +2230,7 @@ setBezierCurveBody_dot( const int npts,        /* (in)  number of points        
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* set the sensitivity of the Nodes */
@@ -2446,7 +2446,7 @@ setBsplineCurveBody_dot( const int npts,        /* (in)  number of points       
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* set the sensitivity of the Nodes */
@@ -2664,14 +2664,14 @@ setLineEdge_dot( ego eedge )      /* (in/out) Edge with velocity */
   status = EG_setGeometry_dot(eline, CURVE, LINE, NULL, data, data_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  /* set the t-range sensitivity */
+  /* set the Edge t-range sensitivity */
   tdata[0] = 0;
   tdata[1] = sqrt(data[3]*data[3] + data[4]*data[4] + data[5]*data[5]);
 
   tdata_dot[0] = 0;
   tdata_dot[1] = (data[3]*data_dot[3] + data[4]*data_dot[4] + data[5]*data_dot[5])/tdata[1];
 
-  status = EG_setGeometry_dot(eedge, EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedge, EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -2769,7 +2769,7 @@ makePlaneBody( ego context,         /* (in)  EGADS context    */
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, eplane, FACE, SFORWARD,
-                           NULL, 1, &eloop, senses, &eface);
+                           NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -3075,7 +3075,7 @@ makeSphericalBody( ego context,         /* (in)  EGADS context  */
   double data[10], tdata[2], dx[3], dy[3], dz[3], *rvec=NULL;
   ego    esphere, ecircle, eedges[8], enodes[2], eloop, eface, eref;
 
-  /* create the Sphere */
+  /* create the Spherical */
   data[0] = xcent[0]; /* center */
   data[1] = xcent[1];
   data[2] = xcent[2];
@@ -3185,9 +3185,8 @@ makeSphericalBody( ego context,         /* (in)  EGADS context  */
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  senses[0] = SFORWARD;
   status = EG_makeTopology(context, esphere, FACE, SFORWARD,
-                           NULL, 1, &eloop, senses, &eface);
+                           NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -3248,14 +3247,14 @@ setSphericalBody_dot( const double *xcent,     /* (in)  Center          */
   tdata[0]     = -PI/2;
   tdata[1]     =  PI/2;
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   tdata[0]     = 0;
   tdata[1]     = TWOPI;
-  status = EG_setGeometry_dot(eedges[1], EDGE, DEGENERATE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[1], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[3], EDGE, DEGENERATE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[3], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* set the Sphere data and velocity */
@@ -3530,7 +3529,7 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
   double data[14], tdata[2], dx[3], dy[3], dz[3], x1[3], x2[3], *rvec=NULL, vmin, h;
   ego    econe, ecircle, eline, eedges[8], enodes[2], eloop, eface, eref;
 
-  /* create the cone */
+  /* create the Conical */
   data[ 0] = xcent[0]; /* center */
   data[ 1] = xcent[1];
   data[ 2] = xcent[2];
@@ -3663,9 +3662,8 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  senses[0] = SFORWARD;
   status = EG_makeTopology(context, econe, FACE, SFORWARD,
-                           NULL, 1, &eloop, senses, &eface);
+                           NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -3864,16 +3862,16 @@ setConicalBody_dot( const double *xcent,     /* (in)  Center          */
   tdata_dot[0] = vmin_dot;
   tdata_dot[1] = 0;
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   tdata[0]     = 0;
   tdata[1]     = TWOPI;
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
-  status = EG_setGeometry_dot(eedges[1], EDGE, DEGENERATE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[1], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[3], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[3], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 #ifdef PCURVE_SENSITIVITY
@@ -4061,7 +4059,7 @@ makeCylindricalBody( ego context,         /* (in)  EGADS context  */
   double data[13], tdata[2], dx[3], dy[3], dz[3], x1[3], x2[3], *rvec=NULL;
   ego    ecylinder, ecircle[2], eedges[8], enodes[2], eloop, eface, eref;
 
-  /* create the Cylinder */
+  /* create the Cylindrical */
   data[ 0] = xcent[0]; /* center */
   data[ 1] = xcent[1];
   data[ 2] = xcent[2];
@@ -4186,9 +4184,8 @@ makeCylindricalBody( ego context,         /* (in)  EGADS context  */
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  senses[0] = SFORWARD;
   status = EG_makeTopology(context, ecylinder, FACE, SFORWARD,
-                           NULL, 1, &eloop, senses, &eface);
+                           NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -4394,9 +4391,9 @@ setCylindricalBody_dot( const double *xcent,     /* (in)  Center          */
   tdata[1]     = TWOPI;
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
-  status = EG_setGeometry_dot(eedges[1], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[1], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[3], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[3], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -4557,7 +4554,7 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
 
   R = minr + majr;
 
-  /* create the Sphere */
+  /* create the Toroidal */
   data[ 0] = xcent[0]; /* center */
   data[ 1] = xcent[1];
   data[ 2] = xcent[2];
@@ -4703,9 +4700,8 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  senses[0] = SFORWARD;
   status = EG_makeTopology(context, etorus, FACE, SFORWARD,
-                           NULL, 1, &eloop, senses, &eface);
+                           NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -4781,15 +4777,15 @@ setToroidalBody_dot( const double *xcent,     /* (in)  Center                  *
   tdata_dot[1] = 0;
   tdata[0]     = 0;
   tdata[1]     = TWOPI;
-  status = EG_setGeometry_dot(eedges[0], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[2], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[2], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   tdata[0]     = 0;
   tdata[1]     = PI;
 
-  status = EG_setGeometry_dot(eedges[1], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[1], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -5229,9 +5225,8 @@ makeRevolutionBody( ego context,         /* (in)  EGADS context    */
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  senses[0] = SFORWARD;
   status = EG_makeTopology(context, esurf, FACE, SFORWARD,
-                           NULL, 1, &eloop, senses, &eface);
+                           NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -5398,9 +5393,9 @@ setRevolutionBody_dot( const double *xcent,     /* (in)  Center                 
   tdata_dot[1] = 0;
   tdata[0]     = 0;
   tdata[1]     = TWOPI;
-  status = EG_setGeometry_dot(eedges[1], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[1], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[3], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[3], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* set the velocity on the surface */
@@ -5428,7 +5423,7 @@ setRevolutionBody_dot( const double *xcent,     /* (in)  Center                 
 
   EG_free(rvec); rvec = NULL;
   EG_free(rvec_dot); rvec_dot = NULL;
-  status = EG_getGeometry_dot(eedges[0], &rvec, &rvec_dot);
+  status = EG_getGeometry_dot(eline, &rvec, &rvec_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_setGeometry_dot(eref, CURVE, LINE, NULL, rvec, rvec_dot);
@@ -5627,7 +5622,7 @@ makeExtrusionBody( ego context,         /* (in)  EGADS context    */
                            data, &ecircle[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  /* create the Extruded surface */
+  /* create the Extrusion surface */
   data[0] = vec[0]; /* direction */
   data[1] = vec[1];
   data[2] = vec[2];
@@ -5697,9 +5692,8 @@ makeExtrusionBody( ego context,         /* (in)  EGADS context    */
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  senses[0] = SFORWARD;
   status = EG_makeTopology(context, esurf, FACE, SFORWARD,
-                           NULL, 1, &eloop, senses, &eface);
+                           NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -5883,9 +5877,9 @@ setExtrusionBody_dot( const double *xcent,     /* (in)  Center                  
   tdata[1]     = TWOPI;
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
-  status = EG_setGeometry_dot(eedges[1], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[1], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[3], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[3], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -6205,9 +6199,8 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  senses[0] = SFORWARD;
   status = EG_makeTopology(context, esurf, FACE, SFORWARD,
-                           NULL, 1, &eloop, senses, &eface);
+                           NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -6408,13 +6401,13 @@ setBezierSurfaceBody_dot( const int nCPu,        /* (in)  number of points in u 
   tdata[1]     = 1;
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[1], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[1], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[2], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[2], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[3], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[3], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -6673,9 +6666,8 @@ makeOffsetSurfaceBody( ego context,         /* (in)  EGADS context    */
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  senses[0] = SFORWARD;
   status = EG_makeTopology(context, esurf, FACE, SFORWARD,
-                           NULL, 1, &eloop, senses, &eface);
+                           NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -7146,9 +7138,8 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  senses[0] = SFORWARD;
   status = EG_makeTopology(context, esurf, FACE, SFORWARD,
-                           NULL, 1, &eloop, senses, &eface);
+                           NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -7322,13 +7313,13 @@ setBsplineSurfaceBody_dot( const int nCPu,        /* (in)  number of points in u
   tdata[1]     = 1;
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[1], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[1], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[2], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[2], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
-  status = EG_setGeometry_dot(eedges[3], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[3], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -7478,8 +7469,6 @@ checkNode_dot(ego context)
   double data[18], data_dot[18];
   ego    enode;
 
-  EG_setOutLevel(context, 2);
-
   /* make a node */
   data[0] = 0;
   data[1] = 1;
@@ -7541,6 +7530,23 @@ checkNode_dot(ego context)
   status = EG_setGeometry_dot(enode, 0, 0, NULL, NULL, NULL);
   if (status != EGADS_SUCCESS) goto cleanup;
 
+  EG_deleteObject(enode); enode = NULL;
+
+  /* create a node directly with sensitivities */
+  data[0] = 0;
+  data[1] = 1;
+  data[2] = 2;
+  data_dot[0] = 3;
+  data_dot[1] = 4;
+  data_dot[2] = 5;
+  status = EG_makeTopology_dot(context, NULL, NODE, 0,
+                               data, data_dot, 0, NULL, NULL, &enode);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* check that it has sensitivities */
+  status = EG_hasGeometry_dot(enode);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
   status = EGADS_SUCCESS;
 
 cleanup:
@@ -7548,7 +7554,6 @@ cleanup:
     printf(" Failure %d in %s\n", status, __func__);
   }
   EG_deleteObject(enode);
-  EG_setOutLevel(context, 1);
 
   return status;
 }
@@ -7561,10 +7566,7 @@ checkCurve_dot(ego context)
   int    esens[1] = {SFORWARD}, *senses, oclass, mtype, nloop, nedge, nnode;
   double data[18], data_dot[18], tdata[2], tdata_dot[2];
   ego    eline=NULL, enodes[2]={NULL,NULL}, eedge=NULL, eloop=NULL, ebody=NULL;
-  ego    bline, *bnodes, *bedges, *bloops, eref;
-
-  EG_setOutLevel(context, 2);
-
+  ego    bline, *bnodes, *bedges, *bloops, eref, eloop2=NULL, ebody2=NULL;
 
   /* create the Line (point and direction) */
   data[0] = 0;
@@ -7648,29 +7650,42 @@ checkCurve_dot(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
-  /* add sensitivity to the line again */
+  EG_deleteObject(eline); eline = NULL;
+
+  /* crate a new line with sensitivities */
   data[0] = 0;
   data[1] = 0;
   data[2] = 0;
   data[3] = 2;
   data[4] = 1;
   data[5] = 3;
-  status = EG_setGeometry_dot(eline, CURVE, LINE, NULL, data, data_dot);
+  data_dot[0] = 3;
+  data_dot[1] = 4;
+  data_dot[2] = 5;
+  data_dot[3] = 6;
+  data_dot[4] = 7;
+  data_dot[5] = 8;
+  status = EG_makeGeometry_dot(context, CURVE, LINE, NULL, NULL,
+                               data, data_dot, &eline);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  /* create Nodes for the Edge */
+  /* check that it has sensitivities */
+  status = EG_hasGeometry_dot(eline);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* create Nodes for the Edge with sensitvities */
   data[0] = 0;
   data[1] = 0;
   data[2] = 0;
-  status = EG_makeTopology(context, NULL, NODE, 0,
-                           data, 0, NULL, NULL, &enodes[0]);
+  status = EG_makeTopology_dot(context, NULL, NODE, 0,
+                               data, data_dot, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = data[3];
   data[1] = data[4];
   data[2] = data[5];
-  status = EG_makeTopology(context, NULL, NODE, 0,
-                           data, 0, NULL, NULL, &enodes[1]);
+  status = EG_makeTopology_dot(context, NULL, NODE, 0,
+                               data, data_dot, 0, NULL, NULL, &enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /******************************/
@@ -7684,11 +7699,16 @@ checkCurve_dot(ego context)
   tdata_dot[0] = 0;
   tdata_dot[1] = (data[3]*data_dot[3] + data[4]*data_dot[4] + data[5]*data_dot[5])/tdata[1];
 
-  status = EG_makeTopology(context, eline, EDGE, TWONODE,
-                           tdata, 2, enodes, NULL, &eedge);
+  status = EG_makeTopology_dot(context, eline, EDGE, TWONODE,
+                               tdata, tdata_dot, 2, enodes, NULL, &eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = EG_setGeometry_dot(eedge, EDGE, TWONODE, NULL, tdata, tdata_dot);
+  /* hasGeometry_dot checks the Edge t-range, curve and nodes for an edge */
+  status = EG_hasGeometry_dot(eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* remove the t-range sensitivity */
+  status = EG_setRange_dot(eedge, EDGE, NULL, NULL);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* hasGeometry_dot checks the Edge t-range, curve and nodes for an edge */
@@ -7698,20 +7718,9 @@ checkCurve_dot(ego context)
     goto cleanup;
   }
 
-  /* add sensitivity to nodes */
-  data[0] = 0;
-  data[1] = 0;
-  data[2] = 0;
-  status = EG_setGeometry_dot(enodes[0], NODE, 0, NULL, data, data_dot);
+  status = EG_setRange_dot(eedge, EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  data[0] = data[3];
-  data[1] = data[4];
-  data[2] = data[5];
-  status = EG_setGeometry_dot(enodes[1], NODE, 0, NULL, data, data_dot);
-  if (status != EGADS_SUCCESS) goto cleanup;
-
-  /* check that the curve and nodes now have sensitivities */
   status = EG_hasGeometry_dot(eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
 
@@ -7719,24 +7728,41 @@ checkCurve_dot(ego context)
   /* Loop                       */
   /******************************/
 
-  status = EG_makeTopology(context, NULL, LOOP, OPEN,
-                           NULL, 1, &eedge, esens, &eloop);
+  status = EG_makeTopology_dot(context, NULL, LOOP, OPEN,
+                               NULL, NULL, 1, &eedge, esens, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* check all geometry in the loop has sensitivities */
   status = EG_hasGeometry_dot(eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
+  status = EG_makeTopology(context, NULL, LOOP, OPEN,
+                           NULL, 1, &eedge, esens, &eloop2);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* check all geometry in the loop has sensitivities */
+  status = EG_hasGeometry_dot(eloop2);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+
   /* remove sensitives from one node */
   status = EG_setGeometry_dot(enodes[0], 0, 0, NULL, NULL, NULL);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* hasGeometry_dot should now be NOTFOUND */
-  status = EG_hasGeometry_dot(eedge);
+  status = EG_hasGeometry_dot(eloop);
   if (status != EGADS_NOTFOUND) {
     status = EGADS_NODATA;
     goto cleanup;
   }
+
+  /* hasGeometry_dot should now be NOTFOUND */
+  status = EG_hasGeometry_dot(eloop2);
+  if (status != EGADS_NOTFOUND) {
+    status = EGADS_NODATA;
+    goto cleanup;
+  }
+  EG_deleteObject(eloop2); eloop2=NULL;
 
   /* add the sensitivity back */
   data[0] = 0;
@@ -7752,13 +7778,25 @@ checkCurve_dot(ego context)
   /***********************************/
 
   /* make the WIREBODY */
-  status = EG_makeTopology(context, NULL, BODY, WIREBODY,
-                           NULL, 1, &eloop, NULL, &ebody);
+  status = EG_makeTopology_dot(context, NULL, BODY, WIREBODY,
+                               NULL, NULL, 1, &eloop, NULL, &ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* check all geometry in the body has sensitivities */
   status = EG_hasGeometry_dot(ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
+
+
+  /* make the WIREBODY */
+  status = EG_makeTopology(context, NULL, BODY, WIREBODY,
+                           NULL, 1, &eloop, NULL, &ebody2);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* check all geometry in the body has sensitivities */
+  status = EG_hasGeometry_dot(ebody2);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  EG_deleteObject(ebody2); ebody2=NULL;
+
 
   /* get the Loop from the Body */
   status = EG_getTopology(ebody, &eref, &oclass, &mtype,
@@ -7837,7 +7875,6 @@ cleanup:
   EG_deleteObject(enodes[0]);
   EG_deleteObject(enodes[1]);
   EG_deleteObject(eline);
-  EG_setOutLevel(context, 1);
 
   return status;
 }
@@ -7847,15 +7884,12 @@ int
 checkSurface_dot(ego context)
 {
   int    status = EGADS_SUCCESS;
-  int    i, esens[4] = {SREVERSE, SFORWARD, SFORWARD, SREVERSE}, lsens[1]={SFORWARD}, *senses;
+  int    i, esens[4] = {SREVERSE, SFORWARD, SFORWARD, SREVERSE}, *senses;
   int    oclass, mtype, nface, nloop, nedge, nnode;
   double data[18], data_dot[18], tdata[2], tdata_dot[2];
   ego    esphere=NULL, ecircle=NULL, enodes[2]={NULL,NULL};
   ego    eedges[8]={NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL}, eloop=NULL, eface=NULL, ebody=NULL;
-  ego    bcircle, *bnodes, *bedges, *bloops, *bfaces, eref;
-
-  EG_setOutLevel(context, 2);
-
+  ego    bcircle, *bnodes, *bedges, *bloops, *bfaces, eref, eface2=NULL;
 
   /* create the Sphere */
   data[0] = 0;   /* center */
@@ -7970,33 +8004,23 @@ checkSurface_dot(ego context)
   data[7] = 0;
   data[8] = 1;
   data[9] = 2;   /* radius */
-  status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
-                           data, &ecircle);
-  if (status != EGADS_SUCCESS) goto cleanup;
-
-  /* add sensitivity to the Circle */
-  status = EG_setGeometry_dot(ecircle, CURVE, CIRCLE, NULL, data, data_dot);
+  status = EG_makeGeometry_dot(context, CURVE, CIRCLE, NULL, NULL,
+                               data, data_dot, &ecircle);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create Nodes with sensitivities for the Edge */
   data[0] =  0;
   data[1] =  0;
   data[2] = -2;
-  status = EG_makeTopology(context, NULL, NODE, 0,
-                           data, 0, NULL, NULL, &enodes[0]);
-  if (status != EGADS_SUCCESS) goto cleanup;
-
-  status = EG_setGeometry_dot(enodes[0], NODE, 0, NULL, data, data_dot);
+  status = EG_makeTopology_dot(context, NULL, NODE, 0,
+                               data, data_dot, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0;
   data[1] = 0;
   data[2] = 2;
-  status = EG_makeTopology(context, NULL, NODE, 0,
-                           data, 0, NULL, NULL, &enodes[1]);
-  if (status != EGADS_SUCCESS) goto cleanup;
-
-  status = EG_setGeometry_dot(enodes[1], NODE, 0, NULL, data, data_dot);
+  status = EG_makeTopology_dot(context, NULL, NODE, 0,
+                               data, data_dot, 0, NULL, NULL, &enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Circle */
@@ -8005,11 +8029,8 @@ checkSurface_dot(ego context)
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
 
-  status = EG_makeTopology(context, ecircle, EDGE, TWONODE,
-                           tdata, 2, enodes, NULL, &eedges[0]);
-  if (status != EGADS_SUCCESS) goto cleanup;
-
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_makeTopology_dot(context, ecircle, EDGE, TWONODE,
+                               tdata, tdata_dot, 2, enodes, NULL, &eedges[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Degenerate Edges on the Nodes */
@@ -8018,20 +8039,14 @@ checkSurface_dot(ego context)
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
 
-  status = EG_makeTopology(context, NULL, EDGE, DEGENERATE,
-                           tdata, 1, &enodes[0], NULL, &eedges[1]);
-  if (status != EGADS_SUCCESS) goto cleanup;
-
-  status = EG_setGeometry_dot(eedges[1], EDGE, DEGENERATE, NULL, tdata, tdata_dot);
+  status = EG_makeTopology_dot(context, NULL, EDGE, DEGENERATE,
+                               tdata, tdata_dot, 1, &enodes[0], NULL, &eedges[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   eedges[2] = eedges[0]; /* repeat the circle edge */
 
-  status = EG_makeTopology(context, NULL, EDGE, DEGENERATE,
-                           tdata, 1, &enodes[1], NULL, &eedges[3]);
-  if (status != EGADS_SUCCESS) goto cleanup;
-
-  status = EG_setGeometry_dot(eedges[3], EDGE, DEGENERATE, NULL, tdata, tdata_dot);
+  status = EG_makeTopology_dot(context, NULL, EDGE, DEGENERATE,
+                               tdata, tdata_dot, 1, &enodes[1], NULL, &eedges[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create P-curves */
@@ -8056,8 +8071,8 @@ checkSurface_dot(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Loop */
-  status = EG_makeTopology(context, esphere, LOOP, CLOSED,
-                           NULL, 4, eedges, esens, &eloop);
+  status = EG_makeTopology_dot(context, esphere, LOOP, CLOSED,
+                               NULL, NULL, 4, eedges, esens, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* check all geometry in the loop has sensitivities */
@@ -8065,13 +8080,24 @@ checkSurface_dot(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make a Face */
-  status = EG_makeTopology(context, esphere, FACE, SFORWARD,
-                           NULL, 1, &eloop, lsens, &eface);
+  status = EG_makeTopology_dot(context, esphere, FACE, SFORWARD,
+                               NULL, NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* check all geometry in the Face has sensitivities */
   status = EG_hasGeometry_dot(eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* make a Face2 */
+  status = EG_makeTopology(context, esphere, FACE, SFORWARD,
+                           NULL, 1, &eloop, NULL, &eface2);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* check all geometry in the Face has sensitivities */
+  status = EG_hasGeometry_dot(eface2);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  EG_deleteObject(eface2); eface2 = NULL;
+
 
   /* make the Body */
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
@@ -8170,7 +8196,6 @@ cleanup:
   EG_deleteObject(enodes[1]);
   EG_deleteObject(ecircle);
   EG_deleteObject(esphere);
-  EG_setOutLevel(context, 1);
 
   return status;
 }

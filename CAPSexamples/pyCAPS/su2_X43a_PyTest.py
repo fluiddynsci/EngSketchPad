@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -12,118 +10,136 @@ import argparse
 # Import SU2 Python interface module
 from parallel_computation import parallel_computation as su2Run
 
-
 # Setup and read command line options. Please note that this isn't required for pyCAPS
 parser = argparse.ArgumentParser(description = 'SU2 X43a Pytest Example',
                                  prog = 'su2_X43a_PyTest',
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
+# Create working directory variable
 workDir = os.path.join(str(args.workDir[0]), "SU2X43aAnalysisTest")
-
-# Initialize capsProblem object
-myProblem = capsProblem()
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","cfdX43a.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
-
-# Set intention - could also be set during .loadAIM
-myProblem.capsIntent = "CFD"
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Change a design parameter - area in the geometry
-myProblem.geometry.setGeometryVal("tailLength", 150)
+myProblem.geometry.despmtr.tailLength = 150
 
-# Load Tetgen aim
-myProblem.loadAIM(aim = "tetgenAIM", analysisDir= ".")
+
+# Load EGADS Tess aim
+mySurfMesh = myProblem.analysis.create(aim = "egadsTessAIM",
+                                       name = "tess")
+
+# Set project name so a mesh file is generated
+mySurfMesh.input.Proj_Name = "egadsTessMesh"
 
 # Set new EGADS body tessellation parameters
-#myProblem.analysis["tetgenAIM"].setAnalysisVal("Tess_Params", [.05, 0.01, 20.0])
+mySurfMesh.input.Tess_Params = [0.5, 0.1, 20.0]
 
-# Preserve surface mesh while messhing
-myProblem.analysis["tetgenAIM"].setAnalysisVal("Preserve_Surf_Mesh", True)
+# Set output grid format since a project name is being supplied - Tecplot file
+mySurfMesh.input.Mesh_Format = "Tecplot"
 
 # Run AIM pre-analysis
-myProblem.analysis["tetgenAIM"].preAnalysis()
+mySurfMesh.preAnalysis()
+
+##########################################
+## egadsTess was ran during preAnalysis ##
+##########################################
+
+# Run AIM post-analysis
+mySurfMesh.postAnalysis()
+
+
+# Load Tetgen aim
+myMesh = myProblem.analysis.create(aim = "tetgenAIM",
+                                   name = "myMesh")
+
+myMesh.input["Surface_Mesh"].link(mySurfMesh.output["Surface_Mesh"])
+
+# Preserve surface mesh while meshing
+myMesh.input.Preserve_Surf_Mesh = True
+
+# Run AIM pre-analysis
+myMesh.preAnalysis()
 
 # NO analysis is needed - Tetgen was already ran during preAnalysis
 
 # Run AIM post-analysis
-myProblem.analysis["tetgenAIM"].postAnalysis()
+myMesh.postAnalysis()
 
 # Load SU2 aim - child of Tetgen AIM
-myProblem.loadAIM(aim = "su2AIM",
-                  altName = "su2",
-                  analysisDir = workDir, parents = ["tetgenAIM"])
+myAnalysis = myProblem.analysis.create(aim = "su2AIM", name = "su2")
+
+myAnalysis.input["Mesh"].link(myMesh.output["Volume_Mesh"])
 
 projectName = "x43a_Test"
 
 # Set SU2 Version
-myProblem.analysis["su2"].setAnalysisVal("SU2_Version","Falcon")
+myAnalysis.input.SU2_Version = "Blackbird"
 
 # Set project name
-myProblem.analysis["su2"].setAnalysisVal("Proj_Name", projectName)
+myAnalysis.input.Proj_Name = projectName
 
 # Set AoA number
-myProblem.analysis["su2"].setAnalysisVal("Alpha", 3.0)
+myAnalysis.input.Alpha = 3.0
 
 # Set Mach number
-myProblem.analysis["su2"].setAnalysisVal("Mach", 3.5)
+myAnalysis.input.Mach = 3.5
 
 # Set equation type
-myProblem.analysis["su2"].setAnalysisVal("Equation_Type","Compressible")
+myAnalysis.input.Equation_Type = "Compressible"
 
 # Set number of iterations
-myProblem.analysis["su2"].setAnalysisVal("Num_Iter",5)
+myAnalysis.input.Num_Iter = 5
 
 # Set overwrite cfg file
-myProblem.analysis["su2"].setAnalysisVal("Overwrite_CFG", True)
+myProblem.analysis["su2"].input.Overwrite_CFG = True
 
 # Set boundary conditions
 inviscidBC = {"bcType" : "Inviscid"}
-myProblem.analysis["su2"].setAnalysisVal("Boundary_Condition", [("x43A", inviscidBC),
-                                                                ("Farfield","farfield")])
+myProblem.analysis["su2"].input.Boundary_Condition = {"x43A": inviscidBC,
+                                                      "Farfield":"farfield"}
 
 # Specifcy the boundares used to compute forces
-myProblem.analysis["su2"].setAnalysisVal("Surface_Monitor", ["x43A"])
+myProblem.analysis["su2"].input.Surface_Monitor = ["x43A"]
 
 # Run AIM pre-analysis
-myProblem.analysis["su2"].preAnalysis()
+myAnalysis.preAnalysis()
 
 ####### Run SU2 ####################
 print ("\n\nRunning SU2......")
 currentDirectory = os.getcwd() # Get our current working directory
 
-os.chdir(myProblem.analysis["su2"].analysisDir) # Move into test directory
+os.chdir(myAnalysis.analysisDir) # Move into test directory
 
-su2Run(projectName + ".cfg", args.numberProc) # Run SU2
+su2Run(myAnalysis.input.Proj_Name + ".cfg", args.numberProc) # Run SU2
 
 os.chdir(currentDirectory) # Move back to top directory
 #######################################
 
 # Run AIM post-analysis
-myProblem.analysis["su2"].postAnalysis()
+myAnalysis.postAnalysis()
 
 # Get force results
-print ("Total Force - Pressure + Viscous")
+print("Total Force - Pressure + Viscous")
 # Get Lift and Drag coefficients
-print ("Cl = " , myProblem.analysis["su2"].getAnalysisOutVal("CLtot"), \
-       "Cd = " , myProblem.analysis["su2"].getAnalysisOutVal("CDtot"))
+print("Cl = " , myAnalysis.output.CLtot,
+      "Cd = " , myAnalysis.output.CDtot)
 
 # Get Cmx, Cmy, and Cmz coefficients
-print ("Cmx = " , myProblem.analysis["su2"].getAnalysisOutVal("CMXtot"), \
-       "Cmy = " , myProblem.analysis["su2"].getAnalysisOutVal("CMYtot"), \
-       "Cmz = " , myProblem.analysis["su2"].getAnalysisOutVal("CMZtot"))
+print("Cmx = " , myAnalysis.output.CMXtot,
+      "Cmy = " , myAnalysis.output.CMYtot,
+      "Cmz = " , myAnalysis.output.CMZtot)
 
 # Get Cx, Cy, Cz coefficients
-print ("Cx = " , myProblem.analysis["su2"].getAnalysisOutVal("CXtot"), \
-       "Cy = " , myProblem.analysis["su2"].getAnalysisOutVal("CYtot"), \
-       "Cz = " , myProblem.analysis["su2"].getAnalysisOutVal("CZtot"))
-
-# Close CAPS
-myProblem.closeCAPS()
+print("Cx = " , myAnalysis.output.CXtot,
+      "Cy = " , myAnalysis.output.CYtot,
+      "Cz = " , myAnalysis.output.CZtot)

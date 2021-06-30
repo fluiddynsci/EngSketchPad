@@ -44,10 +44,10 @@ ROTATEX   90  0  0
    ATTRIBUTE capsAIM        $astrosAIM;egadsTessAIM
    ATTRIBUTE capsDiscipline $Structure #FEA Analysis (2D elements)
 
-SELECT EDGE 3
-   ATTRIBUTE capsGroup $LeadingEdge
-SELECT EDGE 1
-   ATTRIBUTE capsGroup $TrailingEdge
+#SELECT EDGE 3
+#   ATTRIBUTE capsGroup $LeadingEdge
+#SELECT EDGE 1
+#   ATTRIBUTE capsGroup $TrailingEdge
 
 SELECT FACE 1
    ATTRIBUTE capsBound $Skin_Top

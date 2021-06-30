@@ -21,10 +21,6 @@
 
 #include "private-libwebsockets.h"
 
-#ifdef S_SPLINT_S
-  extern int strcasecmp(const char *s1, const char *s2);
-#endif
-
 
 const struct lws_tokens lws_tokens[WSI_TOKEN_COUNT] = {
 
@@ -1607,7 +1603,7 @@ int libwebsocket_write(struct libwebsocket *wsi, unsigned char *buf,
 		if ((protocol & 0xf) == LWS_WRITE_BINARY) {
 			/* in binary mode we send 7-bit used length blocks */
 			pre = 1;
-			while (len & (127 << shift)) {
+			while (len & ((size_t) 127 << shift)) {
 				pre++;
 				shift += 7;
 			}

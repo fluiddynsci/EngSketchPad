@@ -4,8 +4,8 @@
 
 #include "hashElement.h"
 
-static int initiate_hashElem(hashElem* elem) {
-
+static int initiate_hashElem(hashElem* elem)
+{
   int i;
 
   for (i = 0; i < NVERT; i++)
@@ -14,7 +14,8 @@ static int initiate_hashElem(hashElem* elem) {
   return CAPS_SUCCESS;
 }
 
-static int initiate_hashElemLink(hashElemLink* link) {
+static int initiate_hashElemLink(hashElemLink* link)
+{
 
   link->elemIndex = NULL;
   link->nelem = 0;
@@ -22,7 +23,8 @@ static int initiate_hashElemLink(hashElemLink* link) {
   return CAPS_SUCCESS;
 }
 
-int initiate_hashTable(hashElemTable *table) {
+int initiate_hashTable(hashElemTable *table)
+{
 
   table->nvertex = 0;
   table->lookup = NULL;
@@ -31,9 +33,10 @@ int initiate_hashTable(hashElemTable *table) {
   return CAPS_SUCCESS;
 }
 
-int destroy_hashTable(hashElemTable *table) {
-
+int destroy_hashTable(hashElemTable *table)
+{
   int i;
+
   for (i = 0; i < table->nvertex; i++)
     EG_free(table->lookup[i].elemIndex);
 
@@ -47,8 +50,8 @@ int destroy_hashTable(hashElemTable *table) {
   return CAPS_SUCCESS;
 }
 
-int allocate_hashTable(int nvertex, int nelem, hashElemTable *table) {
-
+int allocate_hashTable(int nvertex, int nelem, hashElemTable *table)
+{
   int status = CAPS_SUCCESS;
   int i;
 
@@ -70,7 +73,8 @@ int allocate_hashTable(int nvertex, int nelem, hashElemTable *table) {
   status = CAPS_SUCCESS;
 
   cleanup:
-    if (status != CAPS_SUCCESS) printf("Premature exit in initiate_hashElem status = %d\n", status);
+    if (status != CAPS_SUCCESS)
+      printf("Premature exit in initiate_hashElem status = %d\n", status);
 
     if (status != CAPS_SUCCESS) {
       EG_free(table->lookup); table->lookup = NULL;
@@ -79,17 +83,18 @@ int allocate_hashTable(int nvertex, int nelem, hashElemTable *table) {
     return status;
 }
 
-static void swapi(int *xp, int *yp) {
-
+static void swapi(int *xp, int *yp)
+{
     int temp = *xp;
     *xp = *yp;
     *yp = temp;
 }
 
 // A function to implement bubble sort
-static void bubbleSort(int n, int vert[]) {
-
+static void bubbleSort(int n, int vert[])
+{
   int i, j;
+  
   for (i = 0; i < n-1; i++)
     // Last i elements are already in place
     for (j = 0; j < n-i-1; j++)
@@ -99,7 +104,9 @@ static void bubbleSort(int n, int vert[]) {
 }
 
 // vertex indexing is assumed to be 1-based
-int hash_addElement(int nvertex, int vertex[], int elemIndex, hashElemTable *table) {
+int hash_addElement(int nvertex, int vertex[], int elemIndex,
+                    hashElemTable *table)
+{
 
   int status = CAPS_SUCCESS;
   int i;
@@ -135,7 +142,9 @@ int hash_addElement(int nvertex, int vertex[], int elemIndex, hashElemTable *tab
 }
 
 // get an element index based on the vertexes of the element
-int hash_getIndex(int nvertex, int vertex[], hashElemTable *table, int *elemIndex) {
+int hash_getIndex(int nvertex, int vertex[], hashElemTable *table,
+                  int *elemIndex)
+{
 
   int status = CAPS_SUCCESS;
   int i;
@@ -184,7 +193,8 @@ int hash_getIndex(int nvertex, int vertex[], hashElemTable *table, int *elemInde
   status = CAPS_SUCCESS;
 
   cleanup:
-    if (status != CAPS_SUCCESS) printf("Premature exit in getIndex_hashTable status = %d\n", status);
+    if (status != CAPS_SUCCESS)
+      printf("Premature exit in getIndex_hashTable status = %d\n", status);
 
     return status;
 }

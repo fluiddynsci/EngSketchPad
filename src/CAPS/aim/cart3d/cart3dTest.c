@@ -3,7 +3,7 @@
  *
  *             Cart3D AIM tester
  *
- *      Copyright 2014-2020, Massachusetts Institute of Technology
+ *      Copyright 2014-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -13,7 +13,6 @@
 #include <string.h>
 
 #ifdef WIN32
-#define unlink   _unlink
 #define getcwd   _getcwd
 #define PATH_MAX _MAX_PATH
 #else
@@ -22,28 +21,58 @@
 #endif
 
 
+static void
+printErrors(int nErr, capsErrs *errors)
+{
+  int         i, j, stat, eType, nLines;
+  char        **lines;
+  capsObj     obj;
+  static char *type[5] = {"Cont:   ", "Info:   ", "Warning:", "Error:  ",
+                          "Status: "};
+
+  if (errors == NULL) return;
+
+  for (i = 1; i <= nErr; i++) {
+    stat = caps_errorInfo(errors, i, &obj, &eType, &nLines, &lines);
+    if (stat != CAPS_SUCCESS) {
+      printf(" printErrors: %d/%d caps_errorInfo = %d\n", i, nErr, stat);
+      continue;
+    }
+    for (j = 0; j < nLines; j++) {
+      if (j == 0) {
+        printf(" CAPS %s ", type[eType+1]);
+      } else {
+        printf("               ");
+      }
+      printf("%s\n", lines[j]);
+    }
+  }
+  
+  caps_freeError(errors);
+}
+
+
 int main(int argc, char *argv[])
 {
-  int            i, j, n, stat, nFields, *ranks, dirty, nErr, nLines;
-  int            naobj, npts, rank, exec, imm[2];
-  char           *apath, *intents, **fnames, **lines, *name, *lunits, *us;
+  int            i, j, n, stat, nFields, *ranks, *fInOut, dirty, nErr, nLines;
+  int            major, minor, npts, rank, exec, imm[2];
+  char           *apath, *intents, **fnames, **lines, *lunits, *us;
+/*@-unrecog@*/
   char           cpath[PATH_MAX];
+/*@+unrecog@*/
   const char     *tname;
   double         val, minmax[2], *data, ptess[3] = {0.003, 0.001, 7.5};
-  capsObj        pobj, cobj, tobj, obj, bobj, vobj, dobj, link, parent;
-  capsObj        *aobjs;
+  capsObj        pobj, cobj, tobj, obj, bobj, vobj, dobj;
   capsErrs       *errors;
-  capsOwn        current;
   ego            body;
-  enum capsoType type;
-  enum capssType subtype;
 
-  if ((argc < 2) || (argc > 4)) {
-    printf(" usage: cart3dTest filename apath [capsname]!\n");
+  if ((argc < 2) || (argc > 3)) {
+    printf(" usage: cart3dTest fileName aName!\n");
     return 1;
   }
 
-  stat = caps_open(argv[1], "cart3dTest", &pobj);
+  stat = caps_open("cart3dTest", NULL, 0, argv[1], 1, &pobj, &nErr, &errors);
+  if (nErr != 0) printErrors(nErr, errors);
   if (stat != CAPS_SUCCESS) {
     printf(" caps_open = %d\n", stat);
     if (stat == -308)
@@ -52,31 +81,29 @@ int main(int argc, char *argv[])
   }
 
   /* look at the bodies and report units */
-  stat = caps_size(pobj, BODIES, NONE, &n);
+  stat = caps_size(pobj, BODIES, NONE, &n, &nErr, &errors);
+  if (nErr != 0) printErrors(nErr, errors);
   if (stat != CAPS_SUCCESS) {
     printf(" caps_size on Bodies = %d\n", stat);
-  } else {
-    for (i = 1; i <= n; i++) {
-      stat = caps_bodyByIndex(pobj, i, &body, &lunits);
-      if (stat != CAPS_SUCCESS) {
-        printf(" caps_bodyByIndex = %d for Body %d!\n", stat, i);
-      } else {
-        printf(" Body %d has length units = %s\n", i, lunits);
-      }
+    caps_close(pobj, 0, NULL);
+    return 1;
+  }
+  for (i = 1; i <= n; i++) {
+    stat = caps_bodyByIndex(pobj, i, &body, &lunits);
+    if (stat != CAPS_SUCCESS) {
+      printf(" caps_bodyByIndex = %d for Body %d!\n", stat, i);
+    } else {
+      printf(" Body %d has length units = %s\n", i, lunits);
     }
   }
 
   /* load the Cart3D AIM */
-  stat = caps_load(pobj, "cart3dAIM", argv[2], NULL, NULL, 0, NULL, &cobj);
+  stat = caps_makeAnalysis(pobj, "cart3dAIM", argv[2], NULL, NULL, 0, &cobj,
+                           &nErr, &errors);
+  if (nErr != 0) printErrors(nErr, errors);
   if (stat != CAPS_SUCCESS) {
-    printf(" caps_load = %d\n", stat);
-    caps_close(pobj);
-    return 1;
-  }
-  stat = caps_info(pobj, &name, &type, &subtype, &link, &parent, &current);
-  if (stat != CAPS_SUCCESS) {
-    printf(" caps_info on Problem = %d\n", stat);
-    caps_close(pobj);
+    printf(" caps_makeAnalysis = %d\n", stat);
+    caps_close(pobj, 0, NULL);
     return 1;
   }
   
@@ -84,32 +111,50 @@ int main(int argc, char *argv[])
   stat = caps_childByName(cobj, VALUE, ANALYSISIN, "Tess_Params", &tobj);
   if (stat != CAPS_SUCCESS) {
     printf(" caps_childByName = %d\n", stat);
-  } else {
-    stat = caps_setValue(tobj, 1, 3, (void *) &ptess);
-    if (stat != CAPS_SUCCESS)
-      printf(" caps_setValue = %d\n", stat);
+    caps_close(pobj, 0, NULL);
+    return 1;
+  }
+  stat = caps_setValue(tobj, Double, 1, 3, (void *) &ptess, NULL, NULL,
+                       &nErr, &errors);
+  if (nErr != 0) printErrors(nErr, errors);
+  if (stat != CAPS_SUCCESS) {
+    printf(" caps_setValue = %d\n", stat);
+    caps_close(pobj, 0, NULL);
+    return 1;
   }
   
   /* find & set alpha input */
   stat = caps_childByName(cobj, VALUE, ANALYSISIN, "alpha", &tobj);
   if (stat != CAPS_SUCCESS) {
     printf(" caps_childByName tParams = %d\n", stat);
-  } else {
-    val  = 2.0;
-    stat = caps_setValue(tobj, 1, 1, (void *) &val);
-    if (stat != CAPS_SUCCESS)
-      printf(" caps_setValue alpha = %d\n", stat);
+    caps_close(pobj, 0, NULL);
+    return 1;
+  }
+  val  = 2.0;
+  stat = caps_setValue(tobj, Double, 1, 1, (void *) &val, NULL, "degree",
+                        &nErr, &errors);
+  if (nErr != 0) printErrors(nErr, errors);
+  if (stat != CAPS_SUCCESS) {
+    printf(" caps_setValue alpha = %d\n", stat);
+    caps_close(pobj, 0, NULL);
+    return 1;
   }
   
   /* find & set maxR input */
   stat = caps_childByName(cobj, VALUE, ANALYSISIN, "maxR", &tobj);
   if (stat != CAPS_SUCCESS) {
     printf(" caps_childByName maxR = %d\n", stat);
-  } else {
-    j    = 12;
-    stat = caps_setValue(tobj, 1, 1, (void *) &j);
-    if (stat != CAPS_SUCCESS)
-      printf(" caps_setValue maxR = %d\n", stat);
+    caps_close(pobj, 0, NULL);
+    return 1;
+  }
+  j    = 12;
+  stat = caps_setValue(tobj, Integer, 1, 1, (void *) &j, NULL, NULL,
+                      &nErr, &errors);
+  if (nErr != 0) printErrors(nErr, errors);
+  if (stat != CAPS_SUCCESS) {
+    printf(" caps_setValue maxR = %d\n", stat);
+    caps_close(pobj, 0, NULL);
+    return 1;
   }
   
   /* make a bound */
@@ -121,33 +166,33 @@ int main(int argc, char *argv[])
     vobj = NULL;
     dobj = NULL;
   } else {
-    stat = caps_makeVertexSet(bobj, cobj, NULL, &vobj);
+    stat = caps_makeVertexSet(bobj, cobj, NULL, &vobj, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (stat != CAPS_SUCCESS) {
       printf(" caps_makeVertexSet %s = %d\n", tname, stat);
       vobj = NULL;
       dobj = NULL;
     } else {
-      stat = caps_makeDataSet(vobj, "Pressure", Analysis, 1, &dobj);
-/*    stat = caps_makeDataSet(vobj, "Velocity", Analysis, 3, &dobj);  */
+      stat = caps_makeDataSet(vobj, "Pressure", FieldOut, 1, &dobj, &nErr, &errors);
+/*    stat = caps_makeDataSet(vobj, "Velocity", FieldOut, 3, &dobj, &nErr, &errors);  */
       if (stat != CAPS_SUCCESS)
         printf(" caps_makeDataSet Pressure = %d\n", stat);
     }
-    stat = caps_completeBound(bobj);
+    stat = caps_closeBound(bobj);
     if (stat != CAPS_SUCCESS)
-      printf(" caps_completeBound %s = %d\n", tname, stat);
+      printf(" caps_closeBound %s = %d\n", tname, stat);
   }
 
   /* get Cart3D AIM analysis info */
-  stat = caps_analysisInfo(cobj, &apath, &us, &intents, &naobj, &aobjs,
-                           &nFields, &fnames, &ranks, &exec, &dirty);
+  stat = caps_analysisInfo(cobj, &apath, &us, &major, &minor, &intents,
+                           &nFields, &fnames, &ranks, &fInOut, &exec, &dirty);
   if (stat != CAPS_SUCCESS) {
     printf(" caps_analysisInfo = %d\n", stat);
-    caps_close(pobj);
+    caps_close(pobj, 0, NULL);
     return 1;
   }
   printf("\n Cart3D Intent   = %s", intents);
   printf("\n APath           = %s", apath);
-  printf("\n Num. of parents = %d", naobj);
   printf("\n Fields          =");
   for (i = 0; i < nFields; i++) printf("  %s (%d)", fnames[i], ranks[i]);
   printf("\n Dirty           = %d\n", dirty);
@@ -155,33 +200,24 @@ int main(int argc, char *argv[])
   /* do the analysis */
   if (dirty != 0) {
     stat = caps_preAnalysis(cobj, &nErr, &errors);
-
+    if (nErr != 0) printErrors(nErr, errors);
     if (stat != CAPS_SUCCESS)
       printf(" caps_preAnalysis Cart3D = %d\n", stat);
-    if (errors != NULL) {
-      for (i = 0; i < nErr; i++) {
-        stat = caps_errorInfo(errors, i+1, &obj, &nLines, &lines);
-        if (stat != CAPS_SUCCESS) {
-          printf(" CAPS Error: caps_errorInfo[%d] = %d!\n", i+1, stat);
-          continue;
-        }
-        for (j = 0; j < nLines; j++) printf(" %s\n", lines[j]);
-      }
-      caps_freeError(errors);
-    }
 
     dirty = 0;
-    stat = caps_analysisInfo(cobj, &apath, &us, &intents, &naobj, &aobjs,
-                                   &nFields, &fnames, &ranks, &exec, &dirty);
+    stat  = caps_analysisInfo(cobj, &apath, &us, &major, &minor, &intents,
+                              &nFields, &fnames, &ranks, &fInOut, &exec, &dirty);
     if (stat == CAPS_SUCCESS) printf("\n Dirty           = %d\n", dirty);
     
     /* execute flowCart and run the post */
     if (dirty == 5) {
-      
+
+/*@-unrecog@*/
       (void) getcwd(cpath, PATH_MAX);
+/*@+unrecog@*/
       if (chdir(apath) != 0) {
         printf(" ERROR: Cannot change directory to -> %s\n", apath);
-        caps_close(pobj);
+        caps_close(pobj, 0, NULL);
         return 1;
       }
       printf(" Running flowCart!\n");
@@ -192,12 +228,13 @@ int main(int argc, char *argv[])
       
       if (stat == 0) {
         /* run post if we are OK */
-        stat = caps_postAnalysis(cobj, current, &nErr, &errors);
+        stat = caps_postAnalysis(cobj, &nErr, &errors);
+        if (nErr != 0) printErrors(nErr, errors);
         if (stat != CAPS_SUCCESS)
           printf(" caps_postAnalysis = %d\n", stat);
         if (errors != NULL) {
           for (i = 0; i < nErr; i++) {
-            stat = caps_errorInfo(errors, i+1, &obj, &nLines, &lines);
+            stat = caps_errorInfo(errors, i+1, &obj, &j, &nLines, &lines);
             if (stat != CAPS_SUCCESS) {
               printf(" CAPS Error: caps_errorInfo[%d] = %d!\n", i+1, stat);
               continue;
@@ -208,20 +245,21 @@ int main(int argc, char *argv[])
         }
       }
       dirty = 0;
-      stat  = caps_analysisInfo(cobj, &apath, &us, &intents, &naobj, &aobjs,
-                                &nFields, &fnames, &ranks, &exec, &dirty);
+      stat  = caps_analysisInfo(cobj, &apath, &us, &major, &minor, &intents,
+                                &nFields, &fnames, &ranks, &fInOut, &exec,
+                                &dirty);
       if (stat == CAPS_SUCCESS) printf(" Dirty    = %d\n", dirty);
     }
   }
   
   /* output what we have */
   printf("\n");
-  printObjects(pobj, 0);
+  caps_printObjects(pobj, 0);
   printf("\n");
   
   /* min and max on our dataset */
   if (dobj != NULL) {
-    stat = caps_getData(dobj, &npts, &rank, &data, &lunits);
+    stat = caps_getData(dobj, &npts, &rank, &data, &lunits, &nErr, &errors);
     if (stat != CAPS_SUCCESS) {
       printf(" caps_getData = %d\n", stat);
     } else {
@@ -247,13 +285,7 @@ int main(int argc, char *argv[])
     }
   }
 
-  /* checkpoint the Problem */
-  if (argc == 4) {
-    stat = caps_save(pobj, argv[3]);
-    if (stat != CAPS_SUCCESS) printf(" caps_save = %d\n", stat);
-  }
-
-  stat = caps_close(pobj);
+  stat = caps_close(pobj, 1, NULL);
   if (stat != CAPS_SUCCESS) printf(" caps_close = %d\n", stat);
 
   return 0;

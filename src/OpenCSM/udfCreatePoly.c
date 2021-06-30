@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -88,6 +88,8 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     FILE    *fpPoly=NULL;
 
+    ROUTINE(udpExecute);
+
 #ifdef DEBUG
     printf("udpExecute(emodel=%llx)\n", (long long)emodel);
     printf("filename(0) = %s\n", FILENAME(0));
@@ -104,7 +106,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* check that Model was input that contains on Body */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -117,16 +119,13 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     }
 
     status = EG_getContext(emodel, &context);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     /* check arguments */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("filename(%d) = %s\n", numUdp, FILENAME(numUdp));
@@ -137,10 +136,10 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* the outer Body is the one with the larger volume */
     status = EG_getMassProperties(ebodys[0], data0);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getMassProperties);
 
     status = EG_getMassProperties(ebodys[0], data1);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getMassProperties);
 
     if (data0[0] > data1[0]) {
         ebody_outer = ebodys[0];
@@ -158,7 +157,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         hole[2] = HOLE(0,2);
     } else {
         status = EG_getBoundingBox(ebody_inner, bbox);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getBoundingBox);
 
         ifirst = 52;
         ilast  = -1;
@@ -185,20 +184,20 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* look for tessellation associated with the inner Body */
     status = EG_getContext(ebody_inner, &etemp);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     status = EG_getInfo(etemp, &oclass, &mtype, &topref, &prev, &next);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getInfo);
 
     while (next != NULL) {
         etemp  = next;
         status = EG_getInfo(etemp, &oclass, &mtype, &topref, &prev, &next);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getInfo);
 
         if (oclass == TESSELLATION) {
             etess  = etemp;
             status = EG_statusTessBody(etess, &etemp, &stat, &npnt);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_statusTessBody);
 
             /* if we found the correct tessellation, use it */
             if (etemp == ebody_inner) {
@@ -217,7 +216,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         printf("tessellating inner Body\n");
 #endif
         status = EG_getBoundingBox(ebody_inner, bbox);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getBoundingBox);
 
         size = sqrt( (bbox[3] - bbox[0]) * (bbox[3] - bbox[0])
                     +(bbox[4] - bbox[1]) * (bbox[4] - bbox[1])
@@ -228,31 +227,31 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         params[2] = 15.0;
 
         status = EG_makeTessBody(ebody_inner, params, &etess_inner);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTessBody);
 
         made_inner = 1;
 
         status = EG_attributeAdd(ebody_inner, "_tParams",
                                  ATTRREAL, 3, NULL, params, NULL);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_attributeAdd);
     }
 
     /* look for tessellation associated with the outer Body */
     status = EG_getContext(ebody_outer, &etemp);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     status = EG_getInfo(etemp, &oclass, &mtype, &topref, &prev, &next);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getInfo);
 
     while (next != NULL) {
         etemp  = next;
         status = EG_getInfo(etemp, &oclass, &mtype, &topref, &prev, &next);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getInfo);
 
         if (oclass == TESSELLATION) {
             etess  = etemp;
             status = EG_statusTessBody(etess, &etemp, &stat, &npnt);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_statusTessBody);
 
             /* if we found the correct tessellation, use it */
             if (etemp == ebody_outer) {
@@ -271,7 +270,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         printf("tessellating outer Body\n");
 #endif
         status = EG_getBoundingBox(ebody_outer, bbox);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getBoundingBox);
 
         size = sqrt( (bbox[3] - bbox[0]) * (bbox[3] - bbox[0])
                     +(bbox[4] - bbox[1]) * (bbox[4] - bbox[1])
@@ -282,24 +281,29 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         params[2] = 15.0;
 
         status = EG_makeTessBody(ebody_outer, params, &etess_outer);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTessBody);
 
         made_outer = 1;
 
         status = EG_attributeAdd(ebody_outer, "_tParams",
                                  ATTRREAL, 3, NULL, params, NULL);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_attributeAdd);
     }
 
     /* get the statistics for the inner Body */
     status = EG_getBodyTopos(ebody_inner, NULL, NODE, &nnode_inner, &enodes_inner);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
     status = EG_getBodyTopos(ebody_inner, NULL, EDGE, &nedge_inner, &eedges_inner);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
     status = EG_getBodyTopos(ebody_inner, NULL, FACE, &nface_inner, &efaces_inner);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
+
+    if ( etess_inner == NULL) goto cleanup;  // needed for splint
+    if (enodes_inner == NULL) goto cleanup;  // needed for splint
+    if (eedges_inner == NULL) goto cleanup;  // needed for splint
+    if (efaces_inner == NULL) goto cleanup;  // needed for splint
 
     npid_inner = nnode_inner;
     neid_inner = 0;
@@ -307,7 +311,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     for (iedge = 1; iedge <= nedge_inner; iedge++) {
         status = EG_getTessEdge(etess_inner, iedge,
                                 &npnt, &xyz, &uv);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessEdge);
 
         npid_inner += (npnt - 2);
     }
@@ -316,7 +320,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         status = EG_getTessFace(etess_inner, iface,
                                 &npnt, &xyz, &uv, &ptype, &pindx,
                                 &ntri, &tris, &tric);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessFace);
 
         for (ipnt = 0; ipnt < npnt; ipnt++) {
             if (ptype[ipnt] == -1) npid_inner++;
@@ -331,13 +335,18 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* get the statistics for the outer Body */
     status = EG_getBodyTopos(ebody_outer, NULL, NODE, &nnode_outer, &enodes_outer);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
     status = EG_getBodyTopos(ebody_outer, NULL, EDGE, &nedge_outer, &eedges_outer);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
 
     status = EG_getBodyTopos(ebody_outer, NULL, FACE, &nface_outer, &efaces_outer);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
+
+    if ( etess_outer == NULL) goto cleanup;  // needed for splint
+    if (enodes_outer == NULL) goto cleanup;  // needed for splint
+    if (eedges_outer == NULL) goto cleanup;  // needed for splint
+    if (efaces_outer == NULL) goto cleanup;  // needed for splint
 
     npid_outer = nnode_outer;
     neid_outer = 0;
@@ -345,7 +354,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     for (iedge = 1; iedge <= nedge_outer; iedge++) {
         status = EG_getTessEdge(etess_outer, iedge,
                                 &npnt, &xyz, &uv);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessEdge);
 
         npid_outer += (npnt - 2);
     }
@@ -354,7 +363,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         status = EG_getTessFace(etess_outer, iface,
                                 &npnt, &xyz, &uv, &ptype, &pindx,
                                 &ntri, &tris, &tric);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessFace);
 
         for (ipnt = 0; ipnt < npnt; ipnt++) {
             if (ptype[ipnt] == -1) npid_outer++;
@@ -383,13 +392,9 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     fprintf(fpPoly, "# Node index, node coordinates\n");
 
     /* write out the points associated with the inner Body */
-    nodePID_inner = (int  *) malloc((nnode_inner+1)*sizeof(int ));
-    edgePID_inner = (int **) malloc((nedge_inner+1)*sizeof(int*));
-    facePID_inner = (int **) malloc((nface_inner+1)*sizeof(int*));
-    if (nodePID_inner == NULL || edgePID_inner == NULL || facePID_inner == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(nodePID_inner, int,  (nnode_inner+1));
+    MALLOC(edgePID_inner, int*, (nedge_inner+1));
+    MALLOC(facePID_inner, int*, (nface_inner+1));
 
     for (iedge = 0; iedge <= nedge_inner; iedge++) {
         edgePID_inner[iedge] = NULL;
@@ -407,7 +412,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
         status = EG_getTopology(enodes_inner[inode-1], &eref, &oclass, &mtype,
                                 data, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         fprintf(fpPoly, "%8d  %20.10f %20.10f %20.10f\n",
                 npid, data[0], data[1], data[2]);
@@ -418,13 +423,9 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
         status = EG_getTessEdge(etess_inner, iedge,
                                 &npnt, &xyz, &uv);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessEdge);
 
-        edgePID_inner[iedge] = (int *) malloc(npnt*sizeof(int));
-        if (edgePID_inner[iedge] == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        MALLOC(edgePID_inner[iedge], int, npnt);
 
         for (ipnt = 1; ipnt < npnt-1; ipnt++) {
             npid++;
@@ -441,13 +442,9 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         status = EG_getTessFace(etess_inner, iface,
                                 &npnt, &xyz, &uv, &ptype, &pindx,
                                 &ntri, &tris, &tric);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessFace);
 
-        facePID_inner[iface] = (int *) malloc(npnt*sizeof(int));
-        if (facePID_inner[iface] == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        MALLOC(facePID_inner[iface], int, npnt);
 
         for (ipnt = 0; ipnt < npnt; ipnt++) {
             if (ptype[ipnt] == 0) {
@@ -465,13 +462,9 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     }
 
     /* write out the points associated with the outer Body */
-    nodePID_outer = (int  *) malloc((nnode_outer+1)*sizeof(int ));
-    edgePID_outer = (int **) malloc((nedge_outer+1)*sizeof(int*));
-    facePID_outer = (int **) malloc((nface_outer+1)*sizeof(int*));
-    if (nodePID_outer == NULL || edgePID_outer == NULL || facePID_outer == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(nodePID_outer, int,  (nnode_outer+1));
+    MALLOC(edgePID_outer, int*, (nedge_outer+1));
+    MALLOC(facePID_outer, int*, (nface_outer+1));
 
     for (iedge = 0; iedge <= nedge_outer; iedge++) {
         edgePID_outer[iedge] = NULL;
@@ -489,7 +482,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
         status = EG_getTopology(enodes_outer[inode-1], &eref, &oclass, &mtype,
                                 data, &nchild, &echilds, &senses);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         fprintf(fpPoly, "%8d  %20.10f %20.10f %20.10f\n",
                 npid, data[0], data[1], data[2]);
@@ -500,13 +493,9 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
         status = EG_getTessEdge(etess_outer, iedge,
                                 &npnt, &xyz, &uv);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessEdge);
 
-        edgePID_outer[iedge] = (int *) malloc(npnt*sizeof(int));
-        if (edgePID_outer[iedge] == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        MALLOC(edgePID_outer[iedge], int, npnt);
 
         for (ipnt = 1; ipnt < npnt-1; ipnt++) {
             npid++;
@@ -523,13 +512,9 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         status = EG_getTessFace(etess_outer, iface,
                                 &npnt, &xyz, &uv, &ptype, &pindx,
                                 &ntri, &tris, &tric);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessFace);
 
-        facePID_outer[iface] = (int *) malloc(npnt*sizeof(int));
-        if (facePID_outer[iface] == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        MALLOC(facePID_outer[iface], int, npnt);
 
         for (ipnt = 0; ipnt < npnt; ipnt++) {
             if (ptype[ipnt] == 0) {
@@ -559,7 +544,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         status = EG_getTessFace(etess_inner, iface,
                                 &npnt, &xyz, &uv, &ptype, &pindx,
                                 &ntri, &tris, &tric);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessFace);
 
         for (itri = 0; itri < ntri; itri++) {
             npid0 = facePID_inner[iface][tris[3*itri  ]-1];
@@ -579,7 +564,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         status = EG_getTessFace(etess_outer, iface,
                                 &npnt, &xyz, &uv, &ptype, &pindx,
                                 &ntri, &tris, &tric);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTessFace);
 
         for (itri = 0; itri < ntri; itri++) {
             npid0 = facePID_outer[iface][tris[3*itri  ]-1];
@@ -610,7 +595,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* return a copy of the inner Body */
     status = EG_copyObject(ebody_inner, NULL, ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_copyObject);
 
 cleanup:
     if (fpPoly != NULL) {

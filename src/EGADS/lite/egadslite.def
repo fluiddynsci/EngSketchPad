@@ -13,6 +13,7 @@ EG_setOutLevel
 EG_makeObject
 EG_loadModel
 EG_deleteObject
+EG_getInfo
 EG_close
 EG_attributeNum
 EG_attributeNumSeq

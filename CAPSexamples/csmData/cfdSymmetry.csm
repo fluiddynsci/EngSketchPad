@@ -75,16 +75,19 @@ STORE     HalfWing 0 0
 ## [farfield]
 BOX   -80   0  -80   160  80  160
     ATTRIBUTE capsGroup   $Farfield
+    ATTRIBUTE capsMesh    $Farfield
     ATTRIBUTE AFLR4_Cmp_ID FARFIELD_Cmp_ID
 SELECT face 3
     ATTRIBUTE _color      $blue
     ATTRIBUTE capsGroup   $Symmetry
+    ATTRIBUTE capsMesh    $Symmetry
 ## [farfield]
 
 ## [attribute]
 # Wing 1 - Restore
 RESTORE   HalfWing 0
     ATTRIBUTE capsGroup $Wing1
+    ATTRIBUTE capsMesh  $Wing1
     ATTRIBUTE AFLR4_Cmp_ID WING1_Cmp_ID
     ATTRIBUTE AFLR4_Edge_Refinement_Weight 1
 SUBTRACT
@@ -94,6 +97,7 @@ SUBTRACT
 # Wing 2 -  Restore and scale, translate
 RESTORE   HalfWing 0
     ATTRIBUTE capsGroup         $Wing2
+    ATTRIBUTE capsMesh          $Wing2
     ATTRIBUTE AFLR4_Scale_Factor 10
     ATTRIBUTE AFLR4_Cmp_ID       WING2_Cmp_ID
 

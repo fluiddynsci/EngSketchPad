@@ -4,7 +4,7 @@
  */
 
 /*
- * Copyright (C) 2010/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -53,7 +53,8 @@ extern int
 udp_setArgument(char primName[],
                 char name[],
                 void *value,
-                int  nvalue);
+                int  nvalue,
+      /*@null@*/char message[]);
 
 /* execute */
 extern int
@@ -68,7 +69,8 @@ extern int
 udp_getOutput(char primName[],
               ego  body,
               char name[],
-              void *value);
+              void *value,
+              char message[]);
 
 /* return the OverSet Mesh */
 extern int
@@ -95,7 +97,7 @@ udp_sensitivity(char   primName[],
                 int    npts,
                 int    entType,
                 int    entIndex,
-                double uvs[],
+      /*@null@*/double uvs[],
                 double vels[]);
 
 /* unload and cleanup for all */
@@ -104,6 +106,7 @@ udp_cleanupAll();
 
 /* additional attribute type */
 #define ATTRREALSEN 4
+#define ATTRFILE    5
 
 /* define needed for WIN32 */
 #ifdef WIN32
@@ -123,11 +126,13 @@ int udpClean(ego ebody);
 
 int udpSet(char name[],
            void *values,
-           int  nvalue);
+           int  nvalue,
+           char message[]);
 
 int udpGet(ego  ebody,
            char name[],
-           void *value);
+           void *value,
+           char message[]);
 
 int udpVel(ego    ebody,
            char   name[],

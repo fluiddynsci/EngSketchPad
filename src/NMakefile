@@ -30,22 +30,11 @@ all:
 	nmake -f NMakefile
 	cd ..\src\CAPS\aim
 	nmake -f NMakefile
-!IFDEF PYTHONINC
-	cd ..\pyCAPS\src
-	nmake -f NMakefile
-	cd ..
-!ENDIF
 	cd ..\..
 	@echo  *** Build Completed! ***
 
 clean:
-	cd CAPS
-!IFDEF PYTHONINC
-	cd pyCAPS\src
-	nmake -f NMakefile clean
-	cd ..\..
-!ENDIF
-	cd aim
+	cd CAPS\aim
 	nmake -f NMakefile clean
 	cd ..\..\..\CAPSexamples
 	nmake -f NMakefile clean
@@ -69,13 +58,7 @@ clean:
 	cd ..\..
 
 cleanall:
-	cd CAPS
-!IFDEF PYTHONINC
-	cd pyCAPS\src
-	nmake -f NMakefile cleanall
-	cd ..\..
-!ENDIF
-	cd aim
+	cd CAPS\aim
 	nmake -f NMakefile cleanall
 	cd ..\..\..\CAPSexamples
 	nmake -f NMakefile cleanall

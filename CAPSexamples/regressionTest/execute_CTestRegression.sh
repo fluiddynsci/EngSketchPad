@@ -87,24 +87,18 @@ touch $LOGFILE
 # Move into the cCAPS directory
 cd ../cCAPS
 
-export cRegDir=./runDirectory
-if [[ -d "$cRegDir" ]]; then
-  rm -rf $cRegDir
-fi
-mkdir -p $cRegDir
-
 ######### Execute c-Test examples ########
 
 TYPE="ALL"
 testsRan=0
 
-if [ "$1" != "" ]; then
+if [[ "$1" != "" ]]; then
     TYPE="$1"
 else
     echo "No options provided...defaulting to ALL"
 fi
 
-if [ "$OS" == "Windows_NT" ]; then
+if [[ "$OS" == "Windows_NT" ]]; then
     EXT=dll
 else
     EXT=so
@@ -121,20 +115,13 @@ if [[ "$TYPE" == "LINEARAERO" || "$TYPE" == "ALL" ]]; then
     echo "Running.... LINEARAERO c-Tests"
     
     ###### AVL ###### 
-    if [ "`which avl`" != "" ]; then
-        expectCSuccess "./avlTest" $cRegDir "1" 
-    else
-        cp $regTestDir/datafiles/capsTotalForce.txt ${cRegDir}/
-        cp $regTestDir/datafiles/capsStripForce.txt ${cRegDir}/
-        expectCSuccess "./avlTest" $cRegDir "0" 
+    if [[ "`which avl`" != "" ]]; then
+        expectCSuccess "./avlTest" "1" 
     fi
 
     ######  FRICTION ###### 
-    if [ "`which friction`" != "" ]; then
-        expectCSuccess "./frictionTest" $cRegDir "1"
-    else
-        cp $regTestDir/datafiles/frictionOutput.txt ${cRegDir}/
-        expectCSuccess "./frictionTest" $cRegDir "0"
+    if [[ "`which friction`" != "" ]]; then
+        expectCSuccess "./frictionTest" "1"
     fi
 
     testsRan=1
@@ -144,27 +131,25 @@ fi
 if [[ "$TYPE" == "MESH" || "$TYPE" == "ALL" ]]; then
     echo "Running.... MESH c-Tests"
 
-   # if [ "$AFLR" != "" ]; then
+   # if [[ "$AFLR" != "" ]]; then
    #     
-   #     if [ "$TETGEN" != "" ]; then
+   #     if [[ "$TETGEN" != "" ]]; then
    #     fi
    # fi
     
-   # if [ "$TETGEN" != "" ]; then
+   # if [[ "$TETGEN" != "" ]]; then
    # fi
 
-    if [ "$OS" == "Windows_NT" ]; then
-        POINTWISE_AIM=pointwiseAIM.dll
-    else
+    if [[ "$OS" != "Windows_NT" ]]; then
         POINTWISE_AIM=pointwiseAIM.so
     fi
     
     # pointwise
-    #if [[ "`which pointwise`" != "" && "$VALGRIND_COMMAND" == "" && -f $ESP_ROOT/lib/$POINTWISE_AIM ]]; then
-    #    expectCSuccess "./pointwiseTest" $cRegDir "0" 
-    #else
+    if [[ "`which pointwise`" != "" && "$VALGRIND_COMMAND" == "" && -f $ESP_ROOT/lib/$POINTWISE_AIM ]]; then
+        expectCSuccess "./pointwiseTest" "0" 
+    else
         notRun="$notRun\npointwise"
-    #fi
+    fi
 
     testsRan=1
 fi
@@ -174,20 +159,17 @@ if [[ "$TYPE" == "CFD" || "$TYPE" == "ALL" ]]; then
     echo "Running.... CFD c-Tests"
     
     ###### FUN3D ######
-    expectCSuccess "./fun3dTest" $cRegDir
 
-    if [ "$AFLR" != "" ]; then
-
-        expectCSuccess "./fun3dAFLR2Test" $cRegDir 
-        expectCSuccess "./fun3dAFLR4Test" $cRegDir 
+    if [[  -f $ESP_ROOT/lib/aflr2AIM.$EXT ]]; then
+        expectCSuccess "./fun3dAFLR2Test" 
     else
-        notRun="$notRun\nAFLR"
+        notRun="$notRun\nfun3d AFLR"
     fi
 
-    if [ "$TETGEN" != "" ]; then
-        expectCSuccess "./fun3dTetgenTest" $cRegDir 
+    if [[ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]]; then
+        expectCSuccess "./fun3dTetgenTest" 
     else
-        notRun="$notRun\nTetGen"
+        notRun="$notRun\nfun3d TetGen"
     fi
 
     testsRan=1
@@ -198,17 +180,17 @@ if [[ "$TYPE" == "STRUCTURE" || "$TYPE" == "ALL" ]]; then
     echo "Running.... STRUCTURE c-Tests"
     
     ######  Mystran ###### 
-    if [ "`which mystran.exe`" != "" ] && [ "$OS" != "Windows_NT" ]; then
-        expectCSuccess "./mystranTest" $cRegDir "1" 
+    if [[ "`which mystran.exe`" != "" && "$OS" != "Windows_NT" ]]; then
+        expectCSuccess "./mystranTest" "1" 
     else
         notRun="$notRun\nMystran"
     fi 
 
     ######  HSM ###### 
-    if [ -f $ESP_ROOT/lib/hsmAIM.$EXT  ]; then
-        expectCSuccess "./hsmCantileverPlateTest" $cRegDir 
-        expectCSuccess "./hsmSimplePlateTest" $cRegDir 
-        expectCSuccess "./hsmJoinedPlateTest" $cRegDir 
+    if [[ -f $ESP_ROOT/lib/hsmAIM.$EXT  ]]; then
+        expectCSuccess "./hsmCantileverPlateTest" 
+        expectCSuccess "./hsmSimplePlateTest" 
+        expectCSuccess "./hsmJoinedPlateTest" 
     else
         notRun="$notRun\nHSM"
     fi 
@@ -220,20 +202,15 @@ fi
 if [[ "$TYPE" == "AEROELASTIC" || "$TYPE" == "ALL" ]]; then
     echo "Running.... AEROELASTIC c-Tests"
     
-    if [ "$TETGEN" != "" ]; then
+    if [[ "$TETGEN" != "" ]]; then
     
         if [[ "`which mystran.exe`" != "" && "`which nodet_mpi`" != "" ]]; then
-           expectCSuccess "./aeroelasticTest" $cRegDir "1" 
-        else
-           cp $regTestDir/datafiles/aeroelasticSimple_body1.dat ${cRegDir}/
-           cp $regTestDir/datafiles/aeroelasticSimple_ddfdrive_bndry3.dat ${cRegDir}/
-           cp $regTestDir/datafiles/aeroelasticSimple.F06 ${cRegDir}/
-           expectCSuccess "./aeroelasticTest" $cRegDir "0"
+           expectCSuccess "./aeroelasticTest" "1" 
         fi
 
             # SU2 6.0.0 on Windows does not work with displacements
         if [[ "`which mystran.exe`" != "" && "$OS" != "Windows_NT" ]]; then
-           expectCSuccess "./aeroelasticSimple_Iterative_SU2_and_MystranTest" $cRegDir "1" 
+           expectCSuccess "./aeroelasticSimple_Iterative_SU2_and_MystranTest" "1" 
         fi
         
     fi

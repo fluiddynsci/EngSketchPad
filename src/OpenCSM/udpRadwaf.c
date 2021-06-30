@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -77,12 +77,14 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     ego     *enodes1=NULL, *eedges1=NULL, *efaces1=NULL;
     ego     edgList[4], *facList=NULL, eloop, eshell;
 
+    ROUTINE(udpExecute);
+
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
     printf("ysize( 0)   = %f\n", YSIZE( 0));
     printf("zsize( 0)   = %f\n", ZSIZE( 0));
     printf("nspoke(0)   = %d\n", NSPOKE(0));
-    for (iframe = 1; iframe < udps[0].arg[4].size; iframe++) {
+    for (iframe = 1; iframe < udps[0].arg[3].size; iframe++) {
         printf("xframe(0,%d) = %f\n", iframe, XFRAME(0,iframe));
     }
 #endif
@@ -142,10 +144,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
@@ -157,26 +156,14 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     }
 #endif
 
-    enodes0 = (ego*) malloc((NSPOKE(numUdp)+1)*sizeof(ego));
-    eedges0 = (ego*) malloc((NSPOKE(numUdp)+1)*sizeof(ego));
-    efaces0 = (ego*) malloc((NSPOKE(numUdp)+1)*sizeof(ego));
-    enodes1 = (ego*) malloc((NSPOKE(numUdp)+1)*sizeof(ego));
-    eedges1 = (ego*) malloc((NSPOKE(numUdp)+1)*sizeof(ego));
-    efaces1 = (ego*) malloc((NSPOKE(numUdp)+1)*sizeof(ego));
+    MALLOC(enodes0, ego, (NSPOKE(numUdp)+1));
+    MALLOC(eedges0, ego, (NSPOKE(numUdp)+1));
+    MALLOC(efaces0, ego, (NSPOKE(numUdp)+1));
+    MALLOC(enodes1, ego, (NSPOKE(numUdp)+1));
+    MALLOC(eedges1, ego, (NSPOKE(numUdp)+1));
+    MALLOC(efaces1, ego, (NSPOKE(numUdp)+1));
 
-    if (enodes0 == NULL || eedges0 == NULL || efaces0 == NULL ||
-        enodes1 == NULL || eedges1 == NULL || efaces1 == NULL   ) {
-        printf(" udpExecute: problem with malloc\n");
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
-
-    facList = (ego*) malloc(2*NSPOKE(numUdp)*nframe*sizeof(ego));
-    if (facList == NULL) {
-        printf(" udpExecute: problem with malloc (facList)\n");
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(facList, ego, (2*NSPOKE(numUdp)*nframe));
 
     eedges0[0] = NULL;
     efaces0[0] = NULL;
@@ -186,7 +173,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     /* make star-shaped pattern at x=xframe(0) */
     status = makeFrame(context, 1, XFRAME(numUdp,0), YSIZE(numUdp), ZSIZE(numUdp), NSPOKE(numUdp),
                        enodes0, eedges0, efaces0);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(makeFrame);
 
     nface = 0;
     for (iface = 1; iface <= NSPOKE(numUdp); iface++) {
@@ -197,7 +184,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     for (iframe = 1; iframe < nframe; iframe++) {
         status = makeFrame(context, iframe+2, XFRAME(numUdp,iframe), YSIZE(numUdp), ZSIZE(numUdp), NSPOKE(numUdp),
                            enodes1, eedges1, efaces1);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(makeFrame);
 
         for (iface = 1; iface <= NSPOKE(numUdp); iface++) {
             facList[nface++] = efaces1[iface];
@@ -206,45 +193,39 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         /* make the Faces connecting the two star-shaped patterns */
         status = makeEdge(enodes0[0], enodes1[0], &edgList[0]);
         senList[0] = SFORWARD;
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(makeEdge);
 
         for (ispoke = 1; ispoke <= NSPOKE(numUdp); ispoke++) {
             edgList[1] = eedges1[ispoke];
-            senList[1] = SREVERSE;
+            senList[1] = SFORWARD;
 
             status = makeEdge(enodes1[ispoke], enodes0[ispoke], &edgList[2]);
             senList[2] = SREVERSE;
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(makeEdge);
 
             edgList[3] = eedges0[ispoke];
-            senList[3] = SFORWARD;
+            senList[3] = SREVERSE;
 
             status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL,
                                      4, edgList, senList, &eloop);
-            if (status != EGADS_SUCCESS) {
-                printf(" udpExecute: problem in EG_makeTopology(loop)\n");
-                goto cleanup;
-            }
+            CHECK_STATUS(EG_makeTopology);
 
             status = EG_getArea(eloop, NULL, &area);
-            if (status != EGADS_SUCCESS) {
-                printf(" udpExecute: problem in EG_getArea\n");
-                goto cleanup;
-            }
+            CHECK_STATUS(EG_getArea);
 
             if (area < 0) {
                 status = EG_makeFace(eloop, SFORWARD, NULL, &facList[nface++]);
             } else {
                 status = EG_makeFace(eloop, SREVERSE, NULL, &facList[nface++]);
             }
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_makeFace);
 
             faceattr[0] = ispoke;
             faceattr[1] = iframe + 1;
 
             status = EG_attributeAdd(facList[nface-1], "spoke", ATTRINT,
                                      2, faceattr, NULL, NULL);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_attributeAdd);
         }
 
         /* set up for next pass through this loop */
@@ -258,17 +239,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     /* make the Shell and then the SheetBody */
     status = EG_makeTopology(context, NULL, SHELL, OPEN, NULL,
                              nface, facList, NULL, &eshell);
-    if (status != EGADS_SUCCESS) {
-        printf(" udpExecute: problem in EG_makeTopology(shell)\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_makeTopology(context, NULL, BODY, SHEETBODY, NULL,
                              1, &eshell, NULL, ebody);
-    if (status != EGADS_SUCCESS) {
-        printf(" udpExecute: problem in EG_makeTopology(sheetbody)\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(EG_makeTopology);
 
     /* set the output value(s) */
 
@@ -372,16 +347,18 @@ makeEdge(ego     enode1,
     double xyz1[3], xyz2[3], data[6], trange[2];
     ego    context, eref, *echilds, ecurve, enodes[2];
 
+    ROUTINE(makeEdge);
+    
     status = EG_getContext(enode1, &context);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     status = EG_getTopology(enode1, &eref, &oclass, &mtype,
                             xyz1, &nchild, &echilds, &senses);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     status = EG_getTopology(enode2, &eref, &oclass, &mtype,
                             xyz2, &nchild, &echilds, &senses);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     data[0] = xyz1[0];
     data[1] = xyz1[1];
@@ -391,7 +368,7 @@ makeEdge(ego     enode1,
     data[5] = xyz2[2] - xyz1[2];
 
     status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, data, &ecurve);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     enodes[0] = enode1;
     enodes[1] = enode2;
@@ -400,7 +377,7 @@ makeEdge(ego     enode1,
     trange[1] = sqrt(data[3]*data[3] + data[4]*data[4] + data[5]*data[5]);
 
     status = EG_makeTopology(context, ecurve, EDGE, TWONODE, trange, 2, enodes, NULL, eedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
 cleanup:
     if (status != EGADS_SUCCESS) {
@@ -436,12 +413,14 @@ makeFrame(ego    context,
     double xyz[3], theta0, theta1, theta2, theta3, theta, dtheta, area;
     ego    edgList[6], ebeg, eend, eloop;
 
+    ROUTINE(makeFrame);
+
     /* make the Node at the center */
     xyz[0] = xframe;
     xyz[1] = 0;
     xyz[2] = 0;
     status = makeNode(context, xyz, &enodes[0]);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(makeNode);
 
     /* make the spokes (Nodes and Edges) */
     theta0 = atan(ysize / zsize);
@@ -479,10 +458,10 @@ makeFrame(ego    context,
             xyz[2] =  zsize/2;
         }
         status = makeNode(context, xyz, &enodes[ispoke]);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(makeNode);
 
         status = makeEdge(enodes[0], enodes[ispoke], &eedges[ispoke]);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(makeEdge);
 
         theta += dtheta;
     }
@@ -509,11 +488,11 @@ makeFrame(ego    context,
             xyz[1] = +ysize/2;
             xyz[2] = +zsize/2;
             status = makeNode(context, xyz, &eend);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(makeNode);
 
             status = makeEdge(ebeg, eend, &edgList[iedge]);
             senList[iedge] = SFORWARD;
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(makeEdge);
             iedge++;
 
             ebeg = eend;
@@ -524,11 +503,11 @@ makeFrame(ego    context,
             xyz[1] = +ysize/2;
             xyz[2] = -zsize/2;
             status = makeNode(context, xyz, &eend);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(makeNode);
 
             status = makeEdge(ebeg, eend, &edgList[iedge]);
             senList[iedge] = SFORWARD;
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(makeEdge);
             iedge++;
 
             ebeg = eend;
@@ -539,11 +518,11 @@ makeFrame(ego    context,
             xyz[1] = -ysize/2;
             xyz[2] = -zsize/2;
             status = makeNode(context, xyz, &eend);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(makeNode);
 
             status = makeEdge(ebeg, eend, &edgList[iedge]);
             senList[iedge] = SFORWARD;
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(makeEdge);
             iedge++;
 
             ebeg = eend;
@@ -554,11 +533,11 @@ makeFrame(ego    context,
             xyz[1] = -ysize/2;
             xyz[2] = +zsize/2;
             status = makeNode(context, xyz, &eend);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(makeNode);
 
             status = makeEdge(ebeg, eend, &edgList[iedge]);
             senList[iedge] = SFORWARD;
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(makeEdge);
             iedge++;
 
             ebeg = eend;
@@ -566,7 +545,7 @@ makeFrame(ego    context,
 
         status = makeEdge(ebeg, enodes[jspoke], &edgList[iedge]);
         senList[iedge] = SFORWARD;
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(makeEdge);
         iedge++;
 
         edgList[iedge] = eedges[jspoke];
@@ -575,23 +554,23 @@ makeFrame(ego    context,
 
         status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL,
                                  iedge, edgList, senList, &eloop);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         status = EG_getArea(eloop, NULL, &area);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getArea);
 
         if (area < 0) {
             status = EG_makeFace(eloop, SFORWARD, NULL, &efaces[ispoke]);
         } else {
             status = EG_makeFace(eloop, SREVERSE, NULL, &efaces[ispoke]);
         }
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeFace);
 
         faceattr[0] = iframe;
         faceattr[1] = ispoke;
         status = EG_attributeAdd(efaces[ispoke], "frame", ATTRINT,
                                  2, faceattr, NULL, NULL);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_attributeAdd);
 
         theta +=  dtheta;
     }

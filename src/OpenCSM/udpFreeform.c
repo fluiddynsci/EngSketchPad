@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -47,7 +47,7 @@
 
 /* data about possible arguments */
 static char  *argNames[NUMUDPARGS] = {"filename", "imax",  "jmax",  "kmax",  "xyz",    "x", "y", "z", };
-static int    argTypes[NUMUDPARGS] = {ATTRSTRING, ATTRINT, ATTRINT, ATTRINT, ATTRREAL, 0,   0,   0,   };
+static int    argTypes[NUMUDPARGS] = {ATTRFILE,   ATTRINT, ATTRINT, ATTRINT, ATTRREAL, 0,   0,   0,   };
 static int    argIdefs[NUMUDPARGS] = {0,          1,       1,       1,       0,        0,   0,   0,   };
 static double argDdefs[NUMUDPARGS] = {0.,         0.,      0.,      0.,      0.,       0.,  0.,  0.,  };
 
@@ -63,6 +63,8 @@ static int spline2d(ego context, int imax, int jmax, double *x, double *y, doubl
 static void plotData(int*, void*, void*, void*, void*, void*,
                            void*, void*, void*, void*, void*, float*, char*, int);
 #endif
+
+static void *realloc_temp=NULL;              /* used by RALLOC macro */
 
 
 /*
@@ -84,7 +86,7 @@ static void plotData(int*, void*, void*, void*, void*, void*,
     /* make Node */                                                     \
     status = EG_makeTopology(context, NULL, NODE, 0,                    \
                              data, 0, NULL, NULL, &(enodes[INODE]));    \
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
 #define CREATE_EDGE(IEDGE, IBEG, IEND, IMAX)                            \
     if (outLevel >= 1) printf("        creating Edge %3d\n", IEDGE);    \
@@ -101,7 +103,7 @@ static void plotData(int*, void*, void*, void*, void*, void*,
                                                                         \
     status = EG_makeTopology(context, ecurvs[IEDGE], EDGE, TWONODE,     \
                              tdata, 2, etemp, NULL, &(eedges[IEDGE]));  \
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
 #define CREATE_FACE(IFACE, IS, IE, IN, IW, JMAX, KMAX)                  \
     if (outLevel >= 1) printf("        creating Face %3d\n", IFACE);    \
@@ -109,7 +111,7 @@ static void plotData(int*, void*, void*, void*, void*, void*,
     /* make spline Surface */                                           \
     status = spline2d(context, KMAX, JMAX, x2d, y2d, z2d,               \
                       &(esurfs[IFACE]));                                \
-    if (status != EGADS_SUCCESS) goto cleanup;                          \
+    CHECK_STATUS(spline2d);                                             \
                                                                         \
     tdata[0] = 0; tdata[1] = 0;                                         \
     (void) EG_evaluate(esurfs[IFACE], tdata, data);                     \
@@ -134,25 +136,25 @@ static void plotData(int*, void*, void*, void*, void*, void*,
     data[2] = KMAX-1;    data[3] = 0;                                   \
     status = EG_makeGeometry(context, PCURVE, LINE, NULL,               \
                              NULL, data, &(etemp[4]));                  \
-    if (status != EGADS_SUCCESS) goto cleanup;                          \
+    CHECK_STATUS(EG_makeGeometry);                                      \
                                                                         \
     data[0] = KMAX-1;    data[1] = 0;                                   \
     data[2] = 0;         data[3] = JMAX-1;                              \
     status = EG_makeGeometry(context, PCURVE, LINE, NULL,               \
                              NULL, data, &(etemp[5]));                  \
-    if (status != EGADS_SUCCESS) goto cleanup;                          \
+    CHECK_STATUS(EG_makeGeometry);                                      \
                                                                         \
     data[0] = 0;         data[1] = JMAX-1;                              \
     data[2] = KMAX-1;    data[3] = 0;                                   \
     status = EG_makeGeometry(context, PCURVE, LINE, NULL,               \
                              NULL, data, &(etemp[6]));                  \
-    if (status != EGADS_SUCCESS) goto cleanup;                          \
+    CHECK_STATUS(EG_makeGeometry);                                      \
                                                                         \
     data[0] = 0;         data[1] = 0;                                   \
     data[2] = 0;         data[3] = JMAX-1;                              \
     status = EG_makeGeometry(context, PCURVE, LINE, NULL,               \
                              NULL, data , &(etemp[7]));                 \
-    if (status != EGADS_SUCCESS) goto cleanup;                          \
+    CHECK_STATUS(EG_makeGeometry);                                      \
                                                                         \
     /* make the Loop */                                                 \
     senses[0] = SFORWARD; senses[1] = SFORWARD;                         \
@@ -162,12 +164,12 @@ static void plotData(int*, void*, void*, void*, void*, void*,
                                                                         \
     status = EG_makeTopology(context, esurfs[IFACE], LOOP, CLOSED,      \
                              NULL, 4, etemp, senses, &eloop);           \
-    if (status != EGADS_SUCCESS) goto cleanup;                          \
+    CHECK_STATUS(EG_makeTopology);                                      \
                                                                         \
     /* make the Face */                                                 \
     status = EG_makeTopology(context, esurfs[IFACE], FACE, SFORWARD,    \
                              NULL, 1, &eloop, senses, &(efaces[IFACE])); \
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
 
 /*
@@ -186,12 +188,15 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 {
     int     status = EGADS_SUCCESS;
 
-    int     imax, jmax, kmax, i, j, k, ijk, senses[8], periodic, count, outLevel;
+    int     imax, jmax, kmax, i, j, k, ijk, senses[8], periodic, count, outLevel, ieof;
     double  *x2d=NULL, *y2d=NULL, *z2d=NULL;
     double  xtemp, ytemp, ztemp, data[18], tdata[2];
-    FILE    *fp;
+    char    *message=NULL, *filename, *token;
+    FILE    *fp=NULL;
     ego                ecurvs[12], esurfs[6];
     ego     enodes[8], eedges[12], efaces[6], etemp[8], eloop, eshell;
+
+    ROUTINE(udpExecute);
 
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
@@ -206,6 +211,9 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     *nMesh  = 0;
     *string = NULL;
 
+    MALLOC(message, char, 100);
+    message[0] = '\0';
+
     /* check arguments */
 
     /* get the outLevel from OpenCSM */
@@ -214,10 +222,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("filename(%d) = %s\n", numUdp, FILENAME(numUdp));
@@ -229,18 +234,63 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     /* data is in a file */
     if (strlen(FILENAME(0)) > 0) {
 
-        /* open the file */
-        fp = fopen(FILENAME(0), "r");
-        if (fp == NULL) {
-            status = EGADS_NOTFOUND;
+        /* open the file or stream */
+        filename = FILENAME(numUdp);
+
+        if (strncmp(filename, "<<\n", 3) == 0) {
+            token = strtok(filename, " \t\n");
+            if (token == NULL) {
+                ieof = 1;
+            } else {
+                ieof = 0;
+            }
+        } else {
+            fp = fopen(filename, "r");
+            if (fp == NULL) {
+                snprintf(message, 100, "could not open file \"%s\"", filename);
+                status = EGADS_NOTFOUND;
+                goto cleanup;
+            }
+
+            ieof = feof(fp);
+        }
+        if (ieof == 1) {
+            snprintf(message, 100, "premature enf-of-file found");
+            status = EGADS_NODATA;
             goto cleanup;
         }
 
         /* read the size of the configuration */
-        count = fscanf(fp, "%d %d %d", &imax, &jmax, &kmax);
-        if (count != 3) {
-            status = EGADS_NODATA;
-            goto cleanup;
+        if (fp != NULL) {
+            count = fscanf(fp, "%d %d %d", &imax, &jmax, &kmax);
+            if (count != 3) {
+                status = EGADS_NODATA;
+                goto cleanup;
+            }
+        } else {
+            token = strtok(NULL, " \t\n");
+            if (token == NULL) {
+                snprintf(message, 100, "error while reading imax");
+                status = EGADS_NODATA;
+                goto cleanup;
+            }
+            imax = strtol(token, NULL, 10);
+
+            token = strtok(NULL, " \t\n");
+            if (token == NULL) {
+                snprintf(message, 100, "error while reading jmax");
+                status = EGADS_NODATA;
+                goto cleanup;
+            }
+            jmax = strtol(token, NULL, 10);
+
+            token = strtok(NULL, " \t\n");
+            if (token == NULL) {
+                snprintf(message, 100, "error while reading kmax");
+                status = EGADS_NODATA;
+                goto cleanup;
+            }
+            kmax = strtol(token, NULL, 10);
         }
 
         /* save the array size from the file */
@@ -248,16 +298,9 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         JMAX(numUdp) = jmax;
         KMAX(numUdp) = kmax;
 
-        udps[numUdp].arg[5].val = (double *) EG_reall(udps[numUdp].arg[5].val, imax*jmax*kmax*sizeof(double));
-        udps[numUdp].arg[6].val = (double *) EG_reall(udps[numUdp].arg[6].val, imax*jmax*kmax*sizeof(double));
-        udps[numUdp].arg[7].val = (double *) EG_reall(udps[numUdp].arg[7].val, imax*jmax*kmax*sizeof(double));
-
-        if (udps[numUdp].arg[5].val == NULL ||
-            udps[numUdp].arg[6].val == NULL ||
-            udps[numUdp].arg[7].val == NULL   ) {
-            status  = EGADS_MALLOC;
-            goto cleanup;
-        }
+        RALLOC(udps[numUdp].arg[5].val, double, imax*jmax*kmax);
+        RALLOC(udps[numUdp].arg[6].val, double, imax*jmax*kmax);
+        RALLOC(udps[numUdp].arg[7].val, double, imax*jmax*kmax);
 
         /* read the data.  if 3d, only the outside points are read */
         for (k = 0; k < kmax; k++) {
@@ -267,23 +310,69 @@ udpExecute(ego  context,                /* (in)  EGADS context */
                         j == 0 || j == jmax-1 ||
                         k == 0 || k == kmax-1   ) {
                         ijk = (i) + imax * ((j) + jmax * (k));
-                        count = fscanf(fp, "%lf %lf %lf", &xtemp, &ytemp, &ztemp);
 
-                        if (count == 3) {
-                            X(numUdp,ijk) = xtemp;
-                            Y(numUdp,ijk) = ytemp;
-                            Z(numUdp,ijk) = ztemp;
+                        if (fp != NULL) {
+                            count = fscanf(fp, "%lf", &xtemp);
+                            if (count != 1) {
+                                snprintf(message, 100, "error while reading x[%d,%d,%d]", i, j, k);
+                                status = EGADS_NODATA;
+                                goto cleanup;
+                            }
                         } else {
-                            status  = EGADS_NODATA;
-                            goto cleanup;
+                            token = strtok(NULL, " \t\n");
+                            if (token == NULL) {
+                                snprintf(message, 100, "error while reading x[%d,%d,%d]", i, j, k);
+                                status = EGADS_NODATA;
+                                goto cleanup;
+                            }
+                            xtemp = strtod(token, NULL);
                         }
+                        X(numUdp,ijk) = xtemp;
+
+                        if (fp != NULL) {
+                            count = fscanf(fp, "%lf", &ytemp);
+                            if (count != 1) {
+                                snprintf(message, 100, "error while reading y[%d,%d,%d]", i, j, k);
+                                status = EGADS_NODATA;
+                                goto cleanup;
+                            }
+                        } else {
+                            token = strtok(NULL, " \t\n");
+                            if (token == NULL) {
+                                snprintf(message, 100, "error while reading y[%d,%d,%d]", i, j, k);
+                                status = EGADS_NODATA;
+                                goto cleanup;
+                            }
+                            ytemp = strtod(token, NULL);
+                        }
+                        Y(numUdp,ijk) = ytemp;
+
+                        if (fp != NULL) {
+                            count = fscanf(fp, "%lf", &ztemp);
+                            if (count != 1) {
+                                snprintf(message, 100, "error while reading z[%d,%d,%d]", i, j, k);
+                                status = EGADS_NODATA;
+                                goto cleanup;
+                            }
+                        } else {
+                            token = strtok(NULL, " \t\n");
+                            if (token == NULL) {
+                                snprintf(message, 100, "error while reading z[%d,%d,%d]", i, j, k);
+                                status = EGADS_NODATA;
+                                goto cleanup;
+                            }
+                            ztemp = strtod(token, NULL);
+                        }
+                        Z(numUdp,ijk) = ztemp;
                     }
                 }
             }
         }
 
         /* close the file */
-        fclose(fp);
+        if (fp != NULL) {
+            fclose(fp);
+        }
 
     /* data came in XYZ */
     } else if (udps[0].arg[4].size > 4) {
@@ -295,16 +384,9 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         JMAX(numUdp) = jmax;
         KMAX(numUdp) = kmax;
 
-        udps[numUdp].arg[5].val = (double *) EG_reall(udps[numUdp].arg[5].val, imax*jmax*kmax*sizeof(double));
-        udps[numUdp].arg[6].val = (double *) EG_reall(udps[numUdp].arg[6].val, imax*jmax*kmax*sizeof(double));
-        udps[numUdp].arg[7].val = (double *) EG_reall(udps[numUdp].arg[7].val, imax*jmax*kmax*sizeof(double));
-
-        if (udps[numUdp].arg[5].val == NULL ||
-            udps[numUdp].arg[6].val == NULL ||
-            udps[numUdp].arg[7].val == NULL   ) {
-            status  = EGADS_MALLOC;
-            goto cleanup;
-        }
+        RALLOC(udps[numUdp].arg[5].val, double, imax*jmax*kmax);
+        RALLOC(udps[numUdp].arg[6].val, double, imax*jmax*kmax);
+        RALLOC(udps[numUdp].arg[7].val, double, imax*jmax*kmax);
 
         /* copy the data */
         for (ijk = 0; ijk < imax*jmax*kmax; ijk++) {
@@ -315,7 +397,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* no data specified */
     } else {
-        printf(" udpExecute: filename and xyz both null\n");
+        snprintf(message, 100, "filename and xyz both null\n");
         return EGADS_NODATA;
     }
 
@@ -344,14 +426,9 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     #endif
 
     /* allocate necessary (oversized) 2D arrays */
-    x2d = (double*) EG_alloc(imax*jmax*kmax*sizeof(double));
-    y2d = (double*) EG_alloc(imax*jmax*kmax*sizeof(double));
-    z2d = (double*) EG_alloc(imax*jmax*kmax*sizeof(double));
-
-    if (x2d == NULL || y2d == NULL || z2d == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(x2d, double, imax*jmax*kmax);
+    MALLOC(y2d, double, imax*jmax*kmax);
+    MALLOC(z2d, double, imax*jmax*kmax);
 
     /* create WireBody (since jmax<=1) */
     if (jmax <= 1) {
@@ -373,12 +450,12 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         senses[0] = SFORWARD;
         status = EG_makeTopology(context, NULL, LOOP, OPEN,
                                  NULL, 1, eedges, senses, &eloop);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* make a WireBody */
         status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                                  NULL, 1, &eloop, NULL, ebody);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* set the output value(s) */
 
@@ -391,20 +468,20 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
         /* make the cubic spline */
         status = spline2d(context, imax, jmax, &(X(numUdp,0)), &(Y(numUdp,0)), &(Z(numUdp,0)), &(esurfs[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(spline2d);
 
         /* make a Face */
         status = EG_getRange(esurfs[0], data, &periodic);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getRange);
 
         status = EG_makeFace(esurfs[0], SFORWARD, data, &(efaces[0]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeFace);
 
         /* make a FaceBody */
         senses[0] = SFORWARD;
         status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                                  NULL, 1, efaces, senses, ebody);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* inform the user that there is 1 surface meshes */
         *nMesh = 1;
@@ -570,12 +647,12 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         if (outLevel >= 1) printf("        creating Shell\n");
         status = EG_makeTopology(context, NULL, SHELL, CLOSED,
                                  NULL, 6, efaces, NULL, &eshell);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         if (outLevel >= 1) printf("        creating SolidBody\n");
         status = EG_makeTopology(context, NULL, BODY, SOLIDBODY,
                                  NULL, 1, &eshell, NULL, ebody);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* inform the user that there are 6 surface meshes */
         *nMesh = 6;
@@ -591,243 +668,18 @@ cleanup:
     if (y2d != NULL) EG_free(y2d);
     if (x2d != NULL) EG_free(x2d);
 
-    if (status != EGADS_SUCCESS) {
+    if (strlen(message) > 0) {
+        *string = message;
+        printf("%s\n", message);
+    } else if (status != EGADS_SUCCESS) {
+        FREE(message);
         *string = udpErrorStr(status);
+    } else {
+        FREE(message);
     }
 
     return status;
 }
-
-
-//$$$/*
-//y$$ ************************************************************************
-//$$$ *                                                                      *
-//$$$ *   udpMesh - return mesh associated with primitive                    *
-//$$$ *                                                                      *
-//$$$ ************************************************************************
-//$$$ */
-//$$$
-//$$$int
-//$$$udpMesh(ego    ebody,
-//$$$        int    iMesh,
-//$$$        int    *imax,
-//$$$        int    *jmax,
-//$$$        int    *kmax,
-//$$$        double *mesh[])
-//$$${
-//$$$    int    iudp, judp, i2d, j2d, i3d, j3d, k3d;
-//$$$    double *Mesh=NULL;
-//$$$
-//$$$    *imax = 0;
-//$$$    *jmax = 0;
-//$$$    *kmax = 0;
-//$$$    *mesh = Mesh;
-//$$$
-//$$$    /* check that ebody matches one of the ebodys */
-//$$$    iudp = 0;
-//$$$    for (judp = 1; judp <= numUdp; judp++) {
-//$$$        if (ebody == ebodys[judp]) {
-//$$$            iudp = judp;
-//$$$            break;
-//$$$        }
-//$$$    }
-//$$$    if (iudp <= 0) {
-//$$$        return EGADS_NOTMODEL;
-//$$$    }
-//$$$
-//$$$    /* if a FaceBody, return the mesh */
-//$$$    if (Imax[iudp] > 1 && Jmax[iudp] > 1 && Kmax[iudp] == 1) {
-//$$$
-//$$$        /* mesh 1: i3d = i2d; j3d = j2d; k3d = 0 */
-//$$$        if (iMesh == 1) {
-//$$$            Mesh = (double *) EG_alloc(3*Imax[iudp]*Jmax[iudp]*sizeof(double));
-//$$$            if (Mesh == NULL) return EGADS_MALLOC;
-//$$$
-//$$$            *imax = Imax[iudp];
-//$$$            *jmax = Jmax[iudp];
-//$$$            *kmax = Kmax[iudp];
-//$$$            *mesh = Mesh;
-//$$$
-//$$$            for (j3d = 0; j3d < Jmax[iudp]; j3d++) {
-//$$$                for (i3d = 0; i3d < Imax[iudp]; i3d++) {
-//$$$                    i2d = i3d;
-//$$$                    j2d = j3d;
-//$$$
-//$$$                    Mesh[3*(i2d+j2d*(*imax))  ] = X[iudp][i3d+Imax[iudp]*j3d];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+1] = Y[iudp][i3d+Imax[iudp]*j3d];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+2] = Z[iudp][i3d+Imax[iudp]*j3d];
-//$$$                }
-//$$$            }
-//$$$        } else {
-//$$$            *imax = 0;
-//$$$            *jmax = 0;
-//$$$            *kmax = 0;
-//$$$            *mesh = NULL;
-//$$$
-//$$$            return EGADS_INDEXERR;
-//$$$        }
-//$$$
-//$$$    /* if a SolidBody, return one of the meshes */
-//$$$    } else if (Imax[iudp] > 1 && Jmax[iudp] > 1 && Kmax[iudp] > 1) {
-//$$$
-//$$$        /* mesh 1: i3d = 0; j3d = j2d; k3d = i2d */
-//$$$        if        (iMesh == 1) {
-//$$$            Mesh = (double *) EG_alloc(3*Jmax[iudp]*Kmax[iudp]*sizeof(double));
-//$$$            if (Mesh == NULL) return EGADS_MALLOC;
-//$$$
-//$$$            *imax = Kmax[iudp];
-//$$$            *jmax = Jmax[iudp];
-//$$$            *kmax = 1;
-//$$$            *mesh = Mesh;
-//$$$
-//$$$            for (k3d = 0; k3d < Kmax[iudp]; k3d++) {
-//$$$                for (j3d = 0; j3d < Jmax[iudp]; j3d++) {
-//$$$                    i3d = 0;
-//$$$
-//$$$                    i2d = k3d;
-//$$$                    j2d = j3d;
-//$$$
-//$$$                    Mesh[3*(i2d+j2d*(*imax))  ] = X[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+1] = Y[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+2] = Z[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                }
-//$$$            }
-//$$$
-//$$$        /* mesh 2: i3d = Imax-1; j3d = i2d; k3d = j2d */
-//$$$        } else if (iMesh == 2) {
-//$$$            Mesh = (double *) EG_alloc(3*Jmax[iudp]*Kmax[iudp]*sizeof(double));
-//$$$            if (Mesh == NULL) return EGADS_MALLOC;
-//$$$
-//$$$            *imax = Jmax[iudp];
-//$$$            *jmax = Kmax[iudp];
-//$$$            *kmax = 1;
-//$$$            *mesh = Mesh;
-//$$$
-//$$$            for (k3d = 0; k3d < Kmax[iudp]; k3d++) {
-//$$$                for (j3d = 0; j3d < Jmax[iudp]; j3d++) {
-//$$$                    i3d = Imax[iudp] - 1;
-//$$$
-//$$$                    i2d = j3d;
-//$$$                    j2d = k3d;
-//$$$
-//$$$                    Mesh[3*(i2d+j2d*(*imax))  ] = X[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+1] = Y[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+2] = Z[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                }
-//$$$            }
-//$$$
-//$$$        /* mesh 3: i3d = i2d; j3d = 0; k3d = j2d */
-//$$$        } else if (iMesh == 3) {
-//$$$            Mesh = (double *) EG_alloc(3*Kmax[iudp]*Imax[iudp]*sizeof(double));
-//$$$            if (Mesh == NULL) return EGADS_MALLOC;
-//$$$
-//$$$            *imax = Imax[iudp];
-//$$$            *jmax = Kmax[iudp];
-//$$$            *kmax = 1;
-//$$$            *mesh = Mesh;
-//$$$
-//$$$            for (i3d = 0; i3d < Imax[iudp]; i3d++) {
-//$$$                for (k3d = 0; k3d < Kmax[iudp]; k3d++) {
-//$$$                    j3d = 0;
-//$$$
-//$$$                    i2d = i3d;
-//$$$                    j2d = k3d;
-//$$$
-//$$$                    Mesh[3*(i2d+j2d*(*imax))  ] = X[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+1] = Y[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+2] = Z[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                }
-//$$$            }
-//$$$
-//$$$        /* mesh 4: i3d = j2d; j3d = Jmax-1; k3d = i2d */
-//$$$        } else if (iMesh == 4) {
-//$$$            Mesh = (double *) EG_alloc(3*Kmax[iudp]*Imax[iudp]*sizeof(double));
-//$$$            if (Mesh == NULL) return EGADS_MALLOC;
-//$$$
-//$$$            *imax = Kmax[iudp];
-//$$$            *jmax = Imax[iudp];
-//$$$            *kmax = 1;
-//$$$            *mesh = Mesh;
-//$$$
-//$$$            for (i3d = 0; i3d < Imax[iudp]; i3d++) {
-//$$$                for (k3d = 0; k3d < Kmax[iudp]; k3d++) {
-//$$$                    j3d = Jmax[iudp] - 1;
-//$$$
-//$$$                    i2d = k3d;
-//$$$                    j2d = i3d;
-//$$$
-//$$$                    Mesh[3*(i2d+j2d*(*imax))  ] = X[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+1] = Y[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+2] = Z[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                }
-//$$$            }
-//$$$
-//$$$        /* mesh 5: i3d = j2d; j3d = i2d; k3d = 0 */
-//$$$        } else if (iMesh == 5) {
-//$$$            Mesh = (double *) EG_alloc(3*Imax[iudp]*Jmax[iudp]*sizeof(double));
-//$$$            if (Mesh == NULL) return EGADS_MALLOC;
-//$$$
-//$$$            *imax = Jmax[iudp];
-//$$$            *jmax = Imax[iudp];
-//$$$            *kmax = 1;
-//$$$            *mesh = Mesh;
-//$$$
-//$$$            for (j3d = 0; j3d < Jmax[iudp]; j3d++) {
-//$$$                for (i3d = 0; i3d < Imax[iudp]; i3d++) {
-//$$$                    k3d = 0;
-//$$$
-//$$$                    i2d = j3d;
-//$$$                    j2d = i3d;
-//$$$
-//$$$                    Mesh[3*(i2d+j2d*(*imax))  ] = X[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+1] = Y[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+2] = Z[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                }
-//$$$            }
-//$$$
-//$$$        /* mesh 6: i3d = i2d; j3d = j2d; k3d = Kmax-1 */
-//$$$        } else if (iMesh == 6) {
-//$$$            Mesh = (double *) EG_alloc(3*Imax[iudp]*Jmax[iudp]*sizeof(double));
-//$$$            if (Mesh == NULL) return EGADS_MALLOC;
-//$$$
-//$$$            *imax = Imax[iudp];
-//$$$            *jmax = Jmax[iudp];
-//$$$            *kmax = 1;
-//$$$            *mesh = Mesh;
-//$$$
-//$$$            for (j3d = 0; j3d < Jmax[iudp]; j3d++) {
-//$$$                for (i3d = 0; i3d < Imax[iudp]; i3d++) {
-//$$$                    k3d = Kmax[iudp] - 1;
-//$$$
-//$$$                    i2d = i3d;
-//$$$                    j2d = j3d;
-//$$$
-//$$$                    Mesh[3*(i2d+j2d*(*imax))  ] = X[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+1] = Y[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                    Mesh[3*(i2d+j2d*(*imax))+2] = Z[iudp][i3d+Imax[iudp]*(j3d+Jmax[iudp]*k3d)];
-//$$$                }
-//$$$            }
-//$$$        } else {
-//$$$            *imax = 0;
-//$$$            *jmax = 0;
-//$$$            *kmax = 0;
-//$$$            *mesh = NULL;
-//$$$
-//$$$            return EGADS_INDEXERR;
-//$$$        }
-//$$$
-//$$$    /* neither FaceBody nor SolidBody were loaded */
-//$$$    } else {
-//$$$        *imax = 0;
-//$$$        *jmax = 0;
-//$$$        *kmax = 0;
-//$$$        *mesh = NULL;
-//$$$
-//$$$        return EGADS_NOTBODY;
-//$$$    }
-//$$$
-//$$$    return EGADS_SUCCESS;
-//$$$}
 
 
 /*
@@ -888,6 +740,8 @@ spline1d(ego    context,
     double *knotu=NULL, *CP=NULL;
     double dxyztol = 1.0e-7, relax = 0.10;
 
+    ROUTINE(spline1d);
+
     icp   = imax + 2;
     iknot = imax + 6;
 
@@ -914,11 +768,7 @@ spline1d(ego    context,
         note: there are 4 repeateed knots at beginning and
               4 repeated knots at end */
 
-    cp = (double*) EG_alloc((iknot+3*icp)*sizeof(double));
-    if (cp == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(cp, double, (iknot+3*icp));
 
     knotu = &(cp[0    ]);
     CP    = &(cp[iknot]);
@@ -975,7 +825,7 @@ spline1d(ego    context,
     /* make the original BSPLINE (based upon the assumed control points) */
     status = EG_makeGeometry(context, CURVE, BSPLINE, NULL,
                              header, cp, ecurv);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     /* iterate to have knot evaluations match data points */
     niter = 1000;
@@ -987,14 +837,14 @@ spline1d(ego    context,
         /* match finite-differenced slope d/du at beginning */
         i = 1;
         status = EG_evaluate(*ecurv, &(knotu[3]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_evaluate);
 
         du = knotu[4] - knotu[3];
         dx = x[1] - x[0] - du * data[3];
         dy = y[1] - y[0] - du * data[4];
         dz = z[1] - z[0] - du * data[5];
 
-//$$$        /* natural end condition */
+        /* natural end condition */
 //$$$        dx = data[6] * du * du;
 //$$$        dy = data[7] * du * du;
 //$$$        dz = data[8] * du * du;
@@ -1010,7 +860,7 @@ spline1d(ego    context,
         /* match interior points */
         for (i = 2; i < imax; i++) {
             status = EG_evaluate(*ecurv, &(knotu[i+2]), data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             dx = x[i-1] - data[0];
             dy = y[i-1] - data[1];
@@ -1028,14 +878,14 @@ spline1d(ego    context,
         /* match finite-differenced slope d/du at end */
         i = imax;
         status = EG_evaluate(*ecurv, &(knotu[imax+2]), data);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_evaluate);
 
         du = knotu[imax+2] - knotu[imax+1];
         dx = x[imax-1] - x[imax-2] - du * data[3];
         dy = y[imax-1] - y[imax-2] - du * data[4];
         dz = z[imax-1] - z[imax-2] - du * data[5];
 
-//$$$        /* natural end condition */
+        /* natural end condition */
 //$$$        dx = data[6] * du * du;
 //$$$        dy = data[7] * du * du;
 //$$$        dz = data[8] * du * du;
@@ -1051,10 +901,10 @@ spline1d(ego    context,
         /* convergence check */
         if (dxyzmax < dxyztol) break;
 
-//$$$        /* to enable this plotting:
-//$$$           1. set USING_GRAFIC to 1 in Makefile
-//$$$           2. change ${LINKC} to ${LINKF} in link line for freeform.so
-//$$$           3. add ${GRAFIC} before -legads in link line for freeform.so */
+        /* to enable this plotting:
+           1. set USING_GRAFIC to 1 in Makefile
+           2. change ${LINKC} to ${LINKF} in link line for freeform.so
+           3. add ${GRAFIC} before -legads in link line for freeform.so */
 //$$$        {
 //$$$            int    itype;
 //$$$            int    io_kbd = 5;
@@ -1120,7 +970,7 @@ spline1d(ego    context,
 //$$$            }
 //$$$        }
 //$$$
-//$$$        /* make the new curve (after deleting old one) */
+        /* make the new curve (after deleting old one) */
 //$$$        status = EG_deleteObject(*ecurv);
 //$$$        if (status != EGADS_SUCCESS) goto cleanup;
 //$$$
@@ -1168,16 +1018,14 @@ spline2d(ego    context,
     double *knotu=NULL, *knotv=NULL, *CP=NULL;
     double dxyztol = 1.0e-7, relax = 0.10;
 
+    ROUTINE(spline2d);
+
     icp   = imax + 2;
     iknot = imax + 6;
     jcp   = jmax + 2;
     jknot = jmax + 6;
 
-    cp = (double*) EG_alloc((iknot+jknot+3*icp*jcp)*sizeof(double));
-    if (cp == NULL) {
-        status  = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(cp, double, (iknot+jknot+3*icp*jcp));
 
     knotu = &(cp[0          ]);
     knotv = &(cp[iknot      ]);
@@ -1377,7 +1225,7 @@ spline2d(ego    context,
     /* make the original BSPLINE (based upon the assumed control points) */
     status = EG_makeGeometry(context, SURFACE, BSPLINE, NULL,
                              header, cp, esurf);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     /* iterate to have knot evaluations match data points */
     niter = 1000;
@@ -1395,7 +1243,7 @@ spline2d(ego    context,
             parms[0] = knotu[3];
             parms[1] = knotv[3];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             du = knotu[4] - knotu[3];
             dx = x[(1)+(0)*imax] - x[(0)+(0)*imax] - du * data[3];
@@ -1415,7 +1263,7 @@ spline2d(ego    context,
                 parms[0] = knotu[i+2];
                 parms[1] = knotv[  3];
                 status = EG_evaluate(*esurf, parms, data);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_evaluate);
 
                 dx = x[(i-1)+(0)*imax] - data[0];
                 dy = y[(i-1)+(0)*imax] - data[1];
@@ -1435,7 +1283,7 @@ spline2d(ego    context,
             parms[0] = knotu[imax+2];
             parms[1] = knotv[     3];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             du = knotu[imax+2] - knotu[imax+1];
             dx = x[(imax-1)+(0)*imax] - x[(imax-2)+(0)*imax] - du * data[3];
@@ -1463,7 +1311,7 @@ spline2d(ego    context,
             parms[0] = knotu[3];
             parms[1] = knotv[3];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             dv = knotv[4] - knotv[3];
             dx = x[(0)+(1)*imax] - x[(0)+(0)*imax] - dv * data[6];
@@ -1483,7 +1331,7 @@ spline2d(ego    context,
             parms[0] = knotu[3];
             parms[1] = knotv[3];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             du = knotu[4] - knotu[3];
             dv = knotv[4] - knotv[3];
@@ -1504,7 +1352,7 @@ spline2d(ego    context,
                 parms[0] = knotu[i+2];
                 parms[1] = knotv[  3];
                 status = EG_evaluate(*esurf, parms, data);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_evaluate);
 
                 dv = knotv[4] - knotv[3];
                 dx = x[(i-1)+(1)*imax] - x[(i-1)+(0)*imax] - dv * data[6];
@@ -1525,7 +1373,7 @@ spline2d(ego    context,
             parms[0] = knotu[imax+2];
             parms[1] = knotv[     3];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             du = knotu[imax+2] - knotu[imax+1];
             dv = knotv[     4] - knotv[     3];
@@ -1546,7 +1394,7 @@ spline2d(ego    context,
             parms[0] = knotu[imax+2];
             parms[1] = knotv[     3];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             dv = knotv[4] - knotv[3];
             dx = x[(imax-1)+(1)*imax] - x[(imax-1)+(0)*imax] - dv * data[6];
@@ -1570,7 +1418,7 @@ spline2d(ego    context,
             parms[0] = knotu[  3];
             parms[1] = knotv[j+2];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             dx = x[(0)+(j-1)*imax] - data[0];
             dy = y[(0)+(j-1)*imax] - data[1];
@@ -1589,7 +1437,7 @@ spline2d(ego    context,
             parms[0] = knotu[  3];
             parms[1] = knotv[j+2];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             du = knotu[4] - knotu[3];
             dx = x[(1)+(j-1)*imax] - x[(0)+(j-1)*imax] - du * data[3];
@@ -1609,7 +1457,7 @@ spline2d(ego    context,
                 parms[0] = knotu[i+2];
                 parms[1] = knotv[j+2];
                 status = EG_evaluate(*esurf, parms, data);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_evaluate);
 
                 dx = x[(i-1)+(j-1)*imax] - data[0];
                 dy = y[(i-1)+(j-1)*imax] - data[1];
@@ -1629,7 +1477,7 @@ spline2d(ego    context,
             parms[0] = knotu[imax+2];
             parms[1] = knotv[j   +2];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             du = knotu[imax+2] - knotu[imax+1];
             dx = x[(imax-1)+(j-1)*imax] - x[(imax-2)+(j-1)*imax] - du * data[3];
@@ -1649,7 +1497,7 @@ spline2d(ego    context,
             parms[0] = knotu[imax+2];
             parms[1] = knotv[j   +2];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             dx = x[(imax-1)+(j-1)*imax] - data[0];
             dy = y[(imax-1)+(j-1)*imax] - data[1];
@@ -1673,7 +1521,7 @@ spline2d(ego    context,
             parms[0] = knotu[     3];
             parms[1] = knotv[jmax+2];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             dv = knotv[jmax+2] - knotv[jmax+1];
             dx = x[(0)+(jmax-1)*imax] - x[(0)+(jmax-2)*imax] - dv * data[6];
@@ -1693,7 +1541,7 @@ spline2d(ego    context,
             parms[0] = knotu[     3];
             parms[1] = knotv[jmax+2];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             du = knotu[     4] - knotu[     3];
             dv = knotv[jmax+2] - knotv[jmax+1];
@@ -1714,7 +1562,7 @@ spline2d(ego    context,
                 parms[0] = knotu[i   +2];
                 parms[1] = knotv[jmax+2];
                 status = EG_evaluate(*esurf, parms, data);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_evaluate);
 
                 dv = knotv[jmax+2] - knotv[jmax+1];
                 dx = x[(i-1)+(jmax-1)*imax] - x[(i-1)+(jmax-2)*imax] - dv * data[6];
@@ -1735,7 +1583,7 @@ spline2d(ego    context,
             parms[0] = knotu[imax+2];
             parms[1] = knotv[jmax+2];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             du = knotu[imax+2] - knotu[imax+1];
             dv = knotv[jmax+2] - knotv[jmax+1];
@@ -1756,7 +1604,7 @@ spline2d(ego    context,
             parms[0] = knotu[imax+2];
             parms[1] = knotv[jmax+2];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             dv = knotv[jmax+2] - knotv[jmax+1];
             dx = x[(imax-1)+(jmax-1)*imax] - x[(imax-1)+(jmax-2)*imax] - dv * data[6];
@@ -1783,7 +1631,7 @@ spline2d(ego    context,
             parms[0] = knotu[     3];
             parms[1] = knotv[jmax+2];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             du = knotu[4] - knotu[3];
             dx = x[(1)+(jmax-1)*imax] - x[(0)+(jmax-1)*imax] - du * data[3];
@@ -1803,7 +1651,7 @@ spline2d(ego    context,
                 parms[0] = knotu[i   +2];
                 parms[1] = knotv[jmax+2];
                 status = EG_evaluate(*esurf, parms, data);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_evaluate);
 
                 dx = x[(i-1)+(jmax-1)*imax] - data[0];
                 dy = y[(i-1)+(jmax-1)*imax] - data[1];
@@ -1823,7 +1671,7 @@ spline2d(ego    context,
             parms[0] = knotu[imax+2];
             parms[1] = knotv[jmax+2];
             status = EG_evaluate(*esurf, parms, data);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_evaluate);
 
             du = knotu[imax+2] - knotu[imax+1];
             dx = x[(imax-1)+(jmax-1)*imax] - x[(imax-2)+(jmax-1)*imax] - du * data[3];
@@ -1847,11 +1695,11 @@ spline2d(ego    context,
 
         /* make the new curve (after deleting old one) */
         status = EG_deleteObject(*esurf);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_deleteObject);
 
         status = EG_makeGeometry(context, SURFACE, BSPLINE, NULL,
                                  header, cp, esurf);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeGeometry);
     }
 
 cleanup:
@@ -1906,6 +1754,8 @@ plotData(int    *ifunct,                /* (in)  GRAFIC function indicator */
     int     iblack  = GR_BLACK;
     int     ired    = GR_RED;
     int     igreen  = GR_GREEN;
+
+    ROUTINE(plotData);
 
     /* return scales */
     if (*ifunct == 0) {

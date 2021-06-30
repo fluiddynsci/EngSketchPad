@@ -10,20 +10,11 @@ ODIR  = .
 TDIR  = .
 endif
 
-fun3d:  $(TDIR)/fun3dTest \
-	$(TDIR)/fun3dAFLR2Test $(TDIR)/fun3dAFLR4Test  $(TDIR)/fun3dTetgenTest \
+fun3d: $(TDIR)/fun3dAFLR2Test $(TDIR)/fun3dTetgenTest \
 	$(TDIR)/aeroelasticTest
-
-$(TDIR)/fun3dTest:  $(ODIR)/fun3dTest.o $(LDIR)/$(CSHLIB) | $(TDIR)
-	$(CC) -o $(TDIR)/fun3dTest $(ODIR)/fun3dTest.o \
-	-L$(LDIR) -lcaps -locsm -legads -ludunits2 $(RPATH) -lm -ldl
 
 $(TDIR)/fun3dAFLR2Test:  $(ODIR)/fun3dAFLR2Test.o $(LDIR)/$(CSHLIB) | $(TDIR)
 	$(CC) -o $(TDIR)/fun3dAFLR2Test $(ODIR)/fun3dAFLR2Test.o \
-	-L$(LDIR) -lcaps -locsm -legads -ludunits2 $(RPATH) -lm -ldl
-
-$(TDIR)/fun3dAFLR4Test:  $(ODIR)/fun3dAFLR4Test.o $(LDIR)/$(CSHLIB) | $(TDIR)
-	$(CC) -o $(TDIR)/fun3dAFLR4Test $(ODIR)/fun3dAFLR4Test.o \
 	-L$(LDIR) -lcaps -locsm -legads -ludunits2 $(RPATH) -lm -ldl
 
 $(TDIR)/fun3dTetgenTest:  $(ODIR)/fun3dTetgenTest.o $(LDIR)/$(CSHLIB) | $(TDIR)
@@ -35,19 +26,13 @@ $(TDIR)/aeroelasticTest:  $(ODIR)/aeroelasticTest.o $(LDIR)/$(CSHLIB) | $(TDIR)
 	-L$(LDIR) -lcaps -locsm -legads -ludunits2 $(RPATH) -lm -ldl
 
 
-$(ODIR)/fun3dTest.o:    fun3dTest.c $(IDIR)/caps.h | $(ODIR)
-	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) fun3dTest.c -o $(ODIR)/fun3dTest.o
-
-$(ODIR)/fun3dAFLR2Test.o:    fun3dAFLR2Test.c $(IDIR)/caps.h | $(ODIR)
+$(ODIR)/fun3dAFLR2Test.o:  fun3dAFLR2Test.c $(IDIR)/caps.h | $(ODIR)
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) fun3dAFLR2Test.c -o $(ODIR)/fun3dAFLR2Test.o
 
-$(ODIR)/fun3dAFLR4Test.o:    fun3dAFLR4Test.c $(IDIR)/caps.h | $(ODIR)
-	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) fun3dAFLR4Test.c -o $(ODIR)/fun3dAFLR4Test.o
-
-$(ODIR)/fun3dTetgenTest.o:    fun3dTetgenTest.c $(IDIR)/caps.h | $(ODIR)
+$(ODIR)/fun3dTetgenTest.o:  fun3dTetgenTest.c $(IDIR)/caps.h | $(ODIR)
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) fun3dTetgenTest.c -o $(ODIR)/fun3dTetgenTest.o
 	
-$(ODIR)/aeroelasticTest.o:    aeroelasticTest.c $(IDIR)/caps.h | $(ODIR)
+$(ODIR)/aeroelasticTest.o:  aeroelasticTest.c $(IDIR)/caps.h | $(ODIR)
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) aeroelasticTest.c -o $(ODIR)/aeroelasticTest.o
 
 ifdef ESP_BLOC
@@ -59,9 +44,7 @@ $(TDIR):
 endif
 
 clean:
-	-rm -f $(ODIR)/fun3dTest.o $(ODIR)/fun3dAFLR2Test.o $(ODIR)/fun3dAFLR4Test.o \
-		$(ODIR)/aeroelasticTest.o $(ODIR)/fun3dTetgenTest.o
+	-rm -f $(ODIR)/fun3dAFLR2Test.o $(ODIR)/aeroelasticTest.o $(ODIR)/fun3dTetgenTest.o
 
 cleanall:	clean
-	-rm -f $(TDIR)/fun3dTest $(TDIR)/fun3dAFLR2Test $(TDIR)/fun3dAFLR4Test \
-		$(TDIR)/aeroelasticTest $(TDIR)/fun3dTetgenTest
+	-rm -f $(TDIR)/fun3dAFLR2Test $(TDIR)/aeroelasticTest $(TDIR)/fun3dTetgenTest

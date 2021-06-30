@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -13,49 +11,59 @@ parser = argparse.ArgumentParser(description = 'Nastran Pytest Example',
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
-# Initialize capsProblem object
-myProblem = capsProblem()
+# Create working directory variable
+projectName = "NastranModalWingBEM"
+workDir = os.path.join(str(args.workDir[0]), projectName)
+
+# Load CSM file
+geometryScript = os.path.join("..","csmData","feaWingBEM.csm")
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load egadsTess aim
-myProblem.loadAIM( aim = "egadsTessAIM",
-                   altName = "tess" )
+myProblem.analysis.create( aim = "egadsTessAIM",
+                           name = "tess" )
 
+# No Tess vertexes on edges (minimial mesh)
+myProblem.analysis["tess"].input.Edge_Point_Min = 2
+myProblem.analysis["tess"].input.Edge_Point_Max = 2
 
-# All triangles in the grid
-myProblem.analysis["tess"].setAnalysisVal("Mesh_Elements", "Quad")
+# All quad grid
+myProblem.analysis["tess"].input.Mesh_Elements = "Quad"
 
 # Set global tessellation parameters
-myProblem.analysis["tess"].setAnalysisVal("Tess_Params", [.05,.5,15])
+myProblem.analysis["tess"].input.Tess_Params = [1.,1.,30]
 
 # Generate the surface mesh
 myProblem.analysis["tess"].preAnalysis()
 myProblem.analysis["tess"].postAnalysis()
 
-# Load CSM file
-geometryScript = os.path.join("..","csmData","feaWingBEM.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+# View the tessellation
+#myProblem.analysis["tess"].geometry.view()
 
 # Load nastran aim
-myAnalysis = myProblem.loadAIM(aim = "nastranAIM",
-                               altName = "nastran",
-                               analysisDir= os.path.join(args.workDir[0], "NastranModalWingBEM"),
-                               parents = ["tess"] )
+myAnalysis = myProblem.analysis.create(aim = "nastranAIM",
+                                       name = "nastran")
+
+# Link Surface_Mesh
+myAnalysis.input["Mesh"].link(myProblem.analysis["tess"].output["Surface_Mesh"])
 
 projectName = "pyCAPS_nastran_Test"
-myAnalysis.setAnalysisVal("Proj_Name", projectName)
+myAnalysis.input.Proj_Name = projectName
 
-myAnalysis.setAnalysisVal("Edge_Point_Max", 6)
+myAnalysis.input.Edge_Point_Max = 6
 
-myAnalysis.setAnalysisVal("Quad_Mesh", True)
+myAnalysis.input.Quad_Mesh = True
 
-myAnalysis.setAnalysisVal("File_Format", "Free")
+myAnalysis.input.File_Format = "Free"
 
-myAnalysis.setAnalysisVal("Mesh_File_Format", "Large")
+myAnalysis.input.Mesh_File_Format = "Large"
 
 # Set analysis
 eigen = { "extractionMethod"     : "Lanczos",
@@ -63,7 +71,7 @@ eigen = { "extractionMethod"     : "Lanczos",
           "numEstEigenvalue"     : 1,
           "numDesiredEigenvalue" : 10,
           "eigenNormaliztion"    : "MASS"}
-myAnalysis.setAnalysisVal("Analysis", ("EigenAnalysis", eigen))
+myAnalysis.input.Analysis = {"EigenAnalysis": eigen}
 
 # Set materials
 unobtainium  = {"youngModulus" : 2.2E6 ,
@@ -74,8 +82,8 @@ madeupium    = {"materialType" : "isotropic",
                 "youngModulus" : 1.2E5 ,
                 "poissonRatio" : .5,
                 "density"      : 7850}
-myAnalysis.setAnalysisVal("Material", [("Unobtainium", unobtainium),
-                                       ("Madeupium", madeupium)])
+myAnalysis.input.Material = {"Unobtainium": unobtainium,
+                             "Madeupium": madeupium}
 
 # Set property
 shell  = {"propertyType"      : "Shell",
@@ -84,13 +92,13 @@ shell  = {"propertyType"      : "Shell",
           "shearMembraneRatio"  : 0, # Turn of shear - no materialShear
           "membraneThickness" : 0.2}
 
-myAnalysis.setAnalysisVal("Property", ("Ribs_and_Spars", shell))
+myAnalysis.input.Property = {"Ribs_and_Spars": shell}
 
 # Set constraints
 constraint = {"groupName" : ["Rib_Constraint"],
               "dofConstraint" : 123456}
 
-myAnalysis.setAnalysisVal("Constraint", ("ribConstraint", constraint))
+myAnalysis.input.Constraint = {"ribConstraint": constraint}
 
 
 # Run AIM pre-analysis
@@ -113,12 +121,7 @@ myAnalysis.postAnalysis()
 
 # Get Eigen-frequencies
 print ("\nGetting results for natural frequencies.....")
-natrualFreq = myAnalysis.getAnalysisOutVal("EigenFrequency")
+natrualFreq = myAnalysis.output.EigenFrequency
 
-mode = 1
-for i in natrualFreq:
+for mode, i in enumerate(natrualFreq):
     print ("Natural freq (Mode {:d}) = ".format(mode) + '{:.5f} '.format(i) + "(Hz)")
-    mode += 1
-
-# Close CAPS
-myProblem.closeCAPS()

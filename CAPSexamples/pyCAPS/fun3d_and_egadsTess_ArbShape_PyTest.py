@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -15,7 +13,7 @@ parser = argparse.ArgumentParser(description = 'FUN3D and EGADS Tess with arbitr
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
@@ -92,78 +90,78 @@ S809 = [1.000000,  0.000000,
 for i in range(0, 200-len(S809)):
     S809.append(1.0E6)
 
-# Initialize capsProblem object
-myProblem = capsProblem()
-
-# Load CSM file
-geometryScript = os.path.join("..","csmData","cfd2DArbShape.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
-
 # Create working directory variable
 workDir = os.path.join(str(args.workDir[0]), "FUN3DegadsTessArbShapeAnalysisTest")
 
+# Load CSM file
+geometryScript = os.path.join("..","csmData","cfd2DArbShape.csm")
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
+
 # Change a design parameter - area in the geometry
-myProblem.geometry.setGeometryVal("xy", S809)
+myProblem.geometry.despmtr.xy = S809
 
 # Load egadsTess aim
-myProblem.loadAIM(aim = "egadsTessAIM", analysisDir = workDir)
+myProblem.analysis.create(aim = "egadsTessAIM", name = "egadsTess")
 
-myProblem.analysis["egadsTessAIM"].setAnalysisVal("Mesh_Sizing", [("Airfoil"   , {"numEdgePoints" : 400}),
-                                                                  ("TunnelWall", {"numEdgePoints" : 50}),
-                                                                  ("InFlow",     {"numEdgePoints" : 25}),
-                                                                  ("OutFlow",    {"numEdgePoints" : 25}),
-                                                                  ("2DSlice",    {"tessParams" : [0.50, .01, 45]})])
+myProblem.analysis["egadsTess"].input.Mesh_Sizing = {"Airfoil"   : {"numEdgePoints" : 400},
+                                                     "TunnelWall": {"numEdgePoints" : 50},
+                                                     "InFlow"    : {"numEdgePoints" : 25},
+                                                     "OutFlow"   : {"numEdgePoints" : 25},
+                                                     "2DSlice"   : {"tessParams" : [0.50, .01, 45]}}
 
 # Run AIM pre-analysis
-myProblem.analysis["egadsTessAIM"].preAnalysis()
+myProblem.analysis["egadsTess"].preAnalysis()
 
 # NO analysis is needed - egadsTess was already ran during preAnalysis
 
 # Run AIM post-analysis
-myProblem.analysis["egadsTessAIM"].postAnalysis()
+myProblem.analysis["egadsTess"].postAnalysis()
 
 # Load FUN3D aim - child of egadsTess AIM
-myProblem.loadAIM(aim = "fun3dAIM",
-                  altName = "fun3d",
-                  analysisDir = workDir, parents = ["egadsTessAIM"])
+myProblem.analysis.create(aim = "fun3dAIM",
+                          name = "fun3d")
+
+myProblem.analysis["fun3d"].input["Mesh"].link(myProblem.analysis["egadsTess"].output["Surface_Mesh"])
 
 # Set project name
-myProblem.analysis["fun3d"].setAnalysisVal("Proj_Name", "pyCAPS_FUN3D_egadsTess")
+myProblem.analysis["fun3d"].input.Proj_Name = "pyCAPS_FUN3D_egadsTess"
 
-myProblem.analysis["fun3d"].setAnalysisVal("Mesh_ASCII_Flag", True)
+myProblem.analysis["fun3d"].input.Mesh_ASCII_Flag = True
 
 # Set AoA number
-myProblem.analysis["fun3d"].setAnalysisVal("Alpha", 0.0)
+myProblem.analysis["fun3d"].input.Alpha = 0.0
 
 # Set equation type
-myProblem.analysis["fun3d"].setAnalysisVal("Equation_Type","compressible")
+myProblem.analysis["fun3d"].input.Equation_Type = "compressible"
 
 # Set Viscous term
-myProblem.analysis["fun3d"].setAnalysisVal("Viscous", "inviscid")
+myProblem.analysis["fun3d"].input.Viscous = "inviscid"
 
 # Set number of iterations
-myProblem.analysis["fun3d"].setAnalysisVal("Num_Iter",10)
+myProblem.analysis["fun3d"].input.Num_Iter = 10
 
 # Set CFL number schedule
-myProblem.analysis["fun3d"].setAnalysisVal("CFL_Schedule",[1, 40])
+myProblem.analysis["fun3d"].input.CFL_Schedule = [1, 40]
 
 # Set read restart option
-myProblem.analysis["fun3d"].setAnalysisVal("Restart_Read","off")
+myProblem.analysis["fun3d"].input.Restart_Read = "off"
 
 # Set CFL number iteration schedule
-myProblem.analysis["fun3d"].setAnalysisVal("CFL_Schedule_Iter", [1, 200])
+myProblem.analysis["fun3d"].input.CFL_Schedule_Iter = [1, 200]
 
 # Set overwrite fun3d.nml if not linking to Python library
-myProblem.analysis["fun3d"].setAnalysisVal("Overwrite_NML", True)
+myProblem.analysis["fun3d"].input.Overwrite_NML = True
 
 # Set the aim to 2D mode
-myProblem.analysis["fun3d"].setAnalysisVal("Two_Dimensional", True)
+myProblem.analysis["fun3d"].input.Two_Dimensional = True
 
 # Set Mach number
 Mach = 0.4
 gamma = 1.4
 
-myProblem.analysis["fun3d"].setAnalysisVal("Mach", Mach)
+myProblem.analysis["fun3d"].input.Mach = Mach
 
 # Set boundary conditions
 inviscidBC = {"bcType" : "Inviscid", "wallTemperature" : 1}
@@ -175,11 +173,11 @@ inflow = {"bcType" : "SubsonicInflow",
           "totalPressure" : (1+ (gamma-1.0)/2.0*Mach**2)**(gamma/(gamma-1)), # Isentropic relation
           "totalTemperature" : (1+ (gamma-1.0)/2.0*Mach**2)}
 
-myProblem.analysis["fun3d"].setAnalysisVal("Boundary_Condition", [("Airfoil"   , inviscidBC),
-                                                                  ("TunnelWall", inviscidBC),
-                                                                  ("InFlow", inflow),
-                                                                  ("OutFlow",backPressureBC),
-                                                                  ("2DSlice", "SymmetryY")])
+myProblem.analysis["fun3d"].input.Boundary_Condition = {"Airfoil"   : inviscidBC,
+                                                        "TunnelWall": inviscidBC,
+                                                        "InFlow"    : inflow,
+                                                        "OutFlow"   : backPressureBC,
+                                                        "2DSlice"   : "SymmetryY"}
 
 # Run AIM pre-analysis
 myProblem.analysis["fun3d"].preAnalysis()
@@ -207,48 +205,45 @@ myProblem.analysis["fun3d"].postAnalysis()
 if haveFUN3D:
     print ("Total Force - Pressure + Viscous")
     # Get Lift and Drag coefficients
-    print ("Cl = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CLtot"), \
-           "Cd = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CDtot"))
+    print ("Cl = " , myProblem.analysis["fun3d"].output.CLtot,
+           "Cd = " , myProblem.analysis["fun3d"].output.CDtot)
 
     # Get Cmx, Cmy, and Cmz coefficients
-    print ("Cmx = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CMXtot"), \
-           "Cmy = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CMYtot"), \
-           "Cmz = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CMZtot"))
+    print ("Cmx = " , myProblem.analysis["fun3d"].output.CMXtot, 
+           "Cmy = " , myProblem.analysis["fun3d"].output.CMYtot, 
+           "Cmz = " , myProblem.analysis["fun3d"].output.CMZtot)
 
     # Get Cx, Cy, Cz coefficients
-    print ("Cx = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CXtot"), \
-           "Cy = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CYtot"), \
-           "Cz = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CZtot"))
+    print ("Cx = " , myProblem.analysis["fun3d"].output.CXtot,
+           "Cy = " , myProblem.analysis["fun3d"].output.CYtot,
+           "Cz = " , myProblem.analysis["fun3d"].output.CZtot)
 
     print ("Pressure Contribution")
     # Get Lift and Drag coefficients
-    print ("Cl_p = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CLtot_p"), \
-           "Cd_p = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CDtot_p"))
+    print ("Cl_p = " , myProblem.analysis["fun3d"].output.CLtot_p,
+           "Cd_p = " , myProblem.analysis["fun3d"].output.CDtot_p)
 
     # Get Cmx, Cmy, and Cmz coefficients
-    print ("Cmx_p = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CMXtot_p"), \
-           "Cmy_p = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CMYtot_p"), \
-           "Cmz_p = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CMZtot_p"))
+    print ("Cmx_p = " , myProblem.analysis["fun3d"].output.CMXtot_p,
+           "Cmy_p = " , myProblem.analysis["fun3d"].output.CMYtot_p,
+           "Cmz_p = " , myProblem.analysis["fun3d"].output.CMZtot_p)
 
     # Get Cx, Cy, and Cz, coefficients
-    print ("Cx_p = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CXtot_p"), \
-           "Cy_p = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CYtot_p"), \
-           "Cz_p = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CZtot_p"))
+    print ("Cx_p = " , myProblem.analysis["fun3d"].output.CXtot_p,
+           "Cy_p = " , myProblem.analysis["fun3d"].output.CYtot_p,
+           "Cz_p = " , myProblem.analysis["fun3d"].output.CZtot_p)
 
     print ("Viscous Contribution")
     # Get Lift and Drag coefficients
-    print ("Cl_v = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CLtot_v"), \
-           "Cd_v = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CDtot_v"))
+    print ("Cl_v = " , myProblem.analysis["fun3d"].output.CLtot_v,
+           "Cd_v = " , myProblem.analysis["fun3d"].output.CDtot_v)
 
     # Get Cmx, Cmy, and Cmz coefficients
-    print ("Cmx_v = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CMXtot_v"), \
-           "Cmy_v = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CMYtot_v"), \
-           "Cmz_v = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CMZtot_v"))
+    print ("Cmx_v = " , myProblem.analysis["fun3d"].output.CMXtot_v,
+           "Cmy_v = " , myProblem.analysis["fun3d"].output.CMYtot_v,
+           "Cmz_v = " , myProblem.analysis["fun3d"].output.CMZtot_v)
 
     # Get Cx, Cy, and Cz, coefficients
-    print ("Cx_v = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CXtot_v"), \
-           "Cy_v = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CYtot_v"), \
-           "Cz_v = " , myProblem.analysis["fun3d"].getAnalysisOutVal("CZtot_v"))
-
-# Close CAPS
-myProblem.closeCAPS()
+    print ("Cx_v = " , myProblem.analysis["fun3d"].output.CXtot_v,
+           "Cy_v = " , myProblem.analysis["fun3d"].output.CYtot_v,
+           "Cz_v = " , myProblem.analysis["fun3d"].output.CZtot_v)

@@ -7,10 +7,10 @@ select    body 17
    assert        20      @nnode       0  1
    assert        36      @nedge       0  1
    assert        18      @nface       0  1
-   assert   4.6656937e+01  @volume  -.001  1
-   assert   8.2649791e+01  @area    -.001  1
-   assert   0.0000000e+00  @xcg     0.001  1
-   assert   0.0000000e+00  @ycg     0.001  1
-   assert   0.0000000e+00  @zcg     0.001  1
+   assert   4.6656937e+01  @volume  -.01  1
+   assert   8.2649791e+01  @area    -.01  1
+   assert   0.0000000e+00  @xcg     0.01  1
+   assert   0.0000000e+00  @ycg     0.01  1
+   assert   0.0000000e+00  @zcg     0.01  1
 
 end

@@ -364,7 +364,7 @@ int setNacaBody_dot( ego eobj,  /* (in/out) body with sensitivities    */
   tdata_dot[0] = 0;
   tdata_dot[1] = tle_dot;
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* set Edge t-range sensitivity for lower surface */
@@ -373,7 +373,7 @@ int setNacaBody_dot( ego eobj,  /* (in/out) body with sensitivities    */
   tdata_dot[0] = tdata_dot[1];
   tdata_dot[1] = 0;
 
-  status = EG_setGeometry_dot(eedges[1], EDGE, TWONODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[1], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -416,7 +416,7 @@ int setNacaBody_dot( ego eobj,  /* (in/out) body with sensitivities    */
     tdata_dot[0] = 0;
     tdata_dot[1] = (data[3]*data_dot[3] + data[4]*data_dot[4] + data[5]*data_dot[5])/tdata[1];
 
-    status = EG_setGeometry_dot(eedges[2], EDGE, TWONODE, NULL, tdata, tdata_dot);
+    status = EG_setRange_dot(eedges[2], EDGE, tdata, tdata_dot);
     if (status != EGADS_SUCCESS) goto cleanup;
   }
 

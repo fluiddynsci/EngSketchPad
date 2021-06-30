@@ -11,7 +11,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -98,6 +98,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     double  xa, ya, xb, yb, xc, yc, xd, yd, data[18];
     ego     enodes[5], ecurve, eedges[8], eloop, eface;
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
     printf("rad1(0)       = %f\n", RAD1(     0));
@@ -195,10 +197,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("rad1(%d)       = %f\n", numUdp, RAD1(     numUdp));
@@ -264,28 +263,28 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     data[2] = 0;
 
     status = EG_makeTopology(context, NULL, NODE, 9, data, 0, NULL, NULL, &(enodes[0]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     data[0] = x[3];
     data[1] = y[3];
     data[2] = 0;
 
     status = EG_makeTopology(context, NULL, NODE, 9, data, 0, NULL, NULL, &(enodes[1]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     data[0] = x[6];
     data[1] = y[6];
     data[2] = 0;
 
     status = EG_makeTopology(context, NULL, NODE, 9, data, 0, NULL, NULL, &(enodes[2]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     data[0] = x[5];
     data[1] = y[5];
     data[2] = 0;
 
     status = EG_makeTopology(context, NULL, NODE, 9, data, 0, NULL, NULL, &(enodes[3]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     enodes[4] = enodes[0];
 
@@ -299,12 +298,12 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     data[  9] = x[3];    data[ 10] = y[3];    data[ 11] = 0;
 
     status = EG_makeGeometry(context, CURVE, BEZIER, NULL, header, data, &ecurve);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     data[0] = 0;
     data[1] = 1;
     status = EG_makeTopology(context, ecurve, EDGE, TWONODE, data, 2, &(enodes[0]), NULL, &(eedges[0]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     data[ 0] = x[1];           data[ 1] = y[1];           data[ 2] = 0;
     data[ 3] = x[3] - x[1];    data[ 4] = y[3] - y[1];    data[ 5] = 0;
@@ -312,12 +311,12 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     data[ 9] = RAD1(numUdp);
 
     status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL, data, &ecurve);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     data[0] = 0;
     data[1] = PI - 2 * GAMA1(numUdp) * PIo180;
     status = EG_makeTopology(context, ecurve, EDGE, TWONODE, data, 2, &(enodes[1]), NULL, &(eedges[1]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     header[0] = 0;
     header[1] = 3;
@@ -328,12 +327,12 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     data[  9] = x[5];    data[ 10] = y[5];    data[ 11] = 0;
 
     status = EG_makeGeometry(context, CURVE, BEZIER, NULL, header, data, &ecurve);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     data[0] = 0;
     data[1] = 1;
     status = EG_makeTopology(context, ecurve, EDGE, TWONODE, data, 2, &(enodes[2]), NULL, &(eedges[2]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     data[ 0] = x[2];           data[ 1] = y[2];           data[ 2] = 0;
     data[ 3] = x[5] - x[2];    data[ 4] = y[5] - y[2];    data[ 5] = 0;
@@ -341,12 +340,12 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     data[ 9] = RAD2(numUdp);
 
     status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL, data, &ecurve);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     data[0] = 0;
     data[1] = PI - 2 * GAMA2(numUdp) * PIo180;
     status = EG_makeTopology(context, ecurve, EDGE, TWONODE, data, 2, &(enodes[3]), NULL, &(eedges[3]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
 
     /* make Loop from the Edges */
@@ -355,19 +354,20 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     senses[2] = SFORWARD;
     senses[3] = SFORWARD;
     status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL, 4, eedges, senses, &eloop);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     /* make Face from the Loop */
     status = EG_makeFace(eloop, SFORWARD, NULL, &eface);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeFace);
 
     /* create the FaceBody (which will be returned) */
     status = EG_makeTopology(context, NULL, BODY, FACEBODY, NULL, 1, &eface, NULL, ebody);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
+    if (*ebody == NULL) goto cleanup;   // needed for splint
 
     /* set the output value(s) */
     status = EG_getMassProperties(*ebody, data);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getMassProperties);
 
     /* remember this model (body) */
     udps[numUdp].ebody = *ebody;

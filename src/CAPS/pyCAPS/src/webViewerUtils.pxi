@@ -1,7 +1,14 @@
 #
 # Written by Dr. Ryan Durscher AFRL/RQVC
 # 
-# This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3793.
+# This software has been cleared for public release on 27 Oct. 2020, case number 88ABW-2020-3328.
+
+# Python version
+try:
+    from cpython.version cimport PY_MAJOR_VERSION
+except: 
+    print("Error: Unable to import cpython.version")
+    raise ImportError
 
 # C-Imports 
 cimport cWV
@@ -75,7 +82,7 @@ cdef void * setScalarColor(object data, double dataMin, double dataMax, int numC
         else:
      
             colorMap = getColorMap(<object> cMapName, numContour, reverseMap)
-            numColor = len(colorMap)/3 - 1
+            numColor = int(len(colorMap)/3) - 1
             
             if numColor == 0:
                 dataMin = dataMax
@@ -179,12 +186,13 @@ cdef object __getColor(cEGADS.ego egoObj):
 
 
 # Required call-back to catch browser messages
-cdef public void browserMessage(void *wsi, char *inText, int lenText):
+# 'with gil' enables calling CPython functions from within browserMessage
+# https://cython.readthedocs.io/en/latest/src/userguide/external_C_code.html#acquiring-the-gil
+cdef public void browserMessage(void *wsi, char *inText, int lenText) with gil:
     
     cdef:
-        void * temp
-        char * msg
-        char *limits
+        void *temp
+        char *msg
         double upper, lower
         
         int i=0, istart=0, iend=0
@@ -198,16 +206,20 @@ cdef public void browserMessage(void *wsi, char *inText, int lenText):
         char msgFinite[1024]
         char cscale[512]
         char cmatrix[512]
-    
-    # convert text to a python byte string
-    Text = inText[:lenText]
 
-    cscale[0] = '\0'
-    cmatrix[0] = '\0'
-    msgFinite[0] = '\0'
+    # convert text to a python string
+    if PY_MAJOR_VERSION >= 3:
+        Text = inText[:lenText].decode('ascii', 'strict')
+    else:
+        Text = <bytes> inText[:lenText]
+
+    cscale[0] = b'\0'
+    cmatrix[0] = b'\0'
+    msgFinite[0] = b'\0'
     msg = msgFinite
 
-    #printf("Server message: %s\n", <char*>Text)
+    #bText = bytes(Text, "ascii")
+    #printf("Server message: %s\n", <char*> bText)
 
     if 'nextScalar' == Text:
         
@@ -256,9 +268,9 @@ cdef public void browserMessage(void *wsi, char *inText, int lenText):
         
         for i in range(lenText):
                 
-            if ',' == inText[i] and istart == 0:
+            if b',' == inText[i] and istart == 0:
                 istart = i
-            elif ',' == inText[i]:
+            elif b',' == inText[i]:
                 iend = i
         
         # Need special treatment for negatives to a avoid a seg-fault in PyFloat_FromString
@@ -358,7 +370,7 @@ cdef public void browserMessage(void *wsi, char *inText, int lenText):
         istart = 12
         
         # Need special treatment for negatives to a avoid a seg-fault in PyFloat_FromString
-        if inText[istart+1] == "-": 
+        if inText[istart+1] == b"-": 
             numContour = < int > float(inText[istart+2:])
             numContour = -numContour
         else: 
@@ -386,10 +398,14 @@ cdef public void browserMessage(void *wsi, char *inText, int lenText):
     elif "saveView|" in Text:
 
         # extract arguments
-        saveView, viewfile, scale, matrix = Text.split("|")
+        viewfile, scale, matrix = Text.split("|")[1:4]
+
+        viewfile = bytes(viewfile, 'ascii')
+        scale    = bytes(scale   , 'ascii')
+        matrix   = bytes(matrix  , 'ascii')
 
         # save the view in viewfile 
-        fp = fopen(<char*>viewfile, "w")
+        fp = fopen(<char*> viewfile, "w")
         if fp != <FILE*>NULL:
             fprintf(fp, "%s\n", <char*>scale);
             fprintf(fp, "%s\n", <char*>matrix);
@@ -401,10 +417,11 @@ cdef public void browserMessage(void *wsi, char *inText, int lenText):
     # "readView|viewfile" 
     elif "readView|" in Text:
         # extract arguments 
-        readView, viewfile = Text.split("|")
+        viewfile = Text.split("|")[1]
 
         # read the view from viewfile 
-        fp = fopen(<char*>viewfile, "r");
+        viewfile = bytes(viewfile, 'ascii')
+        fp = fopen(<char*> viewfile, "r");
         if fp != <FILE*>NULL:
             fscanf(fp, "%s", cscale);
             fscanf(fp, "%s", cmatrix);
@@ -972,7 +989,7 @@ cdef class graphicPrimitive:
     
     # \param items List of wvData objects used to create the triangle 
     # \param name Name of graphic primitive. Important: Name must be unique 
-    # \param lines Lines in the primiteve on or off
+    # \param lines Turn lines in the primitive on or off.
     # \return Instance of  graphicPrimitive class 
     def createLine(self, items, name, lines=True):
         cdef:
@@ -990,7 +1007,7 @@ cdef class graphicPrimitive:
         
     # \param items List of wvData objects used to create the triangle 
     # \param name Name of graphic primitive. Important: Name must be unique 
-    # \param lines Lines in the primiteve on or off
+    # \param lines Turn lines in the primitive on or off.
     # \return Instance of  graphicPrimitive class 
     def createTriangle(self, items, name, lines=True):
         cdef:
@@ -1304,14 +1321,15 @@ cdef class graphicPrimitive:
         numContour = <int>  item.numContour
         reverseMap = <int>  item.reverseMap
         
+#         print cMapName, numContour, minColor, maxColor
         # Get color map 
         colorMap = getColorMap(cMapName, numContour, reverseMap)
-        
+       
         # Create key data 
         if minColor == maxColor:
             numCol = 1
         else:
-            numCol = <int> len(colorMap)/3
+            numCol = int(len(colorMap)/3)
         
         keyData = <float *> malloc(3*numCol*sizeof(float))
         if not keyData:
@@ -1321,14 +1339,14 @@ cdef class graphicPrimitive:
             keyData[0] = <float> colorMap[-3]
             keyData[1] = <float> colorMap[-2]
             keyData[2] = <float> colorMap[-1]
-        else:
             
+        else:
             i = 0
             while i < 3*numCol:
-            #for i in range(3*numCol):
                 keyData[i] = <float> colorMap[i]
                 i += 1
-
+#                 print keyData[i-1],colorMap[i-1]
+                
         self.status = cWV.wv_setKey(self.context.context, numCol,  
                                                           keyData, 
                                                           minColor, maxColor, 
@@ -1538,8 +1556,8 @@ cdef class _wvContext:
         self.buffer = bytearray(self.bufferLen)
         self.bufferIndex = 0
             
-    def setKey(self, primativeIndex=0):
-        self.graphicPrim[primativeIndex].setKey()
+    def setKey(self, primitiveIndex=0):
+        self.graphicPrim[primitiveIndex].setKey()
         
     def addPrimative(self, type, items, name=None, lines=True ):
          
@@ -1583,7 +1601,7 @@ cdef class _wvContext:
         
         self.bufferIndex = 0 
         
-        print "Flag - ", flag
+        print("Flag - ", flag)
         if flag == 1: # Intiatial message
             self.__sendInitMessage(client)
             return 0
@@ -1593,7 +1611,7 @@ cdef class _wvContext:
         self.__sendKey(client, flag)
         
         if self.context.gPrims == NULL: 
-            print "No GPrims"
+            print("No GPrims")
             return -1
         
         # Any changes
@@ -1628,7 +1646,7 @@ cdef class _wvContext:
             self.context.cleanAll = 0
         
         for i in range(self.context.nGPrim):
-            print "Primative - ", i
+            print("Primative - ", i)
             
             gp = &self.context.gPrims[i]
             
@@ -1638,7 +1656,7 @@ cdef class _wvContext:
                 continue
             
             if gp.updateFlg == cWV.WV_DELETE:
-                print "Deleting all "
+                print("Deleting all ")
                 # Delete the gPrim
                 npack = 8 + gp.nameLen
                 self.__sendBuffer(client, npack)
@@ -1670,7 +1688,7 @@ cdef class _wvContext:
                 
             elif (gp.updateFlg == cWV.WV_PCOLOR) or (flag == -1):
                 #print "New GPrim"
-                print "New Primative (# " , i, ") - ", gp.name
+                print("New Primative (# " , i, ") - ", gp.name)
                 
                 # New gPrim
                 npack = 8 + gp.nameLen + 16
@@ -1733,7 +1751,7 @@ cdef class _wvContext:
                 
                 self.__writeGPrim(client, gp) 
             else:
-                print "Update GPrim"
+                print("Update GPrim")
                 self.__updateGPrim(client, gp)
                 
                 
@@ -1799,7 +1817,7 @@ cdef class _wvContext:
             self.__sendBuffer(client, npack)
             
             if npack > self.bufferLen:
-                print " Oops! npack = %d  BUFLEN = %d\n", npack, self.bufferLen
+                print(" Oops! npack = %d  BUFLEN = %d\n", npack, self.bufferLen)
                 raise IndexError
           
             
@@ -2290,14 +2308,14 @@ cdef class _wvContext:
                 self.bufferIndex +=1
         
         elif count > length:
-            print "Our string got longer!"
+            print("Our string got longer!")
         
         return 
         
     # Send inital gPrim message (i.e. FoV, eye, center, etc.)
     def __sendInitMessage(self, client): 
         
-        print "Initial message"
+        print("Initial message")
         
         struct.pack_into('B', self.buffer, 0, 0)
         struct.pack_into('B', self.buffer, 1, 0)
@@ -2318,14 +2336,14 @@ cdef class _wvContext:
         
         client.sendMessage(self.buffer[:56])
             
-        print "Done - sending initial message"
+        print("Done - sending initial message")
     
     # Send thumbnail data 
     def __sendThumbnail(self, client):
             
         if self.context.thumbnail:
             
-            print "Thumbnail data"
+            print("Thumbnail data")
             #Init + width + height + 4*width*height + close
 
             self.bufferIndex = 0 
@@ -2357,7 +2375,7 @@ cdef class _wvContext:
             
             self.bufferIndex = 0
             
-            print "Done - sending thumbnail data"
+            print("Done - sending thumbnail data")
     
     # Send the key if there is one or if it has changed
     def __sendKey(self, client, flag):
@@ -2366,18 +2384,23 @@ cdef class _wvContext:
            ((flag == -1) and (self.context.nColor != 0)) or \
            (self.context.nColor > 0): 
 
-            print "Key data"
+            print("Key data")
                      
             self.bufferIndex = 0
             i = self.context.titleLen
             
             if (i == -1):
                 i = 0
-                
-            struct.pack_into('B', self.buffer, self.bufferIndex+0, i)
-            struct.pack_into('B', self.buffer, self.bufferIndex+1, 0)
+            
+            struct.pack_into('i', self.buffer, self.bufferIndex+0, i)
+            #struct.pack_into('B', self.buffer, self.bufferIndex+1, 0)
             struct.pack_into('B', self.buffer, self.bufferIndex+2, 0)
-            struct.pack_into('B', self.buffer, self.bufferIndex+3, 9)
+            struct.pack_into('B', self.buffer, self.bufferIndex+3, 9) 
+  
+#             struct.pack_into('B', self.buffer, self.bufferIndex+0, i)
+#             struct.pack_into('B', self.buffer, self.bufferIndex+1, 0)
+#             struct.pack_into('B', self.buffer, self.bufferIndex+2, 0)
+#             struct.pack_into('B', self.buffer, self.bufferIndex+3, 9)
 
             self.bufferIndex += 4
             
@@ -2420,7 +2443,7 @@ cdef class _wvContext:
             client.sendMessage(self.buffer[:self.bufferIndex])
             
             self.bufferIndex = 0
-            print "Done - sending key data"
+            print("Done - sending key data")
             
     # Send delete all code
     def __sendDeleteAll(self):
@@ -2472,7 +2495,7 @@ cdef class _wvContext:
         minVal = [] 
         
         numColor = self.checkNumColor()
-        print "Checking for a common max/min color limit all primitives..."
+        print("Checking for a common max/min color limit all primitives...")
         
         for j in range(numColor):
             
@@ -2500,7 +2523,7 @@ cdef class _wvContext:
     # Unify the bounding box for each primitive
     def unifyBoundingBox(self):
         
-        print "Checking for a common bounding box for all primitives..."
+        print("Checking for a common bounding box for all primitives...")
     
         box = [1E6, -1E6, 1E6, -1E6, 1E6, -1E6]
         for i in self.graphicPrim:
@@ -2542,7 +2565,7 @@ cdef class _wvContext:
     
     # Check to make sure all the primitives have the same number colors 
     def checkNumColor(self):
-        print "Checking to make sure all the primitives have the same number of colors..."
+        print("Checking to make sure all the primitives have the same number of colors...")
         
         numColor = None
         for i in self.graphicPrim:
@@ -2553,9 +2576,9 @@ cdef class _wvContext:
                 
                 if numColor != len(i.colors):
                     
-                    print "The total number of colors do NOT match for each primitive"
-                    print "Primitive", i.name , "has", len(i.colors), "colors, while", numColor, \
-                           "colors were found for another primitive!"
+                    print("The total number of colors do NOT match for each primitive")
+                    print("Primitive", i.name , "has", len(i.colors), "colors, while", numColor, \
+                           "colors were found for another primitive!")
                     
                     self.status = cCAPS.CAPS_MISMATCH
                     raise CAPSError(self.status, msg="while checking the number of colors for each primitive")
@@ -2609,7 +2632,7 @@ cdef class _wvContext:
         
         cWV.wv_cleanupServers()
     
-    # Remove all graphic primatives from context 
+    # Remove all graphic primitives from context 
     def removeAll(self):
         cWV.wv_removeAll(self.context)
             
@@ -2667,10 +2690,10 @@ cdef class capsViewer:
         
         if self.viewerHTML:
             if not os.path.isfile(self.viewerHTML.replace("file:", "")):
-                print "Unable to locate file -", self.viewerHTML, ". Browser will NOT start automatically!"
+                print("Unable to locate file -", self.viewerHTML, ". Browser will NOT start automatically!")
                 self.viewerHTML = None
         
-        print "Starting context"        
+        print("Starting context")
         self.context = _wvContext(portNumber=portNumber, oneBias = oneBias)
     
         self.items = []
@@ -2731,7 +2754,7 @@ cdef class capsViewer:
     #
     # \param enableCheck Enable checks to ensure all primitives have the same number colors and that the limits
     # for each color are initially the same. 
-    # \param unifyBoundingBox Unify the bounding boxes of all primatives (so all images are within the viewering area)
+    # \param unifyBoundingBox Unify the bounding boxes of all primitives (so all images are within the viewering area)
     def startServer(self, enableCheck = True, unifyBoundingBox = True):
         
         self.context.startServer(enableCheck=enableCheck, unifyBoundingBox=unifyBoundingBox)
@@ -2769,7 +2792,7 @@ cdef class capsViewer:
         xyzMin = [ 99999999.0,  99999999.0,  99999999.0]
         xyzMax = [-99999999.0, -99999999.0, -99999999.0]
         if not isinstance(xyz, list):
-            print "xyz should be a list"
+            print("xyz should be a list")
             raise TypeError 
         
         if not isinstance(xyz[0], list):
@@ -2810,7 +2833,7 @@ cdef class capsViewer:
     def addVertex(self, xyz, name=None):
 
         if not isinstance(xyz, list):
-            print "xyz should be a list"
+            print("xyz should be a list")
             raise TypeError 
         
          # Make sure a single vertex occurs twice due to a know bug in wvCleint (known to Bob anyways...)
@@ -2875,7 +2898,7 @@ cdef class capsViewer:
                 connectivity = [connectivity]
         else:
             if not isinstance(connectivity, list):
-                print "connectivity should be a list"
+                print("connectivity should be a list")
                 raise TypeError 
             
             if not isinstance(connectivity[0], list):
@@ -2903,9 +2926,9 @@ cdef class capsViewer:
 
     ## Add color/scalar data set. 
     # See \ref webviewer.py for an example use case. 
-    # \param colorData A list of color/scalar data to be applied at each node  
-    # (e.g. [ node1_Color, node2_Color, node3_Color, etc.]). Cell-centered coloring isn't currently supported. Alternatively,
-    # a Hex string (e.g. '#ff0000' == the color red) may be used to set all nodes to a constant color.
+    # \param colorData A list of scalar data values or Hexedecimal strings to be applied at each node
+    # (e.g. [ node1_Color, node2_Color, node3_Color, etc.]). Alternatively,
+    # a single Hexadecimal string (e.g. '#ff0000' == the color red) may be used to set all nodes to a constant color.
     #
     # \param minColor Minimum color value to use for scaling (default - None). If None, the minimum value is determined
     # automatically from the colorData provided. When plotting multiple color/data sets a minimum value should be provided
@@ -2931,9 +2954,9 @@ cdef class capsViewer:
     
     ## Add color/scalar data set for the graphical lines on triangular primitives. (\ref addLineIndex ). 
     # See \ref webviewer.py for an example use case. 
-    # \param colorData A list of color/scalar data to be applied at each node
+    # \param colorData A list of scalar data values or Hexedecimal strings to be applied at each node
     # (e.g. [ node1_Color, node2_Color, node3_Color, etc.]). Alternatively,
-    # a Hex string (e.g. '#ff0000' == the color red) may be used to set all nodes to a constant color.
+    # a single Hexadecimal string (e.g. '#ff0000' == the color red) may be used to set all nodes to a constant color.
     #
     # \param minColor Minimum color value to use for scaling (default - None). If None, the minimum value is determined
     # automatically from the colorData provided. When plotting multiple color/data sets a minimum value should be provided
@@ -2959,9 +2982,9 @@ cdef class capsViewer:
     
     ## Add color/scalar data set for the graphical points on line or triangular primitives. (\ref addPointIndex ). 
     # See \ref webviewer.py for an example use case. 
-    # \param colorData A list of color/scalar data to be applied at each node
+    # \param colorData A list of scalar data values or Hexedecimal strings to be applied at each node
     # (e.g. [ node1_Color, node2_Color, node3_Color, etc.]). Alternatively,
-    # a Hex string (e.g. '#ff0000' == the color red) may be used to set all nodes to a constant color.
+    # a single Hexadecimal string (e.g. '#ff0000' == the color red) may be used to set all nodes to a constant color.
     #
     # \param minColor Minimum color value to use for scaling (default - None). If None, the minimum value is determined
     # automatically from the colorData provided. When plotting multiple color/data sets a minimum value should be provided
@@ -3047,12 +3070,12 @@ cdef class capsViewer:
     
     ## Create a generic graphic primitive.
     # \param type Type of primitive to create. Options: "point", "line", or "triangle" (case insensitive)
-    # \param items List of "wvData items (objects)" used to create the triangle (default - None). 
+    # \param items List of "wvData items (objects)" used to create the primitive (default - None). 
     # If none are provided all current items added will be used! 
     #
     # \param name Name of graphic primitive (default - GPrim_#, where # is 1 + number of primitives previously loaded). 
     # Important: If specified, the name must be unique.
-    # \param lines Lines in the primiteve on or off
+    # \param lines Turn lines in the primitive on or off.
     #
     def createPrimitive(self, type, items=None, name=None, lines=True ):
         
@@ -3074,7 +3097,7 @@ cdef class capsViewer:
 #         return gPrim
         
     ## Create a point graphic primitive.
-    # \param items List of "wvData items (objects)" used to create the triangle (default - None). 
+    # \param items List of "wvData items (objects)" used to create the point (default - None). 
     # If none are provided all current items added will be used! 
     #
     # \param name Name of graphic primitive (default - GPrim_#, where # is 1 + number of primitives previously loaded). 
@@ -3087,14 +3110,14 @@ cdef class capsViewer:
         return self.createPrimitive("point", items=items, name=name)
         
     ## Create a line graphic primitive.
-    # \param items List of "wvData items (objects)" used to create the triangle (default - None). 
+    # \param items List of "wvData items (objects)" used to create the line (default - None). 
     # If none are provided all current items added will be used! 
     #
     # \param name Name of graphic primitive (default - GPrim_#, where # is 1 + number of primitives previously loaded). 
     # Important: If specified, the name must be unique.
     #
     # \return Optionally returns a reference to the graphicPrimitive object. 
-    def createLine(self, items=None, name=None, turnOn=True):
+    def createLine(self, items=None, name=None):
     # \return Index of graphic primitive
         
         return self.createPrimitive("line", items=items, name=name)
@@ -3106,10 +3129,10 @@ cdef class capsViewer:
     #
     # \param name Name of graphic primitive (default - GPrim_#, where # is 1 + number of primitives previously loaded). 
     # Important: If specified, the name must be unique.
-    # \param lines Lines in the primiteve on or off
+    # \param lines Turn lines in the primitive on or off.
     #
     # \return Optionally returns a reference to the graphicPrimitive object. 
-    def createTriangle(self, items=None, name=None, turnOn=True, lines=True):
+    def createTriangle(self, items=None, name=None, lines=True):
    
         
         return self.createPrimitive("triangle", items=items, name=name, lines=lines)
@@ -3153,7 +3176,7 @@ cdef class capsViewer:
             
             # Check to make sure data sets are actually data sets 
             if not isinstance(i, _capsDataSet): 
-                print "Value is not a _capsDataSet"
+                print("Value is not a _capsDataSet")
                 raise TypeError
             
             for k in range(i.dataRank):
@@ -3163,7 +3186,7 @@ cdef class capsViewer:
         for i in dataSet:
              
             if not isinstance(i, _capsDataSet): # This was already checked, supposedly 
-                print "Value is not a _capsDataSet"
+                print("Value is not a _capsDataSet")
                 raise TypeError
        
             #xyz = i.getDataXYZ()
@@ -3224,7 +3247,7 @@ cdef class capsViewer:
         for i in dataSet:
             
             if not isinstance(i, _capsDataSet): # This was already checked, supposedly 
-                print "Value is not a _capsDataSet"
+                print("Value is not a _capsDataSet")
                 raise TypeError
        
             self.clearItems()
@@ -3312,9 +3335,9 @@ cdef class capsViewer:
     def addBound(self, bound, dataSetType="both"):
         self.addDataBound( bound, dataSetType="both")
 
-    ## Add a _capsBound (see \ref _capsBound) object(s). 
+    ## Add a capsBound (see \ref capsBound) object(s). 
     #
-    # \param bound A single or list of instances of _capsBound objects. 
+    # \param bound A single or list of instances of capsBound objects. 
     # \param dataSetType Specifies which type of data sets in the bound should be added, source or destination.
     # Options: "source", "destination, or "both" (default) - values are case insensitive. 
     def addDataBound(self, bound, dataSetType="both"):  
@@ -3328,7 +3351,7 @@ cdef class capsViewer:
         # Check data set type
         if dataSetType not in ["both", "source", "destination"]:
             
-            print "Invalid option for dataSetType"
+            print("Invalid option for dataSetType")
             raise ValueError
         
         # Initialize date set list
@@ -3337,8 +3360,8 @@ cdef class capsViewer:
         for i in bound:
             
             # Check to make sure the bound is actually a bound 
-            if not isinstance(i, _capsBound):
-                print "Value is not a _capsBound"
+            if not isinstance(i, capsBound):
+                print("Value is not a capsBound")
                 raise TypeError
             
             if dataSetType == "both" or dataSetType == "source":
@@ -3369,7 +3392,7 @@ cdef class capsViewer:
                 else:
                     pass
             
-            print "Unable to determine which variable is x, y, or z "
+            print("Unable to determine which variable is x, y, or z ")
             raise ValueError
             
         tp = capsTecplot(filename)
@@ -3380,14 +3403,14 @@ cdef class capsViewer:
             
             if i.zoneType == "ORDERED":
                 if i.k != 1:
-                    print "3-dimensional ordered data isn't supported, zone - ", i.zoneName
+                    print("3-dimensional ordered data isn't supported, zone - ", i.zoneName)
                     raise TypeError
                 
             elif ( i.zoneType != "FELINESEG"  and 
                    i.zoneType != "FETRIANGLE" and 
                    i.zoneType != "FEQUADRILATERAL"):
                 
-                print "Unsupported zone type - ", i.zoneType
+                print("Unsupported zone type - ", i.zoneType)
                 raise TypeError
         
         # Clear out list of current items
@@ -3440,7 +3463,7 @@ cdef class capsViewer:
                 self.addVertex(xyz)
                 
                 if i.i == 1 and  i.j == 1:
-                    print "Single point in zone is not currently suppored!"
+                    print("Single point in zone is not currently suppored!")
                     raise ValueError
                 
                 # Create connecitivy 
@@ -3465,7 +3488,7 @@ cdef class capsViewer:
                 
                 if i.j == 1:
                 
-                    print "Warning - color data for lines is not currently supported within the addTecplot function!"
+                    print("Warning - color data for lines is not currently supported within the addTecplot function!")
                     self.createLine(name=name)
        
                 else:
@@ -3501,7 +3524,7 @@ cdef class capsViewer:
                 self.addLineColor(1, colorMap = "grey")
                 
                 if i.zoneType == "FELINESEG":
-                    print "Warning - color data for lines is not currently supported within the addTecplot function!"
+                    print("Warning - color data for lines is not currently supported within the addTecplot function!")
                     self.createLine(name=name)
             
                 else:
@@ -3526,7 +3549,7 @@ cdef class capsViewer:
     # \param meshFile Name of unstructured mesh file to load or an instance of a 
     # capsUnstructMesh(see \ref capsUnstructMesh) object.
     #  
-    def addUnstructMesh(self, meshFile):
+    def addUnstructMesh(self, meshFile, **kwargs):
         
         if isinstance(meshFile, str):
             mesh = capsUnstructMesh(meshFile)
@@ -3534,10 +3557,10 @@ cdef class capsViewer:
             mesh = meshFile 
         
         if mesh.numNode == 0 or mesh.numElement == 0:    
-            mesh.loadFile()
+            mesh.loadFile(**kwargs)
         
         if mesh.oneBias != self.oneBias:
-            print "Index biasing between mesh and server mismatch!"
+            print("Index biasing between mesh and server mismatch!")
             raise ValueError
         
         # Clear out list of current items
@@ -3597,7 +3620,7 @@ cdef class capsViewer:
             #print count, mesh.numElement
             
             if count != mesh.numElement:
-                print "capsViewer can only visualize surface data - volume elements will be ignored!"
+                print("capsViewer can only visualize surface data - volume elements will be ignored!")
                 
                 # Determine what the last node in the connectivty should be 
                 maxIndex = 0
@@ -3657,7 +3680,7 @@ cdef class capsViewer:
         # Default mesh 
         else:
             
-            print "Mesh type", mesh.meshType, "isn't reconzied!"
+            print("Mesh type", mesh.meshType, "isn't reconzied!")
             raise TypeError
 
 #             self.addVertex(mesh.xyz)
@@ -3813,7 +3836,7 @@ cdef class capsViewer:
     cdef addEgadsTess(self, int numTess, cEGADS.ego *tess): 
         self.__loadEGADS(numTess, NULL, tess, globalTess=True)
     
-    # Tessellate an array of EGADS bodies and add them to the primatives or add an array
+    # Tessellate an array of EGADS bodies and add them to the primitives or add an array
     # of tessellated bodies to primitives. One of 'bodies' or 'tessellations' should be null. 
     cdef __loadEGADS(self, int numBody, cEGADS.ego *bodies, cEGADS.ego *tessellations, globalTess=False):
         cdef:
@@ -3876,7 +3899,7 @@ cdef class capsViewer:
                 params[1] = 0.0010*size
                 params[2] = 15.0
 
-                print "--> Tessellating Body %6d     (%12.5e %12.5e %7.3f)" % (ibody, params[0], params[1], params[2])
+                print("--> Tessellating Body %6d     (%12.5e %12.5e %7.3f)" % (ibody, params[0], params[1], params[2]))
                 self.status = cEGADS.EG_makeTessBody(body, params, &tess)
                 if self.status != cEGADS.EGADS_SUCCESS: 
                      raiseError("while making tesselation (during a call to EG_makeTessBody)")
@@ -3887,7 +3910,6 @@ cdef class capsViewer:
             if self.status != cEGADS.EGADS_SUCCESS:
                 raiseError("while getting body info (during a call to EG_getTopology)")
 
-            # Skip WIREBODY in this loop
             if mtype == cEGADS.WIREBODY:
                 nameList = self.__loadWireMesh(ibody, nameList, body, tess)
             else:
@@ -3966,7 +3988,7 @@ cdef class capsViewer:
             colorArray = [colorDefault]*numPoint
             
             # Get the points 
-            for j in range(numPoint):
+            for j in range(int(numPoint)):
       
                 self.status = cEGADS.EG_getGlobal(tess, j+1, &pointType, &pointIndex, xyzs)
                 if self.status != cEGADS.EGADS_SUCCESS: 
@@ -4097,7 +4119,7 @@ cdef class capsViewer:
                 globalID += numPoint
                 
             # set the number of elements and stide based on complete quadding
-            numElem = numTri/2 if quadded else numTri
+            numElem = int(numTri/2) if quadded else numTri
             stride = 6 if quadded else 3
 
             for j in range(numElem):
@@ -4163,7 +4185,7 @@ cdef class capsViewer:
 
         #print xyz
         #print connectivity
-
+        
         if useColorArray:
             self.addColor(colorArray)
         else:
@@ -4175,7 +4197,13 @@ cdef class capsViewer:
         self.addLineColor(1, colorMap = "grey")
         
         name, nameList = self.__getBodyName(ibody, nameList, body)
-
+        
+#         cud = capsUnstructData()
+#         cud.xyz = xyz
+#         cud.connectivity = connectivity
+#         if color: cud.metaData = {"color": color}
+#         cud.writeFile(name)
+        
         self.createTriangle(name=name,lines=globalTess)
     
         return nameList
@@ -4332,7 +4360,8 @@ cdef class capsViewer:
             const double *reals 
             const char *string
             
-        name = "Body " + str(ibody+1)
+        name = "Body_" + str(ibody+1)
+        
         attr = _byteify("_name")
         # Get body _name - if available 
         self.status = cEGADS.EG_attributeRet(body, <char *>attr, &atype, &alen, &ints, &reals, &string)
@@ -4345,9 +4374,9 @@ cdef class capsViewer:
                 name = _strify(string)
         if name:
             if name in nameList:
-                name = "Body " + str(ibody+1)
-                print "Body", ibody, ": Name '", name, "' found more than once. Changing name to: '", name, "'"
-            else: 
-                nameList.append(name)
+                name = "Body_" + str(ibody+1)
+                print("Body", ibody, ": Name '", name, "' found more than once. Changing name to: '", name, "'")
+            
+            nameList.append(name)
 
         return name, nameList

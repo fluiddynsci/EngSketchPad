@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -70,6 +70,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     ego     emodel1, emodel2, faceList[1000], eref, *eedges, *efaces;
     ego     *ebodys1, *ebodys2, *ebodys3, *ebodys4, *ebodys5;
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
     printf("filename   = %s\n", FILENAME(0));
@@ -101,10 +103,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("filename(%d) = %s\n", numUdp, FILENAME(numUdp));
@@ -178,7 +177,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
             emodel1 = NULL;
         }
         if (emodel2 != NULL) {
-            EG_deleteObject(emodel1);
+            EG_deleteObject(emodel2);
             emodel2 = NULL;
         }
         goto cleanup;
@@ -277,6 +276,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         }
         goto cleanup;
     }
+    if (*ebody == NULL) goto cleanup;   // needed for splint
 
     /* determine the number of maniford and non-manifold Edges */
     nman = 0;

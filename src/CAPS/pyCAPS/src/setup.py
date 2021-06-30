@@ -4,10 +4,13 @@
 # sdist - build a tar ball of the source
 
 try:
+    print "Using setuptools"
     from setuptools import setup
 #     from setuptools import Command
     from setuptools import Extension
 except ImportError: # Try getting them from the distutils
+    print "Using distutils"
+    
     from distutils.core import setup
 #     from distutils.core import Command
     from distutils.extension import Extension
@@ -23,7 +26,8 @@ version = "2.2.1"
 # macOS and Linux -> -lcaps -locsm -legads -ludunits2 -lwsserver $(PYTHONLIB) -lm -lz 
 # Windows -> caps.lib wsserver.lib ws2_32.lib ocsm.lib egads.lib udunits2.lib z.lib $(PYTHONLIB) 
 
-libs = ["caps", "ocsm", "egads", "udunits2", "wsserver"]
+# libs = ["caps", "ocsm", "egads", "udunits2", "wsserver"]
+libs = ["capsstatic", "ocsm", "egadstatic", "udunits2", "wsserver"]
 
 if platform.system() == "Windows":
     libs += ["ws2_32"] #"legacy_stdio_definitions", "Advapi32" - not sure about these
@@ -68,7 +72,7 @@ capsModule = Extension("pyCAPS",
 #         pass
 #     def run(self):
 #         os.system('rm -vrf ./build ./*.egg-info')
-        
+
 setup(name = 'pyCAPS',
       version = version,
       description = 'Python Extension Module to CAPS',
@@ -78,7 +82,7 @@ Python environment. Written in Cython, pyCAPS natively handles all type conversi
 calls together to simplify a user's experience. Additional functionality not directly available through the CAPS API 
 is also provided.
 
-This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3793.
+Place clearance statement here
 ''',
       author='Ryan Durscher',
       url = 'https://acdl.mit.edu/ESP',
@@ -101,6 +105,8 @@ This software has been cleared for public release on 25 Jul 2018, case number 88
       #  These are all part of the standard Python dist
       #install_requires=["cypython.version", "libc.stdlib", "libs.stdio", "json", "os", "time", "math", "re", "webbrowser", "struct"],
       
-      ext_modules = [capsModule], 
+      ext_modules = [capsModule],
+#       include_package_data=True,
+#       package_data={'': package}
 #       cmdclass = { 'clean': CleanCommand},
 )

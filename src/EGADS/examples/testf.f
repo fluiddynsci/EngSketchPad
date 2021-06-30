@@ -4,7 +4,7 @@ c      EGADS: Electronic Geometry Aircraft Design System
 c
 c             Gerenal FORTRAN build test
 c
-c      Copyright 2011-2020, Massachusetts Institute of Technology
+c      Copyright 2011-2021, Massachusetts Institute of Technology
 c      Licensed under The GNU Lesser General Public License, version 2.1
 c      See http://www.opensource.org/licenses/lgpl-2.1.php
 c
@@ -14,7 +14,7 @@ c
 	integer*8       bodies(*),          shells(*)
         pointer (psenses, senses)
 	integer           senses(*)
-	integer*8    context8, model8, geom8, topo8
+	integer*8    context8, model8(2), geom8, topo8(2)
 	real*8       limits(4)
 	character*80 name
 

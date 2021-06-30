@@ -31,6 +31,3 @@ print(attributeList)
 # Only search down to the node level 
 attributeList = fun3d.getAttributeVal("capsGroup", attrLevel = "Node") 
 print(attributeList)
-
-# Close our problem
-myProblem.closeCAPS()

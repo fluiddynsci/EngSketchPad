@@ -28,8 +28,8 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
 {
   int    status = EGADS_SUCCESS;
   int    n, d, np1, np2, nt1, nt2, nerr=0;
-  int    nface, nedge, nnode, iface, iedge, inode, oclass, mtype;
-  double p1_dot[18], p1[18], p2[18], fd_dot[3];
+  int    nface, nedge, nnode, iface, iedge, inode, oclass, mtype, periodic;
+  double p1_dot[18], p1[18], p2[18], fd_dot[3], range1[4], range2[4], range_dot[4];
   const int    *pt1, *pi1, *pt2, *pi2, *ts1, *tc1, *ts2, *tc2;
   const double *t1, *t2, *x1, *x2, *uv1, *uv2;
   ego    ebody1, ebody2;
@@ -90,9 +90,9 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
       if (status != EGADS_SUCCESS) goto cleanup;
 
       /* compute the configuration velocity based on finite difference */
-      fd_dot[0] = (p2[0] - p1[0])/dtime - p2[3]*(uv2[2*n] - uv1[2*n])/dtime - p2[6]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
-      fd_dot[1] = (p2[1] - p1[1])/dtime - p2[4]*(uv2[2*n] - uv1[2*n])/dtime - p2[7]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
-      fd_dot[2] = (p2[2] - p1[2])/dtime - p2[5]*(uv2[2*n] - uv1[2*n])/dtime - p2[8]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
+      fd_dot[0] = (p2[0] - p1[0])/dtime - p1[3]*(uv2[2*n] - uv1[2*n])/dtime - p1[6]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
+      fd_dot[1] = (p2[1] - p1[1])/dtime - p1[4]*(uv2[2*n] - uv1[2*n])/dtime - p1[7]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
+      fd_dot[2] = (p2[2] - p1[2])/dtime - p1[5]*(uv2[2*n] - uv1[2*n])/dtime - p1[8]*(uv2[2*n+1] - uv1[2*n+1])/dtime;
 
       for (d = 0; d < 3; d++) {
         if (fabs(p1_dot[d] - fd_dot[d]) > ftol) {
@@ -133,9 +133,9 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
       if (status != EGADS_SUCCESS) goto cleanup;
 
       /* compute the configuration velocity based on finite difference */
-      fd_dot[0] = (p2[0] - p1[0])/dtime - p2[3]*(t2[n] - t1[n])/dtime;
-      fd_dot[1] = (p2[1] - p1[1])/dtime - p2[4]*(t2[n] - t1[n])/dtime;
-      fd_dot[2] = (p2[2] - p1[2])/dtime - p2[5]*(t2[n] - t1[n])/dtime;
+      fd_dot[0] = (p2[0] - p1[0])/dtime - p1[3]*(t2[n] - t1[n])/dtime;
+      fd_dot[1] = (p2[1] - p1[1])/dtime - p1[4]*(t2[n] - t1[n])/dtime;
+      fd_dot[2] = (p2[2] - p1[2])/dtime - p1[5]*(t2[n] - t1[n])/dtime;
 
       for (d = 0; d < 3; d++) {
         if (fabs(p1_dot[d] - fd_dot[d]) > etol) {
@@ -148,6 +148,24 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
       //printf("p1_dot = (%+f, %+f, %+f)\n", p1_dot[0], p1_dot[1], p1_dot[2]);
       //printf("fd_dot = (%+f, %+f, %+f)\n", fd_dot[0], fd_dot[1], fd_dot[2]);
       //printf("\n");
+    }
+
+    /* check t-range sensitivity */
+    status = EG_getRange_dot( eedges1[iedge], range1, range_dot, &periodic );
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    status = EG_getRange( eedges2[iedge], range2, &periodic );
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    fd_dot[0] = (range2[0] - range1[0])/dtime;
+    fd_dot[1] = (range2[1] - range1[1])/dtime;
+
+    for (d = 0; d < 2; d++) {
+      if (fabs(range_dot[d] - fd_dot[d]) > etol) {
+        printf("%s Edge %d iparam=%d, trng[%d]=%+le fabs(%+le - %+le) = %+le > %e\n",
+               shape, iedge+1, iparam, d, range1[d], range_dot[d], fd_dot[d], fabs(range_dot[d] - fd_dot[d]), etol);
+        nerr++;
+      }
     }
   }
 
@@ -692,6 +710,376 @@ cleanup:
 }
 
 
+/*****************************************************************************/
+/*                                                                           */
+/*  makeFace                                                                 */
+/*                                                                           */
+/*****************************************************************************/
+
+int
+makeLineEdge( ego context,      /* (in)  EGADS context           */
+              ego n1,           /* (in)  first node              */
+              ego n2,           /* (in)  second node             */
+              ego *eedge )      /* (out) Edge created from nodes */
+{
+  int    status = EGADS_SUCCESS;
+  double data[6], tdata[2], x1[3], x2[3];
+  ego    eline, enodes[2];
+
+  status = EG_evaluate(n1, NULL, x1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_evaluate(n2, NULL, x2);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* create the Line (point and direction) */
+  data[0] = x1[0];
+  data[1] = x1[1];
+  data[2] = x1[2];
+  data[3] = x2[0] - x1[0];
+  data[4] = x2[1] - x1[1];
+  data[5] = x2[2] - x1[2];
+  status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL,
+                           data, &eline);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* make the Edge on the Line */
+  tdata[0] = 0;
+  tdata[1] = sqrt(data[3]*data[3] + data[4]*data[4] + data[5]*data[5]);
+
+  enodes[0] = n1;
+  enodes[1] = n2;
+
+  status = EG_makeTopology(context, eline, EDGE, TWONODE,
+                           tdata, 2, enodes, NULL, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EGADS_SUCCESS;
+
+cleanup:
+  return status;
+}
+
+
+int
+setLineEdge_dot( ego eedge )      /* (in/out) Edge with velocity */
+{
+  int    status = EGADS_SUCCESS;
+  int    nnode, oclass, mtype, *senses;
+  double data[6], data_dot[6], x1[3], x1_dot[3], x2[3], x2_dot[3];
+  double tdata[2], tdata_dot[2];
+  ego    eline, *enodes;
+
+  /* get the Nodes and the Line from the Edge */
+  status = EG_getTopology(eedge, &eline, &oclass, &mtype,
+                          data, &nnode, &enodes, &senses);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* get the velocity of the nodes */
+  status = EG_evaluate_dot(enodes[0], NULL, NULL, x1, x1_dot);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_evaluate_dot(enodes[1], NULL, NULL, x2, x2_dot);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* set the Line data and velocity */
+  data[0] = x1[0];
+  data[1] = x1[1];
+  data[2] = x1[2];
+  data[3] = x2[0] - x1[0];
+  data[4] = x2[1] - x1[1];
+  data[5] = x2[2] - x1[2];
+
+  data_dot[0] = x1_dot[0];
+  data_dot[1] = x1_dot[1];
+  data_dot[2] = x1_dot[2];
+  data_dot[3] = x2_dot[0] - x1_dot[0];
+  data_dot[4] = x2_dot[1] - x1_dot[1];
+  data_dot[5] = x2_dot[2] - x1_dot[2];
+
+  status = EG_setGeometry_dot(eline, CURVE, LINE, NULL, data, data_dot);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* set the Edge t-range sensitivity */
+  tdata[0] = 0;
+  tdata[1] = sqrt(data[3]*data[3] + data[4]*data[4] + data[5]*data[5]);
+
+  tdata_dot[0] = 0;
+  tdata_dot[1] = (data[3]*data_dot[3] + data[4]*data_dot[4] + data[5]*data_dot[5])/tdata[1];
+
+  status = EG_setRange_dot(eedge, EDGE, tdata, tdata_dot);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EGADS_SUCCESS;
+
+cleanup:
+  return status;
+}
+
+
+int
+makePlaneLoop( ego context,         /* (in)  EGADS context    */
+               const double *x0,    /* (in)  Node 0 coord     */
+               const double *x1,    /* (in)  Node 1 coord     */
+               const double *x2,    /* (in)  Node 2 coord     */
+               ego *eloop )         /* (out) Loop             */
+{
+  int    status = EGADS_SUCCESS;
+  int    senses[3] = {SFORWARD, SFORWARD, SFORWARD};
+  double data[3];
+  ego    eedges[3], enodes[3];
+
+  /* create the Nodes for the Edges */
+  data[0] = x0[0];
+  data[1] = x0[1];
+  data[2] = x0[2];
+  status = EG_makeTopology(context, NULL, NODE, 0,
+                           data, 0, NULL, NULL, &enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  data[0] = x1[0];
+  data[1] = x1[1];
+  data[2] = x1[2];
+  status = EG_makeTopology(context, NULL, NODE, 0,
+                           data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  data[0] = x2[0];
+  data[1] = x2[1];
+  data[2] = x2[2];
+  status = EG_makeTopology(context, NULL, NODE, 0,
+                           data, 0, NULL, NULL, &enodes[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* create the Edges */
+  status =  makeLineEdge(context, enodes[0], enodes[1], &eedges[0] );
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status =  makeLineEdge(context, enodes[1], enodes[2], &eedges[1] );
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status =  makeLineEdge(context, enodes[2], enodes[0], &eedges[2] );
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+
+  /* make the loopy */
+  status = EG_makeTopology(context, NULL, LOOP, CLOSED,
+                           NULL, 3, eedges, senses, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EGADS_SUCCESS;
+
+cleanup:
+
+  return status;
+}
+
+
+int
+setPlaneLoop_dot( const double *x0,     /* (in)  Node 0 coord          */
+                  const double *x0_dot, /* (in)  Node 0 coord velocity */
+                  const double *x1,     /* (in)  Node 1 coord          */
+                  const double *x1_dot, /* (in)  Node 1 coord velocity */
+                  const double *x2,     /* (in)  Node 2 coord          */
+                  const double *x2_dot, /* (in)  Node 2 coord velocity */
+                  ego eloop )           /* (in/out) Loop with velocities */
+{
+  int    status = EGADS_SUCCESS;
+  int    nnode, nedge, oclass, mtype, *lsens, *senses;
+  double data[3], data_dot[3];
+  ego    *eedges, enodes[3]={NULL,NULL,NULL}, *enode, eref;
+
+  /* get the Edge from the Loop */
+  status = EG_getTopology(eloop, &eref, &oclass, &mtype,
+                          data, &nedge, &eedges, &lsens);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* get the Nodes from the Edges */
+  status = EG_getTopology(eedges[0], &eref, &oclass, &mtype,
+                          data, &nnode, &enode, &senses);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  enodes[0] = enode[0];
+  enodes[1] = enode[1];
+
+  status = EG_getTopology(eedges[1], &eref, &oclass, &mtype,
+                          data, &nnode, &enode, &senses);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  enodes[1] = enode[0];
+  enodes[2] = enode[1];
+
+  /* create the Nodes for the Edges */
+  data[0]     = x0[0];
+  data[1]     = x0[1];
+  data[2]     = x0[2];
+  data_dot[0] = x0_dot[0];
+  data_dot[1] = x0_dot[1];
+  data_dot[2] = x0_dot[2];
+  status = EG_setGeometry_dot(enodes[0], NODE, 0, NULL, data, data_dot);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  data[0]     = x1[0];
+  data[1]     = x1[1];
+  data[2]     = x1[2];
+  data_dot[0] = x1_dot[0];
+  data_dot[1] = x1_dot[1];
+  data_dot[2] = x1_dot[2];
+  status = EG_setGeometry_dot(enodes[1], NODE, 0, NULL, data, data_dot);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  data[0]     = x2[0];
+  data[1]     = x2[1];
+  data[2]     = x2[2];
+  data_dot[0] = x2_dot[0];
+  data_dot[1] = x2_dot[1];
+  data_dot[2] = x2_dot[2];
+  status = EG_setGeometry_dot(enodes[2], NODE, 0, NULL, data, data_dot);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* set Line Edge velocities */
+  status = setLineEdge_dot( eedges[0] );
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = setLineEdge_dot( eedges[1] );
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = setLineEdge_dot( eedges[2] );
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EGADS_SUCCESS;
+
+cleanup:
+
+  return status;
+}
+
+
+int
+pingMakeFace(ego context)
+{
+  int    status = EGADS_SUCCESS;
+  int    iparam, np1, nt1, iedge, nedge, iface, nface;
+  double x[9], x_dot[9], params[3], dtime = 1e-8;
+  double *x0, *x1, *x2, *x0_dot, *x1_dot, *x2_dot;
+  const int    *pt1, *pi1, *ts1, *tc1;
+  const double *t1, *xyz1, *uv1;
+  ego    eloop1, eloop2, eface1, eface2, ebody, ebody1, ebody2, tess1, tess2;
+
+  x0 = x;
+  x1 = x+3;
+  x2 = x+6;
+
+  x0_dot = x_dot;
+  x1_dot = x_dot+3;
+  x2_dot = x_dot+6;
+
+  /* make the Plane Face body */
+  x0[0] = 0.00; x0[1] = 0.00; x0[2] = 0.00;
+  x1[0] = 1.10; x1[1] = 0.10; x1[2] = 0.05;
+  x2[0] = 0.05; x2[1] = 1.20; x2[2] = 0.10;
+  status = makePlaneLoop(context, x0, x1, x2, &eloop1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_makeFace(eloop1, SFORWARD, NULL, &eface1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_makeTopology(context, NULL, BODY, FACEBODY,
+                           NULL, 1, &eface1, NULL, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* get the Faces from the Body */
+  status = EG_getBodyTopos(ebody1, NULL, FACE, &nface, NULL);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* get the Edges from the Body */
+  status = EG_getBodyTopos(ebody1, NULL, EDGE, &nedge, NULL);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* make the tessellation */
+  params[0] =  0.5;
+  params[1] =  0.1;
+  params[2] = 20.0;
+  status = EG_makeTessBody(ebody1, params, &tess1);
+
+
+  for (iedge = 0; iedge < nedge; iedge++) {
+    status = EG_getTessEdge(tess1, iedge+1, &np1, &xyz1, &t1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+    printf(" makeFace Edge %d np1 = %d\n", iedge+1, np1);
+  }
+
+  for (iface = 0; iface < nface; iface++) {
+    status = EG_getTessFace(tess1, iface+1, &np1, &xyz1, &uv1, &pt1, &pi1,
+                                            &nt1, &ts1, &tc1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+    printf(" makeFace Face %d np1 = %d\n", iface+1, np1);
+  }
+
+  /* zero out velocities */
+  for (iparam = 0; iparam < 9; iparam++) x_dot[iparam] = 0;
+
+  for (iparam = 0; iparam < 9; iparam++) {
+
+    /* set the velocity of the original body */
+    x_dot[iparam] = 1.0;
+    status = setPlaneLoop_dot(x0, x0_dot,
+                              x1, x1_dot,
+                              x2, x2_dot, eloop1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+    x_dot[iparam] = 0.0;
+
+    status = EG_makeFace_dot(eface1, eloop1, NULL, NULL);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    status = EG_makeTopology(context, NULL, BODY, FACEBODY,
+                             NULL, 1, &eface1, NULL, &ebody);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    status = EG_copyGeometry_dot(ebody, NULL, NULL, ebody1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+    EG_deleteObject(ebody);
+
+    status = EG_hasGeometry_dot(ebody1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* make a perturbed Circle for finite difference */
+    x[iparam] += dtime;
+    status = makePlaneLoop(context, x0, x1, x2, &eloop2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+    x[iparam] -= dtime;
+
+    status = EG_makeFace(eloop2, SFORWARD, NULL, &eface2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    status = EG_makeTopology(context, NULL, BODY, FACEBODY,
+                             NULL, 1, &eface2, NULL, &ebody2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* map the tessellation */
+    status = EG_mapTessBody(tess1, ebody2, &tess2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* ping the bodies */
+    status = pingBodies(tess1, tess2, dtime, iparam, "makeFace", 1e-7, 1e-7, 1e-7);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    EG_deleteObject(tess2);
+    EG_deleteObject(ebody2);
+    EG_deleteObject(eface2);
+    EG_deleteObject(eloop2);
+  }
+
+  EG_deleteObject(tess1);
+  EG_deleteObject(ebody1);
+
+cleanup:
+  if (status != EGADS_SUCCESS) {
+    printf(" Failure %d in %s\n", status, __func__);
+  }
+
+  return status;
+}
+
+
 int main(int argc, char *argv[])
 {
   int status;
@@ -706,7 +1094,7 @@ int main(int argc, char *argv[])
 
   status = pingBox(context);
   if (status != EGADS_SUCCESS) goto cleanup;
-
+#if 0
   status = pingSphere(context);
   if (status != EGADS_SUCCESS) goto cleanup;
 
@@ -717,6 +1105,9 @@ int main(int argc, char *argv[])
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = pingTorus(context);
+  if (status != EGADS_SUCCESS) goto cleanup;
+#endif
+  status = pingMakeFace(context);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 cleanup:

@@ -227,7 +227,7 @@ handshake_0405(struct libwebsocket_context *context, struct libwebsocket *wsi)
 	unsigned char hash[20];
 	int n;
 	char *response;
-	char *p;
+	char *p = NULL;
 	char *m = mask_summing_buf;
 	int nonce_len = 0;
 	int accept_len;
@@ -302,8 +302,7 @@ handshake_0405(struct libwebsocket_context *context, struct libwebsocket *wsi)
 		if (n != 16) {
 			fprintf(stderr, "Unable to read random device %s %d\n",
 						     SYSTEM_RANDOM_FILEPATH, n);
-			if (wsi->user_space)
-				free(wsi->user_space);
+			if (wsi->user_space) free(wsi->user_space);
 			goto bail;
 		}
 
@@ -313,8 +312,7 @@ handshake_0405(struct libwebsocket_context *context, struct libwebsocket *wsi)
 						   nonce_buf, sizeof nonce_buf);
 		if (nonce_len < 0) {
 			fprintf(stderr, "Failed to base 64 encode the nonce\n");
-			if (wsi->user_space)
-				free(wsi->user_space);
+			if (wsi->user_space) free(wsi->user_space);
 			goto bail;
 		}
 
@@ -506,6 +504,9 @@ handshake_0405(struct libwebsocket_context *context, struct libwebsocket *wsi)
 
 
 bail:
+#ifdef __clang_analyzer__
+        if (p != NULL) free(p);
+#endif
 	return -1;
 }
 

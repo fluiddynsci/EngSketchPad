@@ -3,7 +3,7 @@
  *
  *             Awave AIM
  *
- *      Copyright 2014-2020, Massachusetts Institute of Technology
+ *      Copyright 2014-2021, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -15,20 +15,27 @@
 #include "aimUtil.h"
 #include "miscUtils.h"
 
-#ifdef WIN32
-#define getcwd   _getcwd
-#define PATH_MAX _MAX_PATH
-#else
-#include <unistd.h>
-#include <limits.h>
-#endif
 
-#define NUMINPUT  2
-#define NUMOUT    3
 #define PI        3.1415926535897931159979635
 #define NINT(A)         (((A) < 0)   ? (int)(A-0.5) : (int)(A+0.5))
 
 //#define DEBUG
+
+enum aimInputs
+{
+  inMach = 1,                  /* index is 1-based */
+  inAlpha,
+  NUMINPUT = inAlpha           /* Total number of inputs */
+};
+
+enum aimOutputs
+{
+  outCDwave = 1,               /* index is 1-based */
+  outMach,
+  outAlpha,
+  NUMOUTPUT = outAlpha         /* Total number of outputs */
+};
+
 
 /*!\mainpage Introduction
  *
@@ -125,11 +132,6 @@
  *
  */
 
-// * The accepted and expected geometric representation and analysis intentions are detailed
-// * in \ref geomRepIntentAwave.
-// *  - <b> capsAIM</b> This attribute is a CAPS requirement to indicate the analysis fidelity the geometry
-// * representation supports.
-
 typedef struct {
     const char *name;
     const char *attribute;
@@ -152,13 +154,15 @@ typedef struct {
   const double *pxyz, *pt;
 } tessStorage;
 
-static int        nInstance  = 0;
-
+typedef struct {
+    // Inidicate if input angle should have units
+    int withUnits;
+} aimStorage;
 
 
 /* ****************** Awave AIM Helper Functions ************************** */
 
-static void initiate_Section( awaveSec *section) {
+static void initiate_Section(awaveSec *section) {
 
     section->name = NULL;
     section->attribute = NULL;
@@ -179,7 +183,7 @@ static void initiate_Section( awaveSec *section) {
     section->halfThick = NULL; // half thickness at x location (100 * (t/c) / 2
 }
 
-static void destroy_Section( awaveSec *section) {
+static void destroy_Section(awaveSec *section) {
 
     section->name = NULL;
     section->attribute = NULL;
@@ -204,7 +208,8 @@ static void destroy_Section( awaveSec *section) {
 // array - array of doubles
 // str - character array that is written in the comment section of the first line (column 73+)
 // fp - file pointer to write to, NULL writes to standard out
-static void printAwaveArray(int length, double array[], char *str, /*@null@*/ FILE *fp)
+static void printAwaveArray(int length, double array[], char *str,
+                            /*@null@*/ FILE *fp)
 {
     int i;
     char * tmp;
@@ -263,6 +268,7 @@ static void printAwaveArray(int length, double array[], char *str, /*@null@*/ FI
 
 }
 
+
 // ********************** AIM Function Break *****************************
 static int
 linInterp2D(int length, double xIn[], double yIn[], double xOut, double* yOut)
@@ -314,10 +320,11 @@ linInterp2D(int length, double xIn[], double yIn[], double xOut, double* yOut)
     return CAPS_SUCCESS;
 }
 
+
 // ********************** AIM Function Break *****************************
 static int
-tessPointReturn(int length, double xOut, const ego edge, const double *xyz_tess, const double *t_tess,
-                double *yOut, double *zOut)
+tessPointReturn(int length, double xOut, const ego edge, const double *xyz_tess,
+                const double *t_tess, double *yOut, double *zOut)
 {
     double dx, dX, t0, t1, t, s, result[18];
     int    i, status;
@@ -348,6 +355,7 @@ tessPointReturn(int length, double xOut, const ego edge, const double *xyz_tess,
 
     return CAPS_NOTFOUND;
 }
+
 
 // ********************** AIM Function Break *****************************
 static int
@@ -459,6 +467,7 @@ defineAwavePod(int nbody, awaveSec sec[], int nPts, int *podLoc, double *xyz,
     EG_free(xIn);
     return CAPS_SUCCESS;
 }
+
 
 // ********************** AIM Function Break *****************************
 static int
@@ -599,6 +608,7 @@ findSectionData(ego body, int *nle, double *xle, int *nte, double *xte,
 
 }
 
+
 // ********************** AIM Function Break *****************************
 static int
 defineAwaveAirfoil(ego body, int nPts, double *xOut, double *cOut, double *hOut)
@@ -662,7 +672,7 @@ defineAwaveAirfoil(ego body, int nPts, double *xOut, double *cOut, double *hOut)
     }
 
     status = EG_getBodyTopos(body, NULL, EDGE, &nEdge, &edges);
-    if (status != EGADS_SUCCESS) {
+    if ((status != EGADS_SUCCESS) || (edges == NULL)) {
         printf(" Awave AIM Warning: LE getBodyTopos EDGE = %d\n", status);
         goto cleanup;
     }
@@ -749,8 +759,10 @@ defineAwaveAirfoil(ego body, int nPts, double *xOut, double *cOut, double *hOut)
             zAvg = (foil_xyz[3*n+2] + foil_xyz[3*j+2]) / 2.0;
 
             cOut[i] = sqrt((xle[1] - yAvg) * (xle[1] - yAvg) + (xle[2] - zAvg) * (xle[2] - zAvg));
-            hOut[i] = (100.0 / chord) * sqrt((foil_xyz[3*n+1] - foil_xyz[3*j+1]) * (foil_xyz[3*n+1] - foil_xyz[3*j+1]) +
-                                             (foil_xyz[3*n+2] - foil_xyz[3*j+2]) * (foil_xyz[3*n+2] - foil_xyz[3*j+2])) / 2.0;
+            hOut[i] = (100.0 / chord) * sqrt((foil_xyz[3*n+1] - foil_xyz[3*j+1]) *
+                                             (foil_xyz[3*n+1] - foil_xyz[3*j+1]) +
+                                             (foil_xyz[3*n+2] - foil_xyz[3*j+2]) *
+                                             (foil_xyz[3*n+2] - foil_xyz[3*j+2])) / 2.0;
         }
     }
 
@@ -769,78 +781,131 @@ cleanup:
     return status;
 }
 
+
 /* ********************** Exposed AIM Functions ***************************** */
 
 // ********************** AIM Function Break *****************************
-int
-aimInitialize(/*@unused@*/ int ngIn, /*@unused@*/ /*@null@*/ capsValue *gIn,
-              int *qeFlag, /*@unused@*/ /*@null@*/ const char *unitSys,
-              int *nIn, int *nOut, int *nFields, char ***fnames, int **ranks)
+int aimInitialize(int inst, /*@unused@*/ const char *unitSys, /*@unused@*/ void *aimInfo,
+                  /*@unused@*/ void **instStore, /*@unused@*/ int *major,
+                  /*@unused@*/ int *minor, int *nIn, int *nOut,
+                  int *nFields, char ***fnames, int **franks, int **fInOut)
 {
-    int flag, ret;
+    int status = CAPS_SUCCESS;
+    const char *keyWord;
+    char *keyValue = NULL, *angle = NULL;
+    double real = 1;
+
+    aimStorage *awaveInstance=NULL;
 
     #ifdef DEBUG
-        printf("\n awaveAIM/aimInitialize   ngIn = %d!\n", ngIn);
+        printf("\n awaveAIM/aimInitialize   instance = %d!\n", inst);
     #endif
-
-    flag     = *qeFlag;
-    *qeFlag  = 0;
 
     // specify the number of analysis input and out "parameters"
     *nIn     = NUMINPUT;    // Mach, Altitude
-    *nOut    = NUMOUT;      // CDwave, MachOut, AoAOut
-    if (flag == 1) return CAPS_SUCCESS;
+    *nOut    = NUMOUTPUT;   // CDwave, MachOut, AoAOut
+    if (inst == -1) return CAPS_SUCCESS;
 
-    // Number of geometry fidelities that are required by the AIM and what they are
-
-    // specify the field variables this analysis can generate
+    /* specify the field variables this analysis can generate and consume */
     *nFields = 0;
-    *ranks   = NULL;
     *fnames  = NULL;
+    *franks  = NULL;
+    *fInOut  = NULL;
 
-    /* return an index for the instance generated */
-    ret = nInstance;
-    nInstance++;
-    return ret;
+    // Allocate su2Instance
+    AIM_ALLOC(awaveInstance, 1, aimStorage, aimInfo, status);
+    *instStore = awaveInstance;
+    awaveInstance->withUnits = (int)false;
+
+    /*! \page aimUnitsAwave AIM Units
+     *  A unit system may be optionally specified during AIM instance initiation. If
+     *  a unit system is provided, all AIM  input values which have associated units must be specified as well.
+     *  If no unit system is used, AIM inputs, which otherwise would require units, will be assumed
+     *  unit consistent. A unit system may be specified via a JSON string dictionary for example:
+     *  unitSys = "{"angle": "deg"}"
+     */
+    if (unitSys != NULL) {
+
+      // Do we have a json string?
+      if (strncmp( unitSys, "{", 1) != 0) {
+        AIM_ERROR(aimInfo, "unitSys ('%s') is expected to be a JSON string dictionary", unitSys);
+        return CAPS_BADVALUE;
+      }
+
+      /*! \page aimUnitsAwave
+       *  \section jsonStringAwave JSON String Dictionary
+       *  The key arguments of the dictionary are described in the following:
+       *
+       *  <ul>
+       *  <li> <B>angle = "None"</B> </li> <br>
+       *  Angle units - e.g. "degree", "deg", "rad", ...
+       *  </ul>
+       */
+      keyWord = "angle";
+      status  = search_jsonDictionary(unitSys, keyWord, &keyValue);
+      if (status == CAPS_SUCCESS) {
+        angle = string_removeQuotation(keyValue);
+        real = 1;
+        status = aim_convert(aimInfo, 1, angle, &real, "degree", &real);
+        AIM_STATUS(aimInfo, status, "unitSys ('%s'): %s is not a %s unit", unitSys, angle, keyWord);
+      } else {
+        AIM_ERROR(aimInfo, "unitSys ('%s') does not contain '%s'", unitSys, keyWord);
+        status = CAPS_BADVALUE;
+        goto cleanup;
+      }
+
+      awaveInstance->withUnits = (int)true;
+    }
+
+cleanup:
+    AIM_FREE(keyValue);
+    AIM_FREE(angle);
+
+    return status;
 }
 
 // ********************** AIM Function Break *****************************
-int
-aimInputs(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
-          char **ainame, capsValue *defval)
+int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+              int index, char **ainame, capsValue *defval)
 {
+  aimStorage *awaveInstance;
 
-	/*! \page aimInputsAwave AIM Inputs
-	 * The following list outlines the Awave inputs along with their default value available
-	 * through the AIM interface.  All inputs to the Awave AIM are variable length arrays.
-	 * <B> All inputs must be the same length</B>.
-	 */
+  *ainame = NULL;
+
+  awaveInstance = (aimStorage *) instStore;
+
+  /*! \page aimInputsAwave AIM Inputs
+   * The following list outlines the Awave inputs along with their default value available
+   * through the AIM interface.  All inputs to the Awave AIM are variable length arrays.
+   * <B> All inputs must be the same length</B>.
+   */
 
 #ifdef DEBUG
-  printf(" awaveAIM/aimInputs instance = %d  index = %d!\n", inst, index);
+  printf(" awaveAIM/aimInputs  index = %d!\n",  index);
 #endif
 
-    if (index == 1) {
+    if (index == inMach) {
         *ainame               = EG_strdup("Mach");
         defval->limits.dlims[0] = 1.0; // Limit of accepted values
         defval->limits.dlims[1] = 100.0;
 
 
         /*! \page aimInputsAwave
-    	 * - <B> Mach = double </B> <br> OR
-    	 * - <B> Mach = [double, ... , double] </B> <br>
-    	 *  Mach number.
-    	 */
+         * - <B> Mach = double </B> <br> OR
+         * - <B> Mach = [double, ... , double] </B> <br>
+         *  Mach number.
+         */
 
-    } else if (index == 2) {
+    } else if (index == inAlpha) {
         *ainame               = EG_strdup("Alpha");
-        defval->units         = EG_strdup("degree");
+        if (awaveInstance != NULL && awaveInstance->withUnits == (int)true)
+          defval->units       = EG_strdup("degree");
 
         /*! \page aimInputsAwave
-    	 * - <B> Alpha = double </B> <br> OR
-    	 * - <B> Alpha = [double, ... , double] </B> <br>
-    	 *  Angle of attack [degree].
-    	 */
+         * - <B> Alpha = double </B> <br> OR
+         * - <B> Alpha = [double, ... , double] </B> <br>
+         *  Angle of attack [degree].
+         */
 
     }
 
@@ -855,9 +920,10 @@ aimInputs(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
     return CAPS_SUCCESS;
 }
 
+
 // ********************** AIM Function Break *****************************
-int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
-                    const char *apath, /*@null@*/ capsValue *inputs, capsErrs **errs)
+int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
+                   /*@null@*/ capsValue *inputs)
 {
     int status; // Function status return
 
@@ -898,7 +964,7 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     double      xte[3], massData[14];
     double      xyzPod[3];
     double      Mach, AoA;
-    char        cpath[PATH_MAX], tmpName[50];
+    char        tmpName[50];
     char        *tmpChar;
     const int   *ints;
     const char  *string, *intents;
@@ -907,8 +973,6 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     #ifdef DEBUG
         printf(" awaveAIM/aimPreAnalysis\n");
     #endif
-
-    *errs = NULL;
 
     Sref = 1.0; // initilize Sref
 
@@ -929,25 +993,6 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
        return CAPS_SOURCEERR;
     }
 
-//    // Check intention
-//    status = check_CAPSIntent(nbody, bodies, &intent);
-//    if (status != CAPS_SUCCESS) return status;
-//    if (intent == CAPSMAGIC) intent = 0;
-
-    // Get where we are and set the path to our input
-    (void) getcwd(cpath, PATH_MAX);
-
-    printf("\nCWD :: %s\n", cpath);
-    printf("APATH :: %s\n", apath);
-
-    if (chdir(apath) != 0) {
-        #ifdef DEBUG
-            printf(" awaveAIM/aimPreAnalysis Cannot chdir to %s!\n", apath);
-        #endif
-
-        return CAPS_DIRERR;
-    }
-
     // Check inputs
     if (inputs == NULL) {
         #ifdef DEBUG
@@ -957,16 +1002,15 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
         return CAPS_NULLVALUE;
     }
 
-    if (inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].nullVal == IsNull ||
-        inputs[aim_getIndex(aimInfo, "Alpha", ANALYSISIN)-1].nullVal == IsNull) {
+    if (inputs[inMach-1].nullVal  == IsNull ||
+        inputs[inAlpha-1].nullVal == IsNull) {
 
         printf("Either input Mach or Alpha has not been set!\n");
         status = CAPS_NULLVALUE;
         goto cleanup;
     }
 
-    if (inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].length !=
-        inputs[aim_getIndex(aimInfo, "Alpha", ANALYSISIN)-1].length) {
+    if (inputs[inMach-1].length != inputs[inAlpha-1].length) {
 
         printf("Inputs Mach and Alpha must be the same length\n");
         status = CAPS_MISMATCH;
@@ -991,7 +1035,6 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     for (i = 0; i < nbody; i++) {
         (void) initiate_Section(&surfaces[i]);
     }
-
 
     //  Memory
     locPod  = (int *)    EG_alloc(nbody*sizeof(int));
@@ -1023,10 +1066,10 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
     printf("Writing Awave input file\n");
 
-    fp = fopen("awaveInput.txt","w");
+    fp = aim_fopen(aimInfo, "awaveInput.txt","w");
 
     if (fp == NULL) {
-      printf(" awaveAIM/aimPreAnalysis Cannot Open File: awaveInput.txt!\n");
+      AIM_ERROR(aimInfo, " awaveAIM/aimPreAnalysis Cannot Open File: awaveInput.txt!\n");
       status = CAPS_IOERR;
       goto cleanup;
     }
@@ -1076,7 +1119,7 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     //                             (uncambered)
     //                        = 0, No X-Y plane symmetry
 
-    NWAF=0;//       22-24     Number of airfoil sections used to describe
+    //NWAF          22-24     Number of airfoil sections used to describe
     //                        the wing (minimum = 2, maximum = 20)
 
     NWAFOR=21;//     25-27     Number of stations at which ordinates are
@@ -1087,7 +1130,7 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     //                        ordinates.  If positive, the airfoil is
     //                        assumed to be symmetrical.
 
-    NFUS=0;//       28-30     Number of fuselage segments
+    //NFUS          28-30     Number of fuselage segments
     //                        (minimum = 1, maximum = 4)
 
     NRADX[0]=21;//   31-33     Number of points per station used to
@@ -1111,12 +1154,12 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
     NFORX[3]=0;//   52-54     Same as NFORX(1) but for fourth segment
 
-    NP=0;//         55-57     Number of pods described (maximum = 9)
+    //NP            55-57     Number of pods described (maximum = 9)
 
     NPODOR=10;//     58-60     Number of stations at which pod radii are
     //           input (minimum = 4, maximum = 30)
 
-    NF =0;//        61-63     Number of fins (vertical tails) described
+    //NF            61-63     Number of fins (vertical tails) described
     //                        (maximum = 6) If given a negative sign, the
     //                        program will expect to read ordinates for
     //                        both the outboard and inboard sides of the
@@ -1127,7 +1170,7 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     //                        input for each fin airfoil
     //                        (minimum = 3, maximum = 10)
 
-    NCAN=0;//       67-69     Number of canards (horizontal tails)
+    //NCAN          67-69     Number of canards (horizontal tails)
     //                        defined (maximum = 2).  If given a negative
     //                        sign, the program will expect to read
     //                        ordinates for both the root and tip.  If
@@ -1153,7 +1196,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
         awaveType[i] = 0; // default is 0, nothing will be written to awave input, section is -Y
 
         // search for the "capsReferenceArea" attribute
-        status = EG_attributeRet(bodies[i], "capsReferenceArea", &atype, &alen, &ints, &reals, &string);
+        status = EG_attributeRet(bodies[i], "capsReferenceArea", &atype, &alen,
+                                 &ints, &reals, &string);
         if (status == EGADS_SUCCESS) {
 
             if (atype != ATTRREAL) {
@@ -1169,7 +1213,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
         // Look for "capsType" attribute
         // Wing, Tail, VTail, HTail, Cannard, Fin are all lifting surfaces
         // Fuse, Fuselage, Store are all bodies of revolution
-        status = EG_attributeRet(bodies[i], "capsType", &atype, &alen, &ints, &reals, &surfaces[i].attribute);
+        status = EG_attributeRet(bodies[i], "capsType", &atype, &alen, &ints,
+                                 &reals, &surfaces[i].attribute);
         if (status != EGADS_SUCCESS) {
 
             printf(" *** WARNING AwaveAIM: capsType not found on body %d - defaulting to 'Wing'!\n", i+1);
@@ -1210,9 +1255,11 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
             strcmp(surfaces[i].attribute,"Fin")     == 0   ) {
 
             // Extract data about the surface
-            status = findSectionData(bodies[i], &nle, surfaces[i].xyz, &nte, xte, &surfaces[i].chordLength, &dtmp, &dtmp);
+            status = findSectionData(bodies[i], &nle, surfaces[i].xyz, &nte,
+                                     xte, &surfaces[i].chordLength, &dtmp, &dtmp);
             if (status != CAPS_SUCCESS) {
-                printf(" awaveAIM/aimPreAnalysis findSectionData = %d!\n", status);
+                printf(" awaveAIM/aimPreAnalysis findSectionData = %d!\n",
+                       status);
                goto cleanup;
             }
 
@@ -1289,7 +1336,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
                 (surfaces[i].camber    == NULL) ||
                 (surfaces[i].halfThick == NULL)   ) {
 
-                printf(" awaveAIM/aimPreAnalysis %d ndiv = %d Allocation!\n", i+1, surfaces[i].ndiv);
+                printf(" awaveAIM/aimPreAnalysis %d ndiv = %d Allocation!\n",
+                       i+1, surfaces[i].ndiv);
 
                 status = EGADS_MALLOC;
                 goto cleanup;
@@ -1305,17 +1353,19 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
             // print the result to standard out
             printf("Lifting Surface Section, Body ID %d\n", i+1);
-            printf("\tXLE:   %8.6f %8.6f %8.6f\n", surfaces[i].xyz[0], surfaces[i].xyz[1], surfaces[i].xyz[2]);
+            printf("\tXLE:   %8.6f %8.6f %8.6f\n", surfaces[i].xyz[0],
+                   surfaces[i].xyz[1], surfaces[i].xyz[2]);
             printf("\tCHORD: %8.6f\n", surfaces[i].chordLength);
             printf("\tATTRIB:%s\n", surfaces[i].attribute);
             printf("\tNAME  :%s\n", surfaces[i].name);
             printf("\tAwave TYPE: %d\n", awaveType[i]);
 
-            #ifdef DEBUG
-                printAwaveArray(surfaces[i].ndiv, surfaces[i].x, "X", NULL);
-                printAwaveArray(surfaces[i].ndiv, surfaces[i].camber, "CAMBER", NULL);
-                printAwaveArray(surfaces[i].ndiv, surfaces[i].halfThick, "HALF THICKNESS", NULL);
-            #endif
+#ifdef DEBUG
+            printAwaveArray(surfaces[i].ndiv, surfaces[i].x, "X", NULL);
+            printAwaveArray(surfaces[i].ndiv, surfaces[i].camber, "CAMBER", NULL);
+            printAwaveArray(surfaces[i].ndiv, surfaces[i].halfThick,
+                            "HALF THICKNESS", NULL);
+#endif
 
             printf("\n");
 
@@ -1368,10 +1418,11 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
                 if (faces != NULL) EG_free(faces);
 
                 status = EG_getBodyTopos(bodies[i], NULL, FACE, &nFace, &faces);
-                if ((status != CAPS_SUCCESS)) goto cleanup;
+                if ((status != EGADS_SUCCESS) || (faces == NULL)) goto cleanup;
 
                 if (nFace != 1) {
-                    printf(" awaveAIM/aimPreAnalysis body %d with %d faces should only have one face!\n", i+1, nFace);
+                    printf(" awaveAIM/aimPreAnalysis body %d with %d faces should only have one face!\n",
+                           i+1, nFace);
                     status = CAPS_BADOBJECT;
                     goto cleanup;
                 }
@@ -1391,7 +1442,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
             // Print the information about the body to standard out
             printf("Body Section, Body ID %d\n", i+1);
-            printf("\tXCG:   %8.6f %8.6f %8.6f\n", surfaces[i].xyz[0], surfaces[i].xyz[1], surfaces[i].xyz[2]);
+            printf("\tXCG:   %8.6f %8.6f %8.6f\n", surfaces[i].xyz[0],
+                   surfaces[i].xyz[1], surfaces[i].xyz[2]);
             printf("\tAREA:  %8.6f\n", surfaces[i].area);
             printf("\tRAD:   %8.6f\n", surfaces[i].radius);
             printf("\tATTRIB:%s\n", surfaces[i].attribute);
@@ -1446,7 +1498,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
             NFORX[3] = nAwaveType[1] - 87;
             break;
         default:
-            printf("Number of fuselage stations %d is too large for Awave\n", nAwaveType[1]);
+            printf("Number of fuselage stations %d is too large for Awave\n",
+                   nAwaveType[1]);
             status = CAPS_RANGEERR;
             goto cleanup;
     }
@@ -1614,7 +1667,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     }
 
     if (NCAN > 2) {
-        printf("Error: Awave can only handle 2 cannards, cannards entered :: %d\n", NCAN);
+        printf("Error: Awave can only handle 2 cannards, cannards entered :: %d\n",
+               NCAN);
         status = CAPS_RANGEERR;
         goto cleanup;
     }
@@ -1689,7 +1743,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     if (J0 == 1) {
 
         tmpChar = convert_doubleToString(Sref,7,0);
-        fprintf(fp,"%s                                                                 ",tmpChar);
+        fprintf(fp,"%s                                                                 ",
+                tmpChar);
         if (tmpChar != NULL) EG_free(tmpChar);
 
         // In Awave colums 73+ on each line are used for comment space
@@ -1708,22 +1763,27 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
                 if (j) { // only print the x locations once
 
-                    printAwaveArray(surfaces[i].ndiv, surfaces[i].x, "WING DATA 100(x/c)", fp);
+                    printAwaveArray(surfaces[i].ndiv, surfaces[i].x,
+                                    "WING DATA 100(x/c)", fp);
                     j = 0;
                 }
 
                 // Print Leading Edge x,y,z then chord length for each section
                 // did not use printAwaveArray because xyz and chordLength are not in the same array
-                tmpChar = convert_doubleToString(surfaces[i].xyz[0],7,0); fprintf(fp,"%s",tmpChar);
+                tmpChar = convert_doubleToString(surfaces[i].xyz[0],7,0);
+                fprintf(fp,"%s",tmpChar);
                 if (tmpChar != NULL) EG_free(tmpChar);
 
-                tmpChar = convert_doubleToString(surfaces[i].xyz[1],7,0); fprintf(fp,"%s",tmpChar);
+                tmpChar = convert_doubleToString(surfaces[i].xyz[1],7,0);
+                fprintf(fp,"%s",tmpChar);
                 if (tmpChar != NULL) EG_free(tmpChar);
 
-                tmpChar = convert_doubleToString(surfaces[i].xyz[2],7,0); fprintf(fp,"%s",tmpChar);
+                tmpChar = convert_doubleToString(surfaces[i].xyz[2],7,0);
+                fprintf(fp,"%s",tmpChar);
                 if (tmpChar != NULL) EG_free(tmpChar);
 
-                tmpChar = convert_doubleToString(surfaces[i].chordLength,7,0); fprintf(fp,"%s",tmpChar);
+                tmpChar = convert_doubleToString(surfaces[i].chordLength,7,0);
+                fprintf(fp,"%s",tmpChar);
                 if (tmpChar != NULL) EG_free(tmpChar);
                 fprintf(fp,"                                            CS%d X,Y,Z,CHORD\n",i);
             }
@@ -1734,13 +1794,15 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
             if (locWing[i]) {
 
-                /*@-bufferoverflowhigh@*/
+/*@-bufferoverflowhigh@*/
                 sprintf(tmpName,"CS%d CAMBER",i);
-                printAwaveArray(surfaces[i].ndiv, surfaces[i].camber, tmpName , fp);
+                printAwaveArray(surfaces[i].ndiv, surfaces[i].camber, tmpName,
+                                fp);
 
                 sprintf(tmpName,"CS%d HALF THICK",i);
-                printAwaveArray(surfaces[i].ndiv, surfaces[i].halfThick, tmpName , fp);
-                /*@+bufferoverflowhigh@*/
+                printAwaveArray(surfaces[i].ndiv, surfaces[i].halfThick, tmpName,
+                                fp);
+/*@+bufferoverflowhigh@*/
             }
         }
     }
@@ -1822,7 +1884,8 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
         }
 
         // Get awave values to define the pod
-        status = defineAwavePod(nbody, surfaces, NPODOR, locFuse, xyzPod, xPod, rPod);
+        status = defineAwavePod(nbody, surfaces, NPODOR, locFuse, xyzPod, xPod,
+                                rPod);
         if (status != CAPS_SUCCESS) {
             printf(" awaveAIM/aimPreAnalysis defineAwavePod = %d\n", status);
         }
@@ -1879,8 +1942,10 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
             // ONLY shape of the first section is used to define the complete airfoil
             // no camber input is allowed
-            printAwaveArray(surfaces[iloc[0]].ndiv, surfaces[iloc[0]].x, "   CHORD 100(x/c)", fp);
-            printAwaveArray(surfaces[iloc[0]].ndiv, surfaces[iloc[0]].halfThick, "   HALF THICK", fp);
+            printAwaveArray(surfaces[iloc[0]].ndiv, surfaces[iloc[0]].x,
+                            "   CHORD 100(x/c)", fp);
+            printAwaveArray(surfaces[iloc[0]].ndiv, surfaces[iloc[0]].halfThick,
+                            "   HALF THICK", fp);
         }
     }
 
@@ -1927,8 +1992,10 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
             // ONLY shape of the first section is used to define the complete airfoil
             // no camber input is allowed
-            printAwaveArray(surfaces[iloc[0]].ndiv, surfaces[iloc[0]].x, "   CHORD 100(x/c)", fp);
-            printAwaveArray(surfaces[iloc[0]].ndiv, surfaces[iloc[0]].halfThick, "   HALF THICK", fp);
+            printAwaveArray(surfaces[iloc[0]].ndiv, surfaces[iloc[0]].x,
+                            "   CHORD 100(x/c)", fp);
+            printAwaveArray(surfaces[iloc[0]].ndiv, surfaces[iloc[0]].halfThick,
+                            "   HALF THICK", fp);
         }
     }
 
@@ -2000,17 +2067,17 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
     // A default Mach 1.0 design case is always created
     fprintf(fp,"DES 1000 100  32   0   0   0   0   0   0\n");
 
-    printf("Number of Mach-Alpha cases = %d\n", inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].length);
+    printf("Number of Mach-Alpha cases = %d\n", inputs[inMach-1].length);
 
     if (inputs[0].length == 1) {
 
         // MACH
-        Mach = 1000 * inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].vals.real;
+        Mach = 1000 * inputs[inMach-1].vals.real;
         fprintf(fp,"%4.0f", Mach); // case name
         fprintf(fp,"%4.0f", Mach); // Mach input
 
         // AOA
-        AoA = 100 * inputs[aim_getIndex(aimInfo, "Alpha", ANALYSISIN)-1].vals.real;
+        AoA = 100 * inputs[inAlpha-1].vals.real;
         fprintf(fp," 100  32   0   0   0   0   1");
         fprintf(fp," %3.0f\n", AoA);
 
@@ -2019,12 +2086,12 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
         for (i = 0; i < inputs[0].length; i++) { // Multiple Mach, Angle of Attack pairs
 
             // MACH
-            Mach = 1000 * inputs[aim_getIndex(aimInfo, "Mach", ANALYSISIN)-1].vals.reals[i];
+            Mach = 1000 * inputs[inMach-1].vals.reals[i];
             fprintf(fp,"%4.0f", Mach); // case name
             fprintf(fp,"%4.0f", Mach); // Mach input
 
             // AOA
-            AoA = 100 * inputs[aim_getIndex(aimInfo, "Alpha", ANALYSISIN)-1].vals.reals[i];
+            AoA = 100 * inputs[inAlpha-1].vals.reals[i];
             fprintf(fp," 100  32   0   0   0   0   1");
             fprintf(fp," %3.0f\n", AoA);
         }
@@ -2032,54 +2099,61 @@ int aimPreAnalysis(/*@unused@*/ int inst, void *aimInfo,
 
     status = CAPS_SUCCESS;
 
-    goto cleanup;
+// Free memory
+cleanup:
 
-    // Free memory
-    cleanup:
+    if (status != CAPS_SUCCESS)
+      printf("Premature exit in awaveAIM preAnalysis status = %d\n", status);
 
-        if (status != CAPS_SUCCESS) printf("Premature exit in awaveAIM preAnalysis status = %d\n", status);
+    if (fp != NULL) fclose(fp);
 
-        chdir(cpath);
+    if (locPod  != NULL) EG_free(locPod);
+    if (locCan  != NULL) EG_free(locCan);
+    if (locFin  != NULL) EG_free(locFin);
+    if (locFuse != NULL) EG_free(locFuse);
+    if (locWing != NULL) EG_free(locWing);
+    if (iloc    != NULL) EG_free(iloc);
+    if (xFuse   != NULL) EG_free(xFuse);
+    if (zFuse   != NULL) EG_free(zFuse);
+    if (aFuse   != NULL) EG_free(aFuse);
 
-        if (fp != NULL) fclose(fp);
+    if (xPod != NULL) EG_free(xPod);
+    if (rPod != NULL) EG_free(rPod);
 
-        if (locPod  != NULL) EG_free(locPod);
-        if (locCan  != NULL) EG_free(locCan);
-        if (locFin  != NULL) EG_free(locFin);
-        if (locFuse != NULL) EG_free(locFuse);
-        if (locWing != NULL) EG_free(locWing);
-        if (iloc    != NULL) EG_free(iloc);
-        if (xFuse   != NULL) EG_free(xFuse);
-        if (zFuse   != NULL) EG_free(zFuse);
-        if (aFuse   != NULL) EG_free(aFuse);
+    if (surfaces != NULL) {
 
-        if (xPod != NULL) EG_free(xPod);
-        if (rPod != NULL) EG_free(rPod);
-
-        if (surfaces != NULL) {
-
-            for (i = 0; i < nbody; i++) {
-                (void) destroy_Section(&surfaces[i]);
-            }
-
-            EG_free(surfaces);
+        for (i = 0; i < nbody; i++) {
+            (void) destroy_Section(&surfaces[i]);
         }
 
-        if (awaveType != NULL) EG_free(awaveType);
+        EG_free(surfaces);
+    }
 
-        if (nodes != NULL) EG_free(nodes);
-        if (faces != NULL) EG_free(faces);
+    if (awaveType != NULL) EG_free(awaveType);
 
-        return status;
+    if (nodes != NULL) EG_free(nodes);
+    if (faces != NULL) EG_free(faces);
+
+    return status;
 }
 
+
 // ********************** AIM Function Break *****************************
-int
-aimOutputs( /*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
-            char **aoname, capsValue *form)
+
+/* no longer optional and needed for restart */
+int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+                    /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
+{
+  return CAPS_SUCCESS;
+}
+
+
+// ********************** AIM Function Break *****************************
+int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+               int index, char **aoname, capsValue *form)
 {
 #ifdef DEBUG
-  printf(" awaveAIM/aimOutputs instance = %d  index = %d!\n", inst, index);
+    printf(" awaveAIM/aimOutputs index = %d!\n", index);
 #endif
 
     // Awave MAY NOT PRODUCE RESULTS FOR ALL INPUT MACH, AoA
@@ -2094,7 +2168,7 @@ aimOutputs( /*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
 	 * check using the echo of input values.
 	 */
 
-    if (index == 1) {
+    if (index == outCDwave) {
 
         *aoname     = EG_strdup("CDwave");
         form->units = NULL;
@@ -2103,7 +2177,7 @@ aimOutputs( /*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
          * - <B> CDwave = </B> Wave Drag Coefficient.
          */
 
-    } else if (index == 2) {
+    } else if (index == outMach) {
         *aoname     = EG_strdup("Mach");
         form->units = NULL;
 
@@ -2111,7 +2185,7 @@ aimOutputs( /*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
          * - <B> MachOut = </B> Mach number.
          */
 
-    } else if (index == 3) {
+    } else if (index == outAlpha) {
         *aoname     = EG_strdup("Alpha");
         form->units = EG_strdup("degree");
 
@@ -2124,7 +2198,6 @@ aimOutputs( /*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
     form->lfixed = Change;
     form->sfixed = Fixed;
     form->dim    = Vector;
-    form->length = 1;
     form->nrow   = 1;
     form->ncol   = 1;
     form->vals.real = 0.0;
@@ -2133,55 +2206,34 @@ aimOutputs( /*@unused@*/ int inst, /*@unused@*/ void *aimInfo, int index,
     return CAPS_SUCCESS;
 }
 
+
 // ********************** AIM Function Break *****************************
-int aimCalcOutput(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, const char *apath,
-                  int index, capsValue *val, capsErrs **errors)
+int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+                  int index, capsValue *val)
 {
 
     int status; // Function return status
 
     size_t linecap = 0;
-    char   cpath[PATH_MAX], *str = "CASE", *valstr, *line = NULL;
+    char   *str = "CASE", *valstr, *line = NULL;
     double tmp, Cd[100], Mach[100], AoA[100];
     int i, cnt = 0, DesCase = 0;
 
     FILE   *fp = NULL;
 
-    #ifdef DEBUG
-        printf(" awaveAIM/aimCalcOutput instance = %d  index = %d!\n", inst, index);
-    #endif
-
-    *errors        = NULL;
-
-    if (val->length > 1) {
-		if (val->vals.reals != NULL) EG_free(val->vals.reals);
-		val->vals.reals = NULL;
-	} else {
-		val->vals.real = 0.0;
-	}
+#ifdef DEBUG
+    printf(" awaveAIM/aimCalcOutput instance = %d  index = %d!\n", inst, index);
+#endif
 
     val->nrow = 1;
     val->ncol = 1;
-    val->length = val->nrow*val->ncol;
-
-    //  Get where we are and set the path to our output */
-    (void) getcwd(cpath, PATH_MAX);
-    if (chdir(apath) != 0) {
-
-        #ifdef DEBUG
-            printf(" AwaveAIM/aimCalcOutput Cannot chdir to %s!\n", apath);
-        #endif
-
-        status = CAPS_DIRERR;
-        goto cleanup;
-    }
 
     // ****************************************************************** //
     // PARSE OUTPUT DATA FILE //
     // ****************************************************************** //
 
     // Open the Awave output file
-    fp = fopen("cdwave.txt", "r"); // EJA mod specific
+    fp = aim_fopen(aimInfo, "cdwave.txt", "r"); // EJA mod specific
     if (fp == NULL) {
         printf(" awaveAIM/aimCalcOutput Cannot open Output file!\n");
 
@@ -2205,16 +2257,16 @@ int aimCalcOutput(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, const char 
 
             // Skip the DES case Output information
             if (DesCase) {
-                #ifdef DEBUG
-                    printf("Awave OUTPUT FOUND :: %s",line);
-                #endif
+#ifdef DEBUG
+                printf("Awave OUTPUT FOUND :: %s",line);
+#endif
 
                 // Move down two lines MachOut
-                getline(&line, &linecap, fp);
-                getline(&line, &linecap, fp);
-                #ifdef DEBUG
-                    printf("\tLINE  %s", line);
-                #endif
+                (void) getline(&line, &linecap, fp);
+                (void) getline(&line, &linecap, fp);
+#ifdef DEBUG
+                printf("\tLINE  %s", line);
+#endif
 
                 status = sscanf(line,"%*s %lf", &tmp);
 
@@ -2223,17 +2275,17 @@ int aimCalcOutput(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, const char 
                     goto cleanup;
                 }
 
-                #ifdef DEBUG
-                    printf("\t\tMACH READ :: %8.6f\n", tmp);
-                #endif
+#ifdef DEBUG
+                printf("\t\tMACH READ :: %8.6f\n", tmp);
+#endif
 
                 Mach[cnt] = tmp;
 
                 // Move down 1 line AoAOut
-                getline(&line, &linecap, fp);
-                #ifdef DEBUG
-                    printf("\tLINE  %s", line);
-                #endif
+                (void) getline(&line, &linecap, fp);
+#ifdef DEBUG
+                printf("\tLINE  %s", line);
+#endif
 
                 status = sscanf(line,"%*s %lf", &tmp);
                 if (status == 0) {
@@ -2241,17 +2293,17 @@ int aimCalcOutput(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, const char 
                     goto cleanup;
                 }
 
-                #ifdef DEBUG
-                    printf("\t\t AOA READ :: %8.6f\n", tmp);
-                #endif
+#ifdef DEBUG
+                printf("\t\t AOA READ :: %8.6f\n", tmp);
+#endif
 
                 AoA[cnt] = tmp;
 
                 // Move down 1 line CdWave
-                getline(&line, &linecap, fp);
-                #ifdef DEBUG
-                    printf("\tLINE  %s", line);
-                #endif
+                (void) getline(&line, &linecap, fp);
+#ifdef DEBUG
+                printf("\tLINE  %s", line);
+#endif
 
                 status = sscanf(line,"%*s %lf", &tmp);
                 if (status == 0) {
@@ -2259,9 +2311,9 @@ int aimCalcOutput(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, const char 
                     goto cleanup;
                 }
 
-                #ifdef DEBUG
-                    printf("\t\t  CD READ :: %8.6f\n\n", tmp);
-                #endif
+#ifdef DEBUG
+                printf("\t\t  CD READ :: %8.6f\n\n", tmp);
+#endif
 
                 Cd[cnt] = tmp;
 
@@ -2273,9 +2325,9 @@ int aimCalcOutput(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, const char 
     }
 
     if (cnt < 1) {
-        #ifdef DEBUG
-            printf(" awaveAIM/aimCalcOutput Cannot find %s in Output file!\n", str);
-        #endif
+#ifdef DEBUG
+        printf(" awaveAIM/aimCalcOutput Cannot find %s in Output file!\n", str);
+#endif
 
         status = CAPS_NOTFOUND;
         goto cleanup;
@@ -2283,16 +2335,15 @@ int aimCalcOutput(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, const char 
 
     val->nrow = cnt;
     val->ncol = 1;
-    val->length = val->nrow*val->ncol;
 
     if (cnt == 1) {
-        if (index == 1) val->vals.real = Cd[0];
-        if (index == 2) val->vals.real = Mach[0];
-        if (index == 3) val->vals.real = AoA[0];
+        if (index == outCDwave) val->vals.real = Cd[0];
+        if (index == outMach)   val->vals.real = Mach[0];
+        if (index == outAlpha)  val->vals.real = AoA[0];
 
     } else if (cnt > 1) {
 
-        val->vals.reals = (double *) EG_alloc(val->length*sizeof(double));
+        val->vals.reals = (double *) EG_alloc(val->nrow*sizeof(double));
 
         if (val->vals.reals == NULL) {
             status = EGADS_MALLOC;
@@ -2301,34 +2352,33 @@ int aimCalcOutput(/*@unused@*/ int inst, /*@unused@*/ void *aimInfo, const char 
 
         for (i = 0; i < cnt; i++) {
 
-            if (index == 1) val->vals.reals[i] = Cd[i];
-            if (index == 2) val->vals.reals[i] = Mach[i];
-            if (index == 3) val->vals.reals[i] = AoA[i];
+            if (index == outCDwave) val->vals.reals[i] = Cd[i];
+            if (index == outMach)   val->vals.reals[i] = Mach[i];
+            if (index == outAlpha)  val->vals.reals[i] = AoA[i];
 
         }
     }
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Premature exit in AwaveAIM aimCalcOutput status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS)
+      printf("Premature exit in AwaveAIM aimCalcOutput status = %d\n", status);
 
-        chdir(cpath);
+    if (fp != NULL) fclose(fp);
 
-        if (fp != NULL) fclose(fp);
+    if (line != NULL) EG_free(line);
 
-        if (line != NULL) EG_free(line);
-
-        return status;
+    return status;
 }
 
 
 // ********************** AIM Function Break *****************************
-void aimCleanup()
+void aimCleanup(/*@unused@*/ void *aimStore)
 {
 #ifdef DEBUG
     printf(" awaveAIM/aimCleanup!\n");
 #endif
 
+    EG_free(aimStore);
 }

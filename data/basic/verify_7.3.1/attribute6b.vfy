@@ -1,6 +1,6 @@
 #======================================#
 # automatically generated verification #
-# OpenCSM  1.18      OpenCASCADE 7.3.1 #
+# OpenCSM  1.19      OpenCASCADE 7.3.1 #
 #======================================#
 select    body 5
    assert         2      @itype       0  1
@@ -11,6 +11,6 @@ select    body 5
    assert   2.5000000e+00  @area    -.001  1
    assert   5.0000000e-02  @xcg      2.0000000e-03  1
    assert   7.0000000e-01  @ycg      2.0000000e-03  1
-   assert   0.0000000e+00  @zcg     -.001  1
+   assert   0.0000000e+00  @zcg     0.001  1
 
 end

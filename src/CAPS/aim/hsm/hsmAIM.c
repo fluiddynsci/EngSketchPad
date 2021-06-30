@@ -16,14 +16,7 @@
  *
  * An outline of the AIM's inputs and outputs are provided in \ref aimInputsHSM and \ref aimOutputsHSM, respectively.
  *
- *
- * Details of the AIM's shareable data structures are outlined in \ref sharableDataHSM if connecting this AIM to other AIMs in a
- * parent-child like manner.
- *
  */
-
-//The accepted and expected geometric representation and analysis intentions are detailed in \ref geomRepIntentHSM.
- // The HSM AIM provides the CAPS users with the ability to generate .......
 
 // Header functions
 #include <string.h>
@@ -101,6 +94,22 @@ extern void HSMOUT(int *nelem, int *kelem, double *vars, double *deps, double *p
 
 //#define DEBUG
 
+enum aimInputs
+{
+  Proj_Name = 1,                 /* index is 1-based */
+  Tess_Params,
+  Edge_Point_Min,
+  Edge_Point_Max,
+  Quad_Mesh,
+  Property,
+  Material,
+  Constraint,
+  Load,
+  Mesh,
+  NUMINPUT = Mesh                /* Total number of inputs */
+};
+
+
 static void
 ortmat(double  e1, double  e2, double g12, double v12,
        double c16, double c26,
@@ -174,8 +183,7 @@ typedef struct {
     // Project name
     char *projectName; // Project names
 
-    // Analysis file path/directory
-    const char *analysisPath;
+    feaUnitsStruct units; // units system
 
     feaProblemStruct feaProblem;
 
@@ -209,125 +217,133 @@ typedef struct {
 
 } aimStorage;
 
-static aimStorage *hsmInstance = NULL;
-static int         numInstance  = 0;
 
-static int initiate_aimStorage(int iIndex) {
-
+static int initiate_aimStorage(aimStorage *hsmInstance)
+{
     int status;
 
     // Set initial values for hsmInstance
-    hsmInstance[iIndex].projectName = NULL;
+    hsmInstance->projectName = NULL;
 
-    // Analysis file path/directory
-    hsmInstance[iIndex].analysisPath = NULL;
+    status = initiate_feaUnitsStruct(&hsmInstance->units);
+    if (status != CAPS_SUCCESS) return status;
 
     // Container for attribute to index map
-    status = initiate_mapAttrToIndexStruct(&hsmInstance[iIndex].attrMap);
+    status = initiate_mapAttrToIndexStruct(&hsmInstance->attrMap);
     if (status != CAPS_SUCCESS) return status;
 
     // Container for attribute to constraint index map
-    status = initiate_mapAttrToIndexStruct(&hsmInstance[iIndex].constraintMap);
+    status = initiate_mapAttrToIndexStruct(&hsmInstance->constraintMap);
     if (status != CAPS_SUCCESS) return status;
 
     // Container for attribute to load index map
-    status = initiate_mapAttrToIndexStruct(&hsmInstance[iIndex].loadMap);
+    status = initiate_mapAttrToIndexStruct(&hsmInstance->loadMap);
     if (status != CAPS_SUCCESS) return status;
 
     // Container for transfer to index map
-    status = initiate_mapAttrToIndexStruct(&hsmInstance[iIndex].transferMap);
+    status = initiate_mapAttrToIndexStruct(&hsmInstance->transferMap);
     if (status != CAPS_SUCCESS) return status;
 
-    status = initiate_feaProblemStruct(&hsmInstance[iIndex].feaProblem);
+    status = initiate_feaProblemStruct(&hsmInstance->feaProblem);
     if (status != CAPS_SUCCESS) return status;
 
     // Pointer to caps input value for tessellation parameters
-    hsmInstance[iIndex].tessParam = NULL;
+    hsmInstance->tessParam = NULL;
 
     // Pointer to caps input value for Edge_Point- Min
-    hsmInstance[iIndex].edgePointMin = NULL;
+    hsmInstance->edgePointMin = NULL;
 
     // Pointer to caps input value for Edge_Point- Max
-    hsmInstance[iIndex].edgePointMax = NULL;
+    hsmInstance->edgePointMax = NULL;
 
     // Pointer to caps input value for No_Quad_Faces
-    hsmInstance[iIndex].quadMesh = NULL;
+    hsmInstance->quadMesh = NULL;
 
     // Mesh holders
-    hsmInstance[iIndex].numMesh = 0;
-    hsmInstance[iIndex].feaMesh = NULL;
+    hsmInstance->numMesh = 0;
+    hsmInstance->feaMesh = NULL;
 
     return CAPS_SUCCESS;
 }
 
-static int destroy_aimStorage(int iIndex) {
-
+static int destroy_aimStorage(aimStorage *hsmInstance)
+{
     int status;
     int i;
+
+    status = destroy_feaUnitsStruct(&hsmInstance->units);
+    if (status != CAPS_SUCCESS)
+      printf("Error: Status %d during destroy_feaUnitsStruct!\n", status);
+
     // Attribute to index map
-    status = destroy_mapAttrToIndexStruct(&hsmInstance[iIndex].attrMap);
-    if (status != CAPS_SUCCESS) printf("Error: Status %d during destroy_mapAttrToIndexStruct!\n", status);
+    status = destroy_mapAttrToIndexStruct(&hsmInstance->attrMap);
+    if (status != CAPS_SUCCESS)
+      printf("Error: Status %d during destroy_mapAttrToIndexStruct!\n", status);
 
     // Attribute to constraint index map
-    status = destroy_mapAttrToIndexStruct(&hsmInstance[iIndex].constraintMap);
-    if (status != CAPS_SUCCESS) printf("Error: Status %d during destroy_mapAttrToIndexStruct!\n", status);
+    status = destroy_mapAttrToIndexStruct(&hsmInstance->constraintMap);
+    if (status != CAPS_SUCCESS)
+      printf("Error: Status %d during destroy_mapAttrToIndexStruct!\n", status);
 
     // Attribute to load index map
-    status = destroy_mapAttrToIndexStruct(&hsmInstance[iIndex].loadMap);
-    if (status != CAPS_SUCCESS) printf("Error: Status %d during destroy_mapAttrToIndexStruct!\n", status);
+    status = destroy_mapAttrToIndexStruct(&hsmInstance->loadMap);
+    if (status != CAPS_SUCCESS)
+      printf("Error: Status %d during destroy_mapAttrToIndexStruct!\n", status);
 
     // Transfer to index map
-    status = destroy_mapAttrToIndexStruct(&hsmInstance[iIndex].transferMap);
-    if (status != CAPS_SUCCESS) printf("Error: Status %d during destroy_mapAttrToIndexStruct!\n", status);
+    status = destroy_mapAttrToIndexStruct(&hsmInstance->transferMap);
+    if (status != CAPS_SUCCESS)
+      printf("Error: Status %d during destroy_mapAttrToIndexStruct!\n", status);
 
     // Cleanup meshes
-    if (hsmInstance[iIndex].feaMesh != NULL) {
+    if (hsmInstance->feaMesh != NULL) {
 
-        for (i = 0; i < hsmInstance[iIndex].numMesh; i++) {
-            status = destroy_meshStruct(&hsmInstance[iIndex].feaMesh[i]);
-            if (status != CAPS_SUCCESS) printf("Error: Status %d during destroy_meshStruct!\n", status);
+        for (i = 0; i < hsmInstance->numMesh; i++) {
+            status = destroy_meshStruct(&hsmInstance->feaMesh[i]);
+            if (status != CAPS_SUCCESS)
+              printf("Error: Status %d during destroy_meshStruct!\n", status);
         }
 
-        EG_free(hsmInstance[iIndex].feaMesh);
+        EG_free(hsmInstance->feaMesh);
     }
 
-    hsmInstance[iIndex].feaMesh = NULL;
-    hsmInstance[iIndex].numMesh = 0;
+    hsmInstance->feaMesh = NULL;
+    hsmInstance->numMesh = 0;
 
     // Destroy FEA problem structure
-    status = destroy_feaProblemStruct(&hsmInstance[iIndex].feaProblem);
-    if (status != CAPS_SUCCESS)  printf("Error: Status %d during destroy_feaProblemStruct!\n", status);
+    status = destroy_feaProblemStruct(&hsmInstance->feaProblem);
+    if (status != CAPS_SUCCESS)
+      printf("Error: Status %d during destroy_feaProblemStruct!\n", status);
 
     // NULL projetName
-    hsmInstance[iIndex].projectName = NULL;
-
-    // NULL analysisPath
-    hsmInstance[iIndex].analysisPath = NULL;
+    hsmInstance->projectName = NULL;
 
     // NULL pointer to caps input value for tessellation parameters
-    hsmInstance[iIndex].tessParam = NULL;
+    hsmInstance->tessParam = NULL;
 
     // NULL pointer to caps input value for Edge_Point- Min
-    hsmInstance[iIndex].edgePointMin = NULL;
+    hsmInstance->edgePointMin = NULL;
 
     // NULL pointer to caps input value for Edge_Point- Max
-    hsmInstance[iIndex].edgePointMax = NULL;
+    hsmInstance->edgePointMax = NULL;
 
     // NULL pointer to caps input value for No_Quad_Faces
-    hsmInstance[iIndex].quadMesh = NULL;
+    hsmInstance->quadMesh = NULL;
 
     return CAPS_SUCCESS;
 }
 
-static int createMesh(int iIndex, void *aimInfo) {
+
+static int createMesh(void *aimInfo, aimStorage *hsmInstance)
+{
 
     int status; // Function return status
 
-        int i, body; // Indexing
+    int i, body; // Indexing
 
     // Bodies
-        const char *intents;
-     int   numBody; // Number of Bodies
+    const char *intents;
+    int   numBody; // Number of Bodies
     ego  *bodies;
 
     // Meshing related variables
@@ -339,257 +355,169 @@ static int createMesh(int iIndex, void *aimInfo) {
     // Coordinate system
     mapAttrToIndexStruct coordSystemMap;
 
-    // AIM Data transfer
-    int  nrow, ncol, rank;
-    void *dataTransfer;
-    enum capsvType vtype;
-    char *units;
-
     meshStruct *tempMesh;
     int *feaMeshList = NULL; // List to seperate structural meshes for aero
+    capsValue *meshVal;
 
     // Inherited fea/volume mesh related variables
     int numFEAMesh = 0;
     int feaMeshInherited = (int) false;
 
     // Destroy feaMeshes
-    if (hsmInstance[iIndex].feaMesh != NULL) {
+    if (hsmInstance->feaMesh != NULL) {
 
-        for (i = 0; i < hsmInstance[iIndex].numMesh; i++) {
-            status = destroy_meshStruct(&hsmInstance[iIndex].feaMesh[i]);
-            if (status != CAPS_SUCCESS) printf("Error: Status %d during destroy_meshStruct!\n", status);
+        for (i = 0; i < hsmInstance->numMesh; i++) {
+            status = destroy_meshStruct(&hsmInstance->feaMesh[i]);
+            if (status != CAPS_SUCCESS)
+              printf("Error: Status %d during destroy_meshStruct!\n", status);
         }
 
-        EG_free(hsmInstance[iIndex].feaMesh);
+        EG_free(hsmInstance->feaMesh);
     }
 
-    hsmInstance[iIndex].feaMesh = NULL;
-    hsmInstance[iIndex].numMesh = 0;
+    hsmInstance->feaMesh = NULL;
+    hsmInstance->numMesh = 0;
 
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
-    #ifdef DEBUG
-           printf(" nastranAIM/createMesh instance = %d  nbody = %d!\n", iIndex, numBody);
-    #endif
+#ifdef DEBUG
+        printf(" nastranAIM/createMesh nbody = %d!\n", numBody);
+#endif
 
     if ((numBody <= 0) || (bodies == NULL)) {
-        printf(" nastranAIM/createMesh No Bodies!\n");
-
+        AIM_ERROR(aimInfo, "No Bodies!");
         return CAPS_SOURCEERR;
     }
 
     // Alloc feaMesh list
-    feaMeshList = (int *) EG_alloc(numBody*sizeof(int));
-    if (feaMeshList == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    AIM_ALLOC(feaMeshList, numBody, int, aimInfo, status);
 
     // Set all indexes to true
     for (i = 0; i < numBody; i++ ) feaMeshList[i] = (int) true;
 
-
     // Get CoordSystem attribute to index mapping
     status = initiate_mapAttrToIndexStruct(&coordSystemMap);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
     status = create_CoordSystemAttrToIndexMap(numBody,
                                               bodies,
                                               3, //>2 - search the body, faces, edges, and all the nodes
                                               &coordSystemMap);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     status = fea_getCoordSystem(numBody,
                                 bodies,
                                 coordSystemMap,
-                                &hsmInstance[iIndex].feaProblem.numCoordSystem,
-                                &hsmInstance[iIndex].feaProblem.feaCoordSystem);
-    if (status != CAPS_SUCCESS) goto cleanup;
+                                &hsmInstance->feaProblem.numCoordSystem,
+                                &hsmInstance->feaProblem.feaCoordSystem);
+    AIM_STATUS(aimInfo, status);
 
     // Get capsConstraint name and index mapping
     status = create_CAPSConstraintAttrToIndexMap(numBody,
                                                  bodies,
                                                  3, //>2 - search the body, faces, edges, and all the nodes
-                                                 &hsmInstance[iIndex].constraintMap);
-    if (status != CAPS_SUCCESS) goto cleanup;
+                                                 &hsmInstance->constraintMap);
+    AIM_STATUS(aimInfo, status);
 
     // Get capsLoad name and index mapping
     status = create_CAPSLoadAttrToIndexMap(numBody,
                                            bodies,
                                            3, //>2 - search the body, faces, edges, and all the nodes
-                                           &hsmInstance[iIndex].loadMap);
-    if (status != CAPS_SUCCESS) goto cleanup;
+                                           &hsmInstance->loadMap);
+    AIM_STATUS(aimInfo, status);
 
     // Get transfer to index mapping
     status = create_CAPSBoundAttrToIndexMap(numBody,
                                             bodies,
                                             3, //>2 - search the body, faces, edges, and all the nodes
-                                            &hsmInstance[iIndex].transferMap);
-    if (status != CAPS_SUCCESS) goto cleanup;
+                                            &hsmInstance->transferMap);
+    AIM_STATUS(aimInfo, status);
 
     /*// Get connect to index mapping
     status = create_CAPSConnectAttrToIndexMap(numBody,
                                                bodies,
                                                3, //>2 - search the body, faces, edges, and all the nodes
-                                               &hsmInstance[iIndex].connectMap);
+                                               &hsmInstance->connectMap);
     if (status != CAPS_SUCCESS) goto cleanup;*/
 
-    // Get attribute to index mapping
-    status = aim_getData(aimInfo, "Attribute_Map", &vtype, &rank, &nrow, &ncol, &dataTransfer, &units);
-    if (status == CAPS_SUCCESS) {
+    // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
+    status = create_CAPSGroupAttrToIndexMap(numBody,
+                                            bodies,
+                                            3, //>2 - search the body, faces, edges, and all the nodes
+                                            &hsmInstance->attrMap);
+    AIM_STATUS(aimInfo, status);
 
-        printf("Found link for attrMap (Attribute_Map) from parent\n");
+    // Get the mesh input Value
+    status = aim_getValue(aimInfo, Mesh, ANALYSISIN, &meshVal);
+    AIM_STATUS(aimInfo, status);
 
-        status = copy_mapAttrToIndexStruct( (mapAttrToIndexStruct *) dataTransfer, &hsmInstance[iIndex].attrMap);
-        if (status != CAPS_SUCCESS) goto cleanup;
+    feaMeshInherited = (int) false;
 
-    } else {
-
-        if (status == CAPS_DIRTY) printf("Parent AIMS are dirty\n");
-
-        printf("Didn't find a link to attrMap from parent - getting it ourselves\n");
-
-        // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
-        status = create_CAPSGroupAttrToIndexMap(numBody,
-                                                bodies,
-                                                3, //>2 - search the body, faces, edges, and all the nodes
-                                                &hsmInstance[iIndex].attrMap);
-        if (status != CAPS_SUCCESS) goto cleanup;
-    }
+    tempMesh = (meshStruct *) meshVal->vals.AIMptr;
 
     // See if a FEA mesh is available from parent
-    status = aim_getData(aimInfo, "FEA_MESH", &vtype, &rank, &nrow, &ncol, &dataTransfer, &units);
-    if (status == CAPS_SUCCESS) {
+    if (tempMesh != NULL && (tempMesh->meshType == SurfaceMesh || tempMesh->meshType == Surface2DMesh)) {
 
-        printf("Found link for a FEA mesh (FEA_Mesh) from parent\n");
-
-        numFEAMesh = 1;
-        if      (nrow == 1 && ncol != 1) numFEAMesh = ncol;
-        else if (nrow != 1 && ncol == 1) numFEAMesh = nrow;
-        else {
-
-            printf("Can not accept 2D matrix of fea meshes\n");
-            status = CAPS_BADVALUE;
-            goto cleanup;
-        }
+        numFEAMesh = meshVal->length;
 
         if (numFEAMesh != numBody) {
-            printf("Number of inherited fea meshes does not match the number of bodies\n");
-            return CAPS_SOURCEERR;
+            AIM_ERROR(aimInfo, "Number of inherited fea meshes does not match the number of bodies");
+            status = CAPS_SOURCEERR;
+            goto cleanup;
         }
 
         if (numFEAMesh > 0) printf("Combining multiple FEA meshes!\n");
-         status = mesh_combineMeshStruct(numFEAMesh,
-                                        (meshStruct *) dataTransfer,
-                                        &hsmInstance[iIndex].feaProblem.feaMesh);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        status = mesh_combineMeshStruct(numFEAMesh,
+                                        (meshStruct *) meshVal->vals.AIMptr,
+                                        &hsmInstance->feaProblem.feaMesh);
+        AIM_STATUS(aimInfo, status);
 
         // Set reference meshes
-        hsmInstance[iIndex].feaProblem.feaMesh.numReferenceMesh = numFEAMesh;
-        hsmInstance[iIndex].feaProblem.feaMesh.referenceMesh = (meshStruct *) EG_alloc(numFEAMesh*sizeof(meshStruct));
-        if (hsmInstance[iIndex].feaProblem.feaMesh.referenceMesh == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        AIM_ALLOC(hsmInstance->feaProblem.feaMesh.referenceMesh, numFEAMesh, meshStruct, aimInfo, status);
+        hsmInstance->feaProblem.feaMesh.numReferenceMesh = numFEAMesh;
 
         for (body = 0; body < numFEAMesh; body++) {
-            hsmInstance[iIndex].feaProblem.feaMesh.referenceMesh[body] = ((meshStruct *) dataTransfer)[body];
+            hsmInstance->feaProblem.feaMesh.referenceMesh[body] =
+                ((meshStruct *) meshVal->vals.AIMptr)[body];
         }
 
         feaMeshInherited = (int) true;
-
-    } else if (status == CAPS_DIRTY) {
-
-        printf("Link for a FEA mesh (FEA_Mesh) from parent found, but Parent AIMS are dirty\n");
-        goto cleanup;
-
-    } else { // Check to see if a general unstructured volume mesh is available
-
-        printf("Didn't find a FEA mesh (FEA_Mesh) from parent - checking for volume mesh\n");
-
-        status = aim_getData(aimInfo, "Volume_MESH", &vtype, &rank, &nrow, &ncol, &dataTransfer, &units);
-        if (status == CAPS_DIRTY) {
-
-            printf("Link for a volume mesh (Volume_Mesh) from parent found, but Parent AIMS are dirty\n");
-            goto cleanup;
-
-        } else if (status == CAPS_SUCCESS) {
-
-            printf("Found link for a  volume mesh (Volume_Mesh) from parent\n");
-
-            numFEAMesh = 1;
-            if (nrow != 1 && ncol != 1) {
-
-                printf("Can not accept multiple volume meshes\n");
-                status = CAPS_BADVALUE;
-                goto cleanup;
-            }
-
-            if (numFEAMesh != numBody) {
-                printf("Number of inherited volume meshes does not match the number of bodies - assuming volume mesh is already combined\n");
-            }
-
-            hsmInstance[iIndex].feaProblem.feaMesh = *(meshStruct *) dataTransfer;
-
-            for (i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numReferenceMesh; i++) {
-
-                status = aim_setTess(aimInfo,
-                                     hsmInstance[iIndex].feaProblem.feaMesh.referenceMesh[i].bodyTessMap.egadsTess);
-                if (status != CAPS_SUCCESS) goto cleanup;
-            }
-
-            feaMeshInherited = (int) true;
-        } else {
-            printf("Didn't find a volume mesh (Volume_Mesh) from parent\n");
-
-            feaMeshInherited = (int) false;
-        }
     }
 
 
     // If we didn't inherit a FEA mesh we need to get one ourselves
     if (feaMeshInherited == (int) false) {
 
-        tessParam[0] = hsmInstance[iIndex].tessParam->vals.reals[0]; // Gets multiplied by bounding box size
-        tessParam[1] = hsmInstance[iIndex].tessParam->vals.reals[1]; // Gets multiplied by bounding box size
-        tessParam[2] = hsmInstance[iIndex].tessParam->vals.reals[2];
+        tessParam[0] = hsmInstance->tessParam->vals.reals[0]; // Gets multiplied by bounding box size
+        tessParam[1] = hsmInstance->tessParam->vals.reals[1]; // Gets multiplied by bounding box size
+        tessParam[2] = hsmInstance->tessParam->vals.reals[2];
 
-        edgePointMin = hsmInstance[iIndex].edgePointMin->vals.integer;
-        edgePointMax = hsmInstance[iIndex].edgePointMax->vals.integer;
-        quadMesh     = hsmInstance[iIndex].quadMesh->vals.integer;
+        edgePointMin = hsmInstance->edgePointMin->vals.integer;
+        edgePointMax = hsmInstance->edgePointMax->vals.integer;
+        quadMesh     = hsmInstance->quadMesh->vals.integer;
 
         if (edgePointMin < 2) {
-            printf("The minimum number of allowable edge points is 2 not %d\n", edgePointMin);
+            printf("The minimum number of allowable edge points is 2 not %d\n",
+                   edgePointMin);
             edgePointMin = 2;
         }
 
         if (edgePointMax < edgePointMin) {
-            printf("The maximum number of edge points must be greater than the current minimum (%d)\n", edgePointMin);
+            printf("The maximum number of edge points must be greater than the current minimum (%d)\n",
+                   edgePointMin);
             edgePointMax = edgePointMin+1;
         }
 
         for (body = 0; body < numBody; body++) {
             if (feaMeshList[body] != (int) true) continue;
 
-            hsmInstance[iIndex].numMesh += 1;
-            if (hsmInstance[iIndex].numMesh == 1) {
-                tempMesh = (meshStruct *) EG_alloc(sizeof(meshStruct));
-            } else {
-                tempMesh= (meshStruct *) EG_reall(hsmInstance[iIndex].feaMesh,
-                                                  hsmInstance[iIndex].numMesh*sizeof(meshStruct));
-            }
-            if (tempMesh == NULL) {
-                status = EGADS_MALLOC;
-                hsmInstance[iIndex].numMesh -= 1;
-                goto cleanup;
-            }
+            hsmInstance->numMesh += 1;
+            AIM_REALL(hsmInstance->feaMesh, hsmInstance->numMesh, meshStruct, aimInfo, status);
 
-            hsmInstance[iIndex].feaMesh = tempMesh;
-
-            status = initiate_meshStruct(&hsmInstance[iIndex].feaMesh[hsmInstance[iIndex].numMesh-1]);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            status = initiate_meshStruct(&hsmInstance->feaMesh[hsmInstance->numMesh-1]);
+            AIM_STATUS(aimInfo, status);
 
             // Get FEA Problem from EGADs body
             status = hsm_bodyToBEM(bodies[body], // (in)  EGADS Body
@@ -597,130 +525,115 @@ static int createMesh(int iIndex, void *aimInfo) {
                                    edgePointMin, // (in)  minimum points along any Edge
                                    edgePointMax, // (in)  maximum points along any Edge
                                    quadMesh,
-                                   &hsmInstance[iIndex].attrMap,
+                                   &hsmInstance->attrMap,
                                    &coordSystemMap,
-                                   &hsmInstance[iIndex].constraintMap,
-                                   &hsmInstance[iIndex].loadMap,
-                                   &hsmInstance[iIndex].transferMap,
-                                   NULL, //&hsmInstance[iIndex].connectMap,
-                                   &hsmInstance[iIndex].feaMesh[hsmInstance[iIndex].numMesh-1]);
+                                   &hsmInstance->constraintMap,
+                                   &hsmInstance->loadMap,
+                                   &hsmInstance->transferMap,
+                                   NULL, //&hsmInstance->connectMap,
+                                   &hsmInstance->feaMesh[hsmInstance->numMesh-1]);
 
             if (status != CAPS_SUCCESS) goto cleanup;
 
-            printf("\tNumber of nodal coordinates = %d\n", hsmInstance[iIndex].feaMesh[hsmInstance[iIndex].numMesh-1].numNode);
-            printf("\tNumber of elements = %d\n", hsmInstance[iIndex].feaMesh[hsmInstance[iIndex].numMesh-1].numElement);
-            //printf("\tElemental Nodes = %d\n", hsmInstance[iIndex].feaMesh[hsmInstance[iIndex].numMesh-1].meshQuickRef.numNode);
-            //printf("\tElemental Rods  = %d\n", hsmInstance[iIndex].feaMesh[hsmInstance[iIndex].numMesh-1].meshQuickRef.numLine);
-            printf("\tElemental Tria3 = %d\n", hsmInstance[iIndex].feaMesh[hsmInstance[iIndex].numMesh-1].meshQuickRef.numTriangle);
-            printf("\tElemental Quad4 = %d\n", hsmInstance[iIndex].feaMesh[hsmInstance[iIndex].numMesh-1].meshQuickRef.numQuadrilateral);
-
-            status = aim_setTess(aimInfo, hsmInstance[iIndex].feaMesh[hsmInstance[iIndex].numMesh-1].bodyTessMap.egadsTess);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            printf("\tNumber of nodal coordinates = %d\n",
+                   hsmInstance->feaMesh[hsmInstance->numMesh-1].numNode);
+            printf("\tNumber of elements = %d\n",
+                   hsmInstance->feaMesh[hsmInstance->numMesh-1].numElement);
+          //printf("\tElemental Nodes = %d\n", hsmInstance->feaMesh[hsmInstance->numMesh-1].meshQuickRef.numNode);
+          //printf("\tElemental Rods  = %d\n", hsmInstance->feaMesh[hsmInstance->numMesh-1].meshQuickRef.numLine);
+            printf("\tElemental Tria3 = %d\n",
+                   hsmInstance->feaMesh[hsmInstance->numMesh-1].meshQuickRef.numTriangle);
+            printf("\tElemental Quad4 = %d\n",
+                   hsmInstance->feaMesh[hsmInstance->numMesh-1].meshQuickRef.numQuadrilateral);
         }
 
-        if (hsmInstance[iIndex].numMesh > 1) printf("Combining multiple FEA meshes!\n");
+        if (hsmInstance->numMesh > 1) printf("Combining multiple FEA meshes!\n");
         // Combine fea meshes into a single mesh for the problem
-        status = mesh_combineMeshStruct(hsmInstance[iIndex].numMesh,
-                                        hsmInstance[iIndex].feaMesh,
-                                        &hsmInstance[iIndex].feaProblem.feaMesh);
+/*@-nullpass@*/
+        status = mesh_combineMeshStruct(hsmInstance->numMesh,
+                                        hsmInstance->feaMesh,
+                                        &hsmInstance->feaProblem.feaMesh);
         if (status != CAPS_SUCCESS) goto cleanup;
 
         // Set reference meshes
-        hsmInstance[iIndex].feaProblem.feaMesh.numReferenceMesh = hsmInstance[iIndex].numMesh;
-        hsmInstance[iIndex].feaProblem.feaMesh.referenceMesh = (meshStruct *) EG_alloc(hsmInstance[iIndex].numMesh*sizeof(meshStruct));
-        if (hsmInstance[iIndex].feaProblem.feaMesh.referenceMesh == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        AIM_ALLOC(hsmInstance->feaProblem.feaMesh.referenceMesh, hsmInstance->numMesh, meshStruct, aimInfo, status);
+        hsmInstance->feaProblem.feaMesh.numReferenceMesh = hsmInstance->numMesh;
 
-        for (body = 0; body < hsmInstance[iIndex].numMesh; body++) {
-            hsmInstance[iIndex].feaProblem.feaMesh.referenceMesh[body] = hsmInstance[iIndex].feaMesh[body];
+        AIM_NOTNULL(hsmInstance->feaMesh, aimInfo, status);
+        for (body = 0; body < hsmInstance->numMesh; body++) {
+            hsmInstance->feaProblem.feaMesh.referenceMesh[body] = hsmInstance->feaMesh[body];
         }
+/*@+nullpass@*/
     }
     status = CAPS_SUCCESS;
 
-    goto cleanup;
+cleanup:
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in createMesh status = %d\n", status);
+    if (feaMeshList != NULL) EG_free(feaMeshList);
 
-        if (feaMeshList != NULL) EG_free(feaMeshList);
+    (void ) destroy_mapAttrToIndexStruct(&coordSystemMap);
 
-        (void ) destroy_mapAttrToIndexStruct(&coordSystemMap);
-
-        return status;
+    return status;
 }
-
-
 
 
 // ********************** Exposed AIM Functions *****************************
 
-int aimInitialize(int ngIn, capsValue *gIn, int *qeFlag, const char *unitSys,
-                  int *nIn, int *nOut, int *nFields, char ***fnames, int **ranks)
+int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *aimInfo,
+                  void **instStore, /*@unused@*/ int *major,
+                  /*@unused@*/ int *minor, int *nIn, int *nOut,
+                  int *nFields, char ***fnames, int **franks, int **fInOut)
 {
-    int status; // Function return
+    int status = CAPS_SUCCESS;
+    aimStorage *hsmInstance=NULL;
 
-    int flag;  // query/execute flag
-
-    aimStorage *tmp;
-
-    #ifdef DEBUG
-            printf("\n hsmAIM/aimInitialize   ngIn = %d!\n", ngIn);
-    #endif
-
-    flag    = *qeFlag;
-
-    // Does the AIM execute itself (i.e. no external executable is called)
-    *qeFlag = 1; // 1 = AIM executes itself, 0 otherwise
+#ifdef DEBUG
+    printf("\n hsmAIM/aimInitialize   instance = %d!\n", inst);
+#endif
 
     // specify the number of analysis input and out "parameters"
-    *nIn     = 9;
+    *nIn     = NUMINPUT;
     *nOut    = 0;
-    if (flag == 1) return CAPS_SUCCESS;
+    if (inst == -1) return CAPS_SUCCESS;
 
-    // Specify the field variables this analysis can generate
+    /* specify the field variables this analysis can generate and consume */
     *nFields = 0;
-    *ranks   = NULL;
     *fnames  = NULL;
+    *franks  = NULL;
+    *fInOut  = NULL;
 
     // Allocate hsmInstance
-    if (hsmInstance == NULL) {
-        hsmInstance = (aimStorage *) EG_alloc(sizeof(aimStorage));
-        if (hsmInstance == NULL) return EGADS_MALLOC;
-    } else {
-        tmp = (aimStorage *) EG_reall(hsmInstance, (numInstance+1)*sizeof(aimStorage));
-        if (tmp == NULL) return EGADS_MALLOC;
-        hsmInstance = tmp;
-    }
+    AIM_ALLOC(hsmInstance, 1, aimStorage, aimInfo, status);
+    *instStore = hsmInstance;
 
     // Set initial values for hsmInstance
+    status = initiate_aimStorage(hsmInstance);
 
-    status = initiate_aimStorage(numInstance);
-    if (status != CAPS_SUCCESS) return status;
-
-    // Increment number of instances
-    numInstance += 1;
-
-    return (numInstance-1);
+cleanup:
+    return status;
 }
 
-// Available AIM inputs
-int aimInputs(int iIndex, void *aimInfo, int index, char **ainame,
-              capsValue *defval)
-{
 
+// Available AIM inputs
+int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
+              char **ainame, capsValue *defval)
+{
+    int status = CAPS_SUCCESS;
+    aimStorage *hsmInstance;
+  
     /*! \page aimInputsHSM AIM Inputs
      * The following list outlines the HSM options along with their default value available
      * through the AIM interface.
      */
 
-    #ifdef DEBUG
-        printf(" hsmAIM/aimInputs instance = %d  index = %d!\n", iIndex, index);
-    #endif
+#ifdef DEBUG
+    printf(" hsmAIM/aimInputs index = %d!\n", index);
+#endif
+    hsmInstance = (aimStorage *) instStore;
+    if (hsmInstance == NULL) return CAPS_NULLVALUE;
 
     // Inputs
-    if (index == 1) {
+    if (index == Proj_Name) {
         *ainame              = EG_strdup("Proj_Name");
          defval->type         = String;
          defval->nullVal      = NotNull;
@@ -732,23 +645,22 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame,
          * This corresponds to the project name used for file naming.
          */
 
-    } else if (index == 2) {
+    } else if (index == Tess_Params) {
         *ainame               = EG_strdup("Tess_Params");
         defval->type          = Double;
         defval->dim           = Vector;
-        defval->length        = 3;
         defval->nrow          = 3;
         defval->ncol          = 1;
         defval->units         = NULL;
         defval->lfixed        = Fixed;
-        defval->vals.reals    = (double *) EG_alloc(defval->length*sizeof(double));
+        defval->vals.reals    = (double *) EG_alloc(defval->nrow*sizeof(double));
         if (defval->vals.reals != NULL) {
             defval->vals.reals[0] = 0.025;
             defval->vals.reals[1] = 0.001;
             defval->vals.reals[2] = 15.00;
         } else return EGADS_MALLOC;
 
-        hsmInstance[iIndex].tessParam = defval;
+        hsmInstance->tessParam = defval;
 
         /*! \page aimInputsHSM
          * - <B> Tess_Params = [0.025, 0.001, 15.0]</B> <br>
@@ -764,7 +676,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame,
          * zero ignores this phase
          */
 
-    } else if (index == 3) {
+    } else if (index == Edge_Point_Min) {
         *ainame               = EG_strdup("Edge_Point_Min");
         defval->type          = Integer;
         defval->vals.integer  = 2;
@@ -773,43 +685,42 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame,
         defval->ncol          = 1;
         defval->nullVal       = NotNull;
 
-        hsmInstance[iIndex].edgePointMin = defval;
+        hsmInstance->edgePointMin = defval;
 
         /*! \page aimInputsHSM
          * - <B> Edge_Point_Min = 2</B> <br>
          * Minimum number of points on an edge including end points to use when creating a surface mesh (min 2).
          */
 
-    } else if (index == 4) {
+    } else if (index == Edge_Point_Max) {
         *ainame               = EG_strdup("Edge_Point_Max");
         defval->type          = Integer;
         defval->vals.integer  = 50;
-        defval->length        = 1;
         defval->lfixed        = Fixed;
         defval->nrow          = 1;
         defval->ncol          = 1;
         defval->nullVal       = NotNull;
 
-        hsmInstance[iIndex].edgePointMax = defval;
+        hsmInstance->edgePointMax = defval;
 
         /*! \page aimInputsHSM
          * - <B> Edge_Point_Max = 50</B> <br>
          * Maximum number of points on an edge including end points to use when creating a surface mesh (min 2).
          */
 
-    } else if (index == 5) {
+    } else if (index == Quad_Mesh) {
         *ainame               = EG_strdup("Quad_Mesh");
         defval->type          = Boolean;
         defval->vals.integer  = (int) false;
 
-        hsmInstance[iIndex].quadMesh = defval;
+        hsmInstance->quadMesh = defval;
 
         /*! \page aimInputsHSM
          * - <B> Quad_Mesh = False</B> <br>
          * Create a quadratic mesh on four edge faces when creating the boundary element model.
          */
 
-    } else if (index == 6) {
+    } else if (index == Property) {
         *ainame              = EG_strdup("Property");
         defval->type         = Tuple;
         defval->nullVal      = IsNull;
@@ -822,7 +733,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame,
          * - <B> Property = NULL</B> <br>
          * Property tuple used to input property information for the model, see \ref feaProperty for additional details.
          */
-    } else if (index == 7) {
+    } else if (index == Material) {
         *ainame              = EG_strdup("Material");
         defval->type         = Tuple;
         defval->nullVal      = IsNull;
@@ -835,7 +746,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame,
          * - <B> Material = NULL</B> <br>
          * Material tuple used to input material information for the model, see \ref feaMaterial for additional details.
          */
-    } else if (index == 8) {
+    } else if (index == Constraint) {
         *ainame              = EG_strdup("Constraint");
         defval->type         = Tuple;
         defval->nullVal      = IsNull;
@@ -848,7 +759,7 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame,
          * - <B> Constraint = NULL</B> <br>
          * Constraint tuple used to input constraint information for the model, see \ref feaConstraint for additional details.
          */
-    } else if (index == 9) {
+    } else if (index == Load) {
         *ainame              = EG_strdup("Load");
         defval->type         = Tuple;
         defval->nullVal      = IsNull;
@@ -861,34 +772,37 @@ int aimInputs(int iIndex, void *aimInfo, int index, char **ainame,
          * - <B> Load = NULL</B> <br>
          * Load tuple used to input load information for the model, see \ref feaLoad for additional details.
          */
+    } else if (index == Mesh) {
+        *ainame             = AIM_NAME(Mesh);
+        defval->type        = Pointer;
+        defval->dim         = Vector;
+        defval->lfixed      = Change;
+        defval->sfixed      = Change;
+        defval->vals.AIMptr = NULL;
+        defval->nullVal     = IsNull;
+        AIM_STRDUP(defval->units, "meshStruct", aimInfo, status);
+
+        /*! \page aimInputsAstros
+         * - <B>Mesh = NULL</B> <br>
+         * A Mesh link.
+         */
     }
 
-    return CAPS_SUCCESS;
+    AIM_NOTNULL(*ainame, aimInfo, status);
+
+cleanup:
+    if (status != CAPS_SUCCESS) AIM_FREE(*ainame);
+    return status;
 }
 
-// Shareable data for the AIM - typically optional
-int aimData(int iIndex, const char *name, enum capsvType *vtype,
-            int *rank, int *nrow, int *ncol, void **data, char **units)
-{
-    /*! \page sharableDataHSM AIM Shareable Data
-     * The HSM AIM has the following shareable data types/values with its children AIMs if they are so inclined.
-     * - None
-     */
-
-    #ifdef DEBUG
-        printf(" hsmAIM/aimData instance = %d  name = %s!\n", inst, name);
-    #endif
-
-    return CAPS_NOTFOUND;
-
-}
 
 // AIM preAnalysis function
-int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsValue *aimInputs, capsErrs **errs)
+int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 {
     int status; // Status return
 
     int i, j, k, propertyIndex, materialIndex; // Indexing
+    aimStorage *hsmInstance;
 
     char *filename = NULL; // Output file
 
@@ -940,9 +854,6 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
 
     int found; // Checker
 
-    // NULL out errors
-    *errs = NULL;
-
     // Newton convergence tolerances
     rtol = 1.0e-11;  /* relative displacements, |d|/dref */
     atol = 1.0e-11;  /* angles (unit vector changes) */
@@ -963,12 +874,12 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
 
     //ddel    last max position Newton delta  (fraction of dref)
     //adel    last max normal angle Newton delta
-
-    // Store away the analysis path/directory
-    hsmInstance[iIndex].analysisPath = analysisPath;
+  
+    hsmInstance = (aimStorage *) instStore;
+    if (aimInputs == NULL) return CAPS_NULLVALUE;
 
     // Get project name
-    hsmInstance[iIndex].projectName = aimInputs[aim_getIndex(aimInfo, "Proj_Name", ANALYSISIN)-1].vals.string;
+    hsmInstance->projectName = aimInputs[Proj_Name-1].vals.string;
 
     status = initiate_hsmMemoryStruct(&hsmMemory);
     if (status != CAPS_SUCCESS) goto cleanup;
@@ -979,31 +890,24 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
     // Get FEA mesh if we don't already have one
     if (aim_newGeometry(aimInfo) == CAPS_SUCCESS) {
 
-        status = createMesh(iIndex, aimInfo);
+        status = createMesh(aimInfo, hsmInstance);
         if (status != CAPS_SUCCESS) goto cleanup;
 
         // Write Nastran Mesh
-        filename = (char *) EG_alloc((strlen(analysisPath) +1 + strlen(hsmInstance[iIndex].projectName)+1)*sizeof(char));
+        filename = (char *) EG_alloc((strlen(hsmInstance->projectName)+1)*sizeof(char));
         if (filename == NULL) return EGADS_MALLOC;
 
-        strcpy(filename, analysisPath);
-        #ifdef WIN32
-            strcat(filename, "\\");
-        #else
-            strcat(filename, "/");
-        #endif
+        strcpy(filename, hsmInstance->projectName);
 
-        strcat(filename, hsmInstance[iIndex].projectName);
-
-        status = mesh_writeNASTRAN(filename,
+        status = mesh_writeNASTRAN(aimInfo,
+                                   filename,
                                    1,
-                                   &hsmInstance[iIndex].feaProblem.feaMesh,
+                                   &hsmInstance->feaProblem.feaMesh,
                                    SmallField,
                                    1.0);
-        if (status != CAPS_SUCCESS) {
-            EG_free(filename);
-            return status;
-        }
+        EG_free(filename);
+        filename = NULL;
+        if (status != CAPS_SUCCESS) return status;
     }
 
     // Note: Setting order is important here.
@@ -1012,58 +916,61 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
     // 3. Mesh should be set before loads, constraints
 
     // Set material properties
-    if (aimInputs[aim_getIndex(aimInfo, "Material", ANALYSISIN)-1].nullVal == NotNull) {
-        status = fea_getMaterial(aimInputs[aim_getIndex(aimInfo, "Material", ANALYSISIN)-1].length,
-                                 aimInputs[aim_getIndex(aimInfo, "Material", ANALYSISIN)-1].vals.tuple,
-                                 &hsmInstance[iIndex].feaProblem.numMaterial,
-                                 &hsmInstance[iIndex].feaProblem.feaMaterial);
+    if (aimInputs[Material-1].nullVal == NotNull) {
+        status = fea_getMaterial(aimInfo,
+                                 aimInputs[Material-1].length,
+                                 aimInputs[Material-1].vals.tuple,
+                                 &hsmInstance->units,
+                                 &hsmInstance->feaProblem.numMaterial,
+                                 &hsmInstance->feaProblem.feaMaterial);
         if (status != CAPS_SUCCESS) return status;
     } else printf("Load tuple is NULL - No materials set\n");
 
     // Set property properties
-    if (aimInputs[aim_getIndex(aimInfo, "Property", ANALYSISIN)-1].nullVal == NotNull) {
-        status = fea_getProperty(aimInputs[aim_getIndex(aimInfo, "Property", ANALYSISIN)-1].length,
-                                 aimInputs[aim_getIndex(aimInfo, "Property", ANALYSISIN)-1].vals.tuple,
-                                 &hsmInstance[iIndex].attrMap,
-                                 &hsmInstance[iIndex].feaProblem);
+    if (aimInputs[Property-1].nullVal == NotNull) {
+        status = fea_getProperty(aimInfo,
+                                 aimInputs[Property-1].length,
+                                 aimInputs[Property-1].vals.tuple,
+                                 &hsmInstance->attrMap,
+                                 &hsmInstance->units,
+                                 &hsmInstance->feaProblem);
         if (status != CAPS_SUCCESS) return status;
 
-
         // Assign element "subtypes" based on properties set
-/*        status = fea_assignElementSubType(hsmInstance[iIndex].feaProblem.numProperty,
-                                          hsmInstance[iIndex].feaProblem.feaProperty,
-                                          &hsmInstance[iIndex].feaProblem.feaMesh);
+/*        status = fea_assignElementSubType(hsmInstance->feaProblem.numProperty,
+                                          hsmInstance->feaProblem.feaProperty,
+                                          &hsmInstance->feaProblem.feaMesh);
         if (status != CAPS_SUCCESS) return status;*/
 
     } else printf("Property tuple is NULL - No properties set\n");
 
     // Set constraint properties
-    if (aimInputs[aim_getIndex(aimInfo, "Constraint", ANALYSISIN)-1].nullVal == NotNull) {
-        status = fea_getConstraint(aimInputs[aim_getIndex(aimInfo, "Constraint", ANALYSISIN)-1].length,
-                                   aimInputs[aim_getIndex(aimInfo, "Constraint", ANALYSISIN)-1].vals.tuple,
-                                   &hsmInstance[iIndex].constraintMap,
-                                   &hsmInstance[iIndex].feaProblem);
+    if (aimInputs[Constraint-1].nullVal == NotNull) {
+        status = fea_getConstraint(aimInputs[Constraint-1].length,
+                                   aimInputs[Constraint-1].vals.tuple,
+                                   &hsmInstance->constraintMap,
+                                   &hsmInstance->feaProblem);
         if (status != CAPS_SUCCESS) return status;
     } else printf("Constraint tuple is NULL - No constraints applied\n");
 
 
     // Set load properties
-    if (aimInputs[aim_getIndex(aimInfo, "Load", ANALYSISIN)-1].nullVal == NotNull) {
-        status = fea_getLoad(aimInputs[aim_getIndex(aimInfo, "Load", ANALYSISIN)-1].length,
-                             aimInputs[aim_getIndex(aimInfo, "Load", ANALYSISIN)-1].vals.tuple,
-                             &hsmInstance[iIndex].loadMap,
-                             &hsmInstance[iIndex].feaProblem);
+    if (aimInputs[Load-1].nullVal == NotNull) {
+        status = fea_getLoad(aimInputs[Load-1].length,
+                             aimInputs[Load-1].vals.tuple,
+                             &hsmInstance->loadMap,
+                             &hsmInstance->feaProblem);
         if (status != CAPS_SUCCESS) return status;
 
         // Loop through loads to see if any of them are supposed to be from an external source
-        for (i = 0; i < hsmInstance[iIndex].feaProblem.numLoad; i++) {
+        for (i = 0; i < hsmInstance->feaProblem.numLoad; i++) {
 
-            if (hsmInstance[iIndex].feaProblem.feaLoad[i].loadType == PressureExternal) {
+            if (hsmInstance->feaProblem.feaLoad[i].loadType == PressureExternal) {
 
                 // Transfer external pressures from the AIM discrObj
                 status = fea_transferExternalPressure(aimInfo,
-                                                      &hsmInstance[iIndex].feaProblem.feaMesh,
-                                                      &hsmInstance[iIndex].feaProblem.feaLoad[i]);
+                                                      &hsmInstance->feaProblem.feaMesh,
+                                                      &hsmInstance->feaProblem.feaLoad[i]);
                 if (status != CAPS_SUCCESS) return status;
 
             } // End PressureExternal if
@@ -1072,9 +979,9 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
 
 
     // Count the number joints
-    for (i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numNode; i++) {
+    for (i = 0; i < hsmInstance->feaProblem.feaMesh.numNode; i++) {
 
-        node = &hsmInstance[iIndex].feaProblem.feaMesh.node[i];
+        node = &hsmInstance->feaProblem.feaMesh.node[i];
 
         if (node->geomData == NULL) {
             printf("No geometry data set for node %d\n", node->nodeID);
@@ -1085,20 +992,21 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
         type = node->geomData->type;
         topoIndex = node->geomData->topoIndex;
 
-        if ( type < 0) continue;
+        if (type < 0) continue;
 
         for (j = 0; j < i; j++) {
 
-            if (hsmInstance[iIndex].feaProblem.feaMesh.node[j].geomData == NULL) {
-                printf("No geometry data set for node %d\n", hsmInstance[iIndex].feaProblem.feaMesh.node[j].nodeID);
+            if (hsmInstance->feaProblem.feaMesh.node[j].geomData == NULL) {
+                printf("No geometry data set for node %d\n",
+                       hsmInstance->feaProblem.feaMesh.node[j].nodeID);
                 status = CAPS_NULLVALUE;
                 goto cleanup;
             }
 
-            if (hsmInstance[iIndex].feaProblem.feaMesh.node[j].geomData->type < 0) continue;
+            if (hsmInstance->feaProblem.feaMesh.node[j].geomData->type < 0) continue;
 
-            if (type == hsmInstance[iIndex].feaProblem.feaMesh.node[j].geomData->type  &&
-                topoIndex == hsmInstance[iIndex].feaProblem.feaMesh.node[j].geomData->topoIndex) {
+            if (type == hsmInstance->feaProblem.feaMesh.node[j].geomData->type  &&
+                topoIndex == hsmInstance->feaProblem.feaMesh.node[j].geomData->topoIndex) {
 
                 numJoint += 1;
                 break; // one point can only connect to one other point
@@ -1107,12 +1015,17 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
     }
 
     kjoint = (int *) EG_alloc(2*numJoint*sizeof(int));
+    if (kjoint == NULL) {
+        printf("No Joints allocated %d\n", numJoint);
+        status = EGADS_MALLOC;
+        goto cleanup;
+    }
 
     // Fill in the joints
     numJoint = 0;
-    for (i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numNode; i++) {
+    for (i = 0; i < hsmInstance->feaProblem.feaMesh.numNode; i++) {
 
-        node = &hsmInstance[iIndex].feaProblem.feaMesh.node[i];
+        node = &hsmInstance->feaProblem.feaMesh.node[i];
 
         if (node->geomData == NULL) {
             printf("No geometry data set for node %d\n",node->nodeID);
@@ -1120,42 +1033,46 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
             goto cleanup;
         }
 
-        type = node->geomData->type;
+        type      = node->geomData->type;
         topoIndex = node->geomData->topoIndex;
 
-        if ( type < 0) continue;
+        if (type < 0) continue;
 
         // only searching lower nodes prevents creating a complete cyclic joint
         for (j = 0; j < i; j++) {
 
-            if (hsmInstance[iIndex].feaProblem.feaMesh.node[j].geomData == NULL) {
-                printf("No geometry data set for node %d\n", hsmInstance[iIndex].feaProblem.feaMesh.node[j].nodeID);
+            if (hsmInstance->feaProblem.feaMesh.node[j].geomData == NULL) {
+                printf("No geometry data set for node %d\n",
+                       hsmInstance->feaProblem.feaMesh.node[j].nodeID);
                 status = CAPS_NULLVALUE;
                 goto cleanup;
             }
 
-            if (hsmInstance[iIndex].feaProblem.feaMesh.node[j].geomData->type < 0) continue;
+            if (hsmInstance->feaProblem.feaMesh.node[j].geomData->type < 0) continue;
 
-            if (type == hsmInstance[iIndex].feaProblem.feaMesh.node[j].geomData->type  &&
-                topoIndex == hsmInstance[iIndex].feaProblem.feaMesh.node[j].geomData->topoIndex) {
+            if (type == hsmInstance->feaProblem.feaMesh.node[j].geomData->type  &&
+                topoIndex == hsmInstance->feaProblem.feaMesh.node[j].geomData->topoIndex) {
 
                 kjoint[2*numJoint + 0] = i;
                 kjoint[2*numJoint + 1] = j;
-//printf("%d (%d, %d)\n", numJoint, i, j);
+              //printf("%d (%d, %d)\n", numJoint, i, j);
                 numJoint += 1;
                 break; // one point can only connect to one other point
             }
         }
     }
 
-    status = hsm_Adjacency(&hsmInstance[iIndex].feaProblem.feaMesh, numJoint, kjoint, &maxAdjacency, &xadj, &adj);
-
+    status = hsm_Adjacency(&hsmInstance->feaProblem.feaMesh, numJoint, kjoint,
+                           &maxAdjacency, &xadj, &adj);
+    if (status != CAPS_SUCCESS) goto cleanup;
     printf("Max Adjacency set to = %d\n", maxAdjacency);
+    AIM_NOTNULL(xadj, aimInfo, status);
+    AIM_NOTNULL( adj, aimInfo, status);
 
     // Count the number of BC nodes - for Constraints
-    for (i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numNode; i++) {
+    for (i = 0; i < hsmInstance->feaProblem.feaMesh.numNode; i++) {
 
-        feaData = (feaMeshDataStruct *) hsmInstance[iIndex].feaProblem.feaMesh.node[i].analysisData;
+        feaData = (feaMeshDataStruct *) hsmInstance->feaProblem.feaMesh.node[i].analysisData;
         if (feaData == NULL) {
             status = CAPS_NULLVALUE;
             goto cleanup;
@@ -1167,9 +1084,9 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
 
 
     // Count the number of BC Edges - for Loads
-    for (i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numElement; i++) {
+    for (i = 0; i < hsmInstance->feaProblem.feaMesh.numElement; i++) {
 
-        element = &hsmInstance[iIndex].feaProblem.feaMesh.element[i];
+        element = &hsmInstance->feaProblem.feaMesh.element[i];
 
         if (element->elementType != Line) continue;
 
@@ -1192,45 +1109,46 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
 
     //maxDim += 1;
 
-    printf("MaxDim = %d, numBCEdge = %d, numBCNode = %d, numJoint = %d\n", maxDim, numBCEdge, numBCNode, numJoint);
+    printf("MaxDim = %d, numBCEdge = %d, numBCNode = %d, numJoint = %d\n",
+           maxDim, numBCEdge, numBCNode, numJoint);
 
-    hsmNumElement = hsmInstance[iIndex].feaProblem.feaMesh.meshQuickRef.numTriangle
-                  + hsmInstance[iIndex].feaProblem.feaMesh.meshQuickRef.numQuadrilateral;
+    hsmNumElement = hsmInstance->feaProblem.feaMesh.meshQuickRef.numTriangle
+                  + hsmInstance->feaProblem.feaMesh.meshQuickRef.numQuadrilateral;
 
 #ifdef HSM_RCM
-    permutation = (int *) EG_alloc(hsmInstance[iIndex].feaProblem.feaMesh.numNode*sizeof(int));
-
-    genrcmi(hsmInstance[iIndex].feaProblem.feaMesh.numNode,
-            xadj[hsmInstance[iIndex].feaProblem.feaMesh.numNode]-1,
+    AIM_ALLOC(permutation, hsmInstance->feaProblem.feaMesh.numNode, int, aimInfo, status);
+/*@-nullpass@*/
+    genrcmi(hsmInstance->feaProblem.feaMesh.numNode,
+            xadj[hsmInstance->feaProblem.feaMesh.numNode]-1,
             xadj, adj,
             permutation);
-
-    EG_free(xadj); xadj = NULL;
-    EG_free(adj);  adj = NULL;
+/*@+nullpass@*/
+    AIM_FREE(xadj);
+    AIM_FREE(adj);
 
     // Convert to 1-based indexing
-    //for (i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numNode; i++)
+    //for (i = 0; i < hsmInstance->feaProblem.feaMesh.numNode; i++)
     //  permutation[i]++;
 
 #else
     EG_free(xadj); xadj = NULL;
     EG_free(adj);  adj = NULL;
 
-    permutation    = (int *) EG_alloc(hsmInstance[iIndex].feaProblem.feaMesh.numNode*sizeof(int));
+    permutation    = (int *) EG_alloc(hsmInstance->feaProblem.feaMesh.numNode*sizeof(int));
 
     // Set to identity
-    for (i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numNode; i++)
+    for (i = 0; i < hsmInstance->feaProblem.feaMesh.numNode; i++)
       permutation[i] = i+1;
 #endif
 
     // Allocate of HSM memory
-    status = allocate_hsmMemoryStruct(hsmInstance[iIndex].feaProblem.feaMesh.numNode,
+    status = allocate_hsmMemoryStruct(hsmInstance->feaProblem.feaMesh.numNode,
                                       hsmNumElement,
                                       maxDim, //, numBCEdge, numBCNode, numJoint);
                                       &hsmMemory);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = allocate_hsmTempMemoryStruct(hsmInstance[iIndex].feaProblem.feaMesh.numNode,
+    status = allocate_hsmTempMemoryStruct(hsmInstance->feaProblem.feaMesh.numNode,
                                           maxAdjacency,
                                           maxDim,
                                           &hsmTempMemory);
@@ -1239,9 +1157,9 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
     /////  Populate HSM inputs /////
 
     // Connectivity
-    for (j = i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numElement; i++) {
+    for (j = i = 0; i < hsmInstance->feaProblem.feaMesh.numElement; i++) {
 
-        element = &hsmInstance[iIndex].feaProblem.feaMesh.element[i];
+        element = &hsmInstance->feaProblem.feaMesh.element[i];
 
         if (element->elementType == Line) continue;
 
@@ -1275,9 +1193,9 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
 
 #if 1
     // Node parameters
-    for (i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numNode; i++) {
+    for (i = 0; i < hsmInstance->feaProblem.feaMesh.numNode; i++) {
 
-        node = &hsmInstance[iIndex].feaProblem.feaMesh.node[i];
+        node = &hsmInstance->feaProblem.feaMesh.node[i];
         feaData = (feaMeshDataStruct *) node->analysisData;
 
         if (feaData == NULL) {
@@ -1332,30 +1250,31 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
         hsmMemory.pars[k*LVTOT + lvn0z] = norm[2]/normalize; // normal - z
 
         found = (int) false;
-        for (propertyIndex = 0; propertyIndex < hsmInstance[iIndex].feaProblem.numProperty; propertyIndex++) {
+        for (propertyIndex = 0; propertyIndex < hsmInstance->feaProblem.numProperty; propertyIndex++) {
 
-            if (feaData->propertyID != hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].propertyID) continue;
+            if (feaData->propertyID != hsmInstance->feaProblem.feaProperty[propertyIndex].propertyID) continue;
 
             found = (int) true;
             break;
         }
 
         if (found == false) {
-            printf("Property ID, %d, for node %d NOT found!\n", feaData->propertyID , node->nodeID);
+            printf("Property ID, %d, for node %d NOT found!\n",
+                   feaData->propertyID, node->nodeID);
             status = CAPS_BADVALUE;
             goto cleanup;
         }
 
-        membraneThickness  = hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].membraneThickness;
-        shearMembraneRatio = hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].shearMembraneRatio;
+        membraneThickness  = hsmInstance->feaProblem.feaProperty[propertyIndex].membraneThickness;
+        shearMembraneRatio = hsmInstance->feaProblem.feaProperty[propertyIndex].shearMembraneRatio;
         refLocation = 0.0;
-        massPerArea = hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].massPerArea;
+        massPerArea = hsmInstance->feaProblem.feaProperty[propertyIndex].massPerArea;
 
        found = (int) false;
-        for (materialIndex = 0; materialIndex < hsmInstance[iIndex].feaProblem.numProperty; materialIndex++) {
+        for (materialIndex = 0; materialIndex < hsmInstance->feaProblem.numProperty; materialIndex++) {
 
-            if (hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].materialID !=
-                hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].materialID) {
+            if (hsmInstance->feaProblem.feaProperty[propertyIndex].materialID !=
+                hsmInstance->feaProblem.feaMaterial[materialIndex].materialID) {
                 continue;
             }
 
@@ -1369,19 +1288,19 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
             goto cleanup;
         }
 
-        youngModulus = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].youngModulus;
-        shearModulus = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].shearModulus;
-        poissonRatio = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].poissonRatio;
+        youngModulus = hsmInstance->feaProblem.feaMaterial[materialIndex].youngModulus;
+        shearModulus = hsmInstance->feaProblem.feaMaterial[materialIndex].shearModulus;
+        poissonRatio = hsmInstance->feaProblem.feaMaterial[materialIndex].poissonRatio;
 
-        if (hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].materialType == Isotropic) {
-            youngModulusLateral = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].youngModulus;
-            shearModulusTrans1Z = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].shearModulus;
-            shearModulusTrans2Z = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].shearModulus;
+        if (hsmInstance->feaProblem.feaMaterial[materialIndex].materialType == Isotropic) {
+            youngModulusLateral = hsmInstance->feaProblem.feaMaterial[materialIndex].youngModulus;
+            shearModulusTrans1Z = hsmInstance->feaProblem.feaMaterial[materialIndex].shearModulus;
+            shearModulusTrans2Z = hsmInstance->feaProblem.feaMaterial[materialIndex].shearModulus;
 
-        } else if (hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].materialType == Orthotropic) {
-            youngModulusLateral = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].youngModulusLateral;
-            shearModulusTrans1Z = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].shearModulusTrans1Z;
-            shearModulusTrans2Z = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].shearModulusTrans2Z;
+        } else if (hsmInstance->feaProblem.feaMaterial[materialIndex].materialType == Orthotropic) {
+            youngModulusLateral = hsmInstance->feaProblem.feaMaterial[materialIndex].youngModulusLateral;
+            shearModulusTrans1Z = hsmInstance->feaProblem.feaMaterial[materialIndex].shearModulusTrans1Z;
+            shearModulusTrans2Z = hsmInstance->feaProblem.feaMaterial[materialIndex].shearModulusTrans2Z;
         } else {
             printf("Unsupported material type!\n");
             status = CAPS_BADVALUE;
@@ -1390,33 +1309,38 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
 
         // Checks
         if (youngModulus <= 0.0) {
-            printf("Error: Young's modulus for material, %s, is <= 0.0!\n", hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].name);
+            printf("Error: Young's modulus for material, %s, is <= 0.0!\n",
+                   hsmInstance->feaProblem.feaMaterial[materialIndex].name);
             status = CAPS_BADVALUE;
             goto cleanup;
         }
 
         if (membraneThickness <= 0.0) {
-            printf("Error: Membrane thickness for property, %s, is <= 0.0!\n", hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].name);
+            printf("Error: Membrane thickness for property, %s, is <= 0.0!\n",
+                   hsmInstance->feaProblem.feaProperty[propertyIndex].name);
             status = CAPS_BADVALUE;
             goto cleanup;
         }
 
         if (shearMembraneRatio <= 0.0) {
-            printf("Error: Shear membrane ratio for property, %s, is <= 0.0!\n", hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].name);
+            printf("Error: Shear membrane ratio for property, %s, is <= 0.0!\n",
+                   hsmInstance->feaProblem.feaProperty[propertyIndex].name);
             status = CAPS_BADVALUE;
             goto cleanup;
         }
 
-        if (hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].materialType == Orthotropic) {
+        if (hsmInstance->feaProblem.feaMaterial[materialIndex].materialType == Orthotropic) {
 
             if (shearModulusTrans1Z <= 0.0) {
-                printf("Error: Shear modulus trans. 1Z for material, %s, is <= 0.0!\n", hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].name);
+                printf("Error: Shear modulus trans. 1Z for material, %s, is <= 0.0!\n",
+                       hsmInstance->feaProblem.feaMaterial[materialIndex].name);
                 status = CAPS_BADVALUE;
                 goto cleanup;
             }
 
             if (shearModulusTrans2Z <= 0.0) {
-                printf("Error: Shear modulus trans. 2Z for material, %s, is <= 0.0!\n", hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].name);
+                printf("Error: Shear modulus trans. 2Z for material, %s, is <= 0.0!\n",
+                       hsmInstance->feaProblem.feaMaterial[materialIndex].name);
                 status = CAPS_BADVALUE;
                 goto cleanup;
             }
@@ -1448,9 +1372,9 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
 #else
 
     // Node parameters
-    for (i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numElement; i++) {
+    for (i = 0; i < hsmInstance->feaProblem.feaMesh.numElement; i++) {
 
-          element = &hsmInstance[iIndex].feaProblem.feaMesh.element[i];
+          element = &hsmInstance->feaProblem.feaMesh.element[i];
           feaData = (feaMeshDataStruct *) element->analysisData;
 
           if (feaData == NULL) {
@@ -1461,7 +1385,7 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
 
           for (j = 0; j < mesh_numMeshConnectivity(element->elementType); j++) {
 
-              node = &hsmInstance[iIndex].feaProblem.feaMesh.node[element->connectivity[j]-1];
+              node = &hsmInstance->feaProblem.feaMesh.node[element->connectivity[j]-1];
 
               if (node->geomData == NULL) {
                   printf("Geometry data not set for node %d\n", node->nodeID);
@@ -1487,7 +1411,8 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
               hsmMemory.pars[k*LVTOT + lve01y] = node->geomData->firstDerivative[1]/normalize; // e_1 - y
               hsmMemory.pars[k*LVTOT + lve01z] = node->geomData->firstDerivative[2]/normalize; // e_1 - z
 
-              normalize = dot_DoubleVal(&node->geomData->firstDerivative[3], &node->geomData->firstDerivative[3]);
+              normalize = dot_DoubleVal(&node->geomData->firstDerivative[3],
+                                        &node->geomData->firstDerivative[3]);
               normalize = sqrt(normalize);
 
               if (normalize == 0.0) {
@@ -1509,30 +1434,32 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
               hsmMemory.pars[k*LVTOT + lvn0z] = norm[2]/normalize; // normal - z
 
               found = (int) false;
-              for (propertyIndex = 0; propertyIndex < hsmInstance[iIndex].feaProblem.numProperty; propertyIndex++) {
+              for (propertyIndex = 0; propertyIndex < hsmInstance->feaProblem.numProperty; propertyIndex++) {
 
-                  if (feaData->propertyID != hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].propertyID) continue;
+                  if (feaData->propertyID != hsmInstance->feaProblem.feaProperty[propertyIndex].propertyID)
+                    continue;
 
                   found = (int) true;
                   break;
               }
 
               if (found == false) {
-                  printf("Property ID, %d, for element %d NOT found!\n", feaData->propertyID , element->elementID);
+                  printf("Property ID, %d, for element %d NOT found!\n",
+                         feaData->propertyID, element->elementID);
                   status = CAPS_BADVALUE;
                   goto cleanup;
               }
 
-              membraneThickness  = hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].membraneThickness;
-              shearMembraneRatio = hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].shearMembraneRatio;
+              membraneThickness  = hsmInstance->feaProblem.feaProperty[propertyIndex].membraneThickness;
+              shearMembraneRatio = hsmInstance->feaProblem.feaProperty[propertyIndex].shearMembraneRatio;
               refLocation = 0.0;
-              massPerArea = hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].massPerArea;
+              massPerArea = hsmInstance->feaProblem.feaProperty[propertyIndex].massPerArea;
 
              found = (int) false;
-              for (materialIndex = 0; materialIndex < hsmInstance[iIndex].feaProblem.numProperty; materialIndex++) {
+              for (materialIndex = 0; materialIndex < hsmInstance->feaProblem.numProperty; materialIndex++) {
 
-                  if (hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].materialID !=
-                      hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].materialID) {
+                  if (hsmInstance->feaProblem.feaProperty[propertyIndex].materialID !=
+                      hsmInstance->feaProblem.feaMaterial[materialIndex].materialID) {
                       continue;
                   }
 
@@ -1546,19 +1473,22 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
                   goto cleanup;
               }
 
-              youngModulus = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].youngModulus;
-              shearModulus = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].shearModulus;
-              poissonRatio = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].poissonRatio;
+              youngModulus = hsmInstance->feaProblem.feaMaterial[materialIndex].youngModulus;
+              shearModulus = hsmInstance->feaProblem.feaMaterial[materialIndex].shearModulus;
+              poissonRatio = hsmInstance->feaProblem.feaMaterial[materialIndex].poissonRatio;
 
-              if (hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].materialType == Isotropic) {
-                  youngModulusLateral = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].youngModulus;
-                  shearModulusTrans1Z = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].shearModulus;
-                  shearModulusTrans2Z = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].shearModulus;
+              if (hsmInstance->feaProblem.feaMaterial[materialIndex].materialType == Isotropic) {
+                  youngModulusLateral = hsmInstance->feaProblem.feaMaterial[materialIndex].youngModulus;
+                  shearModulusTrans1Z = hsmInstance->feaProblem.feaMaterial[materialIndex].shearModulus;
+                  shearModulusTrans2Z = hsmInstance->feaProblem.feaMaterial[materialIndex].shearModulus;
 
-              } else if (hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].materialType == Orthotropic) {
-                  youngModulusLateral = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].youngModulusLateral;
-                  shearModulusTrans1Z = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].shearModulusTrans1Z;
-                  shearModulusTrans2Z = hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].shearModulusTrans2Z;
+              } else if (hsmInstance->feaProblem.feaMaterial[materialIndex].materialType == Orthotropic) {
+                  youngModulusLateral =
+                    hsmInstance->feaProblem.feaMaterial[materialIndex].youngModulusLateral;
+                  shearModulusTrans1Z =
+                    hsmInstance->feaProblem.feaMaterial[materialIndex].shearModulusTrans1Z;
+                  shearModulusTrans2Z =
+                    hsmInstance->feaProblem.feaMaterial[materialIndex].shearModulusTrans2Z;
               } else {
                   printf("Unsupported material type!\n");
                   status = CAPS_BADVALUE;
@@ -1567,33 +1497,39 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
 
               // Checks
               if (youngModulus <= 0.0) {
-                  printf("Error: Young's modulus for material, %s, is <= 0.0!\n", hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].name);
+                  printf("Error: Young's modulus for material, %s, is <= 0.0!\n",
+                         hsmInstance->feaProblem.feaMaterial[materialIndex].name);
                   status = CAPS_BADVALUE;
                   goto cleanup;
               }
 
               if (membraneThickness <= 0.0) {
-                  printf("Error: Membrane thickness for property, %s, is <= 0.0!\n", hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].name);
+                  printf("Error: Membrane thickness for property, %s, is <= 0.0!\n",
+                         hsmInstance->feaProblem.feaProperty[propertyIndex].name);
                   status = CAPS_BADVALUE;
                   goto cleanup;
               }
 
               if (shearMembraneRatio <= 0.0) {
-                  printf("Error: Shear membrane ratio for property, %s, is <= 0.0!\n", hsmInstance[iIndex].feaProblem.feaProperty[propertyIndex].name);
+                  printf("Error: Shear membrane ratio for property, %s, is <= 0.0!\n",
+                         hsmInstance->feaProblem.feaProperty[propertyIndex].name);
                   status = CAPS_BADVALUE;
                   goto cleanup;
               }
 
-              if (hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].materialType == Orthotropic) {
+              if (hsmInstance->feaProblem.feaMaterial[materialIndex].materialType ==
+                  Orthotropic) {
 
                   if (shearModulusTrans1Z <= 0.0) {
-                      printf("Error: Shear modulus trans. 1Z for material, %s, is <= 0.0!\n", hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].name);
+                      printf("Error: Shear modulus trans. 1Z for material, %s, is <= 0.0!\n",
+                             hsmInstance->feaProblem.feaMaterial[materialIndex].name);
                       status = CAPS_BADVALUE;
                       goto cleanup;
                   }
 
                   if (shearModulusTrans2Z <= 0.0) {
-                      printf("Error: Shear modulus trans. 2Z for material, %s, is <= 0.0!\n", hsmInstance[iIndex].feaProblem.feaMaterial[materialIndex].name);
+                      printf("Error: Shear modulus trans. 2Z for material, %s, is <= 0.0!\n",
+                             hsmInstance->feaProblem.feaMaterial[materialIndex].name);
                       status = CAPS_BADVALUE;
                       goto cleanup;
                   }
@@ -1639,20 +1575,23 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
     }
 #endif
 
-    status = hsm_setGlobalParameter(hsmInstance[iIndex].feaProblem, &hsmMemory);
+    status = hsm_setGlobalParameter(hsmInstance->feaProblem, &hsmMemory);
+    if (status != CAPS_SUCCESS) goto cleanup;
+/*@-nullpass@*/
+    status = hsm_setSurfaceParameter(hsmInstance->feaProblem, permutation,
+                                     &hsmMemory);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = hsm_setSurfaceParameter(hsmInstance[iIndex].feaProblem, permutation, &hsmMemory);
+    status = hsm_setEdgeBCParameter(hsmInstance->feaProblem, permutation,
+                                    &hsmMemory);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = hsm_setEdgeBCParameter(hsmInstance[iIndex].feaProblem, permutation, &hsmMemory);
+    status = hsm_setNodeBCParameter(hsmInstance->feaProblem, permutation,
+                                    &hsmMemory);
     if (status != CAPS_SUCCESS) goto cleanup;
-
-    status = hsm_setNodeBCParameter(hsmInstance[iIndex].feaProblem, permutation, &hsmMemory);
-    if (status != CAPS_SUCCESS) goto cleanup;
-
+/*@+nullpass@*/
     printf("NumBCNode = %d\n", hsmMemory.numBCNode);
-    //for (i = 0; i < hsmInstance[iIndex].feaProblem.feaMesh.numNode*LVTOT;i++) printf("i = %d, %f\n", i, hsmMemory.par[i]);
+    //for (i = 0; i < hsmInstance->feaProblem.feaMesh.numNode*LVTOT;i++) printf("i = %d, %f\n", i, hsmMemory.par[i]);
 
     //for (i = 0; i < LPTOT*maxDim; i++) printf("i = %d, %f\n", i, hsmMemory.parp[i]);
     //for (i = 0; i < maxDim; i++) printf("i = %d, %d\n", i, hsmMemory.kbcnode[i]);
@@ -1664,7 +1603,7 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
     // Get the size of the matrix
     itmax = -2; // Return nmdim
     nmdim =  1;
-    kdim  = hsmInstance[iIndex].feaProblem.feaMesh.numNode;
+    kdim  = hsmInstance->feaProblem.feaMesh.numNode;
     ldim  = maxDim;
     nedim = hsmNumElement;
     nddim = maxAdjacency;
@@ -1682,25 +1621,31 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
            &alim, &atol, &adel,
            &damem, &rtolm,
            hsmMemory.parg,
-           &hsmInstance[iIndex].feaProblem.feaMesh.numNode, hsmMemory.pars, hsmMemory.vars,
+           &hsmInstance->feaProblem.feaMesh.numNode, hsmMemory.pars,
+           hsmMemory.vars,
            &nvarg, varg,
            &hsmNumElement, hsmMemory.kelem,
            &numBCEdge, hsmMemory.kbcedge, hsmMemory.pare,
-           &hsmMemory.numBCNode, hsmMemory.kbcnode, hsmMemory.parp, hsmMemory.lbcnode,
+           &hsmMemory.numBCNode, hsmMemory.kbcnode, hsmMemory.parp,
+           hsmMemory.lbcnode,
            &numJoint, hsmMemory.kjoint,
            &kdim, &ldim, &nedim, &nddim, &nmdim,
-           hsmTempMemory.bf, hsmTempMemory.bf_dj, hsmTempMemory.bm, hsmTempMemory.bm_dj,
-           &hsmTempMemory.ibx[0], &hsmTempMemory.ibx[ldim], &hsmTempMemory.ibx[2*ldim], &hsmTempMemory.ibx[3*ldim], &hsmTempMemory.ibx[4*ldim], &hsmTempMemory.ibx[5*ldim],
+           hsmTempMemory.bf, hsmTempMemory.bf_dj, hsmTempMemory.bm,
+           hsmTempMemory.bm_dj,
+           &hsmTempMemory.ibx[0], &hsmTempMemory.ibx[ldim],
+           &hsmTempMemory.ibx[2*ldim], &hsmTempMemory.ibx[3*ldim],
+           &hsmTempMemory.ibx[4*ldim], &hsmTempMemory.ibx[5*ldim],
            hsmTempMemory.resc, hsmTempMemory.resc_vars,
            hsmTempMemory.resp, hsmTempMemory.resp_vars, hsmTempMemory.resp_dvp,
            hsmTempMemory.kdvp, hsmTempMemory.ndvp,
            hsmTempMemory.ares,
-           &hsmTempMemory.frst[0], &hsmTempMemory.frst[kdim], &hsmTempMemory.frst[2*kdim],
+           &hsmTempMemory.frst[0], &hsmTempMemory.frst[kdim],
+           &hsmTempMemory.frst[2*kdim],
            hsmTempMemory.amat, hsmTempMemory.ipp, hsmTempMemory.dvars);
 
 //#define WRITE_MATRIX_MARKET
 #ifdef WRITE_MATRIX_MARKET
-    FILE *file = fopen("B.mtx", "w");
+    FILE *file = aim_fopen(aimInfo, "B.mtx", "w");
 
     //Write the banner
     fprintf(file, "%%%%MatrixMarket matrix coordinate real general\n");
@@ -1752,26 +1697,31 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
            &alim, &atol, &adel,
            &damem, &rtolm,
            hsmMemory.parg,
-           &hsmInstance[iIndex].feaProblem.feaMesh.numNode, hsmMemory.pars, hsmMemory.vars,
+           &hsmInstance->feaProblem.feaMesh.numNode, hsmMemory.pars,
+           hsmMemory.vars,
            &nvarg, varg,
            &hsmNumElement, hsmMemory.kelem,
            &numBCEdge, hsmMemory.kbcedge, hsmMemory.pare,
-           &hsmMemory.numBCNode, hsmMemory.kbcnode, hsmMemory.parp, hsmMemory.lbcnode,
+           &hsmMemory.numBCNode, hsmMemory.kbcnode, hsmMemory.parp,
+           hsmMemory.lbcnode,
            &numJoint, hsmMemory.kjoint,
            &kdim, &ldim, &nedim, &nddim, &nmdim,
-           hsmTempMemory.bf, hsmTempMemory.bf_dj, hsmTempMemory.bm, hsmTempMemory.bm_dj,
-           &hsmTempMemory.ibx[0], &hsmTempMemory.ibx[ldim], &hsmTempMemory.ibx[2*ldim], &hsmTempMemory.ibx[3*ldim], &hsmTempMemory.ibx[4*ldim], &hsmTempMemory.ibx[5*ldim],
+           hsmTempMemory.bf, hsmTempMemory.bf_dj, hsmTempMemory.bm,
+           hsmTempMemory.bm_dj,
+           &hsmTempMemory.ibx[0], &hsmTempMemory.ibx[ldim],
+           &hsmTempMemory.ibx[2*ldim], &hsmTempMemory.ibx[3*ldim],
+           &hsmTempMemory.ibx[4*ldim], &hsmTempMemory.ibx[5*ldim],
            hsmTempMemory.resc, hsmTempMemory.resc_vars,
            hsmTempMemory.resp, hsmTempMemory.resp_vars, hsmTempMemory.resp_dvp,
            hsmTempMemory.kdvp, hsmTempMemory.ndvp,
            hsmTempMemory.ares,
-           &hsmTempMemory.frst[0], &hsmTempMemory.frst[kdim], &hsmTempMemory.frst[2*kdim],
+           &hsmTempMemory.frst[0], &hsmTempMemory.frst[kdim],
+           &hsmTempMemory.frst[2*kdim],
            hsmTempMemory.amat, hsmTempMemory.ipp, hsmTempMemory.dvars);
 
 /*
-    status = hsm_writeTecplot(hsmInstance[iIndex].analysisPath,
-                              hsmInstance[iIndex].projectName,
-                              hsmInstance[iIndex].feaProblem.feaMesh,
+    status = hsm_writeTecplot(hsmInstance->projectName,
+                              hsmInstance->feaProblem.feaMesh,
                               &hsmMemory, permutation);
     if (status != CAPS_SUCCESS) goto cleanup;
 */
@@ -1785,64 +1735,88 @@ int aimPreAnalysis(int iIndex, void *aimInfo,  const char *analysisPath, capsVal
                &lrcurv, &ldrill,
                &i,
                &elim, &etol, &edel,
-               &hsmInstance[iIndex].feaProblem.feaMesh.numNode, hsmMemory.pars, hsmMemory.vars, hsmMemory.deps,
+               &hsmInstance->feaProblem.feaMesh.numNode, hsmMemory.pars,
+               hsmMemory.vars, hsmMemory.deps,
                &hsmNumElement, hsmMemory.kelem,
                &kdim, &ldim, &nedim, &nddim, &nmdim,
                &hsmTempMemory.res[0],
-               &hsmTempMemory.res[kdim], &hsmTempMemory.res[4*kdim], &hsmTempMemory.res[5*kdim],
+               &hsmTempMemory.res[kdim], &hsmTempMemory.res[4*kdim],
+               &hsmTempMemory.res[5*kdim],
                hsmTempMemory.rest, hsmTempMemory.rest_t,
                &hsmTempMemory.idt[kdim], &hsmTempMemory.idt[0],
-               &hsmTempMemory.frstt[0], &hsmTempMemory.frstt[kdim], &hsmTempMemory.frstt[2*kdim],
+               &hsmTempMemory.frstt[0], &hsmTempMemory.frstt[kdim],
+               &hsmTempMemory.frstt[2*kdim],
                hsmTempMemory.amatt,
                hsmTempMemory.resv, hsmTempMemory.resv_v,
                hsmTempMemory.kdv, hsmTempMemory.ndv,
-               &hsmTempMemory.frstv[0], &hsmTempMemory.frstv[kdim], &hsmTempMemory.frstv[2*kdim],
+               &hsmTempMemory.frstv[0], &hsmTempMemory.frstv[kdim],
+               &hsmTempMemory.frstv[2*kdim],
                hsmTempMemory.amatv);
 
         /*
-        HSMOUT(&hsmInstance[iIndex].feaProblem.feaMesh.numElement,
+        HSMOUT(&hsmInstance->feaProblem.feaMesh.numElement,
                 hsmMemory.kelem,
                 hsmMemory.var, hsmMemory.dep, hsmMemory.par, hsmMemory.parg,
-                &hsmInstance[iIndex].feaProblem.feaMesh.numNode, &ldim, &hsmInstance[iIndex].feaProblem.feaMesh.numElement, &nddim, &nmdim);
+                &hsmInstance->feaProblem.feaMesh.numNode, &ldim,
+                &hsmInstance->feaProblem.feaMesh.numElement, &nddim, &nmdim);
          */
-
-        status = hsm_writeTecplot(hsmInstance[iIndex].analysisPath,
-                                  hsmInstance[iIndex].projectName,
-                                  hsmInstance[iIndex].feaProblem.feaMesh,
+/*@-nullpass@*/
+        status = hsm_writeTecplot(aimInfo,
+                                  hsmInstance->projectName,
+                                  hsmInstance->feaProblem.feaMesh,
                                   &hsmMemory, permutation);
+/*@+nullpass@*/
         if (status != CAPS_SUCCESS) goto cleanup;
 
     }
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
-    cleanup:
+cleanup:
 
-        if (status != CAPS_SUCCESS) printf("Error: hsmAIM (instance = %d) status %d\n", iIndex, status);
+    if (status != CAPS_SUCCESS)
+        printf("Error: hsmAIM status %d\n",  status);
 
-        //EG_free(nodeValence);    nodeValence    = NULL;
+    //EG_free(nodeValence);    nodeValence    = NULL;
 
-        EG_free(elementConnect); elementConnect = NULL;
-        EG_free(permutation);    permutation    = NULL;
-        EG_free(permutationInv); permutationInv = NULL;
+    EG_free(elementConnect); elementConnect = NULL;
+    EG_free(permutation);    permutation    = NULL;
+    EG_free(permutationInv); permutationInv = NULL;
 
-        EG_free(openSeg);        openSeg        = NULL;
+    EG_free(openSeg);        openSeg        = NULL;
 
-        EG_free(xadj);           xadj = NULL;
-        EG_free(adj);            adj = NULL;
-        EG_free(kjoint);         kjoint = NULL;
+    EG_free(xadj);           xadj = NULL;
+    EG_free(adj);            adj = NULL;
+    EG_free(kjoint);         kjoint = NULL;
 
-        (void ) destroy_hsmMemoryStruct(&hsmMemory);
-        (void ) destroy_hsmTempMemoryStruct(&hsmTempMemory);
+    (void) destroy_hsmMemoryStruct(&hsmMemory);
+    (void) destroy_hsmTempMemoryStruct(&hsmTempMemory);
 
-        if (filename != NULL) EG_free(filename);
+    if (filename != NULL) EG_free(filename);
 
-        return status;
+    return status;
 }
 
+
+/* the execution code from above should be moved here */
+int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+               int *state)
+{
+  *state = 0;
+  return CAPS_SUCCESS;
+}
+
+
+/* no longer optional and needed for restart */
+int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+                    /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
+{
+  return CAPS_SUCCESS;
+}
+
+
 // Available AIM outputs
-int aimOutputs(int iIndex, void *aimInfo,
+int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                int index, char **aoname, capsValue *form)
 {
     /*! \page aimOutputsHSM AIM Outputs
@@ -1851,9 +1825,9 @@ int aimOutputs(int iIndex, void *aimInfo,
      * - <B>None </B>
      */
 
-    #ifdef DEBUG
-        printf(" hsmAIM/aimOutputs instance = %d  index = %d!\n", inst, index);
-    #endif
+#ifdef DEBUG
+    printf(" hsmAIM/aimOutputs index = %d!\n", index);
+#endif
 
     if (index == 1) {
         *aoname = EG_strdup("OutputVariable");
@@ -1864,22 +1838,19 @@ int aimOutputs(int iIndex, void *aimInfo,
     return CAPS_SUCCESS;
 }
 
+
 // Get value for a given output variable
-int aimCalcOutput(int iIndex, void *aimInfo,
-                  const char *analysisPath, int index,
-                  capsValue *val, capsErrs **errors)
+int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+                  int index, capsValue *val)
 {
 
-    #ifdef DEBUG
-        printf(" hsmAIM/aimCalcOutput instance = %d  index = %d!\n", iIndex, index);
-    #endif
-
-    *errors = NULL;
+#ifdef DEBUG
+    printf(" hsmAIM/aimCalcOutput index = %d!\n", index);
+#endif
 
     // Fill in to populate output variable = index
 
-    if (index == 1){
-
+    if (index == 1) {
         val->vals.integer = (int) false;
     }
 
@@ -1887,27 +1858,20 @@ int aimCalcOutput(int iIndex, void *aimInfo,
 }
 
 
-void aimCleanup()
+void aimCleanup(void *instStore)
 {
-    int iIndex; // Indexing
-
     int status; // Returning status
+    aimStorage *hsmInstance;
 
-    #ifdef DEBUG
-        printf(" hsmAIM/aimCleanup!\n");
-    #endif
+#ifdef DEBUG
+    printf(" hsmAIM/aimCleanup!\n");
+#endif
+    hsmInstance = (aimStorage *) instStore;
 
     // Clean up hsmInstance data
-    for ( iIndex = 0; iIndex < numInstance; iIndex++) {
+    status = destroy_aimStorage(hsmInstance);
+    if (status != CAPS_SUCCESS)
+        printf("Status = %d, hsmAIM aimStorage cleanup!!!\n", status);
 
-        printf(" Cleaning up hsmInstance - %d\n", iIndex);
-
-        status = destroy_aimStorage(iIndex);
-        if (status != CAPS_SUCCESS) printf("Status = %d, hsmAIM instance %d, aimStorage cleanup!!!\n", status, iIndex);
-    }
-
-    if (hsmInstance != NULL) EG_free(hsmInstance);
-    hsmInstance = NULL;
-    numInstance = 0;
-
+    EG_free(hsmInstance);
 }

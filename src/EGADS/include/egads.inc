@@ -3,7 +3,7 @@ C      EGADS: Electronic Geometry Aircraft Design System
 C
 C             FORTRAN Include
 C
-C      Copyright 2011-2020, Massachusetts Institute of Technology
+C      Copyright 2011-2021, Massachusetts Institute of Technology
 C      Licensed under The GNU Lesser General Public License, version 2.1
 C      See http://www.opensource.org/licenses/lgpl-2.1.php
 C
@@ -20,6 +20,8 @@ C
         PARAMETER (NODE=20, EDGE=21, LOOP=22, FACE=23)
         INTEGER    SHELL,    BODY,    MODEL
         PARAMETER (SHELL=24, BODY=25, MODEL=26)
+        INTEGER    EEDGE,    ELOOPX,    EFACE,    ESHELL,    EBODY
+        PARAMETER (EEDGE=31, ELOOPX=32, EFACE=33, ESHELL=34, EBODY=35)
 C
 C       MEMBER TYPES
 C
@@ -52,8 +54,8 @@ C
 C
 C       SOLID BOOLEAN OPERATIONS
 C
-	INTEGER    SUBTRACTION,   INTERSECTION,   FUSION
-	PARAMETER (SUBTRACTION=1, INTERSECTION=2, FUSION=3)
+	INTEGER    SUBTRACTION,   INTERSECTION,   FUSION,   SPLITTER
+	PARAMETER (SUBTRACTION=1, INTERSECTION=2, FUSION=3, SPLITTER=4)
 C
 C	SOLID BODY TYPES
 C

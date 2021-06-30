@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -120,12 +120,12 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* get the context associated with emodel (needed for subsequent
        constructions) */
     status = EG_getContext(emodel, &context);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getContext);
 
     /* check that Model was input that contains one FaceBody or SheetBody */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
                             data, &nchild, &ebodys, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
         printf(" udpExecute: expecting a Model\n");
@@ -139,7 +139,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     status = EG_getTopology(ebodys[0], &eref, &oclass, &mtype,
                             data, &nchild, &echilds, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     if (oclass != BODY || (mtype != FACEBODY && mtype != SHEETBODY)) {
         printf(" udpExecute: expecting one SheetBody\n");
@@ -182,10 +182,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
     printf("xle(    %d) = %f\n", numUdp, XLE(    numUdp));
@@ -222,7 +219,8 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* get the Loop associated with the input Body */
     status = EG_getBodyTopos(ebodys[0], NULL, LOOP,
                              &nloop, &eloops);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
+    if (eloops == NULL) goto cleanup;   // needed for splint
 
     if (nloop != 1) {
         printf(" udpExecute: Body has %d Loops (expecting only 1)\n", nloop);
@@ -233,7 +231,8 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* get the Face associated with the input Body */
     status = EG_getBodyTopos(ebodys[0], NULL, FACE,
                              &nface, &efaces);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getBodyTopos);
+    if (efaces == NULL) goto cleanup;   // needed for splint
 
     if (nface != 1) {
         printf(" udpExecute: Body has %d Faces (expecting only 1)\n", nface);
@@ -243,57 +242,47 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     status = EG_getTopology(efaces[0], &eref, &oclass, &mtype2,
                             data, &nchild, &echilds, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     status = EG_isPlanar(efaces[0]);
     if (status == EGADS_OUTSIDE) {
         printf(" udpExecute: Face is not planar\n");
-    } else if (status < EGADS_SUCCESS) {
-        status = EGADS_RANGERR;
-        goto cleanup;
+    } else {
+        CHECK_STATUS(EG_isPlanar);
     }
 
     /* copy needs to be made so that emodel can be removed by OpenCSM */
     status = EG_copyObject(eref, NULL, &eplane);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_copyObject);
 
     /* get the BSplines associated the Edges in the Loop */
     status = EG_getTopology(eloops[0], &eref, &oclass, &mtype,
                             data, &nedge, &eedges, &senses);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
-    ebsplines = (ego    *) EG_alloc(  nedge   *sizeof(ego   ));
-    tranges   = (double *) EG_alloc(2*nedge   *sizeof(double));
-    newnodes  = (ego    *) EG_alloc( (nedge+1)*sizeof(ego   ));
-    newedges  = (ego    *) EG_alloc(  nedge   *sizeof(ego   ));
-    if (ebsplines == NULL || tranges == NULL || newnodes == NULL || newedges == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    MALLOC(ebsplines, ego,      nedge   );
+    MALLOC(tranges,   double, 2*nedge   );
+    MALLOC(newnodes,  ego,     (nedge+1));
+    MALLOC(newedges,  ego,      nedge   );
 
     for (iedge = 0; iedge < nedge; iedge++) {
         status = EG_getTopology(eedges[iedge], &ebsplines[iedge], &oclass, &mtype,
                                 data, &nnode, &enodes, &senses2);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         tranges[2*iedge  ] = data[0];
         tranges[2*iedge+1] = data[1];
 
         status = EG_getGeometry(ebsplines[iedge], &oclass, &mtype,
                                 &eref, &idata, &rdata);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getGeometry);
 
         if (mtype == LINE) {
             EG_free(idata);     idata = NULL;
             EG_free(rdata);     rdata = NULL;
 
-            idata = (int    *) EG_alloc( 4       *sizeof(int   ));
-            rdata = (double *) EG_alloc((4*NCP+2)*sizeof(double));
-
-            if (idata == NULL || rdata == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
+            MALLOC(idata, int,     4       );
+            MALLOC(rdata, double, (4*NCP+2));
 
             idata[0] = 0;
             idata[1] = 1;
@@ -308,11 +297,11 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
             status = EG_getTopology(enodes[0], &eref, &oclass, &mtype,
                                     xyz_beg, &nchild, &echilds, &senses2);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getTopology);
 
             status = EG_getTopology(enodes[1], &eref, &oclass, &mtype,
                                     xyz_end, &nchild, &echilds, &senses2);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getTopology);
 
             for (i = 0; i < NCP; i++) {
                 frac = (double)(i) / (double)(NCP-1);
@@ -323,16 +312,16 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
             status = EG_makeGeometry(context, CURVE, BSPLINE, NULL,
                                      idata, rdata, &ebsplines[iedge]);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_makeGeometry);
 
             tranges[2*iedge  ] = 0;
             tranges[2*iedge+1] = 1;
         } else if (mtype != BSPLINE) {
             status = EG_convertToBSpline(eedges[iedge], &ebsplines[iedge]);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_convertToBSpline);
 
             status = EG_getRange(ebsplines[iedge], trange, &periodic);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_getRange);
 
             tranges[2*iedge  ] = trange[0];
             tranges[2*iedge+1] = trange[1];
@@ -347,7 +336,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     for (iedge = 0; iedge < nedge; iedge++) {
         status = EG_getGeometry(ebsplines[iedge], &oclass, &mtype,
                                 &eref, &idata, &rdata);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getGeometry);
 
         ncp     = idata[2];
         nknot   = idata[3];
@@ -372,7 +361,9 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     for (iedge = 0; iedge < nedge; iedge++) {
         status = EG_getGeometry(ebsplines[iedge], &oclass, &mtype,
                                 &eref, &idata, &rdata);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getGeometry);
+        if (idata == NULL) goto cleanup;     // needed for splint
+        if (rdata == NULL) goto cleanup;     // needed for splint
 
         ncp     = idata[2];
         nknot   = idata[3];
@@ -392,7 +383,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         if (XLE(0) > 0 || XTE(0) < 1) {
             status = EG_makeGeometry(context, CURVE, BSPLINE, NULL,
                                      idata, rdata, &(ebsplines[iedge]));
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_makeGeometry);
         }
 
         EG_free(idata);     idata = NULL;
@@ -404,7 +395,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     for (iedge = 0; iedge < nedge; iedge++) {
         status = EG_getGeometry(ebsplines[iedge], &oclass, &mtype,
                                 &eref, &idata, &rdata);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getGeometry);
 
         ncp     = idata[2];
         nknot   = idata[3];
@@ -433,14 +424,14 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* make the Nodes for the new Body */
     for (iedge = 0; iedge < nedge; iedge++) {
         status = EG_evaluate(ebsplines[iedge], &(tranges[2*iedge]), data);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_evaluate);
 
         status = EG_invEvaluate(ebsplines[iedge], data, &tt, xyz_out);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_invEvaluate);
 
         status = EG_makeTopology(context, NULL, NODE, 0,
                                  xyz_out, 0, NULL,NULL, &(newnodes[iedge]));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
     }
     newnodes[nedge] = newnodes[0];
 
@@ -449,26 +440,27 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         status = EG_makeTopology(context, ebsplines[iedge], EDGE, TWONODE,
                                  &(tranges[2*iedge]), 2, &(newnodes[iedge]),
                                  NULL, &(newedges[iedge]));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
     }
 
     /* make the Face and copy attributes from original Face */
     status = EG_makeTopology(context, NULL, LOOP, CLOSED,
                              NULL, nedge, newedges, senses, &eloop);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     senses[0] = SFORWARD;
     status = EG_makeTopology(context, eplane, FACE, mtype2,
                              NULL, 1, &eloop, senses, &eface);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
     status = EG_attributeDup(efaces[0], eface);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_attributeDup);
 
     /* make the Body and copy attributes from original Body */
     status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                              NULL, 1, &eface, NULL, ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
+    if (*ebody == NULL) goto cleanup;   // needed for splint
 
 #ifdef DEBUG
     printf("(output) *ebody:\n");
@@ -476,7 +468,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 #endif
 
     status = EG_attributeDup(ebodys[0], *ebody);
-    if (status < EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_attributeDup);
 
     /* there are no output values to set */
 

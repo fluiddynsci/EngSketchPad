@@ -1,7 +1,8 @@
 #
 # Written by Dr. Ryan Durscher AFRL/RQVC
 # 
-# This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3793.
+# This software has been cleared for public release on 27 Oct. 2020, case number 88ABW-2020-3328.
+
 cimport cEGADS
 
 from libc.stdio cimport FILE
@@ -9,18 +10,86 @@ from libc.stdio cimport FILE
 cdef extern from "OpenCSM.h":
 
     # Structures
+    
+    # "Node" is a 0-D topological entity in a Body 
+    ctypedef struct node_T:
+        int           nedge;  # number of indicent Edges 
+        double        x;      # x-coordinate 
+        double        y;      # y-coordinate 
+        double        z;      # z-coordinate 
+        int           ibody;  # Body index (1-nbody) 
+        #grat_T        gratt;  # GRatt of the Node 
+        double        *dxyz;  # tessellation velocity (or NULL) 
+        cEGADS.ego           enode;  # EGADS node object 
+   
+    
+    # "Edge" is a 1-D topological entity in a Body 
+    ctypedef struct edge_T:
+        int           itype;  # Edge type 
+        int           ibeg;   # Node at beginning 
+        int           iend;   # Node at end 
+        int           ileft;  # Face on the left 
+        int           irite;  # Face on the rite 
+        int           nface;  # number of incident Faces 
+        int           ibody;  # Body index (1-nbody) 
+        int           iford;  # face-order 
+        int           imark;  # value of "mark" Attribute (or -1) 
+        #grat_T        gratt;  # GRatt of the Edge 
+        double        *dxyz;  # tessellation velocity (or NULL) 
+        double        *dt;    # parametric   velocity (or NULL) 
+        int           globid; # global ID (bias-1) 
+        cEGADS.ego    eedge;  # EGADS edge object 
+   
+    
+    # "Face" is a 2-D topological entity in a Body 
+    ctypedef struct face_T:
+        int           ibody;  # Body index (1-nbody) 
+        int           iford;  # face-order 
+        int           imark;  # value of "mark" Attribute (or -1) 
+        #grat_T        gratt;  # GRatt of the Face 
+        void          *eggdata; # pointer to external grid generator data 
+        double        *dxyz;  # tessellation velocity (or NULL) 
+        double        *duv;   # parametric   velocity (or NULL) 
+        int           globid; # global ID (bias-1) 
+        cEGADS.ego     eface;  # EGADS face object 
+    
+
     ctypedef struct body_T:
-        cEGADS.ego    ebody   # EGADS Body         object(s)
-        cEGADS.ego    etess   # EGADS Tessellation object(s) 
-        int           onstack #  =1 if on stack (and returned) =0 otherwise
-        
+        int           ibrch;   # Branch associated with Body 
+        int           brtype;  # Branch type (see below) 
+        int           ileft;   # left parent Body (or 0) 
+        int           irite;   # rite parent Body (or 0) 
+        int           ichld;   # child Body (or 0 for root) 
+        int           igroup;  # Group number 
+       # varg_T        arg[10]; # array of evaluated arguments (actually use 1-9) 
+    
+        cEGADS.ego           ebody;   # EGADS Body         object(s) 
+        cEGADS.ego           etess;   # EGADS Tessellation object(s) 
+        int           npnts;   # total number of unique points 
+        int           ntris;   # total number of triangles 
+    
+        int           onstack; # =1 if on stack (and returned); =0 otherwise 
+        int           hasdots; # =1 if an argument has a dot; =2 if UDPARG is changed; =0 otherwise 
+        int           botype;  # Body type (see below) 
+        int           nnode;   # number of Nodes 
+        node_T        *node;   # array  of Nodes 
+        int           nedge;   # number of Edges 
+        edge_T        *edge;   # array  of Edges 
+        int           nface;   # number of Faces 
+        face_T        *face;   # array  of Faces 
+        void          *cache;  # (blind) structure for caching sensitivity info 
+       # grat_T        gratt;   # GRatt of the Nodes 
+  
     ctypedef struct modl_T:
     
         int           nattr # number of global Attributes
     
         int           nbrch # number of Branches
+        brch_T        *brch # array  of Branches
 
         int           npmtr # number of Parameters
+        pmtr_T        *pmtr # array  of Parameters
+
         
         int           nbody # number of Bodys
         body_T        *body # array  of Bodys
@@ -30,7 +99,24 @@ cdef extern from "OpenCSM.h":
         double dtime     # time step in sensitivity 
                                 #  0.001 = initial value 
                                 # -2     = problem with previous attempt to create perturb 
-                                        
+                                
+    ctypedef struct brch_T:                     
+        char          *filename #filename where Branch is defined 
+        int           linenum  # line number in file where Branch is defined
+    
+    ctypedef struct pmtr_T:
+        char          *name # name of Parameter
+        int           type  # Parameter type (see below)
+        int           scope # associated scope (nominally 0)
+        int           nrow  # number of rows    (=0 for string)
+        int           ncol  # number of columns (=0 for string)
+        double        *value# current value(s)
+        double        *dot  # current velocity(s)
+        double        *lbnd # lower Bound(s)
+        double        *ubnd # upper Bound(s)
+        char          *str  # string value
+
+                                
     
     #************************************************************************
     #*                                                                      *
@@ -56,7 +142,11 @@ cdef extern from "OpenCSM.h":
     cdef int ocsmLoadDict(void   *modl,          # (in)  pointer to MODL
                           char   dictname[])     # (in)  file that contains dictionary
 
-
+    # get a list of all .csm, .cpc. and .udc files
+    cdef int ocsmGetFilelist(void   *modl,       # (in)  pointer to MODL 
+                             char   *filelist[]) # (out) bar-sepatared list of files 
+                                                 #      must be freed by user
+                                        
     # save a MODL to a file 
     cdef int ocsmSave(void   *modl,              # (in)  pointer to MODL 
                       char   filename[])         # (in)  file to be written (with extension) 
@@ -100,6 +190,9 @@ cdef extern from "OpenCSM.h":
     cdef int ocsmNewBrch(void   *modl,           # (in)  pointer to MODL 
                          int    iafter,          # (in)  Branch index (0-nbrch) after which to add 
                          int    type,            # (in)  Branch type (see below) 
+                         char   filename[],      # (in)  filename where Branch is defined
+                         #int    fileindx,        # (in)  index into filelist (bias-0) 
+                         int    linenum,         # (in)  file number         (bias-1) 
                          char   arg1[],          # (in)  Argument 1 (or NULL) 
                          char   arg2[],          # (in)  Argument 2 (or NULL) 
                          char   arg3[],          # (in)  Argument 3 (or NULL) 
@@ -404,10 +497,13 @@ cdef extern from "OpenCSM.h":
     cdef int ocsmGetCode(char   *text)          # (in)  text to look up 
     
     #Definitions
-    cdef int OCSM_EXTERNAL "OCSM_EXTERNAL"
-    cdef int OCSM_INTERNAL "OCSM_INTERNAL"
-    cdef int OCSM_CONSTANT "OCSM_CONSTANT"
-    
+    cdef int OCSM_DESPMTR  "OCSM_DESPMTR"
+    cdef int OCSM_CFGPMTR  "OCSM_CFGPMTR"
+    cdef int OCSM_CONPMTR  "OCSM_CONPMTR"
+    cdef int OCSM_LOCALVAR "OCSM_LOCALVAR"
+    cdef int OCSM_OUTPMTR  "OCSM_OUTPMTR"
+    cdef int OCSM_UNKNOWN  "OCSM_UNKNOWN"
+
     cdef int OCSM_ACTIVE     "OCSM_ACTIVE"   # Branch activities
     cdef int OCSM_SUPPRESSED "OCSM_SUPPRESSED"
     cdef int OCSM_INACTIVE   "OCSM_INACTIVE"
@@ -425,8 +521,8 @@ cdef extern from "OpenCSM.h":
     cdef int OCSM_NAME_ALREADY_DEFINED 
     cdef int OCSM_NESTED_TOO_DEEPLY
     cdef int OCSM_IMPROPER_NESTING  
-    cdef int OCSM_NESTING_NOT_CLOSED       
-    cdef int OCSM_NOT_MODL_STRUCTURE          
+    cdef int OCSM_NESTING_NOT_CLOSED    
+    cdef int OCSM_NOT_MODL_STRUCTURE
     cdef int OCSM_PROBLEM_CREATING_PERTURB      
     
     cdef int OCSM_MISSING_MARK                  
@@ -469,9 +565,10 @@ cdef extern from "OpenCSM.h":
     
     cdef int OCSM_NAME_NOT_FOUND                  
     cdef int OCSM_NAME_NOT_UNIQUE                 
-    cdef int OCSM_PMTR_IS_EXTERNAL                
-    cdef int OCSM_PMTR_IS_INTERNAL                
-    cdef int OCSM_PMTR_IS_CONSTANT                
+    cdef int OCSM_PMTR_IS_DESPMTR
+    cdef int OCSM_PMTR_IS_CONPMTR
+    cdef int OCSM_PMTR_IS_OUTPMTR
+    cdef int OCSM_PMTR_IS_LOCALVAR
     cdef int OCSM_WRONG_PMTR_TYPE                 
     cdef int OCSM_FUNC_ARG_OUT_OF_BOUNDS          
     cdef int OCSM_VAL_STACK_UNDERFLOW              
@@ -513,4 +610,4 @@ cdef extern from "OpenCSM.h":
     cdef int OCSM_TOKEN_STACK_UNDERFLOW          
     cdef int OCSM_TOKEN_STACK_OVERFLOW           
     cdef int OCSM_UNSUPPORTED                    
-    cdef int OCSM_INTERNAL_ERROR                                         
+    cdef int OCSM_INTERNAL_ERROR                 

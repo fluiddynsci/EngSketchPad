@@ -343,6 +343,141 @@ patbeg  i  4
    assert  i*2+10   v[i*2,1]
 patend
 
+# check indexing
+DIMENSION mat1      2  3
+DIMENSION mat2      2  3
+DIMENSION mat3      2  3
+
+SET       error     0
+SET       mat1      1;2         #  1;2;2;2;2;2
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     0
+ASSERT    mat1.sum  11
+
+SET       error     0
+SET       mat1      1;2;3;4;5;6;7;8  #  1;2;3;4;5;6
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     0
+ASSERT    mat1.sum  21
+
+SET       error     0
+SET       mat1[0]   1;2         #  1;2;2;2;2;2
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     0
+ASSERT    mat1.sum  11
+
+SET       error     0
+SET       mat1[0,0] 1;2;3;4;5;6 #  1;2;3;4;5;6
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     0
+ASSERT    mat1.sum  21
+
+SET       error     0
+SET       mat1[-1]  7           #  error
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     1
+ASSERT    mat1.sum  21
+
+SET       error     0
+SET       mat1[-1]  7;7         #  7;7;7;7;7;7
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     0
+ASSERT    mat1.sum  42
+
+SET       mat1      1;2;3;4;5;6 #  1;2;3;4;5;6
+
+SET       error     0
+SET       mat1[7]   7           #  error
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     1
+ASSERT    mat1.sum  21
+
+SET       error     0
+SET       mat1[4]   7           #  1;2;3;7;5;6
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     0
+ASSERT    mat1.sum  24
+
+SET       error     0
+SET       mat1[0,1] 7           #  error
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     1
+ASSERT    mat1.sum  24
+
+SET       error     0
+SET       mat1[1,0] 7           #  7;2;3;7;5;6
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     0
+ASSERT    mat1.sum  30
+
+SET       error     0
+SET       mat1[-1,1] 7          #  error
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     1
+ASSERT    mat1.sum  30
+
+SET       error     0
+SET       mat1[3,1] 7           #  error
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     1
+ASSERT    mat1.sum  30
+
+SET       error     0
+SET       mat1[1,-1] 1          #  error
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     1
+ASSERT    mat1.sum  30
+
+SET       error     0
+SET       mat1[1,4] 1           #  error
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     1
+ASSERT    mat1.sum  30
+
+SET       error     0
+SET       mat1[2,2] 8           #  7;2;3;7;8;6
+CATBEG    $illegal_pmtr_index
+   SET    error     1
+CATEND
+ASSERT    error     0
+ASSERT    mat1.sum  33
+
+SET       mat2[2,2] 0
+ASSERT    mat2[1,1] -99999999
+ASSERT    mat2[2,2] 0
+
+SET       mat3[2,2] 0
+ASSERT    mat3[1,1] -99999999
+ASSERT    mat3[2,2] 0
+
 # check ability to change types
 
 # scalar->vector->scalar
@@ -1772,7 +1907,7 @@ catbeg    2
    assert 0  1      # should be skipped
 catend
 
-box       0  0  0  0  0  0
+cylinder  0  0  0  0  0  0  0
 assert    0  1      # should be skipped
 
 catbeg    $illegal_value

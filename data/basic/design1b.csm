@@ -5,7 +5,7 @@ despmtr   Length    4.0
 despmtr   Height    2.0
 despmtr   Depth     2.0
 despmtr   Rhole     0.4
-despmtr   Nhole     2
+cfgpmtr   Nhole     2
 despmtr   Xpole     2.0
 despmtr   Ypole     2.0
 despmtr   Rpole     0.5

@@ -4,9 +4,11 @@ aimInitialize
 aimCleanup
 aimInputs
 aimPreAnalysis
+aimExecute
+aimPostAnalysis
 aimOutputs
 aimCalcOutput
-aimFreeDiscr
+aimFreeDiscrPtr
 aimDiscr
 aimLocateElement
 aimTransfer

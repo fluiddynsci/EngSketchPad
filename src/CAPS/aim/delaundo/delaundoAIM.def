@@ -2,8 +2,8 @@ LIBRARY delaundoAIM
 EXPORTS
 aimInitialize
 aimCleanup
-aimData
 aimInputs
 aimPreAnalysis
+aimPostAnalysis
 aimOutputs
 aimCalcOutput

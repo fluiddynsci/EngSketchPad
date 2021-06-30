@@ -36,15 +36,42 @@ skbeg     x6      y6      -2*r1
    linseg x6      y6      -2*r1
 skend
 extrude   0     0          4*r1
+set       cutter  @nbody
 intersect
-
 store     nose
+
+# split edges at top and bottom of nose
+RESTORE   nose
+BOX       x1-2*r1  y1-2*r1  0  4*r1  4*r1  0
+INTERSECT
+
+SELECT    NODE
+SELECT    SORT     $ycg
+SET       topNode  @sellist[3]
+SET       botNode  @sellist[1]
+SELECT    NODE     topNode
+SET       xtop     @xcg
+SET       ytop     @ycg
+SET       ztop     @zcg
+SELECT    NODE     botNode
+SET       xbot     @xcg
+SET       ybot     @ycg
+SET       zbot     @zcg
+STORE     .
+
+RESTORE   nose
+POINT     xtop   ytop   ztop
+SUBTRACT
+POINT     xbot   ybot   zbot
+SUBTRACT
+
+STORE     nose
 
 # create the ruled surface
 mark
    # extract flat part of nose
    restore   nose
-   select    face      @nbody-2  3
+   select    face      cutter  3
    extract   @iface
 
    # create ruled surface

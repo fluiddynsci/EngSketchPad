@@ -39,7 +39,7 @@ ifdef ESP_BLOC
 PYFILES=$(wildcard pyCAPS/*.* pyCAPS/Makefile)
 PYTEST=$(patsubst pyCAPS/%,$(TDIR)/pyCAPS/%,$(PYFILES))
 
-CSMFILES=$(wildcard csmData/*.*)
+CSMFILES=$(wildcard csmData/*.csm)
 CSMTEST=$(patsubst csmData/%,$(TDIR)/csmData/%,$(CSMFILES))
 
 DATAFILES=$(wildcard datafiles/*.*)
@@ -61,7 +61,7 @@ $(TDIR)/datafiles: | $(TDIR)
 $(PYTEST): $(TDIR)/pyCAPS/%: pyCAPS/% | $(TDIR)/pyCAPS
 	cp -p -f $< $@
 
-$(CSMTEST): $(TDIR)/csmData/%: csmData/% | $(TDIR)/csmData
+$(CSMTEST): $(TDIR)/csmData/%.csm: csmData/%.csm | $(TDIR)/csmData
 	cp -p -f $< $@
 	
 $(DATATEST): $(TDIR)/datafiles/%: datafiles/% | $(TDIR)/datafiles

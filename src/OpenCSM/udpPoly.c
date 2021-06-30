@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2019/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2019/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -99,6 +99,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     double nodeval[24], trange[2], data[4];
     ego    enodes[8], eedges[12], eloop, efaces[6], eshell, emodel, eref, *echilds;
 
+    ROUTINE(udpExecute);
+    
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
     for (i = 0; i < udps[0].arg[0].size/3; i++) {
@@ -124,10 +126,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* cache copy of arguments for future use */
     status = cacheUdp();
-    if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
-        goto cleanup;
-    }
+    CHECK_STATUS(cacheUdp);
 
     /* put POINTS into full array */
     if       (udps[0].arg[0].size == 3) {   // point
@@ -203,7 +202,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     for (i = 0; i < 8; i++) {
         status = PM_makeNode(context, i, nodeval, enodes, &nnode);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(PM_makeNode);
     }
 
 #ifdef DEBUG
@@ -217,14 +216,14 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     if (nnode == 1) {
         trange[0] = 0;   trange[1] = 1;
         status = EG_makeTopology(context, NULL, EDGE, DEGENERATE, trange, 1, &enodes[0], NULL, &eedges[0]);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         senses[0] = SFORWARD;
         status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL, 1, &eedges[0], &senses[0], &eloop);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         status = EG_makeTopology(context, NULL, BODY, WIREBODY, NULL, 1, &eloop, NULL, ebody);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeTopology);
 
         /* remember this model (body) */
         udps[numUdp].ebody = *ebody;
@@ -237,42 +236,42 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* imin -> imax Edges */
     status = PM_makeEdge(context,  0, enodes[0], enodes[1], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     status = PM_makeEdge(context,  1, enodes[3], enodes[2], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     status = PM_makeEdge(context,  2, enodes[4], enodes[5], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     status = PM_makeEdge(context,  3, enodes[7], enodes[6], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     /* jmin -> jmax Edges */
     status = PM_makeEdge(context,  4, enodes[0], enodes[3], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     status = PM_makeEdge(context,  5, enodes[1], enodes[2], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     status = PM_makeEdge(context,  6, enodes[4], enodes[7], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     status = PM_makeEdge(context,  7, enodes[5], enodes[6], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     /* kmin -> kmax Edges */
     status = PM_makeEdge(context,  8, enodes[0], enodes[4], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     status = PM_makeEdge(context,  9, enodes[3], enodes[7], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     status = PM_makeEdge(context, 10, enodes[1], enodes[5], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
     status = PM_makeEdge(context, 11, enodes[2], enodes[6], eedges, &nedge);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeEdge);
 
 #ifdef DEBUG
     for (i = 0; i < 12; i++) {
@@ -287,10 +286,10 @@ udpExecute(ego  context,                /* (in)  EGADS context */
             if (eedges[i] != NULL) {
                 senses[0] = SFORWARD;
                 status = EG_makeTopology(context, NULL, LOOP, OPEN, NULL, 1, &eedges[i], &senses[0], &eloop);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_makeTopology);
 
                 status = EG_makeTopology(context, NULL, BODY, WIREBODY, NULL, 1, &eloop, NULL, ebody);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_makeTopology);
 
                 /* remember this model (body) */
                 udps[numUdp].ebody = *ebody;
@@ -310,32 +309,32 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* make imin Face */
     status = PM_makeFace(context, eedges[ 8], eedges[ 6], eedges[ 9], eedges[ 4], senses, efaces, &nface);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeFace);
 
     /* make imax Face (if distinct from imin Face) */
     if (enodes[0] != enodes[1] || enodes[3] != enodes[2] || enodes[4] != enodes[5] || enodes[7] != enodes[6]) {
         status = PM_makeFace(context, eedges[ 5], eedges[11], eedges[ 7], eedges[10], senses, efaces, &nface);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(PM_makeFace);
     }
 
     /* make jmin Face */
     status = PM_makeFace(context, eedges[ 0], eedges[10], eedges[ 2], eedges[ 8], senses, efaces, &nface);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeFace);
 
     /* make jmax Face (if distinct from jmin Face) */
     if (enodes[0] != enodes[3] || enodes[1] != enodes[2] || enodes[4] != enodes[7] || enodes[5] != enodes[6]) {
         status = PM_makeFace(context, eedges[ 9], eedges[ 3], eedges[11], eedges[ 1], senses, efaces, &nface);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(PM_makeFace);
     }
 
     /* make kmin Face */
     status = PM_makeFace(context, eedges[ 4], eedges[ 1], eedges[ 5], eedges[ 0], senses, efaces, &nface);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(PM_makeFace);
 
     /* make kmax Face (if distinct from kmin Face) */
     if (enodes[0] != enodes[4] || enodes[1] != enodes[5] || enodes[2] != enodes[6] || enodes[3] != enodes[7]) {
         status = PM_makeFace(context, eedges[ 2], eedges[ 7], eedges[ 3], eedges[ 6], senses, efaces, &nface);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(PM_makeFace);
     }
 
 #ifdef DEBUG
@@ -350,7 +349,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         for (i = 0; i < 6; i++) {
             if (efaces[i] != NULL) {
                 status = EG_makeTopology(context, NULL, SHELL, OPEN, NULL, 1, &efaces[i], NULL, &eshell);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(EG_makeTopology);
 
                 break;
             }
@@ -358,7 +357,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
         if (eshell != NULL) {
             status = EG_makeTopology(context, NULL, BODY, SHEETBODY, NULL, 1, &eshell, NULL, ebody);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(EG_makeTopology);
         } else {
             printf(" udpExecute: we could not make a SHELL\n");
             status = -999;
@@ -368,17 +367,17 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     /* SolidBody */
     } else {
         status = EG_sewFaces(nface, efaces, 0, 0, &emodel);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_sewFaces);
 
         status = EG_getTopology(emodel, &eref, &oclass, &mtype, data,
                                 &nchild, &echilds, &senses2);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         status = EG_copyObject(echilds[0], NULL, ebody);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_copyObject);
 
         status = EG_deleteObject(emodel);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_deleteObject);
     }
 
     /* set the output value(s) */
@@ -457,6 +456,8 @@ PM_makeEdge(ego    context,             /* (in)  EGADS context */
     double nodeA[3], nodeB[3], data[18], trange[2], fill[18];
     ego    eref, ecurve, *echilds, echild[2];
 
+    ROUTINE(PM_makeEdge);
+
     /* if Nodes are the same, return a NULL */
     if (enodeA == enodeB) {
         eedges[iedge] = NULL;
@@ -468,7 +469,7 @@ PM_makeEdge(ego    context,             /* (in)  EGADS context */
         if (eedges[i] == NULL) continue;
 
         status = EG_getTopology(eedges[i], &eref, &oclass, &mtype, data, &nchild, &echilds, &senses);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         if        (enodeA == echilds[0] && enodeB == echilds[1]) {
             eedges[iedge] = eedges[i];
@@ -484,10 +485,10 @@ PM_makeEdge(ego    context,             /* (in)  EGADS context */
 
     /* make the Curve */
     status = EG_getTopology(enodeA, &eref, &oclass, &mtype, nodeA, &nchild, &echilds, &senses);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     status = EG_getTopology(enodeB, &eref, &oclass, &mtype, nodeB, &nchild, &echilds, &senses);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_getTopology);
 
     data[0] = nodeA[0];
     data[1] = nodeA[1];
@@ -497,20 +498,20 @@ PM_makeEdge(ego    context,             /* (in)  EGADS context */
     data[5] = nodeB[2] - nodeA[2];
 
     status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL, data, &ecurve);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeGeometry);
 
     /* find trange values */
     status = EG_invEvaluate(ecurve, nodeA, &trange[0], fill);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
 
     status = EG_invEvaluate(ecurve, nodeB, &trange[1], fill);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_invEvaluate);
 
     /* make the Edge */
     echild[0] = enodeA;
     echild[1] = enodeB;
     status = EG_makeTopology(context, ecurve, EDGE, TWONODE, trange, 2, echild, NULL, &(eedges[iedge]));
-    if (status != EGADS_SUCCESS) goto cleanup;
+    CHECK_STATUS(EG_makeTopology);
 
 cleanup:
     return status;
@@ -542,6 +543,8 @@ PM_makeFace(ego    context,             /* (in)  EGADS context */
     double trange[4], data[20], xyzsw[3], xyzse[3], xyznw[3], xyzne[3];
     ego    myEedges[8], eloop, esurface, eref, *enodes, *echilds;
 
+    ROUTINE(PM_makeFace);
+
     /* count the number of non-NULL Edges */
     nedge = 0;
     if (eedgeA != NULL) {
@@ -566,11 +569,11 @@ PM_makeFace(ego    context,             /* (in)  EGADS context */
 
         /* make a Loop of the 3 Edges */
         status = EG_makeLoop(3, myEedges, NULL, 0, &eloop);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeLoop);
 
         /* make a Face from the Loop */
         status = EG_makeFace(eloop, SFORWARD, NULL, &(efaces[*nface]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeFace);
 
         (*nface)++;
 
@@ -578,28 +581,28 @@ PM_makeFace(ego    context,             /* (in)  EGADS context */
     } else if (nedge == 4) {
         status = EG_getTopology(myEedges[0], &eref, &oclass, &mtype,
                                 data, &nnode, &enodes, &senses);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
 
         status = EG_getTopology(enodes[0], &eref, &oclass, &mtype,
                                 xyzsw, &nchild, &echilds, &senses);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         status = EG_getTopology(enodes[1], &eref, &oclass, &mtype,
                                 xyzse, &nchild, &echilds, &senses);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
             
         status = EG_getTopology(myEedges[2], &eref, &oclass, &mtype,
                                 data, &nnode, &enodes, &senses);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         status = EG_getTopology(enodes[0], &eref, &oclass, &mtype,
                                 xyznw, &nchild, &echilds, &senses);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
 
         status = EG_getTopology(enodes[1], &eref, &oclass, &mtype, xyzne,
                                 &nchild, &echilds, &senses);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getTopology);
             
         header[0] = 0;              // bitflag
         header[1] = 1;              // u degree
@@ -636,14 +639,14 @@ PM_makeFace(ego    context,             /* (in)  EGADS context */
         data[ndata++] = xyzne[2];
 
         status = EG_makeGeometry(context, SURFACE, BSPLINE, NULL, header, data, &esurface);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeGeometry);
 
         status = EG_getRange(esurface, trange, &periodic);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_getRange);
 
         /* make the Face from the Loop */
         status = EG_makeFace(esurface, SFORWARD, trange, &(efaces[*nface]));
-        if (status != EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(EG_makeFace);
 
         (*nface)++;
     }

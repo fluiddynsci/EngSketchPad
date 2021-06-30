@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2011/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -44,6 +44,7 @@
 #define FIT_DEGENERATE -4   /* degenerate geometry */
 #define FIT_MALLOC     -5   /* problem mallocing memory */
 #define FIT_SINGULAR   -6   /* matrix diagonal is too small */
+#define FIT_EMPTYCLOUD -7   /* point cloud is empty */
 
 #if defined (__cplusplus)
     extern "C" {
@@ -63,7 +64,8 @@ int    fit1dCloud(int     m,            /* (in)  number of points in cloud */
                   double  *maxf,        /* (out) maximum distance between cloud and fit */
         /*@null@*/double  *dotmin,      /* (out) minimum normalized dot product of control polygon */
         /*@null@*/int     *nmin,        /* (out) minimum number of cloud points in any interval */
-                  int     *numiter,     /* (out) number of iterations executed */
+                  int     *numiter,     /* (in)  if >0, maximum number of iterations allowed */
+                                        /* (out) number of iterations executed */
         /*@null@*/FILE    *fp);         /* (in)  file for progress outputs (or NULL) */
 
 /* initialize the B-spline curve fitter */
@@ -83,8 +85,9 @@ int    fit1d_init(int     m,            /* (in)  number of points in cloud */
 EXTERN
 int    fit1d_step(void    *context,     /* (in)  context */
                   double  smooth,       /* (in)  control net smoothing parameter */
-                  double  *normf,       /* (out) RMS of dsitances between cloud and fit */
-                  double  *maxf);       /* (out) maximum distance between cloud and fit */
+                  double  *normf,       /* (out) RMS of distances between cloud and fit */
+                  double  *maxf,        /* (out) maximum distance between cloud and fit */
+                  int     *accept);     /* (out) =1 if step was accepted */
 
 /* clean up after B-spline curve fitter */
 EXTERN
@@ -96,11 +99,7 @@ int    fit1d_done(void    *context,     /* (in)  context */
         /*@null@*/double  *dotmin,      /* (out) minimum normalized dot product of control polygon (or NULL) */
         /*@null@*/int     *nmin);       /* (out) minimum number of cloud points in any interval (or NULL) */
 
-/* free up memory associated with curve fitter */
-EXTERN
-void   fit1d_free(void    *context);    /* (in)  context */
-
-/* wrapper to fit B-splnie surface with one call */
+/* wrapper to fit B-spline surface with one call */
 EXTERN
 int    fit2dCloud(int     m,            /* (in)  number of points in cloud */
                   int     bitflag,      /* (in)  2=uPeriodic, 4=vPeriodic, 8=intGiven */
@@ -114,13 +113,14 @@ int    fit2dCloud(int     m,            /* (in)  number of points in cloud */
                   double  *normf,       /* (out) RMS of distances between cloud and fit */
                   double  *maxf,        /* (out) maximum distance between cloud and fit */
         /*@null@*/int     *nmin,        /* (out) minimum number of cloud points in any interval */
-                  int     *numiter,     /* (out) number of iterations executed */
+                  int     *numiter,     /* (in)  if >0, maximum number of iterations allowed */
+                                        /* (out) number of iterations executed */
         /*@null@*/FILE    *fp);         /* (in)  file for progress outputs (or NULL) */
 
 /* initialize the B-spline surface fitter */
 EXTERN
 int    fit2d_init(int     m,            /* (in)  number of points in cloud */
-                  int     bitflag,      /* (in)  2=uPeriodic, 4=vPeriodic, 8=int */
+                  int     bitflag,      /* (in)  2=uPeriodic, 4=vPeriodic, 8=intGiven */
                   double  smooth,       /* (in)  control net smoothing parameter */
                   double  XYZcloud[],   /* (in)  array  of points in cloud (x,y,z,x,...) */
                   int     nu,           /* (in)  number of control points in u direction */
@@ -136,9 +136,10 @@ EXTERN
 int    fit2d_step(void    *context,     /* (in)  context */
                   double  smooth,       /* (in)  smoothing parameter */
                   double  *normf,       /* (out) RMS of distances between cloud and fit */
-                  double  *maxf);       /* (out) maximum distance between cloud and fit */
+                  double  *maxf,        /* (out) maximum distance between cloud and fit */
+                  int     *accept);     /* (out) =i if step was accepted */
 
-/* clean up after B-spline surface fitter */
+/* clean up after B-spline surfce fitter */
 EXTERN
 int    fit2d_done(void    *context,     /* (in)  context */
                   double  UVcloud[],    /* (out) UV-parameters of points in cloud */
@@ -147,33 +148,10 @@ int    fit2d_done(void    *context,     /* (in)  context */
                   double  *maxf,        /* (out) maximum distance between cloud and fit */
         /*@null@*/int     *nmin);       /* (out) minimum number of cloud points in any interval (or NULL) */
 
-/* free up memory associated with surface fitter */
-EXTERN
-void   fit2d_free(void    *context);    /* (in)  context */
-
 #if defined (__cplusplus)
     }
 #endif
 
 #undef EXTERN
-
-#ifdef GRAFIC
-int    plotCurve(int    m,              /* (in)  number of points in cloud */
-                 double XYZcloud[],     /* (in)  array  of points in cloud */
-       /*@null@*/double Tcloud[],       /* (in)  T-parameters of points in cloud (or NULL) */
-                 int    n,              /* (in)  number of control points */
-                 double cp[],           /* (in)  array  of control points */
-                 double normf,          /* (in)  RMS of distances between cloud and fit */
-                 double dotmin,         /* (in)  minimum noralized dot product of control polygon */
-                 int    nmin);          /* (in)  minimum number of cloud points in any interval */
-
-int    plotSurface(int    m,            /* (in)  number of points in cloud */
-                   double XYZcloud[],   /* (in)  array  of points in cloud */
-         /*@null@*/double UVcloud[],    /* (in)  UV-parameters of points in cloud (or NULL) */
-                   int    n,            /* (in)  number of control points in each direction */
-                   double cp[],         /* (in)  array  of control points */
-                   double normf,        /* (in)  RMS of distances between cloud and fit */
-                   int    nmin);        /* (out) minimum number of cloud points in any interval */
-#endif
 
 #endif   /* _FITTER_H_ */

@@ -1,7 +1,7 @@
 #
 # Written by Dr. Ryan Durscher AFRL/RQVC
 # 
-# This software has been cleared for public release on 25 Jul 2018, case number 88ABW-2018-3793.
+# This software has been cleared for public release on 27 Oct. 2020, case number 88ABW-2020-3328.
 
 ## CAPS error exception class. 
 # See \ref exception.py for a representative use case.
@@ -50,7 +50,10 @@ class CAPSError(Exception):
  cCAPS.CAPS_NOTIMPLEMENT : 'CAPS_NOTIMPLEMENT',
  cCAPS.CAPS_EXECERR      : 'CAPS_EXECERR',
  cCAPS.CAPS_CLEAN        : 'CAPS_CLEAN',
- cCAPS.CAPS_BADINTENT    : 'CAPS_BADINTENT'}
+ cCAPS.CAPS_BADINTENT    : 'CAPS_BADINTENT',
+ cCAPS.CAPS_BADINIT      : 'CAPS_BADINIT',   
+ cCAPS.CAPS_NOTNEEDED    : 'CAPS_NOTNEEDED',
+ cCAPS.CAPS_NOSENSITVTY  : 'CAPS_NOSENSITVTY'}
         
     ## \showinitializer Dictionary of EGADS errors {errorCode : errorName}.
     egadsError = {
@@ -152,9 +155,9 @@ class CAPSError(Exception):
     
     cOCSM.OCSM_NAME_NOT_FOUND             : 'OCSM_NAME_NOT_FOUND',    
     cOCSM.OCSM_NAME_NOT_UNIQUE            : 'OCSM_NAME_NOT_UNIQUE',    
-    cOCSM.OCSM_PMTR_IS_EXTERNAL           : 'OCSM_PMTR_IS_EXTERNAL',    
-    cOCSM.OCSM_PMTR_IS_INTERNAL           : 'OCSM_PMTR_IS_INTERNAL',    
-    cOCSM.OCSM_PMTR_IS_CONSTANT           : 'OCSM_PMTR_IS_CONSTANT',    
+    #cOCSM.OCSM_PMTR_IS_EXTERNAL           : 'OCSM_PMTR_IS_EXTERNAL',    
+    #cOCSM.OCSM_PMTR_IS_INTERNAL           : 'OCSM_PMTR_IS_INTERNAL',    
+    #cOCSM.OCSM_PMTR_IS_CONSTANT           : 'OCSM_PMTR_IS_CONSTANT',    
     cOCSM.OCSM_WRONG_PMTR_TYPE            : 'OCSM_WRONG_PMTR_TYPE',    
     cOCSM.OCSM_FUNC_ARG_OUT_OF_BOUNDS     : 'OCSM_FUNC_ARG_OUT_OF_BOUNDS',    
     cOCSM.OCSM_VAL_STACK_UNDERFLOW        : 'OCSM_VAL_STACK_UNDERFLOW',     

@@ -1,7 +1,7 @@
 EXPORTS
 aimInitialize
 aimDiscr
-aimFreeDiscr
+aimFreeDiscrPtr
 aimLocateElement
 aimInputs
 aimPreAnalysis
@@ -13,6 +13,5 @@ aimInterpolation
 aimInterpolateBar
 aimIntegration
 aimIntegrateBar
-aimData
 aimBackdoor
 aimCleanup

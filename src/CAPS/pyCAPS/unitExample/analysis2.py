@@ -31,7 +31,3 @@ fun3d2 = myProblem.loadAIM(altName = "fun3d2",
                            copyAIM = "fun3d")
 # Print out memory 
 print(fun3d2)
-
-# Close our problems
-print("Closing our problem")
-myProblem.closeCAPS()

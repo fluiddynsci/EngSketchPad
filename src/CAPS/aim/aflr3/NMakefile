@@ -20,11 +20,7 @@ ODIR  = $(ESP_BLOC)\obj
 ODIR  = .
 !ENDIF
 
-AFLR3_LIB = aflr3.lib aflr4.lib surf_auto.lib rec3.lib otb.lib \
-		ug3.lib ug.lib anbl3.lib aflr2c.lib \
-		rec2.lib bl1.lib dgeom.lib egen.lib ug2.lib \
-		ice2.lib ice3.lib dftr2.lib dftr3.lib ug_io.lib ug_gq.lib \
-		ug_cpp.lib cgns.lib qtb.lib
+AFLR3_LIB = AFLR.lib
 
 default: clear_version $(ODIR)\aflr3_version.exe $(LDIR)\aflr3AIM.dll
 
@@ -45,7 +41,7 @@ $(ODIR)\aflr3AIM.obj:	aflr3AIM.c $(IDIR)\capsTypes.h \
 		/Fo$(ODIR)\aflr3AIM.obj
 
 $(ODIR)\aflr3_Interface.obj:	aflr3_Interface.c ..\utils\meshUtils.h
-	cl /c $(COPTS) $(DEFINE) -D_ENABLE_BL_ -I$(IDIR) \
+	cl /c $(COPTS) $(DEFINE) -I$(IDIR) \
 		-I$(AFLR)\src\aflr3 -I$(AFLR)\src -I..\utils \
 		aflr3_Interface.c /Fo$(ODIR)\aflr3_Interface.obj
 		

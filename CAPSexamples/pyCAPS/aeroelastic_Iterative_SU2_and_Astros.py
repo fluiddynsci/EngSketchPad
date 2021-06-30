@@ -1,7 +1,5 @@
-from __future__ import print_function
-
-# Import pyCAPS class file
-from pyCAPS import capsProblem
+# Import pyCAPS module
+import pyCAPS
 
 # Import os module
 import os
@@ -29,13 +27,10 @@ parser = argparse.ArgumentParser(description = 'Aeroelastic SU2 and Astros Examp
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
-
-# Initialize capsProblem object
-myProblem = capsProblem()
 
 # Create working directory variable
 workDir = os.path.join(str(args.workDir[0]), "Aeroelastic_Iterative_SA")
@@ -48,71 +43,95 @@ numTransferIteration = 2
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransfer.csm")
-myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
+myProblem = pyCAPS.Problem(problemName=workDir,
+                           capsFile=geometryScript,
+                           outLevel=args.verbosity)
 
 # Load AIMs
-myProblem.loadAIM(aim = "tetgenAIM",
-                  altName= "tetgen",
-                  analysisDir = workDir + "_SU2",
-                  capsIntent = "CFD")
+myProblem.analysis.create(aim = "egadsTessAIM",
+                          name= "egads",
+                          capsIntent = "CFD")
 
+myProblem.analysis.create(aim = "tetgenAIM",
+                          name= "tetgen",
+                          capsIntent = "CFD")
 
-myProblem.loadAIM(aim = "su2AIM",
-                  altName = "su2",
-                  analysisDir = workDir + "_SU2",
-                  parents = ["tetgen"],
-                  capsIntent = "CFD")
+myProblem.analysis["tetgen"].input["Surface_Mesh"].link(myProblem.analysis["egads"].output["Surface_Mesh"])
 
-myProblem.loadAIM(aim = "astrosAIM",
-                  altName = "astros",
-                  analysisDir = workDir + "_ASTROS",
-                  capsIntent = "STRUCTURE")
+myProblem.analysis.create(aim = "su2AIM",
+                          name = "su2",
+                          capsIntent = "CFD")
 
-transfers = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
-for i in transfers:
-    myProblem.createDataTransfer(variableName   = ["Pressure", "Displacement"],
-                                 aimSrc         = ["su2", "astros"],
-                                 aimDest        = ["astros", "su2"],
-                                 transferMethod = ["Interpolate", "Interpolate"], #["Conserve", "Interpolate"],
-                                 initValueDest  = [None, (0,0,0)],
-                                 capsBound      = i )
+myProblem.analysis["su2"].input["Mesh"].link(myProblem.analysis["tetgen"].output["Volume_Mesh"])
+
+myProblem.analysis.create(aim = "astrosAIM",
+                          name = "astros",
+                          capsIntent = "STRUCTURE")
+
+# Create the data transfer connections
+boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
+for boundName in boundNames:
+    # Create the bound
+    bound = myProblem.bound.create(boundName)
+    
+    # Create the vertex sets on the bound for su2 and astros analysis
+    su2Vset    = bound.vertexSet.create(myProblem.analysis["su2"])
+    astrosVset = bound.vertexSet.create(myProblem.analysis["astros"])
+    
+    # Create pressure data sets
+    su2_Pressure    = su2Vset.dataSet.create("Pressure", pyCAPS.fType.FieldOut)
+    astros_Pressure = astrosVset.dataSet.create("Pressure", pyCAPS.fType.FieldIn)
+
+    # Create displacement data sets
+    su2_Displacement    = su2Vset.dataSet.create("Displacement", pyCAPS.fType.FieldIn, init=[0,0,0])
+    astros_Displacement = astrosVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+
+    # Link the data sets
+    astros_Pressure.link(su2_Pressure, "Conserve")
+    su2_Displacement.link(astros_Displacement, "Interpolate")
+    
+    # Close the bound as complete (cannot create more vertex or data sets)
+    bound.close()
+
+# Set inputs for EGADS
+myProblem.analysis["egads"].input.Tess_Params = [.6, 0.05, 20.0]
 
 # Set inputs for tetgen
-myProblem.analysis["tetgen"].setAnalysisVal("Tess_Params", [.3, 0.01, 20.0])
-myProblem.analysis["tetgen"].setAnalysisVal("Preserve_Surf_Mesh", True)
+myProblem.analysis["tetgen"].input.Preserve_Surf_Mesh = True
+myProblem.analysis["tetgen"].input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
 
 # Set inputs for su2
 speedofSound = 340.0 # m/s
 refVelocity = 100.0 # m/s
 refDensity = 1.2 # kg/m^3
 
-myProblem.analysis["su2"].setAnalysisVal("Proj_Name", projectName)
-myProblem.analysis["su2"].setAnalysisVal("SU2_Version", "Falcon") # "Falcon", "Raven"
-myProblem.analysis["su2"].setAnalysisVal("Mach", refVelocity/speedofSound)
-myProblem.analysis["su2"].setAnalysisVal("Equation_Type","compressible")
-myProblem.analysis["su2"].setAnalysisVal("Num_Iter",5) # Way too few to converge the solver, but this is an example
-myProblem.analysis["su2"].setAnalysisVal("Output_Format", "Tecplot")
-myProblem.analysis["su2"].setAnalysisVal("Overwrite_CFG", True)
-myProblem.analysis["su2"].setAnalysisVal("Pressure_Scale_Factor",0.5*refDensity*refVelocity**2)
-myProblem.analysis["su2"].setAnalysisVal("Surface_Monitor", "Skin")
+myProblem.analysis["su2"].input.Proj_Name             = projectName
+myProblem.analysis["su2"].input.SU2_Version           = "Blackbird"
+myProblem.analysis["su2"].input.Mach                  = refVelocity/speedofSound
+myProblem.analysis["su2"].input.Equation_Type         = "compressible"
+myProblem.analysis["su2"].input.Num_Iter              = 3 # Way too few to converge the solver, but this is an example
+myProblem.analysis["su2"].input.Output_Format         = "Tecplot"
+myProblem.analysis["su2"].input.Overwrite_CFG         = True
+myProblem.analysis["su2"].input.Pressure_Scale_Factor = 0.5*refDensity*refVelocity**2
+myProblem.analysis["su2"].input.Surface_Monitor       = "Skin"
 
 inviscid = {"bcType" : "Inviscid"}
-myProblem.analysis["su2"].setAnalysisVal("Boundary_Condition", [("Skin", inviscid),
-                                                                ("SymmPlane", "SymmetryY"),
-                                                                ("Farfield","farfield")])
+myProblem.analysis["su2"].input.Boundary_Condition = {"Skin"     : inviscid,
+                                                      "SymmPlane": "SymmetryY",
+                                                      "Farfield" : "farfield"}
 
 # Set inputs for astros
-myProblem.analysis["astros"].setAnalysisVal("Proj_Name", projectName)
-myProblem.analysis["astros"].setAnalysisVal("Edge_Point_Min", 3)
-myProblem.analysis["astros"].setAnalysisVal("Edge_Point_Max", 10)
+myProblem.analysis["astros"].input.Proj_Name = projectName
+myProblem.analysis["astros"].input.Edge_Point_Min = 3
+myProblem.analysis["astros"].input.Edge_Point_Max = 10
 
-myProblem.analysis["astros"].setAnalysisVal("Quad_Mesh", True)
-myProblem.analysis["astros"].setAnalysisVal("Tess_Params", [.5, .1, 15])
-myProblem.analysis["astros"].setAnalysisVal("Analysis_Type", "Static");
+myProblem.analysis["astros"].input.Quad_Mesh = True
+myProblem.analysis["astros"].input.Tess_Params = [.5, .1, 15]
+myProblem.analysis["astros"].input.Analysis_Type = "Static"
 
 # External pressure load to astros that we will inherited from su2
 load = {"loadType" : "PressureExternal"}
-myProblem.analysis["astros"].setAnalysisVal("Load", ("pressureAero", load ))
+myProblem.analysis["astros"].input.Load = {"pressureAero": load}
 
 madeupium    = {"materialType" : "isotropic",
                 "youngModulus" : 1.5E9, # lbf/ft^2
@@ -124,8 +143,8 @@ unobtainium  = {"materialType" : "isotropic",
                 "poissonRatio": 0.33,
                 "density" : 6.0} #slug/ft^3
 
-myProblem.analysis["astros"].setAnalysisVal("Material", [("Madeupium", madeupium),
-                                                         ("Unobtainium", unobtainium)])
+myProblem.analysis["astros"].input.Material = {"Madeupium": madeupium,
+                                               "Unobtainium": unobtainium}
 
 skin  = {"propertyType" : "Shell",
          "membraneThickness" : 0.06,
@@ -139,14 +158,22 @@ ribSpar  = {"propertyType" : "Shell",
             "bendingInertiaRatio" : 1.0, # Default
             "shearMembraneRatio"  : 5.0/6.0} # Default
 
-myProblem.analysis["astros"].setAnalysisVal("Property", [("Skin", skin),
-                                                         ("Ribs_and_Spars", ribSpar),
-                                                         ("Rib_Root", ribSpar)])
+myProblem.analysis["astros"].input.Property = {"Skin"          : skin,
+                                               "Ribs_and_Spars": ribSpar,
+                                               "Rib_Root"      : ribSpar}
 
 constraint = {"groupName" : "Rib_Root",
               "dofConstraint" : 123456}
-myProblem.analysis["astros"].setAnalysisVal("Constraint", ("edgeConstraint", constraint))
+myProblem.analysis["astros"].input.Constraint = {"edgeConstraint": constraint}
 
+####### EGADS ########################
+# Run pre/post-analysis for tetgen
+print ("\nRunning PreAnalysis ......", "egads")
+myProblem.analysis["egads"].preAnalysis()
+
+print ("\nRunning PostAnalysis ......", "egads")
+myProblem.analysis["egads"].postAnalysis()
+#######################################
 
 ####### Tetgen ########################
 # Run pre/post-analysis for tetgen
@@ -157,11 +184,6 @@ print ("\nRunning PostAnalysis ......", "tetgen")
 myProblem.analysis["tetgen"].postAnalysis()
 #######################################
 
-# Populate vertex sets in the bounds after the mesh generation is copleted
-for j in transfers:
-    myProblem.dataBound[j].fillVertexSets()
-
-
 # Copy files needed to run astros
 astros_files = ["ASTRO.D01",  # *.DO1 file
                 "ASTRO.IDX"]  # *.IDX file
@@ -171,12 +193,6 @@ for file in astros_files:
 
 # Aeroelastic iteration loop
 for iter in range(numTransferIteration):
-
-    #Execute the dataTransfer of displacements to su2
-    #initValueDest is used on the first iteration
-    print ("\n\nExecuting dataTransfer \"Displacement\"......")
-    for j in transfers:
-        myProblem.dataBound[j].executeTransfer("Displacement")
 
     ####### SU2 ###########################
     print ("\nRunning PreAnalysis ......", "su2")
@@ -199,7 +215,7 @@ for iter in range(numTransferIteration):
     # Run SU2 solver
     su2Run(projectName + ".cfg", args.numberProc)
 
-    shutil.copy("surface_flow_" + projectName + ".dat", "surface_flow_" + projectName + "_Iteration_" + str(iter) + ".dat")
+    shutil.copy("surface_flow_" + projectName + ".szplt", "surface_flow_" + projectName + "_Iteration_" + str(iter) + ".szplt")
     os.chdir(currentDirectory) # Move back to top directory
     #------------------------------
 
@@ -207,10 +223,6 @@ for iter in range(numTransferIteration):
     myProblem.analysis["su2"].postAnalysis()
     #######################################
 
-    #Execute the dataTransfer of Pressure to astros
-    print ("\n\nExecuting dataTransfer \"Pressure\"......")
-    for j in transfers:
-        myProblem.dataBound[j].executeTransfer("Pressure")
 
     ####### Astros #######################
     print ("\nRunning PreAnalysis ......", "astros")
@@ -231,6 +243,3 @@ for iter in range(numTransferIteration):
     print ("\nRunning PostAnalysis ......", "astros")
     myProblem.analysis["astros"].postAnalysis()
     #######################################
-
-# Close CAPS
-myProblem.closeCAPS()

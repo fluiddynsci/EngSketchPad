@@ -10,12 +10,14 @@
 #include "su2Utils.h"  // Bring in su2 utility header
 
 #ifdef WIN32
-#define strcasecmp  stricmp
+#define strcasecmp stricmp
 #define strtok_r   strtok_s
 #endif
 
 // Extract flow variables from SU2 surface csv file (connectivity is ignored) - dataMatrix = [numVariable][numDataPoint]
-int su2_readAeroLoad(char *filename, int *numVariable, char **variableName[], int *numDataPoint, double ***dataMatrix) {
+int su2_readAeroLoad(void *aimInfo, char *filename, int *numVariable, char **variableName[],
+                     int *numDataPoint, double ***dataMatrix)
+{
 
     int status; // Function return
     int i, j; // Indexing
@@ -30,7 +32,7 @@ int su2_readAeroLoad(char *filename, int *numVariable, char **variableName[], in
     FILE *fp = NULL; // File pointer
 
     // Open file
-    fp = fopen(filename, "r");
+    fp = aim_fopen(aimInfo, filename, "r");
     if (fp == NULL) {
         printf("Unable to open file: %s\n", filename);
         return CAPS_IOERR;
@@ -47,10 +49,13 @@ int su2_readAeroLoad(char *filename, int *numVariable, char **variableName[], in
         status = CAPS_NOTFOUND;
         goto cleanup;
     }
+    if (line == NULL) {
+        status = CAPS_NOTFOUND;
+        goto cleanup;
+    }
 
     // Create a temp string to braket our line with '[' and ']'
-    tempStr = (char *) EG_alloc((strlen(line) + 4)*sizeof(char));
-    if (tempStr == NULL) return EGADS_MALLOC;
+    AIM_ALLOC(tempStr, strlen(line) + 4, char, aimInfo, status);
 
     strcpy(tempStr,"[");
     strncat(tempStr, line, strlen(line)-1);
@@ -125,13 +130,12 @@ int su2_readAeroLoad(char *filename, int *numVariable, char **variableName[], in
 
     } else {
 
-        printf("\tNo data values extracted from file - %s",filename);
+        AIM_ERROR(aimInfo, "\tNo data values extracted from file - %s",filename);
         status = CAPS_BADVALUE;
         goto cleanup;
     }
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
     cleanup:
 
@@ -168,23 +172,24 @@ int su2_readAeroLoad(char *filename, int *numVariable, char **variableName[], in
 
 // Write SU2 surface motion file (connectivity is optional) - dataMatrix = [numVariable][numDataPoint], connectMatrix (optional) = [4*numConnect]
 //  the formating of the data may be specified through dataFormat = [numVariable] (use capsTypes Integer and Double)- If NULL default to double
-int su2_writeSurfaceMotion(char *filename,
+int su2_writeSurfaceMotion(void *aimInfo,
+                           char *filename,
                            int numVariable,
                            int numDataPoint,
                            double **dataMatrix,
                            int *dataFormat,
                            int numConnect,
-                           int *connectMatrix) {
+                           int *connectMatrix)
+{
 
     int i, j; // Indexing
 
     FILE *fp; // File pointer
 
-
     printf("Writing SU2 Motion File - %s\n", filename);
 
     // Open file
-    fp = fopen(filename, "w");
+    fp = aim_fopen(aimInfo, filename, "w");
     if (fp == NULL) {
         printf("Unable to open file: %s\n", filename);
         return CAPS_IOERR;
@@ -241,13 +246,13 @@ int su2_writeSurfaceMotion(char *filename,
 
 // Write SU2 data transfer files
 int su2_dataTransfer(void *aimInfo,
-                     const char *analysisPath,
                      char *projectName,
-                     meshStruct volumeMesh) {
+                     meshStruct volumeMesh)
+{
 
     /*! \page dataTransferSU2 SU2 Data Transfer
      *
-     * \section dataToSU2 Data transfer to SU2
+     * \section dataToSU2 Data transfer to SU2 (FieldIn)
      *
      * <ul>
      *  <li> <B>"Displacement"</B> </li> <br>
@@ -273,9 +278,9 @@ int su2_dataTransfer(void *aimInfo,
     //int numDataTransferElement = 0;
     int dataTransferRank;
     double *dataTransferData;
+    char *units;
 
     // Variables used in global node mapping
-    int *nodeMap, *storage;
     int globalNodeID;
 
     // Data transfer Out variables
@@ -296,6 +301,7 @@ int su2_dataTransfer(void *aimInfo,
 
     status = aim_getBounds(aimInfo, &numTransferName, &transferName);
     if (status != CAPS_SUCCESS) return status;
+    if (transferName == NULL) return CAPS_NULLNAME;
 
     (void) initiate_meshStruct(&surfaceMesh);
 
@@ -310,7 +316,8 @@ int su2_dataTransfer(void *aimInfo,
                                 &dataTransferMethod,
                                 &numDataTransferPoint,
                                 &dataTransferRank,
-                                &dataTransferData);
+                                &dataTransferData,
+                                &units);
 
         if (status == CAPS_SUCCESS) { // If we do have data ready is the rank correct
 
@@ -431,12 +438,9 @@ int su2_dataTransfer(void *aimInfo,
                                     &dataTransferMethod,
                                     &numDataTransferPoint,
                                     &dataTransferRank,
-                                    &dataTransferData);
+                                    &dataTransferData,
+                                    &units);
             if (status != CAPS_SUCCESS) continue; // If no elements in this object skip to next transfer name
-
-            //Get extra node information stored in the discrObj
-            storage = (int *) dataTransferDiscreteObj->ptrm;
-            nodeMap = storage; // Global indexing on the body
 
             // A single point means this is an initialization phase
             if (numDataTransferPoint == 1) {
@@ -449,7 +453,7 @@ int su2_dataTransfer(void *aimInfo,
             else {
                 for (j = 0; j < numDataTransferPoint; j++) {
 
-                    globalNodeID = nodeMap[j];
+                    globalNodeID = dataTransferDiscreteObj->tessGlobal[2*j+1];
                     for (k = 0; k < numOutDataPoint; k++) {
 
                         // If the global node IDs match store the displacement values in the dataOutMatrix
@@ -479,30 +483,26 @@ int su2_dataTransfer(void *aimInfo,
 
         }
 
-        stringLength = strlen(projectName) + strlen(analysisPath) + strlen(fileExt) + 1;
+        stringLength = strlen(projectName) + strlen(fileExt) + 1;
         filename = (char *) EG_alloc((stringLength +1)*sizeof(char));
         if (filename == NULL) {
             status = EGADS_MALLOC;
             goto cleanup;
         }
-
-        strcpy(filename, analysisPath);
-        #ifdef WIN32
-        strcat(filename, "\\");
-        #else
-        strcat(filename, "/");
-        #endif
-        strcat(filename, projectName);
+        strcpy(filename, projectName);
         strcat(filename, fileExt);
 
         // Write out displacement in tecplot file
-        status = su2_writeSurfaceMotion(filename,
+/*@-nullpass@*/
+        status = su2_writeSurfaceMotion(aimInfo,
+                                        filename,
                                         4, // Only want the Global id and coordinates
                                         numOutDataPoint,
                                         dataOutMatrix,
                                         dataOutFormat,
                                         0, // numConnectivity
                                         NULL); // connectivity matrix
+/*@+nullpass@*/
         if (status != CAPS_SUCCESS) goto cleanup;
     } // End if found displacements
 
@@ -534,78 +534,42 @@ int su2_dataTransfer(void *aimInfo,
 }
 
 // Extract the boundary condition names that should added to the marker
-int su2_marker(void *aimInfo, const char* iname, capsValue *aimInputs, FILE *fp, cfdBCsStruct bcProps) {
+int su2_marker(void *aimInfo, const char* iname, capsValue *aimInputs, FILE *fp,
+               cfdBoundaryConditionStruct bcProps)
+{
 
     int status = CAPS_SUCCESS;
     int counter = 0;
     int nmarker = 0;
+    capsValue *markerValue;
 
     int i, j; // indexing
 
-    char **markers = NULL;
-    char *fullstr = NULL, *rest = NULL, *token = NULL;
+    char *marker = NULL;
+
+    markerValue = &aimInputs[aim_getIndex(aimInfo, iname, ANALYSISIN)-1];
 
     // might not be anything to write in the list
-    if (aimInputs[aim_getIndex(aimInfo, iname, ANALYSISIN)-1].nullVal == IsNull) {
+    if (markerValue->nullVal == IsNull) {
         fprintf(fp," NONE )\n");
         return CAPS_SUCCESS;
     }
 
-    fullstr = EG_strdup(aimInputs[aim_getIndex(aimInfo, iname, ANALYSISIN)-1].vals.string);
-
-    // Remove any possible brackets and separators
-    while ((token = strstr(fullstr, "["))) *token = ' ';
-    while ((token = strstr(fullstr, "]"))) *token = ' ';
-    while ((token = strstr(fullstr, "("))) *token = ' ';
-    while ((token = strstr(fullstr, ")"))) *token = ' ';
-    while ((token = strstr(fullstr, ","))) *token = ' ';
-    while ((token = strstr(fullstr, ";"))) *token = ' ';
-    while ((token = strstr(fullstr, ":"))) *token = ' ';
-
-    rest = fullstr;
-    while ((token = strtok_r(rest, " ", &rest))) {
-
-        markers = (char**)EG_reall(markers, (nmarker+1)*sizeof(char*));
-        if ( markers == NULL ) {
-            nmarker = 0;
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-
-        markers[nmarker] = (char*)EG_alloc((strlen(token)+1)*sizeof(char));
-        if ( markers[nmarker] == NULL ) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-
-        sscanf(token, "%s", markers[nmarker]);
-        nmarker++;
-    }
-
-    if (nmarker == 0) {
-        printf("********************************************\n");
-        printf("\n");
-        printf("ERROR: Could not find any names in string:\n\n");
-        printf("\t%s='%s'\n",
-               iname, aimInputs[aim_getIndex(aimInfo, "Surface_Monitor", ANALYSISIN)-1].vals.string);
-        printf("\n");
-        printf("********************************************\n");
-        status = CAPS_NOTFOUND;
-        goto cleanup;
-    }
-
+    nmarker = markerValue->length;
+    marker = markerValue->vals.string;
     counter = 0;
     for (j = 0; j < nmarker; j++) {
-        for (i = 0; i < bcProps.numBCID ; i++) {
-            if (strcmp(bcProps.surfaceProps[i].name, markers[j]) == 0) {
+        for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+            if (strcmp(bcProps.surfaceProp[i].name, marker) == 0) {
 
                 if (counter > 0) fprintf(fp, ",");
-                fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+                fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
                 counter += 1;
                 break;
             }
         }
+        marker += strlen(marker)+1;
     }
     fprintf(fp," )\n");
 
@@ -613,35 +577,72 @@ int su2_marker(void *aimInfo, const char* iname, capsValue *aimInputs, FILE *fp,
         printf("********************************************\n");
         printf("\n");
         printf("ERROR: Could not find all '%s' names:\n\n", iname);
-        for (j = 0; j < nmarker; j++)
-            printf("\t%s\n", markers[j]);
+        marker = markerValue->vals.string;
+        for (j = 0; j < nmarker; j++) {
+            printf("\t%s\n", marker);
+            marker += strlen(marker)+1;
+        }
         printf("\n");
 
         printf("in the list of boundary condition names:\n\n");
-        for (i = 0; i < bcProps.numBCID ; i++)
-            printf("\t%s\n", bcProps.surfaceProps[i].name);
+        for (i = 0; i < bcProps.numSurfaceProp ; i++)
+            printf("\t%s\n", bcProps.surfaceProp[i].name);
         printf("\n");
         printf("********************************************\n");
 
         status = CAPS_NOTFOUND;
     }
 
-
-cleanup:
-    // free the temporary string
-    EG_free(fullstr);
-
-    // free the monitoring strings
-    for (j = 0; j < nmarker; j++)
-        EG_free(markers[j]);
-    EG_free(markers);
-
+//cleanup:
     return status;
+}
+
+int
+su2_unitSystem(const char *unitSystem,
+               const char **length,
+               const char **mass,
+               const char **temperature,
+               const char **force,
+               const char **pressure,
+               const char **density,
+               const char **speed,
+               const char **viscosity,
+               const char **area)
+{
+  /*@-observertrans@*/
+  if (strcasecmp(unitSystem, "SI") == 0) {
+    *length      = "meters";
+    *mass        = "kilograms";
+    *temperature = "Kelvin";
+    *force       = "Newton";
+    *pressure    = "Pascal";
+    *density     = "kg/m^3";
+    *speed       = "m/s";
+    *viscosity   = "N*s/m^2";
+    *area        = "m^2";
+  } else if (strcasecmp(unitSystem, "US") == 0) {
+    *length      = "inches";
+    *mass        = "slug";
+    *temperature = "Rankines";
+    *force       = "lbf";        // slug*ft/s^2
+    *pressure    = "lbf/ft^2";   // psf
+    *density     = "slug/ft^3";
+    *speed       = "ft/s";
+    *viscosity   = "lbf*s/ft^2";
+    *area        = "ft^2";
+  } else {
+    return CAPS_UNITERR;
+  }
+  /*@+observertrans@*/
+
+  return CAPS_SUCCESS;
 }
 
 #ifdef DEFINED_BUT_NOT_USED
 // Use in the future to just the information to carry out the deform.
-static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *aimInputs, cfdBCsStruct bcProps) {
+static int su2_writeConfig_Deform(void *aimInfo, capsValue *aimInputs,
+                                  cfdBoundaryConditionStruct bcProps)
+{
     int status; // Function return status
 
     int i; // Indexing
@@ -656,9 +657,8 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     char fileExt[] = "_Deform.cfg";
 
     printf("Write SU2 configuration file for grid deformation\n");
-    stringLength = strlen(analysisPath)
-                   + 1
-                   + strlen(aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string)
+    stringLength = 1
+                   + strlen(aimInputs[Proj_Name-1].vals.string)
                    + strlen(fileExt);
 
     filename = (char *) EG_alloc((stringLength +1)*sizeof(char));
@@ -667,16 +667,10 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
         goto cleanup;
     }
 
-    strcpy(filename, analysisPath);
-    #ifdef WIN32
-        strcat(filename, "\\");
-    #else
-        strcat(filename, "/");
-    #endif
-    strcat(filename, aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    strcpy(filename, aimInputs[Proj_Name-1].vals.string);
     strcat(filename, fileExt);
 
-    fp = fopen(filename,"w");
+    fp = aim_fopen(aimInfo, filename,"w");
     if (fp == NULL) {
         status =  CAPS_IOERR;
         goto cleanup;
@@ -685,7 +679,7 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     fprintf(fp,"%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
     fprintf(fp,"%%                                                                              %%\n");
     fprintf(fp,"%% SU2 configuration file - for Grid Deformation                                %%\n");
-    fprintf(fp,"%% Created by SU2AIM for Project: \"%s\"\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"%% Created by SU2AIM for Project: \"%s\"\n", aimInputs[Proj_Name-1].vals.string);
     fprintf(fp,"%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n\n");
 
     fprintf(fp,"%% ----------------------- DYNAMIC MESH DEFINITION -----------------------------%%\n");
@@ -700,12 +694,12 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
 
     fprintf(fp,"MARKER_MOVING= (" );
     counter = 0;
-    for (i = 0; i < bcProps.numBCID ; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Inviscid ||
-            bcProps.surfaceProps[i].surfaceType == Viscous) {
+    for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Inviscid ||
+            bcProps.surfaceProp[i].surfaceType == Viscous) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }
@@ -727,12 +721,12 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
 
     fprintf(fp,"DV_MARKER= (");
     counter = 0;
-    for (i = 0; i < bcProps.numBCID ; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Inviscid ||
-            bcProps.surfaceProps[i].surfaceType == Viscous) {
+    for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Inviscid ||
+            bcProps.surfaceProp[i].surfaceType == Viscous) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }
@@ -742,24 +736,24 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     fprintf(fp," )\n");
 
     //fprintf(fp,"DV_MARKER= ( airfoil )\n");
-    fprintf(fp,"MOTION_FILENAME=%s_motion.dat\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"MOTION_FILENAME=%s_motion.dat\n", aimInputs[Proj_Name-1].vals.string);
     fprintf(fp,"\n");
 
     fprintf(fp,"%% ------------------------- INPUT/OUTPUT INFORMATION --------------------------%%\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Mesh input file\n");
-    fprintf(fp,"MESH_FILENAME= %s.su2\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"MESH_FILENAME= %s.su2\n", aimInputs[Proj_Name-1].vals.string);
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Mesh input file format (SU2, CGNS)\n");
     fprintf(fp,"MESH_FORMAT= SU2\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Mesh output file\n");
-    fprintf(fp,"MESH_OUT_FILENAME= %s.su2\n", aimInputs[aim_getIndex(aimInfo, "Proj_Name",  ANALYSISIN)-1].vals.string);
+    fprintf(fp,"MESH_OUT_FILENAME= %s.su2\n", aimInputs[Proj_Name-1].vals.string);
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Output file format (TECPLOT, TECPLOT_BINARY, PARAVIEW,\n");
     fprintf(fp,"%%                     FIELDVIEW, FIELDVIEW_BINARY)\n");
-    string_toUpperCase(aimInputs[aim_getIndex(aimInfo, "Output_Format",  ANALYSISIN)-1].vals.string);
-    fprintf(fp,"OUTPUT_FORMAT= %s\n", aimInputs[aim_getIndex(aimInfo, "Output_Format",  ANALYSISIN)-1].vals.string);
+    string_toUpperCase(aimInputs[Output_Format-1].vals.string);
+    fprintf(fp,"OUTPUT_FORMAT= %s\n", aimInputs[Output_Format-1].vals.string);
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Verbosity of console output: NONE removes minor MPI overhead (NONE, HIGH)\n");
     fprintf(fp,"CONSOLE_OUTPUT_VERBOSITY= HIGH\n");
@@ -771,12 +765,12 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     fprintf(fp,"MARKER_EULER= (" );
 
     counter = 0; // Euler boundary
-    for (i = 0; i < bcProps.numBCID; i++) {
+    for (i = 0; i < bcProps.numSurfaceProp; i++) {
 
-        if (bcProps.surfaceProps[i].surfaceType == Inviscid) {
+        if (bcProps.surfaceProp[i].surfaceType == Inviscid) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }
@@ -791,13 +785,13 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     fprintf(fp,"MARKER_HEATFLUX= (");
 
     counter = 0; // Viscous boundary w/ heat flux
-    for (i = 0; i < bcProps.numBCID; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Viscous &&
-            bcProps.surfaceProps[i].wallTemperatureFlag == (int) true &&
-            bcProps.surfaceProps[i].wallTemperature < 0) {
+    for (i = 0; i < bcProps.numSurfaceProp; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Viscous &&
+            bcProps.surfaceProp[i].wallTemperatureFlag == (int) true &&
+            bcProps.surfaceProp[i].wallTemperature < 0) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d, %f", bcProps.surfaceProps[i].bcID, bcProps.surfaceProps[i].wallHeatFlux);
+            fprintf(fp," %d, %f", bcProps.surfaceProp[i].bcID, bcProps.surfaceProp[i].wallHeatFlux);
 
             counter += 1;
         }
@@ -812,13 +806,13 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     fprintf(fp,"MARKER_ISOTHERMAL= (");
 
     counter = 0; // Viscous boundary w/ isothermal wall
-    for (i = 0; i < bcProps.numBCID; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Viscous &&
-            bcProps.surfaceProps[i].wallTemperatureFlag == (int) true &&
-            bcProps.surfaceProps[i].wallTemperature >= 0) {
+    for (i = 0; i < bcProps.numSurfaceProp; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Viscous &&
+            bcProps.surfaceProp[i].wallTemperatureFlag == (int) true &&
+            bcProps.surfaceProp[i].wallTemperature >= 0) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d, %f", bcProps.surfaceProps[i].bcID, bcProps.surfaceProps[i].wallTemperature);
+            fprintf(fp," %d, %f", bcProps.surfaceProp[i].bcID, bcProps.surfaceProp[i].wallTemperature);
 
             counter += 1;
         }
@@ -832,11 +826,11 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     fprintf(fp,"MARKER_FAR= (" );
 
     counter = 0; // Farfield boundary
-    for (i = 0; i < bcProps.numBCID; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Farfield) {
+    for (i = 0; i < bcProps.numSurfaceProp; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Farfield) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }
@@ -850,11 +844,11 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     fprintf(fp,"MARKER_SYM= (" );
 
     counter = 0; // Symmetry boundary
-    for (i = 0; i < bcProps.numBCID; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Symmetry) {
+    for (i = 0; i < bcProps.numSurfaceProp; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Symmetry) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }
@@ -912,16 +906,16 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     fprintf(fp,"MARKER_INLET= ( ");
 
     counter = 0; // Subsonic Inflow
-    for (i = 0; i < bcProps.numBCID ; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == SubsonicInflow) {
+    for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == SubsonicInflow) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d, %f, %f, %f, %f, %f", bcProps.surfaceProps[i].bcID,
-                                                  bcProps.surfaceProps[i].totalTemperature,
-                                                  bcProps.surfaceProps[i].totalPressure,
-                                                  bcProps.surfaceProps[i].uVelocity,
-                                                  bcProps.surfaceProps[i].vVelocity,
-                                                  bcProps.surfaceProps[i].wVelocity);
+            fprintf(fp," %d, %f, %f, %f, %f, %f", bcProps.surfaceProp[i].bcID,
+                                                  bcProps.surfaceProp[i].totalTemperature,
+                                                  bcProps.surfaceProp[i].totalPressure,
+                                                  bcProps.surfaceProp[i].uVelocity,
+                                                  bcProps.surfaceProp[i].vVelocity,
+                                                  bcProps.surfaceProp[i].wVelocity);
             counter += 1;
         }
     }
@@ -940,13 +934,13 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     fprintf(fp,"MARKER_OUTLET= ( ");
 
     counter = 0; // Outlet boundary
-    for (i = 0; i < bcProps.numBCID ; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == BackPressure ||
-            bcProps.surfaceProps[i].surfaceType == SubsonicOutflow) {
+    for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == BackPressure ||
+            bcProps.surfaceProp[i].surfaceType == SubsonicOutflow) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d, %f", bcProps.surfaceProps[i].bcID,
-                                  bcProps.surfaceProps[i].staticPressure);
+            fprintf(fp," %d, %f", bcProps.surfaceProp[i].bcID,
+                                  bcProps.surfaceProp[i].staticPressure);
 
             counter += 1;
         }
@@ -1006,12 +1000,12 @@ static int su2_writeConfig_Deform(void *aimInfo, char *analysisPath, capsValue *
     fprintf(fp,"MARKER_PLOTTING= (" );
 
     counter = 0; // Surface marker
-    for (i = 0; i < bcProps.numBCID ; i++) {
-        if (bcProps.surfaceProps[i].surfaceType == Inviscid ||
-            bcProps.surfaceProps[i].surfaceType == Viscous) {
+    for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+        if (bcProps.surfaceProp[i].surfaceType == Inviscid ||
+            bcProps.surfaceProp[i].surfaceType == Viscous) {
 
             if (counter > 0) fprintf(fp, ",");
-            fprintf(fp," %d", bcProps.surfaceProps[i].bcID);
+            fprintf(fp," %d", bcProps.surfaceProp[i].bcID);
 
             counter += 1;
         }

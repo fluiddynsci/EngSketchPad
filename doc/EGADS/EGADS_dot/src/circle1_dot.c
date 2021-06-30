@@ -183,7 +183,7 @@ setCircleBody_dot( ego ebody,       /* (in/out) body with sensitivities */
   tdata_dot[0] = 0;
   tdata_dot[1] = 0;
 
-  status = EG_setGeometry_dot(eedges[0], EDGE, ONENODE, NULL, tdata, tdata_dot);
+  status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;

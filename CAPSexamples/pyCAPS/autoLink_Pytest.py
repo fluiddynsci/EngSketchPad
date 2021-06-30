@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 # Import pyCAPS and os module
 import pyCAPS
 import os
@@ -12,10 +10,19 @@ parser = argparse.ArgumentParser(description = 'autoLink Pytest Link Example',
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
-parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
+parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot data")
 parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
+
+# Define units
+m    = pyCAPS.Unit("meter")
+ft   = pyCAPS.Unit("ft")
+kg   = pyCAPS.Unit("kg")
+s    = pyCAPS.Unit("s")
+K    = pyCAPS.Unit("Kelvin")
+deg  = pyCAPS.Unit("degree")
+
 
 def runAnalysis(myProblem):
 
@@ -24,21 +31,21 @@ def runAnalysis(myProblem):
         myAnalysis = myProblem.analysis[i]
 
         # Skip analysis for AVL for Mach numbers > .75
-        if myProblem.value["Mach"].value > 0.75 and myAnalysis.aimName == "avlAIM":
+        if myProblem.parameter["Mach"].value > 0.75 and myAnalysis.name == "avl":
             continue
         # Skip analysis for AWave for Mach < 1.0
-        if myProblem.value["Mach"].value < 1.0 and myAnalysis.aimName == "awaveAIM":
+        if myProblem.parameter["Mach"].value < 1.0 and myAnalysis.name == "awave":
             continue
 
         # Run AIM pre-analysis
         myAnalysis.preAnalysis()
 
         # Run the tool
-        print ("Running", myAnalysis.aimName)
+        print ("Running", myAnalysis.name)
         currentDirectory = os.getcwd() # Get our current working directory
         os.chdir(myAnalysis.analysisDir) # Move into test directory
 
-        os.system(myAnalysis.getAttribute("execute")) # Execute attribute defined above
+        os.system(myAnalysis.attr.execute) # Execute attribute defined above
 
         os.chdir(currentDirectory) # Move back to working directory
 
@@ -54,58 +61,53 @@ def combineDrag(myProblem):
         myAnalysis = myProblem.analysis[i]
 
         # Skip analysis for AVL for Mach numbers > .75 - We wont have any analysis
-        if myProblem.value["Mach"].value > 0.75 and myAnalysis.aimName == "avlAIM":
+        if myProblem.parameter["Mach"].value > 0.75 and myAnalysis.name == "avl":
             continue
         # Skip analysis for AWave for Mach < 1.0 - We wont have any analysis
-        if myProblem.value["Mach"].value < 1.0 and myAnalysis.aimName == "awaveAIM":
+        if myProblem.parameter["Mach"].value < 1.0 and myAnalysis.name == "awave":
             continue
 
-        outValues = myAnalysis.getAnalysisOutVal()
-
         for dragType in drags:
-            if dragType in outValues:
-                CDTotal += outValues[dragType]
+            if dragType in myAnalysis.output:
+                CDTotal += myAnalysis.output[dragType].value
 
     return CDTotal
 
-# Initialize capsProblem object
-myProblem = pyCAPS.capsProblem()
-
-# Load geometry
-geometryScript = os.path.join("..","csmData","linearAero.csm")
-myGeometry = myProblem.loadCAPS(geometryScript, verbosity=args.verbosity)
-
-# Set verbosity to minimal
-myProblem.setVerbosity("minimal")
-
 # Create working directory variable
-workDir = os.path.join(str(args.workDir[0]), "LinkTest_" )
+problemName = str(args.workDir[0]) + "LinkTest"
+
+geometryScript = os.path.join("..","csmData","linearAero.csm")
+
+# Initialize Problem object
+myProblem = pyCAPS.Problem(problemName, capsFile=geometryScript, outLevel=0)
 
 # Load desired aim
-fric = myProblem.loadAIM(aim = "frictionAIM",
-                         analysisDir = workDir + "Friction")
+fric = myProblem.analysis.create(aim = "frictionAIM",
+                                 name = "friction")
 
-awave = myProblem.loadAIM(aim = "awaveAIM",
-                          analysisDir = workDir + "Awave")
+awave = myProblem.analysis.create(aim = "awaveAIM",
+                                  name = "awave",
+                                  unitSystem = {"angle": deg})
 
-avl = myProblem.loadAIM(aim = "avlAIM",
-                        analysisDir = workDir + "AVL")
+avl = myProblem.analysis.create(aim = "avlAIM",
+                                name = "avl",
+                                unitSystem={"mass":kg, "length":m, "time":s, "temperature":K})
 
 # Add attribute to analyses to define execution functions
-fric.addAttribute("execute",  "friction frictionInput.txt frictionOutput.txt > Info.out")
-awave.addAttribute("execute", "awave awaveInput.txt > Info.out")
-avl.addAttribute("execute",   "avl caps < avlInput.txt > avlOutput.txt")
+fric.attr.create("execute",  "friction frictionInput.txt frictionOutput.txt > Info.out")
+awave.attr.create("execute", "awave awaveInput.txt > Info.out")
+avl.attr.create("execute",   "avl caps < avlInput.txt > avlOutput.txt")
 
 # Create mission parameters
-mach     = myProblem.createValue("Mach", 0.1) # Mach number
-alpha    = myProblem.createValue("Alpha", 0.0, "degree") # Angle of attack
-altitude = myProblem.createValue("Altitude", 5000.0, "ft") # Flying altitude
+mach     = myProblem.parameter.create("Mach", 0.1) # Mach number
+alpha    = myProblem.parameter.create("Alpha", 0.0 * deg) # Angle of attack
+altitude = myProblem.parameter.create("Altitude", 5000.0 * ft) # Flying altitude
 
 machRange     = [mach.value + i*0.1 for i in range(7)]
-altitudeRange = [altitude.value + i*5000 for i in range(12)]
+altitudeRange = [altitude.value + i*5000 * ft for i in range(12)]
 
 # Autolink the mission parameters to inputs of the loaded AIMs
-myProblem.autoLinkValue()
+myProblem.autoLinkParameter()
 
 # Set geometry inputs
 # despmtr   thick     0.12      frac of local chord
@@ -120,11 +122,11 @@ myProblem.autoLinkValue()
 #
 # despmtr   washout  -5.00      deg (down at tip)
 # despmtr   dihedral  4.00      deg
-myGeometry.setGeometryVal("area", 7.5)
+myProblem.geometry.despmtr.area = 7.5
 
 # Set additional information for AVL
-avlSurfaces = []
-for i in avl.getAttributeVal("capsGroup"):
+avlSurfaces = {}
+for i in avl.geometry.attrList("capsGroup"):
 
      if "tail" in i.lower():
          surf = {"numChord"     : 8,
@@ -139,10 +141,10 @@ for i in avl.getAttributeVal("capsGroup"):
      else:
          continue # Not interested in other capsGroups
 
-     avlSurfaces.append((i, surf))
+     avlSurfaces[i] = surf
 
 # Add surface information to AVL
-avl.setAnalysisVal("AVL_Surface", avlSurfaces)
+avl.input.AVL_Surface = avlSurfaces
 
 #Create a list of lists for storage
 Cd = [] # altitude index
@@ -163,9 +165,6 @@ for alt in altitudeRange:
 
         Cd[-1].append(combineDrag(myProblem))
 
-# Close CAPS
-myProblem.closeCAPS()
-
 # Print out drag values
 print("Cd = ", Cd)
 
@@ -177,7 +176,7 @@ if (args.noPlotData == False):
         import numpy
 
         X = numpy.arange(min(machRange), max(machRange)+0.0001, machRange[1] - machRange[0])
-        Y = numpy.arange(min(altitudeRange), max(altitudeRange)+0.0001, altitudeRange[1] - altitudeRange[0])
+        Y = numpy.arange(min(altitudeRange)/ft, max(altitudeRange)/ft+0.0001, (altitudeRange[1] - altitudeRange[0])/ft)
         Z = numpy.array(Cd)
 
         CS = plt.contourf(X, Y, Z, 30)

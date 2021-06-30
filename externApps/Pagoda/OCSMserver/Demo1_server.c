@@ -37,7 +37,6 @@
 #include "OpenCSM.h"
 
 static int massProps(ego etess, int iface, double props[]);
-extern int EG_exportModel(ego mobject, size_t *nbytes, char *stream[]);
 
 
 /***********************************************************************/

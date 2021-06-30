@@ -17,16 +17,10 @@ all:
 	(cd CAPS/src; make)
 	(cd ../CAPSexamples; make)
 	(cd CAPS/aim; make)
-ifdef PYTHONINC
-	(cd CAPS/pyCAPS/src; make)
-endif
 	@echo " "
 	@echo " *** Build Completed! ***"
 
 clean:
-ifdef PYTHONINC
-	(cd CAPS/pyCAPS/src; make clean)
-endif
 	(cd CAPS/aim; make clean)
 	(cd ../CAPSexamples; make clean)
 	(cd CAPS/src; make clean)
@@ -41,9 +35,6 @@ endif
 	(cd EGADS/src; make clean)
 
 cleanall:
-ifdef PYTHONINC
-	(cd CAPS/pyCAPS/src; make cleanall)
-endif
 	(cd CAPS/aim; make cleanall)
 	(cd ../CAPSexamples; make cleanall)
 	(cd CAPS/src; make cleanall)
