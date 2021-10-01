@@ -18,7 +18,7 @@ endif
 $(LDIR)/tsfoilAIM.so: $(ODIR)/tsfoilAIM.o $(LDIR)/libaimUtil.a \
 			$(LDIR)/libutils.a
 	$(CC) $(SOFLGS) -o $(LDIR)/tsfoilAIM.so $(ODIR)/tsfoilAIM.o \
-		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -lm
+		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -ldl -lm
 
 $(ODIR)/tsfoilAIM.o: tsfoilAIM.c $(IDIR)/capsTypes.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils \

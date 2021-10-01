@@ -13,7 +13,7 @@ ODIR  = .
 !ENDIF
 
 
-$(LDIR)\delaundoAIM.dll:	$(ODIR)\delaundoAIM.obj \
+$(LDIR)\delaundoAIM.dll:	delaundoAIM.def $(ODIR)\delaundoAIM.obj \
 			$(LDIR)\utils.lib
 	-del $(LDIR)\delaundoAIM.dll
 	link /out:$(LDIR)\delaundoAIM.dll /dll /def:delaundoAIM.def \

@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description = 'SU2 and AFLR2 Node Distance PyTe
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Project name
@@ -31,7 +31,7 @@ workDir = os.path.join(str(args.workDir[0]), "SU2AFLR2NodeDistAnalysisTest")
 geometryScript = os.path.join("..","csmData","cfd2D.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load aflr2 aim
 myProblem.analysis.create(aim = "aflr2AIM", name = "aflr2")
@@ -47,19 +47,13 @@ myProblem.analysis["aflr2"].input.Mesh_Sizing = {"Airfoil"   : airfoil,
 # Make quad/tri instead of just quads
 #myProblem.analysis["aflr2AIM"].input.Mesh_Gen_Input_String = "mquad=1 mpp=3"
 
-# Run AIM pre-analysis
-myProblem.analysis["aflr2"].preAnalysis()
-
-# NO analysis is needed - AFLR2 was already ran during preAnalysis
-
-# Run AIM post-analysis
-myProblem.analysis["aflr2"].postAnalysis()
+# NO analysis is needed - AFLR2 executes automatically
 
 # Load SU2 aim
 su2 = myProblem.analysis.create(aim = "su2AIM",
                                 name = "su2")
 
-su2.input["Mesh"].link(myProblem.analysis["aflr2"].output["Surface_Mesh"])
+su2.input["Mesh"].link(myProblem.analysis["aflr2"].output["Area_Mesh"])
 
 # Set project name
 su2.input.Proj_Name = projectName

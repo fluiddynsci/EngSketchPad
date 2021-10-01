@@ -8,15 +8,14 @@ LOGFILENAME=cCAPSlog.txt
 expectCSuccess ()
 {
     # $1 = program
-    # $2 = execution directory
-    # $3 = run analysis 
+    # $2 = outLevel
      
     echo | tee -a $LOGFILE
     echo "=================================================" | tee -a $LOGFILE
     local status
     set -x
     echo "$1 test;" | tee -a $LOGFILE
-    time $VALGRIND_COMMAND $1 $2 $3 | tee -a $LOGFILE; status=${PIPESTATUS[0]}
+    time $VALGRIND_COMMAND $1 $2 | tee -a $LOGFILE; status=${PIPESTATUS[0]}
     set +x
     if [[ $status == 0 ]]; then
     echo | tee -a $LOGFILE
@@ -39,15 +38,14 @@ expectCSuccess ()
 expectCFailure ()
 {
     # $1 = program
-    # $2 = execution directory
-    # $3 = run analysis 
+    # $2 = outLevel
     
     echo | tee -a $LOGFILE
     echo "=================================================" | tee -a $LOGFILE
     local status
     echo "$1 test;" | tee -a $LOGFILE
     set -x
-    time $VALGRIND_COMMAND $1 $2 $3 | tee -a $LOGFILE; status=${PIPESTATUS[0]}
+    time $VALGRIND_COMMAND $1 $2 | tee -a $LOGFILE; status=${PIPESTATUS[0]}
     set +x
     if [[ $status == 0 ]]; then
     echo | tee -a $LOGFILE
@@ -116,12 +114,23 @@ if [[ "$TYPE" == "LINEARAERO" || "$TYPE" == "ALL" ]]; then
     
     ###### AVL ###### 
     if [[ "`which avl`" != "" ]]; then
-        expectCSuccess "./avlTest" "1" 
+        expectCSuccess "./avlTest" 0
+    else
+        notRun="$notRun\navl"
+    fi
+
+    ###### AWAVE ###### 
+    if [[ "`which awave`" != "" ]]; then
+        expectCSuccess "./awaveTest" 0
+    else
+        notRun="$notRun\nawave"
     fi
 
     ######  FRICTION ###### 
     if [[ "`which friction`" != "" ]]; then
-        expectCSuccess "./frictionTest" "1"
+        expectCSuccess "./frictionTest" 0
+    else
+        notRun="$notRun\nfriction"
     fi
 
     testsRan=1
@@ -146,7 +155,7 @@ if [[ "$TYPE" == "MESH" || "$TYPE" == "ALL" ]]; then
     
     # pointwise
     if [[ "`which pointwise`" != "" && "$VALGRIND_COMMAND" == "" && -f $ESP_ROOT/lib/$POINTWISE_AIM ]]; then
-        expectCSuccess "./pointwiseTest" "0" 
+        expectCSuccess "./pointwiseTest" 0
     else
         notRun="$notRun\npointwise"
     fi
@@ -161,13 +170,13 @@ if [[ "$TYPE" == "CFD" || "$TYPE" == "ALL" ]]; then
     ###### FUN3D ######
 
     if [[  -f $ESP_ROOT/lib/aflr2AIM.$EXT ]]; then
-        expectCSuccess "./fun3dAFLR2Test" 
+        expectCSuccess "./fun3dAFLR2Test" 0
     else
         notRun="$notRun\nfun3d AFLR"
     fi
 
     if [[ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]]; then
-        expectCSuccess "./fun3dTetgenTest" 
+        expectCSuccess "./fun3dTetgenTest" 0
     else
         notRun="$notRun\nfun3d TetGen"
     fi
@@ -181,16 +190,16 @@ if [[ "$TYPE" == "STRUCTURE" || "$TYPE" == "ALL" ]]; then
     
     ######  Mystran ###### 
     if [[ "`which mystran.exe`" != "" && "$OS" != "Windows_NT" ]]; then
-        expectCSuccess "./mystranTest" "1" 
+        expectCSuccess "./mystranTest" 0
     else
         notRun="$notRun\nMystran"
     fi 
 
     ######  HSM ###### 
     if [[ -f $ESP_ROOT/lib/hsmAIM.$EXT  ]]; then
-        expectCSuccess "./hsmCantileverPlateTest" 
-        expectCSuccess "./hsmSimplePlateTest" 
-        expectCSuccess "./hsmJoinedPlateTest" 
+        expectCSuccess "./hsmCantileverPlateTest" 0
+        expectCSuccess "./hsmSimplePlateTest" 0
+        expectCSuccess "./hsmJoinedPlateTest" 0
     else
         notRun="$notRun\nHSM"
     fi 
@@ -202,17 +211,19 @@ fi
 if [[ "$TYPE" == "AEROELASTIC" || "$TYPE" == "ALL" ]]; then
     echo "Running.... AEROELASTIC c-Tests"
     
-    if [[ "$TETGEN" != "" ]]; then
+    if [[ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]]; then
     
         if [[ "`which mystran.exe`" != "" && "`which nodet_mpi`" != "" ]]; then
-           expectCSuccess "./aeroelasticTest" "1" 
+           expectCSuccess "./aeroelasticTest" 0
         fi
 
             # SU2 6.0.0 on Windows does not work with displacements
         if [[ "`which mystran.exe`" != "" && "$OS" != "Windows_NT" ]]; then
-           expectCSuccess "./aeroelasticSimple_Iterative_SU2_and_MystranTest" "1" 
+           expectCSuccess "./aeroelasticSimple_Iterative_SU2_and_MystranTest" 0
         fi
         
+    else
+        notRun="$notRun\naeroelastic"
     fi
 
     testsRan=1

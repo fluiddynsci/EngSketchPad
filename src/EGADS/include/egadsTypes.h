@@ -15,8 +15,8 @@
 
 
 #define EGADSMAJOR     1
-#define EGADSMINOR    19
-#define EGADSPROP     EGADSprop: Revision 1.19
+#define EGADSMINOR    20
+#define EGADSPROP     EGADSprop: Revision 1.20
 
 #define MAGIC      98789
 #define MTESSPARAM     2
@@ -70,8 +70,10 @@
 
   /* TOPOLOGY */
 #define SREVERSE      -1
+#define SINNER        -1
 #define NOMTYPE        0
 #define SFORWARD       1
+#define SOUTER         1
 #define ONENODE        1
 #define TWONODE        2
 #define OPEN           3
@@ -191,7 +193,7 @@ typedef struct {
 
 
 typedef struct {
-  int    tri;                   /* triangle index */
+  int    tri;                   /* triangle index (bias 1) */
   double w[2];                  /* barycentric coordinates (weights for 0/1) */
 } egBary;
 

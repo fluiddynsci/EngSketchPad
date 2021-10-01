@@ -66,13 +66,14 @@ int main(int argc, char *argv[])
 
     int status; // Function return status;
     int i; // Indexing
+    int outLevel = 1;
 
     // CAPS objects
     capsObj  problemObj, hsmObj, tempObj;
     capsErrs *errors;
 
     // CAPS return values
-    int   nErr;
+    int   nErr, exec;
 
     // Input values
     capsTuple        *material = NULL, *constraint = NULL, *property = NULL, *load = NULL;
@@ -82,6 +83,7 @@ int main(int argc, char *argv[])
     //double            doubleVal;
     enum capsBoolean  boolVal;
     char *stringVal = NULL;
+    int               state;
 
 #if !defined(__APPLE__) && !defined(WIN32)
     /* enable floating point exceptions for testing */
@@ -90,20 +92,22 @@ int main(int argc, char *argv[])
 
     printf("\n\nAttention: hsmTest2 is hard coded to look for ../csmData/feaSimplePlate.csm\n");
 
-    if (argc > 1) {
-
-        printf(" usage: hsmTest!\n");
+    if (argc > 2) {
+        printf(" usage: hsmTest outLevel!\n");
         return 1;
+    } else if (argc == 2) {
+        outLevel = atoi(argv[1]);
     }
 
     status = caps_open("HSM_SimplePlate_Example", NULL, 0,
-                       "../csmData/feaSimplePlate.csm", 1, &problemObj,
+                       "../csmData/feaSimplePlate.csm", outLevel, &problemObj,
                        &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Load the AIMs
-    status = caps_makeAnalysis(problemObj, "hsmAIM", NULL, NULL, NULL, 0,
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "hsmAIM", NULL, NULL, NULL, &exec,
                                &hsmObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
@@ -189,14 +193,11 @@ int main(int argc, char *argv[])
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    // Run hsm pre-analysis
-    status = caps_preAnalysis(hsmObj, &nErr, &errors);
+    // Run hsm
+    status = caps_execute(hsmObj, &state, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    // Run hsm post
-    status = caps_postAnalysis(hsmObj, &nErr, &errors);
-    if (nErr != 0) printErrors(nErr, errors);
 
 cleanup:
     if (status != CAPS_SUCCESS) printf("\n\nPremature exit - status = %d\n",

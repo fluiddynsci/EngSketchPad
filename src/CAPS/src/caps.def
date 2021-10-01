@@ -2,6 +2,7 @@ LIBRARY caps
 EXPORTS
 caps_revision
 caps_phaseState
+caps_journalState
 caps_info
 caps_size
 caps_childByIndex
@@ -30,6 +31,8 @@ caps_close
 caps_outLevel
 caps_queryAnalysis
 caps_getBodies
+caps_getTessels
+caps_execute
 caps_getInput
 caps_getOutput
 caps_makeAnalysis
@@ -38,8 +41,7 @@ caps_dupAnalysis
 caps_dirtyAnalysis
 caps_analysisInfo
 caps_preAnalysis
-caps_runAnalysis
-caps_checkAnalysis
+caps_system
 caps_postAnalysis
 caps_AIMbackdoor
 caps_makeBound

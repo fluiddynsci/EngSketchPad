@@ -3,7 +3,7 @@
 /*
  * UVMAP : TRIA-FACE SURFACE MESH UV MAPPING GENERATOR
  *         DERIVED FROM AFLR4, UG, UG2, and UG3 LIBRARIES
- * $Id: uvmap_gen.c,v 1.62 2021/02/28 22:11:00 marcum Exp $
+ * $Id: uvmap_gen.c,v 1.63 2021/08/28 16:58:35 marcum Exp $
  * Copyright 1994-2020, David L. Marcum
  */
 
@@ -220,7 +220,7 @@ INT_ uvmap_gen (
   if (status == 0 && WriteUVmapOut) {
 
     if (strcmp (UVmapCaseName, "_null_"))
-      snprintf (caseName, 512, "%s.uvmap_%d", UVmapCaseName, idef);
+      snprintf (caseName, 512, "%s.uvmap_%d", UVmapCaseName, (int) idef);
     else {
       outFileCnt++;
       snprintf (caseName, 512, "UVmapOut_%d", outFileCnt);

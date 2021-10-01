@@ -37,6 +37,7 @@ ifneq ("$(ESP_ARCH)","CYGWIN64")
 	(cd cart3d; make)
 endif
 	(cd pointwise; make)
+	(cd meshWriter; make)
 	(cd custom; make)
 
 lint:
@@ -69,6 +70,7 @@ ifneq ("$(ESP_ARCH)","CYGWIN64")
 	(cd cart3d; make lint)
 endif
 	(cd pointwise; make lint)
+	(cd meshWriter; make lint)
 	(cd utils; make lint)
 
 clean:
@@ -102,6 +104,7 @@ ifneq ("$(ESP_ARCH)","CYGWIN64")
 	(cd cart3d; make clean)
 endif
 	(cd pointwise; make clean)
+	(cd meshWriter; make clean)
 	(cd custom; make clean)
 
 cleanall:
@@ -135,6 +138,7 @@ ifneq ("$(ESP_ARCH)","CYGWIN64")
 	(cd cart3d; make cleanall)
 endif
 	(cd pointwise; make cleanall)
+	(cd meshWriter; make cleanall)
 	(cd custom; make cleanall)
 
 dox:

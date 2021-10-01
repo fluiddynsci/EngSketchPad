@@ -21,6 +21,8 @@
  * An outline of the AIM's inputs, outputs and attributes are provided in \ref aimInputsAstros and
  * \ref aimOutputsAstros and \ref attributeAstros, respectively.
  *
+ * The Astros AIM can automatically execute Astros, with details provided in \ref aimExecuteAstros.
+ *
  * Details of the AIM's automated data transfer capabilities are outlined in \ref dataTransferAstros
  *
  * \section clearanceAstros Clearance Statement
@@ -98,6 +100,9 @@
 #ifdef WIN32
 #define snprintf   _snprintf
 #define strcasecmp stricmp
+#define SLASH     '\\'
+#else
+#define SLASH     '/'
 #endif
 
 #define MXCHAR  255
@@ -561,7 +566,7 @@ static int createVLMMesh(void *instStore, void *aimInfo, capsValue *aimInputs)
     feaMeshDataStruct *feaData;
 
     astrosInstance = (aimStorage *) instStore;
-  
+
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
     if (status != CAPS_SUCCESS) return status;
@@ -970,7 +975,7 @@ static int createVLMMesh(void *instStore, void *aimInfo, capsValue *aimInputs)
               astrosInstance->feaProblem.feaMesh.node[j].nodeID;
             }
         }
-        
+
         if (astrosInstance->feaProblem.feaAero[i].numGridID > 0) {
             printf("\tSurface %d: Number of points found for aero-spline = %d\n",
                    i+1, astrosInstance->feaProblem.feaAero[i].numGridID );
@@ -1081,7 +1086,7 @@ static int createVLMMesh(void *instStore, void *aimInfo, capsValue *aimInputs)
                     printf("Status %d during destroy_feaAeroStruct\n", status);
             }
         }
-        
+
         if (astrosInstance->feaProblem.feaAero != NULL)
             EG_free(astrosInstance->feaProblem.feaAero);
         astrosInstance->feaProblem.feaAero = NULL;
@@ -1186,7 +1191,7 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
 
     // Initialize instance storage
     (void) initiate_aimStorage(astrosInstance);
-  
+
 cleanup:
     if (status != CAPS_SUCCESS) {
         /* release all possibly allocated memory on error */
@@ -1556,6 +1561,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     //int found; // Boolean operator
 
     int *tempIntegerArray = NULL; // Temporary array to store a list of integers
+    char *noQuoteString = NULL;
 
     // Analysis information
     char *analysisType = NULL;
@@ -1869,10 +1875,9 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     }
 
     else {
-        printf("Unrecognized \"Analysis_Type\", %s, defaulting to \"Modal\" analysis\n", analysisType);
-        analysisType = "Modal";
-        optFlag = 0;
-        fprintf(fp, "ANALYZE\n");
+        AIM_ERROR(aimInfo, "Unrecognized \"Analysis_Type\", %s\n", analysisType);
+        status = CAPS_BADVALUE;
+        goto cleanup;
     }
 
 
@@ -2171,9 +2176,10 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     if (aimInputs[Parameter-1].nullVal == NotNull) {
         for (i = 0; i < aimInputs[Parameter-1].length; i++) {
-
-            fprintf(fp, "%s, %s\n", aimInputs[Parameter-1].vals.tuple[i].name,
-                                    aimInputs[Parameter-1].vals.tuple[i].value);
+            noQuoteString = string_removeQuotation(aimInputs[Parameter-1].vals.tuple[i].value);
+            AIM_NOTNULL(noQuoteString, aimInfo, status);
+            fprintf(fp, "%s, %s\n", aimInputs[Parameter-1].vals.tuple[i].name, noQuoteString);
+            EG_free(noQuoteString);
         }
     }
 
@@ -2186,8 +2192,9 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         objectiveResp = aimInputs[ObjectiveResponseType-1].vals.string;
         if     (strcasecmp(objectiveResp, "Weight") == 0) objectiveResp = "WEIGHT";
         else {
-            printf("\tUnrecognized \"ObjectiveResponseType\", %s, defaulting to \"Weight\"\n", objectiveResp);
-            objectiveResp = "WEIGHT";
+            AIM_ERROR(aimInfo, "\tUnrecognized \"ObjectiveResponseType\", %s\n", objectiveResp);
+            status = CAPS_BADVALUE;
+            goto cleanup;
         }
 
         fprintf(fp,"%-8s", "DRESP1");
@@ -2723,6 +2730,80 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 }
 
 
+// ********************** AIM Function Break *****************************
+int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+               int *state)
+{
+  /*! \page aimExecuteAstros AIM Execution
+   *
+   * If auto execution is enabled when creating an Astros AIM,
+   * the AIM will execute Astros just-in-time with the command line:
+   *
+   * \code{.sh}
+   * $ASTROS_ROOT/astros < $Proj_Name.dat > $Proj_Name.out
+   * \endcode
+   *
+   * where preAnalysis generated the file Proj_Name + ".dat" which contains the input information.
+   * The environemtn variable ASTROS_ROOT is assumed to point to the location where the
+   * "astros.exe" executable and run files "ASTRO.D01" and "ASTRO.IDX" are located.
+   *
+   * The analysis can be also be explicitly executed with caps_execute in the C-API
+   * or via Analysis.runAnalysis in the pyCAPS API.
+   *
+   * Calling preAnalysis and postAnalysis is NOT allowed when auto execution is enabled.
+   *
+   * Auto execution can also be disabled when creating an Astros AIM object.
+   * In this mode, caps_execute and Analysis.runAnalysis can be used to run the analysis,
+   * or Astros can be executed by calling preAnalysis, system call, and posAnalysis as demonstrated
+   * below with a pyCAPS example:
+   *
+   * \code{.py}
+   * print ("\n\preAnalysis......")
+   * astros.preAnalysis()
+   *
+   * print ("\n\nRunning......")
+   * currentDirectory = os.getcwd() # Get our current working directory
+   *
+   * os.chdir(astros.analysisDir) # Move into test directory
+   * os.system(ASTROS_ROOT + os.sep + "astros.exe < " + astros.input.Proj_Name + ".dat > " + astros.input.Proj_Name + ".out"); # Run via system call
+   *
+   * os.chdir(currentDirectory) # Move back to top directory
+   *
+   * print ("\n\postAnalysis......")
+   * astros.postAnalysis()
+   * \endcode
+   */
+
+  int status = CAPS_SUCCESS;
+  char command[PATH_MAX], *env;
+  aimStorage *astrosInstance;
+  *state = 0;
+
+  astrosInstance = (aimStorage *) instStore;
+  if (astrosInstance == NULL) return CAPS_NULLVALUE;
+
+  env = getenv("ASTROS_ROOT");
+  if (env == NULL) {
+    AIM_ERROR(aimInfo, "ASTROS_ROOT environment variable is not set!");
+    return CAPS_EXECERR;
+  }
+
+  snprintf(command, PATH_MAX, "%s%cASTRO.D01", env, SLASH);
+  status = aim_cpFile(aimInfo, command, "");
+  if (status != CAPS_SUCCESS) return status;
+
+  snprintf(command, PATH_MAX, "%s%cASTRO.IDX", env, SLASH);
+  status = aim_cpFile(aimInfo, command, "");
+  if (status != CAPS_SUCCESS) return status;
+
+  snprintf(command, PATH_MAX, "%s%castros.exe < %s.dat > %s.out",
+           env, SLASH, astrosInstance->projectName, astrosInstance->projectName);
+
+  return aim_system(aimInfo, NULL, command);
+}
+
+
+// ********************** AIM Function Break *****************************
 // Check that astros ran without errors
 int
 aimPostAnalysis(void *instStore, /*@unused@*/ void *aimInfo,
@@ -2784,10 +2865,12 @@ aimPostAnalysis(void *instStore, /*@unused@*/ void *aimInfo,
 
   if (withErrors == (int) true) {
     AIM_ERROR(aimInfo, "");
+    AIM_ADDLINE(aimInfo, "****************************************");
     AIM_ADDLINE(aimInfo, "***                                  ***");
     AIM_ADDLINE(aimInfo, "*** A S T R O S  T E R M I N A T E D ***");
     AIM_ADDLINE(aimInfo, "***      W I T H  E R R O R S        ***");
     AIM_ADDLINE(aimInfo, "***                                  ***");
+    AIM_ADDLINE(aimInfo, "****************************************");
     status = CAPS_EXECERR;
   }
 
@@ -2884,7 +2967,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
     char *filename = NULL; // File to open
     char extOUT[] = ".out";
     FILE *fp = NULL; // File pointer
-  
+
     astrosInstance = (aimStorage *) instStore;
 
     filename = (char *) EG_alloc((strlen(astrosInstance->projectName) + strlen(extOUT) +1)*sizeof(char));
@@ -3055,7 +3138,7 @@ int aimDiscr(char *tname, capsDiscr *discr) {
 #endif
 
     if (tname == NULL) return CAPS_NOTFOUND;
-  
+
     astrosInstance = (aimStorage *) discr->instStore;
 
     /*if (astrosInstance->dataTransferCheck == (int) false) {
@@ -3283,7 +3366,7 @@ int aimDiscr(char *tname, capsDiscr *discr) {
 
     globalID = (int *) EG_alloc(numPoint*sizeof(int));
     if (globalID == NULL) { status = EGADS_MALLOC; goto cleanup; }
-  
+
     if (bodyFaceMap == NULL) {
         printf(" astrosAIM/aimDiscr: Body Face Map is NULL!\n");
         status = CAPS_NULLOBJ;

@@ -62,12 +62,9 @@ enum aimOutputs
  *
  *
  * Upon running preAnalysis the AIM generates a single file, "awaveInput.txt" which contains the input
- * information and control sequence for Awave to execute.
- * An example execution for Awave looks like (Linux and OSX executable being used - see \ref AwaveModification):
+ * information and control sequence for Awave to execute (see \ref AwaveModification).
  *
- * \code{.sh}
- * awave awaveInput.txt
- * \endcode
+ * The Awave AIM can automatically execute Awave, with details provided in \ref aimExecuteAwave.
  *
  * \section AwaveModification Awave Modifications
  * The AIM assumes that a modified version of Awave is being used. The modified version allows for longer input
@@ -2139,11 +2136,62 @@ cleanup:
 
 
 // ********************** AIM Function Break *****************************
+int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+               int *state)
+{
+  /*! \page aimExecuteAwave AIM Execution
+   *
+   * If auto execution is enabled when creating an awave AIM,
+   * the AIM will execute awave just-in-time with the command line:
+   *
+   * \code{.sh}
+   * awave awaveInput.txt > awaveOutput.txt
+   * \endcode
+   *
+   * where preAnalysis generated the file "dealundoInput.txt" which contains the input information.
+   *
+   * The analysis can be also be explicitly executed with caps_execute in the C-API
+   * or via Analysis.runAnalysis in the pyCAPS API.
+   *
+   * Calling preAnalysis and postAnalysis is NOT allowed when auto execution is enabled.
+   *
+   * Auto execution can also be disabled when creating an awave AIM object.
+   * In this mode, caps_execute and Analysis.runAnalysis can be used to run the analysis,
+   * or awave can be executed by calling preAnalysis, system call, and posAnalysis as demonstrated
+   * below with a pyCAPS example:
+   *
+   * \code{.py}
+   * print ("\n\preAnalysis......")
+   * awave.preAnalysis()
+   *
+   * print ("\n\nRunning......")
+   * currentDirectory = os.getcwd() # Get our current working directory
+   *
+   * os.chdir(dealundo.analysisDir) # Move into test directory
+   * os.system("awave awaveInput.txt > awaveOutput.txt"); # Run via system call
+   *
+   * os.chdir(currentDirectory) # Move back to top directory
+   *
+   * print ("\n\postAnalysis......")
+   * awave.postAnalysis()
+   * \endcode
+   */
 
-/* no longer optional and needed for restart */
-int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+  *state = 0;
+  return aim_system(aimInfo, NULL, "awave awaveInput.txt > awaveOutput.txt");
+}
+
+
+// ********************** AIM Function Break *****************************
+int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                     /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
 {
+  // check the awave output file
+  if (aim_isFile(aimInfo, "cdwave.txt") != CAPS_SUCCESS) {
+    AIM_ERROR(aimInfo, "awave execution did not produce cdwave.txt");
+    return CAPS_EXECERR;
+  }
+
   return CAPS_SUCCESS;
 }
 

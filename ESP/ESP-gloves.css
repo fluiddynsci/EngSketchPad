@@ -22,18 +22,13 @@ This library is distributed in the hope that it will be useful,
    MA  02110-1301  USA
 */
 
-/* div on bottom left that contains sketch status */
-#glovesStatus {
+/* div on bottom left that contains gloves status */
+#timStatus {
     width:                    250px;
     height:                   350px;
     overflow:                scroll;
     font-family: courier, monospace;
     font-size:                  8pt;
     background:             #F7F7F7;
-}
-
-/* frame on top in which the drawing is done */
-#gloves {
-    border:         1px dotted gray;
 }
 

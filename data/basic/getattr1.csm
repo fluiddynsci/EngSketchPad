@@ -38,7 +38,7 @@ select face 4
 # Attributes on the box
 select body 1
     getattr nattr $_nattr_
-    assert  nattr 4
+    assert  ifzero(nattr-3,1,0)+ifzero(nattr-4,1,0)  1
 
     patbeg iattr nattr
         getattr attrName  iattr
@@ -92,7 +92,7 @@ patend
 # get the number of Attributes associated with cylinder
 select body 2
     getattr nattr $_nattr_
-    assert  nattr 4
+    assert  ifzero(nattr-3,1,0)+ifzero(nattr-4,1,0)  1
 
     patbeg iattr nattr
         getattr attrName  iattr

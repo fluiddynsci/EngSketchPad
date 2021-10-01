@@ -2,6 +2,8 @@
 #include "egads.h"
 #include "egads_dot.h"
 
+#include "../src/egadsStack.h"
+
 #if defined(_MSC_VER) && (_MSC_VER < 1900)
 #define __func__  __FUNCTION__
 #endif
@@ -580,6 +582,72 @@ cleanup:
   return status;
 }
 
+/*****************************************************************************/
+/*                                                                           */
+/*  Re-make Topology from getTopology                                        */
+/*                                                                           */
+/*****************************************************************************/
+
+int
+remakeTopology(ego etopo)
+{
+  int    status = EGADS_SUCCESS;
+  int    i, oclass, mtype, *senses, nchild, *ivec=NULL;
+  double data[4], *rvec=NULL, tol, tolNew;
+  ego    context, eref, egeom, eNewTopo=NULL, eNewGeom=NULL, *echild;
+
+  status = EG_getContext(etopo, &context);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_getTopology(etopo, &egeom, &oclass, &mtype,
+                          data, &nchild, &echild, &senses);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_makeTopology(context, egeom, oclass, mtype,
+                          data, nchild, echild, senses, &eNewTopo);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_isEquivalent(etopo, eNewTopo);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_getTolerance(etopo, &tol);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_getTolerance(eNewTopo, &tolNew);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  if (tolNew > 1.001*tol) {
+    printf("Tolerance missmatch!! %le %le\n", tol, tolNew);
+    status = EGADS_BADSCALE;
+    goto cleanup;
+  }
+
+  if (egeom != NULL) {
+    status = EG_getGeometry(egeom, &oclass, &mtype, &eref, &ivec, &rvec);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    status = EG_makeGeometry(context, oclass, mtype, eref, ivec,
+                             rvec, &eNewGeom);
+    if (status != EGADS_SUCCESS) goto cleanup;
+    EG_deleteObject(eNewGeom);
+  }
+
+  for (i = 0; i < nchild; i++) {
+    status = remakeTopology(echild[i]);
+    if (status != EGADS_SUCCESS) goto cleanup;
+  }
+
+cleanup:
+  EG_deleteObject(eNewTopo);
+
+  EG_free(ivec);
+  EG_free(rvec);
+
+  if (status != EGADS_SUCCESS) {
+    printf(" Failure %d in %s\n", status, __func__);
+  }
+
+  return status;
+}
+
 
 /*****************************************************************************/
 /*                                                                           */
@@ -589,6 +657,7 @@ cleanup:
 
 int
 makeLineBody( ego context,      /* (in)  EGADS context                      */
+              objStack *stack,  /* (in)  EGADS obj stack                    */
               const double *x0, /* (in)  coordinates of the first point     */
               const double *x1, /* (in)  coordinates of the second point    */
               ego *ebody )      /* (out) Line wire body created from points */
@@ -605,12 +674,16 @@ makeLineBody( ego context,      /* (in)  EGADS context                      */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = x1[0];
   data[1] = x1[1];
   data[2] = x1[2];
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the Line (point and direction) */
@@ -624,6 +697,8 @@ makeLineBody( ego context,      /* (in)  EGADS context                      */
   status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL,
                            data, &eline);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eline);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Line */
   tdata[0] = 0;
@@ -632,13 +707,19 @@ makeLineBody( ego context,      /* (in)  EGADS context                      */
   status = EG_makeTopology(context, eline, EDGE, TWONODE,
                            tdata, 2, enodes, NULL, &eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, LOOP, OPEN,
                            NULL, 1, &eedge, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                            NULL, 1, &eloop, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -716,7 +797,7 @@ cleanup:
 }
 
 int
-pingLine(ego context)
+pingLine(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1;
@@ -733,7 +814,11 @@ pingLine(ego context)
   /* make the Line body */
   p1[0] = 0.00; p1[1] = 0.00; p1[2] = 0.00;
   p2[0] = 0.50; p2[1] = 0.75; p2[2] = 1.00;
-  status = makeLineBody(context, p1, p2, &ebody1);
+  status = makeLineBody(context, stack, p1, p2, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the tessellation */
@@ -764,7 +849,7 @@ pingLine(ego context)
 
     /* make a perturbed Line for finite difference */
     x[iparam] += dtime;
-    status = makeLineBody(context, p1, p2, &ebody2);
+    status = makeLineBody(context, stack, p1, p2, &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -780,7 +865,6 @@ pingLine(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -793,7 +877,6 @@ pingLine(ego context)
 
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -810,6 +893,7 @@ cleanup:
 
 int
 makeCircleBody( ego context,         /* (in)  EGADS context    */
+                objStack *stack,     /* (in)  EGADS obj stack  */
                 const double *xcent, /* (in)  Center           */
                 const double *xax,   /* (in)  x-axis           */
                 const double *yax,   /* (in)  y-axis           */
@@ -835,6 +919,8 @@ makeCircleBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_getGeometry(ecircle, &oclass, &mtype, &eref, &ivec, &rvec);
   if (status != EGADS_SUCCESS) goto cleanup;
@@ -851,6 +937,8 @@ makeCircleBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enode);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enode);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Circle */
   tdata[0] = 0;
@@ -859,13 +947,19 @@ makeCircleBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, ecircle, EDGE, ONENODE,
                            tdata, 1, &enode, NULL, &eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, LOOP, CLOSED,
                            NULL, 1, &eedge, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                            NULL, 1, &eloop, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -977,7 +1071,7 @@ cleanup:
 
 
 int
-pingCircle(ego context)
+pingCircle(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1;
@@ -999,7 +1093,11 @@ pingCircle(ego context)
   xax[0]   = 1.10; xax[1]   = 0.10; xax[2]   = 0.05;
   yax[0]   = 0.05; yax[1]   = 1.20; yax[2]   = 0.10;
   x[9] = 1.0;
-  status = makeCircleBody(context, xcent, xax, yax, x[9], &ebody1);
+  status = makeCircleBody(context, stack, xcent, xax, yax, x[9], &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the tessellation */
@@ -1033,7 +1131,7 @@ pingCircle(ego context)
 
     /* make a perturbed Circle for finite difference */
     x[iparam] += dtime;
-    status = makeCircleBody(context, xcent, xax, yax, x[9], &ebody2);
+    status = makeCircleBody(context, stack, xcent, xax, yax, x[9], &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -1049,7 +1147,6 @@ pingCircle(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -1064,7 +1161,6 @@ pingCircle(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -1081,6 +1177,7 @@ cleanup:
 
 int
 makeEllipseBody( ego context,         /* (in)  EGADS context     */
+                 objStack *stack,     /* (in)  EGADS obj stack   */
                  const double *xcent, /* (in)  Center            */
                  const double *xax,   /* (in)  x-axis            */
                  const double *yax,   /* (in)  y-axis            */
@@ -1108,6 +1205,8 @@ makeEllipseBody( ego context,         /* (in)  EGADS context     */
   status = EG_makeGeometry(context, CURVE, ELLIPSE, NULL, NULL,
                            data, &eellipse);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eellipse);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* create the Node for the Edge */
@@ -1117,6 +1216,8 @@ makeEllipseBody( ego context,         /* (in)  EGADS context     */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enode);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enode);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Circle */
   tdata[0] = 0;
@@ -1125,13 +1226,19 @@ makeEllipseBody( ego context,         /* (in)  EGADS context     */
   status = EG_makeTopology(context, eellipse, EDGE, ONENODE,
                            tdata, 1, &enode, NULL, &eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, LOOP, CLOSED,
                            NULL, 1, &eedge, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                            NULL, 1, &eloop, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -1228,7 +1335,7 @@ cleanup:
 
 
 int
-pingEllipse(ego context)
+pingEllipse(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1;
@@ -1251,7 +1358,11 @@ pingEllipse(ego context)
   yax[0]   = 0.10; yax[1]   = 1.10; yax[2]   = 0.05;
   x[ 9] = 2.0;
   x[10] = 1.0;
-  status = makeEllipseBody(context, xcent, xax, yax, x[9], x[10], &ebody1);
+  status = makeEllipseBody(context, stack, xcent, xax, yax, x[9], x[10], &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the tessellation */
@@ -1286,7 +1397,7 @@ pingEllipse(ego context)
 
     /* make a perturbed Circle for finite difference */
     x[iparam] += dtime;
-    status = makeEllipseBody(context, xcent, xax, yax, x[9], x[10], &ebody2);
+    status = makeEllipseBody(context, stack, xcent, xax, yax, x[9], x[10], &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -1302,7 +1413,6 @@ pingEllipse(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -1318,7 +1428,6 @@ pingEllipse(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -1335,12 +1444,13 @@ cleanup:
 /*****************************************************************************/
 
 int
-makeParabolaBody( ego context,       /* (in)  EGADS context    */
-                const double *xcent, /* (in)  Center           */
-                const double *xax,   /* (in)  x-axis           */
-                const double *yax,   /* (in)  y-axis           */
-                const double focus,  /* (in)  focus            */
-                ego *ebody )         /* (out) Circle wire body */
+makeParabolaBody( ego context,         /* (in)  EGADS context    */
+                  objStack *stack,     /* (in)  EGADS obj stack  */
+                  const double *xcent, /* (in)  Center           */
+                  const double *xax,   /* (in)  x-axis           */
+                  const double *yax,   /* (in)  y-axis           */
+                  const double focus,  /* (in)  focus            */
+                  ego *ebody )         /* (out) Circle wire body */
 {
   int    status = EGADS_SUCCESS;
   int    senses[1] = {SFORWARD};
@@ -1361,6 +1471,8 @@ makeParabolaBody( ego context,       /* (in)  EGADS context    */
   status = EG_makeGeometry(context, CURVE, PARABOLA, NULL, NULL,
                            data, &eparabola);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eparabola);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Parabola */
   tdata[0] = -1;
@@ -1373,6 +1485,8 @@ makeParabolaBody( ego context,       /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_evaluate(eparabola, &tdata[1], data);
   if (status != EGADS_SUCCESS) goto cleanup;
@@ -1380,18 +1494,26 @@ makeParabolaBody( ego context,       /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge */
   status = EG_makeTopology(context, eparabola, EDGE, TWONODE,
                            tdata, 2, enodes, NULL, &eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, LOOP, OPEN,
                            NULL, 1, &eedge, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                            NULL, 1, &eloop, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -1491,7 +1613,7 @@ cleanup:
 
 
 int
-pingParabola(ego context)
+pingParabola(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1;
@@ -1513,7 +1635,11 @@ pingParabola(ego context)
   xax[0]   = 1.10; xax[1]   = 0.10; xax[2]   = 0.05;
   yax[0]   = 0.05; yax[1]   = 1.20; yax[2]   = 0.10;
   x[9] = 1.0;
-  status = makeParabolaBody(context, xcent, xax, yax, x[9], &ebody1);
+  status = makeParabolaBody(context, stack, xcent, xax, yax, x[9], &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the tessellation */
@@ -1547,7 +1673,7 @@ pingParabola(ego context)
 
     /* make a perturbed Circle for finite difference */
     x[iparam] += dtime;
-    status = makeParabolaBody(context, xcent, xax, yax, x[9], &ebody2);
+    status = makeParabolaBody(context, stack, xcent, xax, yax, x[9], &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -1563,7 +1689,6 @@ pingParabola(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -1578,7 +1703,6 @@ pingParabola(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -1594,13 +1718,14 @@ cleanup:
 /*****************************************************************************/
 
 int
-makeHyperbolaBody( ego context,         /* (in)  EGADS context     */
-                   const double *xcent, /* (in)  Center            */
-                   const double *xax,   /* (in)  x-axis            */
-                   const double *yax,   /* (in)  y-axis            */
-                   const double majr,   /* (in)  major radius      */
-                   const double minr,   /* (in)  minor radius      */
-                   ego *ebody )         /* (out) Ellipse wire body */
+makeHyperbolaBody( ego context,         /* (in)  EGADS context       */
+                   objStack *stack,     /* (in)  EGADS obj stack     */
+                   const double *xcent, /* (in)  Center              */
+                   const double *xax,   /* (in)  x-axis              */
+                   const double *yax,   /* (in)  y-axis              */
+                   const double majr,   /* (in)  major radius        */
+                   const double minr,   /* (in)  minor radius        */
+                   ego *ebody )         /* (out) Hyperbola wire body */
 {
   int    status = EGADS_SUCCESS;
   int    senses[1] = {SFORWARD};
@@ -1622,6 +1747,8 @@ makeHyperbolaBody( ego context,         /* (in)  EGADS context     */
   status = EG_makeGeometry(context, CURVE, HYPERBOLA, NULL, NULL,
                            data, &ehyperbola);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ehyperbola);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Parabola */
   tdata[0] = -1;
@@ -1634,6 +1761,8 @@ makeHyperbolaBody( ego context,         /* (in)  EGADS context     */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_evaluate(ehyperbola, &tdata[1], data);
   if (status != EGADS_SUCCESS) goto cleanup;
@@ -1641,18 +1770,26 @@ makeHyperbolaBody( ego context,         /* (in)  EGADS context     */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge */
   status = EG_makeTopology(context, ehyperbola, EDGE, TWONODE,
                            tdata, 2, enodes, NULL, &eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, LOOP, OPEN,
                            NULL, 1, &eedge, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                            NULL, 1, &eloop, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -1758,7 +1895,7 @@ cleanup:
 
 
 int
-pingHyperbola(ego context)
+pingHyperbola(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1;
@@ -1781,7 +1918,11 @@ pingHyperbola(ego context)
   yax[0]   = 0.10; yax[1]   = 1.10; yax[2]   = 0.05;
   x[ 9] = 2.0;
   x[10] = 1.0;
-  status = makeHyperbolaBody(context, xcent, xax, yax, x[9], x[10], &ebody1);
+  status = makeHyperbolaBody(context, stack, xcent, xax, yax, x[9], x[10], &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the tessellation */
@@ -1816,7 +1957,7 @@ pingHyperbola(ego context)
 
     /* make a perturbed Circle for finite difference */
     x[iparam] += dtime;
-    status = makeHyperbolaBody(context, xcent, xax, yax, x[9], x[10], &ebody2);
+    status = makeHyperbolaBody(context, stack, xcent, xax, yax, x[9], x[10], &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -1832,7 +1973,6 @@ pingHyperbola(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -1848,7 +1988,6 @@ pingHyperbola(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -1865,6 +2004,7 @@ cleanup:
 
 int
 makeOffsetCurveBody( ego context,         /* (in)  EGADS context                   */
+                     objStack *stack,     /* (in)  EGADS obj stack                 */
                      const double *x0,    /* (in)  coordinates of the first point  */
                      const double *x1,    /* (in)  coordinates of the second point */
                      const double *vec,   /* (in)  offset vector                   */
@@ -1883,12 +2023,16 @@ makeOffsetCurveBody( ego context,         /* (in)  EGADS context                
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = x1[0];
   data[1] = x1[1];
   data[2] = x1[2];
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the Line (point and direction) */
@@ -1901,6 +2045,8 @@ makeOffsetCurveBody( ego context,         /* (in)  EGADS context                
 
   status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL,
                            data, &eline);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eline);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* t-data for the edge */
@@ -1916,18 +2062,26 @@ makeOffsetCurveBody( ego context,         /* (in)  EGADS context                
   status = EG_makeGeometry(context, CURVE, OFFSET, eline, NULL,
                            data, &ecurve);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecurve);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Offset curve */
   status = EG_makeTopology(context, ecurve, EDGE, TWONODE,
                            tdata, 2, enodes, NULL, &eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, LOOP, OPEN,
                            NULL, 1, &eedge, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                            NULL, 1, &eloop, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -2030,7 +2184,7 @@ cleanup:
 }
 
 int
-pingOffsetCurve(ego context)
+pingOffsetCurve(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1;
@@ -2052,7 +2206,11 @@ pingOffsetCurve(ego context)
   p2[0] = 0.50; p2[1] = 0.75; p2[2] = 1.00;
   vec[0] = 1.0; vec[1] = 2.0; vec[2] = 3.0;
   x[9] = 1.1;
-  status = makeOffsetCurveBody(context, p1, p2, vec, x[9], &ebody1);
+  status = makeOffsetCurveBody(context, stack, p1, p2, vec, x[9], &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the tessellation */
@@ -2086,7 +2244,7 @@ pingOffsetCurve(ego context)
 
     /* make a perturbed Line for finite difference */
     x[iparam] += dtime;
-    status = makeOffsetCurveBody(context, p1, p2, vec, x[9], &ebody2);
+    status = makeOffsetCurveBody(context, stack, p1, p2, vec, x[9], &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -2102,7 +2260,6 @@ pingOffsetCurve(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -2116,9 +2273,7 @@ pingOffsetCurve(ego context)
   status = pingTransform(ebody1, params, "Offset Curve", 1e-7, 5e-7, 5e-7);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -2136,6 +2291,7 @@ cleanup:
 
 int
 makeBezierCurveBody( ego context,        /* (in)  EGADS context                        */
+                     objStack *stack,    /* (in)  EGADS obj stack                      */
                      const int npts,     /* (in)  number of points                     */
                      const double *pts,  /* (in)  coordinates                          */
                      ego *ebody )        /* (out) Bezier wire body created from points */
@@ -2154,6 +2310,8 @@ makeBezierCurveBody( ego context,        /* (in)  EGADS context                 
   status = EG_makeGeometry(context, CURVE, BEZIER, NULL,
                            header, pts, &ecurve);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecurve);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create Nodes for the Edge */
   data[0] = pts[0];
@@ -2162,12 +2320,16 @@ makeBezierCurveBody( ego context,        /* (in)  EGADS context                 
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = pts[3*(npts-1)+0];
   data[1] = pts[3*(npts-1)+1];
   data[2] = pts[3*(npts-1)+2];
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Curve */
@@ -2177,13 +2339,19 @@ makeBezierCurveBody( ego context,        /* (in)  EGADS context                 
   status = EG_makeTopology(context, ecurve, EDGE, TWONODE,
                            tdata, 2, enodes, NULL, &eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, LOOP, OPEN,
                            NULL, 1, &eedge, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                            NULL, 1, &eloop, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -2263,7 +2431,7 @@ cleanup:
 }
 
 int
-pingBezierCurve(ego context)
+pingBezierCurve(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1;
@@ -2279,7 +2447,11 @@ pingBezierCurve(ego context)
   double pts_dot[12];
 
   /* make the Bezier body */
-  status = makeBezierCurveBody(context, npts, pts, &ebody1);
+  status = makeBezierCurveBody(context, stack, npts, pts, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the tessellation */
@@ -2310,7 +2482,7 @@ pingBezierCurve(ego context)
 
     /* make a perturbed body for finite difference */
     pts[iparam] += dtime;
-    status = makeBezierCurveBody(context, npts, pts, &ebody2);
+    status = makeBezierCurveBody(context, stack, npts, pts, &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     pts[iparam] -= dtime;
 
@@ -2326,7 +2498,6 @@ pingBezierCurve(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -2338,7 +2509,6 @@ pingBezierCurve(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -2362,6 +2532,7 @@ cleanup:
 
 int
 makeBsplineCurveBody( ego context,        /* (in)  EGADS context                        */
+                      objStack *stack,    /* (in)  EGADS obj stack                      */
                       const int npts,     /* (in)  number of points                     */
                       const double *pts,  /* (in)  coordinates                          */
                       ego *ebody )        /* (out) Spline wire body created from points */
@@ -2376,6 +2547,8 @@ makeBsplineCurveBody( ego context,        /* (in)  EGADS context                
   sizes[1] = KNOTS;
   status = EG_approximate(context, 0, DXYTOL, sizes, pts, &ecurve);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecurve);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create Nodes for the Edge */
   data[0] = pts[0];
@@ -2384,12 +2557,16 @@ makeBsplineCurveBody( ego context,        /* (in)  EGADS context                
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = pts[3*(npts-1)+0];
   data[1] = pts[3*(npts-1)+1];
   data[2] = pts[3*(npts-1)+2];
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Curve */
@@ -2399,13 +2576,19 @@ makeBsplineCurveBody( ego context,        /* (in)  EGADS context                
   status = EG_makeTopology(context, ecurve, EDGE, TWONODE,
                            tdata, 2, enodes, NULL, &eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, LOOP, OPEN,
                            NULL, 1, &eedge, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, WIREBODY,
                            NULL, 1, &eloop, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -2482,7 +2665,7 @@ cleanup:
 
 
 int
-pingBsplineCurve(ego context)
+pingBsplineCurve(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    i, iparam, np1;
@@ -2506,7 +2689,11 @@ pingBsplineCurve(ego context)
   }
 
   /* make the B-spline body */
-  status = makeBsplineCurveBody(context, npts, pts, &ebody1);
+  status = makeBsplineCurveBody(context, stack, npts, pts, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the tessellation */
@@ -2537,7 +2724,7 @@ pingBsplineCurve(ego context)
 
     /* make a perturbed Line for finite difference */
     pts[iparam] += dtime;
-    status = makeBsplineCurveBody(context, npts, pts, &ebody2);
+    status = makeBsplineCurveBody(context, stack, npts, pts, &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     pts[iparam] -= dtime;
 
@@ -2553,7 +2740,6 @@ pingBsplineCurve(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -2565,7 +2751,6 @@ pingBsplineCurve(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -2582,6 +2767,7 @@ cleanup:
 
 int
 makeLineEdge( ego context,      /* (in)  EGADS context           */
+              objStack *stack,  /* (in)  EGADS obj stack         */
               ego n1,           /* (in)  first node              */
               ego n2,           /* (in)  second node             */
               ego *eedge )      /* (out) Edge created from nodes */
@@ -2606,6 +2792,8 @@ makeLineEdge( ego context,      /* (in)  EGADS context           */
   status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL,
                            data, &eline);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eline);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Line */
   tdata[0] = 0;
@@ -2616,6 +2804,8 @@ makeLineEdge( ego context,      /* (in)  EGADS context           */
 
   status = EG_makeTopology(context, eline, EDGE, TWONODE,
                            tdata, 2, enodes, NULL, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -2683,6 +2873,7 @@ cleanup:
 
 int
 makePlaneBody( ego context,         /* (in)  EGADS context    */
+               objStack *stack,     /* (in)  EGADS obj stack  */
                const double *xcent, /* (in)  Center           */
                const double *xax,   /* (in)  x-axis           */
                const double *yax,   /* (in)  y-axis           */
@@ -2706,6 +2897,8 @@ makePlaneBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeGeometry(context, SURFACE, PLANE, NULL, NULL,
                            data, &eplane);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eplane);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_getGeometry(eplane, &oclass, &mtype, &eref, &ivec, &rvec);
   if (status != EGADS_SUCCESS) goto cleanup;
@@ -2726,12 +2919,16 @@ makePlaneBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = xcent[0] + dx[0] - dy[0];
   data[1] = xcent[1] + dx[1] - dy[1];
   data[2] = xcent[2] + dx[2] - dy[2];
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = xcent[0] + dx[0] + dy[0];
@@ -2740,6 +2937,8 @@ makePlaneBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = xcent[0] - dx[0] + dy[0];
   data[1] = xcent[1] - dx[1] + dy[1];
@@ -2747,19 +2946,21 @@ makePlaneBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* create the Edges */
-  status =  makeLineEdge(context, enodes[0], enodes[3], &eedges[0] );
+  status =  makeLineEdge(context, stack, enodes[0], enodes[3], &eedges[0] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status =  makeLineEdge(context, enodes[0], enodes[1], &eedges[1] );
+  status =  makeLineEdge(context, stack, enodes[0], enodes[1], &eedges[1] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status =  makeLineEdge(context, enodes[1], enodes[2], &eedges[2] );
+  status =  makeLineEdge(context, stack, enodes[1], enodes[2], &eedges[2] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status =  makeLineEdge(context, enodes[3], enodes[2], &eedges[3] );
+  status =  makeLineEdge(context, stack, enodes[3], enodes[2], &eedges[3] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -2767,13 +2968,19 @@ makePlaneBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, LOOP, CLOSED,
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, eplane, FACE, SFORWARD,
                            NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eface);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -2944,7 +3151,7 @@ cleanup:
 
 
 int
-pingPlane(ego context)
+pingPlane(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1, nt1, iedge, nedge, iface, nface;
@@ -2966,7 +3173,11 @@ pingPlane(ego context)
   xcent[0] = 0.00; xcent[1] = 0.00; xcent[2] = 0.00;
   xax[0]   = 1.10; xax[1]   = 0.10; xax[2]   = 0.05;
   yax[0]   = 0.05; yax[1]   = 1.20; yax[2]   = 0.10;
-  status = makePlaneBody(context, xcent, xax, yax, &ebody1);
+  status = makePlaneBody(context, stack, xcent, xax, yax, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -3015,7 +3226,7 @@ pingPlane(ego context)
 
     /* make a perturbed Circle for finite difference */
     x[iparam] += dtime;
-    status = makePlaneBody(context, xcent, xax, yax, &ebody2);
+    status = makePlaneBody(context, stack, xcent, xax, yax, &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -3031,7 +3242,6 @@ pingPlane(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -3045,7 +3255,6 @@ pingPlane(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -3063,12 +3272,13 @@ cleanup:
 /*****************************************************************************/
 
 int
-makeSphericalBody( ego context,         /* (in)  EGADS context  */
-                   const double *xcent, /* (in)  Center         */
-                   const double *xax,   /* (in)  x-axis         */
-                   const double *yax,   /* (in)  y-axis         */
-                   double r,            /* (in)  radius         */
-                   ego *ebody )         /* (out) Spherical body */
+makeSphericalBody( ego context,         /* (in)  EGADS context   */
+                   objStack *stack,     /* (in)  EGADS obj stack */
+                   const double *xcent, /* (in)  Center          */
+                   const double *xax,   /* (in)  x-axis          */
+                   const double *yax,   /* (in)  y-axis          */
+                   double r,            /* (in)  radius          */
+                   ego *ebody )         /* (out) Spherical body  */
 {
   int    status = EGADS_SUCCESS;
   int    senses[4] = {SREVERSE, SFORWARD, SFORWARD, SREVERSE}, oclass, mtype, *ivec=NULL;
@@ -3088,6 +3298,8 @@ makeSphericalBody( ego context,         /* (in)  EGADS context  */
   data[9] = r;        /* radius */
   status = EG_makeGeometry(context, SURFACE, SPHERICAL, NULL, NULL,
                            data, &esphere);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, esphere);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_getGeometry(esphere, &oclass, &mtype, &eref, &ivec, &rvec);
@@ -3119,6 +3331,8 @@ makeSphericalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* create the Nodes for the Edge */
@@ -3128,12 +3342,16 @@ makeSphericalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = xcent[0] + dz[0]*r;
   data[1] = xcent[1] + dz[1]*r;
   data[2] = xcent[2] + dz[2]*r;
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Circle */
@@ -3143,6 +3361,8 @@ makeSphericalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, ecircle, EDGE, TWONODE,
                            tdata, 2, enodes, NULL, &eedges[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Degenerate Edges on the Nodes */
   tdata[0] = 0;
@@ -3151,11 +3371,15 @@ makeSphericalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, NULL, EDGE, DEGENERATE,
                            tdata, 1, &enodes[0], NULL, &eedges[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   eedges[2] = eedges[0]; /* repeat the circle edge */
 
   status = EG_makeTopology(context, NULL, EDGE, DEGENERATE,
                            tdata, 1, &enodes[1], NULL, &eedges[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create P-curves */
@@ -3163,20 +3387,28 @@ makeSphericalBody( ego context,         /* (in)  EGADS context  */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = -PI/2; /* v == -PI/2 VMIN */
   data[2] = 1.;    data[3] =  0.  ;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = TWOPI; data[1] = 0.;    /* u == TWOPI UMAX   */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] =  PI/2.; /* v == PI/2 VMAX */
   data[2] = 1.;    data[3] =  0.   ;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -3184,13 +3416,19 @@ makeSphericalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, esphere, LOOP, CLOSED,
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, esphere, FACE, SFORWARD,
                            NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eface);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -3389,7 +3627,7 @@ cleanup:
 
 
 int
-pingSpherical(ego context)
+pingSpherical(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1, nt1, iedge, nedge, iface, nface, dir;
@@ -3417,7 +3655,11 @@ pingSpherical(ego context)
     //xax[0]   = 1.; xax[1]   = 0.; xax[2]   = 0.;
     //yax[0]   = 0.; yax[1]   = 1.; yax[2]   = 0.;
     x[9] = 1.0*dir;
-    status = makeSphericalBody(context, xcent, xax, yax, x[9], &ebody1);
+    status = makeSphericalBody(context, stack, xcent, xax, yax, x[9], &ebody1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* test re-making the topology */
+    status = remakeTopology(ebody1);
     if (status != EGADS_SUCCESS) goto cleanup;
 
     /* get the Faces from the Body */
@@ -3466,7 +3708,7 @@ pingSpherical(ego context)
 
       /* make a perturbed Circle for finite difference */
       x[iparam] += dtime;
-      status = makeSphericalBody(context, xcent, xax, yax, x[9], &ebody2);
+      status = makeSphericalBody(context, stack, xcent, xax, yax, x[9], &ebody2);
       if (status != EGADS_SUCCESS) goto cleanup;
       x[iparam] -= dtime;
 
@@ -3482,7 +3724,6 @@ pingSpherical(ego context)
       if (status != EGADS_SUCCESS) goto cleanup;
 
       EG_deleteObject(tess2);
-      EG_deleteObject(ebody2);
     }
 
     /* zero out sensitivities */
@@ -3497,7 +3738,6 @@ pingSpherical(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess1);
-    EG_deleteObject(ebody1);
   }
 
 cleanup:
@@ -3515,14 +3755,15 @@ cleanup:
 /*****************************************************************************/
 
 int
-makeConicalBody( ego context,         /* (in)  EGADS context  */
-                 const double *xcent, /* (in)  Center         */
-                 const double *xax,   /* (in)  x-axis         */
-                 const double *yax,   /* (in)  y-axis         */
-                 const double *zax,   /* (in)  z-axis         */
-                 const double angle,  /* (in)  angle          */
-                 const double r,      /* (in)  radius         */
-                 ego *ebody )         /* (out) Spherical body */
+makeConicalBody( ego context,         /* (in)  EGADS context   */
+                 objStack *stack,     /* (in)  EGADS obj stack */
+                 const double *xcent, /* (in)  Center          */
+                 const double *xax,   /* (in)  x-axis          */
+                 const double *yax,   /* (in)  y-axis          */
+                 const double *zax,   /* (in)  z-axis          */
+                 const double angle,  /* (in)  angle           */
+                 const double r,      /* (in)  radius          */
+                 ego *ebody )         /* (out) Spherical body  */
 {
   int    status = EGADS_SUCCESS;
   int    senses[4] = {SREVERSE, SFORWARD, SFORWARD, SREVERSE}, oclass, mtype, *ivec=NULL;
@@ -3546,6 +3787,8 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
   data[13] = r;        /* radius */
   status = EG_makeGeometry(context, SURFACE, CONICAL, NULL, NULL,
                            data, &econe);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, econe);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_getGeometry(econe, &oclass, &mtype, &eref, &ivec, &rvec);
@@ -3576,6 +3819,8 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   vmin = -r/sin(angle);
   h = vmin*cos(angle);
@@ -3587,6 +3832,8 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            x1, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the Node on the Circle */
   x2[0] = xcent[0] + dx[0]*r;
@@ -3594,6 +3841,8 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
   x2[2] = xcent[2] + dx[2]*r;
   status = EG_makeTopology(context, NULL, NODE, 0,
                            x2, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the Line (point and direction) */
@@ -3606,6 +3855,8 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL,
                            data, &eline);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eline);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Line */
   tdata[0] = vmin;
@@ -3613,6 +3864,8 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
 
   status = EG_makeTopology(context, eline, EDGE, TWONODE,
                            tdata, 2, enodes, NULL, &eedges[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -3622,6 +3875,8 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
 
   status = EG_makeTopology(context, NULL, EDGE, DEGENERATE,
                            tdata, 1, &enodes[0], NULL, &eedges[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   eedges[2] = eedges[0]; /* repeat the line edge */
@@ -3633,6 +3888,8 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, ecircle, EDGE, ONENODE,
                            tdata, 1, &enodes[1], NULL, &eedges[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* create P-curves */
@@ -3640,20 +3897,28 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = vmin;  /* v == vmin VMIN */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = TWOPI; data[1] = 0.;    /* u == TWOPI UMAX   */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = 0.;    /* v == 0 VMAX */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -3661,13 +3926,19 @@ makeConicalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, econe, LOOP, CLOSED,
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, econe, FACE, SFORWARD,
                            NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eface);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -3915,7 +4186,7 @@ cleanup:
 
 
 int
-pingConical(ego context)
+pingConical(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1, nt1, iedge, nedge, iface, nface;
@@ -3945,7 +4216,11 @@ pingConical(ego context)
 //  zax[0]   = 0.; zax[1]   = 0.; zax[2]   = 1.;
   x[12] = 45.0*PI/180.;
   x[13] = 2.0;
-  status = makeConicalBody(context, xcent, xax, yax, zax, x[12], x[13], &ebody1);
+  status = makeConicalBody(context, stack, xcent, xax, yax, zax, x[12], x[13], &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -3996,7 +4271,7 @@ pingConical(ego context)
 
     /* make a perturbed body for finite difference */
     x[iparam] += dtime;
-    status = makeConicalBody(context, xcent, xax, yax, zax, x[12], x[13], &ebody2);
+    status = makeConicalBody(context, stack, xcent, xax, yax, zax, x[12], x[13], &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -4012,7 +4287,6 @@ pingConical(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -4029,7 +4303,6 @@ pingConical(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -4046,12 +4319,13 @@ cleanup:
 /*****************************************************************************/
 
 int
-makeCylindricalBody( ego context,         /* (in)  EGADS context  */
-                     const double *xcent, /* (in)  Center         */
-                     const double *xax,   /* (in)  x-axis         */
-                     const double *yax,   /* (in)  y-axis         */
-                     const double *zax,   /* (in)  z-axis         */
-                     const double r,      /* (in)  radius         */
+makeCylindricalBody( ego context,         /* (in)  EGADS context    */
+                     objStack *stack,     /* (in)  EGADS obj stack  */
+                     const double *xcent, /* (in)  Center           */
+                     const double *xax,   /* (in)  x-axis           */
+                     const double *yax,   /* (in)  y-axis           */
+                     const double *zax,   /* (in)  z-axis           */
+                     const double r,      /* (in)  radius           */
                      ego *ebody )         /* (out) Cylindrical body */
 {
   int    status = EGADS_SUCCESS;
@@ -4075,6 +4349,8 @@ makeCylindricalBody( ego context,         /* (in)  EGADS context  */
   data[12] = r;        /* radius */
   status = EG_makeGeometry(context, SURFACE, CYLINDRICAL, NULL, NULL,
                            data, &ecylinder);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecylinder);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_getGeometry(ecylinder, &oclass, &mtype, &eref, &ivec, &rvec);
@@ -4105,6 +4381,8 @@ makeCylindricalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the Circle curve for the top */
   data[0] = rvec[0] + dz[0]*r; /* center */
@@ -4120,6 +4398,8 @@ makeCylindricalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* create the Node on the Base */
@@ -4129,6 +4409,8 @@ makeCylindricalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            x1, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the Node on the Top */
   x2[0] = xcent[0] + dx[0]*r + dz[0]*r;
@@ -4137,9 +4419,11 @@ makeCylindricalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            x2, 0, NULL, NULL, &enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the Edges */
-  status =  makeLineEdge(context, enodes[0], enodes[1], &eedges[0] );
+  status =  makeLineEdge(context, stack, enodes[0], enodes[1], &eedges[0] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Circle Base */
@@ -4149,11 +4433,15 @@ makeCylindricalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, ecircle[0], EDGE, ONENODE,
                            tdata, 1, &enodes[0], NULL, &eedges[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   eedges[2] = eedges[0]; /* repeat the line edge */
 
   status = EG_makeTopology(context, ecircle[1], EDGE, ONENODE,
                            tdata, 1, &enodes[1], NULL, &eedges[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -4162,20 +4450,28 @@ makeCylindricalBody( ego context,         /* (in)  EGADS context  */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = 0;    /* v == 0 VMIN */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = TWOPI; data[1] = 0.;    /* u == TWOPI UMAX   */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = r;    /* v == r VMAX */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -4183,13 +4479,19 @@ makeCylindricalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, ecylinder, LOOP, CLOSED,
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, ecylinder, FACE, SFORWARD,
                            NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eface);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -4410,7 +4712,7 @@ cleanup:
 
 
 int
-pingCylindrical(ego context)
+pingCylindrical(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1, nt1, iedge, nedge, iface, nface;
@@ -4439,7 +4741,11 @@ pingCylindrical(ego context)
 //  yax[0]   = 0.; yax[1]   = 1.; yax[2]   = 0.;
 //  zax[0]   = 0.; zax[1]   = 0.; zax[2]   = 1.;
   x[12] = 1.0;
-  status = makeCylindricalBody(context, xcent, xax, yax, zax, x[12], &ebody1);
+  status = makeCylindricalBody(context, stack, xcent, xax, yax, zax, x[12], &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -4489,7 +4795,7 @@ pingCylindrical(ego context)
 
     /* make a perturbed body for finite difference */
     x[iparam] += dtime;
-    status = makeCylindricalBody(context, xcent, xax, yax, zax, x[12], &ebody2);
+    status = makeCylindricalBody(context, stack, xcent, xax, yax, zax, x[12], &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -4505,7 +4811,6 @@ pingCylindrical(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -4521,7 +4826,6 @@ pingCylindrical(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -4538,14 +4842,15 @@ cleanup:
 /*****************************************************************************/
 
 int
-makeToroidalBody( ego context,         /* (in)  EGADS context  */
-                  const double *xcent, /* (in)  Center         */
-                  const double *xax,   /* (in)  x-axis         */
-                  const double *yax,   /* (in)  y-axis         */
-                  const double *zax,   /* (in)  z-axis         */
-                  const double majr,   /* (in)  major radius   */
-                  const double minr,   /* (in)  minor radius   */
-                  ego *ebody )         /* (out) Toroidal body  */
+makeToroidalBody( ego context,         /* (in)  EGADS context   */
+                  objStack *stack,     /* (in)  EGADS obj stack */
+                  const double *xcent, /* (in)  Center          */
+                  const double *xax,   /* (in)  x-axis          */
+                  const double *yax,   /* (in)  y-axis          */
+                  const double *zax,   /* (in)  z-axis          */
+                  const double majr,   /* (in)  major radius    */
+                  const double minr,   /* (in)  minor radius    */
+                  ego *ebody )         /* (out) Toroidal body   */
 {
   int    status = EGADS_SUCCESS;
   int    senses[4] = {SREVERSE, SFORWARD, SFORWARD, SREVERSE}, oclass, mtype, *ivec=NULL;
@@ -4571,6 +4876,8 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
   data[13] = minr;     /* minor radius */
   status = EG_makeGeometry(context, SURFACE, TOROIDAL, NULL, NULL,
                            data, &etorus);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, etorus);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_getGeometry(etorus, &oclass, &mtype, &eref, &ivec, &rvec);
@@ -4601,6 +4908,8 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the outer Circle curve */
   data[0] = xcent[0]; /* center */
@@ -4615,6 +4924,8 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
   data[9] = R;       /* radius */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create Circle curve */
@@ -4631,6 +4942,8 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* create the Nodes */
@@ -4640,12 +4953,16 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = xcent[0] - dx[0]*R;
   data[1] = xcent[1] - dx[1]*R;
   data[2] = xcent[2] - dx[2]*R;
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edges on the Circles */
@@ -4655,6 +4972,8 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, ecircle[0], EDGE, ONENODE,
                            tdata, 1, &enodes[0], NULL, &eedges[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   tdata[0] = 0;
   tdata[1] = PI;
@@ -4662,12 +4981,16 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, ecircle[1], EDGE, TWONODE,
                            tdata, 2, enodes, NULL, &eedges[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   tdata[0] = 0;
   tdata[1] = TWOPI;
 
   status = EG_makeTopology(context, ecircle[2], EDGE, ONENODE,
                            tdata, 1, &enodes[1], NULL, &eedges[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   eedges[3] = eedges[1]; /* repeat the edge */
@@ -4678,20 +5001,28 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = 0.;    /* v == 0 VMIN */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = PI;    data[1] = 0.;    /* u == PI UMAX   */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = TWOPI; /* v == TWOPI VMAX */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -4699,13 +5030,19 @@ makeToroidalBody( ego context,         /* (in)  EGADS context  */
   status = EG_makeTopology(context, etorus, LOOP, CLOSED,
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, etorus, FACE, SFORWARD,
                            NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eface);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -4961,7 +5298,7 @@ cleanup:
 
 
 int
-pingToroidal(ego context)
+pingToroidal(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1, nt1, iedge, nedge, iface, nface;
@@ -4991,7 +5328,11 @@ pingToroidal(ego context)
 //  zax[0]   = 0.; zax[1]   = 0.; zax[2]   = 1.;
   x[12] = 2.5;
   x[13] = 1.0;
-  status = makeToroidalBody(context, xcent, xax, yax, zax, x[12], x[13], &ebody1);
+  status = makeToroidalBody(context, stack, xcent, xax, yax, zax, x[12], x[13], &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -5042,7 +5383,7 @@ pingToroidal(ego context)
 
     /* make a perturbed body for finite difference */
     x[iparam] += dtime;
-    status = makeToroidalBody(context, xcent, xax, yax, zax, x[12], x[13], &ebody2);
+    status = makeToroidalBody(context, stack, xcent, xax, yax, zax, x[12], x[13], &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -5058,7 +5399,6 @@ pingToroidal(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -5075,7 +5415,6 @@ pingToroidal(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -5084,6 +5423,7 @@ cleanup:
 
   return status;
 }
+
 /*****************************************************************************/
 /*                                                                           */
 /*  Revolution                                                               */
@@ -5092,6 +5432,7 @@ cleanup:
 
 int
 makeRevolutionBody( ego context,         /* (in)  EGADS context    */
+                    objStack *stack,     /* (in)  EGADS obj stack  */
                     const double *xcent, /* (in)  Center           */
                     const double *xax,   /* (in)  x-axis           */
                     const double *yax,   /* (in)  y-axis           */
@@ -5116,6 +5457,8 @@ makeRevolutionBody( ego context,         /* (in)  EGADS context    */
   data[9] = r;        /* radius */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_getGeometry(ecircle[0], &oclass, &mtype, &eref, &ivec, &rvec);
@@ -5146,6 +5489,8 @@ makeRevolutionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the Nodes */
   data[0] = xcent[0] + dx[0]*r;
@@ -5154,6 +5499,8 @@ makeRevolutionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = xcent[0] + dz[0]*2*r + dx[0]*r;
   data[1] = xcent[1] + dz[1]*2*r + dx[1]*r;
@@ -5161,10 +5508,12 @@ makeRevolutionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* make the Edge on a Line */
-  status =  makeLineEdge(context, enodes[0], enodes[1], &eedges[0] );
+  status =  makeLineEdge(context, stack, enodes[0], enodes[1], &eedges[0] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Line from the Edge */
@@ -5182,6 +5531,8 @@ makeRevolutionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeGeometry(context, SURFACE, REVOLUTION, eline, NULL,
                            data, &esurf);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, esurf);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   tdata[0] = 0;
@@ -5190,11 +5541,15 @@ makeRevolutionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, ecircle[0], EDGE, ONENODE,
                            tdata, 1, &enodes[0], NULL, &eedges[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   eedges[2] = eedges[0]; /* repeat the line edge */
 
   status = EG_makeTopology(context, ecircle[1], EDGE, ONENODE,
                            tdata, 1, &enodes[1], NULL, &eedges[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -5203,20 +5558,28 @@ makeRevolutionBody( ego context,         /* (in)  EGADS context    */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = 0.;    /* v == 0 VMIN */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = TWOPI; data[1] = 0.;    /* u == TWOPI UMAX   */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = 2*r;   /* v == 2*r VMAX */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -5224,13 +5587,19 @@ makeRevolutionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, esurf, LOOP, CLOSED,
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, esurf, FACE, SFORWARD,
                            NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eface);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -5444,7 +5813,7 @@ cleanup:
 
 
 int
-pingRevolution(ego context)
+pingRevolution(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1, nt1, iedge, nedge, iface, nface;
@@ -5469,7 +5838,11 @@ pingRevolution(ego context)
 //  xax[0]   = 1.; xax[1]   = 0.; xax[2]   = 0.;
 //  yax[0]   = 0.; yax[1]   = 1.; yax[2]   = 0.;
   x[9] = 1.0;
-  status = makeRevolutionBody(context, xcent, xax, yax, x[9], &ebody1);
+  status = makeRevolutionBody(context, stack, xcent, xax, yax, x[9], &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -5518,7 +5891,7 @@ pingRevolution(ego context)
 
     /* make a perturbed body for finite difference */
     x[iparam] += dtime;
-    status = makeRevolutionBody(context, xcent, xax, yax, x[9], &ebody2);
+    status = makeRevolutionBody(context, stack, xcent, xax, yax, x[9], &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -5534,7 +5907,6 @@ pingRevolution(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -5549,7 +5921,6 @@ pingRevolution(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -5567,6 +5938,7 @@ cleanup:
 
 int
 makeExtrusionBody( ego context,         /* (in)  EGADS context    */
+                   objStack *stack,     /* (in)  EGADS obj stack  */
                    const double *xcent, /* (in)  Center           */
                    const double *xax,   /* (in)  x-axis           */
                    const double *yax,   /* (in)  y-axis           */
@@ -5595,6 +5967,8 @@ makeExtrusionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_getGeometry(ecircle[0], &oclass, &mtype, &eref, &ivec, &rvec);
   if (status != EGADS_SUCCESS) goto cleanup;
@@ -5621,6 +5995,8 @@ makeExtrusionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeGeometry(context, CURVE, CIRCLE, NULL, NULL,
                            data, &ecircle[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecircle[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the Extrusion surface */
   data[0] = vec[0]; /* direction */
@@ -5628,6 +6004,8 @@ makeExtrusionBody( ego context,         /* (in)  EGADS context    */
   data[2] = vec[2];
   status = EG_makeGeometry(context, SURFACE, EXTRUSION, ecircle[0], NULL,
                            data, &esurf);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, esurf);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -5638,6 +6016,8 @@ makeExtrusionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = xcent[0] + vec[0] + dx[0]*r;
   data[1] = xcent[1] + vec[1] + dx[1]*r;
@@ -5645,10 +6025,12 @@ makeExtrusionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* make the Edges on the Circles */
-  status =  makeLineEdge(context, enodes[0], enodes[1], &eedges[0] );
+  status =  makeLineEdge(context, stack, enodes[0], enodes[1], &eedges[0] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
   tdata[0] = 0;
@@ -5657,11 +6039,15 @@ makeExtrusionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, ecircle[0], EDGE, ONENODE,
                            tdata, 1, &enodes[0], NULL, &eedges[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   eedges[2] = eedges[0]; /* repeat the line edge */
 
   status = EG_makeTopology(context, ecircle[1], EDGE, ONENODE,
                            tdata, 1, &enodes[1], NULL, &eedges[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -5670,20 +6056,28 @@ makeExtrusionBody( ego context,         /* (in)  EGADS context    */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = 0.;    /* v == 0 VMIN */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = TWOPI; data[1] = 0.;    /* u == TWOPI UMAX   */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = vmag;  /* v == vmag VMAX */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -5691,13 +6085,19 @@ makeExtrusionBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, esurf, LOOP, CLOSED,
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, esurf, FACE, SFORWARD,
                            NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eface);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -5897,7 +6297,7 @@ cleanup:
 
 
 int
-pingExtrusion(ego context)
+pingExtrusion(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1, nt1, iedge, nedge, iface, nface;
@@ -5925,7 +6325,11 @@ pingExtrusion(ego context)
 //  yax[0]   = 0.; yax[1]   = 1.; yax[2]   = 0.;
   x[9] = 1.0;
   vec[0] = 0.0; vec[1] = 5.0; vec[2] = 5.0;
-  status = makeExtrusionBody(context, xcent, xax, yax, x[9], vec, &ebody1);
+  status = makeExtrusionBody(context, stack, xcent, xax, yax, x[9], vec, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -5975,7 +6379,7 @@ pingExtrusion(ego context)
 
     /* make a perturbed body for finite difference */
     x[iparam] += dtime;
-    status = makeExtrusionBody(context, xcent, xax, yax, x[9], vec, &ebody2);
+    status = makeExtrusionBody(context, stack, xcent, xax, yax, x[9], vec, &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -5991,7 +6395,6 @@ pingExtrusion(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -6007,7 +6410,6 @@ pingExtrusion(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -6025,6 +6427,7 @@ cleanup:
 
 int
 makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
+                       objStack *stack,    /* (in)  EGADS obj stack       */
                        const int nCPu,     /* (in)  number of points in u */
                        const int nCPv,     /* (in)  number of points in v */
                        const double *pts,  /* (in)  coordinates           */
@@ -6047,6 +6450,8 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeGeometry(context, SURFACE, BEZIER, NULL,
                            header, pts, &esurf);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, esurf);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* create Nodes for the Edges */
@@ -6058,6 +6463,8 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   i = nCPu-1;
   j = 0;
@@ -6066,6 +6473,8 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   data[2] = pts[3*(i+j*nCPu)+2];
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   i = nCPu-1;
@@ -6076,6 +6485,8 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   i = 0;
   j = nCPv-1;
@@ -6084,6 +6495,8 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   data[2] = pts[3*(i+j*nCPu)+2];
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the curves for the Edges */
@@ -6100,6 +6513,8 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeGeometry(context, CURVE, BEZIER, NULL, header,
                            lpts, &ecurves[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecurves[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   header[0] = 0;
   header[1] = nCPu-1;
@@ -6113,6 +6528,8 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   }
   status = EG_makeGeometry(context, CURVE, BEZIER, NULL, header,
                            lpts, &ecurves[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecurves[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   header[0] = 0;
@@ -6128,6 +6545,8 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeGeometry(context, CURVE, BEZIER, NULL, header,
                            lpts, &ecurves[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecurves[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   header[0] = 0;
   header[1] = nCPu-1;
@@ -6142,6 +6561,8 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeGeometry(context, CURVE, BEZIER, NULL, header,
                            lpts, &ecurves[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, ecurves[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Curves */
   tdata[0] = 0;
@@ -6152,11 +6573,15 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeTopology(context, ecurves[0], EDGE, TWONODE,
                            tdata, 2, nodes, NULL, &eedges[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   nodes[0] = enodes[0];
   nodes[1] = enodes[1];
   status = EG_makeTopology(context, ecurves[1], EDGE, TWONODE,
                            tdata, 2, nodes, NULL, &eedges[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   nodes[0] = enodes[1];
@@ -6164,11 +6589,15 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeTopology(context, ecurves[2], EDGE, TWONODE,
                            tdata, 2, nodes, NULL, &eedges[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   nodes[0] = enodes[3];
   nodes[1] = enodes[2];
   status = EG_makeTopology(context, ecurves[3], EDGE, TWONODE,
                            tdata, 2, nodes, NULL, &eedges[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -6177,20 +6606,28 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = 0.;    /* v == 0 VMIN */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 1;     data[1] = 0.;    /* u == 1 UMAX   */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = 1.;    /* v == 1 VMAX */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -6198,13 +6635,19 @@ makeBezierSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeTopology(context, esurf, LOOP, CLOSED,
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, esurf, FACE, SFORWARD,
                            NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eface);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -6424,7 +6867,7 @@ cleanup:
 
 
 int
-pingBezierSurface(ego context)
+pingBezierSurface(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    i, np1, nt1, iedge, nedge, iface, nface;
@@ -6456,7 +6899,11 @@ pingBezierSurface(ego context)
                        0.25, 0.75, 3.60};
   double pts_dot[3*4*4];
 
-  status = makeBezierSurfaceBody(context, nCPu, nCPv, pts, &ebody1);
+  status = makeBezierSurfaceBody(context, stack, nCPu, nCPv, pts, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -6502,7 +6949,7 @@ pingBezierSurface(ego context)
 
     /* make a perturbed body for finite difference */
     pts[i] += dtime;
-    status = makeBezierSurfaceBody(context, nCPu, nCPv, pts, &ebody2);
+    status = makeBezierSurfaceBody(context, stack, nCPu, nCPv, pts, &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     pts[i] -= dtime;
 
@@ -6518,7 +6965,6 @@ pingBezierSurface(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -6530,7 +6976,6 @@ pingBezierSurface(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -6549,6 +6994,7 @@ cleanup:
 
 int
 makeOffsetSurfaceBody( ego context,         /* (in)  EGADS context    */
+                       objStack *stack,     /* (in)  EGADS obj stack  */
                        const double *xcent, /* (in)  Center           */
                        const double *xax,   /* (in)  x-axis           */
                        const double *yax,   /* (in)  y-axis           */
@@ -6573,6 +7019,8 @@ makeOffsetSurfaceBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeGeometry(context, SURFACE, PLANE, NULL, NULL,
                            data, &eplane);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eplane);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_getGeometry(eplane, &oclass, &mtype, &eref, &ivec, &rvec);
   if (status != EGADS_SUCCESS) goto cleanup;
@@ -6593,6 +7041,8 @@ makeOffsetSurfaceBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeGeometry(context, SURFACE, OFFSET, eplane, NULL,
                            data, &esurf);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, esurf);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* create the Nodes for the Edges */
@@ -6602,12 +7052,16 @@ makeOffsetSurfaceBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = xcent[0] + dx[0] - dy[0] + dz[0]*offset;
   data[1] = xcent[1] + dx[1] - dy[1] + dz[1]*offset;
   data[2] = xcent[2] + dx[2] - dy[2] + dz[2]*offset;
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = xcent[0] + dx[0] + dy[0] + dz[0]*offset;
@@ -6616,6 +7070,8 @@ makeOffsetSurfaceBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = xcent[0] - dx[0] + dy[0] + dz[0]*offset;
   data[1] = xcent[1] - dx[1] + dy[1] + dz[1]*offset;
@@ -6623,19 +7079,21 @@ makeOffsetSurfaceBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* create the Edges */
-  status =  makeLineEdge(context, enodes[0], enodes[3], &eedges[0] );
+  status =  makeLineEdge(context, stack, enodes[0], enodes[3], &eedges[0] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status =  makeLineEdge(context, enodes[0], enodes[1], &eedges[1] );
+  status =  makeLineEdge(context, stack, enodes[0], enodes[1], &eedges[1] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status =  makeLineEdge(context, enodes[1], enodes[2], &eedges[2] );
+  status =  makeLineEdge(context, stack, enodes[1], enodes[2], &eedges[2] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status =  makeLineEdge(context, enodes[3], enodes[2], &eedges[3] );
+  status =  makeLineEdge(context, stack, enodes[3], enodes[2], &eedges[3] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -6644,20 +7102,28 @@ makeOffsetSurfaceBody( ego context,         /* (in)  EGADS context    */
   data[2] =  0.;    data[3] =  1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = -1.;    data[1] = -1.;    /* v == -1 VMIN */
   data[2] =  1.;    data[3] =  0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 1.;    data[1] = -1.;     /* u ==  1 UMAX   */
   data[2] = 0.;    data[3] =  1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = -1.;    data[1] = 1.;     /* v ==  1 VMAX */
   data[2] =  1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -6665,13 +7131,19 @@ makeOffsetSurfaceBody( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, esurf, LOOP, CLOSED,
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, esurf, FACE, SFORWARD,
                            NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eface);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -6861,7 +7333,7 @@ cleanup:
 
 
 int
-pingOffsetSurface(ego context)
+pingOffsetSurface(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1, nt1, iedge, nedge, iface, nface;
@@ -6886,7 +7358,11 @@ pingOffsetSurface(ego context)
   //xax[0]   = 1.; xax[1]   = 0.; xax[2]   = 0.;
   //yax[0]   = 0.; yax[1]   = 1.; yax[2]   = 0.;
   x[9] = 1.1;
-  status = makeOffsetSurfaceBody(context, xcent, xax, yax, x[9], &ebody1);
+  status = makeOffsetSurfaceBody(context, stack, xcent, xax, yax, x[9], &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -6936,7 +7412,7 @@ pingOffsetSurface(ego context)
 
     /* make a perturbed Circle for finite difference */
     x[iparam] += dtime;
-    status = makeOffsetSurfaceBody(context, xcent, xax, yax, x[9], &ebody2);
+    status = makeOffsetSurfaceBody(context, stack, xcent, xax, yax, x[9], &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -6952,7 +7428,6 @@ pingOffsetSurface(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -6967,7 +7442,6 @@ pingOffsetSurface(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -6986,6 +7460,7 @@ cleanup:
 
 int
 makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
+                        objStack *stack,    /* (in)  EGADS obj stack       */
                         const int nCPu,     /* (in)  number of points in u */
                         const int nCPv,     /* (in)  number of points in v */
                         const double *pts,  /* (in)  coordinates           */
@@ -7002,6 +7477,8 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
   sizes[1] = nCPv;
   status = EG_approximate(context, 0, DXYTOL, sizes, pts, &esurf);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, esurf);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_getGeometry(esurf, &oclass, &mtype, &eref, &header, &rvec);
   if (status != EGADS_SUCCESS) goto cleanup;
@@ -7016,6 +7493,8 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   i = nCPu-1;
   j = 0;
@@ -7024,6 +7503,8 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
   data[2] = pts[3*(i+j*nCPu)+2];
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   i = nCPu-1;
@@ -7034,6 +7515,8 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   i = 0;
   j = nCPv-1;
@@ -7042,6 +7525,8 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
   data[2] = pts[3*(i+j*nCPu)+2];
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the curves for the Edges */
@@ -7053,6 +7538,8 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
                            lpts, &ecurves[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
   EG_free(lpts); lpts = NULL;
+  status = EG_stackPush(stack, ecurves[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* vmin */
@@ -7063,6 +7550,8 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
                            lpts, &ecurves[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
   EG_free(lpts); lpts = NULL;
+  status = EG_stackPush(stack, ecurves[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* umax */
   status = EG_isoCurve(header, rvec, header[2]-1, -1, lheader, &lpts);
@@ -7072,6 +7561,8 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
                            lpts, &ecurves[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
   EG_free(lpts); lpts = NULL;
+  status = EG_stackPush(stack, ecurves[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* vmax */
   status = EG_isoCurve(header, rvec, -1, header[5]-1, lheader, &lpts);
@@ -7081,6 +7572,8 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
                            lpts, &ecurves[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
   EG_free(lpts); lpts = NULL;
+  status = EG_stackPush(stack, ecurves[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Curves */
   tdata[0] = 0;
@@ -7091,11 +7584,15 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeTopology(context, ecurves[0], EDGE, TWONODE,
                            tdata, 2, nodes, NULL, &eedges[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   nodes[0] = enodes[0];
   nodes[1] = enodes[1];
   status = EG_makeTopology(context, ecurves[1], EDGE, TWONODE,
                            tdata, 2, nodes, NULL, &eedges[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   nodes[0] = enodes[1];
@@ -7103,11 +7600,15 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeTopology(context, ecurves[2], EDGE, TWONODE,
                            tdata, 2, nodes, NULL, &eedges[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   nodes[0] = enodes[3];
   nodes[1] = enodes[2];
   status = EG_makeTopology(context, ecurves[3], EDGE, TWONODE,
                            tdata, 2, nodes, NULL, &eedges[3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -7116,20 +7617,28 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = 0.;    /* v == 0 VMIN */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 1;     data[1] = 0.;    /* u == 1 UMAX   */
   data[2] = 0.;    data[3] = 1.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = 0.;    data[1] = 1.;    /* v == 1 VMAX */
   data[2] = 1.;    data[3] = 0.;
   status = EG_makeGeometry(context, PCURVE, LINE, NULL, NULL, data, &eedges[4+3]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eedges[4+3]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
@@ -7137,13 +7646,19 @@ makeBsplineSurfaceBody( ego context,        /* (in)  EGADS context         */
   status = EG_makeTopology(context, esurf, LOOP, CLOSED,
                            NULL, 4, eedges, senses, &eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, esurf, FACE, SFORWARD,
                            NULL, 1, &eloop, NULL, &eface);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eface);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface, NULL, ebody);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *ebody);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -7339,7 +7854,7 @@ cleanup:
 
 
 int
-pingBsplineSurface(ego context)
+pingBsplineSurface(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    i, np1, nt1, iedge, nedge, iface, nface;
@@ -7371,7 +7886,11 @@ pingBsplineSurface(ego context)
                        0.25, 0.75, 3.60};
   double pts_dot[3*4*4];
 
-  status = makeBsplineSurfaceBody(context, nCPu, nCPv, pts, &ebody1);
+  status = makeBsplineSurfaceBody(context, stack, nCPu, nCPv, pts, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -7417,7 +7936,7 @@ pingBsplineSurface(ego context)
 
     /* make a perturbed body for finite difference */
     pts[i] += dtime;
-    status = makeBsplineSurfaceBody(context, nCPu, nCPv, pts, &ebody2);
+    status = makeBsplineSurfaceBody(context, stack, nCPu, nCPv, pts, &ebody2);
     if (status != EGADS_SUCCESS) goto cleanup;
     pts[i] -= dtime;
 
@@ -7433,7 +7952,6 @@ pingBsplineSurface(ego context)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
-    EG_deleteObject(ebody2);
   }
 
   /* zero out sensitivities */
@@ -7445,7 +7963,6 @@ pingBsplineSurface(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   EG_deleteObject(tess1);
-  EG_deleteObject(ebody1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -7485,6 +8002,7 @@ checkNode_dot(ego context)
   }
 
   /* attempt to set sensitivity with incorrect data */
+  printf("Check error handling...\n");
   data[0] = 2;
   data[1] = 0;
   data[2] = 1;
@@ -7509,6 +8027,7 @@ checkNode_dot(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* attempt to remove sensitives with incorrect oclass */
+  printf("Check error handling...\n");
   status = EG_setGeometry_dot(enode, LOOP, 0, NULL, NULL, NULL);
   if (status != EGADS_GEOMERR) {
     status = EGADS_GEOMERR;
@@ -7621,6 +8140,7 @@ checkCurve_dot(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* attempt to remove sensitives with incorrect oclass */
+  printf("Check error handling...\n");
   status = EG_setGeometry_dot(eline, SURFACE, LINE, NULL, NULL, NULL);
   if (status != EGADS_GEOMERR) {
     status = EGADS_GEOMERR;
@@ -7628,6 +8148,7 @@ checkCurve_dot(ego context)
   }
 
   /* attempt to remove sensitives with incorrect mtype */
+  printf("Check error handling...\n");
   status = EG_setGeometry_dot(eline, CURVE, CIRCLE, NULL, NULL, NULL);
   if (status != EGADS_GEOMERR) {
     status = EGADS_GEOMERR;
@@ -7915,6 +8436,7 @@ checkSurface_dot(ego context)
 
 
   /* attempt to set sensitivity with incorrect data */
+  printf("Check error handling...\n");
   data[0] = 0;   /* center */
   data[1] = 0;
   data[2] = 0;
@@ -7960,6 +8482,7 @@ checkSurface_dot(ego context)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* attempt to remove sensitives with incorrect oclass */
+  printf("Check error handling...\n");
   status = EG_setGeometry_dot(esphere, CURVE, SPHERICAL, NULL, NULL, NULL);
   if (status != EGADS_GEOMERR) {
     status = EGADS_GEOMERR;
@@ -7967,6 +8490,7 @@ checkSurface_dot(ego context)
   }
 
   /* attempt to remove sensitives with incorrect mtype */
+  printf("Check error handling...\n");
   status = EG_setGeometry_dot(esphere, SURFACE, CONICAL, NULL, NULL, NULL);
   if (status != EGADS_GEOMERR) {
     status = EGADS_GEOMERR;
@@ -8203,8 +8727,9 @@ cleanup:
 
 int main(int argc, char *argv[])
 {
-  int status;
-  ego context;
+  int status, i, oclass, mtype;
+  ego context, ref, prev, next;
+  objStack stack;
 
   /* create an EGADS context */
   status = EG_open(&context);
@@ -8213,66 +8738,70 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
-  status = pingLine(context);
+  /* create stack for gracefully cleaning up objects */
+  status  = EG_stackInit(&stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingCircle(context);
+  status = pingLine(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingEllipse(context);
+  status = pingCircle(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingParabola(context);
+  status = pingEllipse(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingHyperbola(context);
+  status = pingParabola(context, &stack);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = pingHyperbola(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* The trimmed curve disappears with OCC */
   //status = pingTrimmedCurve(context);
   //if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingOffsetCurve(context);
+  status = pingOffsetCurve(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingBezierCurve(context);
+  status = pingBezierCurve(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingBsplineCurve(context);
+  status = pingBsplineCurve(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingPlane(context);
+  status = pingPlane(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingSpherical(context);
+  status = pingSpherical(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingConical(context);
+  status = pingConical(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingCylindrical(context);
+  status = pingCylindrical(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingToroidal(context);
+  status = pingToroidal(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingRevolution(context);
+  status = pingRevolution(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingExtrusion(context);
+  status = pingExtrusion(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingBezierSurface(context);
+  status = pingBezierSurface(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* The trimmed surface disappears with OCC */
 //  status = pingTrimmedSurface(context);
 //  if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingOffsetSurface(context);
+  status = pingOffsetSurface(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status = pingBsplineSurface(context);
+  status = pingBsplineSurface(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /******************************/
@@ -8289,6 +8818,22 @@ int main(int argc, char *argv[])
   if (status != EGADS_SUCCESS) goto cleanup;
 
 cleanup:
+  /* clean up all of our temps */
+  EG_stackPop(&stack, &ref);
+  while (ref != NULL) {
+    i = EG_deleteObject(ref);
+    if (i != EGADS_SUCCESS)
+      printf(" EGADS Internal: EG_deleteObject = %d!\n", i);
+    EG_stackPop(&stack, &ref);
+  }
+  EG_stackFree(&stack);
+
+  /* check to make sure the context is clean */
+  EG_getInfo(context, &oclass, &mtype, &ref, &prev, &next);
+  if (next != NULL) {
+    status = EGADS_CONSTERR;
+    printf("Context is not properly clean!\n");
+  }
 
   EG_close(context);
 

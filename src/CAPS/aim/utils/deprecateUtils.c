@@ -14,23 +14,31 @@
 #include "miscUtils.h"
 
 // Change from the use of capsGroup for mesh sizing to capsMesh
-int deprecate_SizingAttr(int numTuple,
+int deprecate_SizingAttr(void *aimInfo,
+                         int numTuple,
                          capsTuple meshBCTuple[],
                          mapAttrToIndexStruct *meshMap,
                          mapAttrToIndexStruct *groupMap){
     int status;
-    int i, attrIndex;
+    int i, j, attrIndex;
 
     for (i = 0; i < numTuple; i++) {
 
-        status = get_mapAttrToIndexIndex(meshMap, (const char *) meshBCTuple[i].name, &attrIndex);
+        status = get_mapAttrToIndexIndex(meshMap, meshBCTuple[i].name, &attrIndex);
         if (status == CAPS_NOTFOUND) {
-            status = get_mapAttrToIndexIndex(groupMap, (const char *) meshBCTuple[i].name, &attrIndex);
+            status = get_mapAttrToIndexIndex(groupMap, meshBCTuple[i].name, &attrIndex);
             if (status == CAPS_SUCCESS) {
-                printf("DEPRACATED: The capsGroup attribute (capsGroup=%s) is no longer used to specify mesh sizing parameters. Please "
-                        "use capsMesh instead.\n", meshBCTuple[i].name);
+                AIM_ERROR(aimInfo, "DEPRACATED: The capsGroup attribute (capsGroup=%s) is no longer used to specify mesh sizing parameters. Please "
+                                   "use capsMesh instead.", meshBCTuple[i].name);
+            } else {
+                AIM_ERROR(aimInfo, "No attribute capsMesh == '%s'.", meshBCTuple[i].name);
+                AIM_ADDLINE(aimInfo, "------------------------------");
+                AIM_ADDLINE(aimInfo, "Available capsMesh attributes:");
+                for (j = 0; j < meshMap->numAttribute; j++)
+                  AIM_ADDLINE(aimInfo, "%s", meshMap->attributeName[j]);
+                AIM_ADDLINE(aimInfo, "------------------------------");
             }
-
+          
             return CAPS_BADVALUE;
         }
     }

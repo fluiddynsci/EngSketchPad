@@ -57,16 +57,18 @@ attrOut(int level, ego object)
 static void
 parseOut(int level, ego object, /*@null@*/ ego body, int sense)
 {
-  int    i, stat, oclass, mtype, nobjs, periodic, index, *senses, *ivec;
-  ego    geom, *objs;
+  int    i, j, stat, oclass, mtype, nobjs, periodic, index, nedge, nface;
+  int    *senses, *ivec;
+  ego    geom, *objs, *edges, *faces;
   double limits[4], bbox[6], *rvec;
   LONG   pointer;
-  static char *classType[27] = {"CONTEXT", "TRANSFORM", "TESSELLATION",
+  static char *classType[36] = {"CONTEXT", "TRANSFORM", "TESSELLATION",
                                 "NIL", "EMPTY", "REFERENCE", "", "",
-                                "", "", "PCURVE", "CURVE", "SURFACE", "", 
+                                "", "", "PCURVE", "CURVE", "SURFACE", "",
                                 "", "", "", "", "", "", "NODE",
                                 "EGDE", "LOOP", "FACE", "SHELL",
-                                "BODY", "MODEL"};
+                                "BODY", "MODEL", "", "", "", "", "EEDGE",
+                                "ELOOP", "EFACE", "ESHELL", "EBODY"};
   static char *curvType[9] = {"Line", "Circle", "Ellipse", "Parabola",
                               "Hyperbola", "Trimmed", "Bezier", "BSpline", 
                               "Offset"};
@@ -74,6 +76,10 @@ parseOut(int level, ego object, /*@null@*/ ego body, int sense)
                                "Toroidal", "Trimmed" , "Bezier", "BSpline", 
                                "Offset", "Conical", "Extrusion"};
   
+  if (object == NULL) {
+    printf(" ERROR: NULL Object hit!\n");
+    return;
+  }
   pointer = (LONG) object;
   oclass  = object->oclass;
   mtype   = object->mtype;
@@ -262,7 +268,8 @@ parseOut(int level, ego object, /*@null@*/ ego body, int sense)
   for (i = 0; i < 2*level; i++) printf(" ");
   index = 0;
   if ((oclass >= NODE) && (oclass < BODY))
-    if (body != NULL) index = EG_indexBodyTopo(body, object);
+    if (body != NULL)
+      if (body->oclass == BODY) index = EG_indexBodyTopo(body, object);
 #ifdef WIN32
   if (sense == 0) {
     printf("%s %llx %d\n", classType[oclass], pointer, index);
@@ -314,6 +321,7 @@ parseOut(int level, ego object, /*@null@*/ ego body, int sense)
       parseOut(level+1, geom, body, 0);
     if (senses == NULL) {
       if (oclass == MODEL) {
+        if (mtype > nobjs) nobjs = mtype;
         for (i = 0; i < nobjs; i++) parseOut(level+1, objs[i], objs[i], 0);
       } else {
         for (i = 0; i < nobjs; i++) parseOut(level+1, objs[i], body, 0);
@@ -324,6 +332,64 @@ parseOut(int level, ego object, /*@null@*/ ego body, int sense)
     if ((geom != NULL) && (oclass == LOOP))
       for (i = 0; i < nobjs; i++) parseOut(level+1, objs[i+nobjs], body, 0);
     
+  } else if ((oclass >= EEDGE) && (oclass <= EBODY)) {
+    /* effective topology */
+    stat = EG_getTopology(object, &geom, &oclass, &mtype, limits, &nobjs,
+                          &objs, &senses);
+    if (stat != EGADS_SUCCESS) {
+      printf(" parseOut: %d EG_getTopology return = %d\n", level, stat);
+      return;
+    }
+    if (oclass == EEDGE) {
+      for (i = 0; i < 2*level+2; i++) printf(" ");
+      if (mtype == DEGENERATE) {
+        printf("tRange = %lf %lf -- Degenerate!\n", limits[0], limits[1]);
+      } else {
+        printf("tRange = %lf %lf -- mtype = %d\n", limits[0], limits[1], mtype);
+      }
+      stat = EG_effectiveEdgeList(object, &nedge, &edges, &ivec, &rvec);
+      if (stat != EGADS_SUCCESS) {
+        printf(" parseOut: %d EG_effectiveEdgeList return = %d\n", level, stat);
+        return;
+      }
+      for (j = 0; j < nedge; j++) {
+        for (i = 0; i < 2*level+2; i++) printf(" ");
+        printf("tStart = %lf  sense = %d\n", rvec[j], ivec[j]);
+        parseOut(level+1, edges[j], body, 0);
+      }
+      EG_free(edges);
+      EG_free(ivec);
+      EG_free(rvec);
+    } else if (oclass == EFACE) {
+      for (i = 0; i < 2*level+2; i++) printf(" ");
+      printf("uRange = %lf %lf, vRange = %lf %lf\n", limits[0], limits[1],
+                                                     limits[2], limits[3]);
+      stat = EG_getBody(object, &geom);
+      stat = EG_getBodyTopos(geom, object, FACE, &nface, &faces);
+      if (stat != EGADS_SUCCESS) {
+        printf(" parseOut: %d EG_getBodyTopos return = %d\n", level, stat);
+        return;
+      }
+      for (j = 0; j < nface; j++) parseOut(level+1, faces[j], body, 0);
+      EG_free(faces);
+    }
+    if (senses == NULL) {
+      for (i = 0; i < nobjs; i++) parseOut(level+1, objs[i], body, 0);
+    } else {
+      for (i = 0; i < nobjs; i++) parseOut(level+1, objs[i], body, senses[i]);
+    }
+    
+  } else if (oclass == TESSELLATION) {
+    stat = EG_statusTessBody(object, &geom, &index, &j);
+    if (stat == EGADS_SUCCESS) {
+      for (i = 0; i < 2*level+2; i++) printf(" ");
+#ifdef WIN32
+      printf("ref = %llx  state = %d   npts = %d\n", (LONG) geom, index, j);
+#else
+      printf("ref = %lx  state = %d   npts = %d\n", (LONG) geom, index, j);
+#endif
+    }
+    
   }
 
 }
@@ -331,8 +397,9 @@ parseOut(int level, ego object, /*@null@*/ ego body, int sense)
 
 int main(int argc, char *argv[])
 {
-  int i, j, k, n, nn, stat, oclass, mtype, nbodies, *senses;
-  ego context, model, geom, obj, top, prev, next, *bodies, *objs, *nobjs;
+  int    i, j, k, n, nn, stat, oclass, mtype, nbodies, *senses;
+  double box[6], params[3], size;
+  ego    context, model, geom, obj, top, prev, next, *bodies, *objs, *nobjs;
   
   if (argc != 2) {
     printf(" Usage: liteTest liteFile\n\n");
@@ -381,14 +448,12 @@ int main(int argc, char *argv[])
           printf("  Loop Index = %d GetNodes = %d\n", j+1, stat);
           continue;
         }
-        printf("     loop %d has %d Nodes!\n", j, nn);
         EG_free(nobjs);
         stat = EG_getBodyTopos(bodies[i], objs[j], FACE, &nn, &nobjs);
         if (stat != EGADS_SUCCESS) {
           printf("  Loop Index = %d GetFaces = %d\n", j+1, stat);
           continue;
         }
-        printf("     loop %d has %d Faces!\n", j, nn);
         EG_free(nobjs);
       }
       EG_free(objs);
@@ -420,6 +485,24 @@ int main(int argc, char *argv[])
   /* output the entire model structure */
   parseOut(0, model, NULL, 0);
   printf(" \n");
+  
+  /* tessellate any Bodies or EBodies */
+  if (nbodies < mtype) nbodies = mtype;
+  for (i = 0; i < nbodies; i++) {
+    stat = EG_getInfo(bodies[i], &oclass, &mtype, &top, &prev, &next);
+    if (stat != EGADS_SUCCESS) continue;
+    stat = EG_getBoundingBox(bodies[i], box);
+    if (stat != EGADS_SUCCESS) continue;
+                              size = box[3]-box[0];
+    if (size < box[4]-box[1]) size = box[4]-box[1];
+    if (size < box[5]-box[2]) size = box[5]-box[2];
+    params[0] =  0.025*size;
+    params[1] =  0.001*size;
+    params[2] = 15.0;
+    stat = EG_makeTessBody(bodies[i], params, &obj);
+    printf(" Tessellation of Body %d = %d\n", i+1, stat);
+    if (stat == EGADS_SUCCESS) EG_deleteObject(obj);
+  }
   
   /* scan through the objects */
   obj = context;

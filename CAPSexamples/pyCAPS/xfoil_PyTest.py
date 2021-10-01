@@ -13,9 +13,8 @@ parser = argparse.ArgumentParser(description = 'xFoil Pytest Example',
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot data")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 ## [localVariable]
@@ -29,7 +28,7 @@ workDir = os.path.join(str(args.workDir[0]), workDir)
 geometryScript = os.path.join("..","csmData","airfoilSection.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 ## [loadGeom]
 
 ## [setGeom]
@@ -63,27 +62,6 @@ xfoil.input.CL_Increment = [0.8, 3, .25]
 xfoil.input.Append_PolarFile = True
 ##[setXFOIL]
 
-# Run AIM pre-analysis
-## [preAnalysiXFOIL]
-xfoil.preAnalysis()
-## [preAnalysiXFOIL]
-
-####### Run xfoil ####################
-print ("\n\nRunning xFoil......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(xfoil.analysisDir) # Move into test directory
-
-if (args.noAnalysis == False): # Don't run xfoil if noAnalysis is set
-    os.system("xfoil < xfoilInput.txt > Info.out"); # Run xfoil via system call
-
-os.chdir(currentDirectory) # Move back to top directory
-
-# Run AIM post-analysis
-## [postAnalysiXFOIL]
-xfoil.postAnalysis()
-## [postAnalysiXFOIL]
-
 ## [results]
 # Retrieve Cl and Cd
 Cl = xfoil.output.CL
@@ -101,16 +79,10 @@ TranX = xfoil.output.Transition_Top
 print("Transition location = ", TranX)
 ## [results]
 
-if (args.noAnalysis == False and args.noPlotData == False):
+if args.noPlotData == False:
     # Import pyplot module
     try:
         from matplotlib import pyplot as plt
-    except:
-        print ("Unable to import matplotlib.pyplot module. Drag polar will not be plotted")
-        plt = None
-
-    # Plot data
-    if plt is not None:
 
         # Plot first sweep angle
         plt.plot(Alpha,
@@ -128,6 +100,9 @@ if (args.noAnalysis == False and args.noPlotData == False):
         plt.xlabel("$Angle\ of\ Attack\ (^o)$")
         plt.ylabel("$C_L,\ C_D$")
         plt.show()
+        
+    except:
+        print ("Unable to import matplotlib.pyplot module. Drag polar will not be plotted")
 
 # Check assertation
 assert abs(Cl[0]-1.2455) <= 1E-4 and abs(Cd[0]-0.01565) <= 1E-4

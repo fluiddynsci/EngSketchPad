@@ -17,6 +17,8 @@
 #define getcwd     _getcwd
 #define PATH_MAX   _MAX_PATH
 #define strcasecmp  stricmp
+#define F_OK       0
+#include <synchapi.h> // Sleep
 #else
 #include <limits.h>
 #include <unistd.h>
@@ -58,6 +60,7 @@ int main(int argc, char *argv[])
 {
 
     int i, status; // Function return status;
+    int outLevel = 1;
 
     // CAPS objects
     capsObj          problemObj, pointwiseObj;
@@ -77,33 +80,25 @@ int main(int argc, char *argv[])
 
     char currentPath[PATH_MAX];
 
-    int runAnalysis = (int) true;
-
     printf("\n\nAttention: pointwiseTest is hard coded to look for ../csmData/cfdMultiBody.csm\n");
-    printf("An analysisPath maybe specified as a command line option, if none is given "
-            "a directory called \"runDirectory\" in the current folder is assumed to exist! To "
-            "not make system calls to the pointwise executable the third command line option may be "
-            "supplied - 0 = no analysis , >0 run analysis (default).\n\n");
 
     if (argc > 2) {
-      
-        printf(" usage: pointwiseTest noAnalysis!\n");
+        printf(" usage: pointwiseTest outLevel\n");
         return 1;
-    }
-
-    if (argc == 2) {
-        if (strcasecmp(argv[2], "0") == 0) runAnalysis = (int) false;
+    } else if (argc == 2) {
+        outLevel = atoi(argv[1]);
     }
 
     status = caps_open("Pointwise_Example", NULL, 0,
-                       "../csmData/cfdMultiBody.csm", 1,
+                       "../csmData/cfdMultiBody.csm", outLevel,
                        &problemObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Now load the pointwiseAIM
+    exec   = 0;
     status = caps_makeAnalysis(problemObj, "pointwiseAIM", "pointwise",
-                               NULL, NULL, 0, &pointwiseObj, &nErr, &errors);
+                               NULL, NULL, &exec, &pointwiseObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
@@ -127,12 +122,17 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-    if (runAnalysis == (int) false) {
-        printf("\n\nNot Running pointwise!\n\n");
-    } else {
-        printf("\n\nRunning pointwise!\n\n");
+    // Try multiple times in case a license is not available
+    for (i = 0; i < 30; i++) {
+      printf("\n\nRunning pointwise!\n\n");
+      system("pointwise -b  $CAPS_GLYPH/GeomToMesh.glf caps.egads capsUserDefaults.glf");
 
-        system("pointwise -b  $CAPS_GLYPH/GeomToMesh.glf caps.egads capsUserDefaults.glf");
+      if (access("caps.GeomToMesh.gma", F_OK) == 0) break;
+#ifdef WIN32
+      Sleep(10e3);
+#else
+      sleep(10);
+#endif
     }
 
     (void) chdir(currentPath);

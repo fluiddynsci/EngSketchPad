@@ -7,9 +7,10 @@ import sys
 import shutil
 
 # ASTROS_ROOT should be the path containing ASTRO.D01 and ASTRO.IDX
-try:  
+try:
    ASTROS_ROOT = os.environ["ASTROS_ROOT"]
-except KeyError: 
+   os.putenv("PATH", ASTROS_ROOT + os.pathsep + os.getenv("PATH"))
+except KeyError:
    print("Please set the environment variable ASTROS_ROOT")
    sys.exit(1)
    
@@ -23,7 +24,7 @@ parser = argparse.ArgumentParser(description = 'Aeroelastic Modal Fun3D and Astr
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -36,7 +37,7 @@ projectName = "aeroelasticModal"
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransferSimple.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AIMs 
 surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
@@ -57,7 +58,8 @@ fluid.input["Mesh"].link(mesh.output["Volume_Mesh"])
 
 structure = myProblem.analysis.create(aim = "astrosAIM", 
                                       name = "astros", 
-                                      capsIntent = "STRUCTURE")
+                                      capsIntent = "STRUCTURE",
+                                      autoExec = False)
 
 # Create an array of EigenVector names 
 numEigenVector = 3
@@ -87,10 +89,11 @@ for boundName in boundNames:
 
 # Set inputs for egads 
 surfMesh.input.Tess_Params = [.05, 0.01, 20.0]
+surfMesh.input.Edge_Point_Max = 4
 
 # Set inputs for tetgen 
 mesh.input.Preserve_Surf_Mesh = True
-mesh.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+mesh.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set inputs for fun3d
 speedofSound = 340.0 # m/s
@@ -162,24 +165,6 @@ structure.input.Property = {"Skin"    : skin,
 constraint = {"groupName" : "Rib_Root", 
               "dofConstraint" : 123456}
 structure.input.Constraint = {"edgeConstraint": constraint}
-
-####### EGADS ########################
-# Run pre/post-analysis for egads
-print ("\nRunning PreAnalysis ......", "egads")
-surfMesh.preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "egads")
-surfMesh.postAnalysis()
-#######################################
-
-####### Tetgen ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "tetgen")
-mesh.preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "tetgen")
-mesh.postAnalysis()
-#######################################
 
 
 ####### Astros #######################

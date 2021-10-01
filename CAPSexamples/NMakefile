@@ -18,6 +18,7 @@ COPY  =
 all: $(ODIR) $(COPY)
 	cd $(SDIR)\cCAPS
 	nmake -f avlTest.mak
+	nmake -f awaveTest.mak
 	nmake -f frictionTest.mak
 	nmake -f fun3d.mak
 	nmake -f hsm.mak
@@ -27,6 +28,7 @@ all: $(ODIR) $(COPY)
 clean:
 	cd $(SDIR)\cCAPS
 	nmake -f avlTest.mak clean
+	nmake -f awaveTest.mak clean
 	nmake -f frictionTest.mak clean
 	nmake -f hsm.mak clean
 	nmake -f fun3d.mak clean
@@ -36,6 +38,7 @@ clean:
 cleanall:
 	cd $(SDIR)\cCAPS
 	nmake -f avlTest.mak cleanall
+	nmake -f awaveTest.mak cleanall
 	nmake -f frictionTest.mak cleanall
 	nmake -f fun3d.mak cleanall
 	nmake -f hsm.mak cleanall

@@ -31,7 +31,7 @@
 #define _OPENCSM_H_
 
 #define OCSM_MAJOR_VERSION  1
-#define OCSM_MINOR_VERSION 19
+#define OCSM_MINOR_VERSION 20
 
 #define MAX_NAME_LEN       64           /* maximum chars in name */
 #define MAX_EXPR_LEN      512           /* maximum chars in expression */
@@ -181,9 +181,11 @@ Special characters:
    { } < >    characters used in strings
    + - * / ^  arithmetic operators
    $          as first character, introduces a string that is terminated
-                 by end-of-line or un-escaped plus, comma, or open-bracket
+                 by end-of-line or un-escaped plus, comma, or
+                 close-parenthesis
    @          as first character, introduces @-parameters (see below)
-   '          used to escape comma, plus, or open-bracket within strings
+   '          used to escape comma, plus, or close-parenthesis within
+                 strings
    !          if first character of implicit string, ignore $! and treat
                  as an expression
 
@@ -433,6 +435,8 @@ CATBEG    sigCode
                      $node_not_found
                      $non_coplanar_sketch_points
                      $no_selection
+                     $underconstrained
+                     $overconstrained
                      $not_converged
                      $self_intersecting
                      $wrong_types_on_stack
@@ -517,7 +521,7 @@ COMBINE   toler=0
                      create either a SolidBody from closed Shell or an
                      (open) SheetBody
                   elseif all Bodys since Mark are WireBodys and are co-planar
-                     create SheetBody from closed Loop
+                     create SheetBody from closed Loop or close Loop first
                   endif
                   if maxtol>0, then tolerance can be relaxed until successful
                   sets up @-parameters
@@ -544,7 +548,7 @@ CONE      xvrtx yvrtx zvrtx xbase ybase zbase radius
                   signals that may be thrown/caught:
                      $illegal_value
 
-CONNECT   faceList1 faceList2 edgeList1=0 edgeList2=0
+CONNECT   faceList1 faceList2 edgeList1=0 edgeList2=0 toler=0
           use:    connects two Bodys with bridging Faces
           pops:   Body1 Body2
           pushes: Body
@@ -554,8 +558,9 @@ CONNECT   faceList1 faceList2 edgeList1=0 edgeList2=0
                   edgeList1 and edgeList2 must have the same length
                   edgeList1[i] corresponds to edgeList2[i]
                   faceList1[i] corresponds to faceList2[i]
+                  if Body1 is a Mark, left and rite Bodys are the same
                   if edgeLists are given
-                      Body1 is either SheetBody or SolidBody
+                      Body1 is either WireBody, SheetBody, or SolidBody
                       Body2 is same type as Body1
                       Body  is same type as Body1
                       Face in faceLists are removed
@@ -680,6 +685,7 @@ DIMENSION $pmtrName nrow ncol
                   pmtrName must not start with '@'
                   if applied to a DESPMTR or CFGPMTR, must be in either
                       .csm file or top-level include-style .udc file
+                  a legacy fourth argument (despmtr) is no longer used
                   old values are not overwritten
                   cannot be followed by ATTRIBUTE or CSYSTEM
 
@@ -818,7 +824,8 @@ EVALUATE  $type arg1 ...
                         dxdv,    dydv,    dzdv,
                         d2xdu2,  d2ydu2,  d2zdu2,
                         d2xdudv, d2ydudv, d2zdudv,
-                        d2xdv2,  d2ydv2,  d2zdv2
+                        d2xdv2,  d2ydv2,  d2zdv2,
+                        normx,   normy,   normz
                   elseif arguments are: "facerng ibody iface"
                      ibody is Body number (1:nbody)
                      iface is Face number (1:nface)
@@ -1759,6 +1766,9 @@ SKEND     wireonly=0
                   new Face receives the Branch's Attributes
                   sets up @-parameters
                   signals that may be thrown/caught:
+                     $underconstrained
+                     $overconstrained
+                     $not_converged
                      $colinear_sketch_points
                      $non_coplnar_sketch_points
                      $self_intersecting
@@ -2750,6 +2760,7 @@ typedef struct {
 
     int           onstack;              /* =1 if on stack (and returned); =0 otherwise */
     int           hasdots;              /* =1 if an argument has a dot; =2 if UDPARG is changed; =0 otherwise */
+    int           hasdxyz;              /* =1 if Body has associated velocities */
     int           botype;               /* Body type (see below) */
     double        CPU;                  /* CPU time (sec) */
     int           nnode;                /* number of Nodes */
@@ -2758,7 +2769,7 @@ typedef struct {
     edge_T        *edge;                /* array  of Edges */
     int           nface;                /* number of Faces */
     face_T        *face;                /* array  of Faces */
-    int           sens;                 /* flag for caching sensitivity info */
+    int           hassens;              /* flag for caching sensitivity info */
     grat_T        gratt;                /* GRatt of the Nodes */
 } body_T;
 
@@ -2795,7 +2806,7 @@ typedef struct {
     char          *name;                /* name of Parameter */
     int           type;                 /* Parameter type (see below) */
     int           scope;                /* associated scope (nominally 0) */
-    int           flag;                 /* =1 if massprops_dot needs to be called */
+    int           mprop;                /* =1 if associated with mass properties */
     int           nrow;                 /* number of rows    (=0 for string) */
     int           ncol;                 /* number of columns (=0 for string) */
     double        *value;               /* current value(s) */
@@ -2842,9 +2853,10 @@ typedef struct modl_T {
     int           ngroup;               /* number of Groups */
     int           recycle;              /* last Body to recycle */
     int           verify;               /* =1 if verification ASSERTs are checked */
-    int           cleanup;              /* =1 if unattaned egos are auto cleaned up */
+    int           cleanup;              /* number of Branches before context is cleaned up */
     int           dumpEgads;            /* =1 if Bodys are dumped during build */
     int           loadEgads;            /* =1 if Bodys are loaded during build */
+    int           hasMPs;               /* =1 if mass properties have been calculated */
     int           printStack;           /* =1 to print stack after every command */
     int           tessAtEnd;            /* =1 to tessellate Bodys on stack at end of ocsmBuild */
     int           erepAtEnd;            /* =1 to generate Erep based upon _erepAttr and _erepAngle */
@@ -3251,7 +3263,7 @@ int ocsmGetEgo(void   *modl,            /* (in)  pointer to MODL */
 /* set a tessellation or EBody for a Body */
 int ocsmSetEgo(void   *modl,            /* (in)  pointer to MODL */
                int    ibody,            /* (in)  Body index (1:nbody) */
-               int    iselect,          /* (in)  1 for Tessellation, 
+               int    iselect,          /* (in)  1 for Tessellation,
                                                  3 for EBody, 4 for Tessellation on EBody */
                ego    theEgo);          /* (in)  associated EGO */
 

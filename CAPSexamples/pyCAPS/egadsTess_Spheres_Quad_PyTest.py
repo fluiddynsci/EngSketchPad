@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description = 'EGADS Tess Shheres Quad PyTest E
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Working directory
@@ -25,7 +25,7 @@ workDir = os.path.join(str(args.workDir[0]), "egadsTessSpheresAnalysisTest")
 geometryScript = os.path.join("..","csmData","spheres.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AFLR4 aim
 myAnalysis = myProblem.analysis.create(aim = "egadsTessAIM")
@@ -45,14 +45,7 @@ myAnalysis.input.Mesh_Elements = "Quad"
 
 #myAnalysis.input.Mesh_Sizing = Mesh_Sizing
 
-# Run AIM pre-analysis
-myAnalysis.preAnalysis()
-
-##########################################
-## egadsTess was ran during preAnalysis ##
-##########################################
-
-# Run AIM post-analysis
-myAnalysis.postAnalysis()
+# Run AIM
+myAnalysis.runAnalysis()
 
 #myAnalysis.geometry.view()

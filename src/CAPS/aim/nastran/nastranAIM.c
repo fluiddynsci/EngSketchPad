@@ -1756,9 +1756,9 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     else if(strcasecmp(analysisType, "AeroelasticTrim") 	== 0) fprintf(fp, "SOL 144\n");
     else if(strcasecmp(analysisType, "AeroelasticFlutter") 	== 0) fprintf(fp, "SOL 145\n");
     else {
-        printf("Unrecognized \"Analysis_Type\", %s, defaulting to \"Modal\" analysis\n", analysisType);
-        analysisType = "Modal";
-        fprintf(fp, "SOL 3\n");
+        AIM_ERROR(aimInfo, "Unrecognized \"Analysis_Type\", %s", analysisType);
+        status = CAPS_BADVALUE;
+        goto cleanup;
     }
 
     fprintf(fp, "CEND\n\n");
@@ -1800,7 +1800,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // Write sub-case information if multiple analysis tuples were provide - will always have at least 1
     for (i = 0; i < nastranInstance->feaProblem.numAnalysis; i++) {
-        printf("SUBCASE = %d\n", i);
+        //printf("SUBCASE = %d\n", i);
 
         fprintf(fp, "SUBCASE %d\n", i+1);
         fprintf(fp, "\tLABEL = %s\n", nastranInstance->feaProblem.feaAnalysis[i].name);

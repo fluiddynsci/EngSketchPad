@@ -27,48 +27,72 @@
 #include <string.h>
 
 #ifdef WIN32
-#define DLL        HINSTANCE
-#include <windows.h>
-#define snprintf   _snprintf
-#define strcasecmp stricmp
-
+   #define DLL        HINSTANCE
+   #include <windows.h>
+   #define snprintf   _snprintf
+   #define strcasecmp stricmp
 #else
-
-#define DLL void *
-#include <dlfcn.h>
-#include <dirent.h>
-#include <limits.h>
+   #define DLL void *
+   #include <dlfcn.h>
+   #include <dirent.h>
+   #include <limits.h>
 #endif
 
 #include "egads.h"
 
-
 #define MAXPRIM 32
 
-typedef int (*DLLFunc) (void);
-typedef int (*udpI)    (int *, char ***, int **, int **, double **);
-typedef int (*udpN)    (int *);
-typedef int (*udpR)    (int);
-typedef int (*udpC)    (ego);
-typedef int (*udpS)    (char *, void *, int, /*@null@*/char *);
-typedef int (*udpE)    (ego, ego *, int *, char **);
-typedef int (*udpG)    (ego, char *, char **, char *);
-typedef int (*udpM)    (ego, int, int *, int *, int *, double **);
-typedef int (*udpV)    (ego, char *, double *, int);
-typedef int (*udpP)    (ego, int, int, int, /*@null@*/double *, double *);
+typedef int (*udpDLLfunc) (void);
+static char *udpName[MAXPRIM];
+static DLL   udpDLL[ MAXPRIM];
 
-static char *udpName[ MAXPRIM];
-static DLL   udpDLL[  MAXPRIM];
-static udpI  udpInit[ MAXPRIM];
-static udpN  udpNumB[ MAXPRIM];
-static udpR  udpReset[MAXPRIM];
-static udpC  udpClean[MAXPRIM];
-static udpS  udpSet[  MAXPRIM];
-static udpE  udpExec[ MAXPRIM];
-static udpG  udpGet[  MAXPRIM];
-static udpM  udpMesh[ MAXPRIM];
-static udpV  udpVel[  MAXPRIM];
-static udpP  udpSens[ MAXPRIM];
+// func pointers  name in DLL       name in OpenCSM     description
+// -------------  ---------------   ------------------  -----------------------------------------------
+
+// ----- defined in udpUtilities.c -----
+
+// udpInit[]      udpInitialize()   udp_initialize()    initialize and get info about list of arguments
+typedef int (*udpI) (int *nArgs, char **namex[], int *typex[], int *idefault[], double *ddefault[]);
+static        udpI  udpInit[ MAXPRIM];
+
+// udpNumB[]      udpNumBodys()     udp_numBodys()      number of Bodys expecte in first arg to udpExecute
+typedef int (*udpN) ();
+static        udpN  udpNumB[ MAXPRIM];
+
+// udpReset[]     udpReset(0)       udp_clrArguments()  reset the argument to their defaults
+//                udpReset(1)       udp_cleanupAll()    close all UDPs
+typedef int (*udpR) (int flag);
+static        udpR  udpReset[MAXPRIM];
+
+// udpClean[]     udpClean()        udp_clean()         clean the udp cache
+typedef int (*udpC) (ego ebody);
+static        udpC  udpClean[MAXPRIM];
+
+// udpSet[]       udpSetArgument()  udp_setArgument()   sets value of an argument
+typedef int (*udpS) (char name[], void *value, int nvalue, /*@null@*/char message[]);
+static        udpS  udpSet[MAXPRIM];
+
+// udpGet[]       udpGet()          udp_getOutput()     return an output parameter
+typedef int (*udpG) (ego ebody, char name[], void *value, char message[]);
+static        udpG  udpGet[MAXPRIM];
+
+// udpMesh[]      udpMesh()         udp_getMesh()       return mesh associated with primitive
+typedef int (*udpM) (ego ebody, int iMesh, int *imax, int *jmax, int *kmax, double *mesh[]);
+static        udpM  udpMesh[MAXPRIM];
+
+// udpVel[]       udpVel()          udp_setVelocity()   set velocity of an argument
+typedef int (*udpV) (ego ebody, char name[], double dot[], int ndot);
+static        udpV  udpVel[MAXPRIM];
+
+// ----- defined in udpXXX -----
+
+// udpExec[]      udpExecute()      udp_executePrim()   execute the primitive
+typedef int (*udpE) (ego, ego *, int *, char **);
+static        udpE  udpExec[MAXPRIM];
+
+// udpSens[]      udpSensitivity    udp_sensitivity()   return sensitivity derivatives for the "real" argument
+typedef int (*udpP) (ego, int, int, int, /*@null@*/double *, double *);
+static        udpP  udpSens[MAXPRIM];
 
 static int udp_nPrim = 0;
 
@@ -182,7 +206,7 @@ static /*@null@*/ DLL udpDLopen(const char *name)
 #endif
 
     if (!dll) {
-        printf(" Information: Dynamic Loader Error for %s\n", full);
+        printf(" Information: Dynamic Loader for %s not found\n", full);
 #ifndef WIN32
 /*@-mustfreefresh@*/
         printf("              %s\n", dlerror());
@@ -211,16 +235,16 @@ static void udpDLclose(/*@unused@*/ /*@only@*/ DLL dll)
 }
 
 
-static DLLFunc udpDLget(DLL dll,   const char *symname,
+static udpDLLfunc udpDLget(DLL dll,   const char *symname,
                         /*@null@*/ const char *name)
 {
-    DLLFunc data;
+    udpDLLfunc data;
 
 #ifdef WIN32
-    data = (DLLFunc) GetProcAddress(dll, symname);
+    data = (udpDLLfunc) GetProcAddress(dll, symname);
 #else
 /*@-castfcnptr@*/
-    data = (DLLFunc) dlsym(dll, symname);
+    data = (udpDLLfunc) dlsym(dll, symname);
 /*@+castfcnptr@*/
 #endif
     if ((data == NULL) && (name != NULL))

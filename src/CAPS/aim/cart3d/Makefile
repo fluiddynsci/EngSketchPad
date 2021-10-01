@@ -45,7 +45,7 @@ $(LDIR)/cart3dAIM.so:	$(ODIR)/cart3dAIM.o $(ODIR)/writeTrix.o \
 	$(CC) $(SOFLGS) -o $(LDIR)/cart3dAIM.so $(ODIR)/cart3dAIM.o \
 		$(ODIR)/writeTrix.o $(ODIR)/bodyTess.o -L$(LDIR) -laimUtil \
 		-locsm -legads -ludunits2 -lutils -L$(CART3DLIB)/$(CART_ARCH) \
-		-lc3dio -lCart3D $(XMLIB) -lm
+		-lc3dio -lCart3D -ldl $(XMLIB) -lm
 
 $(ODIR)/cart3dAIM.o:	cart3dAIM.c $(IDIR)/capsTypes.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils -I$(CART3DLIB)/xddm \

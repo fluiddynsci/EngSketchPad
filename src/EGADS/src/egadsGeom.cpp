@@ -55,7 +55,7 @@
   extern "C" int  EG_eEvaluate( const egObject *object, const double *param,
                                 double *result );
   extern "C" int  EG_invEEvaluate( const egObject *object, double *xyz,
-                                   double *param, double *result);
+                                   double *param, double *result );
   extern "C" int  EG_eCurvature( const egObject *geom, const double *param,
                                  double *result );
   template<class T>
@@ -1606,8 +1606,9 @@ EG_setGeometry_dot(egObject *obj, int oclass, int mtype,
       }
       return EGADS_NODATA;
     }
-    egadsLoop *ploop = (egadsLoop *) obj->blind;
 
+    /* clear curve dot through the edges */
+    egadsLoop *ploop = (egadsLoop *) obj->blind;
     for (i = 0; i < ploop->nedges; i++) {
       stat = EG_setGeometry_dot(ploop->edges[i], EDGE, 0, NULL, NULL, NULL);
       if (stat != EGADS_SUCCESS) return stat;
@@ -1634,6 +1635,15 @@ EG_setGeometry_dot(egObject *obj, int oclass, int mtype,
     }
     egadsFace *pface = (egadsFace *) obj->blind;
 
+    /* clear surface dot */
+    object = pface->surface;
+    egadsSurface *lgeom = (egadsSurface *) object->blind;
+    if (lgeom != NULL) {
+      EG_free(lgeom->data_dot);
+      lgeom->data_dot = NULL;
+    }
+
+    /* clear curve dot through the loops */
     for (i = 0; i < pface->nloops; i++) {
       stat = EG_setGeometry_dot(pface->loops[i], LOOP, 0, NULL, NULL, NULL);
       if (stat != EGADS_SUCCESS) return stat;
@@ -1703,12 +1713,11 @@ EG_setGeometry_dot(egObject *obj, int oclass, int mtype,
       egadsEdge *pedge = (egadsEdge *) object->blind;
       if (pedge == NULL) continue;
       object = pedge->curve;
+      if (object == NULL) continue;
       egadsCurve *lgeom = (egadsCurve *) object->blind;
       if (lgeom == NULL) continue;
-      if (lgeom->data_dot != NULL) {
-        EG_free(lgeom->data_dot);
-        lgeom->data_dot = NULL;
-      }
+      EG_free(lgeom->data_dot);
+      lgeom->data_dot = NULL;
     }
 
     /* PCurves through Loops */
@@ -1724,10 +1733,8 @@ EG_setGeometry_dot(egObject *obj, int oclass, int mtype,
         if (object == NULL) continue;
         egadsPCurve *lgeom = (egadsPCurve *) object->blind;
         if (lgeom == NULL) continue;
-        if (lgeom->data_dot != NULL) {
-          EG_free(lgeom->data_dot);
-          lgeom->data_dot = NULL;
-        }
+        EG_free(lgeom->data_dot);
+        lgeom->data_dot = NULL;
       }
     }
 
@@ -1739,10 +1746,8 @@ EG_setGeometry_dot(egObject *obj, int oclass, int mtype,
       object = pface->surface;
       egadsSurface *lgeom = (egadsSurface *) object->blind;
       if (lgeom == NULL) continue;
-      if (lgeom->data_dot != NULL) {
-        EG_free(lgeom->data_dot);
-        lgeom->data_dot = NULL;
-      }
+      EG_free(lgeom->data_dot);
+      lgeom->data_dot = NULL;
     }
 
     return EGADS_SUCCESS;
@@ -2284,6 +2289,7 @@ EG_hasGeometry_dot(const egObject *obj)
       if (pedge == NULL) continue;
       if (pedge->filled == 0) return EGADS_NOTFOUND;
       object = pedge->curve;
+      if (object == NULL) continue;
       egadsCurve *lgeom = (egadsCurve *) object->blind;
       if (lgeom == NULL) continue;
       if (lgeom->data_dot == NULL) return EGADS_NOTFOUND;
@@ -3327,23 +3333,25 @@ EG_copyGeometry_dot(const egObject *obj, /*@null@*/ const double *xform,
 
     if (pedge1->filled == 0) {
       if (outLevel > 0)
-        printf(" EGADS Error: Edge without data_dot (EG_copyGeometry_dot)!\n");
+        printf(" EGADS Error: Edge without t-range dot (EG_copyGeometry_dot)!\n");
       return EGADS_NODATA;
     }
     pedge2->filled = 1;
     for (i = 0; i < 2; i++)
       pedge2->trange_dot[i] = pedge1->trange_dot[i];
-    if (pedge2->curve->mtype == LINE ||
-        pedge2->curve->mtype == PARABOLA)
-      for (i = 0; i < 2; i++)
-        pedge2->trange_dot[i] *= fabs(form.ScaleFactor());
-
-    if (pedge2->curve->mtype == OFFSET) {
-      egadsCurve *pcurve = (egadsCurve *) pedge2->curve->blind;
-      if (pcurve->ref->mtype == LINE ||
-          pcurve->ref->mtype == PARABOLA)
+    if (pedge2->curve != NULL) {
+      if (pedge2->curve->mtype == LINE ||
+          pedge2->curve->mtype == PARABOLA) {
         for (i = 0; i < 2; i++)
           pedge2->trange_dot[i] *= fabs(form.ScaleFactor());
+      }
+      if (pedge2->curve->mtype == OFFSET) {
+        egadsCurve *pcurve = (egadsCurve *) pedge2->curve->blind;
+        if (pcurve->ref->mtype == LINE ||
+            pcurve->ref->mtype == PARABOLA)
+          for (i = 0; i < 2; i++)
+            pedge2->trange_dot[i] *= fabs(form.ScaleFactor());
+      }
     }
 
     /* check consistency in the data */

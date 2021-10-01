@@ -16,6 +16,12 @@
 
 #include "egadsTypes.h"
 #include "egadsInternals.h"
+/*@-redef@*/
+typedef int    INT_;
+typedef INT_   INT_3D[3];
+typedef double DOUBLE_2D[2];
+/*@+redef@*/
+#include "uvmap_struct.h"
 #include "liteClasses.h"
 #include "liteDevice.h"
 
@@ -25,6 +31,17 @@
 
 
   extern int EG_close(egObject *context);
+  extern int EG_initTessBody(egObject *object, egObject **tess);
+  extern int EG_setTessEdge(egObject *tess, int eIndex, int len,
+                            const double *xyz, const double *t);
+  extern int EG_setTessFace(egObject *tess, int fIndex, int len,
+                            const double *xyz, const double *uv, int ntri,
+                            const int *tris);
+  extern int EG_statusTessBody(egObject *tess, egObject **body, int *state,
+                               int *npts);
+  extern int EG_objectBodyTopo(const egObject *body, int oclass, int index,
+                               egObject **obj);
+  extern int EG_effectNeighbor(egEFace *eface);
 #ifdef __NVCC__
   extern int EG_evaluateDev(const egObject *geom_d, const double *param,
                             double *ev);
@@ -43,10 +60,10 @@
 
 
 typedef struct {
-  void    *data;
-  size_t  ptr;
-  size_t  size;
-  int     swap;
+  void   *data;
+  size_t ptr;
+  size_t size;
+  int    swap;
 } stream_T;
 
 
@@ -469,7 +486,11 @@ EG_readAttrs(stream_T *fp, egAttrs **attrx)
   }
   attrs_h->nattrs = nattr;
   attrs_h->attrs  = attr;
+  attrs_h->nseqs  = 0;
+  attrs_h->seqs   = NULL;
+/*@-nullret@*/
   EG_SET_ATTRS(attrs, attrs_h);
+/*@+nullret@*/
   for (i = 0; i < nattr; i++) {
     EG_GET_ATTR(attr_h, &(attrs_h->attrs[i]));
     attr_.name   = NULL;
@@ -696,6 +717,7 @@ EG_readBody(egObject *context, egObject *mobject, int bindex, stream_T *fp)
   bobj_h->oclass = BODY;
   bobj_h->mtype  = mtype;
   bobj_h->blind  = lbody;
+  bobj_h->topObj = mobject;
   EG_SET_OBJECT(&bobj, bobj_h);
   EG_SET_OBJECT_PTR(&(lmodel_h->bodies[bindex]), &bobj);
   
@@ -1458,6 +1480,804 @@ EG_readBody(egObject *context, egObject *mobject, int bindex, stream_T *fp)
 }
 
 
+/* this function needs CUDA attention! */
+static int
+EG_uvmapImport(void **uvmap, int **trmap, double *range, stream_T *fp)
+{
+  int          i, stat, msrch, trmp, *map;
+  uvmap_struct *uvstruct;
+  
+  *uvmap = NULL;
+  *trmap = NULL;
+  uvstruct = (uvmap_struct *) EG_alloc(sizeof(uvmap_struct));
+  if (uvstruct == NULL) {
+    printf(" EGADS Error: Failed to allocate UVmap (EG_uvmapImport)!\n");
+    return EGADS_MALLOC;
+  }
+  uvstruct->ndef   = 1;
+  uvstruct->mdef   = 1;
+  uvstruct->idef   = 1;
+  uvstruct->isrch  = 0;
+  uvstruct->ibface = 0;
+  uvstruct->nbface = 0;
+  uvstruct->nnode  = 0;
+
+  uvstruct->idibf  = NULL;
+  uvstruct->msrch  = NULL;
+  uvstruct->inibf  = NULL;
+  uvstruct->ibfibf = NULL;
+  uvstruct->u      = NULL;
+  
+  stat = EGADS_READERR;
+  if (Fread(&uvstruct->isrch,  sizeof(int), 1, fp) != 1) goto errOut;
+  if (Fread(&uvstruct->ibface, sizeof(int), 1, fp) != 1) goto errOut;
+  if (Fread(&uvstruct->nbface, sizeof(int), 1, fp) != 1) goto errOut;
+  if (Fread(&uvstruct->nnode,  sizeof(int), 1, fp) != 1) goto errOut;
+  if (Fread(&msrch,            sizeof(int), 1, fp) != 1) goto errOut;
+  if (Fread(&trmp,             sizeof(int), 1, fp) != 1) goto errOut;
+  
+  uvstruct->idibf = (int *) EG_alloc((uvstruct->nbface+1)*sizeof(int));
+  if (uvstruct->idibf == NULL) {
+    printf(" EGADS Error: malloc %d id (EG_uvmapImport)!\n", uvstruct->nbface);
+    stat = EGADS_MALLOC;
+    goto errOut;
+  }
+  uvstruct->idibf[0] = 0;
+  if (Fread(&uvstruct->idibf[1], sizeof(int), uvstruct->nbface, fp) !=
+      uvstruct->nbface) goto errOut;
+  
+  uvstruct->inibf = (INT_3D *) EG_alloc((uvstruct->nbface+1)*sizeof(INT_3D));
+  if (uvstruct->inibf == NULL) {
+    printf(" EGADS Error: malloc %d ini (EG_uvmapImport)!\n", uvstruct->nbface);
+    stat = EGADS_MALLOC;
+    goto errOut;
+  }
+  uvstruct->ibfibf = (INT_3D *) EG_alloc((uvstruct->nbface+1)*sizeof(INT_3D));
+  if (uvstruct->ibfibf == NULL) {
+    printf(" EGADS Error: malloc %d ibf (EG_uvmapImport)!\n", uvstruct->nbface);
+    stat = EGADS_MALLOC;
+    goto errOut;
+  }
+  uvstruct->inibf[0][0]  = uvstruct->inibf[0][1]  = uvstruct->inibf[0][2]  = 0;
+  uvstruct->ibfibf[0][0] = uvstruct->ibfibf[0][1] = uvstruct->ibfibf[0][2] = 0;
+  for (i = 1; i <= uvstruct->nbface; i++) {
+    if (Fread(uvstruct->inibf[i],  sizeof(int), 3, fp) != 3) goto errOut;
+    if (Fread(uvstruct->ibfibf[i], sizeof(int), 3, fp) != 3) goto errOut;
+  }
+  uvstruct->u = (DOUBLE_2D *) EG_alloc((uvstruct->nnode+1)*sizeof(DOUBLE_2D));
+  if (uvstruct->u == NULL) {
+    printf(" EGADS Error: malloc %d u (EG_uvmapImport)!\n", uvstruct->nnode);
+    stat = EGADS_MALLOC;
+    goto errOut;
+  }
+  uvstruct->u[0][0] = uvstruct->u[0][1] = 0.0;
+  for (i = 1; i <= uvstruct->nnode; i++)
+    if (Fread(uvstruct->u[i], sizeof(double), 2, fp) != 2) goto errOut;
+  
+  range[0] = range[1] = uvstruct->u[1][0];
+  range[2] = range[3] = uvstruct->u[1][1];
+  for (i = 2; i <= uvstruct->nnode; i++) {
+    if (uvstruct->u[i][0] < range[0]) range[0] = uvstruct->u[i][0];
+    if (uvstruct->u[i][0] > range[1]) range[1] = uvstruct->u[i][0];
+    if (uvstruct->u[i][1] < range[2]) range[2] = uvstruct->u[i][1];
+    if (uvstruct->u[i][1] > range[3]) range[3] = uvstruct->u[i][1];
+  }
+
+  if (msrch == 1) {
+    uvstruct->msrch = (int *) EG_alloc((uvstruct->nbface+1)*sizeof(int));
+    if (uvstruct->msrch == NULL) {
+      printf(" EGADS Error: malloc %d msrch (EG_uvmapRead)!\n",
+             uvstruct->nbface);
+      stat = EGADS_MALLOC;
+      goto errOut;
+    }
+    uvstruct->msrch[0] = 0;
+    if (Fread(&uvstruct->msrch[1], sizeof(int), uvstruct->nbface, fp) !=
+        uvstruct->nbface) goto errOut;
+  }
+
+  if (trmp == 1) {
+    map = (int *) EG_alloc(uvstruct->nbface*sizeof(int));
+    if (map == NULL) {
+      printf(" EGADS Error: malloc %d trmap (EG_uvmapRead)!\n",
+             uvstruct->nbface);
+      stat = EGADS_MALLOC;
+      goto errOut;
+    }
+    if (Fread(map, sizeof(int), uvstruct->nbface, fp) != uvstruct->nbface)
+      goto errOut;
+    *trmap = map;
+  }
+  
+  *uvmap = uvstruct;
+  return EGADS_SUCCESS;
+  
+errOut:
+  EG_free(uvstruct->idibf);
+  EG_free(uvstruct->msrch);
+  EG_free(uvstruct->inibf);
+  EG_free(uvstruct->ibfibf);
+  EG_free(uvstruct->u);
+/*@-dependenttrans@*/
+  EG_free(uvstruct);
+/*@+dependenttrans@*/
+  return stat;
+}
+
+
+static int
+EG_readEBody(egObject *context, egObject *mobject, int bindex, int iref,
+             stream_T *fp)
+{
+  int       index, i, j, n, stat, mtype, nsegs, nds[2];
+  double    area;
+  egEBody   *ebody;
+  egEShell  *eshell;
+  egEFace   *eface;
+  egELoop   *eloop;
+  egEEdge   *eedge;
+  egObject  bobj_,    *bobj_h    = &bobj_,    *tobj, *bobj, *body;
+  egObject  context_, *context_h = &context_;
+  egObject  mobject_, *mobject_h = &mobject_;
+  liteModel lmodel_,  *lmodel_h  = &lmodel_,  *lmodel;
+  
+  if (context == NULL)                 return EGADS_NULLOBJ;
+  EG_GET_OBJECT(context_h, context);
+  if (context_h->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (context_h->oclass != CONTXT)     return EGADS_NOTCNTX;
+  if (mobject == NULL)                 return EGADS_NULLOBJ;
+  EG_GET_OBJECT(mobject_h, mobject);
+  if (mobject_h->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (mobject_h->oclass != MODEL)      return EGADS_NOTMODEL;
+  lmodel = (liteModel *) mobject_h->blind;
+  EG_GET_MODEL(lmodel_h, lmodel);
+  body   = lmodel_h->bodies[iref-1];
+  
+  n = Fread(&mtype, sizeof(int), 1, fp);
+  if (n != 1) return EGADS_READERR;
+
+  EG_NEW(&ebody, egEBody, 1);
+  if (ebody == NULL) return EGADS_MALLOC;
+  ebody->ref           = body;
+  ebody->eedges.objs   = NULL;
+  ebody->eloops.objs   = NULL;
+  ebody->efaces.objs   = NULL;
+  ebody->eshells.objs  = NULL;
+  ebody->senses        = NULL;
+  ebody->eedges.nobjs  = 0;
+  ebody->eloops.nobjs  = 0;
+  ebody->efaces.nobjs  = 0;
+  ebody->eshells.nobjs = 0;
+  ebody->angle         = 0.0;
+  ebody->done          = 1;
+  ebody->nedge         = 0;
+  ebody->edges         = NULL;
+  
+  stat = EG_makeObject(context, &bobj);
+  if (stat != EGADS_SUCCESS) {
+    EG_FREE(ebody);
+    return stat;
+  }
+  EG_GET_OBJECT(bobj_h, bobj);
+  stat = EG_readAttrs(fp, (egAttrs **) &bobj_h->attrs);
+  if (stat != EGADS_SUCCESS) {
+    EG_FREE(ebody);
+    return stat;
+  }
+  bobj_h->oclass = EBODY;
+  bobj_h->mtype  = mtype;
+  bobj_h->blind  = ebody;
+  bobj_h->topObj = mobject;
+  EG_SET_OBJECT(&bobj, bobj_h);
+  EG_SET_OBJECT_PTR(&(lmodel_h->bodies[bindex]), &bobj);
+  
+  /***** needs attention for CUDA *****/
+  n = Fread(&ebody->eedges.nobjs,  sizeof(int),    1, fp);
+  if (n != 1) return EGADS_READERR;
+  n = Fread(&ebody->eloops.nobjs,  sizeof(int),    1, fp);
+  if (n != 1) return EGADS_READERR;
+  n = Fread(&ebody->efaces.nobjs,  sizeof(int),    1, fp);
+  if (n != 1) return EGADS_READERR;
+  n = Fread(&ebody->eshells.nobjs, sizeof(int),    1, fp);
+  if (n != 1) return EGADS_READERR;
+  n = Fread(&ebody->nedge,         sizeof(int),    1, fp);
+  if (n != 1) return EGADS_READERR;
+  n = Fread(&ebody->angle,         sizeof(double), 1, fp);
+  if (n != 1) return EGADS_READERR;
+
+  if (mtype == SOLIDBODY) {
+    ebody->senses = (int *) EG_alloc(ebody->eshells.nobjs*sizeof(int));
+    if (ebody->senses == NULL) {
+      printf(" EGADS Error: Cannot allocate %d Senses (EG_importEBody)!\n",
+             ebody->eshells.nobjs);
+      return EGADS_MALLOC;
+    }
+    n = Fread(ebody->senses,       sizeof(int), ebody->eshells.nobjs, fp);
+    if (n != ebody->eshells.nobjs) return EGADS_READERR;
+  }
+  
+  /* source Edges */
+  ebody->edges = (egEdVert *) EG_alloc(ebody->nedge*sizeof(egEdVert));
+  if (ebody->edges == NULL) {
+    printf(" EGADS Error: Cannot allocate %d EdVerts (EG_importEBody)!\n",
+           ebody->nedge);
+    return EGADS_MALLOC;
+  }
+  for (j = 0; j < ebody->nedge; j++) {
+    ebody->edges[j].edge = NULL;
+    ebody->edges[j].npts = 0;
+    ebody->edges[j].ts   = NULL;
+  }
+  for (j = 0; j < ebody->nedge; j++) {
+    n = Fread(&index,                 sizeof(int),    1, fp);
+    if (n != 1) return EGADS_READERR;
+    n = Fread(&ebody->edges[j].curve, sizeof(int),    1, fp);
+    if (n != 1) return EGADS_READERR;
+    n = Fread(&ebody->edges[j].npts,  sizeof(int),    1, fp);
+    if (n != 1) return EGADS_READERR;
+    n = Fread(ebody->edges[j].dstart, sizeof(double), 3, fp);
+    if (n != 3) return EGADS_READERR;
+    n = Fread(ebody->edges[j].dend,   sizeof(double), 3, fp);
+    if (n != 3) return EGADS_READERR;
+    ebody->edges[j].ts = EG_alloc(ebody->edges[j].npts*sizeof(double));
+    if (ebody->edges[j].ts == NULL) {
+      printf(" EGADS Error: Edge %d Cannot allocate %d ts (EG_importEBody)!\n",
+             j+1, ebody->edges[j].npts);
+      return EGADS_MALLOC;
+    }
+    n = Fread(ebody->edges[j].ts,     sizeof(double), ebody->edges[j].npts, fp);
+    if (n != ebody->edges[j].npts) return EGADS_READERR;
+    stat = EG_objectBodyTopo(body, EDGE, index, &ebody->edges[j].edge);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: Source Edge = %d (EG_exportEBody)!\n", index);
+      return EGADS_TOPOERR;
+    }
+  }
+  
+  /* EEdges */
+  ebody->eedges.objs = (egObject **)
+                       EG_alloc(ebody->eedges.nobjs*sizeof(egObject *));
+  if (ebody->eedges.objs == NULL) {
+    printf(" EGADS Error: Cannot allocate %d EEdges (EG_importEBody)!\n",
+           ebody->eedges.nobjs);
+    return EGADS_MALLOC;
+  }
+  for (i = 0; i < ebody->eedges.nobjs; i++) ebody->eedges.objs[i] = NULL;
+  for (i = 0; i < ebody->eedges.nobjs; i++) {
+    n = Fread(&mtype, sizeof(short),  1, fp);
+    if (n != 1) return EGADS_READERR;
+    n = Fread(&nsegs, sizeof(int),    1, fp);
+    if (n != 1) return EGADS_READERR;
+    n = Fread(nds,    sizeof(int),    2, fp);
+    if (n != 2) return EGADS_READERR;
+    stat = EG_makeObject(context, &tobj);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: Cannot make EEdge %d/%d Object (EG_importEBody)!\n",
+             i+1, ebody->eedges.nobjs);
+      return stat;
+    }
+    tobj->oclass          = EEDGE;
+    tobj->mtype           = mtype;
+    tobj->topObj          = bobj;
+    ebody->eedges.objs[i] = tobj;
+    eedge = (egEEdge *) EG_alloc(sizeof(egEEdge));
+    if (eedge == NULL) {
+      printf(" EGADS Error: Malloc on %d EEdge blind (EG_importEBody)!\n", i+1);
+      return EGADS_MALLOC;
+    }
+    tobj->blind   = eedge;
+    n = Fread(eedge->trange, sizeof(double), 2, fp);
+    if (n != 2) return EGADS_READERR;
+    eedge->sedges = ebody->edges;
+    stat = EG_objectBodyTopo(body, NODE, nds[0], &eedge->nodes[0]);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: EEdge = %d First Node (EG_importEBody)!\n", i+1);
+      return EGADS_TOPOERR;
+    }
+    stat = EG_objectBodyTopo(body, NODE, nds[1], &eedge->nodes[1]);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: EEdge = %d Last Node (EG_importEBody)!\n", i+1);
+      return EGADS_TOPOERR;
+    }
+    eedge->nsegs = nsegs;
+    eedge->segs  = (egEEseg *) EG_alloc(eedge->nsegs*sizeof(egEEseg));
+    if (eedge->segs == NULL) {
+      printf(" EGADS Error: Malloc EEdge %d nsegs = %d (EG_importEBody)!\n",
+             i+1, eedge->nsegs);
+      return EGADS_MALLOC;
+    }
+    for (j = 0; j < eedge->nsegs; j++) eedge->segs[j].nstart = NULL;
+    for (j = 0; j < eedge->nsegs; j++) {
+      n = Fread(&eedge->segs[j].iedge,  sizeof(int),    1, fp);
+      if (n != 1) return EGADS_READERR;
+      n = Fread(&eedge->segs[j].sense,  sizeof(int),    1, fp);
+      if (n != 1) return EGADS_READERR;
+      n = Fread(&index,                 sizeof(int),    1, fp);
+      if (n != 1) return EGADS_READERR;
+      n = Fread(&eedge->segs[j].tstart, sizeof(double), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      n = Fread(&eedge->segs[j].tend,   sizeof(double), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      if (index != 0) {
+        stat = EG_objectBodyTopo(body, NODE, index, &eedge->segs[j].nstart);
+        if (stat != EGADS_SUCCESS) {
+          printf(" EGADS Error: EEdge = %d Start Node %d (EG_importEBody)!\n",
+                 i+1, j+1);
+          return EGADS_TOPOERR;
+        }
+      }
+    }
+    stat = EG_readAttrs(fp, (egAttrs **) &tobj->attrs);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: readAttrs = %d  EEdge = %d (EG_importEBody)!\n",
+             stat, i+1);
+      return stat;
+    }
+  }
+  
+  /* ELoops */
+  ebody->eloops.objs = (egObject **)
+                       EG_alloc(ebody->eloops.nobjs*sizeof(egObject *));
+  if (ebody->eloops.objs == NULL) {
+    printf(" EGADS Error: Cannot allocate %d ELoops (EG_importEBody)!\n",
+           ebody->eloops.nobjs);
+    return EGADS_MALLOC;
+  }
+  for (i = 0; i < ebody->eloops.nobjs; i++) ebody->eloops.objs[i] = NULL;
+  for (i = 0; i < ebody->eloops.nobjs; i++) {
+    n = Fread(&mtype, sizeof(short),  1, fp);
+    if (n != 1) return EGADS_READERR;
+    n = Fread(nds,    sizeof(int),    2, fp);
+    if (n != 2) return EGADS_READERR;
+    n = Fread(&area,  sizeof(double), 1, fp);
+    if (n != 1) return EGADS_READERR;
+    stat = EG_makeObject(context, &tobj);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: Cannot make ELoop %d/%d Object (EG_importEBody)!\n",
+             i+1, ebody->eloops.nobjs);
+      return stat;
+    }
+    tobj->oclass          = ELOOPX;
+    tobj->mtype           = mtype;
+/*@-kepttrans@*/
+    tobj->topObj          = bobj;
+/*@+kepttrans@*/
+    ebody->eloops.objs[i] = tobj;
+    tobj->blind           = NULL;
+    if ((nds[0] == 0) && (nds[1] == 0)) continue;
+    eloop = (egELoop *) EG_alloc(sizeof(egELoop));
+    if (eloop == NULL) {
+      printf(" EGADS Error: Malloc on %d ELoop blind (EG_importEBody)!\n", i+1);
+      return EGADS_MALLOC;
+    }
+    tobj->blind         = eloop;
+    eloop->eedges.nobjs = nds[0];
+    eloop->nedge        = nds[1];
+    eloop->edgeUVs      = NULL;
+    eloop->senses       = NULL;
+    eloop->area         = area;
+    eloop->eedges.objs  = (egObject **) EG_alloc(eloop->eedges.nobjs*
+                                                 sizeof(egObject *));
+    if (eloop->eedges.objs == NULL) {
+      printf(" EGADS Error: Malloc on %d ELoop %d Objects (EG_importEBody)!\n",
+             i+1, eloop->eedges.nobjs);
+      return EGADS_MALLOC;
+    }
+    for (j = 0; j < eloop->eedges.nobjs; j++) eloop->eedges.objs[j] = NULL;
+    for (j = 0; j < eloop->eedges.nobjs; j++) {
+      n = Fread(&index, sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      stat = EG_objectBodyTopo(bobj, EEDGE, index, &eloop->eedges.objs[j]);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EGADS Error: ELoop = %d Edge %d  %d  (EG_importEBody)!\n",
+               i+1, j+1, index);
+        return EGADS_TOPOERR;
+      }
+    }
+    eloop->senses = (int *) EG_alloc(eloop->eedges.nobjs*sizeof(int));
+    if (eloop->senses == NULL) {
+      printf(" EGADS Error: Malloc on %d ELoop %d senses (EG_importEBody)!\n",
+             i+1, eloop->eedges.nobjs);
+      return EGADS_MALLOC;
+    }
+    n = Fread(eloop->senses, sizeof(int), eloop->eedges.nobjs, fp);
+    if (n != eloop->eedges.nobjs) return EGADS_READERR;
+    
+    eloop->edgeUVs = (egEdgeUV *) EG_alloc(eloop->nedge*sizeof(egEdgeUV));
+    if (eloop->edgeUVs == NULL) {
+      printf(" EGADS Error: Malloc on %d ELoop %d edgeUVs (EG_importEBody)!\n",
+             i+1, eloop->nedge);
+      return EGADS_MALLOC;
+    }
+    for (j = 0; j < eloop->nedge; j++) {
+      n = Fread(&index,                   sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      n = Fread(&eloop->edgeUVs[j].sense, sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      n = Fread(&eloop->edgeUVs[j].npts,  sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      eloop->edgeUVs[j].iuv = (int *) EG_alloc(eloop->edgeUVs[j].npts*
+                                               sizeof(int));
+      if (eloop->edgeUVs == NULL) {
+        printf(" EGADS Error: Malloc on %d ELoop %d iUVs %d (EG_importEBody)!\n",
+               i+1, j+1, eloop->edgeUVs[j].npts);
+        return EGADS_MALLOC;
+      }
+      n = Fread(eloop->edgeUVs[j].iuv, sizeof(int), eloop->edgeUVs[j].npts, fp);
+      if (n != eloop->edgeUVs[j].npts) return EGADS_READERR;
+      stat = EG_objectBodyTopo(body, EDGE, index, &eloop->edgeUVs[j].edge);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EGADS Error: ELoop = %d EdgeUV %d  %d  (EG_importEBody)!\n",
+               i+1, j+1, index);
+        return EGADS_TOPOERR;
+      }
+    }
+    stat = EG_readAttrs(fp, (egAttrs **) &tobj->attrs);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: readAttrs = %d  ELoop = %d (EG_importEBody)!\n",
+             stat, i+1);
+      return stat;
+    }
+  }
+  
+  /* EFaces */
+  ebody->efaces.objs = (egObject **)
+                       EG_alloc(ebody->efaces.nobjs*sizeof(egObject *));
+  if (ebody->efaces.objs == NULL) {
+    printf(" EGADS Error: Cannot allocate %d EFaces (EG_importEBody)!\n",
+           ebody->efaces.nobjs);
+    return EGADS_MALLOC;
+  }
+  for (i = 0; i < ebody->efaces.nobjs; i++) ebody->efaces.objs[i] = NULL;
+  for (i = 0; i < ebody->efaces.nobjs; i++) {
+    n = Fread(&mtype, sizeof(short), 1, fp);
+    if (n != 1) return EGADS_READERR;
+    eface = (egEFace *) EG_alloc(sizeof(egEFace));
+    if (eface == NULL) {
+      printf(" EGADS Error: Malloc on %d EFace blind (EG_importEBody)!\n", i+1);
+      return EGADS_MALLOC;
+    }
+    stat = EG_makeObject(context, &tobj);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: Cannot make EFace %d/%d Object (EG_importEBody)!\n",
+             i+1, ebody->efaces.nobjs);
+      EG_free(eface);
+      return stat;
+    }
+    ebody->efaces.objs[i] = tobj;
+    tobj->oclass          = EFACE;
+    tobj->mtype           = mtype;
+/*@-kepttrans@*/
+    tobj->topObj          = bobj;
+/*@+kepttrans@*/
+    tobj->blind           = eface;
+    eface->trmap          = NULL;
+    eface->uvmap          = NULL;
+    eface->patches        = NULL;
+    eface->eloops.objs    = NULL;
+    eface->senses         = NULL;
+    eface->patches        = NULL;
+    n = Fread(&eface->npatch,       sizeof(int),   1, fp);
+    if (n != 1) return EGADS_READERR;
+    n = Fread(&eface->eloops.nobjs, sizeof(int),   1, fp);
+    if (n != 1) return EGADS_READERR;
+    n = Fread(&eface->last,         sizeof(int),   1, fp);
+    if (n != 1) return EGADS_READERR;
+    if (eface->npatch != 1) {
+      stat = EG_uvmapImport(&eface->uvmap, &eface->trmap, eface->range, fp);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EGADS Error: EFace %d  uvmapImport = %d (EG_importEBody)!\n",
+               i+1, stat);
+        return stat;
+      }
+    } else {
+      n = Fread(eface->range, sizeof(double), 4, fp);
+      if (n != 4) return EGADS_READERR;
+    }
+    eface->eloops.objs = (egObject **) EG_alloc(eface->eloops.nobjs*
+                                                sizeof(egObject *));
+    if (eface->eloops.objs == NULL) {
+      printf(" EGADS Error: Malloc on %d EFace %d Objects (EG_importEBody)!\n",
+             i+1, eface->eloops.nobjs);
+      return EGADS_MALLOC;
+    }
+    for (j = 0; j < eface->eloops.nobjs; j++) eface->eloops.objs[j] = NULL;
+    for (j = 0; j < eface->eloops.nobjs; j++) {
+      n = Fread(&index, sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      stat = EG_objectBodyTopo(bobj, ELOOPX, index, &eface->eloops.objs[j]);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EGADS Error: EFace = %d ELoop %d  %d  (EG_importEBody)!\n",
+               i+1, j+1, index);
+        return EGADS_TOPOERR;
+      }
+    }
+    eface->senses = (int *) EG_alloc(eface->eloops.nobjs*sizeof(int));
+    if (eface->senses == NULL) {
+      printf(" EGADS Error: Malloc on %d EFace senses %d (EG_importEBody)!\n",
+             i+1, eface->eloops.nobjs);
+      return EGADS_MALLOC;
+    }
+    n = Fread(eface->senses, sizeof(int), eface->eloops.nobjs, fp);
+    if (n != eface->eloops.nobjs) return EGADS_READERR;
+    
+    eface->patches = (egEPatch *) EG_alloc(eface->npatch*sizeof(egEPatch));
+    if (eface->patches == NULL) {
+      printf(" EGADS Error: Malloc on %d Patch Object %d (EG_importEBody)!\n",
+             i+1, eface->npatch);
+      return EGADS_MALLOC;
+    }
+    for (j = 0; j < eface->npatch; j++) {
+      eface->patches[j].uvtris  = NULL;
+      eface->patches[j].uvtric  = NULL;
+      eface->patches[j].uvs     = NULL;
+      eface->patches[j].deflect = NULL;
+      eface->patches[j].tol     = -1.0;
+    }
+    for (j = 0; j < eface->npatch; j++) {
+      n = Fread(&index,                      sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      n = Fread(&eface->patches[j].start,    sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      n = Fread(&eface->patches[j].nuvs,     sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      n = Fread(&eface->patches[j].ndeflect, sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      n = Fread(&eface->patches[j].ntris,    sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      eface->patches[j].uvtris = (int *) EG_alloc(3*eface->patches[j].ntris*
+                                                  sizeof(int));
+      if (eface->patches[j].uvtris == NULL) {
+        printf(" EGADS Error: Malloc on %d Patch uvtris %d (EG_importEBody)!\n",
+               i+1, eface->patches[j].ntris);
+        return EGADS_MALLOC;
+      }
+      n = Fread(eface->patches[j].uvtris,    sizeof(int),
+                3*eface->patches[j].ntris, fp);
+      if (n != 3*eface->patches[j].ntris) return EGADS_READERR;
+      eface->patches[j].uvs = (double *) EG_alloc(2*eface->patches[j].nuvs*
+                                                  sizeof(double));
+      if (eface->patches[j].uvs == NULL) {
+        printf(" EGADS Error: Malloc on %d Patch uvs %d (EG_importEBody)!\n",
+               i+1, eface->patches[j].nuvs);
+        return EGADS_MALLOC;
+      }
+      n = Fread(eface->patches[j].uvs,       sizeof(double),
+                2*eface->patches[j].nuvs, fp);
+      if (n != 2*eface->patches[j].nuvs) return EGADS_READERR;
+      eface->patches[j].deflect = (double *)
+                          EG_alloc(3*eface->patches[j].ndeflect*sizeof(double));
+      if (eface->patches[j].deflect == NULL) {
+        printf(" EGADS Error: Malloc on %d Patch deflect %d (EG_importEBody)!\n",
+               i+1, eface->patches[j].ndeflect);
+        return EGADS_MALLOC;
+      }
+      n = Fread(eface->patches[j].deflect,   sizeof(double),
+                3*eface->patches[j].ndeflect, fp);
+      if (n != 3*eface->patches[j].ndeflect) return EGADS_READERR;
+      
+      stat = EG_objectBodyTopo(body, FACE, index, &eface->patches[j].face);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EGADS Error: EFace = %d Patch %d  %d  (EG_importEBody)!\n",
+               i+1, j+1, index);
+        return EGADS_TOPOERR;
+      }
+    }
+    if (eface->npatch == 1) {
+      stat = EG_effectNeighbor(eface);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EGADS Error: %d Patch effectNeighbor = %d (EG_importEBody)!\n",
+               i+1, stat);
+        return EGADS_MALLOC;
+      }
+    }
+    stat = EG_readAttrs(fp, (egAttrs **) &tobj->attrs);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: readAttrs = %d  EFace = %d (EG_importEBody)!\n",
+             stat, i+1);
+      return stat;
+    }
+  }
+  
+  /* EShells */
+  ebody->eshells.objs = (egObject **) EG_alloc(ebody->eshells.nobjs*
+                                               sizeof(egObject *));
+  if (ebody->eshells.objs == NULL) {
+    printf(" EGADS Error: Malloc on %d EShell Objects (EG_importEBody)!\n",
+           ebody->eshells.nobjs);
+    return EGADS_MALLOC;
+  }
+  for (i = 0; i < ebody->eshells.nobjs; i++) ebody->eshells.objs[i] = NULL;
+  for (i = 0; i < ebody->eshells.nobjs; i++) {
+    n = Fread(&mtype, sizeof(short), 1, fp);
+    if (n != 1) return EGADS_READERR;
+    
+    eshell = (egEShell *) EG_alloc(sizeof(egEShell));
+    if (eshell == NULL) {
+      printf(" EGADS Error: Malloc on %d EShell blind (EG_importEBody)!\n", i+1);
+      return EGADS_MALLOC;
+    }
+    stat = EG_makeObject(context, &tobj);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: Cannot make EShell %d/%d Object (EG_importEBody)!\n",
+             i+1, ebody->eshells.nobjs);
+      EG_free(eshell);
+      return stat;
+    }
+    tobj->oclass           = ESHELL;
+    tobj->mtype            = mtype;
+/*@-kepttrans@*/
+    tobj->topObj           = bobj;
+/*@+kepttrans@*/
+    ebody->eshells.objs[i] = tobj;
+    tobj->blind            = eshell;
+    n = Fread(&eshell->efaces.nobjs, sizeof(int),   1, fp);
+    if (n != 1) return EGADS_READERR;
+    eshell->efaces.objs    = (egObject **) EG_alloc(eshell->efaces.nobjs*
+                                                    sizeof(egObject *));
+    if (eshell->efaces.objs == NULL) {
+      printf(" EGADS Error: Malloc on %d EShell %d Objects (EG_importEBody)!\n",
+             i+1, eshell->efaces.nobjs);
+      return EGADS_MALLOC;
+    }
+    for (j = 0; j < eshell->efaces.nobjs; j++) eshell->efaces.objs[j] = NULL;
+    for (j = 0; j < eshell->efaces.nobjs; j++) {
+      n = Fread(&index, sizeof(int), 1, fp);
+      if (n != 1) return EGADS_READERR;
+      stat = EG_objectBodyTopo(bobj, EFACE, index, &eshell->efaces.objs[j]);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EGADS Error: EShell = %d EFace %d  %d  (EG_importEBody)!\n",
+               i+1, j+1, index);
+        return EGADS_TOPOERR;
+      }
+    }
+    stat = EG_readAttrs(fp, (egAttrs **) &tobj->attrs);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: readAttrs = %d  EShell = %d (EG_importEBody)!\n",
+             stat, i+1);
+      return stat;
+    }
+  }
+  
+  /***** ************************ *****/
+  
+  return EGADS_SUCCESS;
+}
+
+
+static int
+EG_readTess(egObject *mobject, int bindex, int iref, stream_T *fp)
+{
+  int       i, n, stat, nedge, nface, len, ntri, *tris;
+  double    *xyzs, *uvs, *ts;
+  egObject  bobj_,    *bobj_h    = &bobj_,    *bobj, *ref;
+  egObject  mobject_, *mobject_h = &mobject_;
+  liteModel lmodel_,  *lmodel_h  = &lmodel_,  *lmodel;
+
+  if (mobject == NULL)                 return EGADS_NULLOBJ;
+  EG_GET_OBJECT(mobject_h, mobject);
+  if (mobject_h->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (mobject_h->oclass != MODEL)      return EGADS_NOTMODEL;
+  lmodel = (liteModel *) mobject_h->blind;
+  EG_GET_MODEL(lmodel_h, lmodel);
+
+  n = Fread(&nedge, sizeof(int), 1, fp);
+  if (n != 1) return EGADS_READERR;
+  n = Fread(&nface, sizeof(int), 1, fp);
+  if (n != 1) return EGADS_READERR;
+  
+  stat = EG_initTessBody(lmodel_h->bodies[iref-1], &bobj);
+  if (stat != EGADS_SUCCESS) return stat;
+  EG_GET_OBJECT(bobj_h, bobj);
+  bobj_h->topObj = mobject;
+  EG_SET_OBJECT(&bobj, bobj_h);
+  EG_SET_OBJECT_PTR(&(lmodel_h->bodies[bindex]), &bobj);
+  
+  /* get Edges */
+  for (i = 0; i < nedge; i++) {
+    n = Fread(&len, sizeof(int), 1, fp);
+    if (n != 1) return EGADS_READERR;
+#ifdef DEBUG
+    printf(" Reading Edge Tess %d len = %d\n", i+1, len);
+#endif
+    if (len == 0) continue;
+    xyzs = (double *) EG_alloc(3*len*sizeof(double));
+    ts   = (double *) EG_alloc(  len*sizeof(double));
+    if ((xyzs == NULL) || (ts == NULL)) {
+      printf(" EGADS Error: Alloc %d Edge %d (EG_importModel)!\n", i+1, len);
+      return EGADS_MALLOC;
+    }
+    n = Fread(xyzs, sizeof(double), 3*len, fp);
+    if (n != 3*len) {
+      EG_free(ts);
+      EG_free(xyzs);
+      return EGADS_READERR;
+    }
+    n = Fread(ts,   sizeof(double),   len, fp);
+    if (n !=   len) {
+      EG_free(ts);
+      EG_free(xyzs);
+      return EGADS_READERR;
+    }
+    stat = EG_setTessEdge(bobj, i+1, len, xyzs, ts);
+    EG_free(ts);
+    EG_free(xyzs);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: Edge %d EG_setTessEdge = %d (EG_importModel)!\n",
+             i+1, stat);
+      return stat;
+    }
+  }
+  
+  /* get Faces */
+  for (i = 0; i < nface; i++) {
+    n = Fread(&len,  sizeof(int), 1, fp);
+    if (n != 1) return EGADS_READERR;
+    n = Fread(&ntri, sizeof(int), 1, fp);
+    if (n != 1) return EGADS_READERR;
+#ifdef DEBUG
+    printf(" Reading Face Tess %d len = %d  ntri = %d\n", i+1, len, ntri);
+#endif
+    if ((len == 0) || (ntri == 0)) continue;
+    xyzs = (double *) EG_alloc( 3*len*sizeof(double));
+    uvs  = (double *) EG_alloc( 2*len*sizeof(double));
+    tris = (int *)    EG_alloc(3*ntri*sizeof(int));
+    if ((xyzs == NULL) || (uvs == NULL) || (tris == NULL)) {
+      printf(" EGADS Error: Alloc %d Face %d %d (EG_importModel)!\n",
+             i+1, len, ntri);
+      return EGADS_MALLOC;
+    }
+    n = Fread(xyzs, sizeof(double), 3*len, fp);
+    if (n !=  3*len) {
+      EG_free(tris);
+      EG_free(uvs);
+      EG_free(xyzs);
+      return EGADS_READERR;
+    }
+    n = Fread(uvs,  sizeof(double), 2*len, fp);
+    if (n !=  2*len) {
+      EG_free(tris);
+      EG_free(uvs);
+      EG_free(xyzs);
+      return EGADS_READERR;
+    }
+    n = Fread(tris, sizeof(int),   3*ntri, fp);
+    if (n != 3*ntri) {
+      EG_free(tris);
+      EG_free(uvs);
+      EG_free(xyzs);
+      return EGADS_READERR;
+    }
+    stat = EG_setTessFace(bobj, i+1, len, xyzs, uvs, ntri, tris);
+    EG_free(tris);
+    EG_free(uvs);
+    EG_free(xyzs);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EGADS Error: Face %d EG_setTessFace = %d (EG_importModel)!\n",
+             i+1, stat);
+      return stat;
+    }
+  }
+  
+  EG_GET_OBJECT(bobj_h, bobj);
+  stat = EG_readAttrs(fp, (egAttrs **) &bobj_h->attrs);
+  if (stat != EGADS_SUCCESS) return stat;
+  EG_SET_OBJECT(&bobj, bobj_h);
+  
+  stat = EG_statusTessBody(bobj, &ref, &i, &len);
+  if (stat != EGADS_SUCCESS) {
+    printf(" EGADS Warning: %d EG_statusTessBody = %d (EG_importModel)!\n",
+           bindex, stat);
+  } else {
+    if (i != 1)
+      printf(" EGADS Warning: Body %d Tess NOT closed (EG_importModel)!\n",
+             bindex);
+  }
+  
+  return EGADS_SUCCESS;
+}
+
+
 static int
 EG_freeLiteModel(/*@null@*/ liteModel *model)
 {
@@ -1480,10 +2300,10 @@ EG_allocLiteModel(int nbody, double bbox[6], liteModel **model)
   liteModel *obj = NULL;
   void      *nil = NULL;
 
-  obj_h->nbody = nbody;
+  obj_h->nbody   = nbody;
   obj_h->bbox[0] = bbox[0]; obj_h->bbox[1] = bbox[1]; obj_h->bbox[2] = bbox[2];
   obj_h->bbox[3] = bbox[3]; obj_h->bbox[4] = bbox[4]; obj_h->bbox[5] = bbox[5];
-  obj_h->bodies = NULL;
+  obj_h->bodies  = NULL;
   if (nbody > 0) {
     EG_NEW((void **)&(obj_h->bodies), egObject *, obj_h->nbody);
     if (obj_h->bodies == NULL) goto modelCleanup;
@@ -1515,11 +2335,32 @@ modelCleanup:
 }
 
 
+/*** also needs CUDA attention ***/
+static int
+EG_reallocLiteModel(egObject *mobject)
+{
+  int       i, mtype, nbody;
+  egObject  **bodies;
+  liteModel *lmodel;
+
+  mtype  = mobject->mtype;
+  lmodel = (liteModel *) mobject->blind;
+  nbody  = lmodel->nbody;
+  bodies = (egObject **) EG_reall(lmodel->bodies, mtype*sizeof(egObject *));
+  if (bodies == NULL) return EGADS_MALLOC;
+  lmodel->bodies = bodies;
+
+  for (i = nbody; i < mtype; i++) lmodel->bodies[i] = NULL;
+
+  return EGADS_SUCCESS;
+}
+
+
 int
 EG_importModel(egObject *context, const size_t nbytes, const char *stream,
                egObject **model)
 {
-  int       i, n, rev[2];
+  int       i, j, n, oclass, mtype, iref, rev[2];
   liteModel *lmodel = NULL;
   egObject  obj_, *obj_h = &obj_;
   egObject  *obj;
@@ -1574,7 +2415,11 @@ EG_importModel(egObject *context, const size_t nbytes, const char *stream,
   if (n != 1) {
     return EGADS_READERR;
   }
-  EG_allocLiteModel(nbody, bbox, &lmodel);
+  i = EG_allocLiteModel(nbody, bbox, &lmodel);
+  if (i != EGADS_SUCCESS) {
+    printf(" EGADS Error: EG_allocLiteModel = %d!\n", i);
+    return i;
+  }
 
   i = EG_makeObject(context, &obj);
   if (i != EGADS_SUCCESS) {
@@ -1602,6 +2447,59 @@ EG_importModel(egObject *context, const size_t nbytes, const char *stream,
     /* errorred out -- cleanup */
     EG_close(context);
     return i;
+  }
+  
+  if (rev[1] != 0) {
+    n = Fread(&mtype, sizeof(int), 1, fp);
+    if (n != 1) {
+      mtype = 0;
+      printf(" EGADS Info: Cannot read extended Model data!\n");
+    }
+    if (mtype > nbody) {
+      obj->mtype = obj_h->mtype = mtype;
+      i = EG_reallocLiteModel(obj);
+      if (i != EGADS_SUCCESS) {
+        /* errorred out -- cleanup */
+        EG_close(context);
+        return i;
+      }
+      for (j = nbody; j < mtype; j++) {
+        n = Fread(&oclass, sizeof(int), 1, fp);
+        if (n != 1) {
+          EG_close(context);
+          return EGADS_READERR;
+        }
+        n = Fread(&iref, sizeof(int), 1, fp);
+        if (n != 1) {
+          EG_close(context);
+          return EGADS_READERR;
+        }
+        if (oclass == TESSELLATION) {
+          i = EG_readTess(obj, j, iref, fp);
+          if (i != EGADS_SUCCESS) {
+            /* errorred out -- cleanup */
+            printf(" Import Error: %d Tess Entry in Model has status = %d!\n",
+                   j+1, i);
+            EG_close(context);
+            return i;
+          }
+        } else if (oclass == EBODY) {
+          i = EG_readEBody(context, obj, j, iref, fp);
+          if (i != EGADS_SUCCESS) {
+            /* errorred out -- cleanup */
+            printf(" Import Error: %d EBody Entry in Model has status = %d!\n",
+                   j+1, i);
+            EG_close(context);
+            return i;
+          }
+        } else {
+          printf(" Import Error: %d Entry in Model has class = %d!\n",
+                 j+1, oclass);
+          EG_close(context);
+          return EGADS_NOTTOPO;
+        }
+      }
+    }
   }
 
   EG_SET_OBJECT_PTR(&(context->topObj), &obj);

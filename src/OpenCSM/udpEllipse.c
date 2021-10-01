@@ -28,24 +28,25 @@
  *     MA  02110-1301  USA
  */
 
-#define NUMUDPARGS 5
+#define NUMUDPARGS 6
 #include "udpUtilities.h"
 
 /* shorthands for accessing argument values and velocities */
-#define RX(    IUDP)  ((double *) (udps[IUDP].arg[0].val))[0]
-#define RX_DOT(IUDP)  ((double *) (udps[IUDP].arg[0].dot))[0]
-#define RY(    IUDP)  ((double *) (udps[IUDP].arg[1].val))[0]
-#define RY_DOT(IUDP)  ((double *) (udps[IUDP].arg[1].dot))[0]
-#define RZ(    IUDP)  ((double *) (udps[IUDP].arg[2].val))[0]
-#define RZ_DOT(IUDP)  ((double *) (udps[IUDP].arg[2].dot))[0]
-#define NEDGE( IUDP)  ((int    *) (udps[IUDP].arg[3].val))[0]
-#define THBEG( IUDP)  ((double *) (udps[IUDP].arg[4].val))[0]
+#define RX(    IUDP)    ((double *) (udps[IUDP].arg[0].val))[0]
+#define RX_DOT(IUDP)    ((double *) (udps[IUDP].arg[0].dot))[0]
+#define RY(    IUDP)    ((double *) (udps[IUDP].arg[1].val))[0]
+#define RY_DOT(IUDP)    ((double *) (udps[IUDP].arg[1].dot))[0]
+#define RZ(    IUDP)    ((double *) (udps[IUDP].arg[2].val))[0]
+#define RZ_DOT(IUDP)    ((double *) (udps[IUDP].arg[2].dot))[0]
+#define NEDGE( IUDP)    ((int    *) (udps[IUDP].arg[3].val))[0]
+#define THBEG( IUDP)    ((double *) (udps[IUDP].arg[4].val))[0]
+#define THETA( IUDP,I)  ((double *) (udps[IUDP].arg[5].val))[I]
 
 /* data about possible arguments */
-static char  *argNames[NUMUDPARGS] = {"rx",        "ry",        "rz",        "nedge",  "thbeg",  };
-static int    argTypes[NUMUDPARGS] = {ATTRREALSEN, ATTRREALSEN, ATTRREALSEN, ATTRINT,  ATTRREAL, };
-static int    argIdefs[NUMUDPARGS] = {0,           0,           0,           2,        0,        };
-static double argDdefs[NUMUDPARGS] = {0.,          0.,          0.,          0.,       0.,       };
+static char  *argNames[NUMUDPARGS] = {"rx",        "ry",        "rz",        "nedge",  "thbeg",  "theta",  };
+static int    argTypes[NUMUDPARGS] = {ATTRREALSEN, ATTRREALSEN, ATTRREALSEN, ATTRINT,  ATTRREAL, ATTRREAL, };
+static int    argIdefs[NUMUDPARGS] = {0,           0,           0,           2,        0,        0,        };
+static double argDdefs[NUMUDPARGS] = {0.,          0.,          0.,          0.,       0.,       0.,       };
 
 /* get utility routines: udpErrorStr, udpInitialize, udpReset, udpSet,
                          udpGet, udpVel, udpClean, udpMesh */
@@ -70,12 +71,13 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 {
     int     status = EGADS_SUCCESS;
 
-    int     senses[8], periodic, iedge, add=1;
+    int     *senses=NULL, periodic, nedge, iedge, i, add=1;
     double  params[11], node[3], data[18], trange[4], tbeg;
-    ego     enodes[9], ecurve, eedges[8], eloop, eface;
+    char    *message=NULL;
+    ego     *enodes=NULL, ecurve, *eedges=NULL, eloop, eface;
 
     ROUTINE(udpExecute);
-    
+
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
     printf("rx(0)     = %f\n", RX(    0));
@@ -86,6 +88,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     printf("rz_dot(0) = %f\n", RZ_DOT(0));
     printf("nedge(0)  = %d\n", NEDGE( 0));
     printf("thbeg(0)  = %f\n", THBEG( 0));
+    if (udps[0].arg[5].size > 1) {
+        for (i = 0; i < udps[0].arg[5].size; i++) {
+            printf("theta(0,%d)= %f\n", i, THETA(0,i));
+        }
+    }
 #endif
 
     /* default return values */
@@ -93,46 +100,64 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     *nMesh  = 0;
     *string = NULL;
 
+    MALLOC(message, char, 100);
+    message[0] = '\0';
+
     /* check arguments */
     if (udps[0].arg[0].size > 1) {
-        printf(" udpExecute: rx should be a scalar\n");
+        snprintf(message, 100, "rx should be a scalar\n");
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (RX(0) < 0) {
-        printf(" udpExecute: rx = %f < 0\n", RX(0));
+        snprintf(message, 100, "rx = %f < 0\n", RX(0));
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (udps[0].arg[1].size > 1) {
-        printf(" udpExecute: ry should be a scalar\n");
+        snprintf(message, 100, "ry should be a scalar\n");
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (RY(0) < 0) {
-        printf(" udpExecute: ry = %f < 0\n", RY(0));
+        snprintf(message, 100, "ry = %f < 0\n", RY(0));
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (udps[0].arg[2].size > 1) {
-        printf(" udpExecute: rz should be a scalar\n");
+        snprintf(message, 100, "rz should be a scalar\n");
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (RZ(0) < 0) {
-        printf(" udpExecute: rz = %f < 0\n", RZ(0));
+        snprintf(message, 100, "rz = %f < 0\n", RZ(0));
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (NEDGE(0) < 2) {
-        printf(" udpExecute: nedge = %d < 2\n", NEDGE(0));
+        snprintf(message, 100, "nedge = %d < 2\n", NEDGE(0));
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (NEDGE(0) > 8) {
-        printf(" udpExecute: nedge = %d > 8\n", NEDGE(0));
+        snprintf(message, 100, "nedge = %d > 8\n", NEDGE(0));
         status  = EGADS_RANGERR;
         goto cleanup;
+
+    } else if (udps[0].arg[5].size > 1) {
+        nedge = udps[0].arg[5].size;
+        for (i = 1; i < nedge; i++) {
+            if (THETA(0,i) <= THETA(0,i-1)) {
+                snprintf(message, 100, "theta[%d] <= theta[%d]\n", i, i-1);
+                status = EGADS_RANGERR;
+                goto cleanup;
+            }
+        }
+        if (THETA(0,0) <= THETA(0,nedge-1)-360) {
+            snprintf(message, 100, "theta[%d] <= theta[%d[-360\n", 0, nedge-1);
+            status = EGADS_RANGERR;
+            goto cleanup;
+        }
     }
 
     /* cache copy of arguments for future use */
@@ -145,6 +170,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     printf("rz(   %d) = %f\n", numUdp, RZ(   numUdp));
     printf("nedge(%d) = %d\n", numUdp, NEDGE(numUdp));
     printf("thbeg(%d) = %f\n", numUdp, THBEG(numUdp));
+    if (udps[numUdp].arg[5].size > 1) {
+        for (i = 0; i < udps[numUdp].arg[5].size; i++) {
+            printf("theta(%d,%d)= %f\n", numUdp, i, THETA(numUdp,i));
+        }
+    }
 #endif
 
     /* ellipses are centered at origin */
@@ -248,6 +278,12 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         goto cleanup;
     }
 
+    if (udps[0].arg[5].size > 1) {
+        nedge = udps[0].arg[5].size;
+    } else {
+        nedge = NEDGE(0);
+    }
+
     /* make the Curve */
     status = EG_makeGeometry(context, CURVE, ELLIPSE, NULL, NULL, params, &ecurve);
     CHECK_STATUS(EG_makeGeometry);
@@ -255,7 +291,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     status = EG_invEvaluate(ecurve, node, trange, data);
     CHECK_STATUS(EG_invEvaluate);
 
-    tbeg = trange[0] + THBEG(0);
+    if (udps[0].arg[5].size > 1) {
+        tbeg = THETA(0,0);
+    } else {
+        tbeg = trange[0] + THBEG(0);
+    }
 
     /* make sure we get the trange between 0 and TWOPI */
     status = EG_getRange(ecurve, trange, &periodic);
@@ -269,11 +309,20 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         goto cleanup;
     }
 
+    /* get the necessary arrays */
+    MALLOC(senses, int, nedge  );
+    MALLOC(enodes, ego, nedge+1);
+    MALLOC(eedges, ego, nedge  );
+
     /* make the Nodes */
     enodes[0] = NULL;
 
-    for (iedge = 0; iedge < NEDGE(0); iedge++) {
-        trange[0] = tbeg + (double)(iedge) / (double)(NEDGE(0)) * TWOPI;
+    for (iedge = 0; iedge < nedge; iedge++) {
+        if (udps[0].arg[5].size > 1) {
+            trange[0] = THETA(0,iedge);
+        } else {
+            trange[0] = tbeg + (double)(iedge) / (double)(nedge) * TWOPI;
+        }
         status = EG_evaluate(ecurve, trange, data);
         CHECK_STATUS(EG_evaluate);
 
@@ -281,13 +330,25 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         CHECK_STATUS(EG_makeTopology);
     }
 
-    enodes[NEDGE(0)] = enodes[0];
+    enodes[nedge] = enodes[0];
 
     /* make the Edges */
-    for (iedge = 0; iedge < NEDGE(0); iedge++) {
+    for (iedge = 0; iedge < nedge; iedge++) {
 
-        trange[0] = tbeg + (double)(iedge  ) / (double)(NEDGE(0)) * TWOPI;
-        trange[1] = tbeg + (double)(iedge+1) / (double)(NEDGE(0)) * TWOPI;
+        if        (udps[0].arg[5].size > 1 && iedge < nedge-1) {
+            trange[0] = THETA(0,iedge  );
+            trange[1] = THETA(0,iedge+1);
+        } else if (udps[0].arg[5].size > 1) {
+            trange[0] = THETA(0,iedge  );
+            trange[1] = THETA(0,0      );
+        } else {
+            trange[0] = tbeg + (double)(iedge  ) / (double)(nedge) * TWOPI;
+            trange[1] = tbeg + (double)(iedge+1) / (double)(nedge) * TWOPI;
+        }
+        while (trange[1] <= trange[0]) {
+            trange[1] += TWOPI;
+        }
+
         status = EG_makeTopology(context, ecurve, EDGE, TWONODE, trange, 2, &(enodes[iedge]), NULL, &(eedges[iedge]));
         CHECK_STATUS(EG_makeTopology);
 
@@ -295,7 +356,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         senses[iedge] = SFORWARD;
     }
 
-    status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL, NEDGE(0), eedges, senses, &eloop);
+    status = EG_makeTopology(context, NULL, LOOP, CLOSED, NULL, nedge, eedges, senses, &eloop);
     CHECK_STATUS(EG_makeTopology);
 
     /* make Face from the loop */
@@ -322,8 +383,18 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 #endif
 
 cleanup:
-    if (status != EGADS_SUCCESS) {
+    FREE(senses);
+    FREE(enodes);
+    FREE(eedges);
+
+    if (strlen(message) > 0) {
+        *string = message;
+        printf("%s\n", message);
+    } else if (status != EGADS_SUCCESS) {
+        FREE(message);
         *string = udpErrorStr(status);
+    } else {
+        FREE(message);
     }
 
     return status;
@@ -353,7 +424,7 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
     ego    eref, *echilds, *enodes, *eedges, *efaces, eent;
 
     ROUTINE(udpSensitivity);
-    
+
 #ifdef DEBUG
     printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f %f)\n",
            (long long)ebody, npnt, entType, entIndex, uvs[0], uvs[1]);

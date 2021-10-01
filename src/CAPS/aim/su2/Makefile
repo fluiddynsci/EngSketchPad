@@ -20,34 +20,40 @@ OBJS =	$(ODIR)/su2AIM.o $(ODIR)/su2Utils.o $(ODIR)/su2_4_Cardinal.o \
 
 $(LDIR)/su2AIM.so:	$(OBJS) $(LDIR)/libutils.a $(LDIR)/libaimUtil.a
 	$(CC) $(SOFLGS) -o $(LDIR)/su2AIM.so $(OBJS) \
-		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -lm
+		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -ldl -lm
 
-$(ODIR)/su2AIM.o:	su2AIM.c su2Utils.h $(IDIR)/capsTypes.h
-	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils su2AIM.c \
+$(ODIR)/su2AIM.o:	su2AIM.c su2Utils.h $(IDIR)/capsTypes.h \
+			$(IDIR)/aimUtil.h  $(IDIR)/aimMesh.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../meshWriter/su2Writer -I../utils su2AIM.c \
 		-o $(ODIR)/su2AIM.o
 
-$(ODIR)/su2Utils.o:	su2Utils.c su2Utils.h
+$(ODIR)/su2Utils.o:	su2Utils.c su2Utils.h \
+			$(IDIR)/aimUtil.h  $(IDIR)/aimMesh.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils su2Utils.c \
 		-o $(ODIR)/su2Utils.o
 
-$(ODIR)/su2_4_Cardinal.o:	su2_4_Cardinal.c su2Utils.h
+$(ODIR)/su2_4_Cardinal.o:	su2_4_Cardinal.c su2Utils.h \
+			$(IDIR)/aimUtil.h  $(IDIR)/aimMesh.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils su2_4_Cardinal.c \
 		-o $(ODIR)/su2_4_Cardinal.o
 
-$(ODIR)/su2_5_Raven.o:	su2_5_Raven.c su2Utils.h
+$(ODIR)/su2_5_Raven.o:	su2_5_Raven.c su2Utils.h \
+			$(IDIR)/aimUtil.h  $(IDIR)/aimMesh.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils su2_5_Raven.c \
 		-o $(ODIR)/su2_5_Raven.o
 
-$(ODIR)/su2_6_Falcon.o:	su2_6_Falcon.c su2Utils.h
+$(ODIR)/su2_6_Falcon.o:	su2_6_Falcon.c su2Utils.h \
+			$(IDIR)/aimUtil.h  $(IDIR)/aimMesh.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils su2_6_Falcon.c \
 		-o $(ODIR)/su2_6_Falcon.o
 
-$(ODIR)/su2_7_Blackbird.o:	su2_7_Blackbird.c su2Utils.h
+$(ODIR)/su2_7_Blackbird.o:	su2_7_Blackbird.c su2Utils.h \
+			$(IDIR)/aimUtil.h  $(IDIR)/aimMesh.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils su2_7_Blackbird.c \
 		-o $(ODIR)/su2_7_Blackbird.o
 
 lint:
-	$(LINT) -I../../include -I$(IDIR) -I../utils $(wildcard *.c) -exportlocal -uniondef -nestcomment -boolops
+	$(LINT) -I../../include -I$(IDIR) -I../utils -I../meshWriter/su2Writer $(wildcard *.c) -exportlocal -uniondef -nestcomment -boolops
 
 clean:
 	-rm $(OBJS)

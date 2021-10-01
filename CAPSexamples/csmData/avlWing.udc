@@ -105,20 +105,14 @@ SET       zmin     @zmin-1
 SET       zmax     @zmax+1
 STORE .
 
-MARK
-
-    # left tip, root, rite tip (if there is at least one wing:name+$Hinge)
-    CATBEG    $name_not_found
-        THROW -999   # unexpected signal
-    CATEND
-    RESTORE   !wing:name+$Hinge  1
-    STORE     .
-
-    PATBEG    icut  3
-        SET       y  ymin+(ymax-ymin)*(icut-1)/2
-        BOX       xmin  y  zmin  xmax-xmin  0  zmax-zmin
-        RESTORE   !wing:name
-        INTERSECT
+IFTHEN wing:hinge.nrow GT 1
+   MARK
+      # left tip, root, rite tip (if there is at least one wing:name+$Hinge)
+      PATBEG    icut  3
+         SET       y  ymin+(ymax-ymin)*(icut-1)/2
+         BOX       xmin  y  zmin  xmax-xmin  0  zmax-zmin
+         RESTORE   !wing:name
+         INTERSECT
             ATTRIBUTE capsAIM            $avlAIM
             ATTRIBUTE capsReferenceArea  wing:area
             ATTRIBUTE capsReferenceSpan  wing:span
@@ -126,61 +120,53 @@ MARK
             ATTRIBUTE capsReferenceX     wing:area/wing:span/4.0
             ATTRIBUTE capsGroup          wing:name
             ATTRIBUTE _name              wing:name+$_+icut
-    PATEND
-    CATBEG    $name_not_found
-    CATEND
+      PATEND
 
-    # beginning and end of each hinge
-    CATBEG    $name_not_found
-        THROW -999   # unexpected signal
-    CATEND
-    PATBEG    ihinge  9999
-        RESTORE   !wing:name+$Hinge  ihinge
-        SELECT    EDGE  1
-        SET       ybeg     @ymin
-        SET       yend     @ymax
-        GETATTR   tagComp  $tagComp
-        GETATTR   tagType  $tagType
-        GETATTR   tagIndex $tagIndex
-        GETATTR   deflect  $deflect
-        GETATTR   xoverc1  $xoverc1
-        GETATTR   xoverc2  $xoverc2
-        STORE     .
+      PATBEG    ihinge  wing:hinge.nrow
+         RESTORE   !wing:name+$Hinge  ihinge
+         SELECT    EDGE  1
+         SET       ybeg     @ymin
+         SET       yend     @ymax
+         GETATTR   tagComp  $tagComp
+         GETATTR   tagType  $tagType
+         GETATTR   tagIndex $tagIndex
+         GETATTR   deflect  $deflect
+         GETATTR   xoverc1  $xoverc1
+         GETATTR   xoverc2  $xoverc2
+         STORE     .
 
-        BOX       xmin  ybeg  zmin  xmax-xmin  0  zmax-zmin
-        RESTORE   !wing:name
-        INTERSECT
+         BOX       xmin  ybeg  zmin  xmax-xmin  0  zmax-zmin
+         RESTORE   !wing:name
+         INTERSECT
             ATTRIBUTE capsAIM                          $avlAIM
             ATTRIBUTE capsGroup                        wing:name
             ATTRIBUTE !$vlmControl_WingHinge+tagIndex  xoverc1
             ATTRIBUTE _name                            wing:name+$_ictrl+ihinge
 
-        BOX       xmin  yend  zmin  xmax-xmin  0  zmax-zmin
-        RESTORE   !wing:name
-        INTERSECT
+         BOX       xmin  yend  zmin  xmax-xmin  0  zmax-zmin
+         RESTORE   !wing:name
+         INTERSECT
             ATTRIBUTE capsAIM                          $avlAIM
             ATTRIBUTE capsGroup                        wing:name
             ATTRIBUTE !$vlmControl_WingHinge+tagIndex  xoverc2
             ATTRIBUTE _name                            wing:name+$_octrl+ihinge
-    PATEND
-    CATBEG    $name_not_found
-    CATEND
-
-    # if there were no wing:name+$Hinge Bodys, make wing:AvlNcut evenly space cuts
-    IFTHEN    ihinge EQ 1
-        PATBEG    icut  wing:AvlNcut
-            SET       y  ymin+(ymax-ymin)*(icut-1)/(wing:AvlNcut-1)
-            BOX       xmin  y  zmin  xmax-xmin  0  zmax-zmin
-            RESTORE !wing:name
-            INTERSECT
-                ATTRIBUTE capsAIM            $avlAIM
-                ATTRIBUTE capsReferenceArea  wing:area
-                ATTRIBUTE capsReferenceSpan  wing:span
-                ATTRIBUTE capsReferenceChord wing:area/wing:span
-                ATTRIBUTE capsReferenceX     wing:area/wing:span/4.0
-                ATTRIBUTE capsGroup          wing:name
-                ATTRIBUTE _name              wing:name+$_+icut
-        PATEND
-    ENDIF
-GROUP
-
+      PATEND
+   GROUP
+ELSE
+   # if there were no wing:name+$Hinge Bodys, make wing:AvlNcut evenly space cuts
+   MARK
+      PATBEG    icut  wing:AvlNcut
+         SET       y  ymin+(ymax-ymin)*(icut-1)/(wing:AvlNcut-1)
+         BOX       xmin  y  zmin  xmax-xmin  0  zmax-zmin
+         RESTORE !wing:name
+         INTERSECT
+            ATTRIBUTE capsAIM            $avlAIM
+            ATTRIBUTE capsReferenceArea  wing:area
+            ATTRIBUTE capsReferenceSpan  wing:span
+            ATTRIBUTE capsReferenceChord wing:area/wing:span
+            ATTRIBUTE capsReferenceX     wing:area/wing:span/4.0
+            ATTRIBUTE capsGroup          wing:name
+            ATTRIBUTE _name              wing:name+$_+icut
+      PATEND
+   GROUP
+ENDIF

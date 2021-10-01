@@ -21,14 +21,18 @@
   #include <io.h> 
   #define snprintf _snprintf
   typedef __int64 LONG_LONG_int;
+  #define UG_MAX_CHAR_STRING_LENGTH 512
 #else
   #include <libgen.h>
   #include <unistd.h>
   #include <sys/utsname.h>
   typedef int64_t LONG_LONG_int;
+  #define UG_MAX_CHAR_STRING_LENGTH 1024
 #endif
 
 #ifndef __UG_TYPEDEF_H__
+  typedef char CHAR_UG_MAX[UG_MAX_CHAR_STRING_LENGTH];
+
   #ifdef _UG_LONG_LONG_INT_
     #define _UG_INT64_	1
     typedef LONG_LONG_int INT_;

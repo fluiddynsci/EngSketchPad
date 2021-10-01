@@ -60,6 +60,7 @@ int main(int argc, char *argv[])
 
     int status; // Function return status;
     int i; // Indexing
+    int outLevel = 1;
 
     // CAPS objects
     capsObj  problemObj, mystranObj, tempObj;
@@ -81,29 +82,26 @@ int main(int argc, char *argv[])
     char *analysisPath, *unitSystem, *intents, **fnames;
     char currentPath[PATH_MAX];
 
-    int runAnalysis = (int) true;
-
     printf("\n\nAttention: mystranTest is hard coded to look for ../csmData/aeroelasticDataTransferSimple.csm\n");
     printf("To not make system calls to the mystran executable the third command line "
            "option may be supplied - 0 = no analysis , >0 run analysis (default).\n\n");
 
     if (argc > 2) {
-        printf(" usage: mystranTest noAnalysis!\n");
+        printf(" usage: mystranTest outLevel!\n");
         return 1;
-    }
-
-    if (argc == 2) {
-        if (strcasecmp(argv[1], "0") == 0) runAnalysis = (int) false;
+    } else if (argc == 2) {
+        outLevel = atoi(argv[1]);
     }
 
     status = caps_open("MyStran_Example", NULL, 0,
-                       "../csmData/aeroelasticDataTransferSimple.csm", 1,
+                       "../csmData/aeroelasticDataTransferSimple.csm", outLevel,
                        &problemObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Load the AIMs
-    status = caps_makeAnalysis(problemObj, "mystranAIM", NULL, NULL, NULL, 0,
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "mystranAIM", NULL, NULL, NULL, &exec,
                                &mystranObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
@@ -223,12 +221,8 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-    if (runAnalysis == (int) false) {
-        printf("\n\nNOT Running mystran!\n\n");
-    } else {
-        printf("\n\nRunning mystran!\n\n");
-        system("mystran.exe mystran_CAPS.dat > mystranOutput.txt");
-    }
+    printf("\n\nRunning mystran!\n\n");
+    system("mystran.exe mystran_CAPS.dat > mystranOutput.txt");
 
     (void) chdir(currentPath);
 
@@ -280,4 +274,3 @@ cleanup:
 
     return status;
 }
-

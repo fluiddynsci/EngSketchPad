@@ -1,26 +1,22 @@
 #MAC OS X 10.5 & up -- 64 bit (clang):
 #
-EGREV   = 1.0.19
+EGREV   = 1.0.20
 
 LIBPATH = -L$(CASROOT)/$(CASARCH)/lib -L$(ESP_ROOT)/lib
-ifeq ($(CASREV),6.8)
-INCS    = -I$(CASROOT)/inc -I$(CASROOT)
-LIBS    = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKPShape -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet -lPTKernel
-endif
 ifeq ($(CASREV),7.3)
 CPDS    = -std=c++11
 INCS    = -I$(CASROOT)/inc -I$(CASROOT)/include/opencascade -I$(CASROOT)
 LIBS    = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet
-endif
-ifeq ($(CASREV),7.4)
+else ifeq ($(CASREV),7.4)
 CPDS    = -std=c++11
 INCS    = -I$(CASROOT)/inc -I$(CASROOT)/include/opencascade -I$(CASROOT)
 LIBS    = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet
-endif
-ifeq ($(CASREV),7.5)
+else ifeq ($(CASREV),7.5)
 CPDS    = -std=c++11
 INCS    = -I$(CASROOT)/inc -I$(CASROOT)/include/opencascade -I$(CASROOT)
 LIBS    = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet
+else 
+$(error Unsupported CASREV=$(CASREV) -- Must be one of: 7.3 7.4)
 endif
 
 DEFINE = -DREVISION=$(CASREV)

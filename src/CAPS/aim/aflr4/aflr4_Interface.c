@@ -24,7 +24,7 @@ int aflr4_Surface_Mesh(int quiet,
                        int numBody, ego *bodies,
                        void *aimInfo, capsValue *aimInputs,
                        meshInputStruct meshInput,
-                       mapAttrToIndexStruct attrMap,
+                       mapAttrToIndexStruct groupMap,
                        meshStruct *surfaceMeshes)
 {
     int status; // Function return status
@@ -585,6 +585,10 @@ int aflr4_Surface_Mesh(int quiet,
             }
         }
 
+        status = copy_mapAttrToIndexStruct( &groupMap,
+                                            &surfaceMeshes[bodyIndex].groupMap );
+        AIM_STATUS(aimInfo, status);
+
         // save off the tessellation object
         surfaceMeshes[bodyIndex].bodyTessMap.egadsTess = tessBodies[bodyIndex];
 
@@ -596,8 +600,7 @@ int aflr4_Surface_Mesh(int quiet,
         //surfaceMeshes[bodyIndex].bodyTessMap.tessFaceQuadMap = tessFaceQuadMap[bodyIndex]; // Save off the quad map
         //tessFaceQuadMap[bodyIndex] = NULL;
 
-        status = mesh_surfaceMeshEGADSTess(&attrMap,
-                                           &surfaceMeshes[bodyIndex]);
+        status = mesh_surfaceMeshEGADSTess(aimInfo, &surfaceMeshes[bodyIndex]);
         if (status != CAPS_SUCCESS) goto cleanup;
 
         status = aim_newTess(aimInfo, surfaceMeshes[bodyIndex].bodyTessMap.egadsTess);
@@ -640,7 +643,7 @@ cleanup:
 
     EG_free(meshInputString); meshInputString = NULL;
 
-    EG_free(copy_bodies);
+    AIM_FREE(copy_bodies);
     EG_deleteObject(model);
 /*@+nullpass@*/
 

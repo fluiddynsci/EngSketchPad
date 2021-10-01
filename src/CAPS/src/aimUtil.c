@@ -17,6 +17,7 @@
 #ifdef WIN32
 /* needs Advapi32.lib & Ws2_32.lib */
 #include <Windows.h>
+#include <direct.h>
 #define strcasecmp stricmp
 #define snprintf   _snprintf
 #define access     _access
@@ -25,6 +26,8 @@
 #else
 #include <unistd.h>
 #include <dirent.h>
+#include <dlfcn.h>
+//#include <limits.h>
 #include <sys/stat.h>
 #define SLASH     '/'
 #endif
@@ -128,7 +131,7 @@ aim_file(void *aimStruc, const char *file, char *aimFile)
 
 
 int
-aim_mkdir(void *aimStruc, const char *path)
+aim_mkDir(void *aimStruc, const char *path)
 {
   int  status;
   char aimDir[PATH_MAX];
@@ -156,7 +159,7 @@ aim_mkdir(void *aimStruc, const char *path)
 
 
 int
-aim_isfile(void *aimStruc, const char *file)
+aim_isFile(void *aimStruc, const char *file)
 {
   int  status;
   char aimFile[PATH_MAX];
@@ -170,8 +173,186 @@ aim_isfile(void *aimStruc, const char *file)
 }
 
 
+int aim_cpFile(void *aimStruc, const char *src, const char *dst)
+{
+  int  status;
+  char cmd[2*PATH_MAX+10], aimDst[PATH_MAX];
+#ifdef WIN32
+  char sback[PATH_MAX], dback[PATH_MAX];
+#endif
+
+  if (strlen(src) > PATH_MAX) {
+    AIM_ERROR(aimStruc, "File src path exceeds max length!");
+    return CAPS_IOERR;
+  }
+  if (strlen(dst) > PATH_MAX) {
+    AIM_ERROR(aimStruc, "File dst path exceeds max length!");
+    return CAPS_IOERR;
+  }
+
+  status = aim_file(aimStruc, dst, aimDst);
+  if (status != CAPS_SUCCESS) return status;
+
+#ifdef WIN32
+  status = aim_flipSlash(src, sback);
+  if (status != EGADS_SUCCESS)  return status;
+  status = aim_flipSlash(aimDst, dback);
+  if (status != EGADS_SUCCESS)  return status;
+  snprintf(cmd, 2*PATH_MAX+10, "copy /Y %s %s", sback, dback);
+  fflush(NULL);
+#else
+  snprintf(cmd, 2*PATH_MAX+10, "cp %s %s", src, aimDst);
+#endif
+  status = system(cmd);
+  if (status != 0) {
+    AIM_ERROR(aimStruc, "Could not execute: %s", cmd);
+    return CAPS_IOERR;
+  }
+
+  return CAPS_SUCCESS;
+}
+
+
+int aim_relPath(void *aimStruc, const char *src,
+                /*@null@*/ const char *dst, char *relPath)
+{
+  int         i, j, len, status;
+  char        aimDst[PATH_MAX], *ptr;
+  aimInfo     *aInfo;
+  capsProblem *problem;
+
+  aInfo = (aimInfo *) aimStruc;
+  if (aInfo == NULL)                   return CAPS_NULLOBJ;
+  if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
+  problem = aInfo->problem;
+
+  if (strlen(src) > PATH_MAX) {
+    AIM_ERROR(aimStruc, "File src path exceeds max length!");
+    return CAPS_IOERR;
+  }
+  if (relPath == NULL) {
+    AIM_ERROR(aimStruc, "NULL relPath!");
+    return CAPS_IOERR;
+  }
+  relPath[0] = '\0';
+  relPath[1] = '\0';
+  relPath[2] = '\0';
+
+  /* get the destination file */
+  if (dst != NULL) {
+    if (strlen(dst) > PATH_MAX) {
+      AIM_ERROR(aimStruc, "File dst path exceeds max length!");
+      return CAPS_IOERR;
+    }
+    if (strlen(dst) > 0) {
+      status = aim_file(aimStruc, dst, aimDst);
+    } else {
+      status = aim_file(aimStruc, ".", aimDst);
+    }
+  } else {
+    status   = aim_file(aimStruc, ".", aimDst);
+  }
+  AIM_STATUS(aimStruc, status);
+  
+  len = strlen(problem->root);
+  if ((len >= strlen(src)) || (len >= strlen(aimDst))) {
+    AIM_ERROR(aimStruc, "File not in rootPath!");
+    return CAPS_IOERR;
+  }
+  for (i = 0; i < len; i++)
+    if ((problem->root[i] != src[i]) || (problem->root[i] != aimDst[i])) {
+      AIM_ERROR(aimStruc, "Path mismatch!");
+      return CAPS_IOERR;
+    }
+  len++; /* skip the slash */
+
+  j = 0;
+  ptr = aimDst+len;
+  while((ptr = strchr(ptr, SLASH)) != NULL) {
+    relPath[j++] = '.';
+    relPath[j++] = '.';
+    relPath[j++] = SLASH;
+    ptr++;
+  }
+
+  for (i = len; i <= strlen(src); i++, j++) relPath[j] = src[i];
+
+cleanup:
+  return status;
+}
+
+
+int aim_symLink(void *aimStruc, const char *src, /*@null@*/ const char *dst)
+{
+#ifdef WIN32
+  if (dst == NULL) return aim_cpFile(aimStruc, src, ".");
+  return      aim_cpFile(aimStruc, src, dst);
+#else
+  int         i, j, k, m, len, status;
+  char        cmd[2*PATH_MAX+10], aimDst[PATH_MAX], relSrc[PATH_MAX];
+  aimInfo     *aInfo;
+
+  aInfo = (aimInfo *) aimStruc;
+  if (aInfo == NULL)                   return CAPS_NULLOBJ;
+  if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
+
+  if (strlen(src) > PATH_MAX) {
+    AIM_ERROR(aimStruc, "File src path exceeds max length!");
+    return CAPS_IOERR;
+  }
+  if (access(src, F_OK) != 0) {
+    AIM_ERROR(aimStruc, "%s Not a File!", src);
+    return CAPS_IOERR;
+  }
+
+  /* convert the absolute src path to a relative path */
+  status = aim_relPath(aimStruc, src, dst, relSrc);
+  AIM_STATUS(aimStruc, status);
+
+  /* get the destination file */
+  if (dst != NULL) {
+    if (strlen(dst) > PATH_MAX) {
+      AIM_ERROR(aimStruc, "File dst path exceeds max length!");
+      return CAPS_IOERR;
+    }
+    if (strlen(dst) > 0) {
+      status = aim_file(aimStruc, dst, aimDst);
+    } else {
+      status = aim_file(aimStruc, ".", aimDst);
+    }
+  } else {
+    status   = aim_file(aimStruc, ".", aimDst);
+  }
+  AIM_STATUS(aimStruc, status);
+
+  /* remove any old links */
+  len = strlen(aimDst);
+  if ((aimDst[len-1] == '.') && (aimDst[len-2] == '/')) {
+    for (i = strlen(relSrc); i > 0; i--)
+      if (relSrc[i] == '/') break;
+    m = len-2;
+    if ((i == 0) && (relSrc[0] != '/')) m = len-1;
+    j = strlen(relSrc);
+    for (k = i; k < j; k++) aimDst[m+k-i] = relSrc[k];
+    aimDst[m+j-i] = 0;
+  }
+  unlink(aimDst);
+
+  snprintf(cmd, 2*PATH_MAX+10, "ln -s %s %s", relSrc, aimDst);
+  status = system(cmd);
+  if (status != 0) {
+    AIM_ERROR(aimStruc, "Could not execute: %s", cmd);
+    return CAPS_IOERR;
+  }
+
+cleanup:
+  return status;
+#endif
+}
+
+
 int
-aim_isdir(void *aimStruc, const char *path)
+aim_isDir(void *aimStruc, const char *path)
 {
   int   status;
   char  aimDir[PATH_MAX];
@@ -227,9 +408,9 @@ aim_fopen(void *aimStruc, const char *path, const char *mode)
 
 
 int
-aim_system(void *aimStruc, const char *command)
+aim_system(void *aimStruc, /*@null@*/ const char *rpath, const char *command)
 {
-  int          status;
+  size_t       status;
   char         *fullcommand;
   size_t       len;
   aimInfo      *aInfo;
@@ -244,17 +425,30 @@ aim_system(void *aimStruc, const char *command)
 
   len = 9 + strlen(problem->root) + 1 + strlen(analysis->path) +
         4 + strlen(command) + 1;
-  fullcommand = EG_alloc(len*sizeof(char));
-  if (fullcommand == NULL) return EGADS_MALLOC;
-
+  if (rpath == NULL) {
+    fullcommand = EG_alloc(len*sizeof(char));
+    if (fullcommand == NULL) return EGADS_MALLOC;
 #ifdef WIN32
-  status = snprintf(fullcommand, len, "%c: && cd %s\\%s && %s",
-                    problem->root[0], &problem->root[2], analysis->path,
-                    command);
+    status = snprintf(fullcommand, len, "%c: && cd %s\\%s && %s",
+                      problem->root[0], &problem->root[2], analysis->path,
+                      command);
 #else
-  status = snprintf(fullcommand, len, "cd %s/%s && %s",
-                    problem->root, analysis->path, command);
+    status = snprintf(fullcommand, len, "cd %s/%s && %s",
+                      problem->root, analysis->path, command);
 #endif
+  } else {
+    len += strlen(rpath) + 1;
+    fullcommand = EG_alloc(len*sizeof(char));
+    if (fullcommand == NULL) return EGADS_MALLOC;
+#ifdef WIN32
+    status = snprintf(fullcommand, len, "%c: && cd %s\\%s\\%s && %s",
+                      problem->root[0], &problem->root[2], analysis->path,
+                      rpath, command);
+#else
+    status = snprintf(fullcommand, len, "cd %s/%s/%s && %s",
+                      problem->root, analysis->path, rpath, command);
+#endif
+  }
   if (status >= len) {
     EG_free(fullcommand);
     return CAPS_BADVALUE;
@@ -262,7 +456,7 @@ aim_system(void *aimStruc, const char *command)
 
   status = system(fullcommand);
   EG_free(fullcommand);
-  return status;
+  return status == 0 ? CAPS_SUCCESS : CAPS_EXECERR;
 }
 
 
@@ -332,7 +526,8 @@ aim_newAnalysisIn(void *aimStruc, int index)
   analysis = (capsAnalysis *) aInfo->analysis;
   if (index <= 0 || index > analysis->nAnalysisIn) return CAPS_RANGEERR;
 
-  if (analysis->analysisIn[index-1]->last.sNum < analysis->pre.sNum) return CAPS_CLEAN;
+  if (analysis->analysisIn[index-1]->last.sNum < analysis->pre.sNum)
+    return CAPS_CLEAN;
   return CAPS_SUCCESS;
 }
 
@@ -693,6 +888,7 @@ aim_getValue(void *aimStruc, int index, enum capssType subtype,
   capsProblem  *problem;
   capsAnalysis *analysis;
   capsObject   **objs;
+  const char *objName = "";
 
   aInfo = (aimInfo *) aimStruc;
   if ((subtype != GEOMETRYIN) && (subtype != GEOMETRYOUT) &&
@@ -706,17 +902,24 @@ aim_getValue(void *aimStruc, int index, enum capssType subtype,
   if (subtype == GEOMETRYIN) {
     nobj = problem->nGeomIn;
     objs = problem->geomIn;
+    objName = "GEOMETRYIN";
   } else if (subtype == GEOMETRYOUT) {
     nobj = problem->nGeomOut;
     objs = problem->geomOut;
+    objName = "GEOMETRYOUT";
   } else if (subtype == ANALYSISIN) {
     nobj = analysis->nAnalysisIn;
     objs = analysis->analysisIn;
+    objName = "ANALYSISIN";
   } else {
     nobj = analysis->nAnalysisOut;
     objs = analysis->analysisOut;
+    objName = "ANALYSISOUT";
   }
-  if (index > nobj)                    return CAPS_BADINDEX;
+  if (index > nobj) {
+    AIM_ERROR(aimStruc, "%s Index (%d > %d) out-of-range!", objName, index, nobj);
+    return CAPS_BADINDEX;
+  }
 
   *value = (capsValue *) objs[index-1]->blind;
   return CAPS_SUCCESS;
@@ -1074,22 +1277,23 @@ aim_fillAttrs(capsObject *object, int *n, char ***names, capsValue **values)
   for (i = 0; i < num; i++) {
     len   = object->attrs->attrs[i].length;
     atype = object->attrs->attrs[i].type;
-    value[i].length  = 1;
-    value[i].type    = Integer;
-    value[i].nrow    = value[i].ncol   = value[i].dim = 0;
-    value[i].index   = value[i].pIndex = 0;
-    value[i].lfixed  = value[i].sfixed = Fixed;
-    value[i].nullVal = NotAllowed;
-    value[i].units   = NULL;
-    value[i].link    = NULL;
-    aName[i]         = EG_strdup(object->attrs->attrs[i].name);
+    value[i].length     = 1;
+    value[i].type       = Integer;
+    value[i].nrow       = value[i].ncol   = value[i].dim = 0;
+    value[i].index      = value[i].pIndex = 0;
+    value[i].lfixed     = value[i].sfixed = Fixed;
+    value[i].nullVal    = NotAllowed;
+    value[i].meshWriter = NULL;
+    value[i].units      = NULL;
+    value[i].link       = NULL;
+    aName[i]            = EG_strdup(object->attrs->attrs[i].name);
     if (aName[i] == NULL) goto bail;
     value[i].limits.dlims[0] = value[i].limits.dlims[1] = 0.0;
     value[i].linkMethod      = Copy;
     value[i].gInType         = 0;
     value[i].partial         = NULL;
-    value[i].ndot            = 0;
-    value[i].dots            = NULL;
+    value[i].nderiv          = 0;
+    value[i].derivs          = NULL;
     if (atype == ATTRINT) {
       if (len == 1) {
         value[i].vals.integer = object->attrs->attrs[i].vals.integer;
@@ -1197,10 +1401,10 @@ aim_analysisAttrs(void *aimStruc, int *nValue, char ***names,
   capsProblem  *problem;
   capsAnalysis *analysis;
 
-  *nValue = 0;
-  *names  = NULL;
-  *values = NULL;
-  aInfo   = (aimInfo *) aimStruc;
+  *nValue  = 0;
+  *names   = NULL;
+  *values  = NULL;
+  aInfo    = (aimInfo *) aimStruc;
   if (aInfo == NULL)                    return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
   problem  = aInfo->problem;
@@ -1279,8 +1483,9 @@ aim_setSensitivity(void *aimStruc, const char *GIname, int irow, int icol)
   aInfo->icol   = 0;
 
   /* clear all then set */
-  ocsmSetVelD(problem->modl, 0,     0,    0,    0.0);
-  ocsmSetVelD(problem->modl, ipmtr, irow, icol, 1.0);
+  stat = ocsmSetDtime(problem->modl, 0);                     if (stat != SUCCESS) return stat;
+  stat = ocsmSetVelD(problem->modl, 0,     0,    0,    0.0); if (stat != SUCCESS) return stat;
+  stat = ocsmSetVelD(problem->modl, ipmtr, irow, icol, 1.0); if (stat != SUCCESS) return stat;
   buildTo = 0;
   nbody   = 0;
   stat    = ocsmBuild(problem->modl, buildTo, &builtTo, &nbody, NULL);
@@ -1299,16 +1504,16 @@ aim_setSensitivity(void *aimStruc, const char *GIname, int irow, int icol)
       if (problem->geomOut[j] == NULL) continue;
       value = (capsValue *) problem->geomOut[j]->blind;
       if (value               == NULL) continue;
-      if (value->dots         == NULL) continue;
-      if (value->dots[i].dot  != NULL) continue;
-      value->dots[i].dot = (double *) EG_alloc(value->length*sizeof(double));
-      if (value->dots[i].dot  == NULL) continue;
+      if (value->derivs         == NULL) continue;
+      if (value->derivs[i].deriv  != NULL) continue;
+      value->derivs[i].deriv = (double *) EG_alloc(value->length*sizeof(double));
+      if (value->derivs[i].deriv  == NULL) continue;
       reals = value->vals.reals;
       if (value->length == 1) reals = &value->vals.real;
       for (n = k = 0; k < value->nrow; k++)
         for (m = 0; m < value->ncol; m++, n++)
           ocsmGetValu(problem->modl, value->pIndex, k+1, m+1,
-                      &reals[n], &value->dots[i].dot[n]);
+                      &reals[n], &value->derivs[i].deriv[n]);
     }
     break;
   }

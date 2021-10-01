@@ -71,8 +71,8 @@ class TestMasstran(unittest.TestCase):
         self.myProblem.geometry.cfgpmtr["VIEW:box3" ].value = 0
 
         # compute Mass properties
-        self.masstran.preAnalysis()
-        self.masstran.postAnalysis()
+        #self.masstran.preAnalysis()
+        #self.masstran.postAnalysis()
 
         # properties of 1 plate
         Area     = self.masstran.output.Area
@@ -158,8 +158,8 @@ class TestMasstran(unittest.TestCase):
         self.myProblem.geometry.cfgpmtr["VIEW:box3" ].value = 0
 
         # compute Mass properties
-        self.masstran.preAnalysis()
-        self.masstran.postAnalysis()
+        #self.masstran.preAnalysis()
+        #self.masstran.postAnalysis()
 
         # properties of 1 box
         Area     = self.masstran.output.Area
@@ -267,8 +267,8 @@ class TestMasstran(unittest.TestCase):
         self.myProblem.geometry.cfgpmtr["VIEW:box3" ].value = 0
  
         # compute Mass properties
-        self.masstran.preAnalysis()
-        self.masstran.postAnalysis()
+        #self.masstran.preAnalysis()
+        #self.masstran.postAnalysis()
  
         # properties of 1 box lacking 1 face
         Area     = self.masstran.output.Area
@@ -378,8 +378,8 @@ class TestMasstran(unittest.TestCase):
         self.myProblem.geometry.cfgpmtr["VIEW:box3" ].value = 1
  
         # compute Mass properties
-        self.masstran.preAnalysis()
-        self.masstran.postAnalysis()
+        #self.masstran.preAnalysis()
+        #self.masstran.postAnalysis()
  
         # properties of 1 box lacking 1 face
         Area     = self.masstran.output.Area

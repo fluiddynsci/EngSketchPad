@@ -30,7 +30,7 @@ $(LDIR)/hsmAIM.so:	$(ODIR)/hsmAIM.o $(ODIR)/hsmUtils.o $(ODIR)/hsmAdj.o \
 		$(ODIR)/hsmAIM.o $(ODIR)/hsmUtils.o $(ODIR)/hsmAdj.o \
 		$(ODIR)/rcm.o $(ODIR)/genrcmi.o \
 		 -L$(LDIR) -lutils -laimUtil -locsm \
-		-legads -ludunits2 -lhsm $(FRPATH) $(CPPSLB) $(ESPFLIBS)
+		-legads -ludunits2 -lhsm -ldl $(FRPATH) $(CPPSLB) $(ESPFLIBS)
 
 $(ODIR)/hsmAIM.o:	hsmAIM.c $(IDIR)/capsTypes.h 
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils hsmAIM.c \

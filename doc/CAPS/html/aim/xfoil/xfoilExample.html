@@ -114,7 +114,7 @@ Performing analysis using pyCAPS</h1>
 <div class="fragment"><div class="line">geometryScript = os.path.join(<span class="stringliteral">&quot;..&quot;</span>,<span class="stringliteral">&quot;csmData&quot;</span>,<span class="stringliteral">&quot;airfoilSection.csm&quot;</span>)</div>
 <div class="line">myProblem = pyCAPS.Problem(problemName=workDir,</div>
 <div class="line">                           capsFile=geometryScript,</div>
-<div class="line">                           outLevel=args.verbosity)</div>
+<div class="line">                           outLevel=args.outLevel)</div>
 </div><!-- fragment --><p> Any design parameters available in *.csm file are also available within the pyCAPS script. The following snippet changes the despmtr "camber" which will force a rebuild of the geometry that xFoil will now use. </p><div class="fragment"><div class="line"><span class="comment"># Change a design parameter - area in the geometry</span></div>
 <div class="line">myProblem.geometry.despmtr.camber = 0.1</div>
 </div><!-- fragment --><p> Next the xFoil AIM needs to be loaded. </p><div class="fragment"><div class="line"><span class="comment"># Load xfoil aim</span></div>
@@ -138,18 +138,8 @@ Performing analysis using pyCAPS</h1>
 <div class="line"> </div>
 <div class="line"><span class="comment"># Append the polar file if it already exists - otherwise the AIM will delete the file</span></div>
 <div class="line">xfoil.input.Append_PolarFile = <span class="keyword">True</span></div>
-</div><!-- fragment --><p> After all desired options are set aimPreAnalysis needs to be executed. </p><div class="fragment"><div class="line">xfoil.preAnalysis()</div>
-</div><!-- fragment --><p> At this point the required files necessary run xFoil should have be created and placed in the specified analysis working directory. Next xFoil needs to executed such as through an OS system call like,</p>
-<div class="fragment"><div class="line"><span class="keywordflow">print</span> (<span class="stringliteral">&quot;\n\nRunning xFoil......&quot;</span>)</div>
-<div class="line">currentDirectory = os.getcwd() <span class="comment"># Get our current working directory</span></div>
-<div class="line"> </div>
-<div class="line">os.chdir(xfoil.analysisDir) <span class="comment"># Move into test directory</span></div>
-<div class="line"> </div>
-<div class="line">os.system(<span class="stringliteral">&quot;xfoil &lt; xfoilInput.txt &gt; Info.out&quot;</span>); <span class="comment"># Run xfoil via system call</span></div>
-<div class="line"> </div>
-<div class="line">os.chdir(currentDirectory) <span class="comment"># Move back to top directory</span></div>
-</div><!-- fragment --><p>After xFoil is finished running aimPostAnalysis needs to be executed. </p><div class="fragment"><div class="line">xfoil.postAnalysis()</div>
-</div><!-- fragment --><p> Finally, available AIM outputs (see <a class="el" href="aimOutputsXFOIL.html">AIM Outputs</a>) may be retrieved, for example: </p><div class="fragment"><div class="line"><span class="comment"># Retrieve Cl and Cd</span></div>
+</div><!-- fragment --><p> The xFoil AIM auto executes xfoil just-in-time when oututs are requested (<a class="el" href="aimExecuteXFOIL.html">AIM Execution</a>).</p>
+<p>Finally, available AIM outputs (see <a class="el" href="aimOutputsXFOIL.html">AIM Outputs</a>) may be retrieved, for example: </p><div class="fragment"><div class="line"><span class="comment"># Retrieve Cl and Cd</span></div>
 <div class="line">Cl = xfoil.output.CL</div>
 <div class="line">print(<span class="stringliteral">&quot;Cl = &quot;</span>, Cl)</div>
 <div class="line"> </div>
@@ -186,7 +176,7 @@ xFoil generated lift and drag coefficients for various angles of attack</div></d
 </div><!-- PageDoc -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Fri May 28 2021 11:09:42 for xFoil Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
+Generated on Fri Sep 17 2021 06:43:03 for xFoil Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
 </small></address>
 </body>
 </html>

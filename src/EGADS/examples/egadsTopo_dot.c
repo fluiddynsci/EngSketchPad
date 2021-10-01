@@ -2,6 +2,8 @@
 #include "egads.h"
 #include "egads_dot.h"
 
+#include "../src/egadsStack.h"
+
 #if defined(_MSC_VER) && (_MSC_VER < 1900)
 #define __func__  __FUNCTION__
 #endif
@@ -212,6 +214,61 @@ cleanup:
   return status + nerr;
 }
 
+/*****************************************************************************/
+/*                                                                           */
+/*  Re-make Topology from getTopology                                        */
+/*                                                                           */
+/*****************************************************************************/
+
+int
+remakeTopology(ego etopo)
+{
+  int    status = EGADS_SUCCESS;
+  int    i, oclass, mtype, *senses, nchild, *ivec=NULL;
+  double data[4], *rvec=NULL;
+  ego    context, eref, egeom, eNewTopo=NULL, eNewGeom=NULL, *echild;
+
+  status = EG_getContext(etopo, &context);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_getTopology(etopo, &egeom, &oclass, &mtype,
+                          data, &nchild, &echild, &senses);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_makeTopology(context, egeom, oclass, mtype,
+                          data, nchild, echild, senses, &eNewTopo);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = EG_isEquivalent(etopo, eNewTopo);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  EG_deleteObject(eNewTopo);
+
+  if (egeom != NULL) {
+    status = EG_getGeometry(egeom, &oclass, &mtype, &eref, &ivec, &rvec);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    status = EG_makeGeometry(context, oclass, mtype, eref, ivec,
+                             rvec, &eNewGeom);
+    if (status != EGADS_SUCCESS) goto cleanup;
+    EG_deleteObject(eNewGeom);
+  }
+
+  for (i = 0; i < nchild; i++) {
+    status = remakeTopology(echild[i]);
+    if (status != EGADS_SUCCESS) goto cleanup;
+  }
+
+cleanup:
+  EG_free(ivec);
+  EG_free(rvec);
+
+  if (status != EGADS_SUCCESS) {
+    printf(" Failure %d in %s\n", status, __func__);
+  }
+
+  return status;
+}
+
 
 /*****************************************************************************/
 /*                                                                           */
@@ -220,7 +277,7 @@ cleanup:
 /*****************************************************************************/
 
 int
-pingBox(ego context)
+pingBox(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1, nt1, iedge, nedge, iface, nface;
@@ -238,6 +295,10 @@ pingBox(ego context)
 
   /* make the body */
   status = EG_makeSolidBody(context, BOX, data, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -334,6 +395,10 @@ pingSphere(ego context)
   for (sgn = -1; sgn <= 1; sgn += 2) {
     /* make the body */
     status = EG_makeSolidBody(context, sgn*SPHERE, data, &ebody1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* test re-making the topology */
+    status = remakeTopology(ebody1);
     if (status != EGADS_SUCCESS) goto cleanup;
 
     /* get the Faces from the Body */
@@ -436,6 +501,10 @@ pingCone(ego context)
     status = EG_makeSolidBody(context, sgn*CONE, data, &ebody1);
     if (status != EGADS_SUCCESS) goto cleanup;
 
+    /* test re-making the topology */
+    status = remakeTopology(ebody1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
     /* get the Faces from the Body */
     status = EG_getBodyTopos(ebody1, NULL, FACE, &nface, NULL);
     if (status != EGADS_SUCCESS) goto cleanup;
@@ -534,6 +603,10 @@ pingCylinder(ego context)
   for (sgn = -1; sgn <= 1; sgn += 2) {
     /* make the body */
     status = EG_makeSolidBody(context, sgn*CYLINDER, data, &ebody1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* test re-making the topology */
+    status = remakeTopology(ebody1);
     if (status != EGADS_SUCCESS) goto cleanup;
 
     /* get the Faces from the Body */
@@ -639,6 +712,10 @@ pingTorus(ego context)
     status = EG_makeSolidBody(context, sgn*TORUS, data, &ebody1);
     if (status != EGADS_SUCCESS) goto cleanup;
 
+    /* test re-making the topology */
+    status = remakeTopology(ebody1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
     /* get the Faces from the Body */
     status = EG_getBodyTopos(ebody1, NULL, FACE, &nface, NULL);
     if (status != EGADS_SUCCESS) goto cleanup;
@@ -718,6 +795,7 @@ cleanup:
 
 int
 makeLineEdge( ego context,      /* (in)  EGADS context           */
+              objStack *stack,  /* (in)  EGADS obj stack         */
               ego n1,           /* (in)  first node              */
               ego n2,           /* (in)  second node             */
               ego *eedge )      /* (out) Edge created from nodes */
@@ -742,6 +820,8 @@ makeLineEdge( ego context,      /* (in)  EGADS context           */
   status = EG_makeGeometry(context, CURVE, LINE, NULL, NULL,
                            data, &eline);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, eline);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* make the Edge on the Line */
   tdata[0] = 0;
@@ -752,6 +832,8 @@ makeLineEdge( ego context,      /* (in)  EGADS context           */
 
   status = EG_makeTopology(context, eline, EDGE, TWONODE,
                            tdata, 2, enodes, NULL, eedge);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *eedge);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -819,6 +901,7 @@ cleanup:
 
 int
 makePlaneLoop( ego context,         /* (in)  EGADS context    */
+               objStack *stack,     /* (in)  EGADS obj stack  */
                const double *x0,    /* (in)  Node 0 coord     */
                const double *x1,    /* (in)  Node 1 coord     */
                const double *x2,    /* (in)  Node 2 coord     */
@@ -836,12 +919,16 @@ makePlaneLoop( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[0]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[0]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = x1[0];
   data[1] = x1[1];
   data[2] = x1[2];
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[1]);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[1]);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   data[0] = x2[0];
@@ -850,21 +937,25 @@ makePlaneLoop( ego context,         /* (in)  EGADS context    */
   status = EG_makeTopology(context, NULL, NODE, 0,
                            data, 0, NULL, NULL, &enodes[2]);
   if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, enodes[2]);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
   /* create the Edges */
-  status =  makeLineEdge(context, enodes[0], enodes[1], &eedges[0] );
+  status =  makeLineEdge(context, stack, enodes[0], enodes[1], &eedges[0] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status =  makeLineEdge(context, enodes[1], enodes[2], &eedges[1] );
+  status =  makeLineEdge(context, stack, enodes[1], enodes[2], &eedges[1] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
-  status =  makeLineEdge(context, enodes[2], enodes[0], &eedges[2] );
+  status =  makeLineEdge(context, stack, enodes[2], enodes[0], &eedges[2] );
   if (status != EGADS_SUCCESS) goto cleanup;
 
 
   /* make the loopy */
   status = EG_makeTopology(context, NULL, LOOP, CLOSED,
                            NULL, 3, eedges, senses, eloop);
+  if (status != EGADS_SUCCESS) goto cleanup;
+  status = EG_stackPush(stack, *eloop);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EGADS_SUCCESS;
@@ -954,7 +1045,7 @@ cleanup:
 
 
 int
-pingMakeFace(ego context)
+pingMakeFace(ego context, objStack *stack)
 {
   int    status = EGADS_SUCCESS;
   int    iparam, np1, nt1, iedge, nedge, iface, nface;
@@ -976,7 +1067,7 @@ pingMakeFace(ego context)
   x0[0] = 0.00; x0[1] = 0.00; x0[2] = 0.00;
   x1[0] = 1.10; x1[1] = 0.10; x1[2] = 0.05;
   x2[0] = 0.05; x2[1] = 1.20; x2[2] = 0.10;
-  status = makePlaneLoop(context, x0, x1, x2, &eloop1);
+  status = makePlaneLoop(context, stack, x0, x1, x2, &eloop1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeFace(eloop1, SFORWARD, NULL, &eface1);
@@ -984,6 +1075,10 @@ pingMakeFace(ego context)
 
   status = EG_makeTopology(context, NULL, BODY, FACEBODY,
                            NULL, 1, &eface1, NULL, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   /* get the Faces from the Body */
@@ -999,6 +1094,7 @@ pingMakeFace(ego context)
   params[1] =  0.1;
   params[2] = 20.0;
   status = EG_makeTessBody(ebody1, params, &tess1);
+  if (status != EGADS_SUCCESS) goto cleanup;
 
 
   for (iedge = 0; iedge < nedge; iedge++) {
@@ -1043,7 +1139,7 @@ pingMakeFace(ego context)
 
     /* make a perturbed Circle for finite difference */
     x[iparam] += dtime;
-    status = makePlaneLoop(context, x0, x1, x2, &eloop2);
+    status = makePlaneLoop(context, stack, x0, x1, x2, &eloop2);
     if (status != EGADS_SUCCESS) goto cleanup;
     x[iparam] -= dtime;
 
@@ -1065,11 +1161,11 @@ pingMakeFace(ego context)
     EG_deleteObject(tess2);
     EG_deleteObject(ebody2);
     EG_deleteObject(eface2);
-    EG_deleteObject(eloop2);
   }
 
   EG_deleteObject(tess1);
   EG_deleteObject(ebody1);
+  EG_deleteObject(eface1);
 
 cleanup:
   if (status != EGADS_SUCCESS) {
@@ -1082,8 +1178,9 @@ cleanup:
 
 int main(int argc, char *argv[])
 {
-  int status;
-  ego context;
+  int status, i, oclass, mtype;
+  ego context, ref, prev, next;
+  objStack stack;
 
   /* create an EGADS context */
   status = EG_open(&context);
@@ -1092,7 +1189,11 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
-  status = pingBox(context);
+  /* create stack for gracefully cleaning up objects */
+  status  = EG_stackInit(&stack);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = pingBox(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 #if 0
   status = pingSphere(context);
@@ -1107,10 +1208,27 @@ int main(int argc, char *argv[])
   status = pingTorus(context);
   if (status != EGADS_SUCCESS) goto cleanup;
 #endif
-  status = pingMakeFace(context);
+  status = pingMakeFace(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 cleanup:
+
+  /* clean up all of our temps */
+  EG_stackPop(&stack, &ref);
+  while (ref != NULL) {
+    i = EG_deleteObject(ref);
+    if (i != EGADS_SUCCESS)
+      printf(" EGADS Internal: EG_deleteObject = %d!\n", i);
+    EG_stackPop(&stack, &ref);
+  }
+  EG_stackFree(&stack);
+
+  /* check to make sure the context is clean */
+  EG_getInfo(context, &oclass, &mtype, &ref, &prev, &next);
+  if (next != NULL) {
+    status = EGADS_CONSTERR;
+    printf("Context is not properly clean!\n");
+  }
 
   EG_close(context);
 

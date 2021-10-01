@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description = 'SU2 and Tetgen Pytest Example',
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -34,7 +34,7 @@ workDir = os.path.join(str(args.workDir[0]), "SU2TetgenAnalysisTest")
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 ## [geometry]
 
 ## [capsDespmtrs]
@@ -70,23 +70,9 @@ myMesh.input.Preserve_Surf_Mesh = True
 ## [setMeshpmtrs]
 
 ## [meshAnalysis]
-# Run AIM pre-analysis
-mySurfMesh.preAnalysis()
-
-##########################################
-## egadsTess was ran during preAnalysis ##
-##########################################
-
-# Run AIM post-analysis
-mySurfMesh.postAnalysis()
-
-# Run AIM pre-analysis
-myMesh.preAnalysis()
-
-# NO analysis is needed - TetGen was already ran during preAnalysis
-
-# Run AIM post-analysis
-myMesh.postAnalysis()
+##################################################
+## egadsTess/TetGen are executed automatically  ##
+##################################################
 ## [meshAnalysis]
 
 ## [loadSu2]

@@ -4,6 +4,8 @@
 #include "egads.h"     // Bring in egads utilss
 #include "capsTypes.h" // Bring in CAPS types
 #include "aimUtil.h"   // Bring in AIM utils
+#include "aimMesh.h"// Bring in AIM meshing utils
+
 #include "miscUtils.h" // Bring in misc. utility functions
 #include "meshUtils.h" // Bring in meshing utility functions
 #include "cfdTypes.h"  // Bring in cfd specific types
@@ -11,12 +13,13 @@
 
 // Write SU2 configuration file for version Falcon (6.2)
 int su2_writeCongfig_Falcon(void *aimInfo, capsValue *aimInputs,
+                            const char *meshfilename,
                             cfdBoundaryConditionStruct bcProps, int withMotion)
 {
 
     int status; // Function return status
 
-    int i; // Indexing
+    int i, slen; // Indexing
 
     int stringLength;
 
@@ -79,7 +82,8 @@ int su2_writeCongfig_Falcon(void *aimInfo, capsValue *aimInputs,
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Specify turbulence model (NONE, SA, SA_NEG, SST, SA_E, SA_COMP, SA_E_COMP)\n");
-    fprintf(fp,"%% KIND_TURB_MODEL= NONE\n");
+    string_toUpperCase(aimInputs[Turbulence_Model-1].vals.string);
+    fprintf(fp,"KIND_TURB_MODEL = %s\n", aimInputs[Turbulence_Model-1].vals.string);
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Specify Hybrid RANS/LES model (SA_DES, SA_DDES, SA_ZDES, SA_EDDES)\n");
     fprintf(fp,"%% HYBRID_RANSLES= SA_DDES\n");
@@ -158,7 +162,10 @@ int su2_writeCongfig_Falcon(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Init option to choose between Reynolds (default) or thermodynamics quantities\n");
     fprintf(fp,"%% for initializing the solution (REYNOLDS, TD_CONDITIONS)\n");
-    fprintf(fp,"INIT_OPTION= REYNOLDS\n");
+    if (aimInputs[Init_Option-1].nullVal == NotNull) {
+      string_toUpperCase(aimInputs[Init_Option-1].vals.string);
+      fprintf(fp,"INIT_OPTION= %s\n", aimInputs[Init_Option-1].vals.string);
+    }
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Free-stream option to choose between density and temperature (default) for\n");
     fprintf(fp,"%% initializing the solution (TEMPERATURE_FS, DENSITY_FS)\n");
@@ -1357,7 +1364,7 @@ int su2_writeCongfig_Falcon(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% ------------------------- INPUT/OUTPUT INFORMATION --------------------------%%\n");
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Mesh input file\n");
-    fprintf(fp,"MESH_FILENAME= %s.su2\n", aimInputs[Proj_Name-1].vals.string);
+    fprintf(fp,"MESH_FILENAME= %s\n", meshfilename);
 
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Mesh input file format (SU2, CGNS)\n");
@@ -1547,6 +1554,16 @@ int su2_writeCongfig_Falcon(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%%\n");
     fprintf(fp,"%% Use combined objective within gradient evaluation: may reduce cost to compute gradients when using the adjoint formulation.\n");
     fprintf(fp,"%% OPT_COMBINE_OBJECTIVE = NO\n");
+    fprintf(fp,"%%\n");
+    if (aimInputs[Input_String-1].nullVal != IsNull) {
+        fprintf(fp,"%% CAPS Input_String\n");
+        for (slen = i = 0; i < aimInputs[Input_String-1].length; i++) {
+            string_toUpperCase(aimInputs[Input_String-1].vals.string + slen);
+            fprintf(fp,"%s\n", aimInputs[Input_String-1].vals.string + slen);
+            slen += strlen(aimInputs[Input_String-1].vals.string + slen) + 1;
+        }
+    }
+    fprintf(fp,"\n");
     fprintf(fp,"%% ---------------- End of SU2 Configuration File -------------------%%\n");
 
     status = CAPS_SUCCESS;

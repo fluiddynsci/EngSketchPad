@@ -1042,6 +1042,11 @@ ifthen StructuresToggle eq 1 or VulnToggle eq 1
        linseg    ::x[16]   ::y[16]   0
        linseg    ::x[17]   ::y[17]   0
     skend     0
+
+    assert    0  1
+    catbeg    $underconstrained
+    catend
+
     sweep
 
     attribute capsGroup $Stringers
@@ -1092,7 +1097,7 @@ ifthen StructuresToggle eq 1 or VulnToggle eq 1
     # Creates stringer X within fuselage
     #
     restore $ForX 0
-    intersect 0 0 0
+    intersect none 0 0
     udprim  editAttr filename <<
     face adj2edge crown=1
     set           crown=1
@@ -1364,6 +1369,10 @@ ifthen VulnToggle eq 1 or VulnToggle eq 1
        linseg    ::x[1]   ::y[1]   0
     skend     0
 
+    assert    0  1
+    catbeg    $underconstrained
+    catend
+
     skbeg     0.4   0  1   1
        skvar     xy   -0.000833;0.005328;0.000000;1.810591;0.104778;1.420725;0.794773;2.001446;0.000000;
        skcon     X   1   -1  0
@@ -1377,8 +1386,12 @@ ifthen VulnToggle eq 1 or VulnToggle eq 1
        linseg    ::x[3]   ::y[3]   0
        linseg    ::x[1]   ::y[1]   0
     skend     0
-    scale 0.7
 
+    assert    0  1
+    catbeg    $underconstrained
+    catend
+
+scale 0.7
 
     skbeg     0.9   0   1   1
        skvar     xy   0.000000;0.005000;0;

@@ -29,7 +29,7 @@ parser = argparse.ArgumentParser(description = 'Aeroelastic Pressure SU2 and Ast
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
 parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot data")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -42,7 +42,7 @@ projectName = "aeroelasticSimple_Pressure_SA"
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransferSimple.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AIMs
 surfMesh = myProblem.analysis.create(aim = "egadsTessAIM",
@@ -63,7 +63,8 @@ su2.input["Mesh"].link(mesh.output["Volume_Mesh"])
 
 astros = myProblem.analysis.create(aim = "astrosAIM",
                                    name = "astros",
-                                   capsIntent = "STRUCTURE")
+                                   capsIntent = "STRUCTURE",
+                                   autoExec = True)
 
 # Create the data transfer connections
 boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
@@ -87,10 +88,11 @@ for boundName in boundNames:
 
 # Set inputs for egads
 surfMesh.input.Tess_Params = [.05, 0.01, 20.0]
+surfMesh.input.Edge_Point_Max = 4
 
 # Set inputs for tetgen
 mesh.input.Preserve_Surf_Mesh = True
-mesh.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+mesh.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set inputs for su2
 speedofSound = 340.0 # m/s
@@ -149,23 +151,6 @@ astros.input.Constraint = {"edgeConstraint": constraint}
 load = {"loadType" : "PressureExternal"}
 astros.input.Load = {"pressureAero": load}
 
-####### EGADS ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "tetgen")
-surfMesh.preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "tetgen")
-surfMesh.postAnalysis()
-#######################################
-
-####### Tetgen ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "tetgen")
-mesh.preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "tetgen")
-mesh.postAnalysis()
-#######################################
 
 ####### SU2 ###########################
 # Re-run the preAnalysis
@@ -203,29 +188,8 @@ for boundName in boundNames:
 
 
 ####### Astros #######################
-# Run pre/post-analysis for astros and execute
-print ("\nRunning PreAnalysis ......", "astros")
-astros.preAnalysis()
-
-# Run astros
-print ("\n\nRunning Astros......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(astros.analysisDir) # Move into test directory
-
-# Copy files needed to run astros
-astros_files = ["ASTRO.D01",  # *.DO1 file
-                "ASTRO.IDX"]  # *.IDX file
-for file in astros_files:
-    if not os.path.isfile(file):
-        shutil.copy(ASTROS_ROOT + os.sep + file, file)
-
-# Run Astros via system call
-os.system("astros.exe < " + projectName +  ".dat > " + projectName + ".out");
-
-os.chdir(currentDirectory) # Move back to top directory
-
-print ("\nRunning PostAnalysis ......", "astros")
-astros.postAnalysis()
+# Run analysis for astros 
+print ("\nRunning ......", "astros")
+astros.runAnalysis()
 #######################################
 

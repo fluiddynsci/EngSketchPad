@@ -3619,25 +3619,7 @@ int astros_writeGeomParametrization(FILE *fp,
                                              mesh->bodyTessMap.egadsTess,
                                              &numPoint, &xyz);
                 printf(">>> Back from getting sensitivity\n");
-                if (status == CAPS_NOTFOUND) {
-
-                    numPoint = mesh->numNode;
-                    xyz = (double *) EG_reall(xyz, 3*numPoint*sizeof(double));
-                    if (xyz == NULL) {
-                        status = EGADS_MALLOC;
-                        goto cleanup;
-                    }
-
-                    for (m = 0; m < 3*numPoint; m++) xyz[m] = 0.0;
-
-                    printf("Warning: Sensitivity not found for %s, defaulting to 0.0s\n",
-                           geomInName);
-
-                } else if (status != CAPS_SUCCESS) {
-
-                    goto cleanup;
-
-                }
+                AIM_STATUS(aimInfo, status, "Sensitivity for: %s\n", geomInName);
 
                 if (numPoint != mesh->numNode) {
                     printf("Error: the number of nodes returned by aim_senitivity does NOT match the surface mesh!\n");
@@ -3680,23 +3662,8 @@ int astros_writeGeomParametrization(FILE *fp,
                                                                                                  row+1, col+1, // row, col
                                                                                                  mesh->bodyTessMap.egadsTess,
                                                                                                  &numPoint, &xyz);
-                                                if (status == CAPS_NOTFOUND) {
-                                                        numPoint = mesh->numNode;
-                                                        xyz = (double *) EG_reall(xyz, 3*numPoint*sizeof(double));
-                                                        if (xyz == NULL) {
-                                                                status = EGADS_MALLOC;
-                                                                goto cleanup;
-                                                        }
+                                                AIM_STATUS(aimInfo, status, "Sensitivity for: %s\n", geomInName);
 
-                                                        for (m = 0; m < 3*numPoint; m++) xyz[m] = 0.0;
-
-                                                        printf("Warning: Sensitivity not found %s, defaulting to 0.0s\n", geomInName);
-
-                                                } else if (status != CAPS_SUCCESS) {
-
-                                                        goto cleanup;
-
-                                                }
 
                                                 if (numPoint != mesh->numNode) {
                                                         printf("Error: the number of nodes returned by aim_senitivity does NOT match the surface mesh!\n");

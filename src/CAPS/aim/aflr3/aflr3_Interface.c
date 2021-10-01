@@ -341,8 +341,10 @@ cleanup:
 }
 
 
-int aflr3_Volume_Mesh (/*@unused@*/ void *aimInfo, capsValue *aimInputs,
+int aflr3_Volume_Mesh (void *aimInfo,
+                       capsValue *aimInputs,
                        meshInputStruct meshInput,
+                       const char *fileName,
                        int createBL,
                        int blFlag[],
                        double blSpacing[],
@@ -362,6 +364,7 @@ int aflr3_Volume_Mesh (/*@unused@*/ void *aimInfo, capsValue *aimInputs,
     char **prog_argv = NULL; // String arrays
     char *meshInputString = NULL;
     char *rest = NULL, *token = NULL;
+    char aimFile[PATH_MAX];
 
     INT_ bcType;
     INT_ nbl, nbldiff;
@@ -1371,7 +1374,9 @@ int aflr3_Volume_Mesh (/*@unused@*/ void *aimInfo, capsValue *aimInputs,
                                             Surf_ID_Flag,
                                             Surf_Tria_Connectivity,
                                             Coordinates);
-            fp = aim_fopen(aimInfo, "aflr3_surf_debug.tec", "w");
+            strcpy(aimFile, "aflr3_surf_debug.tec");
+
+            fp = fopen(aimFile, "w");
             if (fp == NULL) goto cleanup;
             fprintf(fp, "VARIABLES = X, Y, Z, BC, ID\n");
 
@@ -1409,8 +1414,10 @@ int aflr3_Volume_Mesh (/*@unused@*/ void *aimInfo, capsValue *aimInputs,
                     fprintf(fp, "%d %d %d\n", Surf_Tria_Connectivity[i+1][0],
                                               Surf_Tria_Connectivity[i+1][1],
                                               Surf_Tria_Connectivity[i+1][2]);
-
+/*@-dependenttrans@*/
             fclose(fp);
+/*@+dependenttrans@*/
+            AIM_ERROR(aimInfo, "AFLR3 Grid generation error. The input surfaces mesh has been written to: %s", aimFile);
             goto cleanup;
         }
 
@@ -1496,8 +1503,36 @@ int aflr3_Volume_Mesh (/*@unused@*/ void *aimInfo, capsValue *aimInputs,
         ug_set_int (1, Number_of_Vol_Elems, -123456, Vol_ID_Flag);
     }*/
 
-    // Transfer grid to volumeMesh
+    // Write the mesh to disk
     if (status == 0) {
+
+        snprintf(aimFile, PATH_MAX, "%s.lb8.ugrid", fileName);
+
+        status = ug_io_write_grid_file(aimFile,
+                                       Message_Flag,
+                                       Number_of_BL_Vol_Tets,
+                                       Number_of_Nodes,
+                                       Number_of_Surf_Quads,
+                                       Number_of_Surf_Trias,
+                                       Number_of_Vol_Hexs,
+                                       Number_of_Vol_Pents_5,
+                                       Number_of_Vol_Pents_6,
+                                       Number_of_Vol_Tets,
+                                       Surf_Grid_BC_Flag,
+                                       Surf_ID_Flag,
+                                       Surf_Reconnection_Flag,
+                                       Surf_Quad_Connectivity,
+                                       Surf_Tria_Connectivity,
+                                       Vol_Hex_Connectivity,
+                                       Vol_ID_Flag,
+                                       Vol_Pent_5_Connectivity,
+                                       Vol_Pent_6_Connectivity,
+                                       Vol_Tet_Connectivity,
+                                       Coordinates,
+                                       Initial_Normal_Spacing,
+                                       BL_Thickness);
+        AIM_STATUS(aimInfo, status);
+
         status = aflr3_to_MeshStruct(Number_of_Nodes,
                                      Number_of_Surf_Trias,
                                      Number_of_Surf_Quads,

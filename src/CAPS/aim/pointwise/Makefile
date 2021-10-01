@@ -25,9 +25,11 @@ $(LDIR)/pointwiseAIM.so:	$(ODIR)/pointwiseAIM.o $(ODIR)/hashElement.o \
 	touch $(LDIR)/pointwiseAIM.so
 	rm $(LDIR)/pointwiseAIM.so
 	$(CC) $(SOFLGS) -o $(LDIR)/pointwiseAIM.so $(ODIR)/pointwiseAIM.o $(ODIR)/hashElement.o \
-		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 $(RPATH) -lm -lpthread
+		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -ldl \
+		$(RPATH) -lm -lpthread
 
-$(ODIR)/pointwiseAIM.o:	pointwiseAIM.c hashElement.h $(IDIR)/capsTypes.h 
+$(ODIR)/pointwiseAIM.o:	pointwiseAIM.c hashElement.h $(IDIR)/capsTypes.h \
+			$(IDIR)/aimUtil.h  $(IDIR)/aimMesh.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils pointwiseAIM.c \
 		-o $(ODIR)/pointwiseAIM.o
 

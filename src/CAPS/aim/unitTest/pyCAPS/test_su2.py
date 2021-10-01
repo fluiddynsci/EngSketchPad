@@ -29,16 +29,10 @@ class TestSU2(unittest.TestCase):
         Mesh_Sizing = {"Farfield": {"tessParams" : [7.,  2., 20.0]}}
         egadsTess.input.Mesh_Sizing = Mesh_Sizing
 
-        egadsTess.preAnalysis()
-        egadsTess.postAnalysis()
-
         tetgen = cls.myProblem.analysis.create(aim = "tetgenAIM",
                                                name = "tetgen")
 
         tetgen.input["Surface_Mesh"].link(egadsTess.output["Surface_Mesh"])
-
-        tetgen.preAnalysis()
-        tetgen.postAnalysis()
 
         cls.myAnalysis = cls.myProblem.analysis.create(aim = "su2AIM")
 
@@ -57,6 +51,54 @@ class TestSU2(unittest.TestCase):
         if os.path.isdir(cls.problemName):
             shutil.rmtree(cls.problemName)
 
+    # Test inputs
+    def test_inputs(self):
+        
+        self.myAnalysis.input.Proj_Name = "su2_CAPS"
+        self.myAnalysis.input.Mach = 0.5
+        self.myAnalysis.input.Re = 1e6
+        self.myAnalysis.input.Physical_Problem = "Navier_Stokes"
+        self.myAnalysis.input.Equation_Type = "Incompressible"
+        self.myAnalysis.input.Turbulence_Model = "SA_NEG"
+        self.myAnalysis.input.Alpha = 10
+        self.myAnalysis.input.Beta = 4
+        self.myAnalysis.input.Init_Option = "TD_CONDITIONS"
+        self.myAnalysis.input.Overwrite_CFG = True
+        self.myAnalysis.input.Num_Iter = 5
+        self.myAnalysis.input.CFL_Number = 4
+        self.myAnalysis.input.Boundary_Condition = {"Wing1": {"bcType" : "Inviscid"},
+                                                    "Wing2": {"bcType" : "Inviscid"},
+                                                    "Farfield":"farfield"}
+        self.myAnalysis.input.MultiGrid_Level = 3
+        self.myAnalysis.input.Residual_Reduction = 10
+        self.myAnalysis.input.Unit_System = "SI"
+        self.myAnalysis.input.Reference_Dimensionalization = "Dimensional"
+        self.myAnalysis.input.Freestream_Pressure = 101325
+        self.myAnalysis.input.Freestream_Temperature = 300
+        self.myAnalysis.input.Freestream_Density = 1.225
+        self.myAnalysis.input.Freestream_Velocity = 100
+        self.myAnalysis.input.Freestream_Viscosity = 1e-5
+        self.myAnalysis.input.Moment_Center = [10,2,4]
+        self.myAnalysis.input.Moment_Length = 2
+        self.myAnalysis.input.Reference_Area = 10
+        self.myAnalysis.input.Pressure_Scale_Factor = 5
+        self.myAnalysis.input.Pressure_Scale_Offset = 9
+        self.myAnalysis.input.Output_Format = "Tecplot"
+        self.myAnalysis.input.Two_Dimensional = False
+        self.myAnalysis.input.Convective_Flux = "JST"
+        self.myAnalysis.input.Surface_Monitor = ["Wing1", "Wing2"]
+        self.myAnalysis.input.Surface_Deform = ["Wing1", "Wing2"]
+        self.myAnalysis.input.Input_String = ["value1 = 1", "value2 = 2"]
+        
+        for version in ["Cardinal", "Raven", "Falcon", "Blackbird"]:
+            
+            self.myAnalysis.input.SU2_Version = version
+            
+            self.myAnalysis.preAnalysis()
+            self.myAnalysis.postAnalysis()
+        
+            self.assertEqual(os.path.isfile(os.path.join(self.myAnalysis.analysisDir, self.configFile)), True)
+            os.remove(os.path.join(self.myAnalysis.analysisDir, self.configFile))
 
     # Try put an invalid boundary name
     def test_invalidBoundaryName(self):

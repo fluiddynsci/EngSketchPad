@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description = 'FUN3D and Tetgen Alpha Sweep PyT
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -24,21 +24,13 @@ workDir = os.path.join(str(args.workDir[0]), "FUN3DTetgenAlphaSweep")
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load egadsTess aim
 myProblem.analysis.create(aim = "egadsTessAIM", name = "egadsTess")
 
 # Set new EGADS body tessellation parameters
 myProblem.analysis["egadsTess"].input.Tess_Params = [1.0, 0.01, 20.0]
-
-# Run AIM pre-analysis
-myProblem.analysis["egadsTess"].preAnalysis()
-
-# NO analysis is needed - EGADS was already ran during preAnalysis
-
-# Run AIM post-analysis
-myProblem.analysis["egadsTess"].postAnalysis()
 
 
 # Load Tetgen aim
@@ -49,17 +41,6 @@ myProblem.analysis["tetgen"].input["Surface_Mesh"].link(myProblem.analysis["egad
 
 # Preserve surface mesh while messhing
 myProblem.analysis["tetgen"].input.Preserve_Surf_Mesh = True
-
-# Get analysis info.
-myProblem.analysis["tetgen"].info()
-
-# Run AIM pre-analysis
-myProblem.analysis["tetgen"].preAnalysis()
-
-# NO analysis is needed - Tetgen was already ran during preAnalysis
-
-# Run AIM post-analysis
-myProblem.analysis["tetgen"].postAnalysis()
 
 # Get analysis info.
 myProblem.analysis["tetgen"].info()

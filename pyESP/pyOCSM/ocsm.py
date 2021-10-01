@@ -1052,7 +1052,8 @@ class Ocsm(object):
             name        Brchch name
         """
         _ocsm.ocsmGetName.argtypes = [ctypes.c_void_p,
-                                      ctypes.c_int]
+                                      ctypes.c_int,
+                                      ctypes.c_char_p]
         _ocsm.ocsmGetName.restype  =  ctypes.c_int
 
         name = ctypes.create_string_buffer(257)

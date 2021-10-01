@@ -594,7 +594,7 @@ main(int       argc,                /* (in)  number of arguments */
     /* initialize the scene graph meta data */
     if (batch == 0) {
         SPLINT_CHECK_FOR_NULL(sgFocusData);
-        
+
         sgFocusData[0] = '\0';
     }
 
@@ -2315,9 +2315,9 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
     int       inode, iedge, iloop, iface, closed=1, nfaces, ncp, ndata;
     int       periodic, nnode, nedge, nface, ipnt;
 
-    int       i, j, k, ij, header[7], sense, *senses=NULL, oclass, mtype, nchild, *senses2;
+    int       i, j, k, ij, header[7], *senses=NULL, oclass, mtype, nchild, *senses2;
     double    xyz[3], *cpdata=NULL, tdata[4], data[18], data2[4];
-    double    rms, rmstrain, uv_out[2], xyz_out[18], area;
+    double    rms, rmstrain, uv_out[2], xyz_out[18];
     ego       context, eref, ecurv, esurf, *eloops=NULL, eshell, ebody, emodel;
     ego       enode, enodes[2], *eedges=NULL, *efaces=NULL, *echilds;
     FILE      *fpsum=NULL;
@@ -2327,6 +2327,33 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
     /* -------------------------------------------------2-------------- */
 
     SPRINT0(1, "Generating EGADS ...");
+
+#ifdef DEBUG
+    /* print whole data structure */
+    for (inode = 1; inode <=Nnode; inode++) {
+        printf("inode=%3d, nedg=%3d, xyz=%10.5f %10.5f %10.5f\n", inode,
+               node[inode].nedg,
+               node[inode].x, node[inode].y, node[inode].z);
+    }
+    for (iedge = 1; iedge <= Nedge; iedge++) {
+        printf("iedge=%3d, ibeg=%3d, iend=%3d, ileft=%3d, irite=%3d\n", iedge,
+               edge[iedge].ibeg,  edge[iedge].iend,
+               edge[iedge].ileft, edge[iedge].irite);
+    }
+    for (iface = 1; iface <= Nface; iface++) {
+        printf("iface=%3d, icol=%3d, nedg=%3d, nlup=%3d\n", iface,
+               face[iface].icol, face[iface].nedg, face[iface].nlup);
+        printf("           edg=");
+        for (i = 0; i < face[iface].nedg; i++) {
+            printf(" %3d", face[iface].edg[i]);
+        }
+        printf("\n           lup=");
+        for (i = 0; i < face[iface].nlup; i++) {
+            printf(" %3d", face[iface].lup[i]);
+        }
+        printf("\n");
+    }
+#endif
 
     strcpy(message, "okay");
 
@@ -2491,18 +2518,8 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
                 senses[i] = SREVERSE;   /* inner Loops */
             }
 
-            status = EG_getArea(eloops[0], NULL, &area);
-            CHECK_STATUS(EG_getArea);
-
-            if (area < 0) {
-                sense = SREVERSE;
-            } else {
-                sense = SFORWARD;
-            }
-
-            status = EG_makeTopology(context, esurf, FACE, sense, NULL,
-                                         face[iface].nlup, eloops, NULL, &(face[iface].eface));
-            printf("EG_makeTopology(FACE) -> status=%d\n", status);
+            status = EG_makeTopology(context, esurf, FACE, SFORWARD, NULL,
+                                         face[iface].nlup, eloops, senses, &(face[iface].eface));
             CHECK_STATUS(EG_makeTopology);
 
             efaces[nfaces] = face[iface].eface;
@@ -2778,7 +2795,7 @@ generateEgads(char   egadsname[],       /* (in)  name of file to write */
             }
 
             status = EG_makeTopology(context, esurf, FACE, SFORWARD, NULL,
-                                     face[iface].nlup, eloops, NULL, &(face[iface].eface));
+                                     face[iface].nlup, eloops, senses, &(face[iface].eface));
             printf("EG_makeTopology(FACE) -> status=%d\n", status);
             CHECK_STATUS(EG_makeTopology);
 
@@ -3570,6 +3587,7 @@ empFit2dCloud(void *struc)              /* (both) emp structure */
 
         bitflag = 0;
         smooth  = 1;
+        numiter = 100;
 
         if (outLevel > 1) {
             status = fit2dCloud(face[iface].ntrain,

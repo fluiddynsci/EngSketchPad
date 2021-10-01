@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(description = 'MYSTRAN Pytest Example',
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create project name
@@ -25,7 +25,7 @@ workDir = os.path.join(str(args.workDir[0]), projectName)
 geometryScript = os.path.join("..","csmData","feaSimplePlate.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load mystran aim
 myProblem.analysis.create(aim = "mystranAIM",
@@ -78,20 +78,5 @@ myProblem.analysis["mystran"].input.Load = {"appliedPressure": load}
 # Set analysis
 # No analysis case information needs to be set for a single static load case
 
-# Run AIM pre-analysis
-myProblem.analysis["mystran"].preAnalysis()
-
-####### Run MyStran ####################
-print ("\n\nRunning MYSTRAN......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(myProblem.analysis["mystran"].analysisDir) # Move into test directory
-
-os.system("mystran.exe " + projectName +  ".dat"); # Run mystran via system call
-
-os.chdir(currentDirectory) # Move back to working directory
-print ("Done running MYSTRAN!")
-######################################
-
-# Run AIM post-analysis
-myProblem.analysis["mystran"].postAnalysis()
+# Run AIM 
+myProblem.analysis["mystran"].runAnalysis()

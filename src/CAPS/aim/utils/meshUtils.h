@@ -13,9 +13,9 @@ extern "C" {
 #endif
 
 // extracts boundary elements and adds them to the surface mesh
-int mesh_addTess2Dbc(meshStruct *surfaceMesh, mapAttrToIndexStruct *attrMap);
+int mesh_addTess2Dbc(void *aimInfo, meshStruct *surfaceMesh, mapAttrToIndexStruct *attrMap);
 
-int mesh_bodyTessellation(ego tess, mapAttrToIndexStruct *attrMap,
+int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap,
                           int *numNodes, double *xyzCoord[],
                           int *numTriFace, int *triFaceConn[], int *triFaceCompID[], int *triFaceTopoID[],
                           int *numBndEdge, int *bndEdgeConn[], int *bndEdgeCompID[], int *bndEdgeTopoID[],
@@ -25,14 +25,14 @@ int mesh_bodyTessellation(ego tess, mapAttrToIndexStruct *attrMap,
                           int *numQuadFace, int *quadFaceConn[], int *quadFaceCompID[], int *quadFaceTopoID[]);
 
 // Create a surface mesh in meshStruct format using the EGADS body object
-int mesh_surfaceMeshEGADSBody(ego body, double refLen, double tessParams[3], int quadMesh, mapAttrToIndexStruct *attrMap, meshStruct *surfMesh);
+int mesh_surfaceMeshEGADSBody(void *aimInfo, ego body, double refLen, double tessParams[3], int quadMesh, meshStruct *surfMesh);
 
 // Create a surface mesh in meshStruct format using the EGADS body tessellation
-int mesh_surfaceMeshEGADSTess(mapAttrToIndexStruct *attrMap, meshStruct *surfMesh);
+int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh);
 
 // Modify the EGADS body tessellation based on given inputs
 int mesh_modifyBodyTess(int numMeshProp,
-                        meshSizingStruct meshProp[],
+             /*@null@*/ meshSizingStruct meshProp[],
                         int minEdgePointGlobal,
                         int maxEdgePointGlobal,
                         int quadMesh,
@@ -108,7 +108,8 @@ int initiate_meshSizingStruct (meshSizingStruct *meshProp);
 int destroy_meshSizingStruct (meshSizingStruct *meshProp);
 
 // Fill meshProps in a meshBCStruct format with mesh boundary condition information from incoming Mesh Sizing Tuple
-int mesh_getSizingProp(int numTuple,
+int mesh_getSizingProp(void *aimInfo,
+                       int numTuple,
                        capsTuple meshBCTuple[],
                        mapAttrToIndexStruct *attrMap,
                        int *numMeshProp,

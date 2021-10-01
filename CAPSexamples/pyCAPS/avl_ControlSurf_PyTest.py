@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description = 'AVL Contral Surface Pytest Examp
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -23,7 +23,7 @@ workDir = os.path.join(str(args.workDir[0]), "AVLControlAnalsyisTest")
 geometryScript = os.path.join("..","csmData","avlWingTail.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Change a design parameter - area in the geometry
 myProblem.geometry.despmtr.area = 10.0
@@ -70,20 +70,6 @@ myAnalysis.input.AVL_Control = {"WingRightLE": flapLE,
                                #"WingLeftTE": flapTE
                                 "Tail"      : flapTE}
 
-# Run AIM pre-analysis
-myAnalysis.preAnalysis()
-
-# Run AVL
-print ("Running AVL")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(myAnalysis.analysisDir) # Move into test directory
-os.system("avl caps < avlInput.txt > avlOutput.txt");
-
-os.chdir(currentDirectory) # Move back to working directory
-
-# Run AIM post-analysis
-myAnalysis.postAnalysis()
 
 # Get Output Data from AVL
 print ("Alpha  " + str(myAnalysis.output["Alpha" ].value))

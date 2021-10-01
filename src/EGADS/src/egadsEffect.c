@@ -21,6 +21,20 @@
 
 //#define DEBUG
 
+#ifdef __HOST_AND_DEVICE__
+#undef __HOST_AND_DEVICE__
+#endif
+#ifdef __PROTO_H_AND_D__
+#undef __PROTO_H_AND_D__
+#endif
+
+#ifdef __CUDACC__
+#define __HOST_AND_DEVICE__ extern "C" __host__ __device__
+#define __PROTO_H_AND_D__   extern "C" __host__ __device__
+#else
+#define __HOST_AND_DEVICE__
+#define __PROTO_H_AND_D__ extern
+#endif
 
 #define NOTFILLED       -1      /* Not yet filled flag */
 #define PI              3.1415926535897931159979635
@@ -42,52 +56,20 @@ typedef struct {
 } eloopFrag;
 
 
-extern int  EG_uvmapLocate( void *uvmap, int *trmap, double *uv, int *fID,
-                            int *itri, int *verts, double *ws );
-extern int  EG_uv2UVmap( void *uvmap, int *trmap, double *fuv, double *fuvs,
-                         int *tris, int tbeg, int tend, double *uv );
+#ifndef LITE
 extern int  EG_uvmapMake( int ntri, int *tris, int *itris, int nvrt,
                           double *vrts, double *range, int **trmap,
                           void **uvmap );
-extern void EG_getUVmap( void *uvmap, int index, double *uv );
 extern int  EG_uvmapWrite( void *uvmap, int *trmap, FILE *fp );
 extern int  EG_uvmapRead( FILE *fp, double *range, void **uvmap, int **trmap );
 extern int  EG_uvmapCopy( void *uvsrc, int *trsrc, void **uvmap, int **trmap );
-extern int  uvmap_struct_free( void *uvmap );
+extern void uvmap_struct_free( void *uvmap );
 
 extern int  EG_fillArea( int ncontours, const int *cntr, const double *vertices,
                          int *triangles, int *n_fig8, int pass, fillArea *fa );
-extern void EG_makeConnect(int k1, int k2, int *tri, int *kedge, int *ntable,
-                           connect *etable, int face);
 extern void EG_readAttrs( egObject *obj, int nattr, FILE *fp );
 extern void EG_writeAttr( egAttrs *attrs, FILE *fp );
 extern int  EG_writeNumAttr( egAttrs *attrs );
-extern int  EG_inTriExact( double *t1, double *t2, double *t3, double *p,
-                           double *w );
-extern int  EG_computeTessMap( egTessel *btess, int outLevel );
-#ifdef DEBUG
-extern int  EG_evaluate( const egObject *geom, /*@null@*/ const double *param,
-                         double *result );
-#endif
-extern int  EG_evaluatX( const egObject *geom, /*@null@*/ const double *param,
-                         double *result );
-extern int  EG_invEvaluatX( const egObject *geom, double *xyz, double *param,
-                            double *result );
-extern int  EG_getEdgeUVX( const egObject *face, const egObject *edge,
-                           int sense, double t, double *result );
-extern int  EG_getTopology( const egObject *topo, egObject **geom, int *oclass,
-                            int *mtype, /*@null@*/ double *limits, int *nChild,
-                            egObject ***children, int **senses );
-extern int  EG_indexBodyTopo( const egObject *body, const egObject *src );
-extern int  EG_objectBodyTopo( const egObject *body, int oclass, int index,
-                               egObject **obj );
-extern int  EG_getBodyTopos( const egObject *body, /*@null@*/ egObject *src,
-                             int oclass, int *ntopo,
-                             /*@null@*/ egObject ***topos );
-extern int  EG_attributeRet( const egObject *obj, const char *name, int *atype,
-                             int *len, /*@null@*/ const int    **ints,
-                                       /*@null@*/ const double **reals,
-                                       /*@null@*/ const char   **str );
 extern int  EG_attributeAdd( egObject *obj, const char *name, int type, int len,
                              /*@null@*/ const int    *ints,
                              /*@null@*/ const double *reals,
@@ -97,21 +79,67 @@ extern int  EG_attributeCommon( const egObject *src, egObject *dst );
 extern int  EG_attributeDel( egObject *obj, /*@null@*/ const char *name );
 extern int  EG_fullAttrs( const egObject *obj );
 extern int  EG_getWindingAngle( egObject *edge, double t, double *angle );
-extern int  EG_getRangX( const egObject *geom, double *range, int *periodic );
+extern int  EG_computeTessMap( egTessel *btess, int outLevel );
+extern int  EG_massProperties( int nTopo, egObject **topos, double *data );
+extern int  EG_objectBodyTopo( const egObject *body, int oclass, int index,
+                               egObject **obj );
+extern int  EG_getBodyTopos( const egObject *body, /*@null@*/ egObject *src,
+                             int oclass, int *ntopo,
+                             /*@null@*/ egObject ***topos );
 extern int  EG_getAreX( egObject *object, /*@null@*/ const double *limits,
                         double *area );
-extern int  EG_arcLenX( const egObject *geom, double t1, double t2,
-                        double *alen );
-extern int  EG_inFaceX( const egObject *face, const double *uv,
-                        /*@null@*/ double *pt, /*@null@*/ double *uvx );
-extern int  EG_getBoundingBX( const egObject *topo, double *bbox );
-extern int  EG_curvaturX( const egObject *geom, const double *param,
-                          double *result );
-extern int  EG_massProperties( int nTopo, egObject **topos, double *data );
-extern int  EG_getBody( const egObject *object, egObject **body );
+#endif
+__PROTO_H_AND_D__ int  EG_uvmapLocate( void *uvmap, int *trmap, double *uv,
+                                       int *fID, int *itri, int *verts,
+                                       double *ws );
+__PROTO_H_AND_D__ int  EG_uv2UVmap( void *uvmap, int *trmap, double *fuv,
+                                    double *fuvs, int *tris, int tbeg, int tend,
+                                    double *uv );
+__PROTO_H_AND_D__ void EG_getUVmap( void *uvmap, int index, double *uv );
+
+__PROTO_H_AND_D__ int  EG_inTriExact( double *t1, double *t2, double *t3,
+                                      double *p, double *w );
+#ifdef DEBUG
+__PROTO_H_AND_D__ int  EG_evaluate( const egObject *geom,
+                                    /*@null@*/ const double *param,
+                                    double *result );
+#endif
+__PROTO_H_AND_D__ int  EG_getTopology( const egObject *topo, egObject **geom,
+                                       int *oclass, int *mtype,
+                                       /*@null@*/ double *limits, int *nChild,
+                                       egObject ***children, int **senses );
+__PROTO_H_AND_D__ int  EG_indexBodyTopo( const egObject *body,
+                                         const egObject *src );
+__PROTO_H_AND_D__ int  EG_evaluatX( const egObject *geom,
+                                    /*@null@*/ const double *param,
+                                    double *result );
+__PROTO_H_AND_D__ int  EG_invEvaluatX( const egObject *geom, double *xyz,
+                                      double *param, double *result );
+__PROTO_H_AND_D__ int  EG_getEdgeUVX( const egObject *face,
+                                      const egObject *edge, int sense, double t,
+                                      double *result );
+__PROTO_H_AND_D__ int  EG_attributeRet( const egObject *obj, const char *name,
+                                        int *atype, int *len,
+                                        /*@null@*/ const int    **ints,
+                                        /*@null@*/ const double **reals,
+                                        /*@null@*/ const char   **str );
+__PROTO_H_AND_D__ int  EG_getRangX( const egObject *geom, double *range,
+                                    int *periodic );
+__PROTO_H_AND_D__ int  EG_arcLenX( const egObject *geom, double t1, double t2,
+                                   double *alen );
+__PROTO_H_AND_D__ int  EG_inFaceX( const egObject *face, const double *uv,
+                                   /*@null@*/ double *pt,
+                                   /*@null@*/ double *uvx );
+__PROTO_H_AND_D__ int  EG_getBoundingBX( const egObject *topo, double *bbox );
+__PROTO_H_AND_D__ int  EG_curvaturX( const egObject *geom, const double *param,
+                                     double *result );
+__PROTO_H_AND_D__ int  EG_getBody( const egObject *object, egObject **body );
+__PROTO_H_AND_D__ void EG_makeConnect( int k1, int k2, int *tri, int *kedge,
+                                       int *ntable, connect *etable, int face );
 
 
-static int
+
+__HOST_AND_DEVICE__ int
 EG_effectNeighbor(egEFace *effect)
 {
   int     i, j, n, i0, i1, i2, npts, ntris, *tris, *tric, *vtab, ipat = 0;
@@ -160,7 +188,7 @@ EG_effectNeighbor(egEFace *effect)
 }
 
 
-static int
+__HOST_AND_DEVICE__ static int
 EG_effectWalk(egEFace *effect, double *uv, int *tri, double *w)
 {
   int     itri, i0, i1, i2, ntris, *tris, *tric, stat, cnt, last, ipat = 0;
@@ -218,7 +246,7 @@ EG_effectWalk(egEFace *effect, double *uv, int *tri, double *w)
 }
 
 
-static int
+__HOST_AND_DEVICE__ static int
 EG_effectInTri(egEFace *effect, const double *uvx, int *itrix, double *w)
 {
   int    stat, itri, i1, i2, i3, cls, ipat = 0;
@@ -273,7 +301,7 @@ EG_effectInTri(egEFace *effect, const double *uvx, int *itrix, double *w)
 }
 
 
-static int
+__HOST_AND_DEVICE__ static int
 EG_eFaceInterior(egEFace *effect, double *uv, egObject **face)
 {
   int    stat, ipat, itri, i1, i2, i3, verts[3];
@@ -313,7 +341,7 @@ EG_eFaceInterior(egEFace *effect, double *uv, egObject **face)
 }
 
 
-static int
+__HOST_AND_DEVICE__ static int
 EG_effect1EdgeEval(egEEdge *effect, double t, double *result, int *hit)
 {
   int    i, ie, stat;
@@ -357,7 +385,7 @@ EG_effect1EdgeEval(egEEdge *effect, double t, double *result, int *hit)
 }
 
 
-static int
+__HOST_AND_DEVICE__ static int
 EG_effectEdgeEval(egEEdge *effect, double t, double *result, int *hit)
 {
   int    stat, i, ie, iseg;
@@ -420,7 +448,7 @@ EG_effectEdgeEval(egEEdge *effect, double t, double *result, int *hit)
 }
 
 
-static int
+__HOST_AND_DEVICE__ static int
 EG_effectEvalEdge(egEEdge *effect, double tx, double *result)
 {
   int    stat, hit;
@@ -478,7 +506,7 @@ EG_effectEvalEdge(egEEdge *effect, double tx, double *result)
 }
 
 
-static int
+__HOST_AND_DEVICE__ static int
 EG_effect1FaceEval(egEFace *effect, const double *uv, double *data, int *flag)
 {
   int    stat, itri, i1, i2, i3, ipat;
@@ -539,7 +567,7 @@ EG_effect1FaceEval(egEFace *effect, const double *uv, double *data, int *flag)
 }
 
 
-static int
+__HOST_AND_DEVICE__ static int
 EG_effectFaceEval(egEFace *effect, const double *uvx, double *data, int *flag)
 {
   int    i, i1, i2, i3, ix, itri, stat, verts[3];
@@ -612,7 +640,7 @@ EG_effectFaceEval(egEFace *effect, const double *uvx, double *data, int *flag)
 }
 
 
-static int
+__HOST_AND_DEVICE__ static int
 EG_effectEvalFace(egEFace *effect, const double *uvx, double *result)
 {
   int    flag, stat, status = EGADS_SUCCESS;
@@ -728,6 +756,7 @@ EG_effectEvalFace(egEFace *effect, const double *uvx, double *result)
 }
 
 
+#ifndef LITE
 static void
 EG_dereference(egObject *eobj, int flag)
 {
@@ -749,9 +778,10 @@ EG_dereference(egObject *eobj, int flag)
   if (stat != EGADS_SUCCESS)
     printf(" EGADS Internal: EG_dereferenceObject = %d\n!", stat);
 }
+#endif
 
 
-static int
+__HOST_AND_DEVICE__ static int
 EG_effeContained(egObject *obj, egObject *src)
 {
   int      i, stat;
@@ -798,6 +828,7 @@ EG_effeContained(egObject *obj, egObject *src)
 }
 
 
+#ifndef LITE
 static void
 EG_swapEBodies(egObject *ebo1, egObject *ebo2)
 {
@@ -839,9 +870,10 @@ EG_swapEBodies(egObject *ebo1, egObject *ebo2)
   ebo1->blind   = ebody2;
   ebo2->blind   = ebody1;
 }
+#endif
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_getETopology(const egObject *topo, egObject **geom, int *oclass,
                 int *type, /*@null@*/ double *range, int *nChildren,
                 egObject ***children, int **senses)
@@ -862,6 +894,7 @@ EG_getETopology(const egObject *topo, egObject **geom, int *oclass,
   if (topo->magicnumber != MAGIC) return EGADS_NOTOBJ;
   if (topo->blind == NULL)        return EGADS_NODATA;
   if (topo->oclass < EEDGE)       return EGADS_NOTTOPO;
+  if (topo->oclass > EBODY)       return EGADS_NOTTOPO;
   *oclass = topo->oclass;
   *type   = topo->mtype;
   
@@ -917,7 +950,7 @@ EG_getETopology(const egObject *topo, egObject **geom, int *oclass,
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_getEBodyTopos(const egObject *body, /*@null@*/ egObject *src,
                  int oclass, int *ntopo, /*@null@*/ egObject ***topos)
 {
@@ -1253,7 +1286,7 @@ EG_getEBodyTopos(const egObject *body, /*@null@*/ egObject *src,
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_indexEBodyTopo(const egObject *body, const egObject *src)
 {
   int      i, stat, n, index = 0;
@@ -1312,7 +1345,7 @@ EG_indexEBodyTopo(const egObject *body, const egObject *src)
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_objectEBodyTopo(const egObject *body, int oclass, int index, egObject **obj)
 {
   int      n, stat;
@@ -1357,7 +1390,7 @@ EG_objectEBodyTopo(const egObject *body, int oclass, int index, egObject **obj)
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_getERange(const egObject *obj, double *range, int *periodic)
 {
   egEFace *eface;
@@ -1391,6 +1424,7 @@ EG_getERange(const egObject *obj, double *range, int *periodic)
 }
 
 
+#ifndef LITE
 int
 EG_getEArea(egObject *object, /*@null@*/ const double *limits, double *area)
 {
@@ -1413,9 +1447,10 @@ EG_getEArea(egObject *object, /*@null@*/ const double *limits, double *area)
   
   return EGADS_SUCCESS;
 }
+#endif
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_inEFace(const egObject *object, const double *uv)
 {
   int     i, stat;
@@ -1437,7 +1472,7 @@ EG_inEFace(const egObject *object, const double *uv)
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_arcELength(const egObject *object, double t1, double t2, double *alen)
 {
   int     i, ie, stat;
@@ -1498,7 +1533,7 @@ EG_arcELength(const egObject *object, double t1, double t2, double *alen)
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_eEvaluate(const egObject *object, const double *param, double *result)
 {
   egEEdge *eedge;
@@ -1521,7 +1556,7 @@ EG_eEvaluate(const egObject *object, const double *param, double *result)
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_invEEvaluate(const egObject *object, double *xyz, double *param,
                 double *result)
 {
@@ -1617,7 +1652,7 @@ EG_invEEvaluate(const egObject *object, double *xyz, double *param,
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_getEEdgeUV(const egObject *face, const egObject *topo, int sensx, double t,
               double *uv)
 {
@@ -1752,7 +1787,7 @@ EG_getEEdgeUV(const egObject *face, const egObject *topo, int sensx, double t,
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_eCurvature(const egObject *geom, const double *param, double *result)
 {
   int      i, stat;
@@ -1880,7 +1915,7 @@ EG_eCurvature(const egObject *geom, const double *param, double *result)
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_eBoundingBox(const egObject *topo, double *bbox)
 {
   int            i, n, stat;
@@ -1938,6 +1973,7 @@ EG_eBoundingBox(const egObject *topo, double *bbox)
 }
 
 
+#ifndef LITE
 int
 EG_massEProps(const egObject *topo, double *data)
 {
@@ -2035,9 +2071,10 @@ EG_massEProps(const egObject *topo, double *data)
   EG_free(topos);
   return stat;
 }
+#endif
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_tolEObject(const egObject *topo, double *tol)
 {
   int      i, j, k, ie;
@@ -2188,6 +2225,7 @@ EG_tolEObject(const egObject *topo, double *tol)
 }
 
 
+#ifndef LITE
 void
 EG_destroyEBody(egObject *ebobj, int flag)
 {
@@ -3929,10 +3967,10 @@ readerr:
 
 
 int
-EG_copyEBody(const egObject *body, egObject **EBody)
+EG_copyEBody(const egObject *body, /*@null@*/ void *ptr, egObject **EBody)
 {
   int      i, j, k, stat;
-  egObject *context, *eobj, *tobj, *sobj;
+  egObject *context, *eobj, *tobj, *sobj, *orig, *ref = NULL;
   egEBody  *ebody,  *src;
   egEShell *eshell, *sshell;
   egEFace  *eface,  *sface;
@@ -3946,14 +3984,27 @@ EG_copyEBody(const egObject *body, egObject **EBody)
   if (body->blind == NULL)        return EGADS_NODATA;
   if (EG_sameThread(body))        return EGADS_CNTXTHRD;
   context = EG_context(body);
+  ref     = (egObject *) ptr;
+  if (ref != NULL) {
+    if (ref->magicnumber == MAGIC) {
+      if (ref->oclass != BODY) ref = NULL;
+    } else {
+      ref = NULL;
+    }
+  }
   
   src   = (egEBody *) body->blind;
+  orig  = src->ref;
   ebody = (egEBody *) EG_alloc(sizeof(egEBody));
   if (ebody == NULL) {
     printf(" EGADS Error: Malloc of EBody  (EG_copyEBody)!\n");
     return EGADS_MALLOC;
   }
-  ebody->ref           = src->ref;
+  if (ref == NULL) {
+    ebody->ref         = orig;
+  } else {
+    ebody->ref         = ref;
+  }
   ebody->eedges.objs   = NULL;
   ebody->eloops.objs   = NULL;
   ebody->efaces.objs   = NULL;
@@ -3977,7 +4028,7 @@ EG_copyEBody(const egObject *body, egObject **EBody)
   eobj->mtype  = body->mtype;
   eobj->blind  = ebody;
   EG_referenceObject(eobj, context);
-  EG_referenceTopObj(src->ref, eobj);
+  EG_referenceTopObj(ebody->ref, eobj);
 
   if (body->mtype == SOLIDBODY) {
     ebody->senses = (int *) EG_alloc(ebody->eshells.nobjs*sizeof(int));
@@ -4149,7 +4200,7 @@ EG_copyEBody(const egObject *body, egObject **EBody)
     eloop->senses = (int *) EG_alloc(eloop->eedges.nobjs*sizeof(int));
     if (eloop->senses == NULL) {
       printf(" EGADS Error: Malloc on %d ELoop %d senses (EG_copyEBody)!\n",
-             i+1, eloop->nedge);
+             i+1, eloop->eedges.nobjs);
       EG_destroyEBody(eobj, 1);
       return EGADS_MALLOC;
     }
@@ -4402,14 +4453,113 @@ EG_copyEBody(const egObject *body, egObject **EBody)
     }
     EG_attributeDup(sobj, tobj);
   }
+  
+  /* fix up Body entities to match the reference */
+  if (ref != NULL) {
+    for (j = 0; j < ebody->nedge; j++) {
+      k = EG_indexBodyTopo(orig, ebody->edges[j].edge);
+      if (k <= EGADS_SUCCESS) {
+        printf(" EGADS Error: Edge %d indexBodyTopo = %d (EG_copyEBody)!\n",
+               j+1, k);
+        EG_destroyEBody(eobj, 1);
+        return EGADS_TOPOERR;
+      }
+      stat = EG_objectBodyTopo(ref, EDGE, k, &ebody->edges[j].edge);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EGADS Error: Edge %d objectBodyTopo = %d (EG_copyEBody)!\n",
+               j+1, stat);
+        EG_destroyEBody(eobj, 1);
+        return EGADS_TOPOERR;
+      }
+    }
+    for (i = 0; i < ebody->eedges.nobjs; i++) {
+      eedge = (egEEdge *) ebody->eedges.objs[i]->blind;
+      if (eedge == NULL) continue;
+      for (j = 0; j < 2; j++) {
+        k = EG_indexBodyTopo(orig, eedge->nodes[j]);
+        if (k <= EGADS_SUCCESS) {
+          printf(" EGADS Error: EEdge %d Node %d indexBodyTopo = %d (EG_copyEBody)!\n",
+                 i+1, j, k);
+          EG_destroyEBody(eobj, 1);
+          return EGADS_TOPOERR;
+        }
+        stat = EG_objectBodyTopo(ref, NODE, k, &eedge->nodes[j]);
+        if (stat != EGADS_SUCCESS) {
+          printf(" EGADS Error: EEdge %d Node %d objectBodyTopo = %d (EG_copyEBody)!\n",
+                 i+1, j, stat);
+          EG_destroyEBody(eobj, 1);
+          return EGADS_TOPOERR;
+        }
+      }
+      for (j = 0; j < eedge->nsegs; j++) {
+        if (eedge->segs[j].nstart == NULL) continue;
+        k = EG_indexBodyTopo(orig, eedge->segs[j].nstart);
+        if (k <= EGADS_SUCCESS) {
+          printf(" EGADS Error: EEdge %d NStart %d indexBodyTopo = %d (EG_copyEBody)!\n",
+                 i+1, j, k);
+          EG_destroyEBody(eobj, 1);
+          return EGADS_TOPOERR;
+        }
+        stat = EG_objectBodyTopo(ref, NODE, k, &eedge->segs[j].nstart);
+        if (stat != EGADS_SUCCESS) {
+          printf(" EGADS Error: EEdge %d NStart %d objectBodyTopo = %d (EG_copyEBody)!\n",
+                 i+1, j, stat);
+          EG_destroyEBody(eobj, 1);
+          return EGADS_TOPOERR;
+        }
+      }
+    }
+    for (i = 0; i < ebody->eloops.nobjs; i++) {
+      eloop = (egELoop *) ebody->eloops.objs[i]->blind;
+      if (eloop == NULL) continue;
+      for (j = 0; j < eloop->nedge; j++) {
+        k = EG_indexBodyTopo(orig, eloop->edgeUVs[j].edge);
+        if (k <= EGADS_SUCCESS) {
+          printf(" EGADS Error: ELoop %d %d indexBodyTopo = %d (EG_copyEBody)!\n",
+                 i+1, j+1, k);
+          EG_destroyEBody(eobj, 1);
+          return EGADS_TOPOERR;
+        }
+        stat = EG_objectBodyTopo(ref, EDGE, k, &eloop->edgeUVs[j].edge);
+        if (stat != EGADS_SUCCESS) {
+          printf(" EGADS Error: ELoop %d %d objectBodyTopo = %d (EG_copyEBody)!\n",
+                 i+1, j+1, stat);
+          EG_destroyEBody(eobj, 1);
+          return EGADS_TOPOERR;
+        }
+      }
+    }
+    for (i = 0; i < ebody->efaces.nobjs; i++) {
+      eface = (egEFace *) ebody->efaces.objs[i]->blind;
+      if (eface == NULL) continue;
+      for (j = 0; j < eface->npatch; j++) {
+        k = EG_indexBodyTopo(orig, eface->patches[j].face);
+        if (k <= EGADS_SUCCESS) {
+          printf(" EGADS Error: EFace %d %d indexBodyTopo = %d (EG_copyEBody)!\n",
+                 i+1, j+1, k);
+          EG_destroyEBody(eobj, 1);
+          return EGADS_TOPOERR;
+        }
+        stat = EG_objectBodyTopo(ref, FACE, k, &eface->patches[j].face);
+        if (stat != EGADS_SUCCESS) {
+          printf(" EGADS Error: EFace %d %d objectBodyTopo = %d (EG_copyEBody)!\n",
+                 i+1, j+1, stat);
+          EG_destroyEBody(eobj, 1);
+          return EGADS_TOPOERR;
+        }
+      }
+    }
+  }
 
   *EBody = eobj;
   return EGADS_SUCCESS;
 }
+#endif
 
 
 /*  ************************* Exposed Entry Points ************************* */
 
+#ifndef LITE
 int
 EG_initEBody(egObject *tess, double angle, egObject **EBody)
 {
@@ -5456,7 +5606,7 @@ EG_makeEFace(egObject *EBody, int nFace, egObject **Faces, egObject **EFace)
   n *= 2;
   
   /* save away our current state */
-  stat = EG_copyEBody(EBody, &saved);
+  stat = EG_copyEBody(EBody, NULL, &saved);
   if (stat != EGADS_SUCCESS) {
     printf(" EGADS Error: copyEBody = %d (EG_makeEFace)!\n", stat);
     EG_free(iedge);
@@ -6317,7 +6467,7 @@ EG_makeEFace(egObject *EBody, int nFace, egObject **Faces, egObject **EFace)
 
   /* remove extraneous Nodes */
   EG_deleteObject(saved);
-  stat = EG_copyEBody(EBody, &saved);
+  stat = EG_copyEBody(EBody, NULL, &saved);
   if (stat != EGADS_SUCCESS) {
     printf(" EGADS Warning: Second copyEBody = %d (EG_makeEFace)!\n", stat);
     return EGADS_SUCCESS;
@@ -6523,9 +6673,10 @@ EG_makeAttrEFaces(egObject *EBody, const char *attrName, int *nEFace,
   
   return EGADS_SUCCESS;
 }
+#endif
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_effectiveMap(egObject *EObject, double *eparam, egObject **Object,
                 double *param)
 {
@@ -6592,7 +6743,7 @@ EG_effectiveMap(egObject *EObject, double *eparam, egObject **Object,
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_effectiveEdgeList(egObject *EEdge, int *nedges, egObject ***edges,
                      int **senses, double **tstart)
 {
@@ -6636,7 +6787,7 @@ EG_effectiveEdgeList(egObject *EEdge, int *nedges, egObject ***edges,
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_effectiveTri(egObject *EObj, double *uv, int *fIndex, int *itri, double *w)
 {
   int      stat, ipat, i, verts[3];
@@ -6675,7 +6826,7 @@ EG_effectiveTri(egObject *EObj, double *uv, int *fIndex, int *itri, double *w)
 }
 
 
-int
+__HOST_AND_DEVICE__ int
 EG_getTessEFace(egObject *tess, int index, egObject **faces, double *uvs)
 {
   int      i, i1, i2, i3, itri, ix, stat, verts[3];

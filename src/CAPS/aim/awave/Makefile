@@ -23,14 +23,14 @@ endif
 
 $(LDIR)/awaveAIM.so:	$(ODIR)/awaveAIM.o $(LDIR)/libutils.a $(LDIR)/libaimUtil.a
 	$(CC) $(SOFLGS) -o $(LDIR)/awaveAIM.so $(ODIR)/awaveAIM.o \
-		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -lm
+		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -ldl -lm
 
 $(ODIR)/awaveAIM.o:	awaveAIM.c $(IDIR)/capsTypes.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils awaveAIM.c \
 		-o $(ODIR)/awaveAIM.o
 
 $(TDIR)/awave:	$(ODIR)/awave.o
-	$(FCOMP) -o $(TDIR)/awave $(ODIR)/awave.o
+	$(FCOMP) -o $(TDIR)/awave $(ODIR)/awave.o $(ESPFLIBS)
 
 $(ODIR)/awave.o:	$(AWAVE)
 ifeq ($(EFCOMP),ifort)

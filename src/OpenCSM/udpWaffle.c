@@ -820,8 +820,10 @@ processFile(ego    context,             /* (in)  EGADS context */
 {
     int    status = EGADS_SUCCESS;      /* (out) default return */
 
-    int    nbrch, npmtr, npmtr_save, ipmtr, nbody, type, nrow, ncol, itoken, ichar, nchar;
+    int    nbrch, npmtr, npmtr_save, ipmtr, nbody, type, nrow, ncol, itoken, ichar;
     int    mpnt=0, ipnt, jpnt, mseg=0, iseg, jseg, ibeg, iend, jbeg, jend, itype;
+    int    mline, nline=0, i;
+    int    *begline=NULL, *endline=NULL;
     int    pat_pmtr[ ]={ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     int    pat_value[]={ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     int    pat_end[  ]={-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
@@ -875,7 +877,7 @@ processFile(ego    context,             /* (in)  EGADS context */
     filename = FILENAME(numUdp);
 
     if (strncmp(filename, "<<\n", 3) == 0) {
-        istream = 2;
+        istream = 1;
     } else {
         istream = 0;
     }
@@ -891,14 +893,56 @@ processFile(ego    context,             /* (in)  EGADS context */
 
         ieof = feof(fp);
 
-    /* otherwise, remember if we are at the end of the stream */
+    /* otherwise, find extents of each line of the input */
     } else {
+        mline = 25;
+        nline = 0;
+        iend  = 0;
+
+        MALLOC(begline, int, mline);
+        MALLOC(endline, int, mline);
+
+        for (i = 3; i < STRLEN(filename); i++) {
+            if (iend == 0) {
+                if (filename[i] == ' '  || filename[i] == '\t' ||
+                    filename[i] == '\r' || filename[i] == '\n'   ) continue;
+
+                iend = i;
+
+                if (nline >= mline) {
+                    mline += 25;
+                    RALLOC(begline, int, mline);
+                    RALLOC(endline, int, mline);
+                }
+
+                begline[nline] = i;
+                endline[nline] = i + 1;
+                nline++;
+            } else if (filename[i] == '\r') {
+                filename[i] = ' ';
+            } else if (filename[i] == '\n') {
+                endline[nline-1] = iend + 1;
+                iend = 0;
+            } else if (filename[i] != ' ' && filename[i] != '\t') {
+                iend = i;
+            }
+        }
+
+        /* remember if we are at the end of the stream */
         if (strlen(filename) <= 2) {
             ieof = 1;
         } else {
             ieof = 0;
         }
     }
+
+    /* print copy of input file */
+//$$$    for (i = 0; i < nline; i++) {
+//$$$        memcpy(templine, filename+begline[i], endline[i]-begline[i]);
+//$$$        templine[endline[i]-begline[i]] = '\0';
+//$$$
+//$$$        printf("%5d :%s:\n", i, templine);
+//$$$    }
 
     /* default (empty) Point and Segment tables */
     mpnt = 10;
@@ -916,28 +960,32 @@ processFile(ego    context,             /* (in)  EGADS context */
         /* read the next line */
         if (fp != NULL) {
             (void) fgets(templine, 255, fp);
-            ieof = feof(fp);
-        } else {
-            nchar = getToken(&filename[2], istream-1, '\n', 255, templine);
-            istream++;
+            if (feof(fp) > 0) break;
 
-            if (nchar < 0) {
-                ieof = 1;
+            /* overwite the \n and \r at the end */
+            if (STRLEN(templine) > 0 && templine[STRLEN(templine)-1] == '\n') {
+                templine[STRLEN(templine)-1] = '\0';
             }
+            if (STRLEN(templine) > 0 && templine[STRLEN(templine)-1] == '\r') {
+                templine[STRLEN(templine)-1] = '\0';
+            }
+        } else {
+            if (istream-1 >= nline) {
+                break;
+            }
+
+            SPLINT_CHECK_FOR_NULL(begline);
+            SPLINT_CHECK_FOR_NULL(endline);
+
+            memcpy(templine, filename+begline[istream-1], endline[istream-1]-begline[istream-1]);
+            templine[endline[istream-1]-begline[istream-1]] = '\0';
+
+            istream++;
         }
-        if (ieof > 0) break;
 
         if (outLevel >= 1) {
             printf("    processing: %s", templine);
             if (fp == NULL) printf("\n");
-        }
-
-        /* overwite the \n and \r at the end */
-        if (STRLEN(templine) > 0 && templine[STRLEN(templine)-1] == '\n') {
-            templine[STRLEN(templine)-1] = '\0';
-        }
-        if (STRLEN(templine) > 0 && templine[STRLEN(templine)-1] == '\r') {
-            templine[STRLEN(templine)-1] = '\0';
         }
 
         /* get and process the first token */
@@ -1300,7 +1348,7 @@ processFile(ego    context,             /* (in)  EGADS context */
             CHECK_STATUS(getToken);
 
             status = getToken(templine, 2, ' ', 255, pname1);
-            CHECK_STATUS(get);
+            CHECK_STATUS(getToken);
 
             status = getToken(templine, 3, ' ', 255, pname2);
             CHECK_STATUS(getToken);
@@ -1544,6 +1592,10 @@ processFile(ego    context,             /* (in)  EGADS context */
     }
 
 cleanup:
+    /*@ignore@*/
+    FREE(begline);
+    FREE(endline);
+    /*@end@*/
 
     /* return pointers to freeable memory */
     *pnt_p = pnt;

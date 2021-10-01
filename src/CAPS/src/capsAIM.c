@@ -157,7 +157,7 @@ static /*@null@*/ DLL aimDLopen(const char *name)
 }
 
 
-static void aimDLclose(/*@unused@*/ /*@only@*/ DLL dll)
+static void aimDLclose(/*@only@*/ DLL dll)
 {
 #ifdef WIN32
   FreeLibrary(dll);
@@ -214,7 +214,9 @@ static int aimDYNload(aimContext *cntxt, const char *name)
   cntxt->aimInput[ret]    = (aimIn) aimDLget(dll, "aimInputs"        );
   cntxt->aimPAnal[ret]    = (aimA)  aimDLget(dll, "aimPreAnalysis"   );
   cntxt->aimExec[ret]     = (aimEx) aimDLget(dll, "aimExecute"       );
+#ifdef ASYNCEXEC
   cntxt->aimCheck[ret]    = (aimEx) aimDLget(dll, "aimCheck"         );
+#endif
   cntxt->aimPost[ret]     = (aimPo) aimDLget(dll, "aimPostAnalysis"  );
   cntxt->aimOutput[ret]   = (aimO)  aimDLget(dll, "aimOutputs"       );
   cntxt->aimCalc[ret]     = (aimC)  aimDLget(dll, "aimCalcOutput"    );
@@ -452,6 +454,7 @@ aim_Execute(aimContext cntxt,
 }
 
 
+#ifdef ASYNCEXEC
 int
 aim_Check(aimContext cntxt,
           const char *analysisName,
@@ -470,6 +473,7 @@ aim_Check(aimContext cntxt,
   
   return cntxt.aimCheck[i](instStore, aimStruc, state);
 }
+#endif
 
 
 int

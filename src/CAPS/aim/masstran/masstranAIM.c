@@ -202,7 +202,7 @@ static int destroy_aimStorage(aimStorage *masstranInstance)
               printf("Error: Status %d during destroy_meshStruct!\n", status);
         }
 
-        EG_free(masstranInstance->feaMesh);
+        AIM_FREE(masstranInstance->feaMesh);
     }
 
     masstranInstance->feaMesh = NULL;

@@ -15,7 +15,7 @@ TDIR = $(ESP_ROOT)\bin
 !ENDIF
 
 
-$(LDIR)\skeletonAIM.dll:	$(ODIR)\skeletonAIM.obj $(LDIR)\utils.lib
+$(LDIR)\skeletonAIM.dll:	skeletonAIM.def $(ODIR)\skeletonAIM.obj $(LDIR)\utils.lib
 	-del $(LDIR)\skeletonAIM.dll $(LDIR)\skeletonAIM.lib \
 		$(LDIR)\skeletonAIM.exp
 	link /out:$(LDIR)\skeletonAIM.dll /dll /def:skeletonAIM.def \

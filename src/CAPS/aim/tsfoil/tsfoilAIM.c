@@ -20,6 +20,7 @@
  *
  * Upon running preAnalysis the AIM generates two files: 1. "tsfoilInput.txt" which contains instructions for
  * TSFOIL to execute and 2. "caps.tsfoil" which contains the geometry to be analyzed.
+ * The TSFOIL AIM can automatically execute TSFOIL, with details provided in \ref aimExecuteTSFOIL.
  *
  * \section assumptionsTSFOIL Assumptions
  * TSFOIL inherently assumes the airfoil cross-section is in the x-y plane, if it isn't an attempt is made
@@ -91,6 +92,7 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, /*@unused@*/ void 
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
               int index, char **ainame, capsValue *defval)
 {
@@ -143,6 +145,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
                    capsValue *aimInputs)
 {
@@ -476,6 +479,68 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
 }
 
 
+// ********************** AIM Function Break *****************************
+int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+               int *state)
+{
+  /*! \page aimExecuteTSFOIL AIM Execution
+   *
+   * If auto execution is enabled when creating an TSFOIL AIM,
+   * the AIM will execute TSFOIL just-in-time with the command line:
+   *
+   * \code{.sh}
+   * tsfoil2 < tsfoilInput.txt > Info.out
+   * \endcode
+   *
+   * where preAnalysis generated the file "frictionInput.txt" which contains the input information.
+   *
+   * The analysis can be also be explicitly executed with caps_execute in the C-API
+   * or via Analysis.runAnalysis in the pyCAPS API.
+   *
+   * Calling preAnalysis and postAnalysis is NOT allowed when auto execution is enabled.
+   *
+   * Auto execution can also be disabled when creating an TSFOIL AIM object.
+   * In this mode, caps_execute and Analysis.runAnalysis can be used to run the analysis,
+   * or TSFOIL can be executed by calling preAnalysis, system call, and posAnalysis as demonstrated
+   * below with a pyCAPS example:
+   *
+   * \code{.py}
+   * print ("\n\preAnalysis......")
+   * tsfoil.preAnalysis()
+   *
+   * print ("\n\nRunning......")
+   * currentDirectory = os.getcwd() # Get our current working directory
+   *
+   * os.chdir(tsfoil.analysisDir) # Move into test directory
+   * os.system("tsfoil2 < tsfoilInput.txt > Info.out"); # Run via system call
+   *
+   * os.chdir(currentDirectory) # Move back to top directory
+   *
+   * print ("\n\postAnalysis......")
+   * tsfoil.postAnalysis()
+   * \endcode
+   */
+
+  *state = 0;
+  return aim_system(aimInfo, NULL, "tsfoil2 < tsfoilInput.txt > Info.out");
+}
+
+
+// ********************** AIM Function Break *****************************
+int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+                    /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
+{
+  // check the friction output file
+  if (aim_isFile(aimInfo, "tsfoilOutput.txt") != CAPS_SUCCESS) {
+    AIM_ERROR(aimInfo, "tsfoil2 execution did not produce tsfoilOutput.txt");
+    return CAPS_EXECERR;
+  }
+
+  return CAPS_SUCCESS;
+}
+
+
+// ********************** AIM Function Break *****************************
 int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
                int index, char **aoname, capsValue *form)
 {
@@ -539,14 +604,7 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
 }
 
 
-/* no longer optional and needed for restart */
-int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
-                    /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
-{
-  return CAPS_SUCCESS;
-}
-
-
+// ********************** AIM Function Break *****************************
 int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                   int index, capsValue *val)
 {
@@ -666,6 +724,7 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 }
 
 
+// ********************** AIM Function Break *****************************
 void aimCleanup(/*@unused@*/ void *instStore)
 {
 

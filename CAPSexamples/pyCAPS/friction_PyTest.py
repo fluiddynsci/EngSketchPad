@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description = 'FRICTION Pytest Example',
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 ## [localVariable]
@@ -30,7 +30,7 @@ workDir = os.path.join(str(args.workDir[0]), "FrictionAnalysisTest")
 geometryScript = os.path.join("..","csmData","frictionWingTailFuselage.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 myProblem.geometry.despmtr.area = 10.0
 ## [geometry]
@@ -56,33 +56,7 @@ myAnalysis.input.Altitude = [9000, 18200.0]*pyCAPS.Unit("m")
 ## [setInputs]
 
 # -----------------------------------------------------------------
-# Run AIM pre-analysis
-# -----------------------------------------------------------------
-## [preAnalysis]
-myAnalysis.preAnalysis()
-## [preAnalysis]
-
-# -----------------------------------------------------------------
-# Run Friction
-# -----------------------------------------------------------------
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(myAnalysis.analysisDir) # Move into test directory
-
-if (args.noAnalysis == False): # Don't run friction if noAnalysis is set
-	os.system("friction frictionInput.txt frictionOutput.txt > Info.out")
-
-os.chdir(currentDirectory) # Move back to working directory
-
-# -----------------------------------------------------------------
-# Run AIM post-analysis
-# -----------------------------------------------------------------
-## [postAnalysis]
-myAnalysis.postAnalysis()
-## [postAnalysis]
-
-# -----------------------------------------------------------------
-# Get Output Data from Friction
+# Get Output Data from Friction (execution is automatic just-in-time)
 # -----------------------------------------------------------------
 ## [output]
 Cdtotal = myAnalysis.output.CDtotal

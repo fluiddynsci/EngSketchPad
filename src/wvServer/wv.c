@@ -179,7 +179,9 @@ wv_createContext(int bias, float fov, float zNear, float zFar, float *eye,
   context->nameMap    = NULL;
   wv_stringSetOpen(&context->nameMap);
 
+/*@-nullret@*/
   return context;
+/*@+nullret@*/
 }
 
 

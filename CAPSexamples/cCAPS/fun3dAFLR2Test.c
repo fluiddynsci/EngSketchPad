@@ -58,7 +58,8 @@ int main(int argc, char *argv[])
 {
 
     int status; // Function return status;
-    int i; // Indexing
+    int i;      // Indexing
+    int outLevel = 1;
 
     // CAPS objects
     capsObj          problemObj, meshObj, fun3dObj, tempObj;
@@ -76,6 +77,7 @@ int main(int argc, char *argv[])
 
     char *stringVal = NULL;
 
+    int state;
     int major, minor, nFields, *ranks, *fInOut, dirty, exec;
     char *analysisPath, *unitSystem, *intents, **fnames;
 
@@ -86,23 +88,26 @@ int main(int argc, char *argv[])
     printf("\n\nAttention: fun3dAFLR2Test is hard coded to look for ../csmData/cfdMultiBody.csm\n");
 
     if (argc > 2) {
-        printf(" usage: fun3dAFLR2Test!\n");
+        printf(" usage: fun3dAFLR2Test outLevel!\n");
         return 1;
+    } else if (argc == 2) {
+        outLevel = atoi(argv[1]);
     }
 
     status = caps_open("FUN3D_AFRL2_Example", NULL, 0, "../csmData/cfd2D.csm",
-                       1, &problemObj, &nErr, &errors);
+                       outLevel, &problemObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Execute the geometry construction so "cmean" can be extracted from the csm file
-    status = caps_preAnalysis(problemObj, &nErr, &errors);
+    status = caps_execute(problemObj, &state, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Load the AFLR2 AIM */
+    exec   = 1;
     status = caps_makeAnalysis(problemObj, "aflr2AIM", analysisPath1,
-                               NULL, NULL, 0, &meshObj, &nErr, &errors);
+                               NULL, NULL, &exec, &meshObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS)  goto cleanup;
 
@@ -119,24 +124,12 @@ int main(int argc, char *argv[])
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-
-    // Do the analysis -- actually run AFLR2
-    status = caps_preAnalysis(meshObj, &nErr, &errors);
-    if (nErr != 0) printErrors(nErr, errors);
-    if (status != CAPS_SUCCESS) goto cleanup;
-
-    // Everything is done in preAnalysis, so we just do the post
-    status = caps_postAnalysis(meshObj, &nErr, &errors);
-    if (nErr != 0) printErrors(nErr, errors);
-    if (status != CAPS_SUCCESS) goto cleanup;
-
-    // Get our 1 output -- just a complete flag */
-    status = caps_childByName(meshObj, VALUE, ANALYSISOUT, "Done", &tempObj);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    // AFLR2 automatically executes
 
     // Now load the fun3dAIM
+    exec   = 0;
     status = caps_makeAnalysis(problemObj, "fun3dAIM", analysisPath2,
-                               NULL, NULL, 1, &fun3dObj, &nErr, &errors);
+                               NULL, NULL, &exec, &fun3dObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
@@ -198,8 +191,8 @@ int main(int argc, char *argv[])
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    /* Link the surface mesh from AFLR2 to Fun3D */
-    status = caps_childByName(meshObj, VALUE, ANALYSISOUT, "Surface_Mesh",
+    /* Link the mesh from AFLR2 to Fun3D */
+    status = caps_childByName(meshObj, VALUE, ANALYSISOUT, "Area_Mesh",
                               &source);
     if (status != CAPS_SUCCESS) {
       printf("meshObj childByName for Volume_Mesh = %d\n", status);

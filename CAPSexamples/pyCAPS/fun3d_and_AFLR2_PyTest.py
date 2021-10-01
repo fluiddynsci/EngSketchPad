@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description = 'FUN3D and AFLR2 PyTest Example',
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 #NREL's S809 Airfoil coordinates
@@ -97,7 +97,7 @@ workDir = os.path.join(str(args.workDir[0]), "FUN3DAFLR2ArbShapeAnalysisTest")
 geometryScript = os.path.join("..","csmData","cfd2DArbShape.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Change a design parameter - area in the geometry
 myProblem.geometry.despmtr.xy = S809
@@ -117,19 +117,11 @@ myProblem.analysis["aflr2"].input.Mesh_Sizing = {"Airfoil"   : {"numEdgePoints" 
 # Make quad/tri instead of just quads
 myProblem.analysis["aflr2"].input.Mesh_Gen_Input_String = "mquad=1 mpp=3"
 
-# Run AIM pre-analysis
-myProblem.analysis["aflr2"].preAnalysis()
-
-# NO analysis is needed - AFLR2 was already ran during preAnalysis
-
-# Run AIM post-analysis
-myProblem.analysis["aflr2"].postAnalysis()
-
 # Load FUN3D aim - child of aflr2 AIM
 myProblem.analysis.create(aim = "fun3dAIM",
                           name = "fun3d")
 
-myProblem.analysis["fun3d"].input["Mesh"].link(myProblem.analysis["aflr2"].output["Surface_Mesh"])
+myProblem.analysis["fun3d"].input["Mesh"].link(myProblem.analysis["aflr2"].output["Area_Mesh"])
 
 # Set project name
 myProblem.analysis["fun3d"].input.Proj_Name = "pyCAPS_FUN3D_aflr2"

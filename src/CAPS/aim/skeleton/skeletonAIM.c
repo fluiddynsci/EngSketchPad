@@ -444,7 +444,6 @@ aimDiscr(char *tname, capsDiscr *discr)
                ibody+1);
     AIM_NOTNULL(faces, discr->aInfo, status);
 
-    found = 0;
     for (iface = 0; iface < nFace; iface++) {
       status = EG_attributeRet(faces[iface], "capsBound", &atype, &alen,
                                &ints, &reals, &string);
@@ -455,10 +454,10 @@ aimDiscr(char *tname, capsDiscr *discr)
       printf(" skeletonAIM/aimDiscr: Body %d/Face %d matches %s!\n",
              ibody+1, iface+1, tname);
 #endif
-      /* count the number of face with capsBound */
-      found = 1;
+      /* count the number of Bodys with capsBound */
+      nBodyDisc++;
+      break;
     }
-    if (found == 1) nBodyDisc++;
     AIM_FREE(faces);
   }
   if (nBodyDisc == 0) {

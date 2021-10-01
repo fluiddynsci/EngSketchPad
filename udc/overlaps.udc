@@ -1,6 +1,6 @@
 # overlaps.udc
 #
-# Body2 Body1 OVERLAPS -
+# Body2 Body1 OVERLAPS Body2 Body1
 #
 # returns in @@overlaps: 0 if Body1 and Body2 do not overlap
 #                        1 if Body1 and Body2 do     overlap

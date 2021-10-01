@@ -15,7 +15,7 @@ TDIR  = $(ESP_ROOT)\bin
 !ENDIF
 
 
-$(LDIR)\nastranAIM.dll:	$(ODIR)\nastranAIM.obj $(LDIR)\utils.lib
+$(LDIR)\nastranAIM.dll:	nastranAIM.def $(ODIR)\nastranAIM.obj $(LDIR)\utils.lib
 	-del $(LDIR)\nastranAIM.dll $(LDIR)\nastranAIM.lib \
 		$(LDIR)\nastranAIM.exp
 	 link /out:$(LDIR)\nastranAIM.dll /dll /def:nastranAIM.def \

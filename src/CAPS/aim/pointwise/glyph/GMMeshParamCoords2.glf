@@ -614,6 +614,29 @@ proc WriteGeomMapFileV2 { fname blks { debugFormat 0 } {verbose 0}} {
                 set nodeEgadsID [getEgadsIDByGridPoint $nodeDB]
                 if {$nodeEgadsID != ""} {
                     set conEgadsID $nodeEgadsID
+                    set conDbCurve $nodeDB
+                    set egadsCurve [getOriginalEgadsCurve $conDbCurve]
+                } else {
+                    set goodConMap 0
+                }
+            } else {
+                set goodConMap 0
+            }
+            if {!$goodConMap} {
+                set goodConMap 1
+                set nodePoint [$con getPoint -constrained isDb 2]
+                if {$isDb} {
+                    set nodeDB [lindex $nodePoint 2]
+                    set nodeEgadsID [getEgadsIDByGridPoint $nodeDB]
+                    if {$nodeEgadsID != ""} {
+                        set conEgadsID $nodeEgadsID
+                        set conDbCurve $nodeDB
+                        set egadsCurve [getOriginalEgadsCurve $conDbCurve]
+                    } else {
+                        set goodConMap 0
+                    }
+                } else {
+                    set goodConMap 0
                 }
             }
         } else {
@@ -636,20 +659,24 @@ proc WriteGeomMapFileV2 { fname blks { debugFormat 0 } {verbose 0}} {
                     puts "[mkEntLink $con] maps to more than one EGADS edge ID"
                     if {$goodConMap == 1} {
                         set gridPoint2 [$con getPoint 2]
+                        set gridPoint2Str [lreplace $gridPoint2 2 2 [mkEntLink [lindex $gridPoint2 2]]]
                         set xyz [$con getXYZ 2]
                         puts "  conPtInd: 2"
-                        puts "  dbCoords: $gridPoint2"
+                        puts "  dbCoords: $gridPoint2Str"
                         puts "  [mkXYZLink $xyz]"
                         puts "  egadsID: $conEgadsID"
+                        puts "  egads Ent: [decodeEgadsID $conEgadsID]"
                         # dictionary dump
                         set conEgadsID [getEgadsIDByGridPoint $gridPoint2 1 ]
 
                         puts ""
                         set xyz [$con getXYZ $i]
                         puts "  conPtInd: $i"
-                        puts "  dbCoords: $gridPoint"
+                        set gridPointStr [lreplace $gridPoint 2 2 [mkEntLink [lindex $gridPoint 2]]]
+                        puts "  dbCoords: $gridPointStr"
                         puts "  [mkXYZLink $xyz]"
                         puts "  egadsID: $egadsID"
+                        puts "  egads Ent: [decodeEgadsID $egadsID]"
                         # dictionary dump
                         set egadsID [getEgadsIDByGridPoint $gridPoint 1]
                         puts ""
@@ -664,7 +691,7 @@ proc WriteGeomMapFileV2 { fname blks { debugFormat 0 } {verbose 0}} {
         }
         
         if {$goodConMap == 0} {
-            puts "Unable to map $conName to EGADS edge ID"
+            puts "Unable to map [mkEntLink $con] to EGADS edge ID"
             continue
         }
         
@@ -934,7 +961,7 @@ proc WriteGeomMapFileV2 { fname blks { debugFormat 0 } {verbose 0}} {
 }
 
 # TEST - export geometry-mesh associativity file for all blocks
-if 10 {
+if 0 {
     set scriptDir [file dirname [info script]]
     set writeDir $scriptDir
     

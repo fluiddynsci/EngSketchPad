@@ -9,14 +9,16 @@ ODIR  = $(ESP_BLOC)\obj
 ODIR  = .
 !ENDIF
 
-OBJS  =	attrUtils.obj meshUtils.obj cfdUtils.obj miscUtils.obj feaUtils.obj vlmUtils.obj nastranUtils.obj tecplotUtils.obj arrayUtils.obj deprecateUtils.obj cardUtils.obj nastranCards.obj jsonUtils.obj
+OBJS  =	attrUtils.obj meshUtils.obj cfdUtils.obj miscUtils.obj \
+        feaUtils.obj vlmUtils.obj nastranUtils.obj tecplotUtils.obj \
+		arrayUtils.obj deprecateUtils.obj cardUtils.obj nastranCards.obj jsonUtils.obj
 OBJSP =	vlmSpanSpace.obj
 OBJSPython = nastranOP2Reader.obj
 
 !IFDEF ESP_BLOC
-default:	start $(LDIR)\utils.lib end
+default:	start $(LDIR)\utils.lib $(IDIR)\meshTypes.h $(IDIR)\miscTypes.h end
 !ELSE
-default:	$(LDIR)\utils.lib
+default:	$(LDIR)\utils.lib $(IDIR)\meshTypes.h
 !ENDIF
 
 start:
@@ -51,6 +53,14 @@ $(OBJSPython): $(OBJSPython:.obj=.c)
 	
 $(OBJSP):	$(OBJSP:.obj=.cpp)
 	cl /c $(CPPOPT) $(DEFINE) /I..\include /I$(IDIR) /I. $*.cpp
+
+$(IDIR)\meshTypes.h:	meshTypes.h
+	-del $(IDIR)\meshTypes.h
+	copy meshTypes.h $(IDIR)\meshTypes.h
+
+$(IDIR)\miscTypes.h:	miscTypes.h
+	-del $(IDIR)\miscTypes.h
+	copy miscTypes.h $(IDIR)\miscTypes.h
 
 end:
 	-del *.c *.cpp *.h

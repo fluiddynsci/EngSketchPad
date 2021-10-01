@@ -21,7 +21,7 @@ default:
 !ENDIF
 
 
-$(LDIR)\hsmAIM.dll:	$(ODIR)\hsmAIM.obj $(ODIR)\hsmUtils.obj \
+$(LDIR)\hsmAIM.dll:	hsmAIM.def $(ODIR)\hsmAIM.obj $(ODIR)\hsmUtils.obj \
 			$(ODIR)\hsmAdj.obj $(ODIR)\rcm.obj $(ODIR)\genrcmi.obj \
 			$(LDIR)\utils.lib  $(LDIR)\hsm.lib $(LDIR)\aimUtil.lib
 	-del $(LDIR)\hsmAIM.dll $(LDIR)\hsmAIM.lib $(LDIR)\hsmAIM.exp

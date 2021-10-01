@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(description = 'SU2 and AFLR Pytest Example',
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -27,7 +27,7 @@ workDir = os.path.join(str(args.workDir[0]), "su2_and_AFLR4_AFLR3")
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Change a design parameter - area in the geometry
 myProblem.geometry.despmtr.area = 50
@@ -46,7 +46,7 @@ aflr4.input.Mesh_ASCII_Flag = True
 aflr4.input.Mesh_Format = "Tecplot"
 
 # Set AIM verbosity
-aflr4.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+aflr4.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Farfield growth factor
 aflr4.input.ff_cdfr = 1.4
@@ -72,7 +72,7 @@ aflr3.input.Mesh_ASCII_Flag = True
 aflr3.input.Mesh_Format = "Tecplot"
 
 # Set AIM verbosity
-aflr3.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+aflr3.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 
 # Load SU2 aim - child of AFLR3 AIM
@@ -108,6 +108,11 @@ su2.input.Physical_Problem = "Euler"
 # Set number of iterations
 su2.input.Num_Iter = 5
 
+# Set number of inner iterations, testing Input_String
+su2.input.Input_String = ["INNER_ITER= 10",
+                          "CONV_FIELD= RMS_DENSITY",
+                          "CONV_RESIDUAL_MINVAL= -8"]
+
 # Set overwrite su2 cfg if not linking to Python library
 su2.input.Overwrite_CFG = True
 
@@ -122,26 +127,9 @@ su2.input.Boundary_Condition = {"Wing1": bc1,
 su2.input.Surface_Monitor = ["Wing1", "Wing2"]
 
 
-
-# Run AIM pre-analysis
-aflr4.preAnalysis()
-
 #################################################
-##  AFLR4  is internally ran during preAnalysis #
+##  AFLR4/AFLR3 are executed automatically      #
 #################################################
-
-# Run AIM post-analysis
-aflr4.postAnalysis()
-
-# Run AIM pre-analysis
-aflr3.preAnalysis()
-
-#################################################
-##  AFLR3 is internally ran during preAnalysis #
-#################################################
-
-# Run AIM post-analysis
-aflr3.postAnalysis()
 
 # Run AIM pre-analysis
 su2.preAnalysis()

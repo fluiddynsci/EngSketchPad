@@ -21,6 +21,11 @@ skbeg     0   0   0   1
    linseg    ::x[4]   ::y[4]   0
    linseg    ::x[1]   ::y[1]   0
 skend     0
+
+assert    0  1
+catbeg    $overconstrained
+catend
+
 extrude   0   0   1
 
 end

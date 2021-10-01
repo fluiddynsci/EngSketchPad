@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description = 'Masstran Pytest Example',
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -25,7 +25,7 @@ workDir = os.path.join(str(args.workDir[0]), "masstranWingBEM")
 geometryScript = os.path.join("..","csmData","feaWingBEM.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 ## [loadGeom]
 
 ## [structureMesh]
@@ -39,9 +39,7 @@ myProblem.analysis["tess"].input.Mesh_Elements = "Quad"
 # Set global tessellation parameters
 myProblem.analysis["tess"].input.Tess_Params = [.05,.5,15]
 
-# Generate the surface mesh
-myProblem.analysis["tess"].preAnalysis()
-myProblem.analysis["tess"].postAnalysis()
+# The surfaces mesh is generated automatically just-in-time
 ## [structureMesh]
 
 
@@ -77,11 +75,11 @@ shell  = {"propertyType"      : "Shell",
 masstranAIM.input.Property = {"Ribs_and_Spars": shell}
 ##[setTuple]
 
-# Run AIM pre/post-analysis to perform the calculation
-## [prepostAnalysis]
-masstranAIM.preAnalysis()
-masstranAIM.postAnalysis()
-## [prepostAnalysis]
+## [executeAnalysis]
+#####################################
+## masstran executes automatically ##
+#####################################
+## [executeAnalysis]
 
 ## [results]
 # Get mass properties

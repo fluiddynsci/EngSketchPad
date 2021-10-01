@@ -304,7 +304,7 @@ static int destroy_aimStorage(aimStorage *hsmInstance)
               printf("Error: Status %d during destroy_meshStruct!\n", status);
         }
 
-        EG_free(hsmInstance->feaMesh);
+        AIM_FREE(hsmInstance->feaMesh);
     }
 
     hsmInstance->feaMesh = NULL;

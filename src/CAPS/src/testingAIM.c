@@ -12,6 +12,7 @@
 #include <string.h>
 #include <math.h>
 #include "aimUtil.h"
+#include "aimMesh.h"
 
 #define DEBUG
 //#define SENSITIVITY
@@ -23,10 +24,31 @@
 
 
 typedef struct {
-  int instance;
-  int nBody;
-  ego *tess;
+  int        instance;
+  int        nBody;
+  ego        *tess;
+  aimMeshRef *mesh;
 } aimStorage;
+
+
+
+void
+aimCleanup(/*@only@*/ void *instStore)
+{
+  aimStorage *aimStore;
+
+  aimStore = (aimStorage *) instStore;
+#ifdef DEBUG
+  printf(" testingAIM/aimCleanup   instance = %d!\n", aimStore->instance);
+#endif
+
+  AIM_FREE(aimStore->tess);
+  if (aimStore->mesh != NULL) {
+    aim_freeMeshRef(aimStore->mesh);
+    EG_free(aimStore->mesh);
+  }
+  EG_free(aimStore);
+}
 
 
 int
@@ -50,22 +72,33 @@ aimInitialize(int inst, /*@unused@*/ const char *unitSys,
   /* specify the number of analysis input and out "parameters" */
   *major  = 1;
   *minor  = 0;
-  *nIn    = 3;
-  *nOut   = 2;
+  *nIn    = 4;
+  *nOut   = 3;
   if (inst == -1) return CAPS_SUCCESS;
 
   /* setup our AIM specific state */
   aimStore = (aimStorage *) EG_alloc(sizeof(aimStorage));
   if (aimStore == NULL) return EGADS_MALLOC;
   aimStore->instance = inst;
-  aimStore->nBody = 0;
-  aimStore->tess  = NULL;
+  aimStore->nBody    = 0;
+  aimStore->tess     = NULL;
+  aimStore->mesh     = NULL;
+  
+  /* only instance 0 can write */
+  if (inst == 0) {
+    aimStore->mesh = (aimMeshRef *) EG_alloc(sizeof(aimMeshRef));
+    if (aimStore->mesh == NULL) {
+      EG_free(aimStore);
+      return EGADS_MALLOC;
+    }
+    aim_initMeshRef(aimStore->mesh);
+  }
 
   /* specify the field variables this analysis can generate */
   *nFields = 4;
   ints     = (int *) EG_alloc((*nFields)*sizeof(int));
   if (ints == NULL) {
-    EG_free(aimStore);
+    aimCleanup(aimStore);
     return EGADS_MALLOC;
   }
   ints[0]  = 1;
@@ -75,9 +108,9 @@ aimInitialize(int inst, /*@unused@*/ const char *unitSys,
   *franks   = ints;
   strs     = (char **) EG_alloc((*nFields)*sizeof(char *));
   if (strs == NULL) {
-    EG_free(aimStore);
     EG_free(*franks);
     *franks = NULL;
+    aimCleanup(aimStore);
     return EGADS_MALLOC;
   }
   strs[0]  = EG_strdup("scalar");
@@ -88,13 +121,13 @@ aimInitialize(int inst, /*@unused@*/ const char *unitSys,
 
   ints     = (int *) EG_alloc((*nFields)*sizeof(int));
   if (ints == NULL) {
-    EG_free(aimStore);
-    EG_free(*franks);
-    *franks = NULL;
     for (i = 0; i < *nFields; i++)
       EG_free((*fnames)[i]);
     EG_free(*fnames);
     *fnames = NULL;
+    EG_free(*franks);
+    *franks = NULL;
+    aimCleanup(aimStore);
     return EGADS_MALLOC;
   }
   ints[0] = FieldOut;
@@ -106,21 +139,6 @@ aimInitialize(int inst, /*@unused@*/ const char *unitSys,
   *instStore = aimStore;
 
   return CAPS_SUCCESS;
-}
-
-
-void
-aimCleanup(void *instStore)
-{
-  aimStorage *aimStore=NULL;
-
-  aimStore = (aimStorage *) instStore;
-#ifdef DEBUG
-  printf(" testingAIM/aimCleanup   instance = %d!\n", aimStore->instance);
-#endif
-  aimStore->nBody = 0;
-  AIM_FREE(aimStore->tess);
-  EG_free(aimStore);
 }
 
 
@@ -492,7 +510,7 @@ aimInputs(void *instStore, /*@unused@*/ void *aimStruc, int index, char **ainame
     defval->ncol       = 3;
     defval->vals.tuple = tuple;
 
-  } else {
+  } else if (index == 3) {
 
     *ainame = EG_strdup("tessIn");
     if (*ainame == NULL) return EGADS_MALLOC;
@@ -505,6 +523,25 @@ aimInputs(void *instStore, /*@unused@*/ void *aimStruc, int index, char **ainame
       return EGADS_MALLOC;
     }
 
+  } else {
+    
+    *ainame = EG_strdup("meshFile");
+    if (*ainame == NULL) return EGADS_MALLOC;
+    defval->type        = PointerMesh;
+    defval->vals.AIMptr = NULL;
+    defval->nullVal     = IsNull;
+    defval->units       = EG_strdup("writer");
+    if (defval->units == NULL) {
+      EG_free(*ainame);
+      return EGADS_MALLOC;
+    }
+    defval->meshWriter  = EG_strdup("testingWriter");
+    if (defval->meshWriter == NULL) {
+      EG_free(defval->units);
+      EG_free(*ainame);
+      return EGADS_MALLOC;
+    }
+    
   }
 
   return CAPS_SUCCESS;
@@ -514,12 +551,15 @@ aimInputs(void *instStore, /*@unused@*/ void *aimStruc, int index, char **ainame
 int
 aimPreAnalysis(void *instStore, void *aimStruc, /*@null@*/ capsValue *inputs)
 {
-  int              nBname, stat, state, i, npts, rank;
-  char             **bNames, *units;
+  int              nBname, stat, state, i, npts, rank, len;
+  char             **bNames, *units, *full;
   double           *data;
   capsDiscr        *discr;
+  capsObject       *vobj;
+  capsValue        *value;
   enum capsdMethod method;
   aimStorage       *aimStore;
+  aimMeshRef       *mesh;
   ego              tess, body;
   FILE             *fp;
 
@@ -568,6 +608,13 @@ aimPreAnalysis(void *instStore, void *aimStruc, /*@null@*/ capsValue *inputs)
         printf("   %d scalars!\n", npts);
       }
     }
+    
+    if (aimStore->mesh->fileName == NULL) {
+      printf("   meshRef = NULL\n");
+    } else {
+      stat = aim_deleteMeshes(aimStruc, aimStore->mesh);
+      printf("   aim_deleteMeshes = %d\n", stat);
+    }
   } else if (aimStore->instance == 1) {
     /* look for child's dependency */
     if (inputs != NULL) {
@@ -577,6 +624,34 @@ aimPreAnalysis(void *instStore, void *aimStruc, /*@null@*/ capsValue *inputs)
       } else {
         stat = EG_statusTessBody(tess, &body, &state, &npts);
         printf("   tess State = %d  %d   npts = %d\n", stat, state, npts);
+      }
+      
+      mesh = (aimMeshRef *) inputs[3].vals.AIMptr;
+      /* special internal linking -- CAPS normally sets this up */
+      if (mesh == NULL)
+        if (inputs[3].link != NULL) {
+          vobj  = inputs[3].link;
+          value = vobj->blind;
+          if (value != NULL) mesh = (aimMeshRef *) value->vals.AIMptr;
+        }
+      
+      if (mesh != NULL) {
+        printf("   mesh file = %s\n", mesh->fileName);
+        len  = strlen(mesh->fileName) + 5;
+        full = (char *) EG_alloc(len*sizeof(char));
+        if (full != NULL) {
+          for (i = 0; i < len-5; i++) full[i] = mesh->fileName[i];
+          full[len-5] = '.';
+          full[len-4] = 't';
+          full[len-3] = 'x';
+          full[len-2] = 't';
+          full[len-1] =  0;
+          stat = aim_symLink(aimStruc, full, NULL);
+          printf("   symLink  = %d\n", stat);
+          EG_free(full);
+        } else {
+          printf(" Malloc Error on %d characters!\n", len);
+        }
       }
     }
 
@@ -616,9 +691,10 @@ aimOutputs(/*@null@*/ void *instStore, /*@unused@*/ void *aimStruc,
 
     *aoname = EG_strdup("testingAIMout");
     if (*aoname == NULL) return EGADS_MALLOC;
-    form->type = Double;
+    form->type  = Double;
+    form->units = EG_strdup("cm");
 
-  } else {
+  } else if (index == 2) {
 
     *aoname = EG_strdup("tessOut");
     if (*aoname == NULL) return EGADS_MALLOC;
@@ -630,6 +706,18 @@ aimOutputs(/*@null@*/ void *instStore, /*@unused@*/ void *aimStruc,
       return EGADS_MALLOC;
     }
 
+  } else {
+    
+    *aoname = EG_strdup("meshFile");
+    if (*aoname == NULL) return EGADS_MALLOC;
+    form->type    = PointerMesh;
+    form->nullVal = NotNull;
+    form->units   = EG_strdup("writer");
+    if (form->units == NULL) {
+      EG_free(*aoname);
+      return EGADS_MALLOC;
+    }
+    
   }
 
   return CAPS_SUCCESS;
@@ -660,11 +748,13 @@ aimPostAnalysis(void *instStore, void *aimStruc, int restart,
 
   aimStore = (aimStorage *) instStore;
 #ifdef DEBUG
-  printf(" testingAIM/aimPostAnalysis instance = %d!\n", aimStore->instance);
+  printf(" testingAIM/aimPostAnalysis instance = %d  restart = %d!\n",
+         aimStore->instance, restart);
 #endif
   
   if (restart == 1) {
     /* do pre on restarted post */
+    printf(" testingAIM/aimPostAnalysis: restart -- going into pre!\n");
     stat = aimPreAnalysis(instStore, aimStruc, inputs);
     if (stat != CAPS_SUCCESS) {
       printf(" testingAIM/aimPostAnalysis: aimPreAnalysis = %d\n", stat);
@@ -682,9 +772,11 @@ aimPostAnalysis(void *instStore, void *aimStruc, int restart,
         printf(" testingAIM/aimPostAnalysis: %d aim_getGeomInType = %d\n",
                i, stat);
       } else if (stat == 1) {
-        printf(" testingAIM/aimPostAnalysis: %d is Config Parameter\n", i);
+        printf(" testingAIM/aimPostAnalysis: %d -- %d is Config Parameter\n",
+               aimStore->instance, i);
       } else if (stat == 2) {
-        printf(" testingAIM/aimPostAnalysis: %d is Constant Parameter\n", i);
+        printf(" testingAIM/aimPostAnalysis: %d -- %d is Constant Parameter\n",
+               aimStore->instance, i);
       }
     }
   }
@@ -696,19 +788,20 @@ aimPostAnalysis(void *instStore, void *aimStruc, int restart,
 int
 aimCalcOutput(void *instStore, void *aimStruc, int index, capsValue *val)
 {
-  int              stat, rank, npts;
+  int              i, stat, rank, npts, len;
   double           *dval;
   enum capsdMethod method;
   capsDiscr        *discr;
-  char             *units;
+  char             *units, relative[PATH_MAX];
   const char       *name;
 #ifdef SENSITIVITY
-  int              nBody,   nFace, i, j, ig;
+  int              nBody,   nFace, j, ig;
   double           *dxyz;
   ego              *bodies, *faces;
   const char       *intents;
 #endif
   aimStorage       *aimStore;
+  aimMesh          meshStruc;
 
   aimStore = (aimStorage *) instStore;
 #ifdef DEBUG
@@ -718,6 +811,7 @@ aimCalcOutput(void *instStore, void *aimStruc, int index, capsValue *val)
 #endif
 
   if (index == 2) {
+    
     val->vals.AIMptr    = NULL;
     val->nullVal        = IsNull;
     if (aimStore->tess != NULL) {
@@ -732,7 +826,34 @@ aimCalcOutput(void *instStore, void *aimStruc, int index, capsValue *val)
 #endif
 #endif
     return CAPS_SUCCESS;
+    
+  } else if (index == 3) {
+    
+    if (aimStore->mesh != NULL) {
+      if (aimStore->mesh->fileName == NULL) {
+        stat = aim_file(aimStruc, "meshFile", relative);
+        if (stat != CAPS_SUCCESS) return stat;
+        len  = strlen(relative) + 1;
+        aimStore->mesh->fileName = (char *) EG_alloc(len*sizeof(char));
+        if (aimStore->mesh->fileName == NULL) return EGADS_MALLOC;
+        for (i = 0; i < len; i++) aimStore->mesh->fileName[i] = relative[i];
+/*      printf(" mesh fileName = %s\n", aimStore->mesh->fileName);  */
+      }
+      meshStruc.meshData = NULL;
+      meshStruc.meshRef  = aimStore->mesh;
+      stat = aim_writeMeshes(aimStruc, index, &meshStruc);
+      if (stat == CAPS_NOTFOUND) return CAPS_SUCCESS;
+      if (stat != CAPS_SUCCESS)  return stat;
+      val->nullVal     = NotNull;
+/*@-kepttrans@*/
+      val->vals.AIMptr = aimStore->mesh;
+/*@+kepttrans@*/
+    }
+    return CAPS_SUCCESS;
+    
   }
+
+  val->vals.real = 12.34;
 
   /* get a dataset */
   stat = aim_getDiscr(aimStruc, "Interface", &discr);

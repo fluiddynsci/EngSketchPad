@@ -52,6 +52,8 @@
 #include <math.h>
 #include "capsTypes.h"
 #include "aimUtil.h"
+#include "aimMesh.h"
+#include "su2Writer.h"
 
 #include "meshUtils.h"
 #include "cfdUtils.h"
@@ -79,10 +81,7 @@ typedef struct {
     char *projectName;
 
     // Attribute to index map
-    mapAttrToIndexStruct attrMap;
-
-    // Check to make sure data transfer is ok
-    int dataTransferCheck;
+    mapAttrToIndexStruct groupMap;
 
     // Point to caps input value for version of Su2
     capsValue *su2Version;
@@ -177,11 +176,8 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *a
     su2Instance->su2Version = NULL;
 
     // Container for attribute to index map
-    status = initiate_mapAttrToIndexStruct(&su2Instance->attrMap);
+    status = initiate_mapAttrToIndexStruct(&su2Instance->groupMap);
     AIM_STATUS(aimInfo, status);
-
-    // Check to make sure data transfer is ok
-    su2Instance->dataTransferCheck = (int) true;
 
     // Pointer to caps input value for scaling pressure during data transfer
     su2Instance->pressureScaleFactor = NULL;
@@ -330,9 +326,9 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
      * distributed with SU2.
      * Note: The configuration file is dependent on the version of SU2 used.
      * This configuration file that will be auto generated is compatible with
-     * SU2 4.1.1. (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) or 7.1.1(Blackbird - Default)
+     * SU2 4.1.1. (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) or 7.2.0 (Blackbird - Default)
      */
-  
+
     su2Instance = (aimStorage *) instStore;
 
     if (su2Instance != NULL) units = &su2Instance->units;
@@ -376,6 +372,21 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
          * - <B> Re = NULL</B> <br>
          * Reynolds number; this corresponds to the REYNOLDS_NUMBER keyword in the configuration file.
          */
+    } else if (index == Math_Problem) {
+        *ainame              = EG_strdup("Math_Problem");
+        defval->type         = String;
+        defval->vals.string  = NULL;
+        defval->nullVal      = NotNull;
+        defval->units        = NULL;
+        defval->lfixed       = Change;
+        defval->dim          = Scalar;
+        defval->vals.string  = EG_strdup("Direct");
+
+        /*! \page aimInputsSU2
+         * - <B> Math_Problem = "Direct"</B> <br>
+         * Math problem type; this corresponds to the MATH_PROBLEM keyword in the configuration file.
+         * Options: DIRECT, CONTINUOUS_ADJOINT, DISCRETE_ADJOINT, ... see SU2 template for additional options.
+         */
 
     } else if (index == Physical_Problem) {
         *ainame              = EG_strdup("Physical_Problem");
@@ -407,6 +418,22 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
          * Equation regime type; this corresponds to the REGIME_TYPE keyword in the configuration file.
          * Options: Compressible or Incompressible.
          */
+
+    } else if (index == Turbulence_Model) {
+        *ainame              = EG_strdup("Turbulence_Model");
+        defval->type         = String;
+        defval->vals.string  = NULL;
+        defval->nullVal      = NotNull;
+        defval->units        = NULL;
+        defval->lfixed       = Change;
+        defval->vals.string  = EG_strdup("SA_NEG");
+
+        /*! \page aimInputsSU2
+         * - <B> Turbulence_Model = "SA_NEG"</B> <br>
+         * RANS turbulence model; this corresponds to the KIND_TURB_MODEL keyword in the configuration file.
+         * Options: NONE, SA, SA_NEG, SST, SA_E, SA_COMP, SA_E_COMP, SST_SUST
+         */
+
     } else if (index == Alpha) {
         *ainame              = EG_strdup("Alpha");
         defval->type         = Double;
@@ -436,6 +463,20 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
         /*! \page aimInputsSU2
          * - <B> Beta = 0.0</B> <br>
          * Side slip angle [degree]; this corresponds to the SIDESLIP_ANGLE keyword in the configuration file.
+         */
+
+    } else if (index == Init_Option) {
+        *ainame              = EG_strdup("Init_Option");
+        defval->type         = String;
+        defval->nullVal      = NotNull;
+        defval->lfixed       = Fixed;
+        defval->dim          = Scalar;
+        defval->vals.string  = EG_strdup("Reynolds");
+
+        /*! \page aimInputsSU2
+         * - <B> Init_Option = "Reynolds"</B> <br>
+         * Init option to choose between Reynolds (default) or thermodynamics quantities for
+         * initializing the solution (REYNOLDS, TD_CONDITIONS); this corresponds to the INIT_OPTION keyword in the configuration file.
          */
 
     } else if (index == Overwrite_CFG) {
@@ -518,7 +559,8 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
         defval->type         = String;
         defval->nullVal      = NotNull;
         defval->vals.string  = EG_strdup("SI");
-        defval->lfixed       = Change;
+        defval->lfixed       = Fixed;
+        defval->dim          = Scalar;
 
         /*! \page aimInputsSU2
          * - <B> Unit_System = "SI"</B> <br>
@@ -531,7 +573,8 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
         defval->type         = String;
         defval->nullVal      = NotNull;
         defval->vals.string  = EG_strdup("Dimensional");
-        defval->lfixed       = Change;
+        defval->lfixed       = Fixed;
+        defval->dim          = Scalar;
 
         /*! \page aimInputsSU2
          * - <B> Reference_Dimensionalization = NULL</B> <br>
@@ -623,15 +666,10 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
         defval->dim           = Vector;
         defval->nrow          = 3;
         defval->ncol          = 1;
-        defval->units         = NULL;
-        defval->vals.reals    = (double *) EG_alloc(defval->nrow*sizeof(double));
-        if (defval->vals.reals == NULL) {
-            return EGADS_MALLOC;
-        } else {
-            defval->vals.reals[0] = 0.0;
-            defval->vals.reals[1] = 0.0;
-            defval->vals.reals[2] = 0.0;
-        }
+        AIM_ALLOC(defval->vals.reals, defval->nrow, double, aimInfo, status);
+        defval->vals.reals[0] = 0.0;
+        defval->vals.reals[1] = 0.0;
+        defval->vals.reals[2] = 0.0;
         defval->nullVal       = IsNull;
         defval->lfixed        = Fixed;
         if (units != NULL && units->length != NULL) {
@@ -731,7 +769,6 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
     }  else if (index == Two_Dimensional) {
         *ainame              = EG_strdup("Two_Dimensional");
         defval->type         = Boolean;
-        defval->type         = Boolean;
         defval->vals.integer = (int) false;
 
         /*! \page aimInputsSU2
@@ -761,7 +798,7 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
 
         /*! \page aimInputsSU2
          * - <B>SU2_Version = "Blackbird"</B> <br>
-         * SU2 version to generate specific configuration file. Options: "Cardinal(4.0)", "Raven(5.0)", "Falcon(6.2)" or "Blackbird(7.0.7)".
+         * SU2 version to generate specific configuration file. Options: "Cardinal(4.0)", "Raven(5.0)", "Falcon(6.2)" or "Blackbird(7.2.0)".
          */
 
       if (su2Instance != NULL) su2Instance->su2Version = defval;
@@ -796,24 +833,26 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
       defval->type        = String;
       defval->vals.string = NULL;
       defval->nullVal     = IsNull;
+      defval->lfixed      = Change;
+      defval->dim         = Vector;
 
       /*! \page aimInputsSU2
        * - <B>Input_String = NULL</B> <br>
-       * An input string that will be written as is to the end of the SU2 cfg file.
+       * Array of input strings that will be written as is to the end of the SU2 cfg file.
        */
 
     } else if (index == Mesh) {
         *ainame             = AIM_NAME(Mesh);
-        defval->type        = Pointer;
+        defval->type        = PointerMesh;
         defval->nrow        = 1;
         defval->lfixed      = Fixed;
         defval->vals.AIMptr = NULL;
         defval->nullVal     = IsNull;
-        AIM_STRDUP(defval->units, "meshStruct", aimInfo, status);
+        AIM_STRDUP(defval->meshWriter, MESHWRITER, aimInfo, status);
 
         /*! \page aimInputsSU2
          * - <B>Mesh = NULL</B> <br>
-         * A Surface_Mesh or Volume_Mesh link for 2D and 3D calculations respectively.
+         * A Area_Mesh or Volume_Mesh link for 2D and 3D calculations respectively.
          */
 
     } else {
@@ -841,12 +880,6 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     // Indexing
     int i, body;
 
-    // Data transfer
-    //int  nrow, ncol, rank;
-    //void *dataTransfer = NULL;
-    //enum capsvType vtype;
-    //char *units = NULL;
-
     // EGADS return values
     int          atype, alen;
     const int    *ints;
@@ -854,7 +887,8 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     const double *reals;
 
     // Output filename
-    char *filename = NULL;
+    char meshfilename[PATH_MAX];
+    char filepath[PATH_MAX];
 
     // File pointer if we are going to internally write the namelist
     // FILE *fnml;
@@ -862,9 +896,6 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     // AIM input bodies
     int  numBody;
     ego *bodies = NULL;
-    int  bodySubType = 0, bodyOClass, bodyNumChild, *bodySense;
-    ego  bodyRef, *bodyChild;
-    double bodyData[4];
 
     const char *bodyLunits=NULL;
     cfdUnitsStruct *units=NULL;
@@ -876,20 +907,17 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     bndCondStruct bndConds;
 
     // Volume Mesh obtained from meshing AIM
-    meshStruct *volumeMesh = NULL;
-    int numElementCheck; // Consistency checkers for volume-surface meshes
+    aimMeshRef *meshRef = NULL;
 
     // Discrete data transfer variables
-    char **transferName = NULL;
-    int numTransferName;
+    char **boundNames = NULL;
+    int numBoundName;
 
     int attrLevel = 0;
-    int xMeshConstant = (int) true, yMeshConstant = (int) true, zMeshConstant= (int) true; // 2D mesh checks
-    double tempCoord;
     int withMotion = (int) false;
 
     aimStorage *su2Instance;
-  
+
     su2Instance = (aimStorage *) instStore;
     units = &su2Instance->units;
 
@@ -912,7 +940,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         AIM_ERROR(aimInfo, "No Bodies!");
         return CAPS_SOURCEERR;
     }
-  
+
     if (aimInputs == NULL) return CAPS_BADVALUE;
 
     if (units->length != NULL) {
@@ -1083,7 +1111,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         status = create_CAPSGroupAttrToIndexMap(numBody,
                                                 bodies,
                                                 attrLevel,
-                                                &su2Instance->attrMap);
+                                                &su2Instance->groupMap);
         if (status != CAPS_SUCCESS) return status;
     }
 
@@ -1093,110 +1121,25 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         status = cfd_getBoundaryCondition(aimInfo,
                                           aimInputs[Boundary_Condition-1].length,
                                           aimInputs[Boundary_Condition-1].vals.tuple,
-                                          &su2Instance->attrMap,
+                                          &su2Instance->groupMap,
                                           &bcProps);
         if (status != CAPS_SUCCESS) goto cleanup;
 
     } else {
-        AIM_ANALYSISIN_ERROR(aimInfo, Boundary_Condition, "Warning: No boundary conditions provided !!!!\n");
+        AIM_ANALYSISIN_ERROR(aimInfo, Boundary_Condition, "No boundary conditions provided !!!!");
         status = CAPS_BADVALUE;
         goto cleanup;
     }
 
     if (aimInputs[Mesh-1].nullVal == IsNull) {
-        AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to an output 'Surface_Mesh' or 'Volume_Mesh'");
+        AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to an output 'Area_Mesh' or 'Volume_Mesh'");
         status = CAPS_BADVALUE;
         goto cleanup;
     }
 
     // Get mesh
-    volumeMesh = (meshStruct *)aimInputs[Mesh-1].vals.AIMptr;
-    AIM_NOTNULL(volumeMesh, aimInfo, status);
-
-    // Are we running in two-mode
-    if (aimInputs[Two_Dimensional-1].vals.integer == (int) true) {
-
-        if (numBody > 1) {
-            AIM_ERROR(aimInfo, "Only 1 body may be provided when running in two mode!! numBody = %d", numBody);
-            status = CAPS_BADVALUE;
-            goto cleanup;
-        }
-
-        for (body = 0; body < numBody; body++) {
-            // What type of BODY do we have?
-            status = EG_getTopology(bodies[body], &bodyRef, &bodyOClass,
-                                    &bodySubType, bodyData, &bodyNumChild,
-                                    &bodyChild, &bodySense);
-            if (status != EGADS_SUCCESS) goto cleanup;
-
-            if (bodySubType != FACEBODY && bodySubType != SHEETBODY) {
-                AIM_ERROR(aimInfo, "Body type must be either FACEBODY (%d) or a SHEETBODY (%d) when running in two mode!",
-                          FACEBODY, SHEETBODY);
-                status = CAPS_BADTYPE;
-                goto cleanup;
-            }
-        }
-
-        // Constant x?
-        for (i = 0; i < volumeMesh->numNode; i++) {
-            if ((volumeMesh->node[i].xyz[0] - volumeMesh->node[0].xyz[0]) > 1E-7) {
-                xMeshConstant = (int) false;
-                break;
-            }
-        }
-
-        // Constant y?
-        for (i = 0; i < volumeMesh->numNode; i++) {
-            if ((volumeMesh->node[i].xyz[1] - volumeMesh->node[0].xyz[1] ) > 1E-7) {
-                yMeshConstant = (int) false;
-                break;
-            }
-        }
-
-        // Constant z?
-        for (i = 0; i < volumeMesh->numNode; i++) {
-            if ((volumeMesh->node[i].xyz[2]-volumeMesh->node[0].xyz[2]) > 1E-7) {
-                zMeshConstant = (int) false;
-                break;
-            }
-        }
-
-        if (zMeshConstant != (int) true) {
-            printf("SU2 expects 2D meshes be in the x-y plane... attempting to rotate mesh!\n");
-
-            if (xMeshConstant == (int) true && yMeshConstant == (int) false) {
-                printf("Swapping z and x coordinates!\n");
-                for (i = 0; i < volumeMesh->numNode; i++) {
-                    tempCoord = volumeMesh->node[i].xyz[0];
-                    volumeMesh->node[i].xyz[0] = volumeMesh->node[i].xyz[2];
-                    volumeMesh->node[i].xyz[2] = tempCoord;
-                }
-
-            } else if(xMeshConstant == (int) false && yMeshConstant == (int) true) {
-
-                printf("Swapping z and y coordinates!\n");
-                for (i = 0; i < volumeMesh->numNode; i++) {
-                    tempCoord = volumeMesh->node[i].xyz[1];
-                    volumeMesh->node[i].xyz[1] = volumeMesh->node[i].xyz[2];
-                    volumeMesh->node[i].xyz[2] = tempCoord;
-                }
-
-            } else {
-                printf("Unable to rotate mesh!\n");
-                status = CAPS_NOTFOUND;
-            }
-        }
-
-        // add boundary elements if they are missing
-        if (volumeMesh != NULL)
-            if (volumeMesh->meshQuickRef.numLine == 0) {
-                status = mesh_addTess2Dbc(volumeMesh, &su2Instance->attrMap);
-                if (status != CAPS_SUCCESS) goto cleanup;
-            }
-
-        // Can't currently do data transfer in 2D-mode
-        su2Instance->dataTransferCheck = (int) false;
-    }
+    meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
+    AIM_NOTNULL(meshRef, aimInfo, status);
 
     if (status == CAPS_SUCCESS) {
 
@@ -1234,84 +1177,28 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         }
         printf("Done boundary flags\n");
 
-        // Write SU2 Mesh
-        if (aim_newGeometry(aimInfo) == CAPS_SUCCESS) {
-
-            status = mesh_writeSU2( aimInfo,
-                                    su2Instance->projectName,
-                                    (int) false,
-                                    volumeMesh, bndConds.numBND, bndConds.bndID,
-                                    1.0);
-            if (status != CAPS_SUCCESS) {
-                goto cleanup;
-            }
-        }
-
         status = destroy_bndCondStruct(&bndConds);
         if (status != CAPS_SUCCESS) return status;
-
-        // Lets check the volume mesh
-
-        // Do we have an individual surface mesh for each body
-        if (volumeMesh->numReferenceMesh != numBody &&
-            aimInputs[Two_Dimensional-1].vals.integer == (int) false) {
-            printf("Number of linked surface mesh in the volume mesh, %d, does not match the number "
-                    "of bodies, %d - data transfer will NOT be possible.",
-                   volumeMesh->numReferenceMesh, numBody);
-
-            su2Instance->dataTransferCheck = (int) false;
-        }
-
-        // Check to make sure the volume mesher didn't add any unaccounted for points/faces
-        numElementCheck = 0;
-        for (i = 0; i < volumeMesh->numReferenceMesh; i++) {
-            numElementCheck += volumeMesh->referenceMesh[i].numElement;
-        }
-
-        if (volumeMesh->meshQuickRef.useStartIndex == (int) false &&
-            volumeMesh->meshQuickRef.useListIndex  == (int) false) {
-
-            status = mesh_retrieveNumMeshElements(volumeMesh->numElement,
-                                                  volumeMesh->element,
-                                                  Triangle,
-                                                  &volumeMesh->meshQuickRef.numTriangle);
-            if (status != CAPS_SUCCESS) goto cleanup;
-
-            status = mesh_retrieveNumMeshElements(volumeMesh->numElement,
-                                                  volumeMesh->element,
-                                                  Quadrilateral,
-                                                  &volumeMesh->meshQuickRef.numQuadrilateral);
-            if (status != CAPS_SUCCESS) goto cleanup;
-
-        }
-
-        if (numElementCheck != volumeMesh->meshQuickRef.numTriangle +
-                               volumeMesh->meshQuickRef.numQuadrilateral) {
-
-            su2Instance->dataTransferCheck = (int) false;
-            printf("Volume mesher added surface elements - data transfer will NOT be possible.\n");
-
-        } else { // Data transfer appears to be ok
-            su2Instance->dataTransferCheck = (int) true;
-        }
     }
 
     // If data transfer is ok ....
     withMotion = (int) false;
-    if (su2Instance->dataTransferCheck == (int) true) {
-
+    if (meshRef->nmap > 0) {
         //See if we have data transfer information
-        status = aim_getBounds(aimInfo, &numTransferName, &transferName);
-
-        if (status == CAPS_SUCCESS && numTransferName > 0) {
+        status = aim_getBounds(aimInfo, &numBoundName, &boundNames);
+        if (status == CAPS_SUCCESS && numBoundName > 0) {
             status = su2_dataTransfer(aimInfo,
                                       su2Instance->projectName,
-                                      *volumeMesh);
+                                      meshRef);
             if (status != CAPS_SUCCESS && status != CAPS_NOTFOUND) goto cleanup;
 
             withMotion = (int) true;
         }
     } // End if data transfer ok
+
+    status = aim_relPath(aimInfo, meshRef->fileName, ".", filepath);
+    AIM_STATUS(aimInfo, status);
+    snprintf(meshfilename, PATH_MAX, "%s%s", filepath, MESHEXTENSION);
 
     if (usePython == (int) true && pythonLinked == (int) true) {
         ///////////////////////////////////////////////////////////////////////////////////
@@ -1330,24 +1217,24 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
             if (strcasecmp(aimInputs[SU2_Version-1].vals.string, "Cardinal") == 0) {
 
-                status = su2_writeCongfig_Cardinal(aimInfo, aimInputs, bcProps);
+                status = su2_writeCongfig_Cardinal(aimInfo, aimInputs, meshfilename, bcProps);
 
             } else if (strcasecmp(aimInputs[SU2_Version-1].vals.string, "Raven") == 0) {
 
-                status = su2_writeCongfig_Raven(aimInfo, aimInputs, bcProps);
+                status = su2_writeCongfig_Raven(aimInfo, aimInputs, meshfilename, bcProps);
 
             } else if (strcasecmp(aimInputs[SU2_Version-1].vals.string, "Falcon") == 0) {
 
-                status = su2_writeCongfig_Falcon(aimInfo, aimInputs, bcProps, withMotion);
+                status = su2_writeCongfig_Falcon(aimInfo, aimInputs, meshfilename, bcProps, withMotion);
 
             } else if (strcasecmp(aimInputs[SU2_Version-1].vals.string, "Blackbird") == 0) {
 
-                status = su2_writeCongfig_Blackbird(aimInfo, aimInputs, bcProps, withMotion);
+                status = su2_writeCongfig_Blackbird(aimInfo, aimInputs, meshfilename, bcProps, withMotion);
 
             } else {
 
-                printf("Unrecognized 'SU2_Version' = %s! Valid choices are Cardinal, Raven, Falcon, or Blackbird.\n",
-                       aimInputs[SU2_Version-1].vals.string);
+                AIM_ERROR(aimInfo, "Unrecognized 'SU2_Version' = %s! Valid choices are Cardinal, Raven, Falcon, or Blackbird.\n",
+                          aimInputs[SU2_Version-1].vals.string);
                 status = CAPS_BADVALUE;
             }
 
@@ -1362,8 +1249,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
 cleanup:
 
-    AIM_FREE(transferName);
-    AIM_FREE(filename);
+    AIM_FREE(boundNames);
 
     (void) destroy_cfdBoundaryConditionStruct(&bcProps);
     // (void) destroy_cfdModalAeroelasticStruct(&modalAeroelastic);
@@ -1552,7 +1438,7 @@ int aimCalcOutput(void *instStore, void *aimInfo, int index, capsValue *val)
         AIM_ERROR(aimInfo, "Forces are not available because 'Surface_Monitor' is NULL.");
         return CAPS_BADVALUE;
     }
-    
+
     if (SurfaceMonitor->nullVal == IsNull) {
         AIM_ERROR(aimInfo, "Forces are not available because 'Surface_Monitor' is not specified.\n");
         return CAPS_BADVALUE;
@@ -1566,7 +1452,7 @@ int aimCalcOutput(void *instStore, void *aimInfo, int index, capsValue *val)
 /*@-bufferoverflowhigh@*/
     sprintf(filename, "%s%s%s", fileSuffix, su2Instance->projectName, fileExtension);
 /*@+bufferoverflowhigh@*/
-  
+
     fp = aim_fopen(aimInfo, filename, "r");
     AIM_FREE(filename); // Free filename allocation
 
@@ -1654,7 +1540,7 @@ void aimCleanup(void *instStore)
     su2Instance = (aimStorage *) instStore;
 
     // Clean up su2Instance data
-    destroy_mapAttrToIndexStruct(&su2Instance->attrMap);
+    destroy_mapAttrToIndexStruct(&su2Instance->groupMap);
 
     // SU2 project name
     su2Instance->projectName = NULL;
@@ -1681,9 +1567,9 @@ void aimFreeDiscrPtr(void *ptr)
 }
 
 
+/************************************************************************/
 int aimDiscr(char *tname, capsDiscr *discr)
 {
-
     int i; // Indexing
 
     int status; // Function return status
@@ -1697,39 +1583,8 @@ int aimDiscr(char *tname, capsDiscr *discr)
     const char   *intents;
     capsValue *meshVal;
 
-#ifdef OLD_DISCR_IMPLEMENTATION_TO_REMOVE
-    int body, face; // Indexing
-
-    // EGADS objects
-    ego tess, *faces = NULL, tempBody;
-
-    const char   *string, *capsGroup; // capsGroups strings
-
-    // EGADS function returns
-    int plen, tlen;
-    const int    *ptype, *pindex, *tris, *nei;
-    const double *xyz, *uv;
-
-    // Body Tessellation
-    int numFace = 0;
-    int numFaceFound = 0;
-    int numPoint = 0, numTri = 0, numGlobalPoint = 0;
-    int *bodyFaceMap = NULL; // size=[2*numFaceFound], [2*numFaceFound + 0] = body, [2*numFaceFoun + 1] = face
-
-    int *globalID = NULL, *localStitchedID = NULL, gID = 0;
-
-    int nodeOffSet = 0;
-
-    int *storage= NULL; // Extra information to store into the discr void pointer
-
-    int numCAPSGroup = 0, attrIndex = 0, foundAttr = (int) false;
-    int *capsGroupList = NULL;
-    int dataTransferBodyIndex=-99;
-#endif
-
     // Volume Mesh obtained from meshing AIM
-    meshStruct *volumeMesh;
-    int numElementCheck = 0;
+    aimMeshRef *meshRef;
 
 #ifdef DEBUG
     printf(" su2AIM/aimDiscr: tname = %s!\n", tname);
@@ -1738,21 +1593,12 @@ int aimDiscr(char *tname, capsDiscr *discr)
     if (tname == NULL) return CAPS_NOTFOUND;
     su2Instance = (aimStorage *) discr->instStore;
 
-/*
-    if (su2Instance->dataTransferCheck == (int) false) {
-        printf(" su2AIM/aimDiscr: The volume is not suitable for data transfer - possibly the volume mesher "
-                "added unaccounted for points\n");
-        return CAPS_BADVALUE;
-    }
-*/
     // Currently this ONLY works if the capsTranfer lives on single body!
     status = aim_getBodies(discr->aInfo, &intents, &numBody, &bodies);
-    if (status != CAPS_SUCCESS) {
-        printf(" su2AIM/aimDiscr: aim_getBodies = %d!\n", status);
-        return status;
-    }
+    AIM_STATUS(discr->aInfo, status);
+
     if (bodies == NULL) {
-        printf(" su2AIM/aimDiscr: No Bodies!\n");
+        AIM_ERROR(discr->aInfo, " su2AIM/aimDiscr: No Bodies!\n");
         return CAPS_NOBODIES;
     }
 
@@ -1761,63 +1607,35 @@ int aimDiscr(char *tname, capsDiscr *discr)
     AIM_STATUS(discr->aInfo, status);
 
     if (meshVal->nullVal == IsNull) {
-        AIM_ANALYSISIN_ERROR(discr->aInfo, Mesh, "'Mesh' input must be linked to an output 'Surface_Mesh' or 'Volume_Mesh'");
+        AIM_ANALYSISIN_ERROR(discr->aInfo, Mesh, "'Mesh' input must be linked to an output 'Area_Mesh' or 'Volume_Mesh'");
         status = CAPS_BADVALUE;
         goto cleanup;
     }
 
     // Get mesh
-    volumeMesh = (meshStruct *)meshVal->vals.AIMptr;
-    AIM_NOTNULL(volumeMesh, discr->aInfo, status);
+    meshRef = (aimMeshRef *)meshVal->vals.AIMptr;
+    AIM_NOTNULL(meshRef, discr->aInfo, status);
 
-    if (volumeMesh->referenceMesh == NULL) {
-        AIM_ERROR(discr->aInfo, "No reference meshes in volume mesh - data transfer isn't possible.\n");
+    if (meshRef->nmap == 0 || meshRef->maps == NULL) {
+        AIM_ERROR(discr->aInfo, "No surface mesh map in volume mesh - data transfer isn't possible.\n");
         status = CAPS_BADVALUE;
         goto cleanup;
     }
 
-    if (aim_newGeometry(discr->aInfo) == CAPS_SUCCESS) {
+    if (aim_newGeometry(discr->aInfo) == CAPS_SUCCESS &&
+        su2Instance->groupMap.numAttribute == 0) {
         // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
         status = create_CAPSGroupAttrToIndexMap(numBody,
                                                 bodies,
                                                 1, // Only search down to the face level of the EGADS body
-                                                &su2Instance->attrMap);
+                                                &su2Instance->groupMap);
         AIM_STATUS(discr->aInfo, status);
     }
 
     // Do we have an individual surface mesh for each body
-    if (volumeMesh->numReferenceMesh != numBody) {
+    if (meshRef->nmap != numBody) {
         AIM_ERROR(  discr->aInfo, "Number of surface mesh in the linked volume mesh (%d) does not match the number");
-        AIM_ADDLINE(discr->aInfo,"of bodies (%d) - data transfer is NOT possible.", volumeMesh->numReferenceMesh,numBody);
-        status = CAPS_MISMATCH;
-        goto cleanup;
-    }
-
-    // Check to make sure the volume mesher didn't add any unaccounted for points/faces
-    numElementCheck = 0;
-    for (i = 0; i < volumeMesh->numReferenceMesh; i++) {
-        numElementCheck += volumeMesh->referenceMesh[i].numElement;
-    }
-
-    if (volumeMesh->meshQuickRef.useStartIndex == (int) false &&
-        volumeMesh->meshQuickRef.useListIndex  == (int) false) {
-
-        status = mesh_retrieveNumMeshElements(volumeMesh->numElement,
-                                              volumeMesh->element,
-                                              Triangle,
-                                              &volumeMesh->meshQuickRef.numTriangle);
-        AIM_STATUS(discr->aInfo, status);
-
-        status = mesh_retrieveNumMeshElements(volumeMesh->numElement,
-                                              volumeMesh->element,
-                                              Quadrilateral,
-                                              &volumeMesh->meshQuickRef.numQuadrilateral);
-        AIM_STATUS(discr->aInfo, status);
-    }
-
-    if (numElementCheck != volumeMesh->meshQuickRef.numTriangle +
-                           volumeMesh->meshQuickRef.numQuadrilateral) {
-        AIM_ERROR(discr->aInfo, "Volume mesher added surface elements - data transfer will NOT be possible.\n");
+        AIM_ADDLINE(discr->aInfo,"of bodies (%d) - data transfer is NOT possible.", meshRef->nmap,numBody);
         status = CAPS_MISMATCH;
         goto cleanup;
     }
@@ -1825,350 +1643,23 @@ int aimDiscr(char *tname, capsDiscr *discr)
     // To this point is doesn't appear that the volume mesh has done anything bad to our surface mesh(es)
 
     // Store away the tessellation now
-    AIM_ALLOC(tess, volumeMesh->numReferenceMesh, ego, discr->aInfo, status);
-    for (i = 0; i < volumeMesh->numReferenceMesh; i++) {
-        tess[i] = volumeMesh->referenceMesh[i].bodyTessMap.egadsTess;
+    AIM_ALLOC(tess, numBody, ego, discr->aInfo, status);
+    for (i = 0; i < numBody; i++) {
+        tess[i] = meshRef->maps[i].tess;
     }
 
-    status = mesh_fillDiscr(tname, &su2Instance->attrMap, volumeMesh->numReferenceMesh, tess, discr);
+    status = mesh_fillDiscr(tname, &su2Instance->groupMap, numBody, tess, discr);
     AIM_STATUS(discr->aInfo, status);
 
-#ifdef OLD_DISCR_IMPLEMENTATION_TO_REMOVE
-    numFaceFound = 0;
-    numPoint = numTri = 0;
-    // Find any faces with our boundary marker and get how many points and triangles there are
-    for (body = 0; body < numBody; body++) {
-
-        status = EG_getBodyTopos(bodies[body], NULL, FACE, &numFace, &faces);
-        if (status != EGADS_SUCCESS) {
-            printf(" su2AIM: getBodyTopos (Face) = %d for Body %d!\n",
-                   status, body);
-            return status;
-        }
-        if (faces == NULL) continue;
-
-        for (face = 0; face < numFace; face++) {
-
-            // Retrieve the string following a capsBound tag
-            status = retrieve_CAPSBoundAttr(faces[face], &string);
-            if (status != CAPS_SUCCESS) continue;
-
-            if (strcmp(string, tname) != 0) continue;
-
 #ifdef DEBUG
-            printf(" su2AIM/aimDiscr: Body %d/Face %d matches %s!\n",
-                   body, face+1, tname);
+    printf(" su2AIM/aimDiscr: Instance = %d, Finished!!\n", iIndex);
 #endif
-
-
-            status = retrieve_CAPSGroupAttr(faces[face], &capsGroup);
-            if (status != CAPS_SUCCESS) {
-                printf("capsBound found on face %d, but no capGroup found!!!\n", face);
-                continue;
-            } else {
-
-                status = get_mapAttrToIndexIndex(&su2Instance->attrMap,
-                                                 capsGroup, &attrIndex);
-                if (status != CAPS_SUCCESS) {
-                    printf("capsGroup %s NOT found in attrMap\n",capsGroup);
-                    continue;
-                } else {
-
-                    // If first index create arrays and store index
-                    if ((numCAPSGroup == 0) || (capsGroupList == NULL)) {
-                        numCAPSGroup = 1;
-                        capsGroupList = (int *) EG_alloc(numCAPSGroup*sizeof(int));
-                        if (capsGroupList == NULL) {
-                            status =  EGADS_MALLOC;
-                            goto cleanup;
-                        }
-
-                        capsGroupList[numCAPSGroup-1] = attrIndex;
-                    } else { // If we already have an index(es) let make sure it is unique
-                        foundAttr = (int) false;
-                        for (i = 0; i < numCAPSGroup; i++) {
-                            if (attrIndex == capsGroupList[i]) {
-                                foundAttr = (int) true;
-                                break;
-                            }
-                        }
-
-                        if (foundAttr == (int) false) {
-                            numCAPSGroup += 1;
-                            capsGroupList = (int *) EG_reall(capsGroupList,
-                                                             numCAPSGroup*sizeof(int));
-                            if (capsGroupList == NULL) {
-                                status =  EGADS_MALLOC;
-                                goto cleanup;
-                            }
-
-                            capsGroupList[numCAPSGroup-1] = attrIndex;
-                        }
-                    }
-                }
-            }
-
-            // Get face tessellation
-            status = EG_getTessFace(bodies[body+numBody], face+1, &plen, &xyz,
-                                    &uv, &ptype, &pindex, &tlen, &tris, &nei);
-            if (status != EGADS_SUCCESS) {
-                printf(" su2AIM: EG_getTessFace %d = %d for Body %d!\n",
-                       face+1, status, body+1);
-                continue;
-            }
-
-            numFaceFound += 1;
-            dataTransferBodyIndex = body;
-            if (numFaceFound == 1) {
-                bodyFaceMap = (int *) EG_alloc(2*numFaceFound*sizeof(int));
-            } else {
-                bodyFaceMap = (int *) EG_reall(bodyFaceMap, 2*numFaceFound*sizeof(int));
-            }
-
-            if (bodyFaceMap == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
-
-            // Get number of points and triangles
-            bodyFaceMap[2*(numFaceFound-1) + 0] = body+1;
-            bodyFaceMap[2*(numFaceFound-1) + 1] = face+1;
-
-            // Sum number of points and triangles
-            numPoint  += plen;
-            numTri  += tlen;
-        }
-
-        if (faces != NULL) EG_free(faces);
-        faces = NULL;
-
-
-        if (dataTransferBodyIndex >= 0) break; // Force that only one body can be used
-    }
-
-    if (numFaceFound == 0) {
-        printf(" su2AIM/aimDiscr: No Faces match %s!\n", tname);
-
-        status = CAPS_NOTFOUND;
-        goto cleanup;
-    }
-
-    if ((dataTransferBodyIndex - 1) > volumeMesh->numReferenceMesh ) {
-        printf(" su2AIM/aimDiscr: Data transfer body index doesn't match number of reference meshes in volume mesh - data transfer isn't possible.\n");
-        status = CAPS_MISMATCH;
-        goto cleanup;
-    }
-
-    if (numPoint == 0 || numTri == 0) {
-#ifdef DEBUG
-        printf(" su2AIM/aimDiscr: ntris = %d, npts = %d!\n", numTri, numPoint);
-#endif
-        status = CAPS_SOURCEERR;
-        goto cleanup;
-    }
-
-#ifdef DEBUG
-    printf(" su2AIM/aimDiscr: Instance %d, Body Index for data transfer = %d\n",
-           iIndex, dataTransferBodyIndex);
-#endif
-
-
-    // Specify our single element type
-    status = EGADS_MALLOC;
-    discr->nTypes = 1;
-
-    discr->types  = (capsEleType *) EG_alloc(sizeof(capsEleType));
-    if (discr->types == NULL) goto cleanup;
-    discr->types[0].nref  = 3;
-    discr->types[0].ndata = 0;            /* data at geom reference positions */
-    discr->types[0].ntri  = 1;
-    discr->types[0].nmat  = 0;            /* match points at geom ref positions */
-    discr->types[0].tris  = NULL;
-    discr->types[0].gst   = NULL;
-    discr->types[0].dst   = NULL;
-    discr->types[0].matst = NULL;
-
-    discr->types[0].tris   = (int *) EG_alloc(3*sizeof(int));
-    if (discr->types[0].tris == NULL) goto cleanup;
-    discr->types[0].tris[0] = 1;
-    discr->types[0].tris[1] = 2;
-    discr->types[0].tris[2] = 3;
-
-    discr->types[0].gst   = (double *) EG_alloc(6*sizeof(double));
-    if (discr->types[0].gst == NULL) goto cleanup;
-    discr->types[0].gst[0] = 0.0;
-    discr->types[0].gst[1] = 0.0;
-    discr->types[0].gst[2] = 1.0;
-    discr->types[0].gst[3] = 0.0;
-    discr->types[0].gst[4] = 0.0;
-    discr->types[0].gst[5] = 1.0;
-
-    // Get the tessellation and make up a simple linear continuous triangle discretization */
-
-    discr->nElems = numTri;
-
-    discr->elems = (capsElement *) EG_alloc(discr->nElems*sizeof(capsElement));
-    if (discr->elems == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
-
-    discr->mapping = (int *) EG_alloc(2*numPoint*sizeof(int)); // Will be resized
-    if (discr->mapping == NULL) goto cleanup;
-
-    globalID = (int *) EG_alloc(numPoint*sizeof(int));
-    if (globalID == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
-
-    numPoint = 0;
-    numTri = 0;
-    if (bodyFaceMap != NULL)
-      for (face = 0; face < numFaceFound; face++) {
-
-        tess = bodies[bodyFaceMap[2*face + 0]-1 + numBody];
-
-        if (localStitchedID == NULL) {
-            status = EG_statusTessBody(tess, &tempBody, &i, &numGlobalPoint);
-            if (status != CAPS_SUCCESS) goto cleanup;
-
-            localStitchedID = (int *) EG_alloc(numGlobalPoint*sizeof(int));
-            if (localStitchedID == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
-
-            for (i = 0; i < numGlobalPoint; i++) localStitchedID[i] = 0;
-        }
-
-        // Get face tessellation
-        status = EG_getTessFace(tess, bodyFaceMap[2*face + 1], &plen, &xyz, &uv,
-                                &ptype, &pindex, &tlen, &tris, &nei);
-        if (status != EGADS_SUCCESS) {
-            printf(" su2AIM: EG_getTessFace %d = %d for Body %d!\n",
-                   bodyFaceMap[2*face + 1], status, bodyFaceMap[2*face + 0]);
-            continue;
-        }
-
-        for (i = 0; i < plen; i++ ) {
-
-            status = EG_localToGlobal(tess, bodyFaceMap[2*face+1], i+1, &gID);
-            if (status != EGADS_SUCCESS) goto cleanup;
-
-            if (localStitchedID[gID -1] != 0) continue;
-
-            discr->mapping[2*numPoint  ] = bodyFaceMap[2*face + 0];
-            discr->mapping[2*numPoint+1] = gID;
-
-            localStitchedID[gID -1] = numPoint+1;
-
-            globalID[numPoint] = gID;
-
-            numPoint += 1;
-
-        }
-
-        // Get triangle connectivity in global sense
-        for (i = 0; i < tlen; i++) {
-
-            discr->elems[numTri].bIndex      = bodyFaceMap[2*face + 0];
-            discr->elems[numTri].tIndex      = 1;
-            discr->elems[numTri].eIndex      = bodyFaceMap[2*face + 1];
-
-            discr->elems[numTri].gIndices    = (int *) EG_alloc(6*sizeof(int));
-            if (discr->elems[numTri].gIndices == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
-
-            discr->elems[numTri].dIndices    = NULL;
-            discr->elems[numTri].eTris.tq[0] = i+1;
-
-            status = EG_localToGlobal(tess, bodyFaceMap[2*face + 1],
-                                      tris[3*i + 0], &gID);
-            if (status != EGADS_SUCCESS) goto cleanup;
-
-            discr->elems[numTri].gIndices[0] = localStitchedID[gID-1];
-            discr->elems[numTri].gIndices[1] = tris[3*i + 0];
-
-            status = EG_localToGlobal(tess, bodyFaceMap[2*face + 1],
-                                      tris[3*i + 1], &gID);
-            if (status != EGADS_SUCCESS) goto cleanup;
-
-            discr->elems[numTri].gIndices[2] = localStitchedID[gID-1];
-            discr->elems[numTri].gIndices[3] = tris[3*i + 1];
-
-            status = EG_localToGlobal(tess, bodyFaceMap[2*face + 1],
-                                      tris[3*i + 2], &gID);
-            if (status != EGADS_SUCCESS) goto cleanup;
-
-            discr->elems[numTri].gIndices[4] = localStitchedID[gID-1];
-            discr->elems[numTri].gIndices[5] = tris[3*i + 2];
-
-            numTri += 1;
-        }
-    }
-
-    discr->nPoints = numPoint;
-
-#ifdef DEBUG
-    printf(" su2AIM/aimDiscr: ntris = %d, npts = %d!\n",
-           discr->nElems, discr->nPoints);
-#endif
-
-    // Resize mapping to switched together number of points
-    discr->mapping = (int *) EG_reall(discr->mapping, 2*numPoint*sizeof(int));
-
-    // Local to global node connectivity + numCAPSGroup + sizeof(capGrouplist)
-    storage  = (int *) EG_alloc((numPoint + 1 + numCAPSGroup) *sizeof(int));
-    if (storage == NULL) goto cleanup;
-    discr->ptrm = storage;
-
-    // Store the local-to-Global (volume) id
-    nodeOffSet = 0;
-    for (i = 0; i < dataTransferBodyIndex; i++) {
-        nodeOffSet += volumeMesh->referenceMesh[i].numNode;
-    }
-
-    #ifdef DEBUG
-        printf(" su2AIM/aimDiscr: Instance = %d, nodeOffSet = %d, dataTransferBodyIndex = %d\n",
-               iIndex, nodeOffSet, dataTransferBodyIndex);
-    #endif
-
-    for (i = 0; i < numPoint; i++) {
-
-        storage[i] = globalID[i] + nodeOffSet; //volumeMesh->referenceMesh[dataTransferBodyIndex-1].node[globalID[i]-1].nodeID + nodeOffSet;
-
-        //#ifdef DEBUG
-        //	printf(" su2AIM/aimDiscr: Instance = %d, Global Node ID %d\n", iIndex, storage[i]);
-        //#endif
-    }
-
-    // Save way the attrMap capsGroup list
-    storage[numPoint] = numCAPSGroup;
-    for (i = 0; i < numCAPSGroup; i++) {
-        storage[numPoint+1+i] = capsGroupList[i];
-    }
-#endif
-    #ifdef DEBUG
-        printf(" su2AIM/aimDiscr: Instance = %d, Finished!!\n", iIndex);
-    #endif
 
     status = CAPS_SUCCESS;
 
 cleanup:
     AIM_FREE(tess);
-#ifdef OLD_DISCR_IMPLEMENTATION_TO_REMOVE
-    if (faces != NULL) EG_free(faces);
 
-    if (globalID  != NULL) EG_free(globalID);
-    if (localStitchedID != NULL) EG_free(localStitchedID);
-
-    if (capsGroupList != NULL) EG_free(capsGroupList);
-    if (bodyFaceMap != NULL) EG_free(bodyFaceMap);
-#endif
-  
     return status;
 }
 
@@ -2245,7 +1736,7 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
         printf("Unrecognized data transfer variable - %s\n", dataName);
         return CAPS_NOTFOUND;
     }
-  
+
     su2Instance = (aimStorage *) discr->instStore;
 
     //Get the appropriate parts of the tessellation to data
@@ -2420,7 +1911,7 @@ int aimInterpolation(capsDiscr *discr, /*@unused@*/ const char *name,
 #ifdef DEBUG
     printf(" su2AIM/aimInterpolation  %s!\n", name);
 #endif
-  
+
     return  aim_interpolation(discr, name, bIndex, eIndex,
                               bary, rank, data, result);
 }
@@ -2433,7 +1924,7 @@ int aimInterpolateBar(capsDiscr *discr, /*@unused@*/ const char *name,
 #ifdef DEBUG
     printf(" su2AIM/aimInterpolateBar  %s!\n", name);
 #endif
-  
+
     return  aim_interpolateBar(discr, name, bIndex, eIndex,
                                bary, rank, r_bar, d_bar);
 }

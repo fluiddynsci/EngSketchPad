@@ -20,7 +20,7 @@
  *
  * An outline of the AIM's inputs, outputs and attributes are provided in \ref aimInputsAFLR4 and
  * \ref aimOutputsAFLR4 and \ref attributeAFLR4, respectively.
- * The complete AFLR documentation is available at the <a href="http://www.simcenter.msstate.edu/software/downloads/doc/system/index.html">SimCenter</a>.
+ * The complete AFLR documentation is available at the <a href="https://www.simcenter.msstate.edu/software/documentation/system/index.html">SimCenter</a>.
  *
  * Example surface meshes:
  *  \image html wing2DAFRL4.png "AFLR4 meshing example - 2D Airfoil" width=500px
@@ -240,7 +240,8 @@ static int destroy_aimStorage(aimStorage *aflr4Instance)
 #endif
 
 
-static int setAFLR4Attr(ego body,
+static int setAFLR4Attr(void *aimInfo,
+                        ego body,
                         mapAttrToIndexStruct *meshMap,
                         int numMeshProp,
                         meshSizingStruct *meshProp)
@@ -248,28 +249,32 @@ static int setAFLR4Attr(ego body,
 
     int status; // Function return status
 
-    int faceIndex; // Indexing
+    int iface, iedge; // Indexing
 
-    int numFace;
-    ego *faces = NULL;
+    int numFace, numEdge;
+    ego *faces = NULL, *edges = NULL;
 
-    const char *groupName = NULL;
+    const char *meshName = NULL;
     int attrIndex = 0;
     int propIndex = 0;
     const char* bcType = NULL;
 
     status = EG_getBodyTopos(body, NULL, FACE, &numFace, &faces);
-    if (status != EGADS_SUCCESS) return status;
-    if (faces == NULL) return CAPS_NULLOBJ;
+    AIM_STATUS(aimInfo, status);
+    AIM_NOTNULL(faces, aimInfo, status);
 
-    // Loop through the faces and copy capsGroup to PW:Name
-    for (faceIndex = 0; faceIndex < numFace; faceIndex++) {
+    status = EG_getBodyTopos(body, NULL, FACE, &numEdge, &edges);
+    AIM_STATUS(aimInfo, status);
+    AIM_NOTNULL(edges, aimInfo, status);
 
-        status = retrieve_CAPSMeshAttr(faces[faceIndex], &groupName);
-        if ((status == EGADS_SUCCESS) && (groupName != NULL)) {
+    // Loop through the faces and set AFLR attributes
+    for (iface = 0; iface < numFace; iface++) {
 
-            status = get_mapAttrToIndexIndex(meshMap, groupName, &attrIndex);
-            if (status != CAPS_SUCCESS) goto cleanup;
+        status = retrieve_CAPSMeshAttr(faces[iface], &meshName);
+        if ((status == EGADS_SUCCESS) && (meshName != NULL)) {
+
+            status = get_mapAttrToIndexIndex(meshMap, meshName, &attrIndex);
+            AIM_STATUS(aimInfo, status);
 
             for (propIndex = 0; propIndex < numMeshProp; propIndex++) {
 
@@ -292,36 +297,61 @@ static int setAFLR4Attr(ego body,
                         bcType = "BL_INT_UG3_GBC";
 
                     // add the BC attribute
-                    status = EG_attributeAdd(faces[faceIndex], "AFLR_GBC", ATTRSTRING, 0, NULL, NULL, bcType);
-                    if (status != EGADS_SUCCESS) goto cleanup;
+                    status = EG_attributeAdd(faces[iface], "AFLR_GBC", ATTRSTRING, 0, NULL, NULL, bcType);
+                    AIM_STATUS(aimInfo, status);
                 }
 
                 // If scaleFactor specified in meshProp
                 if (meshProp[propIndex].scaleFactor > 0) {
 
                     // add the scale factor attribute
-                    status = EG_attributeAdd(faces[faceIndex], "AFLR4_Scale_Factor", ATTRREAL, 1, NULL, &meshProp[propIndex].scaleFactor, NULL);
-                    if (status != EGADS_SUCCESS) goto cleanup;
+                    status = EG_attributeAdd(faces[iface], "AFLR4_Scale_Factor", ATTRREAL, 1, NULL, &meshProp[propIndex].scaleFactor, NULL);
+                    AIM_STATUS(aimInfo, status);
                 }
 
                 // If edgeWeight specified in meshProp
                 if (meshProp[propIndex].edgeWeight >= 0) {
 
                     // add the edge scale factor weight attribute
-                    status = EG_attributeAdd(faces[faceIndex], "AFLR4_Edge_Refinement_Weight", ATTRREAL, 1, NULL, &meshProp[propIndex].edgeWeight, NULL);
-                    if (status != EGADS_SUCCESS) goto cleanup;
+                    status = EG_attributeAdd(faces[iface], "AFLR4_Edge_Refinement_Weight", ATTRREAL, 1, NULL, &meshProp[propIndex].edgeWeight, NULL);
+                    AIM_STATUS(aimInfo, status);
                 }
             }
         }
     } // Face loop
 
+
+    // Loop through the edges and set AFLR attributes
+    for (iedge = 0; iedge < numEdge; iedge++) {
+
+        status = retrieve_CAPSMeshAttr(edges[iedge], &meshName);
+        if ((status == EGADS_SUCCESS) && (meshName != NULL)) {
+
+            status = get_mapAttrToIndexIndex(meshMap, meshName, &attrIndex);
+            AIM_STATUS(aimInfo, status);
+
+            for (propIndex = 0; propIndex < numMeshProp; propIndex++) {
+
+                // Check if the mesh property applies to the capsMesh of this face
+                if (meshProp[propIndex].attrIndex != attrIndex) continue;
+
+                // If scaleFactor specified in meshProp
+                if (meshProp[propIndex].scaleFactor > 0) {
+
+                    // add the scale factor attribute
+                    status = EG_attributeAdd(edges[iedge], "AFLR4_Scale_Factor", ATTRREAL, 1, NULL, &meshProp[propIndex].scaleFactor, NULL);
+                    AIM_STATUS(aimInfo, status);
+                }
+            }
+        }
+    } // Edge loop
+
     status = CAPS_SUCCESS;
 
 cleanup:
-    if (status != CAPS_SUCCESS)
-        printf("Error: Premature exit in setAFLR4Attr, status %d\n", status);
 
-    EG_free(faces);
+    AIM_FREE(faces);
+    AIM_FREE(edges);
 
     return status;
 }
@@ -395,7 +425,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
      * The following list outlines the AFLR4 meshing options along with their default value available
      * through the AIM interface.
      *
-     * Please consult the <a href="http://www.simcenter.msstate.edu/software/downloads/doc/aflr4/index.html">AFLR4 documentation</a> for default values not present here.
+     * Please consult the <a href="https://www.simcenter.msstate.edu/software/documentation/aflr4/index.html">AFLR4 documentation</a> for default values not present here.
      */
 
     int status; // error code
@@ -901,16 +931,14 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
 #ifdef DEBUG
     printf(" aflr4AIM/aimPreAnalysis numBody = %d!\n", numBody);
 #endif
 
     if (numBody <= 0 || bodies == NULL) {
-#ifdef DEBUG
-        printf(" aflr4AIM/aimPreAnalysis No Bodies!\n");
-#endif
+        AIM_ERROR(aimInfo, "No Bodies!");
         return CAPS_SOURCEERR;
     }
     if (aimInputs == NULL) return CAPS_NULLVALUE;
@@ -919,23 +947,20 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // Cleanup previous aimStorage for the instance in case this is the second time through preAnalysis for the same instance
     status = destroy_aimStorage(aflr4Instance);
-    if (status != CAPS_SUCCESS) {
-        printf("Status = %d, aflr4AIM aimStorage cleanup!!!\n", status);
-        return status;
-    }
+    AIM_STATUS(aimInfo, status);
 
     // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
     status = create_CAPSGroupAttrToIndexMap(numBody,
                                             bodies,
                                             3, // Node level
                                             &aflr4Instance->groupMap);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
     status = create_CAPSMeshAttrToIndexMap(numBody,
                                            bodies,
                                            3, // Node level
                                            &aflr4Instance->meshMap);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
     // Allocate surfaceMesh from number of bodies
     aflr4Instance->numSurface  = numBody;
@@ -949,7 +974,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     // Initiate surface meshes
     for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++){
         status = initiate_meshStruct(&aflr4Instance->surfaceMesh[bodyIndex]);
-        if (status != CAPS_SUCCESS) return status;
+        AIM_STATUS(aimInfo, status);
     }
 
     // Setup meshing input structure
@@ -975,37 +1000,37 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // Set aflr4 specific mesh inputs
     if (aimInputs[Mesh_Gen_Input_String-1].nullVal != IsNull) {
-
-        aflr4Instance->meshInput.aflr4Input.meshInputString =
-                     EG_strdup(aimInputs[Mesh_Gen_Input_String-1].vals.string);
-        if (aflr4Instance->meshInput.aflr4Input.meshInputString == NULL) return EGADS_MALLOC;
+        AIM_STRDUP(aflr4Instance->meshInput.aflr4Input.meshInputString, aimInputs[Mesh_Gen_Input_String-1].vals.string, aimInfo, status);
     }
 
     // Get mesh sizing parameters
     if (aimInputs[Mesh_Sizing-1].nullVal != IsNull) {
 
-        status = deprecate_SizingAttr(aimInputs[Mesh_Sizing-1].length,
+        status = deprecate_SizingAttr(aimInfo,
+                                      aimInputs[Mesh_Sizing-1].length,
                                       aimInputs[Mesh_Sizing-1].vals.tuple,
                                       &aflr4Instance->meshMap,
                                       &aflr4Instance->groupMap);
-        if (status != CAPS_SUCCESS) return status;
+        AIM_STATUS(aimInfo, status);
 
-        status = mesh_getSizingProp(aimInputs[Mesh_Sizing-1].length,
+        status = mesh_getSizingProp(aimInfo,
+                                    aimInputs[Mesh_Sizing-1].length,
                                     aimInputs[Mesh_Sizing-1].vals.tuple,
                                     &aflr4Instance->meshMap,
                                     &numMeshProp,
                                     &meshProp);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         // apply the sizing attributes
         for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++) {
 /*@-nullpass@*/
-            status = setAFLR4Attr(bodies[bodyIndex],
+            status = setAFLR4Attr(aimInfo,
+                                  bodies[bodyIndex],
                                   &aflr4Instance->meshMap,
                                   numMeshProp,
                                   meshProp);
 /*@+nullpass@*/
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
         }
     }
 
@@ -1016,10 +1041,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
                                 aflr4Instance->meshInput,
                                 aflr4Instance->groupMap,
                                 aflr4Instance->surfaceMesh);
-    if (status != CAPS_SUCCESS) {
-        printf("Problem during AFLR4 surface meshing\n");
-        goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status, "Problem during AFLR4 surface meshing");
 
     if (aflr4Instance->meshInput.outputFileName != NULL) {
 
@@ -1107,7 +1129,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
             if (filename != NULL) EG_free(filename);
             filename = NULL;
 
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
         }
     }
 
@@ -1120,7 +1142,7 @@ cleanup:
         for (i = 0; i < numMeshProp; i++) {
             (void) destroy_meshSizingStruct(&meshProp[i]);
         }
-        EG_free(meshProp); meshProp = NULL;
+        AIM_FREE(meshProp);
     }
 
     if (status != CAPS_SUCCESS)
@@ -1262,14 +1284,14 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                                                   aflr4Instance->surfaceMesh[surf].element,
                                                   Triangle,
                                                   &nElem);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
             numElement += nElem;
 
             status = mesh_retrieveNumMeshElements(aflr4Instance->surfaceMesh[surf].numElement,
                                                   aflr4Instance->surfaceMesh[surf].element,
                                                   Quadrilateral,
                                                   &nElem);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
             numElement += nElem;
         }
 

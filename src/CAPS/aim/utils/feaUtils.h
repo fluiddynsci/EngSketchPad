@@ -28,7 +28,8 @@ int fea_createMesh(void *aimInfo,
 // Convert an EGADS body to a boundary element model, modified by Ryan Durscher (AFRL)
 // from code written by John Dannenhoffer @ Syracuse University, patterned after code
 // written by Bob Haimes  @ MIT
-int fea_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
+int fea_bodyToBEM(void *aimInfo,                       // (in)  AIM structure
+                  ego    ebody,                        // (in)  EGADS Body
                   double paramTess[3],                 // (in)  Tessellation parameters
                   int    edgePointMin,                 // (in)  minimum points along any Edge
                   int    edgePointMax,                 // (in)  maximum points along any Edge
@@ -43,7 +44,8 @@ int fea_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
                   meshStruct *feaMesh);                // (out) FEA mesh structure
 
 // Set the fea analysis meta data in a mesh
-int fea_setAnalysisData( mapAttrToIndexStruct *attrMap,       // (in)  map from CAPSGroup names to indexes
+int fea_setAnalysisData( void *aimInfo,                       // (in)  AIM structure
+                         mapAttrToIndexStruct *attrMap,       // (in)  map from CAPSGroup names to indexes
                          mapAttrToIndexStruct *coordSystemMap,// (in)  map from CoordSystem names to indexes
                          mapAttrToIndexStruct *constraintMap, // (in)  map from CAPSConstraint names to indexes
                          mapAttrToIndexStruct *loadMap,       // (in)  map from CAPSLoad names to indexes

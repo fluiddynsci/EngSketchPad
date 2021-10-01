@@ -30,7 +30,7 @@ parser = argparse.ArgumentParser(description = 'Aeroelastic Displacement SU2 and
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
 parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot data")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -43,7 +43,7 @@ projectName = "aeroelasticSimple_Displacement_SA"
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransferSimple.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AIMs 
 surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
@@ -64,7 +64,8 @@ su2.input["Mesh"].link(mesh.output["Volume_Mesh"])
 
 astros = myProblem.analysis.create(aim = "astrosAIM", 
                                    name = "astros", 
-                                   capsIntent = "STRUCTURE")
+                                   capsIntent = "STRUCTURE",
+                                   autoExec = False)
 
 # Create the data transfer connections
 boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
@@ -88,10 +89,11 @@ for boundName in boundNames:
 
 # Set inputs for egads 
 surfMesh.input.Tess_Params = [.05, 0.01, 20.0]
+surfMesh.input.Edge_Point_Max = 4
 
 # Set inputs for tetgen 
 mesh.input.Preserve_Surf_Mesh = True
-mesh.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+mesh.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set inputs for su2
 speedofSound = 340.0 # m/s
@@ -154,24 +156,6 @@ astros.input.Constraint = {"edgeConstraint": constraint}
 load = {"groupName": "Skin", "loadType" : "Pressure", "pressureForce": 1E8}
 astros.input.Load = {"pressureInternal": load}
 
-####### EGADS ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "tetgen")
-surfMesh.preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "tetgen")
-surfMesh.postAnalysis()
-#######################################
-
-####### Tetgen ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "tetgen")
-mesh.preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "tetgen")
-mesh.postAnalysis()
-#######################################
-
 
 ####### Astros #######################
 # Run pre/post-analysis for astros and execute
@@ -224,11 +208,7 @@ currentDirectory = os.getcwd() # Get our current working directory
 os.chdir(su2.analysisDir) # Move into test directory
 
 # Run SU2 mesh deformation
-# Work around python 3 bug in su2Deform function
-if sys.version_info[0] < 3:
-    su2Deform(su2.input.Proj_Name + ".cfg", args.numberProc)
-else:
-    os.system("SU2_DEF " + su2.input.Proj_Name + ".cfg")
+su2Deform(su2.input.Proj_Name + ".cfg", args.numberProc)
 
 # Run SU2 CFD solver
 su2Run(su2.input.Proj_Name + ".cfg", args.numberProc)

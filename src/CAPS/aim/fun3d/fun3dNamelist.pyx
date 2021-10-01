@@ -16,23 +16,14 @@ except:
 #    raise ImportError
 
 # Import Python modules
-try:
-    import sys
-except:
-    print("\tUnable to import sys module - Try ' pip install sys '")
-#    raise ImportError
-
-try:
-    import os
-except:
-    print("\tUnable to import os module - Try ' pip install os '")
-#    raise ImportError
+import sys
+import os
 
 try:
     import f90nml
 except:
     print("\tUnable to import f90nml module - Try ' pip install f90nml '")
-#    raise ImportError
+    raise
 
 cdef extern from *:
     """
@@ -90,8 +81,14 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
     
     cdef:
         char aimFile[PATH_MAX]
-    
-    cAIMUtil.aim_file(aimInfo, b'fun3d.nml', aimFile)
+
+    index = cAIMUtil.aim_getIndex(aimInfo, "Design_Variable", cCAPS.ANALYSISIN)-1
+    if aimInputs[index].nullVal != cCAPS.IsNull:
+        Flow = b"Flow" + os.sep.encode()
+    else:
+        Flow = b""
+
+    cAIMUtil.aim_file(aimInfo, Flow + b'fun3d.nml', aimFile)
     fname = _str(aimFile, lower=False)
 
     nml = None
@@ -121,18 +118,23 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
         nml['project']['project_rootname'] = _str(aimInputs[index].vals.string)
 
     # &raw_grid
-    index = cAIMUtil.aim_getIndex(aimInfo, "Mesh_Format",  cCAPS.ANALYSISIN)-1
-    if aimInputs[index].nullVal != cCAPS.IsNull:
-        if 'raw_grid' not in nml:
-            nml['raw_grid'] = f90nml.Namelist()
-
-        nml['raw_grid']['grid_format'] = _str(aimInputs[index].vals.string)
-        
-        index = cAIMUtil.aim_getIndex(aimInfo, "Mesh_ASCII_Flag",  cCAPS.ANALYSISIN)-1
-        if aimInputs[index].vals.integer == <int> cCAPS.true:
-           nml['raw_grid']['data_format'] = 'ascii'
-        else:
-           nml['raw_grid']['data_format'] = 'stream'
+    #index = cAIMUtil.aim_getIndex(aimInfo, "Mesh_Format",  cCAPS.ANALYSISIN)-1
+    #if aimInputs[index].nullVal != cCAPS.IsNull:
+    #    if 'raw_grid' not in nml:
+    #        nml['raw_grid'] = f90nml.Namelist()
+    #
+    #    nml['raw_grid']['grid_format'] = _str(aimInputs[index].vals.string)
+    #    
+    #    index = cAIMUtil.aim_getIndex(aimInfo, "Mesh_ASCII_Flag",  cCAPS.ANALYSISIN)-1
+    #    if aimInputs[index].vals.integer == <int> cCAPS.true:
+    #       nml['raw_grid']['data_format'] = 'ascii'
+    #    else:
+    #       nml['raw_grid']['data_format'] = 'stream'
+    if 'raw_grid' not in nml:
+        nml['raw_grid'] = f90nml.Namelist()
+    
+    nml['raw_grid']['grid_format'] = "AFLR3"
+    nml['raw_grid']['data_format'] = 'stream'
 
     index = cAIMUtil.aim_getIndex(aimInfo, "Two_Dimensional",  cCAPS.ANALYSISIN)-1
     if aimInputs[index].vals.integer == <int> cCAPS.true:
@@ -293,14 +295,14 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
                 nml['boundary_conditions']['wall_temperature'] = [None]*length
             else: 
                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temperature']):
-                    for n in range(len(nml['boundary_conditions']['wall_temperature']), length):
+                    for _ in range(len(nml['boundary_conditions']['wall_temperature']), length):
                         nml['boundary_conditions']['wall_temperature'].append(None)
                              
             if 'wall_temp_flag' not in nml['boundary_conditions']:
                 nml['boundary_conditions']['wall_temp_flag'] = [None]*length
             else:
                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temp_flag']):
-                    for n in range(len(nml['boundary_conditions']['wall_temp_flag']), length):
+                    for _ in range(len(nml['boundary_conditions']['wall_temp_flag']), length):
                         nml['boundary_conditions']['wall_temp_flag'].append(None)
                         
             nml['boundary_conditions']['wall_temperature'][index] = bcProps.surfaceProp[i].wallTemperature
@@ -313,7 +315,7 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
                 nml['boundary_conditions']['total_pressure_ratio'] = [None]*length
             else: 
                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):
-                    for n in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):
+                    for _ in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):
                         nml['boundary_conditions']['total_pressure_ratio'].append(None)
                              
             nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProp[i].totalPressure
@@ -322,7 +324,7 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length
             else: 
                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):
-                    for n in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):
+                    for _ in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):
                         nml['boundary_conditions']['total_temperature_ratio'].append(None)
                              
             nml['boundary_conditions']['total_temperature_ratio'][index] = bcProps.surfaceProp[i].totalTemperature
@@ -336,7 +338,7 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length
             else: 
                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):
-                    for n in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):
+                    for _ in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):
                         nml['boundary_conditions']['static_pressure_ratio'].append(None)
                              
             nml['boundary_conditions']['static_pressure_ratio'][index] = bcProps.surfaceProp[i].staticPressure
@@ -349,7 +351,7 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
                 nml['boundary_conditions']['mach_bc'] = [None]*length
             else: 
                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):
-                    for n in range(len(nml['boundary_conditions']['mach_bc']), length):
+                    for _ in range(len(nml['boundary_conditions']['mach_bc']), length):
                         nml['boundary_conditions']['mach_bc'].append(None)
                              
             nml['boundary_conditions']['mach_bc'][index] = bcProps.surfaceProp[i].machNumber
@@ -362,7 +364,7 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
                 nml['boundary_conditions']['massflow'] = [None]*length
             else: 
                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['massflow']):
-                    for n in range(len(nml['boundary_conditions']['massflow']), length):
+                    for _ in range(len(nml['boundary_conditions']['massflow']), length):
                         nml['boundary_conditions']['massflow'].append(None)
                              
             nml['boundary_conditions']['massflow'][index] = bcProps.surfaceProp[i].massflow

@@ -1,6 +1,6 @@
 # contains.udc
 #
-# body2 body1 CONTAINS body2
+# Body2 Body1 CONTAINS Body2 Body1
 #
 # returns in @@contains: 0 if Body1 is fully     within Body2
 #                        1 if Body1 is not fully within Body2

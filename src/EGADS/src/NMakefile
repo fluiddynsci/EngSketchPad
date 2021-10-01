@@ -60,6 +60,7 @@ start:
 	xcopy $(SDIR)\..\util\regQuads.c           /Q /Y
 	xcopy $(SDIR)\..\util\regQuads.h           /Q /Y
 	xcopy $(SDIR)\..\util\Surreal*_btest.cpp   /Q /Y
+	xcopy $(SDIR)\..\util\uvmap\uvmap_struct.h /Q /Y
 
 $(LDIR)\egadstatic.lib:	$(OBJSP) $(OBJS) emp.obj evaluate.obj rational.obj \
 			regQuads.obj $(LDIR)\uvmap.lib
@@ -98,15 +99,16 @@ egads.res:	egads.rc
 
 $(OBJS):	$(INCD)\egadsErrors.h egadsInternals.h egadsStack.h \
 		$(INCD)\egadsTypes.h egadsTris.h $(OBJS:.obj=.c)
-	cl /c $(COPTS) $(DEFINE) $(XDEF) /I. /I$(INCD) /I..\util $*.c
+	cl /c $(COPTS) $(DEFINE) $(XDEF) /I. /I$(INCD) /I..\util \
+		/I..\util\uvmap $*.c
 
 $(FOBJS):	$(INCD)\egadsErrors.h egadsInternals.h egadsStack.h \
 		$(INCD)\egadsTypes.h $(FOBJS:.obj=.c)
 	cl /c $(COPTS) $(DEFINE) $(XDEF) /I. /I$(INCD) $*.c
 
 $(OBJSP):	$(INCD)\egadsErrors.h egadsOCC.h egadsInternals.h egadsStack.h \
-		$(INCD)\egadsTypes.h $(INCD)\egads_dot.h egadsClasses.h egadsSplineFit.h \
-		$(OBJSP:.obj=.cpp)
+		$(INCD)\egadsTypes.h $(INCD)\egads_dot.h egadsClasses.h \
+		egadsSplineFit.h $(OBJSP:.obj=.cpp)
 	cl /c $(CPPOPT) $(DEFINE) $(XDEF) $(INCS) /I. /I$(INCD) $*.cpp
 
 !IFDEF ESP_BLOC

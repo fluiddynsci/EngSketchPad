@@ -17,9 +17,9 @@
   </head>
 
   <body>
-    <p><h1 align=center>Engineering Sketch Pad (ESP) Version 1.19</h1>
+    <p><h1 align=center>Engineering Sketch Pad (ESP) Version 1.20</h1>
     <p><h3>Authors: John F. Dannenhoffer, III (Syracuse University) and Bob Haimes (MIT)</h3>
-    <p><h3>Date: June 2021.</h3>
+    <p><h3>Date: September 2021.</h3>
 
     <p><h3 align=center><img src="esp_logo.png" width="400"/></h3>
 
@@ -53,35 +53,37 @@
     <p><a href="#sec6">6.0 Example <code>.csm</code> file</a>
     <p><a href="#sec7">7.0 Frequently Asked Questions</a>
     <p><a href="#sec8">8.0 Release notes</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.1">8.1 New/extended features in v1.19</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.2">8.2 Bug fixes since v1.18</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.3">8.1 New/extended features in v1.18</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.4">8.2 Bug fixes since v1.17</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.5">8.5 New/extended features in v1.17</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.6">8.6 Bug fixes since v1.16</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.7">8.7 New/extended features in v1.16</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.8">8.8 Bug fixes since v1.15</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.9">8.9 New/extended features in v1.15</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.10">8.10 Bug fixes since v1.14</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.11">8.11 New/extended features in v1.14</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.12">8.12 Bug fixes since v1.13</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.13">8.13 New/extended features in v1.13</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.14">8.14 Bug fixes since v1.12</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.15">8.15 New/extended features in v1.12</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.16">8.16 Bug fixes since v1.11</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.17">8.17 New/extended features in v1.11</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.18">8.18 Bug fixes since v1.10</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.19">8.19 New/extended features in v1.10</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.20">8.20 Bug fixes since v1.09</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.21">8.21 New/extended features in v1.09</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.22">8.22 Bug fixes since v1.08</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.23">8.23 New/extended features in v1.08</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.24">8.24 Bug fixes since v1.07</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.25">8.25 New/extended features in v1.07</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.26">8.26 Bug fixes since v1.06</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.27">8.27 New/extended features in v1.06</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.28">8.28 Bug fixes since v1.05</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.29">8.29 Known problems in v1.09</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.1">8.1 New/extended features in v1.20</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.2">8.2 Bug fixes since v1.19</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.3">8.3 New/extended features in v1.19</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.4">8.4 Bug fixes since v1.18</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.5">8.5 New/extended features in v1.18</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.6">8.6 Bug fixes since v1.17</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.7">8.7 New/extended features in v1.17</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.8">8.8 Bug fixes since v1.16</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.9">8.9 New/extended features in v1.16</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.10">8.10 Bug fixes since v1.15</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.11">8.11 New/extended features in v1.15</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.12">8.12 Bug fixes since v1.14</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.13">8.13 New/extended features in v1.14</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.14">8.14 Bug fixes since v1.13</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.15">8.15 New/extended features in v1.13</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.16">8.16 Bug fixes since v1.12</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.17">8.17 New/extended features in v1.12</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.18">8.18 Bug fixes since v1.11</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.19">8.19 New/extended features in v1.11</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.20">8.20 Bug fixes since v1.10</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.21">8.21 New/extended features in v1.10</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.22">8.22 Bug fixes since v1.09</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.23">8.23 New/extended features in v1.09</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.24">8.24 Bug fixes since v1.08</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.25">8.25 New/extended features in v1.08</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.26">8.26 Bug fixes since v1.07</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.27">8.27 New/extended features in v1.07</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.28">8.28 Bug fixes since v1.06</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.29">8.29 New/extended features in v1.06</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.30">8.30 Bug fixes since v1.05</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.31">8.31 Known problems in v1.09</a>
     <p><a href="#sec9">9.0 Error Codes</a>
     <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec9.1">9.1 OpenCSM error codes</a>
     <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec9.2">9.2 EGADS error codes</a>
@@ -1056,9 +1058,9 @@
         Trying these on the spindle gives you pictures like this.
 
       <p><img src="pictures/tutorial1-10.png" width="100%"/>
-        
+
       <p><img src="pictures/tutorial1-11.png" width="100%"/>
-        
+
       <p><img src="pictures/tutorial1-12.png" width="100%"/>
 
       <p><h4>DisplayFilter</h4>
@@ -1104,7 +1106,7 @@
 
       <p>Closing your browswer will also terminate
          the <code>ESP</code> server.
-        
+
       <p>Now that you have finished your tour of the <code>ESP</code>
          interface, proceed on to Tutorial 2 to start building up this
          configuration from scratch.
@@ -1127,13 +1129,13 @@
          This should bring up an empty <code>ESP</code> GUI.
 
       <p><h4>First (example) configuration</h4>
-        
+
       <p>We are going to start a new configuration, using
          the <code>ESP</code> integrated code editor.  To do that,
          click on <b>File</b> and then choose <b>Edit: &lt;new
          file&gt;</b>.  The GraphicsWindow should now contain and
          empty file.
-        
+
       <p>Start by typing the following into the code editor:
         <pre>
           # tutorial2
@@ -1292,7 +1294,7 @@
     <p>In <code>ESP</code>, expressions follow the same syntax as most
        modern computer languages. See <a href="#sec5.10">Expression
        rules</a> for complete details.
-      
+
     <p>Line 12:
       <pre>
         END
@@ -1314,7 +1316,7 @@
        change to a 3D view of your configuration.
 
       <p><img src="pictures/tutorial2-02.png" width="100%"/>
-            
+
     <p>To see the effect of the DesignParameters in your model,
        press <b>length</b> in the DesignParameters part of the
        TreeWindow and change the value to <code>1</code>,
@@ -1348,11 +1350,11 @@
         # create box centered at the origin
         BOX        -length/2  -height/2  -depth/2 \ comment
                     length     height     depth
-          
+
         # create the cylinder and move to correct location
         CYLINDER   0  0  0  0  height  0  radius
         TRANSLATE  0  0  depth/2
-          
+
         END
       </pre>
       Your editor should look like this:
@@ -1416,7 +1418,7 @@
        See that by using the Stack, there was no need to
        tell <code>ESP</code> which Body was to
        be <code>TRANLATE</code>d.
-      
+
     <p>If we <b>Save</b> this modified script, we should get a
         configuration with two Bodys:
 
@@ -1446,7 +1448,7 @@
         # create box centered at the origin
         BOX        -length/2  -height/2  -depth/2 \ comment
                     length     height     depth
-          
+
         # create the cylinder and move to correct location
         CYLINDER   0  0  0  0  height  0  radius
         TRANSLATE  0  0  depth/2
@@ -1479,7 +1481,7 @@
         # create box centered at the origin
         BOX        -length/2  -height/2  -depth/2 \ comment
                     length     height     depth
-          
+
         # create the cylinder and move to correct location
         CYLINDER   0  0  0  0  height  0  radius
         TRANSLATE  0  0  depth/2
@@ -1492,7 +1494,7 @@
         ELSE
            INTERSECT
         ENDIF
-          
+
         END
       </pre>
        which would look like this:
@@ -1509,7 +1511,7 @@
        respect to it.  That makes it ideal for cases (such as this),
        where you want to be able to influence the build before it
        happens, but not in a way that could be differentiated.
-      
+
     <p>Here we have introduced a new concept (line lines 19 through
       25):
       <pre>
@@ -1549,11 +1551,11 @@
        the <code>ESP</code> TreeWindow to get each of the following:
 
     <p><img src="pictures/tutorial2-07.png" width="100%"/>
-      
+
     <p><img src="pictures/tutorial2-08.png" width="100%"/>
-      
+
     <p><img src="pictures/tutorial2-09.png" width="100%"/>
-      
+
     <p><h4>Second (real) configuration --- basic tire</h4>
 
     <p>Rather than typing a lot of code, we are going to use the
@@ -1637,7 +1639,7 @@
         <li><code>MIRROR</code> to make the mirror image of a
           Body.</li>
       </ul>
-      
+
     <p>We now want to <code>MIRROR</code> across the <i>xy</i> plane
        (signified as the (0,0,1) plane). But, the <code>MIRROR</code>
        operates the same as all the other transformations; that is it
@@ -1676,9 +1678,9 @@
 
     <p>Again, if we use <b>StepThru</b> mode, we can see
        the <b>JOIN</b>ed original and <b>MIRROR</b>ed Bodys.
-      
+
     <p><img src="pictures/tutorial2-11.png" width="100%"/>
-      
+
     <p>Lines 34 through 36:
       <pre>
         RESTORE   .
@@ -1748,7 +1750,7 @@
        around this, we will use the <code>SELECT</code> statement.
        This statement has lots of options, and in fact is the longest
        entry in the section that describes the various commands.
-      
+
     <p>To figure out which Face we want to Attribute:
       <ul>
         <li>press <b>ExpandAll</b> to the right of "Branches" in the
@@ -1760,7 +1762,7 @@
 
     <p>Put your cursor over the magenta Face and press the <b>^</b>
        (or <b>6</b>) key in the GraphicsWindow, and you should see this:
-      
+
     <p><img src="pictures/tutorial2-12.png" width="100%"/>
 
     <p>In the MessageWindow, you can see that the Face has many
@@ -1791,7 +1793,7 @@
         SELECT FACE @nbody 6
       </pre>
       where the trailing <code>1</code> is assumed.
-      
+
     <p>We can <code>ATTRIBUTE</code> this <code>SELECT</code>
        statement (in lines 26 and 27):
       <pre>
@@ -1799,7 +1801,7 @@
         ATTRIBUTE _color $magenta
       </pre>
        to get the desired result.
-      
+
     <p><h4>Drilling holes</h4>
 
     <p>The next thing is to add in a series (called a pattern) of
@@ -1941,7 +1943,7 @@
        can add the statements in lines 53 and 56 to skip this if the
        use specifies a non-positive value
        for <code>disk:chamfer</code>.
-         
+
     <p><h4>OutputParameters</h4>
 
     <p><code>ESP</code> has the ability to make some of its
@@ -2013,7 +2015,7 @@
     <p>One final note.  Although it might seem daunting to build a
        script like <code>tutorial2.csm</code>, if you build it up,
        step-by-step, it is not quite so difficult.
-      
+
     <p><h3 id="sec2.3">2.3 Third Tutorial: Using the sketcher and adding spokes</h3>
 
     <p>As with the second Tutorial, this third Tutorial will start with
@@ -2021,7 +2023,7 @@
       learned to the real Tutorial problem.
 
     <p><h4>First sketch - the shape</h4>
-      
+
     <p>For the third tutorial, we will start without
        a <code>.csm</code> file.  This can either be done by starting
       over or by pressing <b>File</b> and then <b>New</b>.
@@ -2092,7 +2094,7 @@
        in:
 
     <p><img src="pictures/tutorial3-01.png" width="100%"/>
-      
+
     <p>in a counter-clockwise direction, starting at the point with
        the label "XY".  Make sure that when you have completed the
        closed sketch, the last point should be the same as the first
@@ -2122,7 +2124,7 @@
     <p>If you do not know what constraint(s) to add, press the
        <b>Constraining...</b> button and several choices
        will be presented to you (in green), as in:
-       
+
     <p><img src="pictures/tutorial3-02.png" width="100%"/>
 
     <p>We will choose the following:
@@ -2151,7 +2153,7 @@
        sketch will solve.  (If it does not, you can always remove
        constraints by moving the cursor over the constraint and
        pressing <b>&lt;</b>, which deletes selected constraints at
-       that point or on that segment.)  To center the image, 
+       that point or on that segment.)  To center the image,
        press the <b>H</b> button.  You screen should
        look like:
 
@@ -2391,7 +2393,7 @@
     <p><img src="pictures/tutorial3-11.png" width="100%"/>
 
     <p><h4>Adding a sketch to a model</h4>
-      
+
     <p>One of the problems with using the interactive sketcher is that
        the only way of saving an interactively-drawn sketch is to use <b>Export
        FeatureTree</b>, but that option removes all your formatting
@@ -2433,7 +2435,7 @@
     <p>Notice that the Body is drawn in pink, meaning that it is a
        SheetBody (that is, a Body with Face(s) that does not enclose a
        volume).
-      
+
     <p>Next we are going to save this as a user-defined component
       (UDC).  For now, think of a UDC as a file that can be included
       in another file.  To save this, press <b>File</b> and
@@ -2470,7 +2472,7 @@
        SolidBody (that is, it encloses a volume).
 
     <p><img src="pictures/tutorial3-14.png" width="100%"/>
-      
+
     <p>If you change the value of the <code>depth</code>
        DesignParameter and <b>Press to Re-build</b>, you will see the
        depth of the wedge has changed.  Now we want to
@@ -2550,9 +2552,9 @@
        arguments <code>0</code>, <code>tire:diam_inner/2</code>,
        <code>0</code>, and <code>1</code>, that
        looks like:
-      
+
     <p><img src="pictures/tutorial3-16.png" width="100%"/>
-      
+
     <p>The constraints associated with this sketch are:
       <ul>
         <li>the length of the lower segment is
@@ -2621,7 +2623,7 @@
        no longer have a parameter named <code>tire:width</code>; it
        has been renamed to <code>tire:wid_outer</code>.  Make the
        change, <b>Save</b>, and <b>Press to Re-build</b>.
-          
+
     <p><h4>Adding in spokes</h4>
 
     <p>The next thing we are going to do is to add spokes to our
@@ -2734,7 +2736,7 @@
         <li>finally the resulting model is <code>STORE</code>d in
             "SolidModel 0" and a copy of it is left on the Stack.</li>
       </ul>
-                               
+
     <p><h3 id="sec2.4">2.4 Fourth Tutorial: RULEs, BLENDs, and error checking</h3>
 
     <p>In this fourth tutorial, we are going to focus on Bodys that
@@ -2812,7 +2814,7 @@
 
     <p>Note that both of these commands pop a SheetBody off the Stack
        and put the resulting SolidBody back onto the Stack.
-      
+
     <p><h4>Basic RULEs and BLENDs</h4>
 
     <p>Now we will make more a more interesting Body by starting with
@@ -2887,9 +2889,9 @@
        connect the sections (instead of straight lines as was done
        for <code>RULE</code>).  Change the <code>RULE</code>
        to <code>BLEND</code> in the code editor and see what happens.
-      
+
     <p><img src="pictures/tutorial4-04.png" width="100%"/>
-      
+
     <p><h4>Using user-defined primitives and components</h4>
 
     <p>In Tutorial 3 we used the <code>UDPRIM</code> statement to
@@ -2924,7 +2926,7 @@
        like a user-defined primitive (UDP), except it consumes one or
        more Bodys from the Stack; recall that UDPs do not consume any
        Bodys from the Stack.
-      
+
     <p>The second through ninth arguments come in <i>name/value</i>
        pairs.  The <code>UDPRIM</code> statement has enough room to
        have four pairs of them.  But some UDPs and UDCs can have more
@@ -3033,7 +3035,7 @@
        statements.)  Pay particular attention to lines 37 and 40:
       <pre>
         CFGPMTR   spindle:Cfront      2        # blend continuity at front transition
-        
+
         CFGPMTR   spindle:Cback       2        # blend continuity at back  transition
      </pre>
        which define ConfigurationParameters.  Recall that a
@@ -3050,7 +3052,7 @@
        defines a ConstantParameter, which must be a single number.  It
        has global scope, meaning that it is visible in the top-level
        script as well as any UDCs that may be loaded.
-      
+
     <p>Lines 49 through 52
       <pre>
         DIMENSION spindle:xloc              1  spindle:nsect
@@ -3178,7 +3180,7 @@
        of <code>spindle:Cfront</code> and
        <code>spindle:Cback</code> and see how the spindle shape
        changes.
-                                  
+
     <p><img src="pictures/tutorial4-06.png" width="100%"/>
 
     <p><img src="pictures/tutorial4-07.png" width="100%"/>
@@ -3190,7 +3192,7 @@
        duplicated twice, doing this way is much less efficient and may
        cause problems in your build later on.  So it is best to use
        <code>RULE</code> if appropriate.
-      
+
     <p>The concept of a Group is introduced in line 99:
       <pre>
         GROUP
@@ -3322,7 +3324,7 @@
        the <code>HOLLOW</code> command, and
        finally <code>SUBTRACT</code>s the grown Body from the
        SolidModel.
-           
+
     <p><h4>Adding error checking</h4>
 
     <p>The writer of an <code>ESP</code> model often knows something
@@ -3371,7 +3373,7 @@
 
     <p>Press <b>File</b>, <b>Open</b>, and
        select <code>../data/tutorial5</code>.
-        
+
     <p>The first big change (relative to <code>tutorial4</code>) is
        in lines 170 to 178:
       <pre>
@@ -6078,6 +6080,8 @@ CATBEG    sigCode
                      $node_not_found
                      $non_coplanar_sketch_points
                      $no_selection
+                     $underconstrained
+                     $overconstrained
                      $not_converged
                      $self_intersecting
                      $wrong_types_on_stack
@@ -6177,7 +6181,7 @@ COMBINE   toler=0
                      create either a SolidBody from closed Shell or an
                      (open) SheetBody
                   elseif all Bodys since Mark are WireBodys and are co-planar
-                     create SheetBody from closed Loop
+                     create SheetBody from closed Loop or close Loop first
                   endif
                   if maxtol>0, then tolerance can be relaxed until successful
                   sets up @-parameters
@@ -6210,7 +6214,7 @@ CONE      xvrtx yvrtx zvrtx xbase ybase zbase radius
       <p><h3 id="connect">connect</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-CONNECT   faceList1 faceList2 edgeList1=0 edgeList2=0
+CONNECT   faceList1 faceList2 edgeList1=0 edgeList2=0 toler=0
           use:    connects two Bodys with bridging Faces
           pops:   Body1 Body2
           pushes: Body
@@ -6220,8 +6224,9 @@ CONNECT   faceList1 faceList2 edgeList1=0 edgeList2=0
                   edgeList1 and edgeList2 must have the same length
                   edgeList1[i] corresponds to edgeList2[i]
                   faceList1[i] corresponds to faceList2[i]
+                  if Body1 is a Mark, left and rite Bodys are the same
                   if edgeLists are given
-                      Body1 is either SheetBody or SolidBody
+                      Body1 is either WireBody, SheetBody, or SolidBody
                       Body2 is same type as Body1
                       Body  is same type as Body1
                       Face in faceLists are removed
@@ -6361,6 +6366,7 @@ DIMENSION $pmtrName nrow ncol
                   pmtrName must not start with '@'
                   if applied to a DESPMTR or CFGPMTR, must be in either
                       .csm file or top-level include-style .udc file
+                  a legacy fourth argument (despmtr) is no longer used
                   old values are not overwritten
                   cannot be followed by ATTRIBUTE or CSYSTEM
         </pre>
@@ -6517,7 +6523,8 @@ EVALUATE  $type arg1 ...
                         dxdv,    dydv,    dzdv,
                         d2xdu2,  d2ydu2,  d2zdu2,
                         d2xdudv, d2ydudv, d2zdudv,
-                        d2xdv2,  d2ydv2,  d2zdv2
+                        d2xdv2,  d2ydv2,  d2zdv2,
+                        normx,   normy,   normz
                   elseif arguments are: "facerng ibody iface"
                      ibody is Body number (1:nbody)
                      iface is Face number (1:nface)
@@ -7563,6 +7570,9 @@ SKEND     wireonly=0
                   new Face receives the Branch's Attributes
                   sets up @-parameters
                   signals that may be thrown/caught:
+                     $underconstrained
+                     $overconstrained
+                     $not_converged
                      $colinear_sketch_points
                      $non_coplnar_sketch_points
                      $self_intersecting
@@ -8173,6 +8183,8 @@ UDPRIM ellipse
            rz         radius in z-direction   [default 0]
            nedge      number of Edges         [default 2]
            thbeg      theta for first Node    [default 0]
+           theta      optional array of thetas[default 0]
+           theta[]    array of thetas
        output arguments:
        usage:
            if     (rx==0 && ry>0 && rz>0)
@@ -8200,7 +8212,7 @@ UDPRIM fitcurve
            npnt       number of point in file
            rms        rms of distances from points to curve
        usage:
-           read points (X, Y, Z) from filename (on point per line)
+           read points (X, Y, Z) from filename (one point per line)
            repeated points designate Node locations (which
               separate Edges)
            the Bspline is defined to be C2-continuous everywhere
@@ -8292,7 +8304,7 @@ UDPRIM ganged Mark, Body1, ...
            volume     volume of Body created
        usage:
            pops Bodys back to Mark
-           uses first Body a common Body for SUBTRACT or UNION
+           uses first Body as a common Body for SUBTRACT or UNION
 
 UDPRIM guide Body1 Body2
        input arguments (specified as name/value pairs):
@@ -8440,6 +8452,20 @@ UDPRIM nurbbody
            build a SolidBody with untrimmed specified in filename
            for each Nurb, file contains 7-integer head followed
               by the real data as specified in egads.pdf file
+
+UDPRIM parabaloid
+       input arguments (specified as name/value pairs):
+           xlength    length along axis in X direction
+           yradius    radius in Y-direction
+           zradius    radius in Z-direction
+       output arguments:
+       usage:
+           if yadius>0 and zradius>0
+               build a parabaloid (SolidBody)
+           elseif yradius>0
+               build a parabola (SheetBody) in x-z plane
+           elseif zradius>0
+               build a parabola (SheetBody) in x-y plane
 
 UDPRIM nuscale
        input arguments (specified as name/value pairs):
@@ -8674,8 +8700,9 @@ UDPRIM supell
                    ry_s  is latest ry or ry_s
                    n_se  is latest n, n_s, n_e, or n_se
            to get a simple ellipse, only need to specify rx and ry
-           nquad=1 and nquad=2 create WirwBodys, nquad=4 creates SheetBody
+           nquad=1 and nquad=2 create WireBodys, nquad=4 creates SheetBody
        notes:
+           negative slpfac prescribes correct slopes at junctions
            super-ellipse centered at (0,0,0)
            super-ellipse generated in x-y plane
 
@@ -9536,7 +9563,158 @@ end
 
     <p><h2 id="sec8">8.0: Release Notes</h2>
 
-    <p><h3 id="sec8.1"> 8.1: New/extended features in v1.19</h3>
+    <p><h3 id="sec8.3"> 8.1: New/extended features in v1.20</h3>
+
+    <p><h4>New/updated commands/statements and functions</h4>
+
+    <p> extend CONNECT so that it can CONNECT Faces in a single Body
+        if there is a Mark before the last SolidBody
+
+    <p>add toler=0 argument to CONNECT command
+
+    <p>extend CONNECT to work with WireBodys
+
+    <p>add Curve, Pcurve, and Surface printouts to ocsmPrintEgo
+
+    <p>extend COMBINE command to close WireBody if needed; add
+       combine8* test cases
+
+    <p>add normals to output from EVALUATE FACE command
+
+    <p>when SUBTRACTing co-planar SheetBodys, make sure result has
+       same normal as the outer SheetBody; add subtract6j-k test cases
+
+    <p>apply attributes on LINSEG, ARC, CIRARC, BEZIER, SPLINE, and
+       SSLOPE Branches to the Edge that they create
+
+    <p><h4>New/modified command line arguments</h4>
+
+    <p>allow -dxdd option to be applied to subscripted DESPMTRs
+
+    <p><h4>New/updated UDPs, UDCs, or UDFs</h4>
+
+    <p>improve speed of udfEditAttr and udpWaffle (on LINUX) when
+       script is very long
+
+    <p>fix comments in contains.udc and overlaps.udc
+
+    <p>add theta[] argument to udpEllipse; add ellipse2 test case
+
+    <p>add .tParams attribute to Body too in applyTparams.udc
+
+    <p>in udfSlices, if there is a .tParams attribute on the input
+       Body, put it on the slices too
+
+    <p>fix token parsing associated with DOS CR (carriage return) in
+       udpWaffle and udfEditAttr
+
+    <p>match slopes and curvatures at seams in UdpSupell when
+       slpfact is negative
+
+    <p>improve accuracy of udpFreeform; update associated
+       verification data
+
+    <p>add udpParabaloid and test case
+
+    <p><h4>OpenCSM updates</h4>
+
+    <p>improve detection of matching Edges in CONNECT
+
+    <p>allow CATBEG to catch overconstrained and underconstrained
+       errors
+
+    <p>generate underconstrained, overconstrained, or not_converged
+       signals from SKEND
+
+    <p>improve convergence tolerance in sketcher
+
+    <p>check if a user gave an illegal $order to SUBTRACT
+
+    <p><h4>ESP updates</h4>
+
+    <p>add plotting of normals to DisplayType
+
+    <p><h4>Miscellaneous updates</h4>
+
+    <p><h3 id="sec8.4"> 8.2: Bug fixes since v1.19</h3>
+
+    <p><h4>OpenCSM bug fixes</h4>
+
+    <p>fix memory error associated with reordering senses in loops
+       (inletWithWalls1)
+
+    <p>fix seg fault if $order in INTERSECT is given as $xmin (and not
+       xmin); check that only valid $order are given; fix test cases
+       that used invalid $order
+
+    <p>fix sign of dip to minimize residual for S and R constraints
+       in sketcher
+
+    <p>ensure that sweep() function always gives sign that is the
+       same as dab
+
+    <p>fix bugs associated with SSLOPE statement (especially when a
+       sketch is flipped); add sketch10* test cases
+
+    <p>fix bug that prematurely exits if UDP does not exist and we
+       are recycling
+
+    <p>fix bug in mass property derivatives
+
+    <p>fix bug when starting serveCSM on Windoze from an .egads, .igs,
+       or .stp file for filename with backslashes; add autoStart test
+       case
+
+    <p>fix bug associated with -dxdd option (incorrectly wrote .tess
+       file instead of .sens file)
+
+    <p>fix memory leak associated when COMBINE closes a WireBody in
+       order to make a SheetBody
+
+    <p>fix bug that did not readjust the level when returning from a
+       UDC
+
+    <p>fix bug when the last line of a UDC (without an END statement)
+       calls a UDC (with an END statement)
+
+    <p>significantly speed up recycling
+
+    <p>fix CONNECT errors associated with non-contiguous Faces; add
+       connect7f test case
+
+    <p>preserve orientation of Faces during EXTRACT; add extract4
+       test case
+
+    <p>do not include SSLOPE statments when determining if Sketch
+       points are co-planar
+
+    <p>change number of reclassified points in Plugs to be the larger
+       of 5 and a fraction of area associated with a Face
+
+    <p>fix bug that sometimes uses FD sensitivities when analytic
+       derivatives could be used instead (associated with UDPARG
+       statements)
+
+    <p>remove inside-out test for SolidBodys to improve performance
+
+    <p>do not add _tParams attribute unless the Body will be
+       tessellated; remove coarseBox test case
+
+    <p>fix ocsmGetName prototype in ocsm.py
+
+    <p>fix bug in JOIN associated with Faces that share Edges but
+       which have bounding boxes that differ
+      
+    <p><h4>ESP bug fixes</h4>
+
+    <p>fix Hint associated with CONNECT command
+
+    <p>broadcast view matrix to partners when cursor leaves canvas
+       before mouse up event
+
+    <p>fix long delay when browser without ball syncs display
+
+    <p><h3 id="sec8.3"> 8.3: New/extended features in v1.19</h3>
 
     <p><h4>New/updated commands/statements and functions</h4>
 
@@ -9795,7 +9973,7 @@ end
     <p>Plugs: improve cloud point reclassification process; write
        plugs.despmtrs file at end
 
-    <p><h3 id="sec8.2"> 8.2: Bug fixes since v1.18</h3>
+    <p><h3 id="sec8.4"> 8.4: Bug fixes since v1.18</h3>
 
     <p><h4>OpenCSM bug fixes</h4>
 
@@ -9899,7 +10077,7 @@ end
 
     <p>fix first-column coloring when editing  DesignParameter
 
-    <p><h3 id="sec8.3"> 8.3: New/extended features in v1.18</h3>
+    <p><h3 id="sec8.5"> 8.5: New/extended features in v1.18</h3>
 
     <p><h4>New/updated commands/statements and functions</h4>
 
@@ -9988,7 +10166,7 @@ end
 
     <p>allow plotfile to contain triangles (if jmax==-2)
 
-    <p><h3 id="sec8.4"> 8.4: Bug fixes since v1.17</h3>
+    <p><h3 id="sec8.6"> 8.6: Bug fixes since v1.17</h3>
 
     <p>throw error if sketch solver does not converge
 
@@ -10092,7 +10270,7 @@ end
     <p>fix bug after FileEdit when one of the skteches in a RULE or
        BLEND could not be recycled
 
-    <p><h3 id="sec8.5"> 8.5: New/extended features in v1.17</h3>
+    <p><h3 id="sec8.7"> 8.7: New/extended features in v1.17</h3>
 
     <p><h4>New/updated commands/statements and functions</h4>
 
@@ -10201,7 +10379,7 @@ end
     <p>allow multi-segment line plotting in serveCSM
 
 
-    <p><h3 id="sec8.6"> 8.6: Bug fixes since v1.16</h3>
+    <p><h3 id="sec8.8"> 8.8: Bug fixes since v1.16</h3>
 
     <p>fix bug that did not allow sensitivity calculations if there
       was a NodeBody on the stack
@@ -10270,7 +10448,7 @@ end
     <p>fix bug that did not free memory after an error was detected
       during argument evaluations
 
-    <p><h3 id="sec8.7"> 8.7: New/extended features in v1.16</h3>
+    <p><h3 id="sec8.9"> 8.9: New/extended features in v1.16</h3>
 
     <p>add ESP_QuickReference
 
@@ -10323,7 +10501,7 @@ end
 
     <p>compute analytic sensisitivities for udpBiconvex
 
-    <p><h3 id="sec8.8"> 8.8: Bug fixes since v1.15</h3>
+    <p><h3 id="sec8.10"> 8.10: Bug fixes since v1.15</h3>
 
     <p>fix bug in Sketcher to use atan2d for ::I[]
 
@@ -10386,7 +10564,7 @@ end
     <p>fix bug that did not update Local Variables after FILE->Edit in
  `    ESP
 
-    <p><h3 id="sec8.9"> 8.9: New/extended features in v1.15</h3>
+    <p><h3 id="sec8.11"> 8.11: New/extended features in v1.15</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -10511,7 +10689,7 @@ end
 
     <p>allow StepThru mode to show WireBodys
 
-    <p><h3 id="sec8.10"> 8.10: Bug fixes since v1.14</h3>
+    <p><h3 id="sec8.12"> 8.12: Bug fixes since v1.14</h3>
 
     <p>fix erroneous error message ass≈oociated with UNION of
       SheetBodys or WireBodys with the tomark flag
@@ -10623,7 +10801,7 @@ end
 
     <p>fix typos associated with LINT in Makefile.DARWIN64
 
-    <p><h3 id="sec8.11"> 8.11: New/extended features in v1.14</h3>
+    <p><h3 id="sec8.13"> 8.13: New/extended features in v1.14</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -10739,7 +10917,7 @@ end
 
     <p>Allow visibility of NodeBodys to be toggled in ESP
 
-    <p><h3 id="sec8.12"> 8.12: Bug fixes since v1.13</h3>
+    <p><h3 id="sec8.14"> 8.14: Bug fixes since v1.13</h3>
 
     <p>Fix error statement associated with mis-matched argument in
        call to UDC
@@ -10871,7 +11049,7 @@ end
 
     <p>Fix bug that truncated long filenames in ESP Edit-File
 
-    <p><h3 id="sec8.13"> 8.13: New/extended features in v1.13</h3>
+    <p><h3 id="sec8.15"> 8.15: New/extended features in v1.13</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -10959,7 +11137,7 @@ end
     <p>Design Parameters are now listed hierarchically in ESP (with
        the hierarcy defined by a colon (:)
 
-    <p><h3 id="sec8.14"> 8.14: Bug fixes since v1.12</h3>
+    <p><h3 id="sec8.16"> 8.16: Bug fixes since v1.12</h3>
 
     <p>Fix bug that caused infinite recursion if trying to generate a
        .sens file for a case that required finite difference
@@ -10997,7 +11175,7 @@ end
     <p>An error is raised if an INTERFACE statement uses name of a
        CONPMTR
 
-    <p><h3 id="sec8.15"> 8.15: New/extended features in v1.12</h3>
+    <p><h3 id="sec8.17"> 8.17: New/extended features in v1.12</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -11102,7 +11280,7 @@ end
 
     <p>Recycling is used (if possible) after FileEdit
 
-    <p><h3 id="sec8.16"> 8.16: Bug fixes since v1.11</h3>
+    <p><h3 id="sec8.18"> 8.18: Bug fixes since v1.11</h3>
 
     <p>Fix many bugs in udpTblade and Tblade itself
 
@@ -11143,7 +11321,7 @@ end
        faulted) after an error encountered during loading a .csm file
        (after FileOpen or FileEdit)
 
-    <p><h3 id="sec8.17"> 8.17: New/extended features in v1.11</h3>
+    <p><h3 id="sec8.19"> 8.19: New/extended features in v1.11</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -11212,7 +11390,7 @@ end
 
     <p>Add ability to save view to and read view from a file
 
-    <p><h3 id="sec8.18"> 8.18: Bug fixes since v1.010</h3>
+    <p><h3 id="sec8.20"> 8.20: Bug fixes since v1.010</h3>
 
     <p>Add printing of Node Attributes in ocsmPrintBrep
 
@@ -11254,7 +11432,7 @@ end
 
     <p>Fix bug to allow HOLLOW after SKEND
 
-    <p><h3 id="sec8.19"> 8.19: New/extended features in v1.10</h3>
+    <p><h3 id="sec8.21"> 8.21: New/extended features in v1.10</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -11311,7 +11489,7 @@ end
 
     <p>Add gallery of cases to ESP-help
 
-    <p><h3 id="sec8.20"> 8.20: Bug fixes since v1.09</h3>
+    <p><h3 id="sec8.22"> 8.22: Bug fixes since v1.09</h3>
 
     <p>Fix code when bad expression is detected to not seg fault
 
@@ -11326,7 +11504,7 @@ end
 
     <p>Fix arrowhead size in CSYSTEMs
 
-    <p><h3 id="sec8.21"> 8.21: New/extended features in v1.09</h3>
+    <p><h3 id="sec8.23"> 8.23: New/extended features in v1.09</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -11449,7 +11627,7 @@ end
 
     <p>Add many new test cases, all with verification data
 
-    <p><h3 id="sec8.22"> 8.22: Bug fixes since v1.08</h3>
+    <p><h3 id="sec8.24"> 8.24: Bug fixes since v1.08</h3>
 
     <p>Improve robustness of UNION when applied to SheetBodys
 
@@ -11488,7 +11666,7 @@ end
 
     <p>Fix erroneous truncation of very long metadata in ESP
 
-    <p><h3 id="sec8.23"> 8.23: New/extended features in v1.08</h3>
+    <p><h3 id="sec8.25"> 8.25: New/extended features in v1.08</h3>
 
     <p>A new ocsmDelPmtr function has been added to the OpenCSM API to
        delete a Design Parameter
@@ -11582,7 +11760,7 @@ end
        explicit as to which messages are sent by the browser and which
        message are sent by the server
 
-    <p><h3 id="sec8.24"> 8.24: Bug fixes since v1.07</h3>
+    <p><h3 id="sec8.26"> 8.26: Bug fixes since v1.07</h3>
 
     <p>Numerous typos were fixed in this help file
 
@@ -11668,7 +11846,7 @@ end
 
     <p>Sensitivities are now correctly computed for non-manifold Edges
 
-    <p><h3 id="sec8.25"> 8.25: New/extended features in v1.07</h3>
+    <p><h3 id="sec8.27"> 8.27: New/extended features in v1.07</h3>
 
     <p><code>CAPRI</code> is no longer supported
 
@@ -11790,7 +11968,7 @@ end
        to <code>ESP_START</code> (although <code>ESP_START</code> still
        works)
 
-    <p><h3 id="sec8.26"> 8.26: Bug fixes since v1.06</h3>
+    <p><h3 id="sec8.28"> 8.28: Bug fixes since v1.06</h3>
 
     <p>A journalling error was associated with the UNION command
 
@@ -11833,7 +12011,7 @@ end
 
     <p>An error in the first Branch caused ESP to hang
 
-    <p><h3 id="sec8.27"> 8.27: New/extended features in v1.06</h3>
+    <p><h3 id="sec8.29"> 8.29: New/extended features in v1.06</h3>
 
     <p>User-defined components (UDCs) have been implemented to execute
        consistently with user-defined primitives (UDPs).  The main
@@ -11955,7 +12133,7 @@ end
 
     <p>Branches are indented (with ">") in Tree Window in ESP.
 
-    <p><h3 id="sec8.28"> 8.28: Bug fixes since v1.05</h3>
+    <p><h3 id="sec8.30"> 8.30: Bug fixes since v1.05</h3>
 
     <p>Attribute values can be strings (prepended by "$").
 
@@ -11991,7 +12169,7 @@ end
     <p>Fix serveCSM so that the JSON that it transfers to the browser
        does not contain ",]" nor ",}".
 
-    <p><h3 id="sec8.29"> 8.29: Known problems in v1.09</h3>
+    <p><h3 id="sec8.31"> 8.31: Known problems in v1.09</h3>
 
     <p>Internet Explorer (11) is not recommended since it sometimes
        stops sending messages to the server.

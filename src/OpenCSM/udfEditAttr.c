@@ -71,6 +71,8 @@ static int getBodyTopos(ego ebody, ego esrc, int oclass, int *nlist, ego **elist
 static int printAttrs(ego ebody);
 #endif
 
+static void *realloc_temp=NULL;              /* used by RALLOC macro */
+
 
 /*
  ************************************************************************
@@ -681,10 +683,12 @@ processFile(ego    context,             /* (in)  EGADS context */
 {
     int       status = 0;               /* (out) return status */
 
-    int       nnode, nedge, nface, isel, nsel, istype, itoken, istream, ieof, nchar;
+    int       nnode, nedge, nface, isel, nsel, istype, itoken, istream, ieof;
     int       nlist, ilist, nnbor, inbor, iremove, atype, alen, i;
     int       status1, status2, outLevel;
     int       nbrch, npmtr, npmtr_save, ipmtr, nbody, npat=0, iskip;
+    int       mline, nline, iend;
+    int       *begline=NULL, *endline=NULL;
     int       pat_pmtr[ ]={ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     int       pat_value[]={ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     int       pat_end[  ]={-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
@@ -746,10 +750,12 @@ processFile(ego    context,             /* (in)  EGADS context */
     /* determine if filename actually contains the name of a file
        or a copy of a virtual file */
     if (strncmp(filename, "<<\n", 3) == 0) {
-        istream = 2;
+        istream = 1;
     } else {
         istream = 0;
     }
+
+    nline = 0;
 
     /* if a file, open it now and remember if we are at the end of file */
     if (istream == 0) {
@@ -762,14 +768,56 @@ processFile(ego    context,             /* (in)  EGADS context */
 
         ieof = feof(fp);
 
-    /* otherwise, remember if we are at the end of the stream */
+    /* otherwise, find extents of each line of the input */
     } else {
+        mline = 25;
+        nline = 0;
+        iend  = 0;
+
+        MALLOC(begline, int, mline);
+        MALLOC(endline, int, mline);
+
+        for (i = 3; i < STRLEN(filename); i++) {
+            if (iend == 0) {
+                if (filename[i] == ' '  || filename[i] == '\t' ||
+                    filename[i] == '\r' || filename[i] == '\n'   ) continue;
+
+                iend = i;
+
+                if (nline >= mline) {
+                    mline += 25;
+                    RALLOC(begline, int, mline);
+                    RALLOC(endline, int, mline);
+                }
+
+                begline[nline] = i;
+                endline[nline] = i + 1;
+                nline++;
+            } else if (filename[i] == '\r') {
+                filename[i] = ' ';
+            } else if (filename[i] == '\n') {
+                endline[nline-1] = iend + 1;
+                iend = 0;
+            } else if (filename[i] != ' ' && filename[i] != '\t') {
+                iend = i;
+            }
+        }
+
+        /* remember if we are at the end of the stream */
         if (strlen(filename) <= 2) {
             ieof = 1;
         } else {
             ieof = 0;
         }
     }
+
+    /* print copy of input file */
+//$$$    for (i = 0; i < nline; i++) {
+//$$$        memcpy(templine, filename+begline[i], endline[i]-begline[i]);
+//$$$        templine[endline[i]-begline[i]] = '\0';
+//$$$
+//$$$        printf("%5d :%s:\n", i, templine);
+//$$$    }
 
     /* by default, we are not skipping (which we do if we are
        in a PATBEG with no replicates) */
@@ -781,23 +829,28 @@ processFile(ego    context,             /* (in)  EGADS context */
         /* read the next line */
         if (fp != NULL) {
             (void) fgets(templine, 255, fp);
-            ieof = feof(fp);
-        } else {
-            nchar = 0;
-            while (nchar == 0) {
-                nchar = getToken(&filename[2], istream-1, '\n', 255, templine);
-                istream++;
+            if (feof(fp) > 0) break;
 
-                if (nchar > 0) {
-                    ieof = 0;
-                    break;
-                } else if (nchar < 0) {
-                    ieof = 1;
-                    break;
-                }
+            /* overwite the \n and \r at the end */
+            if (STRLEN(templine) > 0 && templine[STRLEN(templine)-1] == '\n') {
+                templine[STRLEN(templine)-1] = '\0';
             }
+            if (STRLEN(templine) > 0 && templine[STRLEN(templine)-1] == '\r') {
+                templine[STRLEN(templine)-1] = '\0';
+            }
+        } else {
+            if (istream-1 >= nline) {
+                break;
+            }
+
+            SPLINT_CHECK_FOR_NULL(begline);
+            SPLINT_CHECK_FOR_NULL(endline);
+
+            memcpy(templine, filename+begline[istream-1], endline[istream-1]-begline[istream-1]);
+            templine[endline[istream-1]-begline[istream-1]] = '\0';
+
+            istream++;
         }
-        if (ieof > 0) break;
 
         if (VERBOSE(0) > 0) {
             if        (istype == OCSM_FACE) {
@@ -821,14 +874,6 @@ processFile(ego    context,             /* (in)  EGADS context */
             } else {
                 printf("       nothing currently selected\n");
             }
-        }
-
-        /* overwite the \n and \r at the end */
-        if (STRLEN(templine) > 0 && templine[STRLEN(templine)-1] == '\n') {
-            templine[STRLEN(templine)-1] = '\0';
-        }
-        if (STRLEN(templine) > 0 && templine[STRLEN(templine)-1] == '\r') {
-            templine[STRLEN(templine)-1] = '\0';
         }
 
         if (outLevel >= 1) {
@@ -1620,6 +1665,9 @@ processFile(ego    context,             /* (in)  EGADS context */
     }
 
 cleanup:
+    FREE(begline);
+    FREE(endline);
+
     if (newList != NULL) free(newList);
 
     EG_free(elist);

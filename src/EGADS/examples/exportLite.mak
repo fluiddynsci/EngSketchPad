@@ -15,8 +15,8 @@ $(TDIR)\exportLite.exe:	$(ODIR)\exportLite.obj $(LDIR)\egads.lib
 
 $(ODIR)\exportLite.obj:	..\src\egadsExport.c $(IDIR)\egads.h \
 		$(IDIR)\egadsTypes.h $(IDIR)\egadsErrors.h 
-	cl /c $(COPTS) $(DEFINE) /I$(IDIR) -DSTANDALONE ..\src\egadsExport.c \
-		/Fo$(ODIR)\exportLite.obj
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) /I..\util\uvmap -DSTANDALONE \
+		..\src\egadsExport.c /Fo$(ODIR)\exportLite.obj
 
 clean:
 	-del $(ODIR)\exportLite.obj

@@ -4,6 +4,8 @@
 #include "egads.h"     // Bring in egads utilss
 #include "capsTypes.h" // Bring in CAPS types
 #include "aimUtil.h"   // Bring in AIM utils
+#include "aimMesh.h"// Bring in AIM meshing utils
+
 #include "miscUtils.h" // Bring in misc. utility functions
 #include "meshUtils.h" // Bring in meshing utility functions
 #include "cfdTypes.h"  // Bring in cfd specific types
@@ -209,18 +211,18 @@ int su2_writeSurfaceMotion(void *aimInfo,
 
                 } else if (dataFormat[j] == (int) Double) {
 
-                    fprintf(fp, "%e ", dataMatrix[j][i]);
+                    fprintf(fp, "%.18e ", dataMatrix[j][i]);
 
                 } else {
 
-                    printf("Unrecognized data format requested - %d", (int) dataFormat[j]);
+                    AIM_ERROR(aimInfo, "Unrecognized data format requested - %d", (int) dataFormat[j]);
                     fclose(fp);
                     return CAPS_BADVALUE;
                 }
 
             } else {
 
-                fprintf(fp, "%e ", dataMatrix[j][i]);
+                fprintf(fp, "%.18e ", dataMatrix[j][i]);
             }
         }
 
@@ -247,7 +249,7 @@ int su2_writeSurfaceMotion(void *aimInfo,
 // Write SU2 data transfer files
 int su2_dataTransfer(void *aimInfo,
                      char *projectName,
-                     meshStruct volumeMesh)
+                     aimMeshRef *meshRef)
 {
 
     /*! \page dataTransferSU2 SU2 Data Transfer
@@ -263,273 +265,208 @@ int su2_dataTransfer(void *aimInfo,
      */
 
     int status; // Function return status
-    int i, j, k; // Indexing
+    int i, j, ibound, ibody, iglobal; // Indexing
 
     int stringLength = 0;
 
     char *filename = NULL;
 
     // Discrete data transfer variables
-    capsDiscr *dataTransferDiscreteObj;
-    char **transferName = NULL;
-    int numTransferName = 0;
+    capsDiscr *discr;
+    char **boundNames = NULL;
+    int numBoundName = 0;
     enum capsdMethod dataTransferMethod;
     int numDataTransferPoint;
-    //int numDataTransferElement = 0;
     int dataTransferRank;
     double *dataTransferData;
     char *units;
 
+    int state, nGlobal, *globalOffset=NULL;
+    ego body;
+
     // Variables used in global node mapping
-    int globalNodeID;
+    int ptype, pindex;
+    double xyz[3];
 
     // Data transfer Out variables
 
     double **dataOutMatrix = NULL;
-    int *dataOutFormat = NULL;
-    int *dataConnectMatrix = NULL;
+    int dataOutFormat[] = {Integer, Double, Double, Double};
 
-    int numOutVariable = 7;
+    int numOutVariable = 4; // ID and x,y,x
     int numOutDataPoint = 0;
-    int numOutDataConnect = 0;
 
-    char fileExt[] = "_motion.dat";
+    const char fileExt[] = "_motion.dat";
 
     int foundDisplacement = (int) false;
 
-    meshStruct surfaceMesh;
+    AIM_ALLOC(dataOutMatrix, numOutVariable, double*, aimInfo, status);
+    for (i = 0; i < numOutVariable; i++) dataOutMatrix[i] = NULL;
 
-    status = aim_getBounds(aimInfo, &numTransferName, &transferName);
-    if (status != CAPS_SUCCESS) return status;
-    if (transferName == NULL) return CAPS_NULLNAME;
-
-    (void) initiate_meshStruct(&surfaceMesh);
+    status = aim_getBounds(aimInfo, &numBoundName, &boundNames);
+    AIM_STATUS(aimInfo, status);
 
     foundDisplacement = (int) false;
-    for (i = 0; i < numTransferName; i++) {
+    for (ibound = 0; ibound < numBoundName; ibound++) {
+      AIM_NOTNULL(boundNames, aimInfo, status);
 
-        status = aim_getDiscr(aimInfo, transferName[i], &dataTransferDiscreteObj);
-        if (status != CAPS_SUCCESS) continue;
+      status = aim_getDiscr(aimInfo, boundNames[ibound], &discr);
+      if (status != CAPS_SUCCESS) continue;
 
-        status = aim_getDataSet(dataTransferDiscreteObj,
-                                "Displacement",
-                                &dataTransferMethod,
-                                &numDataTransferPoint,
-                                &dataTransferRank,
-                                &dataTransferData,
-                                &units);
+      status = aim_getDataSet(discr,
+                              "Displacement",
+                              &dataTransferMethod,
+                              &numDataTransferPoint,
+                              &dataTransferRank,
+                              &dataTransferData,
+                              &units);
+      if (status != CAPS_SUCCESS) continue;
 
-        if (status == CAPS_SUCCESS) { // If we do have data ready is the rank correct
+      foundDisplacement = (int) true;
 
-            foundDisplacement = (int) true;
+      // Is the rank correct?
+      if (dataTransferRank != 3) {
+        AIM_ERROR(aimInfo, "Displacement transfer data found however rank is %d not 3!!!!", dataTransferRank);
+        status = CAPS_BADRANK;
+        goto cleanup;
+      }
 
-            if (dataTransferRank != 3) {
-                printf("Displacement transfer data found however rank is %d not 3!!!!\n", dataTransferRank);
-                status = CAPS_BADRANK;
-                goto cleanup;
-            }
-
-            break;
-        }
-
-    } // Loop through transfer names
-
+    } // Loop through bound names
 
     if (foundDisplacement != (int) true ) {
-
         printf("No recognized data transfer names found!\n");
-
         status = CAPS_NOTFOUND;
         goto cleanup;
     }
 
-    // Ok looks like we have displacements to get so lets continue
     printf("Writing SU2 data transfer files\n");
 
-    // Combine surface meshes found in the volumes
-    status = mesh_combineMeshStruct(volumeMesh.numReferenceMesh,
-                                    volumeMesh.referenceMesh,
-                                    &surfaceMesh);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    // first construct the complete boundary mesh
+    // SU2 will initailize all active MARKER boundaries to the motion file values,
+    // so the safest thing to do is write out all boundary points
+    AIM_ALLOC(globalOffset, meshRef->nmap+1, int, aimInfo, status);
+    numOutDataPoint = 0;
+    globalOffset[0] = 0;
+    for (i = 0; i < meshRef->nmap; i++) {
+      status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &nGlobal);
+      AIM_STATUS(aimInfo, status);
 
-    // Right now we are just going to output a body containing all surface nodes
-    numOutDataPoint = surfaceMesh.numNode;
-    numOutDataConnect = surfaceMesh.numElement;
+      // re-allocate data arrays
+      for (j = 0; j < numOutVariable; j++) {
+        AIM_REALL(dataOutMatrix[j], numOutDataPoint + nGlobal, double, aimInfo, status);
+      }
 
-    // Allocate data arrays that are going to be output
-    dataOutMatrix = (double **) EG_alloc(numOutVariable*sizeof(double));
-    dataOutFormat = (int *) EG_alloc(numOutVariable*sizeof(int));
-    dataConnectMatrix = (int *) EG_alloc(4*numOutDataConnect*sizeof(int));
+      for (iglobal = 0; iglobal < nGlobal; iglobal++) {
+        status = EG_getGlobal(meshRef->maps[i].tess,
+                              iglobal+1, &ptype, &pindex, xyz);
+        AIM_STATUS(aimInfo, status);
 
-    if (dataOutMatrix == NULL || dataOutFormat == NULL || dataConnectMatrix == NULL) {
-        status = EGADS_MALLOC;
+        // Volume mesh node ID (0-based for SU2)
+        dataOutMatrix[0][globalOffset[i]+iglobal] = meshRef->maps[i].map[iglobal]-1;
+
+        // First just set the Coordinates
+        dataOutMatrix[1][globalOffset[i]+iglobal] = xyz[0];
+        dataOutMatrix[2][globalOffset[i]+iglobal] = xyz[1];
+        dataOutMatrix[3][globalOffset[i]+iglobal] = xyz[2];
+      }
+
+      numOutDataPoint += nGlobal;
+      globalOffset[i+1] = globalOffset[i] + nGlobal;
+    }
+
+    // now apply the displacements
+    for (ibound = 0; ibound < numBoundName; ibound++) {
+      AIM_NOTNULL(boundNames, aimInfo, status);
+
+      status = aim_getDiscr(aimInfo, boundNames[ibound], &discr);
+      if (status != CAPS_SUCCESS) continue;
+
+      status = aim_getDataSet(discr,
+                              "Displacement",
+                              &dataTransferMethod,
+                              &numDataTransferPoint,
+                              &dataTransferRank,
+                              &dataTransferData,
+                              &units);
+      if (status != CAPS_SUCCESS) continue;
+
+      if (numDataTransferPoint != discr->nPoints &&
+          numDataTransferPoint > 1) {
+        AIM_ERROR(aimInfo, "Developer error!! %d != %d", numDataTransferPoint, discr->nPoints);
+        status = CAPS_MISMATCH;
         goto cleanup;
-    }
+      }
 
-    for (i = 0; i < numOutVariable; i++) dataOutMatrix[i] = NULL;
+      for (i = 0; i < discr->nPoints; i++) {
 
-    for (i = 0; i < numOutVariable; i++) {
+        ibody   = discr->tessGlobal[2*i+0];
+        iglobal = discr->tessGlobal[2*i+1];
 
-        dataOutMatrix[i] = (double *) EG_alloc(numOutDataPoint*sizeof(double));
+        status = EG_getGlobal(discr->bodys[ibody-1].tess,
+                              iglobal, &ptype, &pindex, xyz);
+        AIM_STATUS(aimInfo, status);
 
-        if (dataOutMatrix[i] == NULL) { // If allocation failed ....
-
-            status =  EGADS_MALLOC;
-            goto cleanup;
+        // Find the disc tessellation in the original list of tessellations
+        for (j = 0; j < meshRef->nmap; j++) {
+          if (discr->bodys[ibody-1].tess == meshRef->maps[j].tess) {
+            break;
+          }
         }
-    }
+        if (j == meshRef->nmap) {
+          AIM_ERROR(aimInfo, "Could not find matching tessellation!");
+          status = CAPS_MISMATCH;
+          goto cleanup;
+        }
 
-    // Set data out formatting
-    for (i = 0; i < numOutVariable; i++) {
-        if (i == 0) {
-            dataOutFormat[i] = (int) Integer;
+        if (numDataTransferPoint == 1) {
+          // A single point means this is an initialization phase
+          dataOutMatrix[1][globalOffset[j]+iglobal-1] += dataTransferData[0];
+          dataOutMatrix[2][globalOffset[j]+iglobal-1] += dataTransferData[1];
+          dataOutMatrix[3][globalOffset[j]+iglobal-1] += dataTransferData[2];
         } else {
-            dataOutFormat[i] = (int) Double;
+          // Apply delta displacements
+          dataOutMatrix[1][globalOffset[j]+iglobal-1] += dataTransferData[3*i+0];
+          dataOutMatrix[2][globalOffset[j]+iglobal-1] += dataTransferData[3*i+1];
+          dataOutMatrix[3][globalOffset[j]+iglobal-1] += dataTransferData[3*i+2];
         }
-    }
+      }
+    } // Loop through bound names
 
-    // Fill data out matrix with current surface mesh and global id
-    for (i = 0; i < numOutDataPoint; i++ ) {
+    stringLength = strlen(projectName) + strlen(fileExt) + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
+    strcpy(filename, projectName);
+    strcat(filename, fileExt);
 
-        // Global ID - assumes the surfaceMesh nodes are in the volume at the beginning
-        dataOutMatrix[0][i] = (double) surfaceMesh.node[i].nodeID;
-
-        // Coordinates
-        dataOutMatrix[1][i] = surfaceMesh.node[i].xyz[0];
-        dataOutMatrix[2][i] = surfaceMesh.node[i].xyz[1];
-        dataOutMatrix[3][i] = surfaceMesh.node[i].xyz[2];
-
-        // Delta displacements
-        dataOutMatrix[4][i] = 0;
-        dataOutMatrix[5][i] = 0;
-        dataOutMatrix[6][i] = 0;
-    }
-
-/*
-    for (i = 0; i < numOutDataConnect; i++) {
-
-        if (surfaceMesh.element[i].elementType == Triangle) {
-            dataConnectMatrix[4*i+ 0] = surfaceMesh.element[i].connectivity[0];
-            dataConnectMatrix[4*i+ 1] = surfaceMesh.element[i].connectivity[1];
-            dataConnectMatrix[4*i+ 2] = surfaceMesh.element[i].connectivity[2];
-            dataConnectMatrix[4*i+ 3] = surfaceMesh.element[i].connectivity[2];
-        }
-
-        if (surfaceMesh.element[i].elementType == Quadrilateral) {
-            dataConnectMatrix[4*i+ 0] = surfaceMesh.element[i].connectivity[0];
-            dataConnectMatrix[4*i+ 1] = surfaceMesh.element[i].connectivity[1];
-            dataConnectMatrix[4*i+ 2] = surfaceMesh.element[i].connectivity[2];
-            dataConnectMatrix[4*i+ 3] = surfaceMesh.element[i].connectivity[3];
-        }
-    }
-
-*/
-
-    // Re-loop through transfers - if we are doing displacements
-    if (foundDisplacement == (int) true) {
-
-        for (i = 0; i < numTransferName; i++) {
-
-            status = aim_getDiscr(aimInfo, transferName[i], &dataTransferDiscreteObj);
-            if (status != CAPS_SUCCESS) continue;
-
-            status = aim_getDataSet(dataTransferDiscreteObj,
-                                    "Displacement",
-                                    &dataTransferMethod,
-                                    &numDataTransferPoint,
-                                    &dataTransferRank,
-                                    &dataTransferData,
-                                    &units);
-            if (status != CAPS_SUCCESS) continue; // If no elements in this object skip to next transfer name
-
-            // A single point means this is an initialization phase
-            if (numDataTransferPoint == 1) {
-                for (k = 0; k < numOutDataPoint; k++) {
-                    dataOutMatrix[4][k] = dataTransferData[0];
-                    dataOutMatrix[5][k] = dataTransferData[1];
-                    dataOutMatrix[6][k] = dataTransferData[2];
-                }
-            }
-            else {
-                for (j = 0; j < numDataTransferPoint; j++) {
-
-                    globalNodeID = dataTransferDiscreteObj->tessGlobal[2*j+1];
-                    for (k = 0; k < numOutDataPoint; k++) {
-
-                        // If the global node IDs match store the displacement values in the dataOutMatrix
-                        if (globalNodeID  == (int) dataOutMatrix[0][k]) {
-
-                            // A rank of 3 should have already been checked
-                            // Delta displacements
-                            dataOutMatrix[4][k] = dataTransferData[3*j+0];
-                            dataOutMatrix[5][k] = dataTransferData[3*j+1];
-                            dataOutMatrix[6][k] = dataTransferData[3*j+2];
-                            break;
-                        }
-                    }
-                }
-            }
-        } // End dataTransferDiscreteObj loop
-
-        // Update surface coordinates based on displacements and decrement grid IDs
-        for (i = 0; i < numOutDataPoint; i++ ) {
-
-            dataOutMatrix[0][i] -= 1; // SU2 wants grid ids to start at 0 !!!!
-
-            // Coordinates + displacements at nodes
-            dataOutMatrix[1][i] = dataOutMatrix[1][i] + dataOutMatrix[4][i]; // x
-            dataOutMatrix[2][i] = dataOutMatrix[2][i] + dataOutMatrix[5][i]; // y
-            dataOutMatrix[3][i] = dataOutMatrix[3][i] + dataOutMatrix[6][i]; // z
-
-        }
-
-        stringLength = strlen(projectName) + strlen(fileExt) + 1;
-        filename = (char *) EG_alloc((stringLength +1)*sizeof(char));
-        if (filename == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-        strcpy(filename, projectName);
-        strcat(filename, fileExt);
-
-        // Write out displacement in tecplot file
+    // Write out displacement in tecplot file
 /*@-nullpass@*/
-        status = su2_writeSurfaceMotion(aimInfo,
-                                        filename,
-                                        4, // Only want the Global id and coordinates
-                                        numOutDataPoint,
-                                        dataOutMatrix,
-                                        dataOutFormat,
-                                        0, // numConnectivity
-                                        NULL); // connectivity matrix
+    status = su2_writeSurfaceMotion(aimInfo,
+                                    filename,
+                                    numOutVariable,
+                                    numOutDataPoint,
+                                    dataOutMatrix,
+                                    dataOutFormat,
+                                    0, // numConnectivity
+                                    NULL); // connectivity matrix
 /*@+nullpass@*/
-        if (status != CAPS_SUCCESS) goto cleanup;
-    } // End if found displacements
+    AIM_STATUS(aimInfo, status);
 
     status = CAPS_SUCCESS;
 
-    goto cleanup;
+// Clean-up
+cleanup:
 
-    // Clean-up
-    cleanup:
-
-        (void) destroy_meshStruct(&surfaceMesh);
-
-        if (dataOutMatrix != NULL) {
-            for (i = 0; i < numOutVariable; i++) {
-                if (dataOutMatrix[i] != NULL)  EG_free(dataOutMatrix[i]);
-            }
+    if (dataOutMatrix != NULL) {
+        for (i = 0; i < numOutVariable; i++) {
+          AIM_FREE(dataOutMatrix[i]);
         }
+    }
 
-        if (dataOutMatrix != NULL) EG_free(dataOutMatrix);
-        if (dataOutFormat != NULL) EG_free(dataOutFormat);
-        if (dataConnectMatrix != NULL) EG_free(dataConnectMatrix);
+    AIM_FREE(dataOutMatrix);
+    AIM_FREE(filename);
+    AIM_FREE(boundNames);
+    AIM_FREE(globalOffset);
 
-        if (filename != NULL) EG_free(filename);
-
-        if (transferName != NULL) EG_free(transferName);
-
-        return status;
+    return status;
 
 }
 
@@ -573,22 +510,19 @@ int su2_marker(void *aimInfo, const char* iname, capsValue *aimInputs, FILE *fp,
     }
     fprintf(fp," )\n");
 
-    if (counter != nmarker) {
-        printf("********************************************\n");
-        printf("\n");
-        printf("ERROR: Could not find all '%s' names:\n\n", iname);
+    if (counter != nmarker || counter == 0) {
+        AIM_ERROR(aimInfo, "Could not find all '%s' names:\n", iname);
         marker = markerValue->vals.string;
         for (j = 0; j < nmarker; j++) {
-            printf("\t%s\n", marker);
+            AIM_ADDLINE(aimInfo, "\t%s", marker);
             marker += strlen(marker)+1;
         }
-        printf("\n");
+        AIM_ADDLINE(aimInfo, "");
 
-        printf("in the list of boundary condition names:\n\n");
+        AIM_ADDLINE(aimInfo, "in the list of boundary condition names:\n");
         for (i = 0; i < bcProps.numSurfaceProp ; i++)
-            printf("\t%s\n", bcProps.surfaceProp[i].name);
-        printf("\n");
-        printf("********************************************\n");
+          AIM_ADDLINE(aimInfo, "\t%s", bcProps.surfaceProp[i].name);
+        AIM_ADDLINE(aimInfo, "");
 
         status = CAPS_NOTFOUND;
     }

@@ -26,7 +26,7 @@ OBJSPython = nastranOP2Reader.o
 PYINC=-DHAVE_PYTHON -I$(PYTHONINC)
 endif
 
-default: $(LDIR)/libutils.a $(IDIR)/meshTypes.h
+default: $(LDIR)/libutils.a $(IDIR)/meshTypes.h $(IDIR)/miscTypes.h
 
 
 $(LDIR)/libutils.a:	$(OBJS) $(OBJSPython) $(OBJSP)
@@ -44,6 +44,11 @@ $(IDIR)/meshTypes.h: meshTypes.h
 	touch $(IDIR)/meshTypes.h
 	rm $(IDIR)/meshTypes.h
 	cp -p meshTypes.h $(IDIR)/meshTypes.h
+
+$(IDIR)/miscTypes.h: miscTypes.h
+	touch $(IDIR)/miscTypes.h
+	rm $(IDIR)/miscTypes.h
+	cp -p miscTypes.h $(IDIR)/miscTypes.h
 
 LINT_FLAGS=-uniondef -exportlocal -nullpass -retvalother -evalorder -nullderef \
            -initallelements -bufferoverflowhigh -boolops -dependenttrans -kepttrans -immediatetrans

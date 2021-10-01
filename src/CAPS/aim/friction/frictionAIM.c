@@ -63,13 +63,10 @@ enum aimOutputs
  *
  *
  * Upon running preAnalysis the AIM generates a single file, "frictionInput.txt" which contains the input
- * information and control sequence for FRICTION to execute.
+ * information and control sequence for FRICTION to execute (see \ref frictionModification).
  * To populate output data the AIM expects a file, "frictionOutput.txt", to exist after running FRICTION.
- * An example execution for FRICTION looks like (Linux and OSX executable being used - see \ref frictionModification):
+ * The FRICTION AIM can automatically execute FRICTION, with details provided in \ref aimExecuteFRICTION.
  *
- * \code{.sh}
- * friction frictionInput.txt frictionOutput.txt
- * \endcode
  *
  * \section frictionModification FRICTION Modifications
  * While FRICTION is available from,
@@ -608,7 +605,7 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
 
             if (atype != ATTRSTRING) {
 
-                printf("capsType should be followed by a single string!\n");
+                printf("capsType should be a single string!\n");
                 status = EGADS_ATTRERR;
                 goto cleanup;
             }
@@ -1068,11 +1065,63 @@ cleanup:
 
 
 // ********************** AIM Function Break *****************************
+int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+               int *state)
+{
+  /*! \page aimExecuteFRICTION AIM Execution
+   *
+   * If auto execution is enabled when creating an FRICTION AIM,
+   * the AIM will execute FRICTION just-in-time with the command line:
+   *
+   * \code{.sh}
+   * friction frictionInput.txt frictionOutput.txt > Info.out
+   * \endcode
+   *
+   * where preAnalysis generated the file "frictionInput.txt" which contains the input information.
+   *
+   * The analysis can be also be explicitly executed with caps_execute in the C-API
+   * or via Analysis.runAnalysis in the pyCAPS API.
+   *
+   * Calling preAnalysis and postAnalysis is NOT allowed when auto execution is enabled.
+   *
+   * Auto execution can also be disabled when creating an FRICTION AIM object.
+   * In this mode, caps_execute and Analysis.runAnalysis can be used to run the analysis,
+   * or FRICTION can be executed by calling preAnalysis, system call, and posAnalysis as demonstrated
+   * below with a pyCAPS example:
+   *
+   * \code{.py}
+   * print ("\n\preAnalysis......")
+   * friction.preAnalysis()
+   *
+   * print ("\n\nRunning......")
+   * currentDirectory = os.getcwd() # Get our current working directory
+   *
+   * os.chdir(friction.analysisDir) # Move into test directory
+   * os.system("friction frictionInput.txt frictionOutput.txt > Info.out"); # Run via system call
+   *
+   * os.chdir(currentDirectory) # Move back to top directory
+   *
+   * print ("\n\postAnalysis......")
+   * friction.postAnalysis()
+   * \endcode
+   */
 
-/* no longer optional and needed for restart */
-int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+  *state = 0;
+  return aim_system(aimInfo, NULL,
+                    "friction frictionInput.txt frictionOutput.txt > Info.out");
+}
+
+
+// ********************** AIM Function Break *****************************
+int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                     /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
 {
+  // check the friction output file
+  if (aim_isFile(aimInfo, "frictionOutput.txt") != CAPS_SUCCESS) {
+    AIM_ERROR(aimInfo, "friction execution did not produce frictionOutput.txt");
+    return CAPS_EXECERR;
+  }
+
   return CAPS_SUCCESS;
 }
 

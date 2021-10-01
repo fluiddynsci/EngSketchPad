@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['xfoil_20aim_20example_110',['xFoil AIM Example',['../../aim/xfoil/xfoilExample.html',1,'']]],
-  ['xyz_111',['xyz',['../../pyCAPShtml/classpy_c_a_p_s_1_1problem_1_1_data_set.html#a2ca2c2950af21a3b94c96ea9c6e20261',1,'pyCAPS::problem::DataSet']]]
+  ['writeparameters_112',['writeParameters',['../../pyCAPShtml/classpy_c_a_p_s_1_1problem_1_1_problem_geometry.html#a72be82bb153d49f5b8eb852f09ed8b90',1,'pyCAPS::problem::ProblemGeometry']]],
+  ['writetecplot_113',['writeTecplot',['../../pyCAPShtml/classpy_c_a_p_s_1_1problem_1_1_data_set.html#a3b6ac2bd4a3da556b2100b41858d8eef',1,'pyCAPS::problem::DataSet']]]
 ];

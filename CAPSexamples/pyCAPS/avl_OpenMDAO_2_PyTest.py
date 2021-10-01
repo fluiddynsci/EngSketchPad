@@ -8,13 +8,13 @@ from openmdao.api import Problem, Group, IndepVarComp, ExplicitComponent, ScipyO
 import argparse
 
 # Setup and read command line options. Please note that this isn't required for pyCAPS
-parser = argparse.ArgumentParser(description = 'Avl and OpenMDAP 1 PyTest Example',
-                                 prog = 'avl_OpenMDAO_1_PyTest',
+parser = argparse.ArgumentParser(description = 'Avl and OpenMDAO v2 PyTest Example',
+                                 prog = 'avl_OpenMDAO_2_PyTest',
                                  formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -25,11 +25,12 @@ print("Loading file into our Problem")
 geometryScript = os.path.join("..","csmData","avlWing.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AVL aim
 myAnalysis = myProblem.analysis.create(aim = "avlAIM",
-                                       name = "avl")
+                                       name = "avl",
+                                       autoExec = False)
 
 # Setup AVL surfaces
 wing = {"groupName"         : "Wing", # Notice Wing is the value for the capsGroup attribute

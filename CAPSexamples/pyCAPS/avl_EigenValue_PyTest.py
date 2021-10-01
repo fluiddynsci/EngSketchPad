@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(description = 'AVL Eigen Value Pytest Example',
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = [""], nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # -----------------------------------------------------------------
@@ -30,7 +30,7 @@ slug = pyCAPS.Unit("slug")
 # -----------------------------------------------------------------
 problemName = str(args.workDir[0]) + "AVLEigenTest"
 geometryScript = os.path.join("..","csmData","avlWing.csm")
-myProblem = pyCAPS.Problem(problemName, capsFile=geometryScript, outLevel=args.verbosity)
+myProblem = pyCAPS.Problem(problemName, capsFile=geometryScript, outLevel=args.outLevel)
 
 # -----------------------------------------------------------------
 # Change a design parameter - area in the geometry
@@ -80,29 +80,8 @@ myAnalysis.input.Density  = 0.002378 * slug/ft**3
 myAnalysis.input.Velocity = 64.5396 * ft/s
 
 # -----------------------------------------------------------------
-# Run AIM pre-analysis
-# -----------------------------------------------------------------
-myAnalysis.preAnalysis()
-
-# -----------------------------------------------------------------
-# Run AVL
-# -----------------------------------------------------------------
-print ("Running AVL")
-currentDirectory = os.getcwd() # Get our current working directory
-os.chdir(myAnalysis.analysisDir) # Move into test directory
-
-os.system("avl caps < avlInput.txt > avlOutput.txt");
-
-os.chdir(currentDirectory) # Move back to working directory
-
-# -----------------------------------------------------------------
-# Run AIM post-analysis
-# -----------------------------------------------------------------
-myAnalysis.postAnalysis()
-
-# -----------------------------------------------------------------
 # Get Output Data from AVL
-# These calls access aimOutput data
+# These calls automatically run avl and access aimOutput data
 # -----------------------------------------------------------------
 
 EigenValues = myAnalysis.output.EigenValues

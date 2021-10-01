@@ -92,6 +92,7 @@ aim_Execute(aimContext cntxt,
             void       *aimStruc,       /* the AIM context */
             int        *state);         /* the state of the execution */
 
+#ifdef ASYNCEXEC
 /* check the analysis execution */
 extern int
 aim_Check(aimContext cntxt,
@@ -99,6 +100,7 @@ aim_Check(aimContext cntxt,
 /*@null@*/void       *instStore,        /* instance storage */
           void       *aimStruc,         /* the AIM context */
           int        *state);           /* the state of the execution */
+#endif
 
 /* output information for the AIM */
 extern int

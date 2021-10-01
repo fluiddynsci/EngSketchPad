@@ -5,6 +5,11 @@ import glob
 import shutil
 import math
 
+try:
+    import numpy
+except ImportError:
+    numpy = None
+
 from sys import version_info as pyVersion
 
 import pyCAPS
@@ -69,7 +74,7 @@ class TestGeometry(unittest.TestCase):
         myGeometry = self.myProblem.geometry
 
         # Get the names of all OpenCSM des/cfg/out pmtr in unitGeom.csm
-        self.assertEqual(sorted(myGeometry.despmtr.keys()), sorted(['wing:dihedral', 'taper', 'wing:lesweep', 'despMat', 'despRow', 'despCol', 'area', 'twist', 'aspect', 'v@1:d_name', 'sphereR']))
+        self.assertEqual(sorted(myGeometry.despmtr.keys()), sorted(['wing:dihedral', 'taper', 'wing:lesweep', 'wing:chord:root', 'despMat', 'despRow', 'despCol', 'area', 'twist', 'aspect', 'v@1:d_name', 'htail', 'htail:chord', 'vtail', 'vtail:chord', 'sphereR']))
         self.assertEqual(sorted(myGeometry.cfgpmtr.keys()), sorted(['VIEW:CFD', 'nrow', 'ncol', 'series2', 'series']))
         self.assertEqual(sorted(myGeometry.conpmtr.keys()), sorted(['nConst']))
         self.assertEqual(sorted(myGeometry.outpmtr.keys()), sorted(['dummyRow', 'dummyRow3', 'dummyRow2', 'span', 'cmean', 'dummyCol', 'dummyMat', 'sphereVol']))
@@ -119,22 +124,42 @@ class TestGeometry(unittest.TestCase):
 
         myGeometry.despmtr.wing.lesweep = 10
         self.assertEqual(10, myGeometry.despmtr.wing.lesweep)
-        self.assertEqual(sorted(myGeometry.despmtr.wing.keys()), sorted(['lesweep', 'dihedral']))
+        self.assertEqual(sorted(myGeometry.despmtr.wing.keys()), sorted(['lesweep', 'dihedral', 'chord:root']))
 
         self.myGeometry.despmtr.wing.lesweep = 20.0
         self.assertEqual(self.myGeometry.despmtr.wing.lesweep, 20.0)
-        
+
         self.myGeometry.despmtr.wing.lesweep = [30.0]
         self.assertEqual(self.myGeometry.despmtr.wing.lesweep, 30.0)
 
         self.myGeometry.despmtr.wing.lesweep = [[40.0]]
         self.assertEqual(self.myGeometry.despmtr.wing.lesweep, 40.0)
 
+        myGeometry.despmtr["wing:chord:root"].value = 1.5
+        self.assertEqual( 1.5, myGeometry.despmtr["wing:chord:root"].value)
+        self.assertEqual( 1.5, myGeometry.despmtr["wing"]["chord:root"].value)
+        self.assertEqual( 1.5, myGeometry.despmtr["wing"]["chord"]["root"].value)
+        self.assertEqual( 1.5, myGeometry.despmtr["wing"]["chord"].root)
+        self.assertEqual( 1.5, myGeometry.despmtr["wing"].chord.root)
+        self.assertEqual( 1.5, myGeometry.despmtr.wing.chord.root)
+
+        myGeometry.despmtr["htail"].value = 2
+        myGeometry.despmtr["htail:chord"].value = 3
+        self.assertEqual( 2, myGeometry.despmtr["htail"].value)
+        self.assertEqual( 2, myGeometry.despmtr.htail)
+        self.assertEqual( 3, myGeometry.despmtr["htail:chord"].value)
+
+        myGeometry.despmtr["vtail"].value = 4
+        myGeometry.despmtr["vtail:chord"].value = 5
+        self.assertEqual( 4, myGeometry.despmtr["vtail"].value)
+        self.assertEqual( 4, myGeometry.despmtr.vtail)
+        self.assertEqual( 5, myGeometry.despmtr["vtail:chord"].value)
+
         self.myGeometry.cfgpmtr.VIEW.CFD = False
         self.assertEqual(self.myGeometry.cfgpmtr.VIEW.CFD, 0)
         self.myGeometry.cfgpmtr.VIEW.CFD = True
         self.assertEqual(self.myGeometry.cfgpmtr.VIEW.CFD, 1)
-        
+
 
         self.assertEqual(8412, myGeometry.cfgpmtr.series)
         myGeometry.cfgpmtr.series = 2424
@@ -147,6 +172,12 @@ class TestGeometry(unittest.TestCase):
         # cannot set non-existing des/cfg pmtr
         with self.assertRaises(AttributeError):
             myGeometry.cfgpmtr.series3 = 1212
+
+
+        self.assertEqual(10, myGeometry.conpmtr.nConst)
+        # cannot set conpmtr
+        with self.assertRaises(pyCAPS.CAPSError):
+            myGeometry.conpmtr.nConst = 10
 
         # compute some outpmtr values consistent with equations in unitGeom.csm
         aspect = myGeometry.despmtr.aspect
@@ -193,49 +224,99 @@ class TestGeometry(unittest.TestCase):
         myGeometry.despmtr.despMat[0] = [2., 3.]
         self.assertEqual(myGeometry.despmtr.despMat, [[12.0, 13.0], [13.0, 14.0], [30.0, 32.0]])
 
-        myGeometry.despmtr.despCol = [10.,11.,12.]
+        myGeometry.despmtr.despCol = [[10.],[11.],[12.]]
         self.assertEqual(myGeometry.despmtr.despCol, [10.,11.,12.])
 
         myGeometry.despmtr.despRow = [11.,12.,13.]
         self.assertEqual(myGeometry.despmtr.despRow, [11.,12.,13.])
 
         self.assertEqual(myGeometry.outpmtr.dummyRow ,[1,2,3])
-        self.assertEqual(myGeometry.outpmtr.dummyRow2,[1,2,2])
+        self.assertEqual(myGeometry.outpmtr.dummyRow2,[1,2,None])
         self.assertEqual(myGeometry.outpmtr.dummyRow3,[2,3,1,1,1])
         self.assertEqual(myGeometry.outpmtr.dummyCol ,[3,2,1])
         self.assertEqual(myGeometry.outpmtr.dummyMat ,[[1,2],[3,4],[5,6]])
+
+        # Test None values in matrix
+        myGeometry.despmtr.despMat = [[None, None], [None, 14.0], [15.0, None]]
+        self.assertEqual(myGeometry.despmtr.despMat, [[None, None], [None, 14.0], [15.0, None]])
+        myGeometry.despmtr.despMat = [[11.0, 12.0], [13.0, 14.0], [15.0, 16.0]]
+        self.assertEqual(myGeometry.despmtr.despMat, [[11.0, 12.0], [13.0, 14.0], [15.0, 16.0]])
 
         # Get just the names of the output values
         valueList = self.myGeometry.outpmtr.keys()
         self.assertEqual("cmean" in valueList, True)
 
 #==============================================================================
+    # Test geometry values with numpy
+    @unittest.skipIf(numpy is None, "numpy not installed")
+    def test_numpy(self):
+
+        myGeometry = self.myProblem.geometry
+
+        myGeometry.cfgpmtr.series = numpy.int32(2425)
+        self.assertEqual(2425, myGeometry.cfgpmtr.series)
+
+        myGeometry.cfgpmtr.series = numpy.int64(2426)
+        self.assertEqual(2426, myGeometry.cfgpmtr.series)
+
+        myGeometry.cfgpmtr.series = numpy.float32(2427)
+        self.assertEqual(2427, myGeometry.cfgpmtr.series)
+
+        myGeometry.cfgpmtr.series = numpy.float64(2428)
+        self.assertEqual(2428, myGeometry.cfgpmtr.series)
+
+        myGeometry.despmtr.despMat = numpy.array([[11.0, 12.0], [13.0, 14.0], [30.0, 32.0]], numpy.float32)
+        self.assertEqual(myGeometry.despmtr.despMat, [[11.0, 12.0], [13.0, 14.0], [30.0, 32.0]])
+
+        myGeometry.despmtr.despMat = numpy.array([(12.0, 13.0), (13.0, 14.0), (30.0, 32.0)], numpy.float64)
+        self.assertEqual(myGeometry.despmtr.despMat, [[12.0, 13.0], [13.0, 14.0], [30.0, 32.0]])
+
+        # Modyifying temporay variable does not change the value
+        myGeometry.despmtr.despMat[0] = numpy.array([2., 3.], numpy.float32)
+        self.assertEqual(myGeometry.despmtr.despMat, [[12.0, 13.0], [13.0, 14.0], [30.0, 32.0]])
+
+        myGeometry.despmtr.despCol = numpy.array([[10],[11],[12]], numpy.int32)
+        self.assertEqual(myGeometry.despmtr.despCol, [10.,11.,12.])
+
+        myGeometry.despmtr.despRow = numpy.array([11,12,13], numpy.int64)
+        self.assertEqual(myGeometry.despmtr.despRow, [11.,12.,13.])
+
+#==============================================================================
     # Retrieve geometry attributes
     def test_matShapeChange(self):
 
         myGeometry = self.myProblem.geometry
-        
+
+        #---------
         self.assertEqual(myGeometry.cfgpmtr.nrow, 3)
         self.assertEqual(myGeometry.cfgpmtr.ncol, 2)
         myGeometry.despmtr.despMat = [[11.,12.],
                                       [13.,14.],
                                       [15.,16.]]
- 
+
         self.assertEqual(myGeometry.despmtr.despMat, [[11.,12.],
                                                       [13.,14.],
                                                       [15.,16.]])
- 
-        myGeometry.cfgpmtr.nrow = 4
-        self.assertEqual(myGeometry.cfgpmtr.nrow, 4)
+
+        #---------
+        myGeometry.cfgpmtr.nrow = 5
+        self.assertEqual(myGeometry.cfgpmtr.nrow, 5)
         myGeometry.despmtr.despMat = [[11.,12.],
                                       [13.,14.],
                                       [15.,16.],
-                                      [17.,18.]]
+                                      [17.,18.],
+                                      [19.,20.]]
         self.assertEqual(myGeometry.despmtr.despMat, [[11.,12.],
                                                       [13.,14.],
                                                       [15.,16.],
-                                                      [17.,18.]])
+                                                      [17.,18.],
+                                                      [19.,20.]])
+        myGeometry.despmtr.despCol = [11.,12.,13.,14.,15.]
+        self.assertEqual(myGeometry.despmtr.despCol, [11.,12.,13.,14.,15.])
+        myGeometry.despmtr.despRow = [11.,12.,13.,14.,15.]
+        self.assertEqual(myGeometry.despmtr.despRow, [11.,12.,13.,14.,15.])
 
+        #---------
         myGeometry.cfgpmtr.nrow = 1
         myGeometry.cfgpmtr.ncol = 2
         self.assertEqual(myGeometry.cfgpmtr.nrow, 1)
@@ -244,6 +325,12 @@ class TestGeometry(unittest.TestCase):
         myGeometry.despmtr.despMat = [13.,14.]
         self.assertEqual(myGeometry.despmtr.despMat, [13.,14.])
 
+        myGeometry.despmtr.despCol = 11.
+        self.assertEqual(myGeometry.despmtr.despCol, 11.)
+        myGeometry.despmtr.despRow = 11.
+        self.assertEqual(myGeometry.despmtr.despRow, 11.)
+
+        #---------
         myGeometry.cfgpmtr.nrow = 2
         myGeometry.cfgpmtr.ncol = 1
         self.assertEqual(myGeometry.cfgpmtr.nrow, 2)
@@ -252,6 +339,12 @@ class TestGeometry(unittest.TestCase):
         myGeometry.despmtr.despMat = [11.,12.]
         self.assertEqual(myGeometry.despmtr.despMat, [11.,12.])
 
+        myGeometry.despmtr.despCol = [11.,12.]
+        self.assertEqual(myGeometry.despmtr.despCol, [11.,12.])
+        myGeometry.despmtr.despRow = [11.,12.]
+        self.assertEqual(myGeometry.despmtr.despRow, [11.,12.])
+
+        #---------
         myGeometry.cfgpmtr.nrow = 3
         myGeometry.cfgpmtr.ncol = 2
         self.assertEqual(myGeometry.cfgpmtr.nrow, 3)
@@ -259,7 +352,9 @@ class TestGeometry(unittest.TestCase):
         self.assertEqual(myGeometry.despmtr.despMat, [[11.,12.],
                                                       [12.,12.],
                                                       [12.,12.]])
- 
+        self.assertEqual(myGeometry.despmtr.despCol, [11.,12.,12.])
+        self.assertEqual(myGeometry.despmtr.despRow, [11.,12.,12.])
+
 
 #==============================================================================
     # Retrieve geometry attributes
@@ -283,10 +378,10 @@ class TestGeometry(unittest.TestCase):
         # Check CSYSTEM attribute on body
         attributeList = problem.geometry.attrList("leftWingSkin", attrLevel="Body")
         self.assertEqual(len(attributeList), 1)
-        
+
         attributeList = attributeList[0] # Only want the first element
         self.assertIsInstance(attributeList, egads.csystem)
-        
+
         self.assertEqual(len(attributeList), 9)
 
         leftWingSkin = [ 3.77246051677845,  0               ,  0.004591314188236,
@@ -405,6 +500,10 @@ class TestGeometry(unittest.TestCase):
 
         bodies, units = self.myGeometry.bodies()
 
+        for key in bodies:
+            self.assertIsInstance(bodies[key], egads.ego)
+        self.assertEqual(units, pyCAPS.Unit("ft"))
+
         self.assertEqual(sorted(bodies.keys()), sorted(["Farfield", "Wing1", "Wing2"]))
 
         boundingBox = {}
@@ -466,7 +565,7 @@ class TestGeometry(unittest.TestCase):
 
             aspect = problem.geometry.despmtr.aspect
             area   = problem.geometry.despmtr.area
-            
+
             cmean            = (area/aspect)**0.5
             cmean_areaTrue   = 0.5/cmean * 1/aspect
             cmean_aspectTrue = 0.5/cmean * -area/aspect**2
@@ -477,7 +576,7 @@ class TestGeometry(unittest.TestCase):
 
             self.assertAlmostEqual(cmean_areaTrue  , cmean_area  , 5)
             self.assertAlmostEqual(cmean_aspectTrue, cmean_aspect, 5)
-            
+
         for fac in [1.1, 1.2]:
             problem.geometry.despmtr.area *= fac
 
@@ -492,7 +591,41 @@ class TestGeometry(unittest.TestCase):
         sphereVol_sphereR = problem.geometry.outpmtr["sphereVol"].deriv("sphereR")
 
         #self.assertAlmostEqual(sphereVol    , problem.geometry.outpmtr.sphereVol, 3)
-        #self.assertAlmostEqual(0.94, sphereVol_sphereRTrue/sphereVol_sphereR, 2)
+        #self.assertAlmostEqual(0.94, sphereVol_sphereR/sphereVol_sphereRTrue, 2)
+
+
+#==============================================================================
+    # Test value derivatives bug in OpenCSM. Remove this whenthe bug is fixed.
+    def off_test_deriv2(self):
+
+        problem1 = pyCAPS.Problem(self.problemName+str(self.iProb), capsFile="sup.csm", outLevel=0); self.__class__.iProb += 1
+
+        inlet = problem1.geometry
+
+        inlet.despmtr['dp_r'].value = 3.0
+        inlet.despmtr['dp_n'].value = 1.5
+
+        #self.assertAlmostEqual(inlet.outpmtr["volume"].value, 149.23536335509598, 2)
+
+        #self.assertAlmostEqual(inlet.outpmtr["volume"].deriv('dp_r'), 81.59984899433215, 2)
+        #self.assertAlmostEqual(inlet.outpmtr["volume"].deriv('dp_n'), 47.63136146266333, 2)
+
+        #self.assertAlmostEqual(inlet.outpmtr["volume"].deriv('dp_n'), 47.63136146266333, 2)
+        #self.assertAlmostEqual(inlet.outpmtr["volume"].deriv('dp_r'), 81.59984899433215, 2)
+
+
+        problem2 = pyCAPS.Problem(self.problemName+str(self.iProb), capsFile="sup.csm", outLevel=0); self.__class__.iProb += 1
+
+        inlet = problem2.geometry
+
+        inlet.despmtr['dp_r'].value = 3.0
+        inlet.despmtr['dp_n'].value = 1.5
+
+        self.assertAlmostEqual(inlet.outpmtr["volume"].deriv('dp_n'), 47.63136146266333, 2)
+        self.assertAlmostEqual(inlet.outpmtr["volume"].deriv('dp_r'), 82.20855787328674, 2)
+
+        self.assertAlmostEqual(inlet.outpmtr["volume"].deriv('dp_r'), 82.20855787328674, 2)
+        self.assertAlmostEqual(inlet.outpmtr["volume"].deriv('dp_n'), 47.63136146266333, 2)
 
 if __name__ == '__main__':
     unittest.main()

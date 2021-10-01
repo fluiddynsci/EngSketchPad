@@ -47,10 +47,11 @@
 __PROTO_H_AND_D__ int  EG_importModel( egObject *context, const size_t nbytes,
                                        const char *stream, egObject **model );
 __PROTO_H_AND_D__ int  EG_exactInit( );
+__PROTO_H_AND_D__ void uvmap_struct_free( void *uvmap );
 
 
 static const char *EGADSprop[2] = {STR(EGADSPROP),
-                  "\nEGADSprop: Copyright 2011-2019 MIT. All Rights Reserved."};
+                  "\nEGADSprop: Copyright 2011-2021 MIT. All Rights Reserved."};
 
 
 #ifndef __CUDA_ARCH__
@@ -91,27 +92,110 @@ EG_revision(int *major, int *minor, const char **OCCrev)
 __HOST_AND_DEVICE__ static int
 EG_freeBlind(egObject *object)
 {
+  int          i, j, k;
   liteGeometry *lgeom;
   liteLoop     *lloop;
   liteFace     *lface;
   liteShell    *lshell;
   liteBody     *lbody;
   liteModel    *lmodel;
+  egTessel     *tess;
+  egEBody      *ebody;
+  egEShell     *eshell;
+  egEFace      *eface;
+  egELoop      *eloop;
+  egEEdge      *eedge;
   egObject     object_, *object_h = &object_;
 
-  if  (object == NULL)                 return EGADS_NULLOBJ;
+  if (object == NULL)                 return EGADS_NULLOBJ;
   EG_GET_OBJECT(object_h, object);
-  if  (object_h->magicnumber != MAGIC) return EGADS_NOTOBJ;
-  if ((object_h->oclass < PCURVE) ||
-      (object_h->oclass > MODEL))      return EGADS_NOTTOPO;
-  if (object_h->blind == NULL)         return EGADS_SUCCESS;
+  if (object_h->magicnumber != MAGIC) return EGADS_NOTOBJ;
   
+  if (object_h->oclass == TESSELLATION) {
+    tess = (egTessel *) object_h->blind;
+    if (tess != NULL) {
+      egTessel tess_, *tess_h = &tess_;
+      EG_GET_TESSEL(tess_h, tess);
+      if (tess_h->xyzs != NULL) EG_FREE(tess_h->xyzs);
+      if (tess_h->tess1d != NULL) {
+        egTess1D tess1d_, *tess1d_h = &tess1d_;
+        for (i = 0; i < tess_h->nEdge; i++) {
+          EG_GET_TESS1D(tess1d_h, &(tess_h->tess1d[i]));
+          if (tess1d_.faces[0].faces != NULL)
+            EG_FREE(tess1d_.faces[0].faces);
+          if (tess1d_.faces[1].faces != NULL)
+            EG_FREE(tess1d_.faces[1].faces);
+          if (tess1d_.faces[0].tric  != NULL)
+            EG_FREE(tess1d_.faces[0].tric);
+          if (tess1d_.faces[1].tric  != NULL)
+            EG_FREE(tess1d_.faces[1].tric);
+          if (tess1d_.xyz    != NULL)
+            EG_FREE(tess1d_.xyz);
+          if (tess1d_.t      != NULL)
+            EG_FREE(tess1d_.t);
+          if (tess1d_.global != NULL)
+            EG_FREE(tess1d_.global);
+        }
+        EG_FREE(tess_h->tess1d);
+      }
+      if (tess_h->tess2d != NULL) {
+        egTess2D tess2d_, *tess2d_h = &tess2d_;
+        for (i = 0; i < 2*tess_h->nFace; i++) {
+          EG_GET_TESS2D(tess2d_h, &(tess_h->tess2d[i]));
+          if (tess2d_.mKnots != NULL)
+            EG_deleteObject(tess2d_.mKnots);
+          if (tess2d_.xyz    != NULL)
+            EG_FREE(tess2d_.xyz);
+          if (tess2d_.uv     != NULL)
+            EG_FREE(tess2d_.uv);
+          if (tess2d_.global != NULL)
+            EG_FREE(tess2d_.global);
+          if (tess2d_.ptype  != NULL)
+            EG_FREE(tess2d_.ptype);
+          if (tess2d_.pindex != NULL)
+            EG_FREE(tess2d_.pindex);
+          if (tess2d_.bary   != NULL)
+            EG_FREE(tess2d_.bary);
+          if (tess2d_.frame != NULL)
+            EG_FREE(tess2d_.frame);
+          if (tess2d_.frlps != NULL)
+            EG_FREE(tess2d_.frlps);
+          if (tess2d_.tris   != NULL)
+            EG_FREE(tess2d_.tris);
+          if (tess2d_.tric   != NULL)
+            EG_FREE(tess2d_.tric);
+          if (tess2d_.patch  != NULL) {
+            egPatch  patch_, *patch_h = &patch_;
+            for (j = 0; j < tess2d_.npatch; j++) {
+              EG_GET_PATCH(patch_h, &(tess2d_.patch[j]));
+              if (patch_.ipts != NULL)
+                EG_FREE(patch_.ipts);
+              if (patch_.bounds != NULL)
+                EG_FREE(patch_.bounds);
+            }
+            EG_FREE(tess2d_.patch);
+          }
+        }
+        EG_FREE(tess_h->tess2d);
+      }
+      if (tess_h->globals != NULL) EG_FREE(tess_h->globals);
+    }
+    EG_FREE(object_h->blind);
+    object_h->blind = NULL;
+    EG_SET_OBJECT(&object, object_h);
+    return EGADS_SUCCESS;
+  }
+
+  if (object_h->oclass < PCURVE)      return EGADS_NOTTOPO;
+  if (object_h->blind == NULL)        return EGADS_SUCCESS;
   if (object_h->oclass <= SURFACE) {
     liteGeometry lgeom_, *lgeom_h = &lgeom_;
     lgeom = (liteGeometry *) object_h->blind;
     EG_GET_GEOM(lgeom_h, lgeom);
     if (lgeom_h->header != NULL) EG_FREE(lgeom_h->header);
     EG_FREE(lgeom_h->data);
+  } else if ((object_h->oclass == NODE) || (object_h->oclass == EDGE)) {
+    /* nothing to remove! */
   } else if (object_h->oclass == LOOP) {
     liteLoop lloop_, *lloop_h = &lloop_;
     lloop = (liteLoop *) object_h->blind;
@@ -147,6 +231,53 @@ EG_freeBlind(egObject *object)
     lmodel = (liteModel *) object_h->blind;
     EG_GET_MODEL(lmodel_h, lmodel);
     EG_FREE(lmodel_h->bodies);
+    
+  /***** needs attention for CUDA *****/
+  } else if (object_h->oclass == EEDGE) {
+    eedge = (egEEdge *) object_h->blind;
+    if (eedge->segs != NULL) EG_free(eedge->segs);
+  } else if (object_h->oclass == ELOOPX) {
+    eloop = (egELoop *) object_h->blind;
+    if (eloop->edgeUVs != NULL) {
+      for (k = 0; k < eloop->nedge; k++) EG_free(eloop->edgeUVs[k].iuv);
+      EG_free(eloop->edgeUVs);
+    }
+    EG_free(eloop->eedges.objs);
+    EG_free(eloop->senses);
+  } else if (object_h->oclass == EFACE) {
+    eface = (egEFace *) object_h->blind;
+    if (eface->trmap   != NULL) EG_free(eface->trmap);
+    if (eface->uvmap   != NULL) uvmap_struct_free(eface->uvmap);
+    if (eface->patches != NULL) {
+      for (j = 0; j < eface->npatch; j++) {
+        EG_free(eface->patches[j].uvtric);
+        EG_free(eface->patches[j].uvtris);
+        EG_free(eface->patches[j].uvs);
+        EG_free(eface->patches[j].deflect);
+      }
+      EG_free(eface->patches);
+    }
+    EG_free(eface->eloops.objs);
+    if (eface->senses != NULL) EG_free(eface->senses);
+  } else if (object_h->oclass == ESHELL) {
+    eshell = (egEShell *) object_h->blind;
+    EG_free(eshell->efaces.objs);
+  } else if (object_h->oclass == EBODY) {
+    ebody = (egEBody *) object_h->blind;
+    if (ebody->edges != NULL) {
+      for (i = 0; i < ebody->nedge; i++)
+        EG_free(ebody->edges[i].ts);
+      EG_free(ebody->edges);
+    }
+    if (ebody->eedges.objs  != NULL) EG_free(ebody->eedges.objs);
+    if (ebody->eloops.objs  != NULL) EG_free(ebody->eloops.objs);
+    if (ebody->efaces.objs  != NULL) EG_free(ebody->efaces.objs);
+    if (ebody->eshells.objs != NULL) EG_free(ebody->eshells.objs);
+    if (ebody->senses       != NULL) EG_free(ebody->senses);
+  /***** ************************ *****/
+
+  } else {
+    return EGADS_NOTTOPO;
   }
   
   EG_FREE(object_h->blind);
@@ -164,7 +295,7 @@ EG_makeObject(/*@null@*/ egObject *context, egObject **obj)
   egCntxt  cntx_, *cntx_h = &cntx_;
   egCntxt  *cntx;
   egObject context_, *context_h = &context_;
-  egObject object_, *object_h = &object_;
+  egObject object_,  *object_h  = &object_;
   
   if (context == NULL)                 return EGADS_NULLOBJ;
   EG_GET_OBJECT(context_h, context);
@@ -492,6 +623,7 @@ EG_deleteObject(egObject *object)
 
     context = EG_context(object);
     if (context == NULL)              return EGADS_NOTCNTX;
+    if (object->topObj != context)    return EGADS_TOPOCNT;
     EG_GET_OBJECT(context_h, context);
     cntx = (egCntxt *) context_h->blind;
     if (cntx == NULL)                 return EGADS_NODATA;
@@ -668,10 +800,13 @@ EG_close(egObject *context)
   while (obj != NULL) {
     EG_GET_OBJECT(obj_h, obj);
     next = obj_h->next;
-    if ((obj_h->oclass >= PCURVE) && (obj_h->oclass <= MODEL)) {
+    if (((obj_h->oclass >= PCURVE) && (obj_h->oclass <= MODEL)) ||
+        ((obj_h->oclass >= EEDGE)  && (obj_h->oclass <= EBODY)) ||
+         (obj_h->oclass == TESSELLATION)) {
       status = EG_freeBlind(obj);
       if (status != EGADS_SUCCESS)
-        printf(" EGADS Info: freeBlind = %d in Cleanup (EG_close)!\n", status);
+        printf(" EGADS Info: %d freeBlind = %d in Cleanup (EG_close)!\n",
+               obj_h->oclass, status);
     }
     attrs = (egAttrs *) obj_h->attrs;
     if (attrs != NULL) {

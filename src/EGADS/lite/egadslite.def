@@ -68,3 +68,7 @@ EG_setTessFace
 EG_localToGlobal
 EG_getGlobal
 EG_importModel
+EG_effectiveMap
+EG_effectiveEdgeList
+EG_effectiveTri
+EG_getTessEFace

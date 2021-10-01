@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description = 'AFLR4 and AFLR3 Pytest Example',
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Set analysis directory
@@ -24,7 +24,7 @@ workDir = os.path.join(str(args.workDir[0]), "AFLRAnalysisTest")
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript, 
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AFLR4 aim
 mySurfMesh = myProblem.analysis.create(aim = "aflr4AIM")
@@ -33,7 +33,7 @@ mySurfMesh = myProblem.analysis.create(aim = "aflr4AIM")
 mySurfMesh.input.Proj_Name = "pyCAPS_AFLR4_AFLR3"
 
 # Set AIM verbosity
-mySurfMesh.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+mySurfMesh.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set output grid format since a project name is being supplied - Tecplot  file
 mySurfMesh.input.Mesh_Format = "Tecplot"
@@ -45,15 +45,9 @@ mySurfMesh.input.ff_cdfr = 1.4
 mySurfMesh.input.max_scale = 0.6
 mySurfMesh.input.min_scale = 0.06
 
-# Run AIM pre-analysis
-mySurfMesh.preAnalysis()
-
 ######################################
-## AFRL4 was ran during preAnalysis ##
+## AFRL4 executes automatically     ##
 ######################################
-
-# Run AIM post-analysis
-mySurfMesh.postAnalysis()
 
 ######################################
 ## Build volume mesh off of surface ##
@@ -67,7 +61,7 @@ myVolMesh = myProblem.analysis.create(aim = "aflr3AIM")
 myVolMesh.input["Surface_Mesh"].link(mySurfMesh.output["Surface_Mesh"])
 
 # Set AIM verbosity
-myVolMesh.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+myVolMesh.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set project name - so a mesh file is generated
 myVolMesh.input.Proj_Name = "pyCAPS_AFLR4_AFLR3_VolMesh"
@@ -90,12 +84,5 @@ else:
     # Set mesh sizing parmeters
     myVolMesh.input.Mesh_Sizing = {"Wing1": viscousBC, "Wing2": inviscidBC}
 
-# Run AIM pre-analysis
-myVolMesh.preAnalysis()
-
-######################################
-## AFLR3 was ran during preAnalysis ##
-######################################
-
-# Run AIM post-analysis
-myVolMesh.postAnalysis()
+# Run AIM
+myVolMesh.runAnalysis()

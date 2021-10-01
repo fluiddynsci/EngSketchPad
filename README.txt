@@ -1,29 +1,36 @@
                         ESP: The Engineering Sketch Pad
-                             Rev 1.19 -- June 2021
+                          Rev 1.20b -- September 2021
 
 
-0. Warnings!
-
-    If you have been using previous Betas and writing EGADS files with
-    Effective Topology Bodies, you need to delete the files. The internals
-    of the Effective Topology data has changed.
+0. Preamble
 
     Windows 7 & 8 are no longer supported, only Windows 10 is tested. 
     This also means that older versions of MS Visual Studio are no longer 
-    being tested either. Only MSVS versions 2015 and up are fully supported.
+    being tested either. Only MSVS versions 2017 and up are fully supported.
 
     This ESP release no longer tests against Python 2.7. It should still
     work, but we strongly advise going to at least Python 3.7. Also, we
     now only support OpenCASCADE at Rev 7.3 or higher. And these must be
     the versions taken from the ESP website (and not from elsewhere). At
-    this point we recommend 7.4.1 and are testing 7.5.1.
+    this point we recommend 7.4.1 and are skipping 7.5 (waiting for 7.6).
 
-    Apple's OSX Catalina (10.15) and newer OSs may cause problems. You 
-    may not be able to download the distributions using a browser. For 
-    instructions on how to get ESP see OSXcatalina.txt on the website. Big 
-    Sur (11.x) has not been fully tested, but should work.  At the present 
-    we cannot natively support Apple M1 equipment, but plan to do so for our 
-    next ESP release.
+    The training material is no longer part of this distribution. The last
+    training was given for Rev 1.19 and can be found at the ESP website at
+    http://acdl.mit.edu/ESP/Training, which is in 2 parts. The first is on
+    ESP geometry construction and is found in the ESP subdirectory and the
+    second on analysis is found in the CAPS subdirectory. The PDFs and MP4s
+    of the lectures can be found in the (sub)subdirectory "lectures".
+    Please do not apply the overlays -- they are specifically for ESP 1.19.
+
+    Apple notes: 
+    (1) You CANNOT download the distributions using a browser. For 
+        instructions on how to get ESP see MACdownloads.txt on the web site.
+    (2) Big Sur (11.x) is now fully tested. 
+    (3) Apple M1 computers are natively supported but require Rosetta2 for 
+        the execution of some legacy CAPS apps. Rosetta2 can be installed by 
+        executing the following command: "softwareupdate --install-rosetta".
+    (4) M1 builds must be done in a "native" shell. That is, typing "arch"
+        must return "arm64".
 
 
 1. Prerequisites
@@ -42,9 +49,9 @@
     these include Mozilla's FireFox, Google Chrome and Apple's Safari. 
     Internet Explorer and legacy versions of Edge are NOT supported because 
     of a problem in their Websockets implementation. The "Chromium" version
-    of Microsoft Edge is now supported.   Also, note that there are some 
-    problems with Intel Graphics and some WebGL Browsers. For LINUX, "zlib"
-    development is required.
+    of Microsoft Edge is now supported. Also, note that there have been some
+    reports of problems with Intel Graphics and some WebGL Browsers. For 
+    LINUX, "zlib" development is required.
 
     CAPS has a dependency on UDUNITS2, and potentially on Python and other 
     applications. See Section 2.3.
@@ -76,25 +83,27 @@
 
 1.2.1 EGADS
 
-    The significant updates made to EGADS from Rev 1.18 are:
+    The significant updates made to EGADS from Rev 1.19 are:
 
-    1) Refactored documentation.
-    2) Effective (virtual) Topology support.
-    3) The ability to save Effective Bodies (EBody) and Tessellation Objects
-       in Model Objects and write them in EGADS files.
-    4) A native Python interface (pyEGADS) written using Python's ctypes 
-       module.
+    1) EGADSlite now supports Effective (virtual) Topology.
+    2) IGES I/O handles length units (like STEP).
+    3) pyEGADS: The tuple returned from egads.getTopology is now consistent 
+       with the arguments to egads.makeTopology. Existing scripts will need 
+       to be updated.
 
-    Note that at this time you cannot use Effective Bodies with EGADSlite.
-
-1.2.2 ESP
+1.2.2 OpenCSM & ESP
 
     In addition to many big fixes (see $ESP_ROOT/src/OpenCSMnotes.txt
-    for a full list), the significant upgrades are documented in
-    section 8.1 of ESP-help.html; bug fixes are documented in section
-    8.2 of the same document.
+    for a full list), the significant upgrades are documented in section 
+    8.1 of ESP-help.html; bug fixes are documented in section 8.2 of the 
+    same document.
 
-1.2.3 Known issues in v1.19:
+    The most notable change is a significant improvement in the speed, 
+    especially when recycling.  This was done by careful code 
+    optimization and by setting the _tParams attribute on a Body only
+    when a tessellation is done.
+
+1.2.3 Known issues in v1.20:
 
     Sensitivities for BLENDS with C0 are done by finite differences.
 
@@ -104,6 +113,7 @@
     2) pyCAPS has been rewritten using Python's ctypes module and the
        interface has been refactored.
     3) Formalized process for working with units in Python
+    4) Many AIMs can now auto-execute
 
 
 2. Building the Software
@@ -114,7 +124,7 @@
 
     If using Windows, skip to section 2.2.
 
-2.1 Linux and MAC OSX
+2.1 Linux and MAC OS
 
     The configuration is built using the path where the OpenCASCADE runtime 
     distribution can be found.  This path can be located in an OpenCASCADE 
@@ -129,19 +139,18 @@
     An optional second argument to makeEnv is required if the distribution 
     of OpenCASCADE has multiple architectures. In this case it is the 
     subdirectory name that contains the libraries for the build of interest 
-    (CASARCH).
+    (CASARCH). Apple M1 CPUs should indicate "DARWINM1" as the architecture.
 
     This procedure produces 2 files at the top level: ESPenv.sh and
-    ESPenv.csh.  These are the environments for both sh (bash) and csh 
-    (tcsh) respectively.  The appropriate file can be "source"d or 
-    included in the user's startup scripts. This must be done before either 
-    building and/or running the software. For example, if using the csh or 
-    tcsh:
+    ESPenv.csh.  These are the environments for both sh (bash/zsh) and csh 
+    (tcsh) respectively.  The appropriate file can be "source"d or included 
+    in the user's startup scripts. This must be done before either building 
+    and/or running the software. For example, if using the csh or tcsh:
 
         % cd $ESP_ROOT
         % source ESPenv.csh
 
-    or if using bash:
+    or if using bash/zsh:
 
         $ cd $ESP_ROOT
         $ source ESPenv.sh
@@ -156,13 +165,13 @@
     The configuration is built from the path where the OpenCASCADE runtime 
     distribution can be found. MS Visual Studio is required and a command 
     shell where the 64bit C/C++ compiler should be opened and the following 
-    executed in that window (note that MS VS 2015, 2017 and 2019 are all 
-    fully supported). The Windows environment is built simply by going to 
-    the config subdirectory and executing the script "winEnv" in a bash 
-    shell (run from the command window):
+    executed in that window (note that MS VS 2017 and 2019 are fully 
+    supported). The Windows environment is built simply by going to the 
+    config subdirectory and executing the script "winEnv" in a bash shell 
+    (run from the command window):
 
         C:\> cd %ESP_ROOT%\config
-        C:\> bash winEnv D:\OpenCASCADE7.3.1
+        C:\> bash winEnv D:\OpenCASCADE7.4.1
 
     winEnv (like makeEnv) has an optional second argument that is only 
     required if the distribution of OpenCASCADE has multiple architectures. 
@@ -219,8 +228,9 @@
 
     AFLR (See Section 4.1):
       AFLR      is the path where the AFLR distribution has been deposited
-      AFLR_ARCH is the architecture flag to use (MacOSX-x86-64, Linux-x86-64,
-                WIN64) -- note that this is set by the config procedure
+      AFLR_ARCH is the architecture flag to use (MacOSX-arm64, MacOSX-x86-64, 
+                Linux-x86-64 or WIN64) -- note that this is set by the config 
+                procedure
 
     AWAVE
       AWAVE is the location to find the FORTRAN source for AWAVE
@@ -400,7 +410,7 @@
 
 4.4 Cart3D
 
-    The interfaces to Cart3D will only work with V1.5.5.
+    The interfaces to Cart3D will only work with V1.5.5 and V1.5.7.
 
 4.5 Fun3D
 
@@ -414,12 +424,12 @@
     environment variable points to the Mystran bin directory.
 
     Mystran currently only functions on Windows if CAPS is compiled with 
-    MSVC 2015 or higher. This may be addressed in future releases. 
+    MSVC 2017 or higher. This may be addressed in future releases. 
 
 4.7 NASTRAN
 
     Nastran bdf files are only correct on Windows if CAPS is compiled with 
-    MSVC 2015 or higher. This may be addressed in future releases. 
+    MSVC 2017 or higher. This may be addressed in future releases. 
 
 4.8 Pointwise
 
@@ -432,7 +442,7 @@
 4.9 SU2
 
     Supported versions are: 4.1.1 (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) 
-    and 7.1.1 (Blackbird). SU2 version 6.0 will work except for the use of 
+    and 7.2.0 (Blackbird). SU2 version 6.0 will work except for the use of 
     displacements in a Fluid/Structure Interaction setting.
     
 4.10 xfoil

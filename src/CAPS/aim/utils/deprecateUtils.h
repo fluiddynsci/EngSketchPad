@@ -7,7 +7,8 @@
 #include "miscTypes.h"  // Bring in miscellanous structures
 
 // Change the from the use of capsGroup for mesh sizing to capsMesh
-int deprecate_SizingAttr(int numTuple,
+int deprecate_SizingAttr(void *aimInfo,
+                         int numTuple,
                          capsTuple meshBCTuple[],
                          mapAttrToIndexStruct *meshMap,
                          mapAttrToIndexStruct *groupMap);

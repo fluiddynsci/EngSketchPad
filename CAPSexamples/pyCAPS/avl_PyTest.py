@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description = 'AVL Pytest Example',
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # -----------------------------------------------------------------
@@ -32,7 +32,7 @@ workDir = os.path.join(str(args.workDir[0]), workDir)
 geometryScript = os.path.join("..","csmData","avlWing.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 myProblem.geometry.despmtr.area = 10.0
 ## [geometry]
@@ -61,35 +61,7 @@ wing = {"groupName"    : "Wing", # Notice Wing is the value for the capsGroup at
         "spaceSpan"    : 1.0}
 
 myAnalysis.input.AVL_Surface = {"Wing": wing}
-
 ## [setInputs]
-
-# -----------------------------------------------------------------
-# Run AIM pre-analysis
-# -----------------------------------------------------------------
-## [preAnalysis]
-myAnalysis.preAnalysis()
-## [preAnalysis]
-
-# -----------------------------------------------------------------
-# Run AVL
-# -----------------------------------------------------------------
-## [runAVL]
-print ("Running AVL")
-currentDirectory = os.getcwd() # Get our current working directory
-os.chdir(myAnalysis.analysisDir) # Move into test directory
-
-os.system("avl caps < avlInput.txt > avlOutput.txt");
-
-os.chdir(currentDirectory) # Move back to working directory
-## [runAVL]
-
-# -----------------------------------------------------------------
-# Run AIM post-analysis
-# -----------------------------------------------------------------
-## [postAnalysis]
-myAnalysis.postAnalysis()
-## [postAnalysis]
 
 # -----------------------------------------------------------------
 # Get Output Data from AVL

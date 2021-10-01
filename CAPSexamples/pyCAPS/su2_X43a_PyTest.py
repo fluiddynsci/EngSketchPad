@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description = 'SU2 X43a Pytest Example',
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -28,7 +28,7 @@ workDir = os.path.join(str(args.workDir[0]), "SU2X43aAnalysisTest")
 geometryScript = os.path.join("..","csmData","cfdX43a.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Change a design parameter - area in the geometry
 myProblem.geometry.despmtr.tailLength = 150
@@ -47,15 +47,9 @@ mySurfMesh.input.Tess_Params = [0.5, 0.1, 20.0]
 # Set output grid format since a project name is being supplied - Tecplot file
 mySurfMesh.input.Mesh_Format = "Tecplot"
 
-# Run AIM pre-analysis
-mySurfMesh.preAnalysis()
-
 ##########################################
-## egadsTess was ran during preAnalysis ##
+## egadsTess is executed automatically  ##
 ##########################################
-
-# Run AIM post-analysis
-mySurfMesh.postAnalysis()
 
 
 # Load Tetgen aim
@@ -67,13 +61,10 @@ myMesh.input["Surface_Mesh"].link(mySurfMesh.output["Surface_Mesh"])
 # Preserve surface mesh while meshing
 myMesh.input.Preserve_Surf_Mesh = True
 
-# Run AIM pre-analysis
-myMesh.preAnalysis()
+##########################################
+## TetGen is executed automatically     ##
+##########################################
 
-# NO analysis is needed - Tetgen was already ran during preAnalysis
-
-# Run AIM post-analysis
-myMesh.postAnalysis()
 
 # Load SU2 aim - child of Tetgen AIM
 myAnalysis = myProblem.analysis.create(aim = "su2AIM", name = "su2")

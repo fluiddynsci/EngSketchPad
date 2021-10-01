@@ -2,6 +2,15 @@
 ifndef ESP_ROOT
 $(error ESP_ROOT must be set -- Please fix the environment...)
 endif
+ifndef ESP_ARCH
+$(error ESP_ARCH must be set -- Please fix the environment...)
+endif
+ifndef CASROOT
+$(error CASROOT must be set -- Please fix the environment...)
+endif
+ifndef CASREV
+$(error CASREV must be set -- Please fix the environment...)
+endif
 #
 include ../include/$(ESP_ARCH)
 LDIR  = $(ESP_ROOT)/lib
@@ -25,8 +34,9 @@ endif
 
 VPATH = $(ODIR)
 
-OBJSP = egadsGeom.o egadsHLevel.o    egadsTopo.o     egadsCopy.o     egadsSpline.o \
-	egadsIO.o   egadsSplineFit.o egadsSkinning.o egadsTessSens.o BRepLib_FuseEdges.o
+OBJSP = egadsGeom.o egadsHLevel.o egadsTopo.o egadsCopy.o egadsSpline.o \
+	egadsIO.o   egadsSplineFit.o egadsSkinning.o egadsTessSens.o \
+	BRepLib_FuseEdges.o
 OBJS  = egadsBase.o egadsMemory.o egadsAttrs.o  egadsTess.o   egadsTessInp.o \
 	egadsTris.o egadsQuads.o  egadsFit.o    egadsRobust.o egadsSBO.o \
 	prmCfit.o   prmGrid.o     prmUV.o       egadsExport.o  \
@@ -37,7 +47,7 @@ SRINC = $(SIDIR)/SurrealD.h $(SIDIR)/SurrealD_Lazy.h $(SIDIR)/SurrealD_Trad.h \
         $(SIDIR)/SurrealS.h $(SIDIR)/SurrealS_Lazy.h $(SIDIR)/SurrealS_Trad.h \
 	$(SIDIR)/always_inline.h
 
-default:	includes uts $(LDIR)/$(SHLIB) \
+default:	includes $(LDIR)/$(SHLIB) \
 		$(LDIR)/libegadstatic.a $(LDIR)/libfgads.a $(LDIR)/libemp.a
 	@echo " *** EGADS Build Complete! ***"
 
@@ -81,9 +91,6 @@ $(LDIR)/libegadstatic.a:	$(OBJSP) $(OBJS) emp.o evaluate.o rational.o \
 		ar $(LOPTS) $(LDIR)/libegadstatic.a $(OBJS) $(OBJSP) emp.o \
 		evaluate.o rational.o regQuads.o; $(RANLB) )
 
-$(LDIR)/libuvmap.a:
-	$(MAKE) -C ../util
-
 $(LDIR)/libfgads.a:		$(FOBJS)
 	touch $(LDIR)/libfgads.a
 	rm $(LDIR)/libfgads.a
@@ -110,13 +117,13 @@ $(ODIR)/SurrealS4:	../util/SurrealS4_btest.cpp
 	$(CXX) -o $(ODIR)/SurrealS4 -O -I. ../util/SurrealS4_btest.cpp
 	$(ODIR)/SurrealS4
 
-uts:	$(ODIR)/SurrealD1 $(ODIR)/SurrealD4 $(ODIR)/SurrealS1 $(ODIR)/SurrealS4
+$(LDIR)/libuvmap.a:	includes $(ODIR)/SurrealD1 $(ODIR)/SurrealD4 $(ODIR)/SurrealS1 $(ODIR)/SurrealS4
 	$(MAKE) -C ../util
 
 $(OBJS): %.o:	%.c ../include/egadsErrors.h egadsInternals.h egadsStack.h \
 		../include/egadsTypes.h egadsTris.h
 	$(CC) -c $(COPTS) $(DEFINE) $(XDEF) -I../include -I../util \
-		$< -o $(ODIR)/$@
+		-I../util/uvmap $< -o $(ODIR)/$@
 
 $(FOBJS): %.o:	%.c ../include/egadsErrors.h egadsInternals.h egadsStack.h \
 		../include/egadsTypes.h 
@@ -244,7 +251,7 @@ include ../include/STANALYZER.make
 
 lint:
 	@echo EGADS library:
-	$(LINT) -I../include -I../util egadsBase.c egadsAttrs.c egadsMemory.c egadsTess.c egadsTessInp.c egadsTris.c egadsQuads.c egadsFit.c egadsRobust.c egadsSBO.c ../util/regQuads.c egadsExport.c egadsSolids.c egadsEffect.c -evalorder -exportlocal -incompletetype -boolops -predboolothers -dependenttrans -nestcomment
+	$(LINT) -I../include -I../util -I../util/uvmap egadsBase.c egadsAttrs.c egadsMemory.c egadsTess.c egadsTessInp.c egadsTris.c egadsQuads.c egadsFit.c egadsRobust.c egadsSBO.c ../util/regQuads.c egadsExport.c egadsSolids.c egadsEffect.c -evalorder -exportlocal -incompletetype -boolops -predboolothers -dependenttrans -nestcomment
 	@echo " "
 	@echo FORTRAN bindings:
 	$(LINT) -I../include fgadsBase.c fgadsTopo.c fgadsGeom.c fgadsAttrs.c fgadsMemory.c fgadsTess.c fgadsHLevel.c

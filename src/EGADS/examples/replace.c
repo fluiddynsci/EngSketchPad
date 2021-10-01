@@ -9,6 +9,8 @@
  *
  */
 
+//#define INVALID
+
 #include <math.h>
 #include "egads.h"
 
@@ -17,7 +19,7 @@ int main(/*@unused@*/ int argc, /*@unused@*/ char *argv[])
 {
   int       i, j, stat, nface, atype, len;
   double    data[6];
-  ego       context, newModel, body, newBody, newFace, *faces, repl[4];
+  ego       context, newModel, body, newBody, newFace, *faces, repl[8];
   const int *id;
 
   /* initialize */
@@ -47,12 +49,22 @@ int main(/*@unused@*/ int argc, /*@unused@*/ char *argv[])
   printf(" EG_makeFace        = %d  %d\n", stat, faces[1]->mtype);
   j = -5;
   EG_attributeAdd(newFace, "Face#", ATTRINT, 1, &j, NULL, NULL);
-  
+
   repl[0] = faces[3];
   repl[1] = NULL;
+#ifdef INVALID
+  repl[2] = faces[4];
+  repl[3] = NULL;
+  repl[4] = faces[5];
+  repl[5] = NULL;
+  repl[6] = faces[2];
+  repl[7] = NULL;
+  stat    = EG_replaceFaces(body, 4, repl, &newBody);
+#else
   repl[2] = faces[4];
   repl[3] = newFace;
   stat    = EG_replaceFaces(body, 2, repl, &newBody);
+#endif
   printf(" EG_replaceFaces    = %d\n", stat);
   EG_free(faces);
   EG_deleteObject(body);

@@ -17,7 +17,7 @@ endif
 
 $(LDIR)/mystranAIM.so:	$(ODIR)/mystranAIM.o $(ODIR)/mystranUtils.o $(LDIR)/libutils.a $(LDIR)/libaimUtil.a
 	$(CC) $(SOFLGS) -o $(LDIR)/mystranAIM.so $(ODIR)/mystranAIM.o $(ODIR)/mystranUtils.o \
-		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -lm $(PYTHONLIB)
+		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -ldl -lm $(PYTHONLIB)
 
 $(ODIR)/mystranAIM.o:	mystranAIM.c mystranUtils.h $(IDIR)/capsTypes.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils mystranAIM.c \

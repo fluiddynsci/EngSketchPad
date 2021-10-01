@@ -87,6 +87,9 @@ class TestValue(unittest.TestCase):
         myParam.value = [0.0, 40000.0, 50000]*ft
         self.assertEqual(myParam.value, [0.0, 40000.0, 50000]*ft)
 
+        myParam.transferValue(pyCAPS.tMethod.Copy, self.myParam)
+        self.assertEqual(self.myParam.value, [0.0, 30000.0, 60000.0]*ft)
+
 #==============================================================================
     # Set limits
     def test_limits(self):
@@ -107,6 +110,14 @@ class TestValue(unittest.TestCase):
         myParam = self.myProblem.parameter.create("Strings", ["test1", "test2", "test3"])
         self.assertEqual(myParam.value, ["test1", "test2", "test3"])
 
+        myParam2 = self.myProblem.parameter.create("Strings2", ["foo1", "foo2", "foo3"])
+        myParam2.transferValue(pyCAPS.tMethod.Copy, myParam)
+        self.assertEqual(myParam2.value, ["test1", "test2", "test3"])
+
+        with self.assertRaises(pyCAPS.CAPSError) as e:
+            self.myParam.transferValue(pyCAPS.tMethod.Copy, myParam)
+        self.assertEqual(e.exception.errorName, "CAPS_UNITERR")
+
 #==============================================================================
     # Change the shape/length of fixed value
     def test_changefixedShapeAndLength(self):
@@ -124,6 +135,10 @@ class TestValue(unittest.TestCase):
         myParam.value = [0.0, 1.0]
         self.assertEqual(myParam.value, [0.0, 1.0])
 
+        with self.assertRaises(pyCAPS.CAPSError) as e:
+            self.myParam.transferValue(pyCAPS.tMethod.Copy, myParam)
+        self.assertEqual(e.exception.errorName, "CAPS_UNITERR")
+
 #==============================================================================
     # Change the shape shape value
     def test_changefixedShape2(self):
@@ -134,6 +149,10 @@ class TestValue(unittest.TestCase):
 
         self.assertEqual(e.exception.errorName, "CAPS_SHAPEERR")
 
+        with self.assertRaises(pyCAPS.CAPSError) as e:
+            self.myParam.transferValue(pyCAPS.tMethod.Copy, myParam)
+        self.assertEqual(e.exception.errorName, "CAPS_UNITERR")
+
 #==============================================================================
     # Change the length and shape
     def test_changeLengthAndShape(self):
@@ -142,6 +161,10 @@ class TestValue(unittest.TestCase):
 
         myParam.value = [0.0, 1.0]
         self.assertEqual(myParam.value, [0.0, 1.0])
+
+        with self.assertRaises(pyCAPS.CAPSError) as e:
+            self.myParam.transferValue(pyCAPS.tMethod.Copy, myParam)
+        self.assertEqual(e.exception.errorName, "CAPS_UNITERR")
 
 #==============================================================================
     # Autolink
@@ -208,6 +231,7 @@ class TestValue(unittest.TestCase):
 
         with self.assertRaises(pyCAPS.CAPSError):
             value = self.myProblem.parameter.create("inconValue", [[1,2,3], [0]])
+
 
 if __name__ == '__main__':
     unittest.main()

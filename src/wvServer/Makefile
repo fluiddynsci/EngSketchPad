@@ -44,7 +44,7 @@ lint:
 	$(LINT) server.c wv.c fwv.c -I../include -I. -DLWS_NO_FORK -DSTANDALONE -uniondef -evalorder -boolops -exitarg -nullpass -exportlocal -kepttrans -fullinitblock +charint -syntax
 	@echo " "
 	@echo "Full analysis:"
-	$(LINT) server.c wv.c fwv.c libwebsockets.c sha-1.c base64-decode.c extension.c extension-deflate-stream.c extension-x-google-mux.c md5.c parsers.c handshake.c client-handshake.c -I../include -I. -DLWS_NO_FORK -DSTANDALONE -boolops -exitarg -fullinitblock -nullpass -mayaliasunique +charint -exportlocal -evalorder -shiftimplementation -bufferoverflowhigh -casebreak -kepttrans -retvalother -uniondef -immediatetrans -observertrans -allocmismatch -syntax
+	$(LINT) server.c wv.c fwv.c libwebsockets.c sha-1.c base64-decode.c extension.c extension-deflate-stream.c extension-x-google-mux.c md5.c parsers.c handshake.c client-handshake.c browserMessage.c -I../include -I. -DLWS_NO_FORK -DSTANDALONE -boolops -exitarg -fullinitblock -nullpass -mayaliasunique +charint -exportlocal -evalorder -shiftimplementation -bufferoverflowhigh -casebreak -kepttrans -retvalother -uniondef -immediatetrans -observertrans -allocmismatch -syntax
 
 clean:
 	-(cd $(ODIR); rm map.o $(OBJS) servertest.o )

@@ -15,7 +15,7 @@ TDIR  = $(ESP_ROOT)\bin
 !ENDIF
 
 
-$(LDIR)\tsfoilAIM.dll:	$(ODIR)\tsfoilAIM.obj $(LDIR)\aimUtil.lib \
+$(LDIR)\tsfoilAIM.dll:	tsfoilAIM.def $(ODIR)\tsfoilAIM.obj $(LDIR)\aimUtil.lib \
 			$(LDIR)\utils.lib
 	-del $(LDIR)\tsfoilAIM.dll $(LDIR)\tsfoilAIM.lib $(LDIR)\tsfoilAIM.exp
 	 link /out:$(LDIR)\tsfoilAIM.dll /dll /def:tsfoilAIM.def \

@@ -426,10 +426,10 @@ if (thick > 0):
 
     emodel = ebody.generalBoolean(ecylbody, egads.FUSION)
 
-    eref, oclass, mtype, data, echilds, senses = emodel.getTopology()
+    oclass, mtype, eref, data, echilds, senses = emodel.getTopology()
 
     if (oclass != egads.MODEL or len(echilds) != 1):
-        print("You didn't input a model or are returning more than one body ochild = " + str(oclass) + " nchild = " + str(nchild))
+        print("You didn't input a model or are returning more than one body ochild = " + str(oclass) + " nchild = " + str(len(echilds)))
         sys.exit(-999)
 
     ebody = echilds[0].copyObject()
@@ -449,10 +449,10 @@ if (thick > 0):
 
         emodel = ebody.generalBoolean(ecylbody, egads.SUBTRACTION)
 
-        eref, oclass, mtype, data, echilds, senses = emodel.getTopology()
+        oclass, mtype, eref, data, echilds, senses = emodel.getTopology()
 
         if (oclass != egads.MODEL or len(echilds) != 1):
-            print("You didn't input a model or are returning more than one body ochild = " + str(oclass) + " nchild = " + str(nchild))
+            print("You didn't input a model or are returning more than one body ochild = " + str(oclass) + " nchild = " + str(len(echilds)))
             sys.exit(-999)
 
         ebody = echilds[0].copyObject()

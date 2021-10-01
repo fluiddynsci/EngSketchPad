@@ -15,12 +15,16 @@ DUMP      sphere.igs
 STORE     .
 
 # import the first half of the faces from the box.igs file
-IMPORT                     box.igs            1
-IMPORT                     box.igs            2
-UDPRIM    import filename $box.igs bodynumber 3
+IMPORT    box.igs
+EXTRACT   1
+IMPORT    box.igs
+EXTRACT   2
+UDPRIM    import filename $box.igs
+EXTRACT   3
 
 # import the first face from the sphere.igs file
-UDPRIM    import  filename $sphere.igs bodynumber 1
+UDPRIM    import  filename $sphere.igs
+EXTRACT   1
 
 # do something useless that will take more than a second
 TORUS     0.0  0.0   1.0  0.0  0.0  1.0  4.0  0.9
@@ -51,18 +55,19 @@ SPHERE    1.5  0.5  0.5   0.3
 DUMP      sphere.igs
 STORE     .
 
-# import the faces from the cylinder.igs file
-IMPORT    cylinder.igs 1
-PATBEG    ibody @@numbodies-1
-   IMPORT cylinder.igs ibody+1
-patend
+# import the cylinder.igs file
+IMPORT    cylinder.igs
 
 # import the second face from the (new) sphere.igs file
-UDPRIM    import  filename $sphere.igs bodynumber 2
+UDPRIM    import  filename $sphere.igs
+EXTRACT   2
 
 # import the second half of the faces from the box.igs file
-IMPORT                     box.igs            4
-IMPORT                     box.igs            5
-UDPRIM    import filename $box.igs bodynumber 6
+IMPORT    box.igs
+EXTRACT   4
+IMPORT    box.igs
+EXTRACT   5
+UDPRIM    import filename $box.igs
+EXTRACT   6
 
 end

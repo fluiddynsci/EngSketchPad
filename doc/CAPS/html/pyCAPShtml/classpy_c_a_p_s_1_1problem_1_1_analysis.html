@@ -105,8 +105,11 @@ def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class
 <tr class="separator:a7743b196d00df5de823148a8682cbefd"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a58e10736bed939d3873a86043bebcdbc"><td class="memItemLeft" align="right" valign="top"><a id="a58e10736bed939d3873a86043bebcdbc"></a>
 def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpy_c_a_p_s_1_1problem_1_1_analysis.html#a58e10736bed939d3873a86043bebcdbc">runAnalysis</a> (self)</td></tr>
-<tr class="memdesc:a58e10736bed939d3873a86043bebcdbc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the analysis function for the AIM. <br /></td></tr>
+<tr class="memdesc:a58e10736bed939d3873a86043bebcdbc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the pre/exec/post functions for the AIM (if AIM execution is available). <br /></td></tr>
 <tr class="separator:a58e10736bed939d3873a86043bebcdbc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab6831e32a3358cd7ff75d008902f27c5"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpy_c_a_p_s_1_1problem_1_1_analysis.html#ab6831e32a3358cd7ff75d008902f27c5">system</a> (self, cmd, rpath=None)</td></tr>
+<tr class="memdesc:ab6831e32a3358cd7ff75d008902f27c5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Execute the Command Line String Notes:  <a href="classpy_c_a_p_s_1_1problem_1_1_analysis.html#ab6831e32a3358cd7ff75d008902f27c5">More...</a><br /></td></tr>
+<tr class="separator:ab6831e32a3358cd7ff75d008902f27c5"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a92eae7f8b628f180a65fefe438185707"><td class="memItemLeft" align="right" valign="top"><a id="a92eae7f8b628f180a65fefe438185707"></a>
 def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classpy_c_a_p_s_1_1problem_1_1_analysis.html#a92eae7f8b628f180a65fefe438185707">postAnalysis</a> (self)</td></tr>
 <tr class="memdesc:a92eae7f8b628f180a65fefe438185707"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run post-analysis function for the AIM. <br /></td></tr>
@@ -340,6 +343,54 @@ def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class
 
 </div>
 </div>
+<a id="ab6831e32a3358cd7ff75d008902f27c5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab6831e32a3358cd7ff75d008902f27c5">&#9670;&nbsp;</a></span>system()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def system </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>cmd</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>rpath</em> = <code>None</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Execute the Command Line String Notes: </p>
+<ol type="1">
+<li>only needed when explicitly executing the appropriate analysis solver (i.e., not using the AIM)</li>
+<li>should be invoked after caps_preAnalysis and before caps_postAnalysis</li>
+<li>this must be used instead of the OS system call to ensure that journaling properly functions</li>
+</ol>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cmd</td><td>the command line string to execute </td></tr>
+    <tr><td class="paramname">rpath</td><td>the relative path from the <a class="el" href="classpy_c_a_p_s_1_1problem_1_1_analysis.html" title="Defines a CAPS Analysis Object.">Analysis</a>' directory or None (in the <a class="el" href="classpy_c_a_p_s_1_1problem_1_1_analysis.html" title="Defines a CAPS Analysis Object.">Analysis</a> path) </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
 <hr/>The documentation for this class was generated from the following file:<ul>
 <li>pyCAPS/problem.py</li>
 </ul>
@@ -349,7 +400,7 @@ def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
     <li class="navelem"><b>pyCAPS</b></li><li class="navelem"><b>problem</b></li><li class="navelem"><a class="el" href="classpy_c_a_p_s_1_1problem_1_1_analysis.html">Analysis</a></li>
-    <li class="footer">Generated on Fri May 28 2021 11:09:56 for pyCAPS by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
+    <li class="footer">Generated on Fri Sep 17 2021 06:43:14 for pyCAPS by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
   </ul>
 </div>
 </body>

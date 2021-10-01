@@ -57,11 +57,29 @@ printErrors(int nErr, capsErrs *errors)
 }
 
 
+static void
+freeTuple(int tlen,          /* (in)  length of the tuple */
+          capsTuple *tuple)  /* (in)  tuple freed */
+{
+    int i;
+
+    if (tuple != NULL) {
+        for (i = 0; i < tlen; i++) {
+
+            EG_free(tuple[i].name);
+            EG_free(tuple[i].value);
+        }
+    }
+    EG_free(tuple);
+}
+
+
 int main(int argc, char *argv[])
 {
 
     int status; // Function return status;
     int i; // Indexing
+    int outLevel = 1;
 
     // CAPS objects
     capsObj  problemObj, surfMeshObj, meshObj, fun3dObj, fun3dObj2, mystranObj, tempObj;
@@ -69,13 +87,13 @@ int main(int argc, char *argv[])
 
     // Data transfer
     capsObj topBoundObj, vertexSourceObj, vertexDestObj, dataSourceObj, dataDestObj;
-    int npts, rank;
-    double *data;
-    char *units;
 
     // CAPS return values
     int  nErr;
     capsObj source, target;
+
+    int major, minor, nFields, *ranks, *fInOut, dirty, exec;
+    char *analysisPath=NULL, *unitSystem, *intents, **fnames;
 
     // Input values
     capsTuple         *fun3dBC = NULL, *material = NULL, *constraint = NULL, *property = NULL, *load = NULL;
@@ -88,10 +106,6 @@ int main(int argc, char *argv[])
 
     const char projectName[] = "aeroelasticSimple";
 
-    char analysisPath1[PATH_MAX] = "runDirectory1";
-    char analysisPath2[PATH_MAX] = "runDirectory2";
-    char analysisPath3[PATH_MAX] = "runDirectory3";
-    char analysisPath4[PATH_MAX] = "runDirectory4";
     char currentPath[PATH_MAX];
 
     double speedofSound = 340.0, refVelocity = 100.0, refDensity = 1.2;
@@ -99,86 +113,49 @@ int main(int argc, char *argv[])
     int runAnalysis = (int) true;
 
     printf("\n\nAttention: aeroelasticTest is hard coded to look for ../csmData/aeroelasticDataTransferSimple.csm\n");
-    printf("An analysisPath maybe specified as a command line option, if none is given "
-            "a directory called \"runDirectory\" in the current folder is assumed to exist! To "
-            "not make system calls to the fun3d and mystran executables the third command line option may be "
-            "supplied - 0 = no analysis , >0 run analysis (default).\n\n");
 
-    if (argc > 3) {
-
-        printf(" usage: aeroelasticTest analysisDirectoryPath noAnalysis!\n");
+    if (argc > 2) {
+        printf(" usage: aeroelasticTest outLevel\n");
         return 1;
-
-    } else if (argc == 2 || argc == 3) {
-
-        strncpy(analysisPath1,
-                argv[1],
-                strlen(argv[1])*sizeof(char));
-
-        analysisPath1[strlen(argv[1])  ] = '1';
-        analysisPath1[strlen(argv[1])+1] = '\0';
-
-        strncpy(analysisPath2,
-                argv[1],
-                strlen(argv[1])*sizeof(char));
-
-        analysisPath2[strlen(argv[1])  ] = '2';
-        analysisPath2[strlen(argv[1])+1] = '\0';
-
-        strncpy(analysisPath3,
-                argv[1],
-                strlen(argv[1])*sizeof(char));
-
-        analysisPath3[strlen(argv[1])  ] = '3';
-        analysisPath3[strlen(argv[1])+1] = '\0';
-
-        strncpy(analysisPath4,
-                argv[1],
-                strlen(argv[1])*sizeof(char));
-
-        analysisPath4[strlen(argv[1])  ] = '4';
-        analysisPath4[strlen(argv[1])+1] = '\0';
-
-    } else {
-
-        printf("Assuming the analysis directory path to be -> %s, %s, %s, %s",
-               analysisPath1, analysisPath2, analysisPath3, analysisPath4);
-    }
-
-    if (argc == 3) {
-        if (strcasecmp(argv[2], "0") == 0) runAnalysis = (int) false;
+    } else if (argc == 2) {
+        outLevel = atoi(argv[1]);
     }
 
     status = caps_open("FUN3D_MyStran_Aeroelastic_Example", NULL, 0,
-                       "../csmData/aeroelasticDataTransferSimple.csm", 1,
+                       "../csmData/aeroelasticDataTransferSimple.csm", outLevel,
                        &problemObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Load the AIMs
-    status = caps_makeAnalysis(problemObj, "egadsTessAIM", analysisPath1,
-                               NULL, NULL, 0, &surfMeshObj, &nErr, &errors);
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "egadsTessAIM", NULL,
+                               NULL, NULL, &exec, &surfMeshObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS)  goto cleanup;
 
-    status = caps_makeAnalysis(problemObj, "tetgenAIM", analysisPath2,
-                               NULL, NULL, 0, &meshObj, &nErr, &errors);
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "tetgenAIM", NULL,
+                               NULL, NULL, &exec, &meshObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS)  goto cleanup;
 
-    status = caps_makeAnalysis(problemObj, "fun3dAIM", analysisPath3,
-                               NULL, NULL, 0, &fun3dObj, &nErr, &errors);
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "fun3dAIM", NULL,
+                               NULL, NULL, &exec, &fun3dObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = caps_makeAnalysis(problemObj, "mystranAIM", analysisPath4,
-                               NULL, NULL, 0, &mystranObj, &nErr, &errors);
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "mystranAIM", NULL,
+                               NULL, NULL, &exec, &mystranObj, &nErr, &errors);
    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     /* unused analysis object */
+    exec   = 0;
     status = caps_makeAnalysis(problemObj, "fun3dAIM", "DummyName",
-                               NULL, NULL, 0, &fun3dObj2, &nErr, &errors);
+                               NULL, NULL, &exec, &fun3dObj2, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
@@ -298,8 +275,7 @@ int main(int argc, char *argv[])
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    if (stringVal != NULL) EG_free(stringVal);
-    stringVal = NULL;
+    EG_free(stringVal); stringVal = NULL;
 
     status = caps_childByName(fun3dObj, VALUE, ANALYSISIN, "Restart_Read",
                               &tempObj);
@@ -310,9 +286,7 @@ int main(int argc, char *argv[])
                            NULL, NULL, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
-
-    if (stringVal != NULL) EG_free(stringVal);
-    stringVal = NULL;
+    EG_free(stringVal); stringVal = NULL;
 
     status = caps_childByName(fun3dObj, VALUE, ANALYSISIN, "Overwrite_NML",
                               &tempObj);
@@ -493,12 +467,18 @@ int main(int argc, char *argv[])
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
+    /* get analysis info */
+    status = caps_analysisInfo(fun3dObj, &analysisPath, &unitSystem, &major,
+                               &minor, &intents, &nFields, &fnames, &ranks,
+                               &fInOut, &exec, &dirty);
+    if (status != CAPS_SUCCESS) goto cleanup;
+
     // Execute FUN3D via system call
     (void) getcwd(currentPath, PATH_MAX);
 
-    if (chdir(analysisPath3) != 0) {
+    if (chdir(analysisPath) != 0) {
         status = CAPS_DIRERR;
-        printf(" ERROR: Cannot change directory to -> %s\n", analysisPath3);
+        printf(" ERROR: Cannot change directory to -> %s\n", analysisPath);
         goto cleanup;
     }
 
@@ -559,15 +539,6 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    // Get data
-    /*  status = caps_getData(dataSourceObj, &npts, &rank, &data, &units, &nErr, &errors);
-    if (nErr != 0) printErrors(nErr, errors);
-    if (status != CAPS_SUCCESS) return status;  */
-
-    status = caps_getData(dataDestObj, &npts, &rank, &data, &units, &nErr, &errors);
-    if (nErr != 0) printErrors(nErr, errors);
-    if (status != CAPS_SUCCESS) return status;
-
     // Set load tuple for Mystran
     status = caps_childByName(mystranObj, VALUE, ANALYSISIN, "Load", &tempObj);
     if (status != CAPS_SUCCESS) goto cleanup;
@@ -583,14 +554,20 @@ int main(int argc, char *argv[])
 
     // Do the analysis  for Mystran
     status = caps_preAnalysis(mystranObj, &nErr, &errors);
-   if (nErr != 0) printErrors(nErr, errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Execute Mystran via system call
     (void) getcwd(currentPath, PATH_MAX);
 
-    if (chdir(analysisPath4) != 0) {
-        printf(" ERROR: Cannot change directory to -> %s\n", analysisPath4);
+    /* get analysis info */
+    status = caps_analysisInfo(mystranObj, &analysisPath, &unitSystem, &major,
+                               &minor, &intents, &nFields, &fnames, &ranks,
+                               &fInOut, &exec, &dirty);
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    if (chdir(analysisPath) != 0) {
+        printf(" ERROR: Cannot change directory to -> %s\n", analysisPath);
         status = CAPS_DIRERR;
         goto cleanup;
     }
@@ -619,47 +596,13 @@ cleanup:
     if (status != CAPS_SUCCESS) printf("\n\nPremature exit - status = %d\n",
                                        status);
 
-    if (fun3dBC != NULL) {
-        for (i = 0; i < numFUN3DBC; i++) {
-            if (fun3dBC[i].name  != NULL) EG_free(fun3dBC[i].name);
-            if (fun3dBC[i].value != NULL) EG_free(fun3dBC[i].value);
-        }
-        EG_free(fun3dBC);
-    }
+    freeTuple(numFUN3DBC, fun3dBC);
+    freeTuple(numConstraint, constraint);
+    freeTuple(numLoad, load);
+    freeTuple(numProperty, property);
+    freeTuple(numMaterial, material);
 
-    if (constraint != NULL) {
-        for (i = 0; i < numConstraint; i++) {
-            if (constraint[i].name  != NULL) EG_free(constraint[i].name);
-            if (constraint[i].value != NULL) EG_free(constraint[i].value);
-        }
-        EG_free(constraint);
-    }
-
-    if (load != NULL) {
-        for (i = 0; i < numLoad; i++) {
-            if (load[i].name  != NULL) EG_free(load[i].name);
-            if (load[i].value != NULL) EG_free(load[i].value);
-        }
-        EG_free(load);
-    }
-
-    if (property != NULL) {
-        for (i = 0; i < numProperty; i++) {
-            if (property[i].name  != NULL) EG_free(property[i].name);
-            if (property[i].value != NULL) EG_free(property[i].value);
-        }
-        EG_free(property);
-    }
-
-    if (material != NULL) {
-        for (i = 0; i < numMaterial; i++) {
-            if (material[i].name  != NULL) EG_free(material[i].name);
-            if (material[i].value != NULL) EG_free(material[i].value);
-        }
-        EG_free(material);
-    }
-
-    if (stringVal != NULL) EG_free(stringVal);
+    EG_free(stringVal);
 
     i = 0;
     if (status == CAPS_SUCCESS) i = 1;

@@ -1,5 +1,5 @@
-#ifndef AIMU_H
-#define AIMU_H
+#ifndef AIMUTIL_H
+#define AIMUTIL_H
 /*
  *      CAPS: Computational Aircraft Prototype Syntheses
  *
@@ -32,6 +32,7 @@ extern int fclose (/*@only@*/ FILE *__stream);
 
 #include "capsTypes.h"
 
+
 #ifdef __ProtoExt__
 #undef __ProtoExt__
 #endif
@@ -41,7 +42,6 @@ extern "C" {
 #else
 #define __ProtoExt__ extern
 #endif
-
 
 __ProtoExt__ void
   aim_capsRev( int *major, int *minor );
@@ -56,16 +56,27 @@ __ProtoExt__ /*@null@*/ /*@out@*/ /*@only@*/ FILE *
   aim_fopen( void *aimInfo, const char *file, const char *mode );
 
 __ProtoExt__ int
-  aim_isfile(void *aimStruc, const char *file);
+  aim_isFile(void *aimStruc, const char *file);
 
 __ProtoExt__ int
-  aim_isdir(void *aimStruc, const char *path);
+  aim_cpFile(void *aimStruc, const char *src, const char *dst);
 
 __ProtoExt__ int
-  aim_mkdir(void *aimStruc, const char *path);
+  aim_relPath(void *aimStruc, const char *src,
+              /*@null@*/ const char *dst, char *relPath);
 
 __ProtoExt__ int
-  aim_system( void *aimInfo, const char *command );
+  aim_symLink(void *aimStruc, const char *src, /*@null@*/ const char *dst);
+
+__ProtoExt__ int
+  aim_isDir(void *aimStruc, const char *path);
+
+__ProtoExt__ int
+  aim_mkDir(void *aimStruc, const char *path);
+
+__ProtoExt__ int
+  aim_system( void *aimInfo, /*@null@*/ const char *rpath,
+              const char *command );
 
 __ProtoExt__ int
   aim_getBodies( void *aimInfo, const char **intent, int *nBody, ego **bodies );
@@ -87,8 +98,8 @@ __ProtoExt__ int
 
 __ProtoExt__ int
   aim_convert( void *aimInfo, const int count,
-    /*@null@*/ const char  *inUnits, double  *inValue,
-    /*@null@*/ const char *outUnits, double *outValue );
+               /*@null@*/ const char  *inUnits, double  *inValue,
+               /*@null@*/ const char *outUnits, double *outValue );
 
 __ProtoExt__ int
   aim_unitMultiply( void *aimInfo, const char  *inUnits1, const char *inUnits2,
@@ -264,13 +275,21 @@ __ProtoExt__ void
 
 #else // Non-Microsoft compilers
 
+#if defined(__clang__)
+#  if __clang_major__ > 3 || (__clang_major__ == 3  && __clang_minor__ >= 4)
+#    if __has_warning("-Wgnu-zero-variadic-macro-arguments")
+#      pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
+#    endif
+#  endif
+#endif
+
 #  define GET_ARG_COUNT(...) \
-    INTERNAL_GET_ARG_COUNT_PRIVATE(0 __VA_OPT__(,) __VA_ARGS__, 70, 69, 68, 67, 66, 65, 64, \
+    INTERNAL_GET_ARG_COUNT_PRIVATE(0, ## __VA_ARGS__, 70, 69, 68, 67, 66, 65, 64, \
                                   63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, \
                                   51, 50, 49, 48, 47, 46, 45, 44, 43, 42, 41, 40, \
                                   39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, \
                                   27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, \
-                                  15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+                                  15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0)
 #  define INTERNAL_GET_ARG_COUNT_PRIVATE(_0, _1_, _2_, _3_, _4_, _5_, \
                                          _6_, _7_, _8_, _9_, _10_, \
                                          _11_, _12_, _13_, _14_, _15_, \
@@ -285,14 +304,6 @@ __ProtoExt__ void
                                          _60, _61, _62, _63, _64, _65, \
                                          _66, _67, _68, _69, _70, count, ...) count
 
-#endif
-
-#if defined(__clang__)
-#  if __clang_major__ > 3 || (__clang_major__ == 3  && __clang_minor__ >= 4)
-#    if __has_warning("-Wgnu-zero-variadic-macro-arguments")
-#      pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
-#    endif
-#  endif
 #endif
 
 #define AIM_STATUS(aimInfo, status, ...) \
@@ -416,7 +427,7 @@ aimPostAnalysis( void *instStore, void *aimInfo, int restart,
                  /*@null@*/ capsValue *inputs );
 
 void
-aimCleanup( void *instStore );
+aimCleanup( /*@only@*/ void *instStore );
 
 int
 aimCalcOutput( void *instStore, void *aimInfo, int index, capsValue *val );
@@ -455,10 +466,8 @@ int
 aimBackdoor( void *instStore, void *aimInfo, const char *JSONin,
              char **JSONout );
 
-/*************************************************************************/
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif
+#endif /* AIMUTIL_H */

@@ -114,7 +114,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 {
     int     status = EGADS_SUCCESS;
 
-    int     npnt, ipnt, sense[4], sizes[2], periodic, i, add=1;
+    int     npnt, sense[4], sizes[2], periodic, i, add=1;
     double  rx_w, rx_e, ry_s, ry_n, n_sw, n_se, n_nw, n_ne, theta;
     double  *pnt_ne=NULL, *pnt_nw=NULL, *pnt_sw=NULL, *pnt_se=NULL, *pnt_save=NULL;
     double  data[18], tdata[2], result[3], range[4], eval[18], norm[3], dx, dy, ds;
@@ -229,10 +229,6 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         snprintf(message, 100, "SUPELL: numpnts must be at least 11");
         status  = EGADS_RANGERR;
         goto cleanup;
-    } else if (SLPFACT(0) < 0) {
-        snprintf(message, 100, "SUPELL: slpfact should be non-negative");
-        status  = EGADS_RANGERR;
-        goto cleanup;
     } else if (SLPFACT(0) > 0 && OFFSET(0) != 0) {
         snprintf(message, 100, "SUPELL: both offset and slpfact cannot be set");
         status  = EGADS_RANGERR;
@@ -262,11 +258,11 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 #endif
 
     /* mallocs required by Windows compiler */
-    MALLOC(pnt_ne,   double, 3*NUMPNTS(0)+6);
-    MALLOC(pnt_nw,   double, 3*NUMPNTS(0)+6);
-    MALLOC(pnt_sw,   double, 3*NUMPNTS(0)+6);
-    MALLOC(pnt_se,   double, 3*NUMPNTS(0)+6);
-    MALLOC(pnt_save, double, 3*NUMPNTS(0)+6);
+    MALLOC(pnt_ne,   double, 9*NUMPNTS(0)+6);
+    MALLOC(pnt_nw,   double, 9*NUMPNTS(0)+6);
+    MALLOC(pnt_sw,   double, 9*NUMPNTS(0)+6);
+    MALLOC(pnt_se,   double, 9*NUMPNTS(0)+6);
+    MALLOC(pnt_save, double, 9*NUMPNTS(0)+6);
 
     /* create Nodes at the four cardinal directions */
     data[0] = +rx_e + OFFSET(0);
@@ -308,6 +304,18 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* ne quadrant -- generate coordinates */
     npnt = 0;
+
+    if (SLPFACT(0) < 0 && n_ne >= 2) {
+        for (i = 0; i < NUMPNTS(0); i++) {
+            theta = (double)(NUMPNTS(0)-i) / (double)(NUMPNTS(0)) * PI/2;
+
+            pnt_ne[3*npnt  ] = +rx_e * pow(cos(theta), 2.0/n_ne);
+            pnt_ne[3*npnt+1] = -ry_n * pow(sin(theta), 2.0/n_ne);
+            pnt_ne[3*npnt+2] = 0;
+            npnt++;
+        }
+    }
+    
     pnt_ne[3*npnt  ] = +rx_e;
     pnt_ne[3*npnt+1] =  0;
     pnt_ne[3*npnt+2] =  0;
@@ -340,6 +348,17 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     pnt_ne[3*npnt+1] = +ry_n;
     pnt_ne[3*npnt+2] =  0;
     npnt++;
+
+    if (SLPFACT(0) < 0 && n_ne >= 2) {
+        for (i = 0; i < NUMPNTS(0); i++) {
+            theta = (double)(NUMPNTS(0)-1-i) / (double)(NUMPNTS(0)) * PI/2;
+
+            pnt_ne[3*npnt  ] = -rx_e * pow(cos(theta), 2.0/n_ne);
+            pnt_ne[3*npnt+1] = +ry_n * pow(sin(theta), 2.0/n_ne);
+            pnt_ne[3*npnt+2] = 0;
+            npnt++;
+        }
+    }
 
     /* create offset if required */
     if (OFFSET(0) != 0) {
@@ -375,24 +394,22 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     status = EG_approximate(context, 1, dxytol, sizes, pnt_ne, &(ecurve[0]));
     CHECK_STATUS(EG_approximate);
 
-    ipnt = 0;
-    data[0] = pnt_ne[3*ipnt  ];
-    data[1] = pnt_ne[3*ipnt+1];
-    data[2] = pnt_ne[3*ipnt+2];
+    data[0] = +rx_e + OFFSET(0);
+    data[1] = 0;
+    data[2] = 0;
     status = EG_invEvaluate(ecurve[0], data, &(tdata[0]), result);
     CHECK_STATUS(EG_invEvaluate);
 
-    ipnt = npnt - 1;
-    data[0] = pnt_ne[3*ipnt  ];
-    data[1] = pnt_ne[3*ipnt+1];
-    data[2] = pnt_ne[3*ipnt+2];
+    data[0] = 0;
+    data[1] = +ry_n + OFFSET(0);
+    data[2] = 0;
     status = EG_invEvaluate(ecurve[0], data, &(tdata[1]), result);
     CHECK_STATUS(EG_invEvaluate);
 
 #ifdef GRAFIC
     {
         int    io_kbd=5, io_scr=6, indgr=1+2+4+16+64;
-        int    ilin[3], isym[3], nper[3], nline=0, nplot=0;
+        int    ilin[3], isym[3], nper[3], nline=0, nplot=0, ipnt;
         int    oclass, mtype, *header;
         float  xplot[2000], yplot[2000];
         double tt, *gdata;
@@ -439,7 +456,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         EG_free(gdata );
 
         grinit_(&io_kbd, &io_scr, "northeast", strlen("northeast"));
-        grline_(ilin, isym, &nline, "~x~y~ ", &indgr, xplot, yplot, nper, strlen("~x~y~ "));
+        grline_(ilin, isym, &nline, "~x~y~O=in, S=cp", &indgr, xplot, yplot, nper, strlen("~x~y~O=in, S=cp"));
     }
 #endif
 
@@ -470,6 +487,18 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* nw quadrant -- generate coordinates */
     npnt = 0;
+
+    if (SLPFACT(0) < 0 && n_nw >= 2) {
+        for (i = 0; i < NUMPNTS(0); i++) {
+            theta = (double)(i) / (double)(NUMPNTS(0)) * PI/2;
+
+            pnt_nw[3*npnt  ] = +rx_w * pow(cos(theta), 2.0/n_nw);
+            pnt_nw[3*npnt+1] = +ry_n * pow(sin(theta), 2.0/n_nw);
+            pnt_nw[3*npnt+2] = 0;
+            npnt++;
+        }
+    }
+    
     pnt_nw[3*npnt  ] =  0;
     pnt_nw[3*npnt+1] = +ry_n;
     pnt_nw[3*npnt+2] =  0;
@@ -502,6 +531,17 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     pnt_nw[3*npnt+1] =  0;
     pnt_nw[3*npnt+2] =  0;
     npnt++;
+
+    if (SLPFACT(0) < 0 && n_nw >= 2) {
+        for (i = 1; i < NUMPNTS(0); i++) {
+            theta = (double)(i) / (double)(NUMPNTS(0)-1) * PI/2;
+
+            pnt_nw[3*npnt  ] = -rx_w * pow(cos(theta), 2.0/n_nw);
+            pnt_nw[3*npnt+1] = -ry_n * pow(sin(theta), 2.0/n_nw);
+            pnt_nw[3*npnt+2] = 0;
+            npnt++;
+        }
+    }
 
     /* create offset if required */
     if (OFFSET(0) != 0) {
@@ -536,24 +576,22 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     status = EG_approximate(context, 1, dxytol, sizes, pnt_nw, &(ecurve[1]));
     CHECK_STATUS(EG_approximate);
 
-    ipnt = 0;
-    data[0] = pnt_nw[3*ipnt  ];
-    data[1] = pnt_nw[3*ipnt+1];
-    data[2] = pnt_nw[3*ipnt+2];
+    data[0] = 0;
+    data[1] = +ry_n + OFFSET(0);
+    data[2] = 0;
     status = EG_invEvaluate(ecurve[1], data, &(tdata[0]), result);
     CHECK_STATUS(EG_invEvaluate);
 
-    ipnt = npnt - 1;
-    data[0] = pnt_nw[3*ipnt  ];
-    data[1] = pnt_nw[3*ipnt+1];
-    data[2] = pnt_nw[3*ipnt+2];
+    data[0] = -rx_w - OFFSET(0);
+    data[1] = 0;
+    data[2] = 0;
     status = EG_invEvaluate(ecurve[1], data, &(tdata[1]), result);
     CHECK_STATUS(EG_invEvaluate);
 
 #ifdef GRAFIC
     {
         int    io_kbd=5, io_scr=6, indgr=1+2+4+16+64;
-        int    ilin[3], isym[3], nper[3], nline=0, nplot=0;
+        int    ilin[3], isym[3], nper[3], nline=0, nplot=0, ipnt;
         int    oclass, mtype, *header;
         float  xplot[2000], yplot[2000];
         double tt, *gdata;
@@ -600,7 +638,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         EG_free(gdata );
 
         grinit_(&io_kbd, &io_scr, "northwest", strlen("northwest"));
-        grline_(ilin, isym, &nline, "~x~y~ ", &indgr, xplot, yplot, nper, strlen("~x~y~ "));
+        grline_(ilin, isym, &nline, "~x~y~O=in, S=cp", &indgr, xplot, yplot, nper, strlen("~x~y~O=in, S=cp"));
     }
 #endif
 
@@ -632,6 +670,18 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* sw quadrant -- generate coordinates */
     npnt = 0;
+
+    if (SLPFACT(0) < 0 && n_sw >= 2) {
+        for (i = 0; i < NUMPNTS(0); i++) {
+            theta = (double)(NUMPNTS(0)-i) / (double)(NUMPNTS(0)) * PI/2;
+
+            pnt_sw[3*npnt  ] = -rx_w * pow(cos(theta), 2.0/n_sw);
+            pnt_sw[3*npnt+1] = +ry_s * pow(sin(theta), 2.0/n_sw);
+            pnt_sw[3*npnt+2] = 0;
+            npnt++;
+        }
+    }
+    
     pnt_sw[3*npnt  ] = -rx_w;
     pnt_sw[3*npnt+1] =  0;
     pnt_sw[3*npnt+2] =  0;
@@ -664,6 +714,17 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     pnt_sw[3*npnt+1] = -ry_s;
     pnt_sw[3*npnt+2] =  0;
     npnt++;
+
+    if (SLPFACT(0) < 0 && n_sw >= 2) {
+        for (i = 0; i < NUMPNTS(0); i++) {
+            theta = (double)(NUMPNTS(0)-1-i) / (double)(NUMPNTS(0)) * PI/2;
+
+            pnt_sw[3*npnt  ] = +rx_w * pow(cos(theta), 2.0/n_sw);
+            pnt_sw[3*npnt+1] = -ry_s * pow(sin(theta), 2.0/n_sw);
+            pnt_sw[3*npnt+2] = 0;
+            npnt++;
+        }
+    }
 
     /* create offset if required */
     if (OFFSET(0) != 0) {
@@ -698,24 +759,22 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     status = EG_approximate(context, 1, dxytol, sizes, pnt_sw, &(ecurve[2]));
     CHECK_STATUS(EG_approximate);
 
-    ipnt = 0;
-    data[0] = pnt_sw[3*ipnt  ];
-    data[1] = pnt_sw[3*ipnt+1];
-    data[2] = pnt_sw[3*ipnt+2];
+    data[0] = -rx_w - OFFSET(0);
+    data[1] = 0;
+    data[2] = 0;
     status = EG_invEvaluate(ecurve[2], data, &(tdata[0]), result);
     CHECK_STATUS(EG_invEvaluate);
 
-    ipnt = npnt - 1;
-    data[0] = pnt_sw[3*ipnt  ];
-    data[1] = pnt_sw[3*ipnt+1];
-    data[2] = pnt_sw[3*ipnt+2];
+    data[0] = 0;
+    data[1] = -ry_s - OFFSET(0);
+    data[2] = 0;
     status = EG_invEvaluate(ecurve[2], data, &(tdata[1]), result);
     CHECK_STATUS(EG_invEvaluate);
 
 #ifdef GRAFIC
     {
         int    io_kbd=5, io_scr=6, indgr=1+2+4+16+64;
-        int    ilin[3], isym[3], nper[3], nline=0, nplot=0;
+        int    ilin[3], isym[3], nper[3], nline=0, nplot=0, ipnt;
         int    oclass, mtype, *header;
         float  xplot[2000], yplot[2000];
         double tt, *gdata;
@@ -762,7 +821,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         EG_free(gdata );
 
         grinit_(&io_kbd, &io_scr, "southwest", strlen("southwwest"));
-        grline_(ilin, isym, &nline, "~x~y~ ", &indgr, xplot, yplot, nper, strlen("~x~y~ "));
+        grline_(ilin, isym, &nline, "~x~y~O=in, S=cp", &indgr, xplot, yplot, nper, strlen("~x~y~O=in, S=cp"));
     }
 #endif
 
@@ -776,6 +835,18 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* se quadrant -- generate coordinates */
     npnt = 0;
+
+    if (SLPFACT(0) < 0 && n_se >= 2) {
+        for (i = 0; i < NUMPNTS(0)-1; i++) {
+            theta = (double)(i) / (double)(NUMPNTS(0)-1) * PI/2;
+
+            pnt_se[3*npnt  ] = -rx_e * pow(cos(theta), 2.0/n_se);
+            pnt_se[3*npnt+1] = -ry_s * pow(sin(theta), 2.0/n_se);
+            pnt_se[3*npnt+2] = 0;
+            npnt++;
+        }
+    }
+    
     pnt_se[3*npnt  ] =  0;
     pnt_se[3*npnt+1] = -ry_s;
     pnt_se[3*npnt+2] =  0;
@@ -808,6 +879,17 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     pnt_se[3*npnt+1] =  0;
     pnt_se[3*npnt+2] =  0;
     npnt++;
+
+    if (SLPFACT(0) < 0 && n_se >= 2) {
+        for (i = 0; i < NUMPNTS(0); i++) {
+            theta = (double)(i+1) / (double)(NUMPNTS(0)) * PI/2;
+
+            pnt_se[3*npnt  ] = +rx_e * pow(cos(theta), 2.0/n_se);
+            pnt_se[3*npnt+1] = +ry_s * pow(sin(theta), 2.0/n_se);
+            pnt_se[3*npnt+2] = 0;
+            npnt++;
+        }
+    }
 
     /* create offset if required */
     if (OFFSET(0) != 0) {
@@ -842,24 +924,22 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     status = EG_approximate(context, 1, dxytol, sizes, pnt_se, &(ecurve[3]));
     CHECK_STATUS(EG_approximate);
 
-    ipnt = 0;
-    data[0] = pnt_se[3*ipnt  ];
-    data[1] = pnt_se[3*ipnt+1];
-    data[2] = pnt_se[3*ipnt+2];
+    data[0] = 0;
+    data[1] = -ry_s - OFFSET(0);
+    data[2] = 0;
     status = EG_invEvaluate(ecurve[3], data, &(tdata[0]), result);
     CHECK_STATUS(EG_invEvaluate);
 
-    ipnt = npnt - 1;
-    data[0] = pnt_se[3*ipnt  ];
-    data[1] = pnt_se[3*ipnt+1];
-    data[2] = pnt_se[3*ipnt+2];
+    data[0] = +rx_e + OFFSET(0);
+    data[1] = 0;
+    data[2] = 0;
     status = EG_invEvaluate(ecurve[3], data, &(tdata[1]), result);
     CHECK_STATUS(EG_invEvaluate);
 
 #ifdef GRAFIC
     {
         int    io_kbd=5, io_scr=6, indgr=1+2+4+16+64;
-        int    ilin[3], isym[3], nper[3], nline=0, nplot=0;
+        int    ilin[3], isym[3], nper[3], nline=0, nplot=0, ipnt;
         int    oclass, mtype, *header;
         float  xplot[2000], yplot[2000];
         double tt, *gdata;
@@ -906,7 +986,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         EG_free(gdata );
 
         grinit_(&io_kbd, &io_scr, "southeast", strlen("southeast"));
-        grline_(ilin, isym, &nline, "~x~y~ ", &indgr, xplot, yplot, nper, strlen("~x~y~ "));
+        grline_(ilin, isym, &nline, "~x~y~O=in, S=cp", &indgr, xplot, yplot, nper, strlen("~x~y~O=in, S=cp"));
     }
 #endif
 

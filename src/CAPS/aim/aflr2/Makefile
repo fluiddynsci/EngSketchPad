@@ -22,18 +22,28 @@ endif
 
 AFLR2_LIB  = -laflr2c -legen
 AFLR2_LIB += -lrec2 -ldftr2 -ldftr3 -ldgeom -lotb -lqtb
-AFLR2_LIB += -lice2 -lug2 -lug3 -lug_gq -lug
+AFLR2_LIB += -lug_io -lug_cpp -lice2 -lug2 -lug3 -lug_gq -lug
 
 ifeq ("$(ESP_ARCH)","LINUX64")
 AFLR2_LIB += -lrt
 endif
 
+###############################################################################
 # Used to add debug information to AFLR2
 # Please do not remove this - MCG
 # AFLR2_FILES=$(wildcard $(AFLR)/src/aflr2c/*.c)
 # AFLR2_OBJS=$(patsubst %.c,%.o,$(AFLR2_FILES))
 
-# OBJS=$(AFLR2_OBJS)
+#VPATH    += $(AFLR)/src/ug3
+#UG3_FILES=$(wildcard $(AFLR)/src/ug3/*.c)
+#UG3_OBJS=$(patsubst %.c,%.o,$(UG3_FILES))
+
+#VPATH    += $(AFLR)/src/ug_io
+#UG_IO_FILES = $(wildcard $(AFLR)/src/ug_io/*.c)
+#UG_IO_OBJS  = $(subst $(AFLR)/src/ug_io,$(ODIR),$(UG_IO_FILES:.c=.o))
+
+#OBJS=$(AFLR2_OBJS) $(UG_IO_OBJS) $(UG3_OBJS)
+###############################################################################
 
 $(LDIR)/aflr2AIM.so:	$(ODIR)/aflr2AIM.o $(ODIR)/aflr2_Interface.o \
 			$(LDIR)/libutils.a $(LDIR)/libaimUtil.a $(OBJS)
@@ -42,10 +52,10 @@ $(LDIR)/aflr2AIM.so:	$(ODIR)/aflr2AIM.o $(ODIR)/aflr2_Interface.o \
 	$(CC) $(SOFLGS) -o $(LDIR)/aflr2AIM.so $(ODIR)/aflr2AIM.o \
 		$(ODIR)/aflr2_Interface.o $(OBJS) -L$(AFLR)/$(AFLR_ARCH)/lib \
 		$(AFLR2_LIB) -L$(LDIR) -lutils \
-		-laimUtil -locsm -legads -ludunits2 $(RPATH) $(CPPSLB) -lm
+		-laimUtil -locsm -legads -ludunits2 -ldl $(RPATH) $(CPPSLB) -lm
 
 $(ODIR)/aflr2AIM.o:	$(ODIR)/aflr2_version aflr2AIM.c $(IDIR)/capsTypes.h \
-			../utils/meshUtils.h
+			$(IDIR)/aimUtil.h $(IDIR)/aimMesh.h ../utils/meshUtils.h 
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I$(AFLR)/src \
 		-I../utils aflr2AIM.c -o $(ODIR)/aflr2AIM.o
 
@@ -63,7 +73,7 @@ $(ODIR)/aflr2_version:	aflr2_version.c $(AFLR)/src/aflr2c/aflr2c_version.h
 	$(ODIR)/aflr2_version
 
 ifdef OBJS
-$(OBJS): %.o:	%.c
+$(ODIR)/%.o:	%.c
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I$(AFLR)/src $< -o $@
 endif
 

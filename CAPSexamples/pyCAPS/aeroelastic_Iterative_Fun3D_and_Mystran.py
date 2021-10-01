@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(description = 'Aeroelastic Fun3D and Mystran Ex
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -33,7 +33,7 @@ numTransferIteration = 2
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransfer.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AIMs
 myProblem.analysis.create(aim = "egadsTessAIM",
@@ -54,7 +54,8 @@ myProblem.analysis["fun3d"].input["Mesh"].link(myProblem.analysis["tetgen"].outp
 
 myProblem.analysis.create(aim = "mystranAIM",
                           name = "mystran",
-                          capsIntent = "STRUCTURE")
+                          capsIntent = "STRUCTURE",
+                          autoExec = False)
 
 boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
 for boundName in boundNames:
@@ -159,24 +160,6 @@ constraint = {"groupName" : "Rib_Root",
               "dofConstraint" : 123456}
 myProblem.analysis["mystran"].input.Constraint = {"edgeConstraint": constraint}
 
-####### EGADS ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "egads")
-myProblem.analysis["egads"].preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "egads")
-myProblem.analysis["egads"].postAnalysis()
-#######################################
-
-
-####### Tetgen ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "tetgen")
-myProblem.analysis["tetgen"].preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "tetgen")
-myProblem.analysis["tetgen"].postAnalysis()
-#######################################
 
 # Aeroelastic iteration loop
 for iter in range(numTransferIteration):

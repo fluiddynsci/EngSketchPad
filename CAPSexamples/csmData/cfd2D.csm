@@ -65,8 +65,8 @@ select edge 6
 ifthen sharpTE eq 0 
 
     select edge 7
-        attribute capsGroup $Airfoil
-        attribute capsMesh $Airfoil
+        attribute capsGroup $AirfoilTE
+        attribute capsMesh $AirfoilTE
 
 endif
 

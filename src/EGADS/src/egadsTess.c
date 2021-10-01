@@ -640,6 +640,10 @@ EG_fillArea(int nc, const int *cntr, const double *vertices, int *triangles,
                    i, ncontours, i0, i1);
 	  /* figure 8's in the external loop decrease the triangle count */
           if (i == 0) (*n_fig8)++;  /* . . . . sometimes                 */
+          if (*n_fig8 > 1000) {
+            printf(" EGADS Info: Something is wrong w/ Fig 8s -- BAIL!\n");
+            return -1;
+          }
           for (l = 0; l < index; l++) {
             if (fa->front[l].i0 == i1) fa->front[l].i0 = i0;
             if (fa->front[l].i1 == i1) fa->front[l].i1 = i0;
@@ -1393,6 +1397,62 @@ EG_getTessFace(const egObject *tess, int indx, int *len, const double **xyz,
              btess->tess2d[index-1].pindex[i]);
   }
 */
+  return EGADS_SUCCESS;
+}
+
+
+__HOST_AND_DEVICE__ int
+EG_getTessFrame(const egObject *tess, int index, const egBary **bary,
+                int *nftri, const int **ftris)
+{
+  int      outLevel, stat;
+  egTessel *btess;
+
+  *bary  = NULL;
+  *nftri = 0;
+  *ftris = NULL;
+  if (tess == NULL)                 return EGADS_NULLOBJ;
+  if (tess->magicnumber != MAGIC)   return EGADS_NOTOBJ;
+  if (tess->oclass != TESSELLATION) return EGADS_NOTTESS;
+  outLevel = EG_outLevel(tess);
+  btess    = (egTessel *) tess->blind;
+  if (btess == NULL) {
+    if (outLevel > 0)
+      printf(" EGADS Error: NULL Blind Object (EG_getTessFrame)!\n");
+    return EGADS_NOTFOUND;
+  }
+  if (btess->tess2d == NULL) {
+    if (outLevel > 0)
+      printf(" EGADS Error: No Face Tessellations (EG_getTessFrame)!\n");
+    return EGADS_NODATA;
+  }
+  if ((index < 1) || (index > btess->nFace)) {
+    if (outLevel > 0)
+      printf(" EGADS Error: Index = %d [1-%d] (EG_getTessFrame)!\n",
+             index, btess->nFace);
+    return EGADS_INDEXERR;
+  }
+  if (btess->tess2d[index-1].frame == NULL) {
+    if (outLevel > 0)
+      printf(" EGADS Error: Frame %d is NULL (EG_getTessFrame)!\n", index);
+    return EGADS_NOTFOUND;
+  }
+
+  /* compute the barycentric coordinates if not there */
+  if (btess->tess2d[index-1].bary == NULL) {
+    stat = EG_baryFrame(&btess->tess2d[index-1]);
+    if (stat != EGADS_SUCCESS) {
+      if (outLevel > 0)
+        printf(" EGADS Error: baryFrame Face %d = %d (EG_getTessFrame)!\n",
+               index, stat);
+      return stat;
+    }
+  }
+  
+  *bary  = btess->tess2d[index-1].bary;
+  *nftri = btess->tess2d[index-1].nframe;
+  *ftris = btess->tess2d[index-1].frame;
+  
   return EGADS_SUCCESS;
 }
 
@@ -2848,7 +2908,9 @@ EG_tessEdge(egTessel *btess, egObject **faces, int j, egObject *edge,
   stat = EG_tolerance(edge, &tol);
   if (stat == EGADS_SUCCESS)
     if (mindist < tol) mindist = tol;
-  if (0.1*params[1] > mindist) mindist = 0.1*params[1];
+  stat = EG_arcLength(edge, t[0], t[1], &dist);
+  if (stat == EGADS_SUCCESS)
+    if (dist > mindist) mindist = dist/(2*MAXELEN);
 #ifdef DEBUG
   printf("%lX     minDist = %le\n", tID, mindist);
 #endif
@@ -3194,6 +3256,46 @@ EG_tessEdge(egTessel *btess, egObject **faces, int j, egObject *edge,
   
   /* non-linear curve types */
   if (geomtype != LINE) {
+    
+    ndum = 0;
+    while (npts < MAXELEN) {
+      /* split where arc-length does not match line seg */
+      for (k = ndum; k < npts-1; k++) {
+        stat = EG_arcLength(edge, t[k], t[k+1], &dist);
+        if (stat != EGADS_SUCCESS) continue;
+        d = sqrt((xyz[k][0]-xyz[k+1][0])*(xyz[k][0]-xyz[k+1][0]) +
+                 (xyz[k][1]-xyz[k+1][1])*(xyz[k][1]-xyz[k+1][1]) +
+                 (xyz[k][2]-xyz[k+1][2])*(xyz[k][2]-xyz[k+1][2]));
+        if (d < 2.0*mindist) continue;
+        d /= dist;
+        if (d <= 0.0)        continue;
+        if (d > dotnrm)      continue;
+        for (i = npts-1; i > k; i--) {
+          xyz[i+1][0] = xyz[i][0];
+          xyz[i+1][1] = xyz[i][1];
+          xyz[i+1][2] = xyz[i][2];
+          t[i+1]      = t[i];
+          iobj[i+1]   = iobj[i];
+#ifdef SPLITC0
+          C0[i+1]     = C0[i];
+#endif
+        }
+        t[k+1]      = 0.5*(t[k]+t[k+2]);
+        stat        = EG_evaluate(edge, &t[k+1], result);
+        if (stat != EGADS_SUCCESS) return stat;
+        xyz[k+1][0] = result[0];
+        xyz[k+1][1] = result[1];
+        xyz[k+1][2] = result[2];
+        iobj[k+1]   = EG_effectIndex(body, edge, t[k+1]);
+#ifdef SPLITC0
+        C0[k+1]     = 0;
+#endif
+        ndum        = k;
+        npts++;
+        break;
+      }
+      if (k == npts-1) break;
+    }
 
     /* angle criteria - aux is normalized tangent */
     if (params[2] != 0.0) {

@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser(description = 'Astros PyTest Example',
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 workDir = os.path.join(str(args.workDir[0]), "AstrosModalWingBEM")
@@ -32,7 +32,7 @@ workDir = os.path.join(str(args.workDir[0]), "AstrosModalWingBEM")
 geometryScript = os.path.join("..","csmData","feaWingBEM.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript, 
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 
 # Create egadsTess aim
@@ -44,11 +44,9 @@ myProblem.analysis["tess"].input.Mesh_Elements = "Quad"
 
 # Set global tessellation parameters
 myProblem.analysis["tess"].input.Tess_Params = [.05,.5,15]
+myProblem.analysis["tess"].input.Edge_Point_Max = 2
 
-# Generate the surface mesh
-myProblem.analysis["tess"].preAnalysis()
-myProblem.analysis["tess"].postAnalysis()
-
+# Surface mesh is executed automatically
 
 # Create astros aim
 myProblem.analysis.create( aim = "astrosAIM",
@@ -104,32 +102,7 @@ constraint = {"groupName" : ["Rib_Constraint"],
 
 myProblem.analysis["astros"].input.Constraint = {"ribConstraint": constraint}
 
-
-# Run AIM pre-analysis
-myProblem.analysis["astros"].preAnalysis()
-
-####### Run Astros####################
-print ("\n\nRunning Astros......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(myProblem.analysis["astros"].analysisDir) # Move into test directory
-
-# Copy files needed to run astros
-astros_files = ["ASTRO.D01",  # *.DO1 file
-                "ASTRO.IDX"]  # *.IDX file
-for file in astros_files:
-    if not os.path.isfile(file):
-        shutil.copy(ASTROS_ROOT + os.sep + file, file)
-
-if (args.noAnalysis == False):
-    # Run Astros via system call
-    os.system("astros.exe < " + projectName +  ".dat > " + projectName + ".out");
-
-os.chdir(currentDirectory) # Move back to working directory
-print ("Done running Astros!")
-
-# Run AIM post-analysis
-myProblem.analysis["astros"].postAnalysis()
+# astros is executed automatically just-in-time
 
 # Get Eigen-frequencies
 print ("\nGetting results for natural frequencies.....")

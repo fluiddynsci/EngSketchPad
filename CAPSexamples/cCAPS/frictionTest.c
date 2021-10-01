@@ -58,6 +58,7 @@ int main(int argc, char *argv[])
 {
     int status; // Function return status;
     int i; // Indexing
+    int outLevel = 1;
 
     // CAPS objects
     capsObj          problemObj, frictionObj, tempObj;
@@ -82,31 +83,28 @@ int main(int argc, char *argv[])
     char *analysisPath;
     char currentPath[PATH_MAX];
 
-    int runAnalysis = (int) true;
-
     printf("\n\nAttention: frictionTest is hard coded to look for ../csmData/frictionWingTailFuselage.csm\n");
     printf("To not make system calls to the friction executable the second command line option may be "
            "supplied - 0 = no analysis , >0 run analysis (default).\n\n");
 
     if (argc > 2) {
-        printf(" usage: frictionTest noAnalysis!\n");
+        printf(" usage: frictionTest outLevel!\n");
         return 1;
-    }
-
-    if (argc == 2) {
-        if (strcasecmp(argv[1], "0") == 0) runAnalysis = (int) false;
+    } else if (argc == 2) {
+        outLevel = atoi(argv[1]);
     }
 
 
     status = caps_open("FRICTION_Example", NULL, 0,
-                       "../csmData/frictionWingTailFuselage.csm", 1,
+                       "../csmData/frictionWingTailFuselage.csm", outLevel,
                        &problemObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Now load the frictionAIM
-    status = caps_makeAnalysis(problemObj, "frictionAIM", NULL, NULL, NULL, 0,
-                               &frictionObj, &nErr, &errors);
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "frictionAIM", NULL, NULL, NULL,
+                               &exec, &frictionObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
   
@@ -154,17 +152,14 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-    if (runAnalysis == (int) false) {
-        printf("\n\nNot Running FRICTION!\n\n");
-    } else {
-        printf("\n\nRunning FRICTION!\n\n");
+    printf("\n\nRunning FRICTION!\n\n");
 
 #ifdef WIN32
-        system("friction.exe frictionInput.txt frictionOutput.txt > Info.out");
+    system("friction.exe frictionInput.txt frictionOutput.txt > Info.out");
 #else
-        system("friction frictionInput.txt frictionOutput.txt > Info.out");
+    system("friction frictionInput.txt frictionOutput.txt > Info.out");
 #endif
-    }
+
 
     (void) chdir(currentPath);
 

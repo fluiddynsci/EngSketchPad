@@ -12,34 +12,34 @@ COPY  =
 endif
 
 all: $(COPY) | $(TDIR) 
-	(cd cCAPS; make -f avlTest.make)
-	(cd cCAPS; make -f frictionTest.make)
-	(cd cCAPS; make -f fun3d.make)
-	(cd cCAPS; make -f hsm.make)
-	(cd cCAPS; make -f mystran.make)
-	(cd cCAPS; make -f aeroelastic_SU2.make)
-	(cd cCAPS; make -f pointwiseTest.make)
+	(make -C cCAPS -f avlTest.make)
+	(make -C cCAPS -f awaveTest.make)
+	(make -C cCAPS -f frictionTest.make)
+	(make -C cCAPS -f fun3d.make)
+	(make -C cCAPS -f hsm.make)
+	(make -C cCAPS -f mystran.make)
+	(make -C cCAPS -f aeroelastic_SU2.make)
+	(make -C cCAPS -f pointwiseTest.make)
 
 clean:
-	(cd cCAPS; make -f avlTest.make clean)
-	(cd cCAPS; make -f frictionTest.make clean)	
-	(cd cCAPS; make -f fun3d.make clean)
-	(cd cCAPS; make -f hsm.make clean)
-	(cd cCAPS; make -f mystran.make clean)
-	(cd cCAPS; make -f aeroelastic_SU2.make clean)
-	(cd cCAPS; make -f pointwiseTest.make clean)
+	(make -C cCAPS -f avlTest.make clean)
+	(make -C cCAPS -f awaveTest.make clean)
+	(make -C cCAPS -f frictionTest.make clean)	
+	(make -C cCAPS -f fun3d.make clean)
+	(make -C cCAPS -f hsm.make clean)
+	(make -C cCAPS -f mystran.make clean)
+	(make -C cCAPS -f aeroelastic_SU2.make clean)
+	(make -C cCAPS -f pointwiseTest.make clean)
 
 cleanall:
-	(cd cCAPS; make -f avlTest.make cleanall)
-	(cd cCAPS; make -f frictionTest.make cleanall)
-	(cd cCAPS; make -f fun3d.make cleanall)
-	(cd cCAPS; make -f hsm.make cleanall)
-	(cd cCAPS; make -f mystran.make cleanall)
-	(cd cCAPS; make -f aeroelastic_SU2.make cleanall)
-	(cd cCAPS; make -f pointwiseTest.make cleanall)
-
-ifdef ESP_BLOC
-endif
+	(make -C cCAPS -f avlTest.make cleanall)
+	(make -C cCAPS -f awaveTest.make cleanall)
+	(make -C cCAPS -f frictionTest.make cleanall)
+	(make -C cCAPS -f fun3d.make cleanall)
+	(make -C cCAPS -f hsm.make cleanall)
+	(make -C cCAPS -f mystran.make cleanall)
+	(make -C cCAPS -f aeroelastic_SU2.make cleanall)
+	(make -C cCAPS -f pointwiseTest.make cleanall)
 
 ifdef PYTHONINC
 test: cCAPStest pyCAPStest

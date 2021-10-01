@@ -50,7 +50,7 @@ class TestEGADS(unittest.TestCase):
         myAnalysis.input.Mesh_Length_Factor = -1
 
         with self.assertRaises(pyCAPS.CAPSError) as e:
-            myAnalysis.preAnalysis()
+            myAnalysis.runAnalysis()
 
         self.assertEqual(e.exception.errorName, "CAPS_BADVALUE")
 
@@ -61,12 +61,12 @@ class TestEGADS(unittest.TestCase):
 
         myAnalysis = myProblem.analysis.create(aim = "egadsTessAIM")
 
-        myAnalysis.input.Proj_Name = "pyCAPS_AFLR4_Test"
+        myAnalysis.input.Proj_Name = "pyCAPS_EGADS_Test"
         myAnalysis.input.Mesh_Length_Factor = 1.05
         myAnalysis.input.Tess_Params = [0.1, 0.01, 15.0]
         myAnalysis.input.Mesh_Format = "Tecplot"
         myAnalysis.input.Mesh_ASCII_Flag = True
-        myAnalysis.input.Edge_Point_Min = 1
+        myAnalysis.input.Edge_Point_Min = 2
         myAnalysis.input.Edge_Point_Max = 10
         
         # Modify local mesh sizing parameters
@@ -88,10 +88,8 @@ class TestEGADS(unittest.TestCase):
         Mesh_Sizing = {"Farfield": {"tessParams" : [0.3*80, 0.2*80, 30]}}
         myAnalysis.input.Mesh_Sizing = Mesh_Sizing
 
-        # Run
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
-        
+        # Execution is automatic
+
         # Assert AnalysisOutVals
         self.assertTrue(myAnalysis.output.Done)
 
@@ -112,8 +110,7 @@ class TestEGADS(unittest.TestCase):
         myAnalysis.input.Mesh_Sizing = Mesh_Sizing
 
         # Run
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
+        myAnalysis.runAnalysis()
 
     def test_reenter(self):
 
@@ -129,14 +126,12 @@ class TestEGADS(unittest.TestCase):
         myAnalysis.input.Mesh_Length_Factor = 1
 
         # Run 1st time
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
+        myAnalysis.runAnalysis()
 
         myAnalysis.input.Mesh_Length_Factor = 2
 
         # Run 2nd time coarser
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
+        myAnalysis.runAnalysis()
 
 
     def test_box(self):
@@ -147,8 +142,7 @@ class TestEGADS(unittest.TestCase):
                                                    capsIntent = ["box", "farfield"])
 
         # Just make sure it runs without errors...
-        egadsTess.preAnalysis()
-        egadsTess.postAnalysis()
+        egadsTess.runAnalysis()
 
     def test_cylinder(self):
 
@@ -158,8 +152,7 @@ class TestEGADS(unittest.TestCase):
                                                    capsIntent = ["cylinder", "farfield"])
 
         # Just make sure it runs without errors...
-        egadsTess.preAnalysis()
-        egadsTess.postAnalysis()
+        egadsTess.runAnalysis()
 
     def test_cone(self):
 
@@ -169,8 +162,7 @@ class TestEGADS(unittest.TestCase):
                                                    capsIntent = ["cone", "farfield"])
 
         # Just make sure it runs without errors...
-        egadsTess.preAnalysis()
-        egadsTess.postAnalysis()
+        egadsTess.runAnalysis()
 
     def test_torus(self):
 
@@ -180,8 +172,7 @@ class TestEGADS(unittest.TestCase):
                                                    capsIntent = ["torus", "farfield"])
 
         # Just make sure it runs without errors...
-        egadsTess.preAnalysis()
-        egadsTess.postAnalysis()
+        egadsTess.runAnalysis()
 
         #egadsTess.viewGeometry()
 
@@ -193,8 +184,7 @@ class TestEGADS(unittest.TestCase):
                                                    capsIntent = ["sphere", "farfield"])
 
         # Just make sure it runs without errors...
-        egadsTess.preAnalysis()
-        egadsTess.postAnalysis()
+        egadsTess.runAnalysis()
 
         #egadsTess.viewGeometry()
 
@@ -206,8 +196,7 @@ class TestEGADS(unittest.TestCase):
                                                    capsIntent = ["boxhole", "farfield"])
 
         # Just make sure it runs without errors...
-        egadsTess.preAnalysis()
-        egadsTess.postAnalysis()
+        egadsTess.runAnalysis()
 
         #egadsTess.viewGeometry()
 
@@ -219,8 +208,7 @@ class TestEGADS(unittest.TestCase):
                                                    capsIntent = ["bullet", "farfield"])
 
         # Just make sure it runs without errors...
-        egadsTess.preAnalysis()
-        egadsTess.postAnalysis()
+        egadsTess.runAnalysis()
 
         #egadsTess.viewGeometry()
 
@@ -232,8 +220,7 @@ class TestEGADS(unittest.TestCase):
                                                    capsIntent = ["box", "cylinder", "cone", "torus", "sphere", "boxhole", "bullet", "farfield"]) 
 
         # Just make sure it runs without errors...
-        egadsTess.preAnalysis()
-        egadsTess.postAnalysis()
+        egadsTess.runAnalysis()
 
         #egadsTess.viewGeometry()
 

@@ -70,9 +70,12 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     int     status = EGADS_SUCCESS;
 
     int     oclass, mtype, mtype2, nchild, nchild2, ichild, *senses;
-    int     idir, nedge, nslice, islice, one=1;
+    int     idir, nedge, nslice, islice, one=1, haveTparams, attrType, attrLen;
+    CINT    *tempIlist;
     double  bbox[6], xslice=0, yslice=0, zslice=0, data[18];
+    CDOUBLE *tempRlist;
     char    *message=NULL;
+    CCHAR   *tempClist;
     ego     context, eref, *ebodys, *echilds, esurface, eface, eshell, esheet, emodel2, *eslices=NULL;
 
     ROUTINE(udpExecute);
@@ -140,6 +143,15 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
         idir = 3;
     } else {
         idir = 1;
+    }
+
+    /* if there is a .tParams on ebodys[0], remember it and put it on all slices */
+    status = EG_attributeRet(ebodys[0], ".tParams", &attrType, &attrLen,
+                             &tempIlist, &tempRlist, &tempClist);
+    if (status == SUCCESS) {
+        haveTparams = 1;
+    } else {
+        haveTparams = 0;
     }
 
     /* get an array to store the slices */
@@ -231,6 +243,12 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
             for (ichild = 0; ichild < nchild2; ichild++) {
                 status = EG_copyObject(echilds[ichild], NULL, &eslices[nslice]);
                 CHECK_STATUS(EG_copyObject);
+
+                if (haveTparams == 1) {
+                    status = EG_attributeAdd(eslices[nslice], ".tParams", attrType, attrLen,
+                                             tempIlist, tempRlist, tempClist);
+                    CHECK_STATUS(EG_attributeAdd);
+                }
 
                 /* tell OpenCSM that the Faces do not have a _body attribute */
                 status = EG_attributeAdd(eslices[nslice], "__markFaces__", ATTRINT, 1,

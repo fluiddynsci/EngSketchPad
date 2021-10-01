@@ -4,10 +4,11 @@ aimDiscr
 aimFreeDiscrPtr
 aimLocateElement
 aimInputs
-aimPreAnalysis
 aimOutputs
-aimCalcOutput
+aimPreAnalysis
+aimExecute
 aimPostAnalysis
+aimCalcOutput
 aimTransfer
 aimInterpolation
 aimInterpolateBar

@@ -7,6 +7,7 @@
 #define MESHTYPES_H
 
 #include "egads.h"
+#include "miscTypes.h"
 
 typedef enum {UnknownDistribution, EvenDistribution, TanhDistribution } edgeDistributionEnum;
 
@@ -75,23 +76,23 @@ typedef struct {
 
 // Container for hoTess specific inputs
 typedef struct {
-	meshElementTypeEnum meshElementType;
+    meshElementTypeEnum meshElementType;
 
-	// inputs to EG_tessHOverts
-	// number of vertices local to the elevated element
-	int numLocalElevatedVerts;
+    // inputs to EG_tessHOverts
+    // number of vertices local to the elevated element
+    int numLocalElevatedVerts;
 
-	// weights of local verts relative to ref element
-	// 2*numLocalElevatedVerts in length
-	double *weightsLocalElevatedVerts;
+    // weights of local verts relative to ref element
+    // 2*numLocalElevatedVerts in length
+    double *weightsLocalElevatedVerts;
 
-	// number of internal elevated tris created per source triangle
-	// negative number indicates quads (paired triangles)
-	int numLocalElevatedTris;
+    // number of internal elevated tris created per source triangle
+    // negative number indicates quads (paired triangles)
+    int numLocalElevatedTris;
 
-	// local elevated triangle indices (1-bias)
-	// 3*numLocalElevatedTris in length
-	int *orderLocalElevatedTris;
+    // local elevated triangle indices (1-bias)
+    // 3*numLocalElevatedTris in length
+    int *orderLocalElevatedTris;
 } hoTessInputStruct;
 
 // Container for meshing inputs
@@ -276,6 +277,9 @@ struct meshStruct {
     meshStruct *referenceMesh; // Pointers to other meshes, should be freed but not individual references, size[numReferenceMesh]
 
     meshQuickRefStruct meshQuickRef;
+
+    // Attribute to index map that maps CAPSGroup names to indexes
+    mapAttrToIndexStruct groupMap;
 };
 
 // Container for mesh data relevant for CFD analysis

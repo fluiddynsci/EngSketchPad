@@ -41,7 +41,11 @@ endif
 #UG3_FILES=$(wildcard $(AFLR)/src/ug3/*.c)
 #UG3_OBJS=$(patsubst %.c,%.o,$(UG3_FILES))
 
-#OBJS=$(AFLR3_OBJS) $(UG_OBJS) $(UG3_OBJS)
+#VPATH    += $(AFLR)/src/ug_io
+#UG_IO_FILES = $(wildcard $(AFLR)/src/ug_io/*.c)
+#UG_IO_OBJS  = $(subst $(AFLR)/src/ug_io,$(ODIR),$(UG_IO_FILES:.c=.o))
+
+#OBJS=$(AFLR3_OBJS) $(UG_OBJS) $(UG3_OBJS) $(UG_IO_OBJS)
 ###############################################################################
 
 $(LDIR)/aflr3AIM.so:	$(ODIR)/aflr3AIM.o $(ODIR)/aflr3_Interface.o \
@@ -51,10 +55,10 @@ $(LDIR)/aflr3AIM.so:	$(ODIR)/aflr3AIM.o $(ODIR)/aflr3_Interface.o \
 	$(CC) $(SOFLGS) -o $(LDIR)/aflr3AIM.so $(ODIR)/aflr3AIM.o \
 		$(ODIR)/aflr3_Interface.o $(OBJS) -L$(AFLR)/$(AFLR_ARCH)/lib \
 		$(AFLR3_LIB) $(AFLR3_LIB) $(AFLR3_LIB) -L$(LDIR) -lutils \
-		-laimUtil -locsm -legads -ludunits2 $(RPATH) $(CPPSLB) -lm
+		-laimUtil -locsm -legads -ludunits2 -ldl $(RPATH) $(CPPSLB) -lm
 
 $(ODIR)/aflr3AIM.o:	$(ODIR)/aflr3_version aflr3AIM.c $(IDIR)/capsTypes.h \
-			../utils/meshUtils.h
+			$(IDIR)/aimUtil.h $(IDIR)/aimMesh.h ../utils/meshUtils.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils aflr3AIM.c \
 		-o $(ODIR)/aflr3AIM.o
 
@@ -73,7 +77,7 @@ $(ODIR)/aflr3_version:	aflr3_version.c $(AFLR)/src/aflr3/aflr3_version.h
 	$(ODIR)/aflr3_version
 
 ifdef OBJS
-$(OBJS): %.o:	%.c
+$(ODIR)/%.o:	%.c
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I$(AFLR)/src $< -o $@
 endif
 

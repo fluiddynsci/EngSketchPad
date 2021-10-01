@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description = 'Nastran Three Bar Frequency Pyte
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 workDir = os.path.join(args.workDir[0], "NastranThreeBarFreq")
@@ -25,7 +25,7 @@ workDir = os.path.join(args.workDir[0], "NastranThreeBarFreq")
 geometryScript = os.path.join("..","csmData","feaThreeBar.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 ## [geometry]
 
 ## [loadAIM]

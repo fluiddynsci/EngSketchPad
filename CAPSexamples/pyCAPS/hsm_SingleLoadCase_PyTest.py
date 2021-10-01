@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(description = 'HSM Pytest Example',
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create project name
@@ -25,7 +25,7 @@ workDir = os.path.join(str(args.workDir[0]), projectName)
 geometryScript = os.path.join("..","csmData","feaSimplePlate.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load mystran aim
 myAnalysis = myProblem.analysis.create(aim = "hsmAIM")
@@ -71,8 +71,5 @@ load = {"groupName" : "plate",
 # Set loads
 myAnalysis.input.Load = {"appliedPressure": load}
 
-# Run AIM pre-analysis - Runs HSM
-myAnalysis.preAnalysis()
-
-# Run AIM post-analysis
-myAnalysis.postAnalysis()
+# Run AIM
+myAnalysis.runAnalysis()

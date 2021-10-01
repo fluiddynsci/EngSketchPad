@@ -1616,11 +1616,12 @@ EG_splitBody(const egObject *body, int nseg, const egObject **facEdg,
   if (status != EGADS_SUCCESS) goto cleanup;
   
   if (nshells > 1) {
-    printf(" EGADS Internal: # Shells = %d\n", nshells);
+    if (outLevel > 1)
+      printf(" EGADS Internal: # Shells = %d\n", nshells);
     for (i = 0; i < nseg; i++) {
       status = EG_getBodyTopos(body, fe[i].face, SHELL, &n, &objs);
       if (status != EGADS_SUCCESS) goto cleanup;
-      if (n != 1) printf(" EGADS Internal: Face is in %d Shells!\n", n);
+      if ((n != 1) && (outLevel > 1)) printf(" EGADS Internal: Face is in %d Shells!\n", n);
       fe[i].shell = EG_indexBodyTopo(body, objs[0]);
       EG_free(objs);
     }

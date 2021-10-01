@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description = 'Delaundo Pytest Example',
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -23,10 +23,10 @@ workDir = str(args.workDir[0]) + "/DelaundoAnalysisTest"
 geometryScript = os.path.join("..","csmData","cfd2D.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript, 
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Set the sharp trailing edge geometry design parameter
-myProblem.geometry.cfgpmtr.sharpTE = 0.0
+myProblem.geometry.cfgpmtr.sharpTE = 0
 
 # Load delaundo aim
 myMesh = myProblem.analysis.create(aim = "delaundoAIM")
@@ -36,6 +36,7 @@ airfoil = {"numEdgePoints" : 100, "edgeDistribution" : "Tanh", "initialNodeSpaci
 
 # Set meshing parameters
 myMesh.input.Mesh_Sizing = {"Airfoil"   : airfoil,
+                            "AirfoilTE" : {"numEdgePoints" : 4},
                             "TunnelWall": {"numEdgePoints" : 5},
                             "InFlow"    : {"numEdgePoints" : 5},
                             "OutFlow"   : {"numEdgePoints" : 5}}
@@ -52,23 +53,5 @@ myMesh.input.Proj_Name = projectName
 
 myMesh.input.Mesh_Format = "Tecplot"
 
-# Run AIM pre-analysis
-myMesh.preAnalysis()
-
-####### Run delaundo ####################
-print ("\n\nRunning Delaundo......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(myMesh.analysisDir) # Move into test directory
-
-file = open("Input.sh", "w") # Create a simple input shell script with are control file name
-file.write(projectName + ".ctr\n")
-file.close()
-
-if (args.noAnalysis == False): # Don't run delaundo if noAnalysis is set
-    os.system("delaundo < Input.sh > Info.out"); # Run delaundo via system call
-
-os.chdir(currentDirectory) # Move back to top directory
-
-# Run AIM post-analysis
-myMesh.postAnalysis()
+# Run AIM
+myMesh.runAnalysis()

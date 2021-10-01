@@ -158,7 +158,7 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
 int solveLU(int n, double A[], double b[], double x[] );
 
 // Prints all attributes on an ego
-int print_AllAttr( ego obj );
+int print_AllAttr( void *aimInfo, ego obj );
 
 // Initiate (0 out all values and NULL all pointers) an attribute map in the mapAttrToIndexStruct structure format
 int initiate_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMap);

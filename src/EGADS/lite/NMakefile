@@ -2,6 +2,7 @@
 !include ..\include\$(ESP_ARCH).$(MSVC)
 SDIR  = $(MAKEDIR)
 EDIR  = $(SDIR)\..\src
+UDIR  = $(SDIR)\..\util
 INCD  = $(SDIR)\..\include
 IDIR  = $(ESP_ROOT)\include
 LDIR  = $(ESP_ROOT)\lib
@@ -32,37 +33,43 @@ start:
 	xcopy $(SDIR)\..\src\egadsQuads.c   /Q /Y
 	xcopy $(SDIR)\..\src\egadsTessInp.c /Q /Y
 	xcopy $(SDIR)\..\src\egadsRobust.c  /Q /Y
-	xcopy $(SDIR)\..\util\emp.c         /Q /Y
-	xcopy $(SDIR)\..\util\evaluate.c    /Q /Y
-	xcopy $(SDIR)\..\util\rational.c    /Q /Y
-	xcopy $(SDIR)\..\util\regQuads.c    /Q /Y
-	xcopy $(SDIR)\..\util\regQuads.h    /Q /Y
+	xcopy $(SDIR)\..\src\egadsEffect.c  /Q /Y
+	xcopy $(UDIR)\emp.c                 /Q /Y
+	xcopy $(UDIR)\evaluate.c            /Q /Y
+	xcopy $(UDIR)\rational.c            /Q /Y
+	xcopy $(UDIR)\regQuads.c            /Q /Y
+	xcopy $(UDIR)\regQuads.h            /Q /Y
+	xcopy $(UDIR)\uvmap\uvmap_struct.h  /Q /Y
 
 $(LDIR)\egadslite.dll:	$(OBJS) liteTess.obj liteTris.obj liteQuads.obj \
 			liteTessInp.obj emp.obj evaLite.obj ratLite.obj \
-			egadsRobust.obj liteRegQuads.obj egadslite.res
+			egadsRobust.obj liteRegQuads.obj liteEffect.obj \
+			liteUVmap.obj egadslite.res
 	-del $(LDIR)\egadslite.dll $(LDIR)\egadslite.lib $(LDIR)\egadslite.exp
 	link /out:$(LDIR)\egadslite.dll /dll /def:egadslite.def $(OBJS) \
 		liteTess.obj liteTris.obj liteQuads.obj liteTessInp.obj \
 		emp.obj evaLite.obj ratLite.obj egadsRobust.obj \
-		liteRegQuads.obj egadslite.res
+		liteRegQuads.obj liteEffect.obj liteUVmap.obj egadslite.res
         $(MCOMP) /manifest $(LDIR)\egadslite.dll.manifest \
                 /outputresource:$(LDIR)\egadslite.dll;2
 
 $(LDIR)/egadslitestatic.lib:	$(OBJS) liteTess.obj liteTris.obj \
 				liteQuads.obj liteTessInp.obj emp.obj \
-				evaLite.obj ratLite.obj liteRegQuads.obj 
+				evaLite.obj ratLite.obj liteRegQuads.obj \
+				liteEffect.obj liteUVmap.obj
 	-del $(LDIR)\egadslitestatic.lib
 	lib /out:$(LDIR)\egadslitestatic.lib $(OBJS) liteTess.obj liteTris.obj \
 		liteQuads.obj liteTessInp.obj egadsRobust.obj emp.obj \
-		evaLite.obj ratLite.obj liteRegQuads.obj
+		evaLite.obj ratLite.obj liteRegQuads.obj liteEffect.obj \
+		liteUVmap.obj
 
 egadslite.res:	egadslite.rc
 	rc egadslite
 
 $(OBJS):	$(INCD)\egadsErrors.h $(EDIR)\egadsInternals.h \
 		$(INCD)\egadsTypes.h liteClasses.h liteDevice.h $(OBJS:.obj=.c)
-	cl /c $(COPTS) $(DEFINE) $(XDEF) /I. /I$(INCD) /I$(EDIR) $*.c
+	cl /c $(COPTS) $(DEFINE) $(XDEF) /I. /I$(INCD) /I$(EDIR) \
+		/I..\util\uvmap $*.c
 
 !IFDEF ESP_BLOC
 
@@ -85,6 +92,16 @@ liteTessInp.obj:	$(INCD)\egadsErrors.h $(EDIR)\egadsInternals.h \
 			$(INCD)\egadsTypes.h liteClasses.h egadsTessInp.c
 	cl /c $(COPTS) $(DEFINE) $(XDEF) /DLITE /I. /I$(INCD) /I$(EDIR) \
 		egadsTessInp.c /FoliteTessInp.obj
+
+liteEffect.obj:	$(INCD)\egadsErrors.h $(EDIR)\egadsInternals.h \
+		$(INCD)\egadsTypes.h liteClasses.h egadsEffect.c
+	cl /c $(COPTS) $(DEFINE) $(XDEF) /DLITE /I. /I$(INCD) /I$(EDIR) \
+		egadsEffect.c /FoliteEffect.obj
+
+liteUVmap.obj:	$(INCD)\egadsErrors.h $(EDIR)\egadsInternals.h \
+		$(INCD)\egadsTypes.h liteClasses.h liteUVmap.c
+	cl /c $(COPTS) $(DEFINE) $(XDEF) /DLITE /I. /I$(INCD) /I$(EDIR) \
+		/I$(UDIR)\uvmap liteUVmap.c /FoliteUVmap.obj
 
 emp.obj:	emp.c
 	cl /c $(COPTS) $(DEFINE) /I$(INCD) emp.c
@@ -124,6 +141,16 @@ liteTessInp.obj:	$(INCD)\egadsErrors.h $(EDIR)\egadsInternals.h \
 	cl /c $(COPTS) $(DEFINE) $(XDEF) /DLITE /I. /I$(INCD) /I$(EDIR) \
 		/I..\util ..\src\egadsTessInp.c /FoliteTessInp.obj
 
+liteEffect.obj:	$(INCD)\egadsErrors.h $(EDIR)\egadsInternals.h \
+		$(INCD)\egadsTypes.h liteClasses.h ..\src\egadsEffect.c
+	cl /c $(COPTS) $(DEFINE) $(XDEF) /DLITE /I. /I$(INCD) /I$(EDIR) \
+		..\src\egadsEffect.c /FoliteEffect.obj
+
+liteUVmap.obj:	$(INCD)\egadsErrors.h $(EDIR)\egadsInternals.h \
+		$(INCD)\egadsTypes.h liteClasses.h liteUVmap.c
+	cl /c $(COPTS) $(DEFINE) $(XDEF) /DLITE /I. /I$(INCD) /I$(EDIR) \
+		/I..\util\uvmap liteUVmap.c /FoliteUVmap.obj
+
 emp.obj:	..\util\emp.c
 	cl /c $(COPTS) $(DEFINE) /I$(INCD) ..\util\emp.c
 
@@ -150,7 +177,7 @@ end:
 clean:
 	cd $(ODIR)
 	-del $(OBJS) liteTess.obj liteTris.obj liteQuads.obj liteTessInp.obj \
-		liteRegQuads.obj
+		liteRegQuads.obj liteEffect.obj liteUVmap.obj
 	cd $(SDIR)
 
 cleanall:	clean

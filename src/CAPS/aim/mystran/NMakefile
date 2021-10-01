@@ -15,7 +15,7 @@ TDIR  = $(ESP_ROOT)\bin
 !ENDIF
 
 
-$(LDIR)\mystranAIM.dll:	$(ODIR)\mystranAIM.obj $(ODIR)\mystranUtils.obj $(LDIR)\utils.lib
+$(LDIR)\mystranAIM.dll:	mystranAIM.def $(ODIR)\mystranAIM.obj $(ODIR)\mystranUtils.obj $(LDIR)\utils.lib
 	-del $(LDIR)\mystranAIM.dll $(LDIR)\mystranAIM.lib \
 		$(LDIR)\mystranAIM.exp
 	 link /out:$(LDIR)\mystranAIM.dll /dll /def:mystranAIM.def \

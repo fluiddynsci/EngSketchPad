@@ -1,7 +1,7 @@
 # evaluate2
 # written by John Dannenhoffer
 
-dimension foo 20 1
+dimension foo 23 1
 
 mark
    udprim    supell rx   2 \
@@ -54,12 +54,12 @@ patend
 # Face midpoints
 patbeg iface @nface
    evaluate  face  @ibody iface -99999 -99999
-   assert    20    @edata.size
+   assert    23    @edata.size
    set       umin  @edata[1]
    set       vmin  @edata[2]
 
    evaluate  face  @ibody iface +99999 +99999
-   assert    20    @edata.size
+   assert    23    @edata.size
    set       umax  @edata[1]
    set       vmax  @edata[2]
 
@@ -67,7 +67,7 @@ patbeg iface @nface
    set       vmid  (vmin+vmax)/2
 
    evaluate  face  @ibody iface umid vmid
-   assert    20    @edata.size
+   assert    23    @edata.size
    set       foo   @edata
 
    evaluate  faceinv @ibody iface @edata[3] @edata[4] @edata[5]

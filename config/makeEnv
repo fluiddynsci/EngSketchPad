@@ -93,6 +93,8 @@ if [ "$ARCH" = Darwin ]; then
 	20.3.*) MACOSX=11.2 ;;
 	20.4.*) MACOSX=11.3 ;;
 	20.5.*) MACOSX=11.4 ;;
+	20.6.*) MACOSX=11.5 ;;
+	20.7.*) MACOSX=11.6 ;;
 	esac
 fi
 
@@ -147,8 +149,6 @@ if [ "$ARCH" = Darwin ]; then
 	CARCH=DARWIN64
 	if [ "$mt" = arm64 ]; then
 		CARCH=DARWINM1
-		echo "ERROR - ESP does not support Apple M1 yet!"
-		exit 1
 	fi
 else
 	CARCH=LINUX64
@@ -203,12 +203,16 @@ fi
 #
 # do we have AFLR?
 #
-if [ -n "$AFLR" ]; then
-	if [ "$ARCH" = Darwin ] && [ "$MACOSX" != UNKNOWN ]; then
-		AFLR_ARCH=MacOSX-x86-64
+if [ "$ARCH" = Darwin ] && [ "$MACOSX" != UNKNOWN ]; then
+	if [ "$CARCH" = DARWINM1 ]; then
+		AFLR_ARCH=MacOSX-arm64
 	else
-		AFLR_ARCH=Linux-x86-64
+		AFLR_ARCH=MacOSX-x86-64
 	fi
+else
+	AFLR_ARCH=Linux-x86-64
+fi
+if [ -n "$AFLR" ]; then
 	if [ ! -d $AFLR/$AFLR_ARCH ]; then
 		echo "ERROR - \$AFLR/$AFLR_ARCH (e.g. $AFLR/$AFLR_ARCH) is not a directory!"
 		exit 1
@@ -469,8 +473,8 @@ else
 fi
 if [ "$ARCH" = Darwin ]; then
 	if [ "$MACOSX" != UNKNOWN ]; then
-		echo "export AFLR_ARCH=MacOSX-x86-64"    >> ../ESPenv.sh
-		echo "export MACOSX="$MACOSX   >> ../ESPenv.sh
+		echo "export AFLR_ARCH="$AFLR_ARCH >> ../ESPenv.sh
+		echo "export MACOSX="$MACOSX       >> ../ESPenv.sh
 		echo "export UDUNITS2_XML_PATH="$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.sh
 		echo "export CAPS_GLYPH="$BASE/src/CAPS/aim/pointwise/glyph >> ../ESPenv.sh
 	fi
@@ -545,8 +549,8 @@ else
 fi
 if [ "$ARCH" = Darwin ]; then
 	if [ "$MACOSX" != UNKNOWN ]; then
-		echo "setenv AFLR_ARCH MacOSX-x86-64"    >> ../ESPenv.csh
-		echo "setenv MACOSX "$MACOSX   >> ../ESPenv.csh
+		echo "setenv AFLR_ARCH "$AFLR_ARCH >> ../ESPenv.csh
+		echo "setenv MACOSX "$MACOSX       >> ../ESPenv.csh
 		echo "setenv UDUNITS2_XML_PATH "$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.csh
 		echo "setenv CAPS_GLYPH "$BASE/src/CAPS/aim/pointwise/glyph >> ../ESPenv.csh
 	fi

@@ -25,6 +25,7 @@
 #else
 #include <unistd.h>
 #include <dirent.h>
+#include <dlfcn.h>
 #include <limits.h>
 #include <sys/stat.h>
 #endif
@@ -540,14 +541,15 @@ void caps_freeValueObjects(int vflag, int nObjs, capsObject **objects)
       } else {
         /* pointer type -- nothing should be done here... */
       }
-      if (value->units   != NULL) EG_free(value->units);
-      if (value->partial != NULL) EG_free(value->partial);
-      if (value->dots    != NULL) {
-        for (j = 0; j < value->ndot; j++) {
-          if (value->dots[j].name != NULL) EG_free(value->dots[j].name);
-          if (value->dots[j].dot  != NULL) EG_free(value->dots[j].dot);
+      if (value->units      != NULL) EG_free(value->units);
+      if (value->meshWriter != NULL) EG_free(value->meshWriter);
+      if (value->partial    != NULL) EG_free(value->partial);
+      if (value->derivs     != NULL) {
+        for (j = 0; j < value->nderiv; j++) {
+          if (value->derivs[j].name != NULL) EG_free(value->derivs[j].name);
+          if (value->derivs[j].deriv  != NULL) EG_free(value->derivs[j].deriv);
         }
-        EG_free(value->dots);
+        EG_free(value->derivs);
       }
       if (vflag == 1) EG_free(value);
     }
@@ -647,6 +649,14 @@ void caps_freeAnalysis(int flag, /*@only@*/ capsAnalysis *analysis)
 
   if (analysis == NULL) return;
   
+  for (i = 0; i < analysis->info.wCntxt.aimWriterNum; i++) {
+    EG_free(analysis->info.wCntxt.aimWriterName[i]);
+#ifdef WIN32
+    FreeLibrary(analysis->info.wCntxt.aimWriterDLL[i]);
+#else
+    dlclose(analysis->info.wCntxt.aimWriterDLL[i]);
+#endif
+  }
   problem = analysis->info.problem;
   if (analysis->instStore != NULL)
     aim_cleanup(problem->aimFPTR, analysis->loadName, analysis->instStore);
@@ -754,20 +764,21 @@ caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
   if (data  == NULL) return CAPS_NULLVALUE;
   value = (capsValue *) EG_alloc(sizeof(capsValue));
   if (value == NULL) return EGADS_MALLOC;
-  value->length  = len;
-  value->type    = type;
-  value->nrow    = value->ncol   = value->dim = 0;
-  value->index   = value->pIndex = 0;
-  value->lfixed  = value->sfixed = Fixed;
-  value->nullVal = NotAllowed;
-  value->units   = NULL;
-  value->link    = NULL;
+  value->length     = len;
+  value->type       = type;
+  value->nrow       = value->ncol   = value->dim = 0;
+  value->index      = value->pIndex = 0;
+  value->lfixed     = value->sfixed = Fixed;
+  value->nullVal    = NotAllowed;
+  value->units      = NULL;
+  value->meshWriter = NULL;
+  value->link       = NULL;
   value->limits.dlims[0] = value->limits.dlims[1] = 0.0;
   value->linkMethod      = Copy;
   value->gInType         = 0;
   value->partial         = NULL;
-  value->ndot            = 0;
-  value->dots            = NULL;
+  value->nderiv          = 0;
+  value->derivs          = NULL;
 
   if (data == NULL) {
     value->nullVal = IsNull;
@@ -1116,7 +1127,6 @@ caps_sizeX(capsObject *object, enum capsoType type, enum capssType stype,
     } else if (type == VALUE) {
       if (stype == GEOMETRYIN)  *size = problem->nGeomIn;
       if (stype == GEOMETRYOUT) *size = problem->nGeomOut;
-      if (stype == BRANCH)      *size = problem->nBranch;
       if (stype == PARAMETER)   *size = problem->nParam;
     } else if (type == ANALYSIS) {
       *size = problem->nAnalysis;
@@ -1262,10 +1272,6 @@ caps_childByIndX(capsObject *object, capsProblem *problem, enum capsoType type,
       if (stype == GEOMETRYOUT) {
         if (index > problem->nGeomOut)  return CAPS_RANGEERR;
         *child = problem->geomOut[index-1];
-      }
-      if (stype == BRANCH) {
-        if (index > problem->nBranch)   return CAPS_RANGEERR;
-        *child = problem->branchs[index-1];
       }
       if (stype == PARAMETER) {
         if (index > problem->nParam)    return CAPS_RANGEERR;
@@ -1416,11 +1422,6 @@ caps_childByName(capsObject *object, enum capsoType type, enum capssType stype,
       if (stype == GEOMETRYOUT) {
         ret = caps_findByName(name, problem->nGeomOut,
                                     problem->geomOut, child);
-        goto retrn;
-      }
-      if (stype == BRANCH) {
-        ret = caps_findByName(name, problem->nBranch,
-                                    problem->branchs, child);
         goto retrn;
       }
       if (stype == PARAMETER) {
@@ -1647,16 +1648,17 @@ caps_delete(capsObject *object)
     } else if (value->type == Tuple) {
       caps_freeTuple(value->length, value->vals.tuple);
     } else {
-      /* Pointer -- do nothing */
+      /* Pointer/PointerMesh -- do nothing */
     }
-    if (value->units   != NULL) EG_free(value->units);
-    if (value->partial != NULL) EG_free(value->partial);
-    if (value->dots    != NULL) {
-      for (i = 0; i < value->ndot; i++) {
-        if (value->dots[i].name != NULL) EG_free(value->dots[i].name);
-        if (value->dots[i].dot  != NULL) EG_free(value->dots[i].dot);
+    if (value->units      != NULL) EG_free(value->units);
+    if (value->meshWriter != NULL) EG_free(value->meshWriter);
+    if (value->partial    != NULL) EG_free(value->partial);
+    if (value->derivs     != NULL) {
+      for (i = 0; i < value->nderiv; i++) {
+        if (value->derivs[i].name != NULL) EG_free(value->derivs[i].name);
+        if (value->derivs[i].deriv  != NULL) EG_free(value->derivs[i].deriv);
       }
-      EG_free(value->dots);
+      EG_free(value->derivs);
     }
     EG_free(value);
     

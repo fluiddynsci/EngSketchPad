@@ -39,7 +39,8 @@
   extern void  wv_finishSends(wvContext *context);
 
   /* UI test message call-back */
-  extern void  browserMessage(struct libwebsocket *wsi, char *buf, int len);
+  extern void  browserMessage(/*@null@*/ struct libwebsocket *wsi, char *buf,
+                              int len);
 
 
 enum wv_protocols {
@@ -81,13 +82,16 @@ static int ThreadCreate(void (*entry)(), void *arg)
 
 
 typedef struct {
-        int                         nClient;       /* # active clients */
-        struct libwebsocket         **wsi;         /* the text wsi per client */
-        int                         loop;          /* 1 for continue;
-                                                      0 for done */
-        int                         index;         /* server index */
-        struct libwebsocket_context *WScontext;    /* WebSocket context */
-        wvContext                   *WVcontext;    /* WebViewer context */
+        int                         nClient;    /* # active clients */
+        struct libwebsocket         **wsi;      /* the text wsi per client */
+        int                         loop;       /* 1 for continue;
+                                                   0 for done */
+        int                         index;      /* server index */
+        struct libwebsocket_context *WScontext; /* WebSocket context */
+        wvContext                   *WVcontext; /* WebViewer context */
+        int                         nMess;      /* number of messages  or  -1
+                                                   for outside browserMessage */
+        char                        **mess;     /* stored messages */
         unsigned char               xbuf[LWS_SEND_BUFFER_PRE_PADDING + BUFLEN +
                                          LWS_SEND_BUFFER_POST_PADDING];
 } wvServer;
@@ -304,7 +308,8 @@ callback_ui_text(struct libwebsocket_context *context,
                  enum libwebsocket_callback_reasons reason,
                  void *user, void *in, size_t len)
 {
-	int    i, slot, n;
+	int    i, j, slot, n;
+        char   *mess;
 	struct per_session_data__ui_text *pss = user;
         struct libwebsocket **tmp;
 
@@ -344,17 +349,41 @@ callback_ui_text(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_RECEIVE:
+                servers[slot].nMess = 0;
                 if (servers[slot].WVcontext->callback == NULL) {
-                    browserMessage(wsi, in, len);
+                  browserMessage(wsi, in, len);
                 } else {
-                    servers[slot].WVcontext->callback(wsi, in, len);
+                  servers[slot].WVcontext->callback(wsi, in, len);
                 }
+                for (j = 0; j < servers[slot].nMess; j++) {
+                  len  = strlen(servers[slot].mess[j]);
+                  mess =        servers[slot].mess[j];
+                  if (servers[slot].WVcontext->callback == NULL) {
+                    browserMessage(NULL, mess, len);
+                  } else {
+                    servers[slot].WVcontext->callback(NULL, mess, len);
+                  }
+                }
+                if (servers[slot].mess != NULL) {
+                  for (j = 0; j < servers[slot].nMess; j++)
+                    wv_free(servers[slot].mess[j]);
+                  wv_free(servers[slot].mess);
+                }
+                servers[slot].mess  = NULL;
+                servers[slot].nMess = -1;
 		break;
             
         case LWS_CALLBACK_CLOSED:
               fprintf(stderr, "callback_ui_text: LWS_CALLBACK_CLOSED\n");
               for (n = i = 0; i < servers[slot].nClient; i++) {
-                  if (servers[slot].wsi[i] == wsi) continue;
+                  if (servers[slot].wsi[i] == wsi) {
+                    if (servers[slot].mess != NULL) {
+                      for (j = 0; j < servers[slot].nMess; j++)
+                        wv_free(servers[slot].mess[j]);
+                      wv_free(servers[slot].mess);
+                    }
+                    continue;
+                  }
                   servers[slot].wsi[n] = servers[slot].wsi[i];
                   n++;
               }
@@ -491,6 +520,8 @@ int wv_startServer(int port, char *interface, char *cert_path, char *key_path,
         servers[slot].wsi       = NULL;
         servers[slot].WScontext =   context;
         servers[slot].WVcontext = WVcontext;
+        servers[slot].nMess     = -1;
+        servers[slot].mess      = NULL;
         memset(servers[slot].xbuf, 0, LWS_SEND_BUFFER_PRE_PADDING + BUFLEN +
                                       LWS_SEND_BUFFER_POST_PADDING);
 
@@ -511,12 +542,17 @@ int wv_startServer(int port, char *interface, char *cert_path, char *key_path,
 
 void wv_cleanupServers()
 {
-  int i;
-  
+  int i, j;
+
   for (i = 0; i < nServers; i++) {
+#ifndef __clang_analyzer__
+    if (servers[i].mess != NULL) {
+      for (j = 0; j < servers[i].nMess; j++)
+        wv_free(servers[i].mess[j]);
+      wv_free(servers[i].mess);
+    }
     if (servers[i].loop == -1) continue;
     wv_destroyContext(&servers[i].WVcontext);
-#ifndef __clang_analyzer__
     libwebsocket_context_destroy(servers[i].WScontext);
 #endif
   }
@@ -565,6 +601,62 @@ void wv_killInterface(int index, void *wsix)
   wsi = (struct libwebsocket *) wsix;
   libwebsocket_close_and_free_session(servers[index].WScontext, wsi,
                                       LWS_CLOSE_STATUS_GOINGAWAY);
+}
+
+
+int wv_postMessage(int index, char *text)
+{
+  int len;
+  
+  if ((index < 0) || (index >= nServers)) return -2;
+  if (text == NULL) return -1;
+  if (servers[index].nMess >= 0) return -3;
+  
+  len = strlen(text);
+  if (servers[index].WVcontext->callback == NULL) {
+    browserMessage(NULL, text, len);
+  } else {
+    servers[index].WVcontext->callback(NULL, text, len);
+  }
+  
+  return 0;
+}
+
+
+int wv_makeMessage(void *wsi, char *text)
+{
+  int  i, slot, len;
+  char **ptrs;
+
+  if (text == NULL)            return -1;
+  if (wsi  == NULL)            return -1;
+  for (slot = 0; slot < nServers; slot++) {
+    for (i = 0; i < servers[slot].nClient; i++)
+      if (servers[slot].wsi[i] == wsi) break;
+    if (i < servers[slot].nClient) break;
+  }
+  if (slot == nServers)        return -2;
+  if (servers[slot].nMess < 0) return -3;
+  
+  len = strlen(text) + 1;
+  if (servers[slot].mess == NULL) {
+    ptrs = (char **) wv_alloc(sizeof(char *));
+    servers[slot].nMess = 0;
+  } else {
+    ptrs = (char **) wv_realloc( servers[slot].mess,
+                                (servers[slot].nMess+1)*sizeof(char *));
+  }
+  if (ptrs == NULL) return -4;
+  ptrs[servers[slot].nMess] = (char *) wv_alloc(len*sizeof(char));
+  if (ptrs[servers[slot].nMess] == NULL) {
+    servers[slot].mess = ptrs;
+    return -4;
+  }
+  for (i = 0; i < len; i++) ptrs[servers[slot].nMess][i] = text[i];
+  servers[slot].mess = ptrs;
+  servers[slot].nMess++;
+  
+  return 0;
 }
 
 
@@ -796,7 +888,7 @@ static void createPoints(wvContext *cntxt, char *name, int attr, float *offset)
 
 int main(/*@unused@*/ int argc, /*@unused@*/ char **argv)
 {
-
+        int       cnt = 1;
         wvContext *cntxt;
         float     eye[3]    = {0.0, 0.0, 7.0};
         float     center[3] = {0.0, 0.0, 0.0};
@@ -828,7 +920,11 @@ int main(/*@unused@*/ int argc, /*@unused@*/ char **argv)
         if (wv_startServer(7681, NULL, NULL, NULL, 0, cntxt) == 0) {
 
                 /* we have a single valid server -- do nothing */
-                while (wv_statusServer(0)) usleep(500000);
+                while (wv_statusServer(0)) {
+                      usleep(500000);
+                      if (cnt%25 == 0) wv_postMessage(0, "sent Message");
+                      cnt++;
+                }
 
         }
         

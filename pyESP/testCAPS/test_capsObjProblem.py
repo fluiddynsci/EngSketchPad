@@ -12,7 +12,7 @@ class TestProblem(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
- 
+
         cls.file = "unitGeom.csm"
         cls.projectName = "testProblem"
         cls.analysisDir1 = "UnitTest1"
@@ -20,7 +20,7 @@ class TestProblem(unittest.TestCase):
         cls.iProb = 1
 
         cls.cleanUp()
-        
+
     @classmethod
     def tearDownClass(cls):
         cls.cleanUp()
@@ -50,7 +50,7 @@ class TestProblem(unittest.TestCase):
 #=============================================================================-
     def test_openSingleParametric(self):
         problem = caps.open(self.projectName, None, self.file, 0)
-         
+
         #check the pointer equality operator
         self.assertEqual(problem, problem)
 
@@ -66,9 +66,9 @@ class TestProblem(unittest.TestCase):
 #=============================================================================-
     # Multiple problems
     def test_openMultiStaic(self):
-   
+
         problem1 = caps.open(self.projectName+"_1", None, "unitGeom.csm", 0)
-        
+
         problem1.writeGeometry("unitGeom2.egads")
 
         self.assertEqual(3, problem1.size(caps.oType.BODIES, 0))
@@ -85,7 +85,7 @@ class TestProblem(unittest.TestCase):
         self.assertIsNone(link)
         self.assertIsNone(parent)
         self.assertIsInstance(last, caps.capsOwn)
-        
+
         body, units = problem1.bodyByIndex(1)
         self.assertIsInstance(body, egads.ego)
         body, units = problem1.bodyByIndex(2)
@@ -153,7 +153,7 @@ class TestProblem(unittest.TestCase):
 
         dummyRow2Obj = problem.childByName(caps.oType.VALUE, caps.sType.GEOMETRYOUT, "dummyRow2")
         data = dummyRow2Obj.getValue()
-        self.assertEqual(data, [1,2,2])
+        self.assertEqual(data, [1,2,None])
 
         dummyRow3Obj = problem.childByName(caps.oType.VALUE, caps.sType.GEOMETRYOUT, "dummyRow3")
         data = dummyRow3Obj.getValue()
@@ -254,7 +254,7 @@ class TestProblem(unittest.TestCase):
 #=============================================================================-
     # Set verbosity
     def test_setOutLevel(self):
- 
+
         problem = caps.open(self.projectName+str(self.iProb), None, self.file, 0); self.__class__.iProb += 1
 
         problem.setOutLevel(0)
@@ -272,18 +272,18 @@ class TestProblem(unittest.TestCase):
 #=============================================================================-
     # Adding/getting attributes
     def test_attributes(self):
-   
+
         problem = caps.open(self.projectName+str(self.iProb), None, self.file, 0); self.__class__.iProb += 1
- 
+
         # Check list attribute
         data = [1, 2, 3]
         value = problem.makeValue("vector_Int", caps.sType.USER, data)
- 
+
         problem.setAttr(value)
         del value
         self.assertEqual(problem.attrByName("vector_Int").getValue(), data)
         self.assertEqual(problem.attrByIndex(1).getValue(), data)
-   
+
         # Check float attribute
         data = 10.0
         value = problem.makeValue("float", caps.sType.USER, data)

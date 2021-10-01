@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['keys_98',['keys',['../classpy_c_a_p_s_1_1problem_1_1_sequence.html#a89d8a00f894393293852f9e16641be32',1,'pyCAPS::problem::Sequence']]]
+  ['journaling_101',['journaling',['../classpy_c_a_p_s_1_1problem_1_1_problem.html#a3456f2c33fe7bbdcfbe25c3aa5d4738d',1,'pyCAPS::problem::Problem']]]
 ];

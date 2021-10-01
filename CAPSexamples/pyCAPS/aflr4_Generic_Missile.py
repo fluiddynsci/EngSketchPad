@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description = 'AFLR4 Generic Missile PyTest Exa
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot surface meshes")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Working directory
@@ -25,13 +25,13 @@ workDir = os.path.join(str(args.workDir[0]), "AFLR4GenericMissileAnalysisTest")
 geometryScript = os.path.join("..","csmData","generic_missile.csm")
 myProblem = pyCAPS.Problem(problemName = workDir,
                                 capsFile=geometryScript, 
-                                outLevel=args.verbosity)
+                                outLevel=args.outLevel)
 
 # Load AFLR4 aim
 myAnalysis = myProblem.analysis.create(aim = "aflr4AIM")
 
 # Set AIM verbosity
-myAnalysis.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+myAnalysis.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set output grid format since a project name is being supplied - Tecplot  file
 myAnalysis.input.Mesh_Format = "Tecplot"
@@ -51,13 +51,6 @@ myAnalysis.input.Proj_Name = "pyCAPS_AFLR4_Missile_Test"
 # Dissable curvature refinement when AFLR4 cannot generate a mesh
 # myAnalysis.input.Mesh_Gen_Input_String = "auto_mode=0"
 
-# Run AIM pre-analysis
-myAnalysis.preAnalysis()
-
-#######################################
-## AFRL4 was ran during preAnalysis ##
-#######################################
-
-# Run AIM post-analysis
-myAnalysis.postAnalysis()
+# Run AIM
+myAnalysis.runAnalysis()
 

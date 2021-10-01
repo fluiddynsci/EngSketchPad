@@ -66,7 +66,7 @@ $(function() {
 <div class="title">AIM Inputs </div>  </div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><p>For the description of the configuration variables, associated values, and available options refer to the template configuration file that is distributed with SU2. Note: The configuration file is dependent on the version of SU2 used. This configuration file that will be auto generated is compatible with SU2 4.1.1. (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) or 7.1.1(Blackbird - Default)</p>
+<div class="textblock"><p>For the description of the configuration variables, associated values, and available options refer to the template configuration file that is distributed with SU2. Note: The configuration file is dependent on the version of SU2 used. This configuration file that will be auto generated is compatible with SU2 4.1.1. (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) or 7.2.0 (Blackbird - Default)</p>
 <ul>
 <li><b> Proj_Name = "su2_CAPS"</b> <br  />
  This corresponds to the project "root" name.</li>
@@ -74,14 +74,20 @@ $(function() {
  Mach number; this corresponds to the MACH_NUMBER keyword in the configuration file.</li>
 <li><b> Re = NULL</b> <br  />
  Reynolds number; this corresponds to the REYNOLDS_NUMBER keyword in the configuration file.</li>
+<li><b> Math_Problem = "Direct"</b> <br  />
+ Math problem type; this corresponds to the MATH_PROBLEM keyword in the configuration file. Options: DIRECT, CONTINUOUS_ADJOINT, DISCRETE_ADJOINT, ... see SU2 template for additional options.</li>
 <li><b> Physical_Problem = "Euler"</b> <br  />
  Physical problem type; this corresponds to the PHYSICAL_PROBLEM keyword in the configuration file. Options: Euler, Navier_Stokes, Wave_Equation, ... see SU2 template for additional options.</li>
 <li><b> Equation_Type = "Compressible"</b> <br  />
  Equation regime type; this corresponds to the REGIME_TYPE keyword in the configuration file. Options: Compressible or Incompressible.</li>
+<li><b> Turbulence_Model = "SA_NEG"</b> <br  />
+ RANS turbulence model; this corresponds to the KIND_TURB_MODEL keyword in the configuration file. Options: NONE, SA, SA_NEG, SST, SA_E, SA_COMP, SA_E_COMP, SST_SUST</li>
 <li><b> Alpha = 0.0</b> <br  />
  Angle of attack [degree]; this corresponds to the AoA keyword in the configuration file.</li>
 <li><b> Beta = 0.0</b> <br  />
  Side slip angle [degree]; this corresponds to the SIDESLIP_ANGLE keyword in the configuration file.</li>
+<li><b> Init_Option = "Reynolds"</b> <br  />
+ Init option to choose between Reynolds (default) or thermodynamics quantities for initializing the solution (REYNOLDS, TD_CONDITIONS); this corresponds to the INIT_OPTION keyword in the configuration file.</li>
 <li><b> Overwrite_CFG = True</b> <br  />
  Provides permission to overwrite configuration file. If set to False a new configuration file won't be generated.</li>
 <li><b> Num_Iter = 9999</b> <br  />
@@ -125,21 +131,21 @@ $(function() {
 <li><b> Convective_Flux = "Roe"</b> <br  />
  Numerical method for convective (inviscid) flux construction; this corresponds to the CONV_NUM_METHOD_FLOW keyword in the configuration file. See SU2 template for additional details.</li>
 <li><b>SU2_Version = "Blackbird"</b> <br  />
- SU2 version to generate specific configuration file. Options: "Cardinal(4.0)", "Raven(5.0)", "Falcon(6.2)" or "Blackbird(7.0.7)".</li>
+ SU2 version to generate specific configuration file. Options: "Cardinal(4.0)", "Raven(5.0)", "Falcon(6.2)" or "Blackbird(7.2.0)".</li>
 <li><b>Surface_Monitor = NULL</b> <br  />
  Array of surface names where the non-dimensional coefficients are evaluated</li>
 <li><b>Surface_Deform = NULL</b> <br  />
  Array of surface names that should be deformed. Defaults to all inviscid and viscous surfaces.</li>
 <li><b>Input_String = NULL</b> <br  />
- An input string that will be written as is to the end of the SU2 cfg file.</li>
+ Array of input strings that will be written as is to the end of the SU2 cfg file.</li>
 <li><b>Mesh = NULL</b> <br  />
- A Surface_Mesh or Volume_Mesh link for 2D and 3D calculations respectively. </li>
+ A Area_Mesh or Volume_Mesh link for 2D and 3D calculations respectively. </li>
 </ul>
 </div></div><!-- contents -->
 </div><!-- PageDoc -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Fri May 28 2021 11:09:08 for SU2 Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
+Generated on Fri Sep 17 2021 06:42:36 for SU2 Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
 </small></address>
 </body>
 </html>

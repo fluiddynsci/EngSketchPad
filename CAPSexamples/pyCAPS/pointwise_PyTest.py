@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description = 'Pointwise Pytest Example',
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Working directory
@@ -26,7 +26,7 @@ workDir = os.path.join(str(args.workDir[0]), "PointwiseAnalysisTest")
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript, 
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AFLR4 aim
 pointwise = myProblem.analysis.create(aim = "pointwiseAIM", name = "pointwise")

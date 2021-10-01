@@ -18,7 +18,7 @@ endif
 $(LDIR)/xfoilAIM.so:	$(ODIR)/xfoilAIM.o $(LDIR)/libaimUtil.a \
 			$(LDIR)/libutils.a
 	$(CC) $(SOFLGS) -o $(LDIR)/xfoilAIM.so $(ODIR)/xfoilAIM.o \
-		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -lm
+		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -ldl -lm
 
 $(ODIR)/xfoilAIM.o: xfoilAIM.c $(IDIR)/capsTypes.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils \

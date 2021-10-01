@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description = 'Nastran AGARD445.6 Pytest Exampl
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 
@@ -25,7 +25,7 @@ workDir = os.path.join(str(args.workDir[0]), projectName)
 geometryScript = os.path.join("..","csmData","feaAGARD445.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Change the sweepAngle and span of the Geometry - Demo purposes
 #myProblem.geometry.despmtr.sweepAngle = 5 # From 45 to 5 degrees

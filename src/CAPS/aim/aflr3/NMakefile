@@ -24,7 +24,7 @@ AFLR3_LIB = AFLR.lib
 
 default: clear_version $(ODIR)\aflr3_version.exe $(LDIR)\aflr3AIM.dll
 
-$(LDIR)\aflr3AIM.dll:	$(ODIR)\aflr3AIM.obj $(ODIR)\aflr3_Interface.obj \
+$(LDIR)\aflr3AIM.dll:	aflr3AIM.def $(ODIR)\aflr3AIM.obj $(ODIR)\aflr3_Interface.obj \
 			$(LDIR)\utils.lib
 	-del $(LDIR)\aflr3AIM.dll
 	link /out:$(LDIR)\aflr3AIM.dll /dll /def:aflr3AIM.def \

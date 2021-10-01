@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description = 'AVL Pytest Design Sweep Example'
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot data")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -24,7 +24,7 @@ workDir = os.path.join(str(args.workDir[0]), "AVLAnalysisSweep")
 geometryScript = os.path.join("..","csmData","avlWingTail.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 machNumber = [0.05*i for i in range(1, 20)] # Build Mach sweep with a list comprehension
 
@@ -61,21 +61,6 @@ for ii in range(len(sweepDesPmtr)):
 
         myProblem.analysis[analysisID].input.AVL_Surface = {"Wing": wing,
                                                             "Vertical_Tail": tail}
-
-        # Run AIM pre-analysis
-        myProblem.analysis[analysisID].preAnalysis()
-
-        # Run AVL
-        print (" Running AVL (sweep angle = " + str(sweepDesPmtr[ii])+ ") at Mach number = " + str(machNumber[i]) +"!")
-        currentDirectory = os.getcwd() # Get our current working directory
-
-        os.chdir(myProblem.analysis[analysisID].analysisDir) # Move into test directory
-        os.system("avl caps < avlInput.txt > avlOutput.txt");
-
-        os.chdir(currentDirectory) # Move back to working directory
-
-        # Run AIM post-analysis
-        myProblem.analysis[analysisID].postAnalysis()
 
         # Get Drag coefficient
         Cd.append(myProblem.analysis[analysisID].output.CDtot)

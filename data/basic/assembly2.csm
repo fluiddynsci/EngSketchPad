@@ -1,31 +1,31 @@
 # assembly2
 # written by John Dannenhoffer
 
-despmtr   len       10
-despmtr   diam      1
+DESPMTR   len       10
+DESPMTR   diam      1
 
 # cylinder
-udparg    csm       filename   $$/assembly_cylinder.csm
-udparg    csm       pmtrname   $diameter;length
-udparg    csm       pmtrvalue  diam;len
-udprim    csm
+UDPARG    csm       filename   $$/assembly_cylinder.csm
+UDPARG    csm       pmtrname   $diameter;length
+UDPARG    csm       pmtrvalue  diam;len
+UDPRIM    csm
 
 # frustrum at len
-udparg    csm       filename   $$/assembly_frustrum.csm
-udparg    csm       pmtrname   $diam1;diam2
-udparg    csm       pmtrvalue  diam;diam/2
-udprim    csm
+UDPARG    csm       filename   $$/assembly_frustrum.csm
+UDPARG    csm       pmtrname   $diam1;diam2
+UDPARG    csm       pmtrvalue  diam;diam/2
+UDPRIM    csm
 
-translate len  0  0
-union
+TRANSLATE len  0  0
+JOIN
 
-# hemisphere at 0
-udparg    csm       filename   $$/assembly_frustrum.csm
-udparg    csm       pmtrname   $diam1;diam2
-udparg    csm       pmtrvalue  diam/2;diam
-udprim    csm
+# frustrum at 0
+UDPARG    csm       filename   $$/assembly_frustrum.csm
+UDPARG    csm       pmtrname   $diam1;diam2
+UDPARG    csm       pmtrvalue  diam/2;diam
+UDPRIM    csm
 
-translate -1  0  0
-union
+TRANSLATE -1  0  0
+JOIN
 
-end
+END

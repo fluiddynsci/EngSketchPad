@@ -98,7 +98,8 @@ int main(int argc, char *argv[])
   }
 
   /* load the Cart3D AIM */
-  stat = caps_makeAnalysis(pobj, "cart3dAIM", argv[2], NULL, NULL, 0, &cobj,
+  exec = 0;
+  stat = caps_makeAnalysis(pobj, "cart3dAIM", argv[2], NULL, NULL, &exec, &cobj,
                            &nErr, &errors);
   if (nErr != 0) printErrors(nErr, errors);
   if (stat != CAPS_SUCCESS) {

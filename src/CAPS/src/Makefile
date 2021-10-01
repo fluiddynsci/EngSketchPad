@@ -11,29 +11,49 @@ endif
 
 VPATH = $(ODIR)
 
-OBJS  = capsBase.o  capsAnalysis.o capsApprox.o capsAttr.o capsAIM.o \
-	capsBound.o capsProblem.o  capsValue.o  capsUnits.o conjGrad.o printObject.o
+OBJS  = capsBase.o  capsAnalysis.o capsApprox.o capsAttr.o  capsAIM.o \
+	capsBound.o capsProblem.o  capsValue.o  capsUnits.o conjGrad.o \
+	capsFunIDs.o printObject.o
 
-default:	includes $(LDIR)/libaimUtil.a \
-		$(LDIR)/$(CSHLIB) $(LDIR)/libcapsstatic.a $(LDIR)/testingAIM.so
+default:	includes $(LDIR)/libaimUtil.a $(LDIR)/$(CSHLIB) \
+		$(LDIR)/libcapsstatic.a $(LDIR)/testingAIM.so \
+		$(LDIR)/testingWriter.so
 
 $(LDIR)/testingAIM.so:	$(ODIR)/testingAIM.o $(LDIR)/libaimUtil.a
 	-rm $(LDIR)/testingAIM.so
 	$(CC) $(SOFLGS) -o $(LDIR)/testingAIM.so $(ODIR)/testingAIM.o \
-		-L$(LDIR) -laimUtil -legads -locsm -ludunits2 $(RPATH) -lm
+		-L$(LDIR) -laimUtil -legads -locsm -ludunits2 -ldl $(RPATH) -lm
 
-$(ODIR)/testingAIM.o:	testingAIM.c ../include/capsTypes.h
+$(ODIR)/testingAIM.o:	testingAIM.c ../include/capsTypes.h \
+			../include/aimUtil.h ../include/aimMesh.h
 	$(CC) -c $(COPTS) $(DEFINE) -I../include -I$(IDIR) testingAIM.c \
 		-o $(ODIR)/testingAIM.o
 
-$(LDIR)/libaimUtil.a:	$(ODIR)/aimUtil.o $(ODIR)/aimTransferUtil.o
+$(LDIR)/testingWriter.so:	$(ODIR)/testingWriter.o $(LDIR)/libaimUtil.a
+	-rm $(LDIR)/testingWriter.so
+	$(CC) $(SOFLGS) -o $(LDIR)/testingWriter.so $(ODIR)/testingWriter.o \
+		-L$(LDIR) -laimUtil -ldl $(RPATH) -lm
+
+$(ODIR)/testingWriter.o:	testingWriter.c ../include/aimUtil.h
+	$(CC) -c $(COPTS) $(DEFINE) -I../include -I$(IDIR) testingWriter.c \
+		-o $(ODIR)/testingWriter.o
+
+$(LDIR)/libaimUtil.a:	$(ODIR)/aimUtil.o $(ODIR)/aimTransferUtil.o \
+			$(ODIR)/aimMesh.o
 	touch $(LDIR)/libaimUtil.a
 	rm $(LDIR)/libaimUtil.a
-	ar -rs $(LDIR)/libaimUtil.a $(ODIR)/aimUtil.o $(ODIR)/aimTransferUtil.o
+	ar -rs $(LDIR)/libaimUtil.a $(ODIR)/aimUtil.o $(ODIR)/aimMesh.o \
+		$(ODIR)/aimTransferUtil.o 
 
-$(ODIR)/aimUtil.o:	aimUtil.c ../include/capsTypes.h $(IDIR)/common.h $(IDIR)/OpenCSM.h
+$(ODIR)/aimUtil.o:	aimUtil.c ../include/capsTypes.h $(IDIR)/common.h \
+			$(IDIR)/OpenCSM.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../include \
 		-I/usr/include/udunits2 aimUtil.c -o $(ODIR)/aimUtil.o
+
+$(ODIR)/aimMesh.o:	aimMesh.c ../include/capsTypes.h \
+			../include/aimUtil.h ../include/aimMesh.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../include \
+		aimMesh.c -o $(ODIR)/aimMesh.o
 
 $(ODIR)/aimTransferUtil.o:	aimTransferUtil.c ../include/capsTypes.h \
 				../include/aimUtil.h
@@ -78,7 +98,12 @@ $(OBJS): %.o: 	%.c ../include/capsErrors.h ../include/capsTypes.h capsBase.h \
 		-I/usr/include/udunits2 $< -o $(ODIR)/$@
 
 includes:	$(IDIR)/caps.h $(IDIR)/capsErrors.h $(IDIR)/capsTypes.h \
-			$(IDIR)/aimUtil.h 
+			$(IDIR)/aimUtil.h $(IDIR)/aimMesh.h
+
+$(IDIR)/aimMesh.h:	../include/aimMesh.h
+	touch $(IDIR)/aimMesh.h
+	rm $(IDIR)/aimMesh.h
+	cp -p ../include/aimMesh.h $(IDIR)/aimMesh.h
 
 $(IDIR)/aimUtil.h:	../include/aimUtil.h
 	touch $(IDIR)/aimUtil.h
@@ -105,15 +130,15 @@ lint:
 	$(LINT) -I../include -I$(IDIR) $(patsubst %.o,%.c,$(OBJS)) -uniondef -exportlocal -nullpass -Dclosedir=free
 	@echo " "
 	@echo "AIM utility library:"
-	$(LINT) -I../include -I$(IDIR) aimUtil.c aimTransferUtil.c -uniondef -exportlocal -initallelements
+	$(LINT) -I../include -I$(IDIR) aimUtil.c aimMesh.c aimTransferUtil.c -uniondef -exportlocal -initallelements -Dclosedir=free
 	@echo " "
 	@echo "testingAIM:"
 	$(LINT) -I../include -I$(IDIR) testingAIM.c 
 
 clean:
-	-(cd $(ODIR); rm -f $(OBJS) testingAIM.o aimUtil.o aimTransferUtil.o)
+	-(cd $(ODIR); rm -f $(OBJS) testingAIM.o testingWriter.o aimUtil.o aimTransferUtil.o aimMesh.o)
 
 cleanall:	clean
 	-rm -f $(LDIR)/libcaps* $(LDIR)/testingAIM.so $(LDIR)/libaimUtil.a
 	-rm -f $(IDIR)/caps.h $(IDIR)/capsErrors.h $(IDIR)/capsTypes.h 
-	-rm -f $(IDIR)/aimUtil.h
+	-rm -f $(IDIR)/aimUtil.h $(IDIR)/aimMesh.h $(LDIR)/testingWriter.so

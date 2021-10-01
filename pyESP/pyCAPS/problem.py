@@ -114,6 +114,13 @@ def _getBodyName(ibody, nameList, body):
     return name
 
 #==============================================================================
+def _ocsmPath(filename):
+
+    relname = os.path.relpath(filename)
+    if len(relname) < len(filename): filename = relname
+    return filename
+
+#==============================================================================
 # Perform unit conversion
 @deprecated("'pyCAPS.Unit'")
 def capsConvert(value, fromUnits, toUnits):
@@ -353,15 +360,16 @@ def createTree(dataItem, showAnalysisGeom, showInternalGeomAttr, reverseMap):
 # \param Problem.attr      \ref AttrSequence of \ref ValueIn attributes
 class Problem(object):
 
-    __slots__ = ['_problemObj', 'geometry', 'parameter', 'analysis', 'bound', 'attr']
+    __slots__ = ['_problemObj', 'geometry', 'parameter', 'analysis', 'bound', 'attr', '_name']
 
     ## Initialize the problem.
     # \param problemName CAPS problem name that serves as the root directory for all file I/O.
-    # \param phaseName the current phase name (None is equivalent to 'Initial')
+    # \param phaseName the current phase name (None is equivalent to 'Scratch')
     # \param capsFile CAPS file to load. Options: *.csm or *.egads.
     # \param outLevel Level of output verbosity. See \ref setOutLevel .
+    # \param useJournal Use Journaling to continue execution of an interrupted script.
     #
-    def __init__(self, problemName, phaseName=None, capsFile=None, outLevel=1):
+    def __init__(self, problemName, phaseName=None, capsFile=None, outLevel=1, useJournal=False):
 
         verbosity = {"minimal"  : 0,
                      "standard" : 1,
@@ -374,7 +382,7 @@ class Problem(object):
         if int(outLevel) not in verbosity.values():
             raise caps.CAPSError(caps.CAPS_BADVALUE, msg = "invalid verbosity level! outLevel={!r}".format(outLevel))
 
-        problemObj = caps.open(problemName, phaseName, capsFile, outLevel)
+        problemObj = caps.open(problemName, phaseName, capsFile, outLevel, useJournal)
         super(Problem, self).__setattr__("_problemObj", problemObj)
 
         super(Problem, self).__setattr__("geometry",  ProblemGeometry(problemObj))
@@ -382,12 +390,26 @@ class Problem(object):
         super(Problem, self).__setattr__("analysis",  AnalysisSequence(self))
         super(Problem, self).__setattr__("bound",     BoundSequence(problemObj))
         super(Problem, self).__setattr__("attr",      AttrSequence(problemObj))
+        super(Problem, self).__setattr__("_name",     problemName)
 
     def __setattr__(self, name, data):
         raise AttributeError("Cannot set attribute: {!r}".format(name))
 
     def __delattr__(self, name):
         raise AttributeError("Cannot del attribute: {!r}".format(name))
+
+    ## Exlicitly closes CAPS Problem Object
+    def close(self):
+        self._problemObj.close()
+
+    ## Property returns the name of the CAPS Problem Object
+    @property
+    def name(self):
+        return self._name
+
+    ## Indicates if the CAPS Problem Object is currently journaling
+    def journaling(self):
+        return self._problemObj.journalState()
 
     ## Set the verbosity level of the CAPS output.
     # See \ref problem5.py for a representative use case.
@@ -698,7 +720,7 @@ class ProblemGeometry(object):
 
     ## Exlicitly build geometry.
     def build(self):
-        self._problemObj.preAnalysis()
+        self._problemObj.execute()
 
     ## Save the current geometry to a file.
     # \param filename File name to use when saving geometry file.
@@ -767,6 +789,7 @@ class ProblemGeometry(object):
             os.remove(egadsFile)
             return
 
+        egadsFile = _ocsmPath(egadsFile)
         os.system("serveCSM -port " + str(kwargs.pop("portNumber", 7681)) + " -outLevel 0 " + egadsFile)
         os.remove(egadsFile)
         os.remove("autoEgads.csm")
@@ -1430,6 +1453,15 @@ class ValueIn(object):
     def unlink(self):
         self._valObj.removeLink()
 
+    ## Transfer values from src to self
+    # \param tmethod 0 - copy, 1 - integrate, 2 - weighted average  -- (1 & 2 only for DataSet src)
+    # \param source the source value object
+    def transferValue(self, tmethod, source):
+        if not (isinstance(source, ValueIn) or isinstance(source, ValueOut)):
+            raise caps.CAPSError(caps.CAPS_BADVALUE, "source must be a Value Object")
+
+        self._valObj.transferValues(tmethod, source._valObj)
+
 #==============================================================================
 
 def _values(obj, stype, usepmtr=0):
@@ -1460,10 +1492,8 @@ class ValueInSequence(Sequence):
             name, otype, stype, link, parent, last = valObj.info()
             if ":" in name:
                 names = name.split(":")
-                if level == 0:
-                    self._capsItems[name] = ValueIn(valObj)
+                self._capsItems[":".join(names[level:])] = ValueIn(valObj)
                 if level+1 == len(names):
-                    self._capsItems[names[level]] = ValueIn(valObj)
                     continue
 
                 if names[level] not in subVals:
@@ -1711,10 +1741,8 @@ class ValueOutSequence(Sequence):
             name, otype, stype, link, parent, last = valObj.info()
             if ":" in name:
                 names = name.split(":")
-                if level == 0:
-                    self._capsItems[name] = ValueOut(valObj)
+                self._capsItems[":".join(names[level:])] = ValueOut(valObj)
                 if level+1 == len(names):
-                    self._capsItems[names[level]] = ValueOut(valObj)
                     continue
 
                 if names[level] not in subVals:
@@ -1790,9 +1818,20 @@ class Analysis(object):
     def preAnalysis(self):
         self._analysisObj.preAnalysis()
 
-    ## Run the analysis function for the AIM.
+    ## Run the pre/exec/post functions for the AIM (if AIM execution is available).
     def runAnalysis(self):
-        self._analysisObj.runAnalysis()
+        self._analysisObj.execute()
+
+    ## Execute the Command Line String
+    #    Notes: 
+    #    1. only needed when explicitly executing the appropriate analysis solver (i.e., not using the AIM)
+    #    2. should be invoked after caps_preAnalysis and before caps_postAnalysis
+    #    3. this must be used instead of the OS system call to ensure that journaling properly functions
+    #
+    # \param cmd  the command line string to execute
+    # \param rpath  the relative path from the Analysis' directory or None (in the Analysis path)
+    def system(self, cmd, rpath=None):
+        self._analysisObj.system(cmd, rpath)
 
     ## Run post-analysis function for the AIM.
     def postAnalysis(self):
@@ -1865,10 +1904,10 @@ class Analysis(object):
             else:
                 print("\tDirty state    = ", cleanliness, " ",)
 
-        if execution == 1:
-            executionFlag = True
-        else:
+        if execution == 0:
             executionFlag = False
+        else:
+            executionFlag = True
 
         if kwargs.pop("infoDict", False):
             return {"name"          : name,
@@ -2117,6 +2156,7 @@ class AnalysisGeometry(object):
             os.remove(egadsFile)
             return
 
+        egadsFile = _ocsmPath(egadsFile)
         os.system("serveCSM -port " + str(kwargs.pop("portNumber", 7681)) + " -outLevel 0 " + egadsFile)
         os.remove(egadsFile)
         os.remove("autoEgads.csm")
@@ -2391,7 +2431,8 @@ class capsAnalysis(Analysis):
             analysisObj = problem._problemObj.makeAnalysis(aim,
                                                            name=analysisDir,
                                                            unitSys=unitSystem,
-                                                           intent=capsIntent)
+                                                           intent=capsIntent,
+                                                           execute=0)
 
         # Store the analysisObj
         super(capsAnalysis,self).__init__(analysisObj)
@@ -2432,6 +2473,8 @@ class capsAnalysis(Analysis):
 
                     if "Surface_Mesh" in outNames:
                         outVal = problem.analysis[parent].output["Surface_Mesh"]
+                    elif "Area_Mesh" in outNames:
+                        outVal = problem.analysis[parent].output["Area_Mesh"]
                     elif "Volume_Mesh" in outNames:
                         outVal = problem.analysis[parent].output["Volume_Mesh"]
                     else:
@@ -2516,9 +2559,9 @@ class capsAnalysis(Analysis):
         if namesOnly:
             return self.output.keys()
 
-        stateOfAnalysis = self.info(printInfo=False)
+        stateOfAnalysis = self.info(printInfo=False,infoDict=True)
 
-        if stateOfAnalysis != 0:
+        if stateOfAnalysis["status"] != 0 and stateOfAnalysis["executionFlag"] == False:
             raise caps.CAPSError(caps.CAPS_DIRTY, msg = "while getting analysis out variables"
                                                       + "Analysis state isn't clean (state = " + str(stateOfAnalysis) + ") can only return names of ouput variables; set namesOnly keyword to True")
 
@@ -2560,11 +2603,11 @@ class capsAnalysis(Analysis):
 
     @deprecated("'Analysis.preAnalysis'")
     def aimPreAnalysis(self):
-        self.pre()
+        self.preAnalysis()
 
     @deprecated("'Analysis.postAnalysis'")
     def aimPostAnalysis(self):
-        self.post()
+        self.postAnalysis()
 
     @deprecated("'Analysis.info'")
     def getAnalysisInfo(self, printInfo=True, **kwargs):
@@ -2728,13 +2771,16 @@ class AnalysisSequence(Sequence):
     #
     # \param unitSystem See AIM documentation for usage.
     #
+    # \param autoExec If false dissable any automatic execution of the AIM.
+    #
     # \return The new Analysis Object is added to the sequence and returned
-    def create(self, aim, name=None, capsIntent=None, unitSystem=None):
+    def create(self, aim, name=None, capsIntent=None, unitSystem=None, autoExec=True):
 
         analysisObj = self._problemObj.makeAnalysis(aim,
                                                     name,
                                                     unitSys=unitSystem,
-                                                    intent=capsIntent)
+                                                    intent=capsIntent,
+                                                    execute = 1 if autoExec else 0)
 
         if name is None:
             name, otype, stype, link, parent, last = analysisObj.info()

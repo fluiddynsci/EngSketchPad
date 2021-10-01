@@ -185,7 +185,7 @@ Performing analysis using pyCAPS</h1>
 <div class="fragment"><div class="line">geometryScript = os.path.join(<span class="stringliteral">&quot;..&quot;</span>,<span class="stringliteral">&quot;csmData&quot;</span>,<span class="stringliteral">&quot;frictionWingTailFuselage.csm&quot;</span>)</div>
 <div class="line">myProblem = pyCAPS.Problem(problemName=workDir,</div>
 <div class="line">                           capsFile=geometryScript,</div>
-<div class="line">                           outLevel=args.verbosity)</div>
+<div class="line">                           outLevel=args.outLevel)</div>
 <div class="line"> </div>
 <div class="line">myProblem.geometry.despmtr.area = 10.0</div>
 </div><!-- fragment --><p> The FRICTION AIM is then loaded with: </p><div class="fragment"><div class="line">myAnalysis = myProblem.analysis.create( aim = <span class="stringliteral">&quot;frictionAIM&quot;</span> )</div>
@@ -194,17 +194,8 @@ Performing analysis using pyCAPS</h1>
 <div class="line"> </div>
 <div class="line"><span class="comment"># Note: friction wants kft (defined in the AIM) - Automatic unit conversion to kft</span></div>
 <div class="line">myAnalysis.input.Altitude = [9000, 18200.0]*pyCAPS.Unit(<span class="stringliteral">&quot;m&quot;</span>)</div>
-</div><!-- fragment --><p> Once all the inputs have been set, preAnalysis needs to be executed. During this operation, all the necessary files to run FRICTION are generated and placed in the analysis working directory (analysisDir). </p><div class="fragment"><div class="line">myAnalysis.preAnalysis()</div>
-</div><!-- fragment --><p> At this point the required files necessary run FRICTION should have been created and placed in the specified analysis working directory. Next FRICTION needs to executed such as through an OS system call (see <a class="el" href="index.html#overviewFRICTION">FRICTION AIM Overview</a> for additional details) like,</p>
-<div class="fragment"><div class="line"><span class="keywordflow">print</span> (<span class="stringliteral">&quot;\n\nRunning FRICTION......&quot;</span>)</div>
-<div class="line">currentDirectory = os.getcwd() <span class="comment"># Get our current working directory</span></div>
-<div class="line"> </div>
-<div class="line">os.chdir(myAnalysis.analysisDir) <span class="comment"># Move into test directory</span></div>
-<div class="line">os.system(<span class="stringliteral">&quot;friction frictionInput.txt frictionOutput.txt &gt; Info.out&quot;</span>); <span class="comment"># Run FRICTION via system call</span></div>
-<div class="line"> </div>
-<div class="line">os.chdir(currentDirectory) <span class="comment"># Move back to top directory</span></div>
-</div><!-- fragment --><p>A call to postAnalysis is then made to check to see if FRICTION executed successfully and the expected files were generated. </p><div class="fragment"><div class="line">myAnalysis.postAnalysis()</div>
-</div><!-- fragment --><p> Similar to the AIM inputs, after the execution of FRICTION and postAnalysis, any of the AIM's output variables (<a class="el" href="aimOutputsFRICTION.html">AIM Outputs</a>) are readily available; for example, </p><div class="fragment"><div class="line">Cdtotal = myAnalysis.output.CDtotal</div>
+</div><!-- fragment --><p> Once all the inputs have been set, outputs can be directly requested. The FRICTION analysis will be automatically executed just-in-time (<a class="el" href="aimExecuteFRICTION.html">AIM Execution</a>).</p>
+<p>Any of the AIM's output variables (<a class="el" href="aimOutputsFRICTION.html">AIM Outputs</a>) are readily available; for example, </p><div class="fragment"><div class="line">Cdtotal = myAnalysis.output.CDtotal</div>
 <div class="line">CdForm  = myAnalysis.output.CDform</div>
 <div class="line">CdFric  = myAnalysis.output.CDfric</div>
 </div><!-- fragment --><p> Printing the above variables results in, </p><div class="fragment"><div class="line">Total drag = [0.01321, 0.01227]</div>
@@ -214,7 +205,7 @@ Performing analysis using pyCAPS</h1>
 </div><!-- PageDoc -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Fri May 28 2021 11:08:19 for FRICTION Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
+Generated on Fri Sep 17 2021 06:41:54 for FRICTION Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
 </small></address>
 </body>
 </html>

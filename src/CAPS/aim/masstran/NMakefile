@@ -17,7 +17,7 @@ TDIR  = $(ESP_ROOT)\bin
 
 default: $(LDIR)\masstranAIM.dll $(BDIR)\Masstran.exe
 
-$(LDIR)\masstranAIM.dll:	$(ODIR)\masstranAIM.obj $(LDIR)\utils.lib
+$(LDIR)\masstranAIM.dll:	masstranAIM.def $(ODIR)\masstranAIM.obj $(LDIR)\utils.lib
 	-del $(LDIR)\masstranAIM.dll $(LDIR)\masstranAIM.lib $(LDIR)\masstranAIM.exp
 	 link /out:$(LDIR)\masstranAIM.dll /dll /def:masstranAIM.def \
 		$(ODIR)\masstranAIM.obj /LIBPATH:$(LDIR) utils.lib aimUtil.lib \

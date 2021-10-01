@@ -50,16 +50,18 @@ int fun3d_readAeroLoad(void *aimInfo, char *filename, int *numVariable, char **v
                        int *numDataPoint, double ***dataMatrix);
 
 // Create a 3D mesh for FUN3D from a 2D mesh
-int fun3d_2DMesh(meshStruct *surfaceMesh,
+int fun3d_2DMesh(void *aimInfo,
+                 aimMeshRef *meshRef,
+                 const char *projectName,
                  mapAttrToIndexStruct *attrMap,
-                 meshStruct *volumeMesh,
-                 int *extrusionBCIndex);
+                 cfdBoundaryConditionStruct *bcProps);
 
 // Write FUN3D data transfer files
 int fun3d_dataTransfer(void *aimInfo,
-                       char *projectName,
+                       const char *projectName,
+                       mapAttrToIndexStruct *groupMap,
                        cfdBoundaryConditionStruct bcProps,
-                       meshStruct volumeMesh,
+                       aimMeshRef *meshRef,
                        /*@null@*/ cfdModalAeroelasticStruct *eigenVector);
 
 // Write FUN3D fun3d.nml file
@@ -72,18 +74,16 @@ int fun3d_writeMovingBody(void *aimInfo, double fun3dVersion,
                           cfdModalAeroelasticStruct *modalAeroelastic);
 
 // Write FUN3D parametrization/sensitivity file
-int fun3d_writeParameterization(int numDesignVariable,
+int fun3d_writeParameterization(void *aimInfo,
+                                int numDesignVariable,
                                 cfdDesignVariableStruct designVariable[],
-                                void *aimInfo,
-                                /*@null@*/ meshStruct *volumeMesh,
-                                int numGeomIn,
-                                /*@null@*/ capsValue *geomInVal);
+                                aimMeshRef *meshRef);
 
 // Write FUN3D rubber.data file
 int fun3d_writeRubber(void *aimInfo,
                       cfdDesignStruct design,
                       double fun3dVersion,
-                      /*@null@*/ meshStruct *volumeMesh);
+                      aimMeshRef *meshRef);
 
 // Make FUN3D directory structure/tree
 int fun3d_makeDirectory(void *aimInfo);

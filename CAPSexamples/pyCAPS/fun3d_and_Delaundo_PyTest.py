@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description = 'FUN3D and Delaundo PyTest Exampl
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -24,7 +24,7 @@ workDir = os.path.join(str(args.workDir[0]), "FUN3DDelaundoAnalysisTest")
 geometryScript = os.path.join("..","csmData","cfd2D.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load delaundo aim
 myProblem.analysis.create(aim = "delaundoAIM", name = "delaundo")
@@ -49,31 +49,12 @@ myProblem.analysis["delaundo"].input.Proj_Name = projectName
 
 myProblem.analysis["delaundo"].input.Mesh_Format = "Tecplot"
 
-# Run AIM pre-analysis
-myProblem.analysis["delaundo"].preAnalysis()
-
-####### Run delaundo ####################
-print ("\n\nRunning Delaundo......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(myProblem.analysis["delaundo"].analysisDir) # Move into test directory
-
-file = open("Input.sh", "w") # Create a simple input shell script with are control file name
-file.write(projectName + ".ctr\n")
-file.close()
-
-os.system("delaundo < Input.sh > Info.out"); # Run delaundo via system call
-
-os.chdir(currentDirectory) # Move back to top directory
-
-# Run AIM post-analysis
-myProblem.analysis["delaundo"].postAnalysis()
 
 # Load FUN3D aim - child of aflr4 AIM
 myProblem.analysis.create(aim = "fun3dAIM",
                           name = "fun3d")
 
-myProblem.analysis["fun3d"].input["Mesh"].link(myProblem.analysis["delaundo"].output["Surface_Mesh"])
+myProblem.analysis["fun3d"].input["Mesh"].link(myProblem.analysis["delaundo"].output["Area_Mesh"])
 
 # Set project name
 myProblem.analysis["fun3d"].input.Proj_Name = "pyCAPS_FUN3D_Delaundo"

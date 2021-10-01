@@ -629,6 +629,7 @@ proc geomtomesh { } {
     #    --------------------------
 
     # set up domain T-Rex using end point spacing values
+    set udomList [pw::Grid getAll -type pw::DomainUnstructured]
     if { 0 < $domParams(MaxLayers) } {
         setup2DTRexBoundaries $udomList $domParams(TRexARLimit) $softconTRex $hardconTRex
     }
@@ -799,7 +800,6 @@ proc geomtomesh { } {
     #    --------------------------
 
     # create single unstructured block
-    puts "Total number of domains = [llength $udomList]"
 
     # assembling domain list that excludes baffles
     puts "Unstructured domain list for assembly has [llength $udomList] entries."

@@ -5,6 +5,8 @@
 #include <set>
 #include <iostream>
 
+#include "aimUtil.h"
+
 #include "tetgen.h"
 #include "meshTypes.h"
 #include "egads.h"
@@ -20,7 +22,9 @@
 #define DOT(a,b)     (a[0]*b[0] + a[1]*b[1] + a[2]*b[2])
 
 
-static int tetgen_to_MeshStruct(tetgenio *mesh, meshStruct *genUnstrMesh)  {
+static int
+tetgen_to_MeshStruct(tetgenio *mesh, meshStruct *genUnstrMesh)
+{
     int status; // Function return status
 
     int i, j, elementIndex; // Indexing
@@ -134,15 +138,80 @@ static int tetgen_to_MeshStruct(tetgenio *mesh, meshStruct *genUnstrMesh)  {
         elementIndex += 1;
     }
 
-    return 0;
+    return CAPS_SUCCESS;
 }
 
-//#ifdef __cplusplus
-extern "C" {
-//#endif
+static int
+writeBinaryUgrid(void *aimInfo, const char *fileName, tetgenio *mesh)
+{
+  int    status = CAPS_SUCCESS;
 
+  int    nTri, nQuad;
+  int    nTet, nPyramid, nPrism, nHex;
+  char   aimFile[PATH_MAX];
+  FILE *fp = NULL;
+
+  snprintf(aimFile, PATH_MAX, "%s.lb8.ugrid", fileName);
+
+  fp = fopen(aimFile, "wb");
+  if (fp == NULL) {
+    AIM_ERROR(aimInfo, "Cannot open file: tetgen.lb8.ugrid");
+    status = CAPS_IOERR;
+    goto cleanup;
+  }
+
+  nTri     = mesh->numberoftrifaces;
+  nQuad    = 0;
+  nTet     = mesh->numberoftetrahedra;
+  nPyramid = 0;
+  nPrism   = 0;
+  nHex     = 0;
+
+  /* read a binary UGRID file */
+  status = fwrite(&mesh->numberofpoints, sizeof(int), 1, fp);
+  if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+  status = fwrite(&nTri,     sizeof(int), 1, fp);
+  if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+  status = fwrite(&nQuad,    sizeof(int), 1, fp);
+  if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+  status = fwrite(&nTet,     sizeof(int), 1, fp);
+  if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+  status = fwrite(&nPyramid, sizeof(int), 1, fp);
+  if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+  status = fwrite(&nPrism,   sizeof(int), 1, fp);
+  if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+  status = fwrite(&nHex,     sizeof(int), 1, fp);
+  if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+  /* write all of the vertices */
+  status = fwrite(mesh->pointlist, sizeof(double), 3*mesh->numberofpoints, fp);
+  if (status != 3*mesh->numberofpoints) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+  /* write the triangle connectivity */
+  status = fwrite(mesh->trifacelist, sizeof(int), 3*nTri, fp);
+  if (status != 3*nTri) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+  /* write the BC ID */
+  status = fwrite(mesh->trifacemarkerlist, sizeof(int), nTri, fp);
+  if (status != nTri) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+  /* write the tetrahedral connectivity */
+  status = fwrite(mesh->tetrahedronlist, sizeof(int), 4*nTet, fp);
+  if (status != 4*nTet) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+  status = CAPS_SUCCESS;
+
+cleanup:
+  if (fp != NULL) fclose(fp);
+
+  return status;
+}
+
+
+extern "C"
 int tetgen_VolumeMesh(void *aimInfo,
                       meshInputStruct meshInput,
+                      const char *fileName,
                       meshStruct *surfaceMesh,
                       meshStruct *volumeMesh)
 {
@@ -234,7 +303,7 @@ int tetgen_VolumeMesh(void *aimInfo,
         if (meshInput.preserveSurfMesh !=0) strcat(temp, "Y"); // Preserve surface mesh flag
 
         if ((meshInput.tetgenInput.meshQuality_rad_edge != 0) ||
-                (meshInput.tetgenInput.meshQuality_angle != 0)) {
+            (meshInput.tetgenInput.meshQuality_angle != 0)) {
 
             strcat(temp, "q"); // Mesh quality flag
 
@@ -460,8 +529,8 @@ int tetgen_VolumeMesh(void *aimInfo,
     try {
         tetrahedralize(inputString, &in, &out);
     } catch (...){
-        printf("Tetgen failed to generate a volume mesh......!!!\n");
-        printf("  See Tecplot file tetegenDebugSurface.dat for the surface mesh\n");
+        AIM_ERROR(aimInfo, "Tetgen failed to generate a volume mesh......!!!");
+        AIM_ADDLINE(aimInfo, "  See Tecplot file tetegenDebugSurface.dat for the surface mesh");
         mesh_writeTecplot(aimInfo,"tetegenDebugSurface.dat", 1, surfaceMesh, 1.0);
         return -335;
     }
@@ -473,8 +542,10 @@ int tetgen_VolumeMesh(void *aimInfo,
 
     // Transfer tetgen mesh structure to genUnstrMesh format
     status = tetgen_to_MeshStruct(&out, volumeMesh);
-    if (status != 0) return status;
+    AIM_STATUS(aimInfo, status);
 
+    status = writeBinaryUgrid(aimInfo, fileName, &out);
+    AIM_STATUS(aimInfo, status);
 
     // Populate surface mesh
     /* if (meshInput.preserveSurfMesh == (int) false &&
@@ -581,11 +652,8 @@ int tetgen_VolumeMesh(void *aimInfo,
     //in.deinitialize();
     //out.deinitialize();
 
+    status = CAPS_SUCCESS;
     printf("Done meshing using TetGen!\n");
-
-    return CAPS_SUCCESS;
+cleanup:
+    return status;
 }
-
-//#ifdef __cplusplus
-}
-//#endif

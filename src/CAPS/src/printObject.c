@@ -88,7 +88,7 @@ printValues(capsObj object, int indent)
         for (i = 0; i < indent+2; i++) printf(" ");
         printf("%d: %s -> %s\n", j+1, tuple[j].name, tuple[j].value);
       }
-    } else if (vtype == Pointer) {
+    } else if ((vtype == Pointer) || (vtype == PointerMesh)) {
 #if defined(WIN32) && defined(_OCC64)
       printf(" %llx", (long long) data);
 #else
@@ -111,7 +111,9 @@ printValues(capsObj object, int indent)
   printf("\n");
   if (vtype != DoubleDeriv) return CAPS_SUCCESS;
 
-  status = caps_hasDeriv(object, &dim, &dotnames);
+  status = caps_hasDeriv(object, &dim, &dotnames,
+                         &nerr, &errors);
+  if (errors != NULL) caps_freeError(errors);
   if (status != CAPS_SUCCESS) return status;
   
   for (i = 0; i < dim; i++) {
@@ -136,7 +138,7 @@ printValues(capsObj object, int indent)
 void
 caps_printObjects(capsObj object, int indent)
 {
-  int            i, j, k, status, nBody, nParam, nGeomIn, nGeomOut, nBranch;
+  int            i, j, k, status, nBody, nParam, nGeomIn, nGeomOut;
   int            nAnalysis, nBound, nAnalIn, nAnalOut, nConnect, nUnConnect;
   int            nAttr, nDataSet, npts, rank, nErr, nLines;
   char           *name, *units, *pname, *pID, *userID, *oname, **lines;
@@ -151,8 +153,8 @@ caps_printObjects(capsObj object, int indent)
   static char    *oType[9]  = { "BODIES", "ATTRIBUTES", "UNUSED", "PROBLEM",
                                 "VALUE", "ANALYSIS", "BOUND", "VERTEXSET",
                                 "DATASET" };
-  static char    *sType[12] = { "NONE", "STATIC", "PARAMETRIC", "GEOMETRYIN",
-                                "GEOMETRYOUT", "BRANCH", "PARAMETER", "USER",
+  static char    *sType[11] = { "NONE", "STATIC", "PARAMETRIC", "GEOMETRYIN",
+                                "GEOMETRYOUT", "PARAMETER", "USER",
                                 "ANALYSISIN", "ANALYSISOUT", "CONNECTED",
                                 "UNCONNECTED" };
 
@@ -285,13 +287,6 @@ caps_printObjects(capsObj object, int indent)
              name, status);
       return;
     }
-    status = caps_size(object, VALUE, BRANCH, &nBranch, &nErr, &errors);
-    if (errors != NULL) caps_freeError(errors);
-    if (status != CAPS_SUCCESS) {
-      printf(" CAPS Error: Object %s returns %d from caps_size(Branch)!\n",
-             name, status);
-      return;
-    }
     status = caps_size(object, ANALYSIS, NONE, &nAnalysis, &nErr, &errors);
     if (errors != NULL) caps_freeError(errors);
     if (status != CAPS_SUCCESS) {
@@ -307,8 +302,8 @@ caps_printObjects(capsObj object, int indent)
       return;
     }
     for (i = 0; i < indent; i++) printf(" ");
-    printf("   %d Bodies, %d Parameters, %d GeomIns, %d GeomOuts, %d Branchs,",
-           nBody, nParam, nGeomIn, nGeomOut, nBranch);
+    printf("   %d Bodies, %d Parameters, %d GeomIns, %d GeomOuts,",
+           nBody, nParam, nGeomIn, nGeomOut);
     printf(" %d Analyses, %d Bounds\n", nAnalysis, nBound);
 
     if (nParam > 0) {
@@ -317,19 +312,6 @@ caps_printObjects(capsObj object, int indent)
         status = caps_childByIndex(object, VALUE, PARAMETER, i+1, &obj);
         if (status != CAPS_SUCCESS) {
           printf(" CAPS Error: Object %s ret=%d from caps_child(Param,%d)!\n",
-                 name, status, i+1);
-          return;
-        }
-        caps_printObjects(obj, indent+2);
-      }
-    }
-  
-    if (nBranch > 0) {
-      printf("\n");
-      for (i = 0; i < nBranch; i++) {
-        status = caps_childByIndex(object, VALUE, BRANCH, i+1, &obj);
-        if (status != CAPS_SUCCESS) {
-          printf(" CAPS Error: Object %s ret=%d from caps_child(Branch,%d)!\n",
                  name, status, i+1);
           return;
         }

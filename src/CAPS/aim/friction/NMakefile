@@ -21,7 +21,7 @@ default:	$(LDIR)\frictionAIM.dll
 !ENDIF
 
 
-$(LDIR)\frictionAIM.dll:	$(ODIR)\frictionAIM.obj $(LDIR)\utils.lib
+$(LDIR)\frictionAIM.dll:	frictionAIM.def $(ODIR)\frictionAIM.obj $(LDIR)\utils.lib
 	-del $(LDIR)\frictionAIM.dll $(LDIR)\frictionAIM.lib \
 		$(LDIR)\frictionAIM.exp
 	link /out:$(LDIR)\frictionAIM.dll /dll /def:frictionAIM.def \

@@ -4,7 +4,7 @@
 
 #include <string.h>
 #include <math.h>
-#include "capsTypes.h"  // Bring in CAPS types
+#include "aimUtil.h"    // Bring in AIM utilities
 #include "vlmTypes.h"   // Bring in Vortex Lattice Method structures
 #include "vlmUtils.h"
 #include "miscUtils.h"  // Bring in miscellaneous utilities
@@ -384,17 +384,16 @@ int get_vlmSurface(int numTuple,
     printf("\tDone getting vortex lattice surface data\n");
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in get_vlmSurface, status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS) printf("Error: Premature exit in get_vlmSurface, status = %d\n", status);
 
-        EG_free(keyValue); keyValue = NULL;
+    EG_free(keyValue); keyValue = NULL;
 
-        if (numGroupName != 0 && groupName != NULL){
-            (void) string_freeArray(numGroupName, &groupName);
-        }
-        return status;
+    if (numGroupName != 0 && groupName != NULL){
+        (void) string_freeArray(numGroupName, &groupName);
+    }
+    return status;
 }
 
 
@@ -848,7 +847,7 @@ int destroy_vlmSurfaceStruct(vlmSurfaceStruct  *surface) {
 
 // Populate vlmSurface-section control surfaces from geometry attributes, modify control properties based on
 // incoming vlmControl structures
-int get_ControlSurface(/*@unused@*/ ego bodies[],
+int get_ControlSurface(void *aimInfo,
                        int numControl,
                        vlmControlStruct vlmControl[],
                        vlmSurfaceStruct *vlmSurface) {
@@ -875,7 +874,7 @@ int get_ControlSurface(/*@unused@*/ ego bodies[],
         vlmSurface->vlmSection[section].numControl = 0;
 
         status = EG_attributeNum(vlmSurface->vlmSection[section].ebody, &numAttr);
-        if (status != EGADS_SUCCESS)  return status;
+        AIM_STATUS(aimInfo, status);
 
         // Control attributes
         for (attr = 0; attr < numAttr; attr++) {
@@ -894,14 +893,16 @@ int get_ControlSurface(/*@unused@*/ ego bodies[],
             if (strncmp(aName, attributeKey, strlen(attributeKey)) != 0) continue;
 
             if (alen == 0) {
-                printf( "Warning: %s should be followed by a single value corresponding to the flap location "
-                        "as a function of the chord. 0 - 1 (fraction - %% / 100), 1-100 (%%)\n", aName);
-                continue;
+                AIM_ERROR(aimInfo, "%s should be followed by a single value corresponding to the flap location "
+                                   "as a function of the chord. 0 - 1 (fraction - %% / 100), 1-100 (%%)", aName);
+                status = CAPS_BADVALUE;
+                goto cleanup;
             }
 
             if (reals[0] > 100) {
-                printf( "Warning: %s value (%f) must be less than 100\n", aName, reals[0]);
-                continue;
+                AIM_ERROR(aimInfo, "%s value (%f) must be less than 100", aName, reals[0]);
+                status = CAPS_BADVALUE;
+                goto cleanup;
             }
 
             //printf("Attribute name = %s\n", aName);
@@ -933,7 +934,7 @@ int get_ControlSurface(/*@unused@*/ ego bodies[],
             index = vlmSurface->vlmSection[section].numControl-1; // Make copy to shorten the following lines of code
 
             status = initiate_vlmControlStruct(&vlmSurface->vlmSection[section].vlmControl[index]);
-            if (status != CAPS_SUCCESS) return status;
+            AIM_STATUS(aimInfo, status);
 
             // Get name of control surface
             if (vlmSurface->vlmSection[section].vlmControl[index].name != NULL) EG_free(vlmSurface->vlmSection[section].vlmControl[index].name);
@@ -950,9 +951,8 @@ int get_ControlSurface(/*@unused@*/ ego bodies[],
                 if (strcasecmp(vlmControl[control].name, attrName) != 0) continue;
 
                 status = copy_vlmControlStruct(&vlmControl[control],
-                        &vlmSurface->vlmSection[section].vlmControl[index]);
-                if (status != CAPS_SUCCESS) return status;
-
+                                               &vlmSurface->vlmSection[section].vlmControl[index]);
+                AIM_STATUS(aimInfo, status);
                 break;
             }
 
@@ -962,7 +962,7 @@ int get_ControlSurface(/*@unused@*/ ego bodies[],
 
             // Get percent of chord from attribute
             if (reals[0] < 0.0) {
-                printf("Warning: Percent chord must < 0, converting to a positive number.\n");
+                printf("Warning: Percent chord must > 0, converting to a positive number.\n");
                 vlmSurface->vlmSection[section].vlmControl[index].percentChord = -1.0* reals[0];
 
             } else {
@@ -1705,6 +1705,10 @@ int vlm_flipSection(ego body, ego *flipped)
 
     // create the new body with the flipped airfoil
     status = EG_makeTopology(context, NULL, oclass, mtype, data, 1, &eflip, sens, flipped);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    // copy over the body attributes
+    status = EG_attributeDup(body, *flipped);
     if (status != EGADS_SUCCESS) goto cleanup;
 
 cleanup:

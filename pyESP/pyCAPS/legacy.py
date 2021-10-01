@@ -2087,6 +2087,8 @@ class capsAnalysis:
                     
                     if "Surface_Mesh" in outNames:
                         outValObj = self.capsProblem.analysis[parent].analysisObj.childByName(caps.oType.VALUE, caps.sType.ANALYSISOUT, "Surface_Mesh")
+                    elif "Area_Mesh" in outNames:
+                        outValObj = self.capsProblem.analysis[parent].analysisObj.childByName(caps.oType.VALUE, caps.sType.ANALYSISOUT, "Area_Mesh")
                     elif "Volume_Mesh" in outNames:
                         outValObj = self.capsProblem.analysis[parent].analysisObj.childByName(caps.oType.VALUE, caps.sType.ANALYSISOUT, "Volume_Mesh")
                     else:

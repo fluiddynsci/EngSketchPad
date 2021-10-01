@@ -117,6 +117,9 @@ __ProtoExt__ int
                    int *bitFlag );
 
 __ProtoExt__ int
+  caps_journalState( const capsObj pobject );
+
+__ProtoExt__ int
   caps_open( const char *prName, /*@null@*/ const char *phName, int flag,
              void *ptr, int outLevel, capsObj *pobject, int *nErr,
              capsErrs **errors );
@@ -128,7 +131,7 @@ __ProtoExt__ int
   caps_outLevel( capsObj pobject, int outLevel );
 
 __ProtoExt__ int
-  caps_getRootPath(capsObj pobject, const char** fullPath);
+  caps_getRootPath( capsObj pobject, const char** fullPath );
 
 
 /* analysis functions */
@@ -140,6 +143,9 @@ __ProtoExt__ int
 __ProtoExt__ int
   caps_getBodies( capsObj aobject, int *nBody, ego **bodies,
                   int *nErr, capsErrs **errors );
+
+__ProtoExt__ int
+  caps_execute( capsObj object, int *state, int *nErr, capsErrs **errors );
 
 __ProtoExt__ int
   caps_getInput( capsObj pobj, const char *aname, int index, char **ainame,
@@ -155,7 +161,7 @@ __ProtoExt__ int
 __ProtoExt__ int
   caps_makeAnalysis( capsObj pobj, const char *anam,
                      /*@null@*/ const char *nam, /*@null@*/ const char *unitSys,
-                     /*@null@*/ const char *intents, int exec,
+                     /*@null@*/ const char *intents, int *exec,
                      capsObj *aobject, int *nErr, capsErrs **errors );
 
 __ProtoExt__ int
@@ -175,14 +181,22 @@ __ProtoExt__ int
 __ProtoExt__ int
   caps_preAnalysis( capsObj aobject, int *nErr, capsErrs **errors );
 
-__ProtoExt__ int
-  caps_runAnalysis( capsObj aobject, int *state, int *nErr, capsErrs **errors );
 
+#ifdef ASYNCEXEC
 __ProtoExt__ int
   caps_checkAnalysis( capsObj aobject, int *phase, int *nErr, capsErrs **errs );
+#endif
+
+__ProtoExt__ int
+  caps_system( capsObj aobject, /*@null@*/ const char *rpath,
+               const char *command );
 
 __ProtoExt__ int
   caps_postAnalysis( capsObj aobject, int *nErr, capsErrs **errors );
+
+__ProtoExt__ int
+  caps_getTessels( capsObj aobject, int *nTessel, ego **tessels,
+                   int *nErr, capsErrs **errors );
 
 
 /* bound, vertexset and dataset functions */
@@ -295,7 +309,8 @@ __ProtoExt__ int
                   capsObj target, int *nErr, capsErrs **errors );
 
 __ProtoExt__ int
-  caps_hasDeriv( capsObj value, int *ndot, char ***names );
+  caps_hasDeriv(capsObject *vobj, int *nderiv, char ***names,
+                int *nErr, capsErrs **errors);
 
 __ProtoExt__ int
   caps_getDeriv( capsObj value, const char *name, int *len, int *rank,

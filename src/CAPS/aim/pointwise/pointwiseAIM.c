@@ -99,6 +99,7 @@
 #include <math.h>
 #include "capsTypes.h"
 #include "aimUtil.h"
+#include "aimMesh.h"
 
 #include "meshUtils.h"       // Collection of helper functions for meshing
 #include "miscUtils.h"       // Collection of helper functions for miscellaneous analysis
@@ -228,14 +229,12 @@ typedef struct {
 // Additional storage values for the instance of the AIM
 typedef struct {
 
-  // Container for volume mesh
-  int numVolumeMesh;
-  meshStruct *volumeMesh;
-
   // Attribute to index map
   mapAttrToIndexStruct groupMap;
 
   mapAttrToIndexStruct meshMap;
+
+  aimMeshRef meshRef;
 
 } aimStorage;
 
@@ -337,14 +336,15 @@ static int initiate_aimStorage(aimStorage *pointwiseInstance)
 
   int status = CAPS_SUCCESS;
 
-  pointwiseInstance->numVolumeMesh = 0;
-  pointwiseInstance->volumeMesh = NULL;
-
   // Destroy attribute to index map
   status = initiate_mapAttrToIndexStruct(&pointwiseInstance->groupMap);
   if (status != CAPS_SUCCESS) return status;
 
   status = initiate_mapAttrToIndexStruct(&pointwiseInstance->meshMap);
+  if (status != CAPS_SUCCESS) return status;
+
+  // Mesh reference passed to solver
+  status = aim_initMeshRef(&pointwiseInstance->meshRef);
   if (status != CAPS_SUCCESS) return status;
 
   return CAPS_SUCCESS;
@@ -353,29 +353,7 @@ static int initiate_aimStorage(aimStorage *pointwiseInstance)
 
 static int destroy_aimStorage(aimStorage *pointwiseInstance)
 {
-  
-  int i, j; // Indexing
-
   int status; // Function return status
-
-  // Destroy volume mesh allocated arrays
-  for (i = 0; i < pointwiseInstance->numVolumeMesh; i++) {
-
-      for (j = 0; j < pointwiseInstance->volumeMesh[i].numReferenceMesh; j++) {
-          status = destroy_meshStruct(&pointwiseInstance->volumeMesh[i].referenceMesh[j]);
-          if (status != CAPS_SUCCESS)
-            printf("Status = %d, pointwiseAIM referenceMesh cleanup!!!\n",
-                   status);
-      }
-
-      status = destroy_meshStruct(&pointwiseInstance->volumeMesh[i]);
-      if (status != CAPS_SUCCESS)
-        printf("Status = %d, pointwiseAIM volumeMesh cleanup!!!\n", status);
-  }
-  pointwiseInstance->numVolumeMesh = 0;
-
-  EG_free(pointwiseInstance->volumeMesh);
-  pointwiseInstance->volumeMesh = NULL;
 
   // Destroy attribute to index map
   status = destroy_mapAttrToIndexStruct(&pointwiseInstance->groupMap);
@@ -385,6 +363,9 @@ static int destroy_aimStorage(aimStorage *pointwiseInstance)
   status = destroy_mapAttrToIndexStruct(&pointwiseInstance->meshMap);
   if (status != CAPS_SUCCESS)
     printf("Status = %d, pointwiseAIM attributeMap mesh cleanup!!!\n", status);
+
+  // Free the meshRef
+  aim_freeMeshRef(&pointwiseInstance->meshRef);
 
   return CAPS_SUCCESS;
 }
@@ -659,14 +640,14 @@ static int getUGRID(FILE *fp, meshStruct *volumeMesh)
 }
 
 
-static int writeMesh(void *aimInfo, aimStorage *pointwiseInstance)
+static int
+writeMesh(void *aimInfo, aimStorage *pointwiseInstance,
+          int numVolumeMesh, meshStruct *volumeMesh)
 {
 
   int status = CAPS_SUCCESS;
 
   int surfIndex, volIndex;
-
-  meshStruct *volumeMesh;
 
   // analysis input values
   capsValue *ProjName;
@@ -683,15 +664,15 @@ static int writeMesh(void *aimInfo, aimStorage *pointwiseInstance)
   initiate_bndCondStruct(&bndConds);
 
   status = aim_getValue(aimInfo, Proj_Name,       ANALYSISIN, &ProjName);
-  if (status != CAPS_SUCCESS) return status;
+  AIM_STATUS(aimInfo, status);
   if (ProjName == NULL) return CAPS_NULLVALUE;
 
   status = aim_getValue(aimInfo, Mesh_Format,     ANALYSISIN, &MeshFormat);
-  if (status != CAPS_SUCCESS) return status;
+  AIM_STATUS(aimInfo, status);
   if (MeshFormat == NULL) return CAPS_NULLVALUE;
 
   status = aim_getValue(aimInfo, Mesh_ASCII_Flag, ANALYSISIN, &MeshASCII_Flag);
-  if (status != CAPS_SUCCESS) return status;
+  AIM_STATUS(aimInfo, status);
   if (MeshASCII_Flag == NULL) return CAPS_NULLVALUE;
 
   // Project Name
@@ -705,8 +686,8 @@ static int writeMesh(void *aimInfo, aimStorage *pointwiseInstance)
   outputASCIIFlag = MeshASCII_Flag->vals.integer;
 
   if (strcasecmp(outputFormat, "SU2") != 0) {
-    for (volIndex = 0; volIndex < pointwiseInstance->numVolumeMesh; volIndex++) {
-      volumeMesh = &pointwiseInstance->volumeMesh[volIndex];
+    for (volIndex = 0; volIndex < numVolumeMesh; volIndex++) {
+      volumeMesh = &volumeMesh[volIndex];
       for (surfIndex = 0; surfIndex < volumeMesh->numReferenceMesh; surfIndex++) {
 /*@-bufferoverflowhigh@*/
         sprintf(surfNumber, "%d", surfIndex+1);
@@ -753,7 +734,7 @@ static int writeMesh(void *aimInfo, aimStorage *pointwiseInstance)
     }
   }
 
-  for (volIndex = 0; volIndex < pointwiseInstance->numVolumeMesh; volIndex++) {
+  for (volIndex = 0; volIndex < numVolumeMesh; volIndex++) {
 
 //      if (aimInputs[Multiple_Mesh-1].vals.integer == (int) true) {
 //          sprintf(bodyIndexNumber, "%d", bodyIndex);
@@ -778,7 +759,7 @@ static int writeMesh(void *aimInfo, aimStorage *pointwiseInstance)
           status = mesh_writeAFLR3(aimInfo,
                                    filename,
                                    outputASCIIFlag,
-                                   &pointwiseInstance->volumeMesh[volIndex],
+                                   &volumeMesh[volIndex],
                                    1.0);
 
       } else if (strcasecmp(outputFormat, "VTK") == 0) {
@@ -786,7 +767,7 @@ static int writeMesh(void *aimInfo, aimStorage *pointwiseInstance)
           status = mesh_writeVTK(aimInfo,
                                  filename,
                                  outputASCIIFlag,
-                                 &pointwiseInstance->volumeMesh[volIndex],
+                                 &volumeMesh[volIndex],
                                  1.0);
 
       } else if (strcasecmp(outputFormat, "SU2") == 0) {
@@ -799,7 +780,7 @@ static int writeMesh(void *aimInfo, aimStorage *pointwiseInstance)
           status = mesh_writeSU2(aimInfo,
                                  filename,
                                  outputASCIIFlag,
-                                 &pointwiseInstance->volumeMesh[volIndex],
+                                 &volumeMesh[volIndex],
                                  bndConds.numBND,
                                  bndConds.bndID,
                                  1.0);
@@ -809,7 +790,7 @@ static int writeMesh(void *aimInfo, aimStorage *pointwiseInstance)
           status = mesh_writeTecplot(aimInfo,
                                      filename,
                                      outputASCIIFlag,
-                                     &pointwiseInstance->volumeMesh[volIndex],
+                                     &volumeMesh[volIndex],
                                      1.0);
 
       } else if (strcasecmp(outputFormat, "Nastran") == 0) {
@@ -817,7 +798,7 @@ static int writeMesh(void *aimInfo, aimStorage *pointwiseInstance)
           status = mesh_writeNASTRAN(aimInfo,
                                      filename,
                                      outputASCIIFlag,
-                                     &pointwiseInstance->volumeMesh[volIndex],
+                                     &volumeMesh[volIndex],
                                      LargeField,
                                      1.0);
       } else {
@@ -840,7 +821,8 @@ static int writeMesh(void *aimInfo, aimStorage *pointwiseInstance)
 }
 
 
-static int writeGlobalGlyph(void *aimInfo, capsValue *aimInputs, double capsMeshLength)
+static int
+writeGlobalGlyph(void *aimInfo, capsValue *aimInputs, double capsMeshLength)
 {
     int status;
 
@@ -909,7 +891,7 @@ static int writeGlobalGlyph(void *aimInfo, capsValue *aimInputs, double capsMesh
     domMaxEdge *= capsMeshLength;
     domWallSpacing *= capsMeshLength;
 
-    // Assumed we are currently already in the correct directory
+    // Open the file in the analysis directory
     fp = aim_fopen(aimInfo, filename, "w");
     if (fp == NULL) {
         status = CAPS_IOERR;
@@ -917,95 +899,56 @@ static int writeGlobalGlyph(void *aimInfo, capsValue *aimInputs, double capsMesh
     }
 
     fprintf(fp, "# Connector level\n");
-    fprintf(fp, "set conParams(InitDim)                          %d; # Initial connector dimension\n",
-            conInitDim);
-    fprintf(fp, "set conParams(MaxDim)                           %d; # Maximum connector dimension\n",
-            conMaxDim);
-    fprintf(fp, "set conParams(MinDim)                           %d; # Minimum connector dimension\n",
-            conMinDim);
-    fprintf(fp, "set conParams(TurnAngle)                       %lf; # Maximum turning angle on connectors for dimensioning (0 - not used)\n",
-            conTurnAngle);
-    fprintf(fp, "set conParams(Deviation)                       %lf; # Maximum deviation on connectors for dimensioning (0 - not used)\n",
-            conDeviation);
-    fprintf(fp, "set conParams(SplitAngle)                      %lf; # Turning angle on connectors to split (0 - not used)\n",
-            conSplitAngle);
+    fprintf(fp, "set conParams(InitDim)                          %d; # Initial connector dimension\n", conInitDim);
+    fprintf(fp, "set conParams(MaxDim)                           %d; # Maximum connector dimension\n", conMaxDim);
+    fprintf(fp, "set conParams(MinDim)                           %d; # Minimum connector dimension\n", conMinDim);
+    fprintf(fp, "set conParams(TurnAngle)                       %lf; # Maximum turning angle on connectors for dimensioning (0 - not used)\n", conTurnAngle);
+    fprintf(fp, "set conParams(Deviation)                       %lf; # Maximum deviation on connectors for dimensioning (0 - not used)\n", conDeviation);
+    fprintf(fp, "set conParams(SplitAngle)                      %lf; # Turning angle on connectors to split (0 - not used)\n", conSplitAngle);
     fprintf(fp, "set conParams(JoinCons)                          0; # Perform joining operation on 2 connectors at one endpoint\n"); // This must be 0 in order to put the surface mesh back on an egads tessellation
-    fprintf(fp, "set conParams(ProxGrowthRate)                  %lf; # Connector proximity growth rate\n",
-            conProxGrowthRate);
-    fprintf(fp, "set conParams(AdaptSources)                     %d; # Compute sources using connectors (0 - not used) V18.2+ (experimental)\n",
-            conAdaptSources);
-    fprintf(fp, "set conParams(SourceSpacing)                    %d; # Use source cloud for adaptive pass on connectors V18.2+\n",
-            conSourceSpacing);
-    fprintf(fp, "set conParams(TurnAngleHard)                   %lf; # Hard edge turning angle limit for domain T-Rex (0.0 - not used)\n",
-            conTurnAngleHard);
+    fprintf(fp, "set conParams(ProxGrowthRate)                  %lf; # Connector proximity growth rate\n", conProxGrowthRate);
+    fprintf(fp, "set conParams(AdaptSources)                     %d; # Compute sources using connectors (0 - not used) V18.2+ (experimental)\n", conAdaptSources);
+    fprintf(fp, "set conParams(SourceSpacing)                    %d; # Use source cloud for adaptive pass on connectors V18.2+\n", conSourceSpacing);
+    fprintf(fp, "set conParams(TurnAngleHard)                   %lf; # Hard edge turning angle limit for domain T-Rex (0.0 - not used)\n", conTurnAngleHard);
     fprintf(fp, "\n");
     fprintf(fp, "# Domain level\n");
-    fprintf(fp, "set domParams(Algorithm)                    \"%s\"; # Isotropic (Delaunay, AdvancingFront or AdvancingFrontOrtho)\n",
-            domAlgorithm);
-    fprintf(fp, "set domParams(FullLayers)                       %d; # Domain full layers (0 for multi-normals, >= 1 for single normal)\n",
-            domFullLayers);
-    fprintf(fp, "set domParams(MaxLayers)                        %d; # Domain maximum layers\n",
-            domMaxLayers);
-    fprintf(fp, "set domParams(GrowthRate)                      %lf; # Domain growth rate for 2D T-Rex extrusion\n",
-            domGrowthRate);
-    fprintf(fp, "set domParams(IsoType)                      \"%s\"; # Domain iso cell type (Triangle or TriangleQuad)\n",
-            domIsoType);
-    fprintf(fp, "set domParams(TRexType)                     \"%s\"; # Domain T-Rex cell type (Triangle or TriangleQuad)\n",
-            domTRexType);
-    fprintf(fp, "set domParams(TRexARLimit)                     %lf; # Domain T-Rex maximum aspect ratio limit (0 - not used)\n",
-            domTRexARLimit);
-    fprintf(fp, "set domParams(TRexAngleBC)                     %lf; # Domain T-Rex spacing from surface curvature\n",
-            domTRexAngleBC);
-    fprintf(fp, "set domParams(Decay)                           %lf; # Domain boundary decay\n",
-            domDecay);
-    fprintf(fp, "set domParams(MinEdge)                         %lf; # Domain minimum edge length\n",
-            domMinEdge);
-    fprintf(fp, "set domParams(MaxEdge)                         %lf; # Domain maximum edge length\n",
-            domMaxEdge);
-    fprintf(fp, "set domParams(Adapt)                            %d; # Set up all domains for adaptation (0 - not used) V18.2+ (experimental)\n",
-            domAdapt);
-    fprintf(fp, "set domParams(WallSpacing)                     %lf; # defined spacing when geometry attributed with $wall\n",
-            domWallSpacing);
-    fprintf(fp, "set domParams(StrDomConvertARTrigger)          %lf; # Aspect ratio to trigger converting domains to structured\n",
-            domStrDomConvARTrig);
+    fprintf(fp, "set domParams(Algorithm)                    \"%s\"; # Isotropic (Delaunay, AdvancingFront or AdvancingFrontOrtho)\n", domAlgorithm);
+    fprintf(fp, "set domParams(FullLayers)                       %d; # Domain full layers (0 for multi-normals, >= 1 for single normal)\n", domFullLayers);
+    fprintf(fp, "set domParams(MaxLayers)                        %d; # Domain maximum layers\n", domMaxLayers);
+    fprintf(fp, "set domParams(GrowthRate)                      %lf; # Domain growth rate for 2D T-Rex extrusion\n", domGrowthRate);
+    fprintf(fp, "set domParams(IsoType)                      \"%s\"; # Domain iso cell type (Triangle or TriangleQuad)\n", domIsoType);
+    fprintf(fp, "set domParams(TRexType)                     \"%s\"; # Domain T-Rex cell type (Triangle or TriangleQuad)\n", domTRexType);
+    fprintf(fp, "set domParams(TRexARLimit)                     %lf; # Domain T-Rex maximum aspect ratio limit (0 - not used)\n", domTRexARLimit);
+    fprintf(fp, "set domParams(TRexAngleBC)                     %lf; # Domain T-Rex spacing from surface curvature\n", domTRexAngleBC);
+    fprintf(fp, "set domParams(Decay)                           %lf; # Domain boundary decay\n", domDecay);
+    fprintf(fp, "set domParams(MinEdge)                         %lf; # Domain minimum edge length\n", domMinEdge);
+    fprintf(fp, "set domParams(MaxEdge)                         %lf; # Domain maximum edge length\n", domMaxEdge);
+    fprintf(fp, "set domParams(Adapt)                            %d; # Set up all domains for adaptation (0 - not used) V18.2+ (experimental)\n", domAdapt);
+    fprintf(fp, "set domParams(WallSpacing)                     %lf; # defined spacing when geometry attributed with $wall\n", domWallSpacing);
+    fprintf(fp, "set domParams(StrDomConvertARTrigger)          %lf; # Aspect ratio to trigger converting domains to structured\n", domStrDomConvARTrig);
     fprintf(fp, "\n");
     fprintf(fp, "# Block level\n");
-    fprintf(fp, "set blkParams(Algorithm)                    \"%s\"; # Isotropic (Delaunay, Voxel) (V18.3+)\n",
-            blkAlgorithm);
-    fprintf(fp, "set blkParams(VoxelLayers)                      %d; # Number of Voxel transition layers if Algorithm set to Voxel (V18.3+)\n",
-            blkVoxelLayers);
-    fprintf(fp, "set blkParams(boundaryDecay)                   %lf; # Volumetric boundary decay\n",
-            blkboundaryDecay);
-    fprintf(fp, "set blkParams(collisionBuffer)                 %lf; # Collision buffer for colliding T-Rex fronts\n",
-            blkcollisionBuffer);
-    fprintf(fp, "set blkParams(maxSkewAngle)                    %lf; # Maximum skew angle for T-Rex extrusion\n",
-            blkmaxSkewAngle);
-    fprintf(fp, "set blkParams(TRexSkewDelay)                    %d; # Number of layers to delay enforcement of skew criteria\n",
-            blkTRexSkewDelay);
-    fprintf(fp, "set blkParams(edgeMaxGrowthRate)               %lf; # Volumetric edge ratio\n",
-            blkedgeMaxGrowthRate);
-    fprintf(fp, "set blkParams(fullLayers)                       %d; # Full layers (0 for multi-normals, >= 1 for single normal)\n",
-            blkfullLayers);
-    fprintf(fp, "set blkParams(maxLayers)                        %d; # Maximum layers\n",
-            blkmaxLayers);
-    fprintf(fp, "set blkParams(growthRate)                      %lf; # Growth rate for volume T-Rex extrusion\n",
-            blkgrowthRate);
-    fprintf(fp, "set blkParams(TRexType)                     \"%s\"; # T-Rex cell type (TetPyramid, TetPyramidPrismHex, AllAndConvertWallDoms)\n",
-            blkTRexType);
+    fprintf(fp, "set blkParams(Algorithm)                    \"%s\"; # Isotropic (Delaunay, Voxel) (V18.3+)\n", blkAlgorithm);
+    fprintf(fp, "set blkParams(VoxelLayers)                      %d; # Number of Voxel transition layers if Algorithm set to Voxel (V18.3+)\n", blkVoxelLayers);
+    fprintf(fp, "set blkParams(boundaryDecay)                   %lf; # Volumetric boundary decay\n", blkboundaryDecay);
+    fprintf(fp, "set blkParams(collisionBuffer)                 %lf; # Collision buffer for colliding T-Rex fronts\n", blkcollisionBuffer);
+    fprintf(fp, "set blkParams(maxSkewAngle)                    %lf; # Maximum skew angle for T-Rex extrusion\n", blkmaxSkewAngle);
+    fprintf(fp, "set blkParams(TRexSkewDelay)                    %d; # Number of layers to delay enforcement of skew criteria\n", blkTRexSkewDelay);
+    fprintf(fp, "set blkParams(edgeMaxGrowthRate)               %lf; # Volumetric edge ratio\n", blkedgeMaxGrowthRate);
+    fprintf(fp, "set blkParams(fullLayers)                       %d; # Full layers (0 for multi-normals, >= 1 for single normal)\n", blkfullLayers);
+    fprintf(fp, "set blkParams(maxLayers)                        %d; # Maximum layers\n", blkmaxLayers);
+    fprintf(fp, "set blkParams(growthRate)                      %lf; # Growth rate for volume T-Rex extrusion\n", blkgrowthRate);
+    fprintf(fp, "set blkParams(TRexType)                     \"%s\"; # T-Rex cell type (TetPyramid, TetPyramidPrismHex, AllAndConvertWallDoms)\n", blkTRexType);
     fprintf(fp, "set blkParams(volInitialize)                     1; # Initialize block after setup\n");
     fprintf(fp, "\n");
     fprintf(fp, "# General\n");
     fprintf(fp, "set genParams(SkipMeshing)                       1; # Skip meshing of domains during interim processing (V18.3+)\n");
     fprintf(fp, "set genParams(CAESolver)                 \"UGRID\"; # Selected CAE Solver (Currently support CGNS, Gmsh and UGRID)\n");
     fprintf(fp, "set genParams(outerBoxScale)                     0; # Enclose geometry in box with specified scale (0 - no box)\n");
-    fprintf(fp, "set genParams(sourceBoxLengthScale)            %lf; # Length scale of enclosed viscous walls in source box (0 - no box)\n",
-            genSourceBoxLengthScale);
-    fprintf(fp, "set genParams(sourceBoxDirection)  { %lf %lf %lf }; # Principal direction vector (i.e. normalized freestream vector)\n",
-            genSourceBoxDirection[0], genSourceBoxDirection[1], genSourceBoxDirection[2]);
-    fprintf(fp, "set genParams(sourceBoxAngle)                  %lf; # Angle for widening source box in the assigned direction\n",
-            genSourceBoxAngle);
-    fprintf(fp, "set genParams(sourceGrowthFactor)              %lf; # Growth rate for spacing value along box\n",
-            genSourceGrowthFactor);
+    fprintf(fp, "set genParams(sourceBoxLengthScale)            %lf; # Length scale of enclosed viscous walls in source box (0 - no box)\n", genSourceBoxLengthScale);
+    fprintf(fp, "set genParams(sourceBoxDirection)  { %lf %lf %lf }; # Principal direction vector (i.e. normalized freestream vector)\n", genSourceBoxDirection[0], genSourceBoxDirection[1], genSourceBoxDirection[2]);
+    fprintf(fp, "set genParams(sourceBoxAngle)                  %lf; # Angle for widening source box in the assigned direction\n", genSourceBoxAngle);
+    fprintf(fp, "set genParams(sourceGrowthFactor)              %lf; # Growth rate for spacing value along box\n", genSourceGrowthFactor);
     fprintf(fp, "set genParams(ModelSize)                         0; # Set model size before CAD import (0 - get from file)\n");
     fprintf(fp, "set genParams(writeGMA)                    \"2.0\"; # Write out geometry-mesh associativity file version (0.0 - none, 1.0 or 2.0)\n");
     fprintf(fp, "set genParams(assembleTolMult)                 2.0; # Multiplier on model assembly tolerance for allowed MinEdge\n");
@@ -1026,9 +969,6 @@ static int writeGlobalGlyph(void *aimInfo, capsValue *aimInputs, double capsMesh
     status = CAPS_SUCCESS;
 
 cleanup:
-    if (status != CAPS_SUCCESS)
-        printf("Error: Premature exit in writeGlobalGlyph, status %d\n", status);
-
     if (fp != NULL) fclose(fp);
 
     return status;
@@ -1145,7 +1085,8 @@ static int set_autoQuiltAttr(ego *body) {
 #endif
 
 
-static int setPWAttr(ego body,
+static int setPWAttr(void *aimInfo,
+                     ego body,
         /*@unused@*/ mapAttrToIndexStruct *groupMap,
                      mapAttrToIndexStruct *meshMap,
                      int numMeshProp,
@@ -1333,10 +1274,9 @@ static int setPWAttr(ego body,
             if (status != EGADS_SUCCESS) goto cleanup;
 
         } else {
-            printf("Error: No capsGroup attribute found on Face %d\n",
+            AIM_ERROR(aimInfo, "No capsGroup attribute found on Face %d",
                    faceIndex+1);
-            printf("Available attributes are:\n");
-            print_AllAttr( faces[faceIndex] );
+            print_AllAttr( aimInfo, faces[faceIndex] );
             goto cleanup;
         }
 
@@ -1468,15 +1408,15 @@ static int setPWAttr(ego body,
 
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS)
-          printf("Error: Premature exit in setPWAttr, status %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS)
+      printf("Error: Premature exit in setPWAttr, status %d\n", status);
 
-        EG_free(nodes);
-        EG_free(edges);
-        EG_free(faces);
+    EG_free(nodes);
+    EG_free(edges);
+    EG_free(faces);
 
-        return status;
+    return status;
 }
 
 
@@ -2152,14 +2092,14 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
         *ainame              = EG_strdup("Connector_Turn_Angle");
         defval->type         = Double;
         defval->nullVal      = NotNull;
-        defval->units        = EG_strdup("degree");
+        defval->units        = NULL;
         defval->lfixed       = Fixed;
         defval->dim          = Scalar;
         defval->vals.real    = 0.0;
 
         /*! \page aimInputsPointwise
          * - <B> Connector_Turn_Angle = 0.0</B> <br>
-         * Maximum turning angle on connectors for dimensioning (0 - not used).
+         * Maximum turning angle [degree] on connectors for dimensioning (0 - not used).
          * Influences connector resolution in high curvature regions. Suggested values from 5 to 20 degrees.
          */
     } else if (index == Connector_Deviation) {
@@ -2201,7 +2141,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
         /*! \page aimInputsPointwise
          * - <B> Connector_Turn_Angle_Hard = 70</B> <br>
-         * Hard edge turning angle limit for domain T-Rex (0.0 - not used).
+         * Hard edge turning angle [degree] limit for domain T-Rex (0.0 - not used).
          */
     } else if (index == Connector_Prox_Growth_Rate) {
         *ainame              = EG_strdup("Connector_Prox_Growth_Rate");
@@ -2731,12 +2671,13 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     ego context, model = NULL;
     aimStorage *pointwiseInstance;
     char aimEgadsFile[PATH_MAX];
+    char aimFile[PATH_MAX];
 
     int quilting = (int)false;
 
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
 #ifdef DEBUG
     printf(" pointwiseAIM/aimPreAnalysis  numBody = %d!\n", numBody);
@@ -2752,60 +2693,65 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
   
     pointwiseInstance = (aimStorage *) instStore;
 
-    // Cleanup previous aimStorage for the instance in case this is the second time through preAnalysis for the
-    // same instance
+    // Cleanup previous aimStorage for the instance in case this is the second time through preAnalysis for the same instance
     status = destroy_aimStorage(pointwiseInstance);
-    if (status != CAPS_SUCCESS) {
-        printf("Status = %d, pointwiseAIM  aimStorage cleanup!!!\n", status);
-        goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status, "pointwiseAIM aimStorage cleanup!!!");
+
+    // set the filename without extensions where the grid is written for solvers
+    status = aim_file(aimInfo, "caps.GeomToMesh", aimFile);
+    AIM_STATUS(aimInfo, status);
+    AIM_STRDUP(pointwiseInstance->meshRef.fileName, aimFile, aimInfo, status);
+
+    // remove previous mesh
+    status = aim_deleteMeshes(aimInfo, &pointwiseInstance->meshRef);
+    AIM_STATUS(aimInfo, status);
 
     // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
     status = create_CAPSGroupAttrToIndexMap(numBody,
                                             bodies,
                                             2, // Only search down to the face level of the EGADS bodyIndex
                                             &pointwiseInstance->groupMap);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
     status = create_CAPSMeshAttrToIndexMap(numBody,
                                             bodies,
                                             3, // Only search down to the face level of the EGADS bodyIndex
                                             &pointwiseInstance->meshMap);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
     // Get mesh sizing parameters
     if (aimInputs[Mesh_Sizing-1].nullVal != IsNull) {
 
-        status = deprecate_SizingAttr(aimInputs[Mesh_Sizing-1].length,
+        status = deprecate_SizingAttr(aimInfo,
+                                      aimInputs[Mesh_Sizing-1].length,
                                       aimInputs[Mesh_Sizing-1].vals.tuple,
                                       &pointwiseInstance->meshMap,
                                       &pointwiseInstance->groupMap);
-        if (status != CAPS_SUCCESS) return status;
+        AIM_STATUS(aimInfo, status);
 
-        status = mesh_getSizingProp(aimInputs[Mesh_Sizing-1].length,
+        status = mesh_getSizingProp(aimInfo,
+                                    aimInputs[Mesh_Sizing-1].length,
                                     aimInputs[Mesh_Sizing-1].vals.tuple,
                                     &pointwiseInstance->meshMap,
                                     &numMeshProp,
                                     &meshProp);
-        if (status != CAPS_SUCCESS) return status;
+        AIM_STATUS(aimInfo, status);
     }
 
     // Get the capsMeshLenght if boundary layer meshing has been requested
     status = check_CAPSMeshLength(numBody, bodies, &capsMeshLength);
 
     if (capsMeshLength <= 0 || status != CAPS_SUCCESS) {
-        printf("**********************************************************\n");
-        if (status != CAPS_SUCCESS)
-          printf("capsMeshLength is not set on any body.\n");
-        else
-          printf("capsMeshLength: %f\n", capsMeshLength);
-        printf("\n");
-        printf("The capsMeshLength attribute must present on at least one body.\n"
-               "\n"
-               "capsMeshLength should be a a positive value representative\n"
-               "of a characteristic length of the geometry,\n"
-               "e.g. the MAC of a wing or diameter of a fuselage.\n");
-        printf("**********************************************************\n");
+        if (status != CAPS_SUCCESS) {
+          AIM_ERROR(aimInfo, "capsMeshLength is not set on any body.");
+        } else {
+          AIM_ERROR(aimInfo, "capsMeshLength: %f", capsMeshLength);
+        }
+        AIM_ADDLINE(aimInfo, "\nThe capsMeshLength attribute must present on at least one body.\n"
+                             "\n"
+                             "capsMeshLength should be a a positive value representative\n"
+                             "of a characteristic length of the geometry,\n"
+                             "e.g. the MAC of a wing or diameter of a fuselage.\n");
         status = CAPS_BADVALUE;
         goto cleanup;
     }
@@ -2830,7 +2776,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         status = EG_copyObject(bodies[i], NULL, &bodyCopy[i]);
         if (status != EGADS_SUCCESS) goto cleanup;
 /*@-nullpass@*/
-        status = setPWAttr(bodyCopy[i],
+        status = setPWAttr(aimInfo, bodyCopy[i],
                            &pointwiseInstance->groupMap,
                            &pointwiseInstance->meshMap,
                            numMeshProp, meshProp, capsMeshLength, &quilting);
@@ -2868,25 +2814,16 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     printf("Writing egads file '%s'....\n",aimEgadsFile);
     remove(aimEgadsFile);
     status = EG_saveModel(model, aimEgadsFile);
-    if (status != EGADS_SUCCESS) {
-        printf(" EG_saveModel status = %d\n", status);
-        goto cleanup;
-    }
-
-/*
-    status = NMB_write(model, nmbFileName, asciiOut, verbose, modelSize);
-    if (status != EGADS_SUCCESS) {
-        printf(" NMB_write status = %d\n", status);
-        goto cleanup;
-    }
-*/
-    status = CAPS_SUCCESS;
+    AIM_STATUS(aimInfo, status);
 
     if (quilting == (int)true) {
-        printf("Error: Quilting is enabled with 'PW:QuiltName' attribute on faces.\n");
-        printf("       Pointwise input files were generated, but CAPS cannot process the resulting grid.\n");
-       status = CAPS_MISMATCH;
+      AIM_ERROR  (aimInfo, "Quilting is enabled with 'PW:QuiltName' attribute on faces.");
+      AIM_ADDLINE(aimInfo, "       Pointwise input files were generated, but CAPS cannot process the resulting grid.");
+      status = CAPS_MISMATCH;
+      goto cleanup;
     }
+
+    status = CAPS_SUCCESS;
 
 cleanup:
 
@@ -2928,9 +2865,13 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
     char attrname[128];
 
+    // Container for volume mesh
+    int numVolumeMesh=0;
+    meshStruct *volumeMesh=NULL;
+
     size_t     nline = 0;
     int        i, j, n, ib, ie, it, in;
-    int        ivp, npts, nVolPts, iper, iline = 0, cID = 0;
+    int        ivp, npts, nVolPts, iper, iline = 0, cID = 0, nglobal, iglobal;
     int        oclass, mtype, numBody = 0, *senses = NULL, *ivec = NULL;
     int        numFaces = 0, iface, numEdges = 0, ibody, iedge, numNodes = 0, nDegen = 0;
     int        ntri = 0, nquad = 0, elem[4], velem[4], *face_tris, elemIndex;
@@ -2939,6 +2880,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
     const char gmafilename[]   = "caps.GeomToMesh.gma";
     const char ugridfilename[] = "caps.GeomToMesh.ugrid";
     const char *intents = NULL, *groupName = NULL;
+    char       aimFile[PATH_MAX];
     char       *line = NULL, aimEgadsFile[PATH_MAX];
     double     limits[4], trange[4], result[18], uv[2], offuv[2], t, ptol;
     double     *face_uv = NULL, *face_xyz = NULL;
@@ -2952,7 +2894,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
     ego        context, edge, face, tess=NULL, prev, next, model=NULL;
     bodyData   *bodydata = NULL;
     edgeMapData **edgeMap = NULL;
-    meshStruct *surfaceMeshes = NULL, *volumeMesh;
+    meshStruct *surfaceMeshes = NULL;
 //    hashElemTable table;
     FILE       *fp = NULL;
 
@@ -2966,31 +2908,29 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
     fp = aim_fopen(aimInfo, ugridfilename, "rb");
     if (fp == NULL) {
-      printf("*********************************************************\n");
-      printf("\n Error: Pointwise did not generate %s!\n\n", ugridfilename);
-      printf("*********************************************************\n");
+      AIM_ERROR(aimInfo, "Pointwise did not generate %s!\n\n", ugridfilename);
       status = CAPS_IOERR;
       goto cleanup;
     }
-  
+
+    status = aim_file(aimInfo, ugridfilename, aimFile);
+    AIM_STATUS(aimInfo, status);
+    status = aim_symLink(aimInfo, aimFile, "caps.GeomToMesh.lb8.ugrid");
+    AIM_STATUS(aimInfo, status);
+
     pointwiseInstance = (aimStorage *) instStore;
 
-    pointwiseInstance->numVolumeMesh = 1;
-    pointwiseInstance->volumeMesh = (meshStruct *) EG_alloc(pointwiseInstance->numVolumeMesh*
-                                                            sizeof(meshStruct));
-    if (pointwiseInstance->volumeMesh == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    numVolumeMesh = 1;
+    AIM_ALLOC(volumeMesh, numVolumeMesh, meshStruct, aimInfo, status);
 
-    status = initiate_meshStruct(pointwiseInstance->volumeMesh);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    status = initiate_meshStruct(volumeMesh);
+    AIM_STATUS(aimInfo, status);
 
-    status = getUGRID(fp, pointwiseInstance->volumeMesh);
+    status = getUGRID(fp, volumeMesh);
+    AIM_STATUS(aimInfo, status);
     fclose(fp); fp = NULL;
-    if (status != EGADS_SUCCESS) {
-      printf("\n Error: getUGRID = %d!\n\n", status);
-      goto cleanup;
-    }
-    nVolPts = pointwiseInstance->volumeMesh->numNode;
-    volumeMesh = pointwiseInstance->volumeMesh;
+
+    nVolPts = volumeMesh->numNode;
 
 #if 0
     // construct the hash table into the surface elements to mark ID's
@@ -3012,45 +2952,37 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     if ((numBody == 0) || (bodies == NULL)) {
-        printf(" Error: numBody = 0!\n");
+        AIM_ERROR(aimInfo, "numBody = 0!");
         status = CAPS_BADOBJECT;
         goto cleanup;
     }
-
-    bodyIndex = (int*)EG_alloc(numBody*sizeof(int));
-    if (bodyIndex == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    AIM_ALLOC(bodyIndex, numBody, int, aimInfo, status);
 
     // Get context
     status = EG_getContext(bodies[0], &context);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     status = aim_file(aimInfo, egadsFileName, aimEgadsFile);
     AIM_STATUS(aimInfo, status);
 
     // read back in the egads file as the bodies might be written in a different order
     status = EG_loadModel(context, 0, aimEgadsFile, &model);
-    if (status != EGADS_SUCCESS) goto cleanup;
-    if (model == NULL) {
-        status = CAPS_NULLOBJ;
-        goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status);
+    AIM_NOTNULL(model, aimInfo, status);
 
     status = EG_getTopology(model, &ref, &oclass, &mtype, limits,
                             &n, &objs, &senses);
-    if (status != EGADS_SUCCESS) goto cleanup;
-    if (objs == NULL) {
-        status = CAPS_NULLOBJ;
-        goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status);
+    AIM_NOTNULL(objs, aimInfo, status);
 
     for (i = 0; i < numBody; i++) {
       status = EG_attributeRet(objs[i], "_body", &atype, &alen, &ints, &reals,
                                &string);
       if (status != EGADS_SUCCESS || alen != 1 || atype != ATTRINT) {
-        printf("_body attribute is not length 1 or not integer!\n");
+        AIM_ERROR(aimInfo, "_body attribute is not length 1 or not integer!");
         status = EGADS_ATTRERR;
         goto cleanup;
       }
@@ -3060,7 +2992,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
         status = EG_attributeRet(bodies[j], "_body", &atype, &alen, &ints, &reals,
                                  &string);
         if (status != EGADS_SUCCESS || alen != 1 || atype != ATTRINT) {
-          printf("_body attribute is not length 1 or not integer!\n");
+          AIM_ERROR(aimInfo, "_body attribute is not length 1 or not integer!");
           status = EGADS_ATTRERR;
           goto cleanup;
         }
@@ -3073,12 +3005,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
     }
     EG_deleteObject(model); model=NULL;
 
-    bodydata = (bodyData *) EG_alloc(numBody*sizeof(bodyData));
-    if (bodydata == NULL) {
-        printf(" Error: EG_alloc on Body storage!\n");
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    AIM_ALLOC(bodydata, numBody, bodyData, aimInfo, status);
     initiate_bodyData(numBody, bodydata);
 
     /* get all of the EGADS Objects */
@@ -3097,36 +3024,27 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
       status = EG_getBodyTopos(bodies[i], NULL, NODE, &bodydata[i].nnodes,
                                &bodydata[i].nodes);
-      if (status != EGADS_SUCCESS) {
-          printf(" Body %d: EG_getBodyTopos NODE = %d\n", i+1, status);
-          goto cleanup;
-      }
+      AIM_STATUS(aimInfo, status);
+
       status = EG_getBodyTopos(bodies[i], NULL, EDGE, &bodydata[i].nedges,
                                &bodydata[i].edges);
-      if (status != EGADS_SUCCESS) {
-          printf(" Body %d: EG_getBodyTopos EDGE = %d\n", i+1, status);
-          goto cleanup;
-      }
+      AIM_STATUS(aimInfo, status);
+
       numEdges += bodydata[i].nedges; // Accumulate the total number of edges
 
       status = EG_getBodyTopos(bodies[i], NULL, FACE, &bodydata[i].nfaces,
                                &bodydata[i].faces);
-      if (status != EGADS_SUCCESS) {
-          printf(" Body %d: EG_getBodyTopos FACE = %d\n", i+1, status);
-          goto cleanup;
-      }
+      AIM_STATUS(aimInfo, status);
+
       numFaces += bodydata[i].nfaces; // Accumulate the total number of faces
 
-      bodydata[i].surfaces = (ego *) EG_alloc(2*bodydata[i].nfaces*sizeof(ego));
-      if (bodydata[i].surfaces == NULL) continue;
+      AIM_ALLOC(bodydata[i].surfaces, 2*bodydata[i].nfaces, ego, aimInfo, status);
       for (j = 0; j < 2*bodydata[i].nfaces; j++) bodydata[i].surfaces[j] = NULL;
 
-      bodydata[i].rvec = (double **) EG_alloc(bodydata[i].nfaces*sizeof(double *));
-      if (bodydata[i].rvec == NULL) continue;
+      AIM_ALLOC(bodydata[i].rvec, bodydata[i].nfaces, double*, aimInfo, status);
       for (j = 0; j < bodydata[i].nfaces; j++) bodydata[i].rvec[j] = NULL;
 
-      bodydata[i].tedges = (edgeData *) EG_alloc(bodydata[i].nedges*sizeof(edgeData));
-      if (bodydata[i].tedges == NULL) continue;
+      AIM_ALLOC(bodydata[i].tedges, bodydata[i].nedges, edgeData, aimInfo, status);
       for (j = 0; j < bodydata[i].nedges; j++) {
           bodydata[i].tedges[j].npts = 0;
           bodydata[i].tedges[j].xyz  = NULL;
@@ -3134,8 +3052,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
           bodydata[i].tedges[j].ivp  = NULL;
       }
 
-      bodydata[i].tfaces = (faceData *) EG_alloc(bodydata[i].nfaces*sizeof(faceData));
-      if (bodydata[i].tfaces == NULL) continue;
+      AIM_ALLOC(bodydata[i].tfaces, bodydata[i].nfaces, faceData, aimInfo, status);
       for (j = 0; j < bodydata[i].nfaces; j++) {
           bodydata[i].tfaces[j].npts  = 0;
           bodydata[i].tfaces[j].xyz   = NULL;
@@ -3149,15 +3066,13 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
       for (j = 0; j < bodydata[i].nfaces; j++) {
         status = EG_getTopology(bodydata[i].faces[j], &bodydata[i].surfaces[j],
                                 &oclass, &mtype, limits, &n, &objs, &senses);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         geom = bodydata[i].surfaces[j];
         if (geom->mtype == TRIMMED) {
           status = EG_getGeometry(geom, &oclass, &mtype, &ref, &ivec, &rvec);
-          if (status != EGADS_SUCCESS) {
-              printf(" Error: Face %d getGeometry status = %d!\n", j+1, status);
-              continue;
-          }
+          AIM_STATUS(aimInfo, status);
+
           bodydata[i].surfaces[j] = ref;
           EG_free(ivec);
           EG_free(rvec);
@@ -3166,18 +3081,14 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
         status = EG_getGeometry(geom, &oclass, &mtype, &ref, &ivec,
                                 &bodydata[i].rvec[j]);
-        if (status != EGADS_SUCCESS) {
-          printf(" Error: Surface %d getGeometry status = %d!\n", j+1, status);
-          continue;
-        }
-        EG_free(ivec); ivec=NULL;
+        AIM_STATUS(aimInfo, status);
+
+        AIM_FREE(ivec);
 
         if (mtype != BSPLINE) {
           status = EG_convertToBSpline(bodydata[i].faces[j],
                                        &bodydata[i].surfaces[j+bodydata[i].nfaces]);
-          if (status != EGADS_SUCCESS) {
-            printf(" Error: Face %d Convert status = %d!\n", j+1, status);
-          }
+          AIM_STATUS(aimInfo, status, "Face %d ConvertToBSpline", j+1);
         }
       }
     }
@@ -3188,7 +3099,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
       for ( iedge = 0; iedge < bodydata[ib].nedges; iedge++ ) {
         status = EG_getTopology( bodydata[ib].edges[iedge], &ref, &oclass,
                                 &mtype, limits, &n, &objs, &senses);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
         if ( mtype == DEGENERATE ) nDegen++;
       }
     }
@@ -3197,26 +3108,27 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
     /* open and parse the gma file to count surface/edge tessellations points */
     fp = aim_fopen(aimInfo, gmafilename, "r");
     if (fp == NULL) {
-        printf(" Error: Cannot open file: %s!\n", gmafilename);
+        AIM_ERROR(aimInfo, "Cannot open file: %s!", gmafilename);
+        status = CAPS_IOERR;
         goto cleanup;
     }
 
     // Read the gma file version
     status = nextHeader(&line, &nline, &iline, fp);
     if (status != CAPS_SUCCESS) {
-        printf(" Error: line %d Could not find next header!\n", iline);
+        AIM_ERROR(aimInfo, "line %d Could not find next header!", iline);
         goto cleanup;
     }
 /*@-nullpass@*/
     status = sscanf(line, "%d %d", &GMA_MAJOR, &GMA_MINOR);
 /*@+nullpass@*/
     if (status != 2) {
-        printf(" Error: line %d Cannot get gma version number!\n", iline);
+        AIM_ERROR(aimInfo, "line %d Cannot get gma version number!", iline);
         goto cleanup;
     }
     if (!(GMA_MAJOR == 2 && GMA_MINOR == 0)) {
-        printf(" Error: line %d Cannot read gma file version %d.%d\n",
-               iline, GMA_MAJOR, GMA_MINOR);
+        AIM_ERROR(aimInfo, "line %d Cannot read gma file version %d.%d",
+                  iline, GMA_MAJOR, GMA_MINOR);
         status = CAPS_IOERR;
         goto cleanup;
     }
@@ -3224,14 +3136,14 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
     // Read the number of connectors and domains
     status = nextHeader(&line, &nline, &iline, fp);
     if (status != CAPS_SUCCESS) {
-        printf(" Error: line %d Could not find next header!\n", iline);
+        AIM_ERROR(aimInfo, "line %d Could not find next header!", iline);
         goto cleanup;
     }
 /*@-nullpass@*/
     status = sscanf(line, "%d %d", &numConnector, &numDomain);
 /*@+nullpass@*/
     if (status != 2) {
-      printf(" Error: line %d Cannot get Connector and Domain count!\n", iline);
+        AIM_ERROR(aimInfo, "line %d Cannot get Connector and Domain count!", iline);
         goto cleanup;
     }
 #if 0
@@ -3243,8 +3155,8 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
     }
 #endif
     if (numDomain != numFaces) {
-        printf(" Error: Number of Domains (%d) must match Face count (%d)\n",
-               numDomain, numFaces);
+        AIM_ERROR(aimInfo, "Number of Domains (%d) must match Face count (%d)",
+                  numDomain, numFaces);
         status = CAPS_IOERR;
         goto cleanup;
     }
@@ -3254,56 +3166,53 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
         // Read the EGADS ID and the number of vertexes
         status = nextHeader(&line, &nline, &iline, fp);
         if (status != CAPS_SUCCESS) {
-            printf(" Error: line %d Could not find next Connector header!\n",
-                   iline);
+            AIM_ERROR(aimInfo, "line %d Could not find next Connector header!", iline);
             goto cleanup;
         }
 /*@-nullpass@*/
         status = sscanf(line, "%d %d", &egadsID, &npts);
 /*@+nullpass@*/
         if (status != 2) {
-            printf(" Error: read line %d return = %d\n", iline, status);
+            AIM_ERROR(aimInfo, "read line %d return = %d", iline, status);
             goto cleanup;
         }
         decodeEgadsID(egadsID, &it, &ib, &in);
         if (ib < 0 || ib >= numBody) {
-          printf(" Error: line %d Body ID (%d) out of bounds (0 - %d)!\n",
+          AIM_ERROR(aimInfo, "line %d Body ID (%d) out of bounds (0 - %d)!\n",
                  iline, ib, numBody);
+          status = CAPS_MISMATCH;
           goto cleanup;
         }
         ib = bodyIndex[ib];
 
         // Check the ID type
         if (it != EDGEID) {
-            printf(" Error: line %d Expected Edge ID!\n", iline);
+            AIM_ERROR(aimInfo, "line %d Expected Edge ID!", iline);
             goto cleanup;
         }
         // Check the Edge index
         if ((in < 0) || (in >= bodydata[ib].nedges)) {
-            printf(" Error: line %d Bad Edge index = %d [1-%d]!\n",
+            AIM_ERROR(aimInfo, "line %d Bad Edge index = %d [1-%d]!\n",
                    iline, in+1, bodydata[ib].nedges);
+            status = CAPS_MISMATCH;
             goto cleanup;
         }
         // skip the comment line
         status = getline(&line, &nline, fp); iline++;
         if (status == -1) {
-          printf(" Error: line %d Failed to read comment!\n", iline);
+          AIM_ERROR(aimInfo, "line %d Failed to read comment!", iline);
+          status = CAPS_IOERR;
           goto cleanup;
         }
 
         edge   = bodydata[ib].edges[in];
         status = EG_getTopology(edge, &geom, &oclass, &mtype, trange, &numNodes,
                                 &nodes, &senses);
-        if (status != EGADS_SUCCESS) {
-            printf(" Error: line %d Bad Edge status = %d!\n", iline, status);
-            goto cleanup;
-        }
+        AIM_STATUS(aimInfo, status, "line %d Bad Edge status = %d!", iline, status);
+
         if (geom->mtype == BSPLINE) {
             status = EG_getRange(geom, trange, &iper);
-            if (status != EGADS_SUCCESS) {
-                printf(" Error: line %d EG_getRange C = %d!\n", iline, status);
-                goto cleanup;
-            }
+            AIM_STATUS(aimInfo, status, "line %d EG_getRange C = %d!", iline, status);
         }
 
         // get the tolerance of the edge
@@ -3311,19 +3220,21 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
         if (status != EGADS_SUCCESS) goto cleanup;
 
         bodydata[ib].tedges[in].npts = npts;
-        bodydata[ib].tedges[in].xyz  = (double *) EG_alloc(3*npts*sizeof(double));
-        bodydata[ib].tedges[in].t    = (double *) EG_alloc(  npts*sizeof(double));
-        bodydata[ib].tedges[in].ivp  = (int *)    EG_alloc(  npts*sizeof(int)   );
+        AIM_ALLOC(bodydata[ib].tedges[in].xyz, 3*npts, double, aimInfo, status);
+        AIM_ALLOC(bodydata[ib].tedges[in].t  ,   npts, double, aimInfo, status);
+        AIM_ALLOC(bodydata[ib].tedges[in].ivp,   npts, int   , aimInfo, status);
 
         for (i = 0; i < npts; i++) {
             status = fscanf(fp, "%d %d %lf\n", &ivp, &edgeID, &t); iline++;
             if (status != 3) {
-                printf(" Error: read line %d return = %d\n", iline, status);
+                AIM_ERROR(aimInfo, "read line %d return = %d", iline, status);
+                status = CAPS_IOERR;
                 goto cleanup;
             }
             if (edgeID != egadsID) {
-                printf(" Error: line %d Connector vertex ID (%d) does not match Edge ID (%d)\n",
+                AIM_ERROR(aimInfo, "line %d Connector vertex ID (%d) does not match Edge ID (%d)\n",
                        iline, edgeID, egadsID);
+                status = CAPS_MISMATCH;
                 goto cleanup;
             }
             bodydata[ib].tedges[in].ivp[i] = ivp;
@@ -3338,11 +3249,8 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
             bodydata[ib].tedges[in].t[i] = t;
 #ifdef CHECKGRID
             status = EG_evaluate(edge, &t, result);
+            AIM_STATUS(aimInfo, status);
 
-            if (status != EGADS_SUCCESS) {
-              printf(" Error: line %d Bad Edge status = %d!\n", iline, status);
-              goto cleanup;
-            }
             d = dist_DoubleVal(result, volumeMesh->node[ivp].xyz);
             if (d > MAX(1e-5,ptol)) {
               printf(" line %3d: Body %d Edge %d Edge deviation = %le  t = %lf mtype = %d\n",
@@ -3350,7 +3258,8 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
               status = EG_invEvaluate(edge, volumeMesh->node[ivp].xyz, &t,
                                       result);
-              if (status != EGADS_SUCCESS) goto cleanup;
+              AIM_STATUS(aimInfo, status);
+
               d = dist_DoubleVal(result, volumeMesh->node[ivp].xyz);
               printf("           %d  %le  %lf [%lf %lf]\n",
                      status, d, t, limits[0], limits[1]);
@@ -3367,7 +3276,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
         // Read the EGADS ID and the number of vertexes, triangles, and quads
         status = nextHeader(&line, &nline, &iline, fp);
         if (status != CAPS_SUCCESS) {
-            printf(" Error: line %d Could not find next Domain header!\n", iline);
+            AIM_ERROR(aimInfo, "line %d Could not find next Domain header!", iline);
             goto cleanup;
         }
 
@@ -3375,7 +3284,8 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
         status = sscanf(line, "%d %d %d %d", &egadsID, &npts, &ntri, &nquad);
 /*@+nullpass@*/
         if (status != 4) {
-            printf(" Error: read line %d return = %d\n", iline, status);
+            AIM_ERROR(aimInfo, "read line %d return = %d", iline, status);
+            status = CAPS_MISMATCH;
             goto cleanup;
         }
         decodeEgadsID(egadsID, &it, &ib, &in);
@@ -3383,109 +3293,103 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
         // Check the ID type
         if (it != FACEID) {
-            printf(" Error: line %d Expected Face ID!\n", iline);
+            AIM_ERROR(aimInfo, "line %d Expected Face ID!", iline);
+            status = CAPS_MISMATCH;
             goto cleanup;
         }
         // Check the Edge index
         if ((in < 0) || (in >= bodydata[ib].nfaces)) {
-            printf(" Error: line %d Bad Face index = %d [1-%d]!\n",
-                   iline, in+1, bodydata[ib].nfaces);
+            AIM_ERROR(aimInfo, "line %d Bad Face index = %d [1-%d]!", iline, in+1, bodydata[ib].nfaces);
+            status = CAPS_MISMATCH;
             goto cleanup;
         }
         // skip the comment line
 
         status = getline(&line, &nline, fp); iline++;
         if (status == -1 || nline == 0 || line == NULL || line[0] != '#') {
-          printf(" Error: line %d Failed to read comment!\n", iline);
+          AIM_ERROR(aimInfo, "line %d Failed to read comment!", iline);
+          status = CAPS_IOERR;
           goto cleanup;
         }
         if (nquad != 0) {
-          printf(" Error: line %d Quads are currently not supported!\n", iline);
+          AIM_ERROR(aimInfo, "line %d Quads are currently not supported!", iline);
+          status = CAPS_MISMATCH;
           goto cleanup;
         }
 
         // allocate new surface elements
         volumeMesh->numElement += ntri+nquad;
-        volumeMesh->element = (meshElementStruct *) EG_reall(volumeMesh->element,
-                                                             volumeMesh->numElement*
-                                                             sizeof(meshElementStruct));
-        if (volumeMesh->element == NULL) {
-          status = EGADS_MALLOC;
-          goto cleanup;
-        }
+        AIM_REALL(volumeMesh->element, volumeMesh->numElement, meshElementStruct, aimInfo, status);
 
         // initialize the new elements
         for (i = elemIndex; i < volumeMesh->numElement; i++ ) {
           status = initiate_meshElementStruct(&volumeMesh->element[i],
                                               volumeMesh->analysisType);
-          if (status != CAPS_SUCCESS) goto cleanup;
+          AIM_STATUS(aimInfo, status);
         }
 
         face = bodydata[ib].faces[in];
         geom = bodydata[ib].surfaces[in];
 
-        status = EG_getGeometry(geom, &oclass, &mtype, &ref, NULL, NULL);
-        if (status != EGADS_SUCCESS) goto cleanup;
-        if (mtype == BSPLINE) {
+        if (geom->mtype == BSPLINE) {
           geomBspl = geom;
         } else {
           geomBspl = bodydata[ib].surfaces[in+bodydata[ib].nfaces];
         }
         status = EG_getRange(geomBspl, limits, &iper);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         /* correct UV-values for periodic shapes */
         status = correctUV(face, geom, geomBspl, bodydata[ib].rvec[in], offuv);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         // get the tolerance of the face
         status = EG_getTolerance(face, &ptol);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         // Look for component/boundary ID for attribute mapper based on capsGroup
         status = retrieve_CAPSGroupAttr(face, &groupName);
         if (status != CAPS_SUCCESS) {
-          printf("Error: No capsGroup attribute found on Face %d, unable to assign a boundary index value\n",
-                 in+1);
-          printf("Available attributes are:\n");
-          print_AllAttr( face );
+          AIM_ERROR(aimInfo, "No capsGroup attribute found on Face %d, unable to assign a boundary index value",
+                    in+1);
+          print_AllAttr( aimInfo, face );
           goto cleanup;
         }
 
 /*@-nullpass@*/
         status = get_mapAttrToIndexIndex(&pointwiseInstance->groupMap,
                                          groupName, &cID);
-        if (status != CAPS_SUCCESS) {
-          printf("Error: Unable to retrieve boundary index from capsGroup %s\n",
-                 groupName);
-          goto cleanup;
-        }
+        AIM_STATUS(aimInfo, status, "Unable to retrieve boundary index from capsGroup: %s",
+                   groupName);
 /*@+nullpass@*/
 
         bodydata[ib].tfaces[in].npts  = npts;
-        bodydata[ib].tfaces[in].xyz   = (double *) EG_alloc(3*npts*sizeof(double));
-        bodydata[ib].tfaces[in].uv    = (double *) EG_alloc(2*npts*sizeof(double));
         bodydata[ib].tfaces[in].ntri  = ntri;
         bodydata[ib].tfaces[in].nquad = nquad;
-        bodydata[ib].tfaces[in].tris  = (int *) EG_alloc(3*ntri*sizeof(int));
-        bodydata[ib].tfaces[in].ivp   = (int *) EG_alloc(  npts*sizeof(int));
+        AIM_ALLOC(bodydata[ib].tfaces[in].xyz , 3*npts, double, aimInfo, status);
+        AIM_ALLOC(bodydata[ib].tfaces[in].uv  , 2*npts, double, aimInfo, status);
+        AIM_ALLOC(bodydata[ib].tfaces[in].tris, 3*ntri, int   , aimInfo, status);
+        AIM_ALLOC(bodydata[ib].tfaces[in].ivp ,   npts, int   , aimInfo, status);
 
         for (i = 0; i < npts; i++) {
           status = getline(&line, &nline, fp); iline++;
           if (status == -1 || nline == 0) {
-            printf(" Error: line %d Failed to read line!\n", iline);
+            AIM_ERROR(aimInfo, "line %d Failed to read line!", iline);
+            status = CAPS_IOERR;
             goto cleanup;
           }
 /*@-nullpass@*/
           status = sscanf(line, "%d %d %lf %lf", &ivp, &faceID, &uv[0], &uv[1]);
 /*@+nullpass@*/
           if (status != 4) {
-            printf(" Error: read line %d return = %d (!= 4)\n", iline, status);
+            AIM_ERROR(aimInfo, "read line %d return = %d (!= 4)", iline, status);
+            status = CAPS_IOERR;
             goto cleanup;
           }
           if (faceID != egadsID) {
-            printf(" Error: line %d Domain vertex ID (%d) does not match Face ID (%d)\n",
-                   iline, faceID, egadsID);
+            AIM_ERROR(aimInfo, "line %d Domain vertex ID (%d) does not match Face ID (%d)\n",
+                      iline, faceID, egadsID);
+            status = CAPS_MISMATCH;
             goto cleanup;
           }
           bodydata[ib].tfaces[in].ivp[i] = ivp;
@@ -3504,10 +3408,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 #ifdef CHECKGRID
           // check the face vertexes
           status = EG_evaluate(face, uv, result);
-          if (status != EGADS_SUCCESS) {
-            printf(" Error: line %d Bad Face stat = %d!\n", iline, status);
-            goto cleanup;
-          }
+          AIM_STATUS(aimInfo, status);
 
           d = dist_DoubleVal(result, volumeMesh->node[ivp].xyz);
           if (d > MAX(1e-5,ptol)) {
@@ -3520,7 +3421,8 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
         // skip the comment line
         status = getline(&line, &nline, fp); iline++;
         if (status == -1 || line == NULL || line[0] != '#') {
-          printf(" Error: line %d Failed to read comment!\n", iline);
+          AIM_ERROR(aimInfo, "line %d Failed to read comment!", iline);
+          status = CAPS_IOERR;
           goto cleanup;
         }
 
@@ -3528,13 +3430,14 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
           status = fscanf(fp, "%d %d %d\n", &elem[0], &elem[1], &elem[2]);
           iline++;
           if (status != 3) {
-            printf(" Error: read line %d return = %d\n", iline, status);
+            AIM_ERROR(aimInfo, "read line %d return = %d", iline, status);
+            status = CAPS_IOERR;
             goto cleanup;
           }
           for (j = 0; j < 3; j++) {
             if ((elem[j] < 1) || (elem[j] > npts)) {
-              printf(" Error: line %d Bad Vertex index = %d [1-%d]!\n",
-                     iline, elem[j], nVolPts);
+              AIM_ERROR(aimInfo, "line %d Bad Vertex index = %d [1-%d]!", iline, elem[j], nVolPts);
+              status = CAPS_MISMATCH;
               goto cleanup;
             }
           }
@@ -3571,50 +3474,46 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
     // generate the QuickRefLists now that all surface elements have been added
     status = mesh_fillQuickRefList(volumeMesh);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     // construct a map between coincident Solid/Sheet body Edges
     status = matchSameEdges(bodies, numBody, &edgeMap);
-    if (status != CAPS_SUCCESS) goto cleanup;
-    if (edgeMap == NULL) {
-        status = CAPS_NULLVALUE;
-        goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status);
 
     // Allocate surfaceMesh from number of bodies
+    AIM_ALLOC(volumeMesh->referenceMesh, numBody, meshStruct, aimInfo, status);
     volumeMesh->numReferenceMesh = numBody;
-    volumeMesh->referenceMesh = (meshStruct *)
-                      EG_alloc(volumeMesh->numReferenceMesh*sizeof(meshStruct));
-    if (volumeMesh->referenceMesh == NULL) {
-      volumeMesh->numReferenceMesh = 0;
-      status = EGADS_MALLOC;
-      goto cleanup;
-    }
     surfaceMeshes = volumeMesh->referenceMesh;
 
     // Initiate surface meshes
     for (ib = 0; ib < numBody; ib++){
         status = initiate_meshStruct(&surfaceMeshes[ib]);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
     }
+
+    // Allocate surfaceMesh from number of bodies
+    AIM_ALLOC(pointwiseInstance->meshRef.maps, numBody, aimMeshTessMap, aimInfo, status);
+    pointwiseInstance->meshRef.nmap = numBody;
+    for (ib = 0; ib < numBody; ib++){
+        pointwiseInstance->meshRef.maps[ib].tess = NULL;
+        pointwiseInstance->meshRef.maps[ib].map = NULL;
+    }
+
 
     // populate the tess objects
     for (ib = 0; ib < numBody; ib++) {
 
         // Build up the body tessellation object
         status = EG_initTessBody(bodies[ib], &tess);
-        if (status != EGADS_SUCCESS) goto cleanup;
-        if (tess == NULL) {
-            status = EGADS_NOTTESS;
-            goto cleanup;
-        }
+        AIM_STATUS(aimInfo, status);
+        AIM_NOTNULL(tess, aimInfo, status);
 
         for ( ie = 0; ie < bodydata[ib].nedges; ie++ ) {
 
             // Check if the edge is degenerate
             status = EG_getTopology(bodydata[ib].edges[ie], &ref, &oclass,
                                     &mtype, limits, &n, &objs, &senses);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
             if (mtype == DEGENERATE) continue;
 
             // set the edge tessellation on the tess object
@@ -3622,6 +3521,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
               ibody = ib;
               iedge = ie;
             } else {
+              AIM_NOTNULL(edgeMap, aimInfo, status);
               ibody = edgeMap[ib][ie].ibody;
               iedge = edgeMap[ib][ie].iedge;
             }
@@ -3629,17 +3529,14 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
             status = EG_setTessEdge(tess, ie+1, bodydata[ibody].tedges[iedge].npts,
                                     bodydata[ibody].tedges[iedge].xyz,
                                     bodydata[ibody].tedges[iedge].t);
-            if (status != EGADS_SUCCESS) {
-              printf(" Error: Failed to set tessellation on Edge %d!\n", iedge+1);
-              goto cleanup;
-            }
+            AIM_STATUS(aimInfo, status, "Failed to set tessellation on Edge %d!", iedge+1);
 
             // Add the unique indexing of the edge tessellation
             snprintf(attrname, 128, "edgeVertID_%d",ie+1);
             status = EG_attributeAdd(tess, attrname, ATTRINT,
                                      bodydata[ibody].tedges[iedge].npts,
                                      bodydata[ibody].tedges[iedge].ivp, NULL, NULL);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
        }
 
         for (iface = 0; iface < bodydata[ib].nfaces; iface++) {
@@ -3650,6 +3547,10 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
             face_tris = bodydata[ib].tfaces[iface].tris;
             face_uv   = bodydata[ib].tfaces[iface].uv;
             face_xyz  = bodydata[ib].tfaces[iface].xyz;
+
+            AIM_NOTNULL(face_tris, aimInfo, status);
+            AIM_NOTNULL(face_uv  , aimInfo, status);
+            AIM_NOTNULL(face_xyz , aimInfo, status);
 
             // check the normals of the elements match the geometry normals
             // only need to check one element per face to decide for all
@@ -3663,7 +3564,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
             // get the normal of the face
             status = EG_evaluate(bodydata[ib].faces[iface], uv, result);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             // use cross dX/du x dX/dv to get geometry normal
             v1[0] = result[3]; v1[1] = result[4]; v1[2] = result[5];
@@ -3706,21 +3607,17 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
                                     face_uv,
                                     ntri,
                                     face_tris);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
 
             // The points get reindexed to be consistent with loops in EG_setTessFace
             // This uses the new triangulation to map that index change.
             status = EG_getTessFace(tess, iface+1, &npts, &pxyz, &puv, &ptype,
                                     &pindex, &ntri, &tris, &tric);
-            if (status != CAPS_SUCCESS) goto cleanup;
-            if (tris == NULL) {
-                status = EGADS_NOTTESS;
-                goto cleanup;
-            }
+            AIM_STATUS(aimInfo, status);
+            AIM_NOTNULL(tris, aimInfo, status);
 
-            faceVertID = (int *) EG_alloc(bodydata[ib].tfaces[iface].npts*sizeof(int));
-            if (faceVertID == NULL) { status = EGADS_MALLOC; goto cleanup; }
+            AIM_ALLOC(faceVertID, bodydata[ib].tfaces[iface].npts, int, aimInfo, status);
 
             for (i = 0; i < ntri; i++) {
               for (j = 0; j < 3; j++) {
@@ -3728,40 +3625,59 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
               }
             }
 
-            // Add the unique indexing of the edge tessellation
+            // Add the unique indexing of the tessellation
             snprintf(attrname, 128, "faceVertID_%d",iface+1);
             status = EG_attributeAdd(tess, attrname, ATTRINT,
                                      bodydata[ib].tfaces[iface].npts,
                                      faceVertID, NULL, NULL);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
-            EG_free(faceVertID); faceVertID = NULL;
+            // replace the shuffled volume ID's
+            AIM_FREE(bodydata[ib].tfaces[iface].ivp);
+            bodydata[ib].tfaces[iface].ivp = faceVertID;
+            faceVertID = NULL;
         }
 
         // finalize the tessellation
-        status = EG_statusTessBody(tess, &bodies[ib], &i, &n);
-        if (status != EGADS_SUCCESS) {
-            printf("\nTessellation object was not built correctly!!!\n");
-            goto cleanup;
+        status = EG_statusTessBody(tess, &bodies[ib], &i, &nglobal);
+        AIM_STATUS(aimInfo, status, "Tessellation object was not built correctly!!!");
+
+        status = copy_mapAttrToIndexStruct( &pointwiseInstance->groupMap,
+                                            &surfaceMeshes[ib].groupMap );
+        AIM_STATUS(aimInfo, status);
+
+        // Create the map from the tessellation global vertex index to the volume mesh vertex index
+        AIM_ALLOC(pointwiseInstance->meshRef.maps[ib].map, nglobal, int, aimInfo, status);
+
+        for (iface = 0; iface < bodydata[ib].nfaces; iface++) {
+          status = EG_getTessFace(tess, iface+1, &npts, &pxyz, &puv, &ptype,
+                                  &pindex, &ntri, &tris, &tric);
+          AIM_STATUS(aimInfo, status);
+
+          /* construct global vertex indices */
+          for (i = 0; i < npts; i++) {
+            status = EG_localToGlobal(tess, iface+1, i+1, &iglobal);
+            AIM_STATUS(aimInfo, status);
+            pointwiseInstance->meshRef.maps[ib].map[iglobal-1] = bodydata[ib].tfaces[iface].ivp[i];
+          }
         }
 
-        // construct the surface mesh object
+        // save the tessellation with caps
+        status = aim_newTess(aimInfo, tess);
+        AIM_STATUS(aimInfo, status);
+
+/*@-kepttrans@*/
+        // reference the surface mesh object
         surfaceMeshes[ib].bodyTessMap.egadsTess = tess;
+        pointwiseInstance->meshRef.maps[ib].tess = tess;
         tess = NULL;
+/*@+kepttrans@*/
 
         surfaceMeshes[ib].bodyTessMap.numTessFace = bodydata[ib].nfaces; // Number of faces in the tessellation
         surfaceMeshes[ib].bodyTessMap.tessFaceQuadMap = NULL; // Save off the quad map
 
-        status = mesh_surfaceMeshEGADSTess(&pointwiseInstance->groupMap,
-                                           &surfaceMeshes[ib]);
-        if (status != CAPS_SUCCESS) goto cleanup;
-
-        // save the tessellation with caps
-        status = aim_newTess(aimInfo, surfaceMeshes[ib].bodyTessMap.egadsTess);
-        if (status != CAPS_SUCCESS) {
-             printf(" aim_setTess return = %d\n", status);
-             goto cleanup;
-         }
+        status = mesh_surfaceMeshEGADSTess(aimInfo, &surfaceMeshes[ib]);
+        AIM_STATUS(aimInfo, status);
 
         printf("Body = %d\n", ib+1);
         printf("\tNumber of nodes    = %d\n", surfaceMeshes[ib].numNode);
@@ -3771,35 +3687,41 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
             printf("\tNumber of tris = %d\n", surfaceMeshes[ib].meshQuickRef.numTriangle);
             printf("\tNumber of quad = %d\n", surfaceMeshes[ib].meshQuickRef.numQuadrilateral);
         }
-
     }
 
     // write out the mesh if requested
-    status = writeMesh(aimInfo, pointwiseInstance);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    status = writeMesh(aimInfo, pointwiseInstance,
+                       numVolumeMesh, volumeMesh);
+    AIM_STATUS(aimInfo, status);
 
     status = CAPS_SUCCESS;
 
 cleanup:
     if (status != CAPS_SUCCESS) {
-      printf("Error: Premature exit in pointwiseAIM aimPostAnalysis, status %d\n", status);
-      printf("\n");
-      printf("       Please make sure you are using Pointwise V18.2 or newer.\n");
-      printf("*********************************************************\n");
+      AIM_ADDLINE(aimInfo, "Please make sure you are using Pointwise V18.4 or newer.\n");
     }
 
-    EG_free(bodyIndex);
+    // Destroy volume mesh allocated arrays
+    for (i = 0; i < numVolumeMesh; i++) {
+        for (j = 0; j < volumeMesh[i].numReferenceMesh; j++) {
+            (void) destroy_meshStruct(&volumeMesh[i].referenceMesh[j]);
+        }
+        (void) destroy_meshStruct(&volumeMesh[i]);
+        AIM_FREE(volumeMesh);
+    }
+
+    AIM_FREE(bodyIndex);
     if (model != NULL) EG_deleteObject(model);
     if (tess  != NULL) EG_deleteObject(tess);
     destroy_bodyData(numBody, bodydata);
-    EG_free(bodydata);
-    EG_free(faceVertID);
-    EG_free(faces);
-    EG_free(edges);
+    AIM_FREE(bodydata);
+    AIM_FREE(faceVertID);
+    AIM_FREE(faces);
+    AIM_FREE(edges);
     if (edgeMap != NULL) {
       for (i = 0; i < numBody; i++)
-        EG_free(edgeMap[i]);
-      EG_free(edgeMap);
+        AIM_FREE(edgeMap[i]);
+      AIM_FREE(edgeMap);
     }
     if (fp != NULL) fclose(fp);
 
@@ -3825,13 +3747,12 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     if (index == Volume_Mesh) {
 
         *aoname           = AIM_NAME(Volume_Mesh);
-        form->type        = Pointer;
-        form->dim         = Vector;
-        form->lfixed      = Change;
-        form->sfixed      = Change;
+        form->type        = PointerMesh;
+        form->dim         = Scalar;
+        form->lfixed      = Fixed;
+        form->sfixed      = Fixed;
         form->vals.AIMptr = NULL;
         form->nullVal     = IsNull;
-        AIM_STRDUP(form->units, "meshStruct", aimInfo, status);
 
         /*! \page aimOutputsPointwise
          * - <B> Volume_Mesh </B> <br>
@@ -3857,6 +3778,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo,
 {
     int        status = CAPS_SUCCESS;
     aimStorage *pointwiseInstance;
+    aimMesh    mesh;
 
 #ifdef DEBUG
     printf(" pointwiseAIM/aimCalcOutput  index = %d!\n", index);
@@ -3865,10 +3787,33 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo,
 
     if (Volume_Mesh == index) {
 
-        // Return the volume meshes
-        val->nrow        = pointwiseInstance->numVolumeMesh;
-        val->vals.AIMptr = pointwiseInstance->volumeMesh;
+        status = aim_queryMeshes( aimInfo, Volume_Mesh, &pointwiseInstance->meshRef );
+        if (status > 0) {
 
+/*@-immediatetrans@*/
+          mesh.meshData = NULL;
+          mesh.meshRef = &pointwiseInstance->meshRef;
+/*@+immediatetrans@*/
+
+          status = aim_readBinaryUgrid(aimInfo, &mesh);
+          AIM_STATUS(aimInfo, status);
+
+          status = aim_writeMeshes(aimInfo, Volume_Mesh, &mesh);
+          AIM_STATUS(aimInfo, status);
+
+          status = aim_freeMeshData(mesh.meshData);
+          AIM_STATUS(aimInfo, status);
+          AIM_FREE(mesh.meshData);
+
+        }
+        else
+          AIM_STATUS(aimInfo, status);
+
+/*@-immediatetrans@*/
+        // Return the volume mesh reference
+        val->nrow        = 1;
+        val->vals.AIMptr = &pointwiseInstance->meshRef;
+/*@+immediatetrans@*/
     } else {
 
         status = CAPS_BADINDEX;

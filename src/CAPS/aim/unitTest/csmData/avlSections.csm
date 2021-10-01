@@ -29,6 +29,7 @@ attribute capsReferenceArea  3
 attribute capsReferenceSpan  3
 attribute capsReferenceChord 1
 attribute capsReferenceX     1/4
+attribute vlmControl_RightAileron 0.8
 rotatex   90        0         0
 rotatey   10        0         0
 translate 0        1.5         0
@@ -39,6 +40,7 @@ rotatex   90        0         0
 translate 0        0.5         0
 attribute capsGroup    $Wing
 attribute _name        $secw2
+attribute vlmControl_RightAileron 0.8
 
 # blunt trailing edge chopped into multiple edges to stress writeSections
 udprim    naca      Thickness thick     Camber    camber
@@ -56,6 +58,7 @@ intersect
 translate 0       -0.5        0
 attribute capsGroup    $Wing
 attribute _name        $secw3
+attribute vlmControl_LeftAileron 0.8
 
 # sharp trailing edge chopped into multiple edges to stress writeSections
 udprim    naca      Thickness thick     Camber    camber sharpte 1
@@ -74,6 +77,7 @@ rotatey   -15        0         0
 translate 0       -1.5        0
 attribute capsGroup    $Wing
 attribute _name        $secw4
+attribute vlmControl_LeftAileron 0.8
 
 # -----------------------------------------------------------------
 # horizonal tail

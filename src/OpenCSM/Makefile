@@ -15,6 +15,7 @@ ODIR  = .
 endif
 
 BINLIST =	$(BDIR)/serveCSM \
+		$(BDIR)/serveESP \
 		$(BDIR)/sensCSM
 LIBLIST =	$(LDIR)/$(OSHLIB) \
 		$(LDIR)/bezier.so \
@@ -40,6 +41,7 @@ LIBLIST =	$(LDIR)/$(OSHLIB) \
 		$(LDIR)/kulfan.so \
 		$(LDIR)/naca.so \
 		$(LDIR)/nurbbody.so \
+		$(LDIR)/parabaloid.so \
 		$(LDIR)/parsec.so \
 		$(LDIR)/pod.so \
 		$(LDIR)/poly.so \
@@ -55,11 +57,16 @@ LIBLIST =	$(LDIR)/$(OSHLIB) \
 		$(LDIR)/stiffener.so \
 		$(LDIR)/supell.so \
 		$(LDIR)/waffle.so \
-		$(LDIR)/PDT2.so
+		$(LDIR)/PDT2.so \
+		$(LDIR)/ereped.so \
+		$(LDIR)/mitten.so \
+		$(LDIR)/plugs.so \
+		$(LDIR)/slugs.so
 LIBFLIST =	$(LDIR)/naca456.so
 INCLIST =	$(IDIR)/OpenCSM.h \
 		$(IDIR)/common.h \
 		$(IDIR)/udp.h \
+		$(IDIR)/tim.h \
 		$(IDIR)/egg.h \
 		$(IDIR)/udpUtilities.h \
 		$(IDIR)/udpUtilities.c
@@ -74,16 +81,24 @@ endif
 #	binaries
 #
 $(BDIR)/serveCSM:	$(ODIR)/serveCSM.o $(LDIR)/$(OSHLIB)
-	$(CXX) -o $(BDIR)/serveCSM $(ODIR)/serveCSM.o $(RPATH) -L$(LDIR) \
-		-locsm -lwsserver -legads -lpthread -lz -lm
+	$(CXX) -o $(BDIR)/serveCSM $(ODIR)/serveCSM.o -L$(LDIR) \
+		-locsm -lwsserver -legads -lpthread -lz $(RPATH) -lm
 
 $(ODIR)/serveCSM.o:	serveCSM.c OpenCSM.h common.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. serveCSM.c \
 		-o $(ODIR)/serveCSM.o
 
+$(BDIR)/serveESP:	$(ODIR)/serveESP.o $(ODIR)/tim.o $(LDIR)/$(OSHLIB)
+	$(CXX) -o $(BDIR)/serveESP $(ODIR)/serveESP.o $(ODIR)/tim.o -L$(LDIR) \
+		-locsm -lwsserver -legads -lpthread -lz $(RPATH) -ldl -lm
+
+$(ODIR)/serveESP.o:	serveESP.c OpenCSM.h common.h tim.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. serveESP.c \
+		-o $(ODIR)/serveESP.o
+
 $(BDIR)/sensCSM:	$(ODIR)/sensCSM.o $(LDIR)/$(OSHLIB)
-	$(CC) -o $(BDIR)/sensCSM $(ODIR)/sensCSM.o $(RPATH) -L$(LDIR) -locsm \
-		-locsm -legads -lm
+	$(CC) -o $(BDIR)/sensCSM $(ODIR)/sensCSM.o -L$(LDIR) -locsm \
+		-locsm -legads $(RPATH) -lm
 
 $(ODIR)/sensCSM.o:	sensCSM.c OpenCSM.h common.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. sensCSM.c -o $(ODIR)/sensCSM.o
@@ -101,7 +116,7 @@ $(LDIR)/libocsm.dylib:	$(ODIR)/OpenCSM.o $(ODIR)/udp.o
 	touch $(LDIR)/libocsm.dylib
 	rm $(LDIR)/libocsm.dylib
 	$(CC) -dynamiclib -o $(LDIR)/libocsm.dylib $(ODIR)/OpenCSM.o \
-		$(ODIR)/udp.o $(RPATH) -L$(LDIR) -legads -ldl \
+		$(ODIR)/udp.o -L$(LDIR) -legads -ldl $(RPATH) \
 		-undefined error -install_name '@rpath/libocsm.dylib' \
 		-compatibility_version $(EGREV) -current_version $(EGREV)
 
@@ -120,6 +135,9 @@ $(ODIR)/OpenCSM.o:	OpenCSM.c OpenCSM.h common.h
 
 $(ODIR)/udp.o:	udp.c
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. udp.c -o $(ODIR)/udp.o
+
+$(ODIR)/tim.o:	tim.c
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. tim.c -o $(ODIR)/tim.o
 
 #
 #	user-defined primitives (UDPs) and functions (UDFs)
@@ -367,6 +385,16 @@ $(ODIR)/udpNurbbody.o:	udpNurbbody.c udpUtilities.c udpUtilities.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. udpNurbbody.c \
 		-o $(ODIR)/udpNurbbody.o
 
+$(LDIR)/parabaloid.so:	$(ODIR)/udpParabaloid.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/parabaloid.so
+	rm $(LDIR)/parabaloid.so
+	$(CC) $(SOFLGS) -o $(LDIR)/parabaloid.so $(ODIR)/udpParabaloid.o \
+		-L$(LDIR) -locsm -legads -lm
+
+$(ODIR)/udpParabaloid.o:	udpParabaloid.c udpUtilities.c udpUtilities.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. udpParabaloid.c \
+		-o $(ODIR)/udpParabaloid.o
+
 $(LDIR)/parsec.so:	$(ODIR)/udpParsec.o $(LDIR)/$(OSHLIB)
 	touch $(LDIR)/parsec.so
 	rm $(LDIR)/parsec.so
@@ -514,7 +542,7 @@ $(ODIR)/udpWaffle.o:	udpWaffle.c udpUtilities.c udpUtilities.h
 		-o $(ODIR)/udpWaffle.o
 
 #
-#	external grid generators
+#	external grid generators (EGGs)
 #
 $(LDIR)/PDT2.so:	$(ODIR)/eggPDT2.o
 	touch $(LDIR)/PDT2.so
@@ -525,6 +553,50 @@ $(LDIR)/PDT2.so:	$(ODIR)/eggPDT2.o
 $(ODIR)/eggPDT2.o:	eggPDT2.c udpUtilities.c udpUtilities.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. eggPDT2.c \
 		-o $(ODIR)/eggPDT2.o
+
+#
+#	tool interface modules (TIMs)
+#
+
+$(LDIR)/ereped.so:	$(ODIR)/timEreped.o $(ODIR)/tim.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/ereped.so
+	rm $(LDIR)/ereped.so
+	$(CXX) $(SOFLGS) -o $(LDIR)/ereped.so $(ODIR)/timEreped.o $(ODIR)/tim.o \
+		-L$(LDIR) -locsm -legads -ldl -lm
+
+$(ODIR)/timEreped.o:	timEreped.c tim.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. timEreped.c \
+		-o $(ODIR)/timEreped.o
+
+$(LDIR)/mitten.so:	$(ODIR)/timMitten.o $(ODIR)/tim.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/mitten.so
+	rm $(LDIR)/mitten.so
+	$(CXX) $(SOFLGS) -o $(LDIR)/mitten.so $(ODIR)/timMitten.o $(ODIR)/tim.o \
+		-L$(LDIR) -locsm -lwsserver -legads -lpthread -lz -ldl -lm
+
+$(ODIR)/timMitten.o:	timMitten.c tim.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. timMitten.c \
+		-o $(ODIR)/timMitten.o
+
+$(LDIR)/plugs.so:	$(ODIR)/timPlugs.o $(ODIR)/tim.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/plugs.so
+	rm $(LDIR)/plugs.so
+	$(CXX) $(SOFLGS) -o $(LDIR)/plugs.so $(ODIR)/timPlugs.o $(ODIR)/tim.o \
+		-L$(LDIR) -locsm -lwsserver -legads -lpthread -lz -ldl -lm
+
+$(ODIR)/timPlugs.o:	timPlugs.c tim.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. timPlugs.c \
+		-o $(ODIR)/timPlugs.o
+
+$(LDIR)/slugs.so:	$(ODIR)/timSlugs.o $(ODIR)/tim.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/slugs.so
+	rm $(LDIR)/slugs.so
+	$(CXX) $(SOFLGS) -o $(LDIR)/slugs.so $(ODIR)/timSlugs.o $(ODIR)/tim.o \
+		-L$(LDIR) -locsm -legads -ldl -lm
+
+$(ODIR)/timSlugs.o:	timSlugs.c tim.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. timSlugs.c \
+		-o $(ODIR)/timSlugs.o
 
 #
 #	include files
@@ -545,6 +617,11 @@ $(IDIR)/udp.h:	udp.h
 	touch $(IDIR)/udp.h
 	rm $(IDIR)/udp.h
 	cp -p udp.h $(IDIR)/udp.h
+
+$(IDIR)/tim.h:	tim.h
+	touch $(IDIR)/tim.h
+	rm $(IDIR)/tim.h
+	cp -p tim.h $(IDIR)/tim.h
 
 $(IDIR)/egg.h:	egg.h
 	touch $(IDIR)/egg.h
@@ -572,6 +649,9 @@ include $(IDIR)/STANALYZER.make
 lint:
 	@echo "Checking serveCSM..."
 	$(LINT) -I$(IDIR) serveCSM.c OpenCSM.c udp.c -allocmismatch -duplicatequals -macrovarprefixexclude -exportlocal -mustfreefresh -mayaliasunique -kepttrans -immediatetrans
+	@echo " "
+	@echo "Checking serveESP..."
+	$(LINT) -I$(IDIR) serveESP.c OpenCSM.c udp.c tim.c -allocmismatch -duplicatequals -macrovarprefixexclude -exportlocal -mustfreefresh -mayaliasunique -kepttrans -immediatetrans
 	@echo " "
 	@echo "Checking sensCSM..."
 	$(LINT) -I$(IDIR) sensCSM.c OpenCSM.c udp.c  -allocmismatch -duplicatequals -macrovarprefixexclude -exportlocal -mustfreefresh -mayaliasunique -kepttrans -immediatetrans
@@ -614,6 +694,9 @@ lint:
 	@echo " "
 	@echo "Checking nurbbody.so..."
 	$(LINT) -I$(IDIR) udpNurbbody.c
+	@echo " "
+	@echo "Checking parabaloid.so..."
+	$(LINT) -I$(IDIR) udpParabaloid.c
 	@echo " "
 	@echo "Checking parsec.so..."
 	$(LINT) -I$(IDIR) udpParsec.c
@@ -693,6 +776,18 @@ lint:
 	@echo "Checking PDT2.so..."
 	$(LINT) -I$(IDIR) eggPDT2.c
 	@echo " "
+	@echo "Checking ereped.so..."
+	$(LINT) -I$(IDIR) timEreped.c
+	@echo " "
+	@echo "Checking mitten.so..."
+	$(LINT) -I$(IDIR) timMitten.c
+	@echo " "
+	@echo "Checking plugs.so..."
+	$(LINT) -I$(IDIR) timPlugs.c
+	@echo " "
+	@echo "Checking slugs.so..."
+	$(LINT) -I$(IDIR) timSlugs.c
+	@echo " "
 	@echo "Checking matchBodys.so..."
 	$(LINT) -I$(IDIR) udfMatchBodys.c
 	@echo " "
@@ -702,14 +797,23 @@ lint:
 
 clean:
 	(cd $(ODIR); rm -f udpFitcurve.o udpFreeform.o udpWaffle.o udpCsm.o \
-		udpEllipse.o udpNaca.o udpHex.o udpImport.o serveCSM.o \
-		OpenCSM.o udp.o udpBezier.o udpBox.o udpNurbbody.o udpParsec.o \
+		udpEllipse.o udpNaca.o udpHex.o udpImport.o serveCSM.o serveESP.o \
+		OpenCSM.o udp.o tim.o udpBezier.o udpBox.o udpNurbbody.o udpParabaloid.o udpParsec.o \
 		udpSample.o udpSew.o udpRadwaf.o udpNaca456.o naca456.o \
 		udpSupell.o udpStag.o udfSlices.o udfStiffener.o udpKulfan.o udpBiconvex.o \
 		udfCatmull.o udfCompare.o udfCreateBEM.o udfCreatePoly.o udfDroop.o \
 		udpPod.o udpPoly.o udpProp.o udfEditAttr.o udfPrintBbox.o udfPrintBrep.o \
-		udpPrintEgo udfFlend.o udfGanged.o udfGuide.o \
-		udfMatchBodys.o udfNuscale.o eggPDT2.o sensCSM.o )
+		udfPrintEgo.o udfFlend.o udfGanged.o udfGuide.o \
+		udfMatchBodys.o udfNuscale.o timEreped.o timMitten.o \
+		timPlugs.o timSlugs.o eggPDT2.o sensCSM.o )
 
 cleanall:	clean
 	rm -f  $(BINLIST) $(LIBLIST) $(LIBFLIST) $(INCLIST)
+
+static:		$(BDIR)/staticCSM
+
+$(BDIR)/staticCSM:	$(ODIR)/serveCSM.o $(ODIR)/OpenCSM.o $(ODIR)/udp.o \
+			$(LDIR)/libegadstatic.a
+	$(CXX) -o $(BDIR)/staticCSM $(ODIR)/serveCSM.o $(ODIR)/OpenCSM.o \
+		$(ODIR)/udp.o -L$(LDIR) -lwsserver -legadstatic -lpthread -lz \
+		$(LIBPATH) $(LIBS) $(RPATH) -ldl -lm

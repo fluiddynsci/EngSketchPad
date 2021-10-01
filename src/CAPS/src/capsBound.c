@@ -80,8 +80,18 @@ extern int  caps_jrnlRead(capsProblem *problem, capsObject *obj, int nargs,
                           capsJrnl *args, CAPSLONG *sNum, int *status);
 extern int  caps_buildBound(capsObject *bobject, int *nErr, capsErrs **errors);
 extern int  caps_unitParse(/*@null@*/ const char *unit);
-extern int  caps_getDataX(capsObject *dobject, int *npts, int *rank, double **data,
+extern int  caps_getDataX(capsObject *dobj, int *npts, int *rank, double **data,
                           char **units, int *nErr, capsErrs **errors);
+extern void caps_concatErrs(/*@null@*/ capsErrs *errs, capsErrs **errors);
+extern void caps_getAIMerrs(capsAnalysis *analy, int *nErr, capsErrs **errors);
+extern int  caps_analysisInfX(const capsObj aobject, char **apath, char **unSys,
+                              int *major, int *minor, char **intents,
+                              int *nField, char ***fnames, int **ranks,
+                              int **fInOut, int *execution, int *status);
+extern int  caps_postAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors,
+                              int flag);
+extern int  caps_execX(capsObject *aobject, int *nErr, capsErrs **errors);
+extern int  caps_circularAutoExecs(capsObject *asrc, capsObject *aobject);
 
 extern int
   caps_conjGrad(int (*func)(int, double[], void *, double *,
@@ -899,12 +909,21 @@ caps_linkDataSet(capsObject *link, enum capsdMethod method,
   if (bound->state                != Open)      return CAPS_STATEERR;
 
   /* set the link */
+  tgtD->linkMethod  = method;
+  tgtD->link        = link;
+
+  /* look for circular links in auto execution */
+  status = caps_circularAutoExecs(target, NULL);
+  if (status != CAPS_SUCCESS) {
+    tgtD->linkMethod  = Copy;
+    tgtD->link        = NULL;
+    return status;
+  }
+
   caps_freeOwner(&target->last);
   problem->sNum    += 1;
   target->last.sNum = problem->sNum;
   caps_fillDateTime(target->last.datetime);
-  tgtD->linkMethod  = method;
-  tgtD->link        = link;
 
   status = caps_writeProblem(pobject);
   if (status != CAPS_SUCCESS)
@@ -1899,7 +1918,8 @@ caps_outputVertexSet(capsObject *vobject, const char *filename)
 static int
 caps_fillFieldOut(capsObject *dobject, int *nErr, capsErrs **errors)
 {
-  int           stat;
+  int           stat, major, minor, nField, exec, dirty, *ranks, *fInOut;
+  char          *intents, *apath, *unitSys, **fnames;
   char          temp[PATH_MAX];
   capsObject    *vobject, *bobject, *pobject, *aobject;
   capsDataSet   *dataset;
@@ -1916,6 +1936,9 @@ caps_fillFieldOut(capsObject *dobject, int *nErr, capsErrs **errors)
   bobject   = vobject->parent;
   pobject   = bobject->parent;
   problem   = (capsProblem *) pobject->blind;
+
+  if (dataset->ftype != FieldOut) return CAPS_SOURCEERR;
+
   if (aobject == NULL) {
     snprintf(temp, PATH_MAX, "caps_getData DataSet %s with NULL analysis!",
              dobject->name);
@@ -1924,9 +1947,21 @@ caps_fillFieldOut(capsObject *dobject, int *nErr, capsErrs **errors)
     return CAPS_SOURCEERR;
   }
 
-  analysis = (capsAnalysis *) aobject->blind;
+  /* check to see if analysis is clean or can auto execute */
+  stat = caps_analysisInfX(aobject, &apath, &unitSys, &major, &minor, &intents,
+                           &nField, &fnames, &ranks, &fInOut, &exec, &dirty);
+  if (stat != CAPS_SUCCESS) return stat;
+  if (dirty > 0) {
+    /* auto execute if available */
+    if ((exec == 2) && (dirty < 5)) {
+      stat = caps_execX(aobject, nErr, errors);
+      if (stat != CAPS_SUCCESS) return stat;
+    } else {
+      return CAPS_DIRTY;
+    }
+  }
 
-  if (dataset->ftype != FieldOut) return CAPS_SOURCEERR;
+  analysis = (capsAnalysis *) aobject->blind;
 
   if (((dobject->last.sNum < analysis->pre.sNum) ||
        (dobject->last.sNum == 0) || (dataset->data == NULL))) {
@@ -2020,8 +2055,10 @@ static int
 caps_fillFieldIn(capsObject *dobject, int *nErr, capsErrs **errors)
 {
   int           i, j, bIndex, eIndex, index, stat, npts;
+  int           major, minor, nField, exec, dirty, *ranks, *fInOut;
   double        *values, *params, *param, *data, st[3];
   char          *units, temp[PATH_MAX];
+  char          *intents, *apath, *unitSys, **fnames;
   capsObject    *vobject, *bobject, *pobject, *aobject, *foundset, *foundanl;
   capsDataSet   *dataset, *otherset, *ds;
   capsVertexSet *vertexset, *fvs = NULL;
@@ -2086,8 +2123,14 @@ caps_fillFieldIn(capsObject *dobject, int *nErr, capsErrs **errors)
     return CAPS_BADOBJECT;
   }
 
-  /* have we been updated? */
-  if ((foundanl->last.sNum > dobject->last.sNum) || (dataset->data == NULL)) {
+  /* check to see if analysis is dirty */
+  stat = caps_analysisInfX(foundanl, &apath, &unitSys, &major, &minor, &intents,
+                           &nField, &fnames, &ranks, &fInOut, &exec, &dirty);
+  if (stat != CAPS_SUCCESS) return stat;
+
+  /* can we auto execute or have we been updated? */
+  if (((exec == 2) && (dirty > 0) && (dirty < 5)) ||
+      (foundanl->last.sNum > dobject->last.sNum) || (dataset->data == NULL)) {
 
     fanal = (capsAnalysis *) foundanl->blind;
     if (fanal == NULL) {
@@ -2173,12 +2216,12 @@ caps_fillFieldIn(capsObject *dobject, int *nErr, capsErrs **errors)
 
     stat = caps_getDataX(foundset, &i, &j, &data, &units, nErr, errors);
     if (stat != CAPS_SUCCESS) {
-      snprintf(temp, PATH_MAX, "Source %s for %s is NULL (caps_getData)!",
+      snprintf(temp, PATH_MAX, "Could not get source %s for FieldIn %s (caps_getData)!",
                foundset->name, dobject->name);
       caps_makeSimpleErr(dobject, CERROR, temp, NULL, NULL, errors);
       if (*errors != NULL) *nErr = (*errors)->nError;
       EG_free(values);
-      return CAPS_NULLVALUE;
+      return stat;
     }
 
     /* compute */
@@ -2303,10 +2346,8 @@ caps_getDataX(capsObject *dobject, int *npts, int *rank, double **data,
 {
   int           stat;
   char          temp[PATH_MAX];
-  capsObject    *vobject, *aobject, *bobject, *pobject, *foundset, *foundanl;
-  capsProblem   *problem;
+  capsObject    *vobject, *aobject, *bobject, *foundset, *foundanl;
   capsBound     *bound;
-  capsAnalysis  *analysis;
   capsDataSet   *dataset;
   capsVertexSet *vertexset, *fvs;
   
@@ -2334,23 +2375,6 @@ caps_getDataX(capsObject *dobject, int *npts, int *rank, double **data,
   if (bobject->blind       == NULL)      return CAPS_NULLBLIND;
   bound   = (capsBound *) bobject->blind;
   if (bound->state         == Open)      return CAPS_STATEERR;
-  pobject = bobject->parent;
-  if (pobject              == NULL)      return CAPS_NULLOBJ;
-  if (pobject->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
-  if (pobject->type        != PROBLEM)   return CAPS_BADTYPE;
-  if (pobject->blind       == NULL)      return CAPS_NULLBLIND;
-  problem = (capsProblem *) pobject->blind;
-  if (aobject != NULL) {
-    if (aobject->magicnumber  != CAPSMAGIC)          return CAPS_BADOBJECT;
-    if (aobject->type         != ANALYSIS)           return CAPS_BADTYPE;
-    if (aobject->blind        == NULL)               return CAPS_NULLBLIND;
-    analysis = (capsAnalysis *) aobject->blind;
-    if ((dataset->ftype == GeomSens) || (dataset->ftype == TessSens) ||
-        (dataset->ftype == FieldOut)) {
-      if (problem->geometry.sNum > analysis->pre.sNum) return CAPS_MISMATCH;
-      if (analysis->pre.sNum     > aobject->last.sNum) return CAPS_MISMATCH;
-    }
-  }
 
   /*
    * Sensitivity/BuiltIn - filled in fillVertexSets
@@ -2392,7 +2416,9 @@ caps_getDataX(capsObject *dobject, int *npts, int *rank, double **data,
 
     foundanl = fvs->analysis;
 
-    if ((foundanl->last.sNum == 0) && (dataset->startup != NULL)) {
+    if ((aobject->last.sNum  == 0) &&
+        (foundanl->last.sNum == 0) &&
+        (dataset->startup    != NULL)) {
       /* bypass everything because we are in a startup situation */
       *rank  = dataset->rank;
       *npts  = 1;
@@ -2420,15 +2446,17 @@ int
 caps_getData(capsObject *dobject, int *npts, int *rank, double **data,
              char **units, int *nErr, capsErrs **errors)
 {
-  int           ret, stat;
+  int           i, j, ret, stat;
   CAPSLONG      sNum;
+  capsErrs      *errs = NULL;
   capsObject    *vobject, *bobject, *pobject, *aobject;
   capsVertexSet *vertexset;
   capsDataSet   *dataset;
   capsAnalysis  *analysis;
   capsBound     *bound;
+  capsValue     *value;
   capsProblem   *problem;
-  capsJrnl      args[4];
+  capsJrnl      args[7];
 
   if (nErr                 == NULL)      return CAPS_NULLVALUE;
   if (errors               == NULL)      return CAPS_NULLVALUE;
@@ -2479,30 +2507,98 @@ caps_getData(capsObject *dobject, int *npts, int *rank, double **data,
   args[1].type = jInteger;
   args[2].type = jPointer;
   args[3].type = jString;
-  stat         = caps_jrnlRead(problem, dobject, 4, args, &sNum, &ret);
+  args[4].type = jInteger;
+  args[5].type = jErr;
+  args[6].type = jObjs;
+  stat         = caps_jrnlRead(problem, dobject, 7, args, &sNum, &ret);
   if (stat == CAPS_JOURNALERR) return stat;
   if (stat == CAPS_JOURNAL) {
-    if (ret == CAPS_SUCCESS) {
-      *npts  = args[0].members.integer;
-      *rank  = args[1].members.integer;
-      *data  = args[2].members.pointer;
-      *units = args[3].members.string;
+    *npts   = args[0].members.integer;
+    *rank   = args[1].members.integer;
+    *data   = args[2].members.pointer;
+    *units  = args[3].members.string;
+    *nErr   = args[4].members.integer;
+    *errors = args[5].members.errs;
+    if ((ret == CAPS_SUCCESS) && (args[6].num != 0)) {
+      for (i = 0; i < args[6].num; i++) {
+        aobject = args[6].members.objs[i];
+        if (aobject        == NULL) continue;
+        if (aobject->blind == NULL) continue;
+        analysis = (capsAnalysis *) aobject->blind;
+        if (sNum < aobject->last.sNum) continue;
+        if (*nErr != 0) {
+          errs    = *errors;
+          *nErr   = 0;
+          *errors = NULL;
+        }
+        stat = caps_postAnalysiX(aobject, nErr, errors, 1);
+        caps_concatErrs(errs, errors);
+        *nErr = 0;
+        if (*errors != NULL) *nErr = (*errors)->nError;
+        if (stat != CAPS_SUCCESS) {
+          printf(" CAPS Info: postAnalysis on %s = %d (caps_getData)!\n",
+                 aobject->name, stat);
+        } else {
+          for (j = 0; j < analysis->nAnalysisOut; j++) {
+            value = analysis->analysisOut[j]->blind;
+            if  (value == NULL) continue;
+            if ((value->type != Pointer) && (value->type != PointerMesh)) continue;
+            if  (analysis->analysisOut[j]->last.sNum == 0) continue;
+            stat = aim_CalcOutput(problem->aimFPTR, analysis->loadName,
+                                  analysis->instStore, &analysis->info, j+1,
+                                  value);
+            if (*nErr != 0) {
+              errs    = *errors;
+              *nErr   = 0;
+              *errors = NULL;
+            }
+            caps_getAIMerrs(analysis, nErr, errors);
+            caps_concatErrs(errs, errors);
+            *nErr = 0;
+            if (*errors != NULL) *nErr = (*errors)->nError;
+            if (stat != CAPS_SUCCESS)
+              printf(" CAPS Warning: aim_CalcOutput on %s = %d (caps_getData)\n",
+                     aobject->name, stat);
+          }
+        }
+      }
     }
     return ret;
   }
 
   sNum = problem->sNum;
-  stat = caps_getDataX(dobject, npts, rank, data, units, nErr, errors);
-  if (stat == CAPS_SUCCESS) {
-    args[0].members.integer = *npts;
-    args[1].members.integer = *rank;
-    args[2].length          = *rank*args[0].members.integer*sizeof(double);
-    args[2].members.pointer = *data;
-    args[3].members.string  = *units;
+  if (ret == CAPS_SUCCESS) {
+    if (problem->nExec != 0) {
+      printf(" CAPS Info: Sync Error -- nExec = %d (caps_getData)!\n",
+             problem->nExec);
+      EG_free(problem->execs);
+      problem->nExec = 0;
+      problem->execs = NULL;
+    }
+    ret = caps_getDataX(dobject, npts, rank, data, units, nErr, errors);
+    *nErr = 0;
+    if (*errors != NULL) *nErr = (*errors)->nError;
   }
-  caps_jrnlWrite(problem, dobject, stat, 4, args, sNum, problem->sNum);
+  args[0].members.integer = *npts;
+  args[1].members.integer = *rank;
+  args[2].length          = *rank*args[0].members.integer*sizeof(double);
+  args[2].members.pointer = *data;
+  args[3].members.string  = *units;
+  args[4].members.integer = *nErr;
+  args[5].members.errs    = *errors;
+  args[6].num             = problem->nExec;
+  args[6].members.objs    = problem->execs;
+  caps_jrnlWrite(problem, dobject, ret, 7, args, sNum, problem->sNum);
+  if (problem->nExec != 0) {
+/*  printf(" CAPS Info: nExec = %d (caps_getData)!\n", problem->nExec);  */
+/*@-kepttrans@*/
+    EG_free(problem->execs);
+/*@+kepttrans@*/
+    problem->nExec = 0;
+    problem->execs = NULL;
+  }
 
-  return stat;
+  return ret;
 }
 
 
@@ -2600,10 +2696,12 @@ gdone:
 
 int
 caps_snDataSets(const capsObject *aobject, int flag, CAPSLONG *sn)
-/* flag = 0 - return lowest sn of dependant destination
-   flag = 1 - return lowest sn of dependant source */
+/* flag = 0 - return lowest sn of source
+   flag = 1 - also check if the linked analysis is dirty */
 {
-  int           i, j, k;
+  int           i, j, k, status, major, minor, nField, exec, dirty;
+  int           *ranks, *fInOut;
+  char          *intents, *apath, *unitSys, **fnames;
   capsObject    *pobject, *linkanl;
   capsProblem   *problem;
   capsBound     *bound;
@@ -2640,17 +2738,7 @@ caps_snDataSets(const capsObject *aobject, int flag, CAPSLONG *sn)
         if (vs->dataSets[k]->blind         == NULL)      continue;
         ds = (capsDataSet *) vs->dataSets[k]->blind;
         if (ds->ftype != FieldIn)                        continue;
-        if (flag == 0) {
-          /* found destination */
-          if (*sn == -1) {
-            *sn = vs->dataSets[k]->last.sNum;
-          } else {
-            if (*sn > vs->dataSets[k]->last.sNum)
-              *sn = vs->dataSets[k]->last.sNum;
-          }
-          continue;
-        }
-        if (ds->link == NULL) continue;
+        if (ds->link                       == NULL)      continue;
 
         if (ds->link->magicnumber != CAPSMAGIC)         return CAPS_BADOBJECT;
         if (ds->link->type        != DATASET)           return CAPS_BADTYPE;
@@ -2668,6 +2756,20 @@ caps_snDataSets(const capsObject *aobject, int flag, CAPSLONG *sn)
         } else {
           if (*sn > linkanl->last.sNum)
             *sn = linkanl->last.sNum;
+        }
+
+        if (flag == 1) {
+          /* check to see if analysis is dirty */
+          status = caps_analysisInfX(linkanl, &apath, &unitSys, &major, &minor,
+                                     &intents, &nField, &fnames, &ranks,
+                                     &fInOut, &exec, &dirty);
+          if (status != CAPS_SUCCESS) return status;
+
+          if (((exec == 2) && (dirty > 0) && (dirty < 5)) ||
+              (linkanl->last.sNum > ds->link->last.sNum)  ||
+              (ds->link->last.sNum == 0)) {
+            *sn = aobject->last.sNum+2;
+          }
         }
       }
     }

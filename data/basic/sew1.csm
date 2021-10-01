@@ -22,81 +22,18 @@ ASSERT    @stack.size  1
 ASSERT    @itype       3
 ASSERT    @nface       6
 
-# read the .igs file and show that it contains 6 SheetBodys
+# read the .igs file and show that it contains 1 SolidBody
 STORE     ...                           # clear the stack
 IMPORT    sew1.igs    -1
-ASSERT    @stack.size  6
-ASSERT    @itype       2
-ASSERT    @nface       1
-
-# combine the SheetBodys into a single SolidBody
-COMBINE                                 # without MARK, combines everything on stack
 ASSERT    @stack.size  1
 ASSERT    @itype       3
 ASSERT    @nface       6
 
-# read the .igs file and sew the Faces into a SolidBody
+# reading the .igs file with UDPRIM SEW produces exactly the same as above
 STORE     ...                           # clear the stack
 UDPRIM    sew   filename  $sew1.igs
 ASSERT    @stack.size  1
 ASSERT    @itype       3
 ASSERT    @nface       6
 
-# read the .igs file again and UNION the 6 SheetBodys into a single SheetBody
-STORE     ...                           # clear the stack
-PATBEG    iface  6
-   IMPORT    sew1.igs  iface
-   STORE     sheet     iface
-PATEND
-
-RESTORE   sheet  1
-RESTORE   sheet  3
-UNION                                   # two Faces via EG_solidBoolean
-RESTORE   sheet  2
-RESTORE   sheet  4
-UNION                                   # two Faces via EG_solidBoolean
-UNION                                   # two SheetBodys via EG_sewfaces
-RESTORE   sheet  5
-UNION                                   # a SheetBody and a Face via EG_solidBoolean
-RESTORE   sheet  6
-UNION                                   # a SheetBody and a Face via EG_solidBoolean
-ASSERT    @stack.size  1
-ASSERT    @itype       2
-ASSERT    @nface       6
-
-# promote the SheetBody to a SolidBody
-COMBINE
-ASSERT    @stack.size  1
-ASSERT    @itype       3
-ASSERT    @nface       6
-
-# combine 3 of the Faces into a SheetBody
-# note: JOIN only takes care of 1 pair of Edges at a time, so other Faces could not be COMBINEd
-STORE     ...                           # clear the stack
-MARK
-RESTORE   sheet  1
-RESTORE   sheet  2
-RESTORE   sheet  3
-JOIN      0  1
-ASSERT    @stack.size  1
-ASSERT    @itype       2
-ASSERT    @nface       3
-
-# join 5 of the Faces into a SheetBody
-# note: JOIN only takes care of 1 pair of Edges at a time, so other Faces could not be COMBINED
-STORE     ...                           # clear the stack
-MARK
-RESTORE   sheet  1
-RESTORE   sheet  2
-RESTORE   sheet  3
-RESTORE   sheet  4
-RESTORE   sheet  5
-COMBINE
-ASSERT    @stack.size  1
-ASSERT    @itype       2
-ASSERT    @nface       5
-
 END
-
-
-

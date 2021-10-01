@@ -32,12 +32,12 @@ int fea_createMesh(void *aimInfo,
                    int    edgePointMin,                 // (in)  minimum points along any Edge
                    int    edgePointMax,                 // (in)  maximum points along any Edge
                    int    quadMesh,                     // (in)  only do tris-for faces
-                   mapAttrToIndexStruct *attrMap,       // (in)  map from CAPSGroup names to indexes
+                   mapAttrToIndexStruct *groupMap,      // (in)  map from CAPSGroup names to indexes
                    mapAttrToIndexStruct *constraintMap, // (in)  map from CAPSConstraint names to indexes
                    mapAttrToIndexStruct *loadMap,       // (in)  map from CAPSLoad names to indexes
                    mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                    mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
-                   mapAttrToIndexStruct *responseMap,    // (in)  map from CAPSResponse names to indexes
+                   mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
                    int *numMesh,                        // (out) total number of FEA mesh structures
                    meshStruct **feaMesh,                // (out) FEA mesh structure
                    feaProblemStruct *feaProblem ) {     // (out) FEA problem structure
@@ -175,13 +175,18 @@ int fea_createMesh(void *aimInfo,
     status = create_CAPSGroupAttrToIndexMap(numBody,
                                             bodies,
                                             3, //>2 - search the body, faces, edges, and all the nodes
-                                            attrMap);
+                                            groupMap);
     AIM_STATUS(aimInfo, status);
 
     // Get the mesh input Value
     meshInd = aim_getIndex(aimInfo, "Mesh", ANALYSISIN);
     if (meshInd < 1)
-      meshInd = aim_getIndex(aimInfo, "Surface_Mesh", ANALYSISIN);
+        meshInd = aim_getIndex(aimInfo, "Surface_Mesh", ANALYSISIN);
+    if (meshInd < 1) {
+        AIM_ERROR(aimInfo, "No 'Mesh' or 'Surface_Mesh' ANALYSISIN Index!");
+        status = CAPS_BADINDEX;
+        goto cleanup;
+    }
 
     status = aim_getValue(aimInfo, meshInd, ANALYSISIN, &meshVal);
     AIM_STATUS(aimInfo, status);
@@ -220,22 +225,21 @@ int fea_createMesh(void *aimInfo,
                         status= CAPS_SOURCEERR;
                         goto cleanup;
                     }
+
+                    // need a check to make sure all tempMesh->groupMap are identical
                 }
 
-                // We need to update our attribute map
-                 status = copy_mapAttrToIndexStruct( attrMap, &attrMapTemp1 );
-                 AIM_STATUS(aimInfo, status);
+                // We need to update our capsGroup attribute map
 
-                 // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
-                 status = create_CAPSGroupAttrToIndexMap(numBody,
-                                                         bodies,
-                                                         3, //>2 - search the body, faces, edges, and all the nodes
-                                                         &attrMapTemp2);
-                 AIM_STATUS(aimInfo, status);
+                // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
+                status = create_CAPSGroupAttrToIndexMap(numBody,
+                                                        bodies,
+                                                        3, //>2 - search the body, faces, edges, and all the nodes
+                                                        &attrMapTemp2);
+                AIM_STATUS(aimInfo, status);
 
-                 status = merge_mapAttrToIndexStruct(&attrMapTemp1, &attrMapTemp2, attrMap);
-                 AIM_STATUS(aimInfo, status);
-
+                status = merge_mapAttrToIndexStruct(&tempMesh->groupMap, &attrMapTemp2, groupMap);
+                AIM_STATUS(aimInfo, status);
             }
 
             feaMeshes = (meshStruct *) EG_alloc(numFEAMesh*sizeof(meshStruct));
@@ -261,7 +265,8 @@ int fea_createMesh(void *aimInfo,
                 AIM_STATUS(aimInfo, status);
 
                 // Get FEA Problem from EGADs body
-                status = fea_setAnalysisData(attrMap,
+                status = fea_setAnalysisData(aimInfo,
+                                             groupMap,
                                              &coordSystemMap,
                                              constraintMap,
                                              loadMap,
@@ -365,7 +370,8 @@ int fea_createMesh(void *aimInfo,
             AIM_STATUS(aimInfo, status);
 
             // Get FEA Problem from EGADs body
-            status = fea_setAnalysisData(attrMap,
+            status = fea_setAnalysisData(aimInfo,
+                                         groupMap,
                                          &coordSystemMap,
                                          constraintMap,
                                          loadMap,
@@ -412,12 +418,13 @@ int fea_createMesh(void *aimInfo,
 
 
             // Get FEA Problem from EGADs body
-            status = fea_bodyToBEM(bodies[body], // (in)  EGADS Body
+            status = fea_bodyToBEM(aimInfo,
+                                   bodies[body], // (in)  EGADS Body
                                    paramTess,    // (in)  Tessellation parameters
                                    edgePointMin, // (in)  minimum points along any Edge
                                    edgePointMax, // (in)  maximum points along any Edge
                                    quadMesh,
-                                   attrMap,
+                                   groupMap,
                                    &coordSystemMap,
                                    constraintMap,
                                    loadMap,
@@ -490,7 +497,8 @@ cleanup:
 // Convert an EGADS body to a boundary element model, modified by Ryan Durscher (AFRL)
 // from code originally written by John Dannenhoffer @ Syracuse University, patterned after code
 // written by Bob Haimes  @ MIT
-int fea_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
+int fea_bodyToBEM(void *aimInfo,                       // (in)  AIM structure
+                  ego    ebody,                        // (in)  EGADS Body
                   double paramTess[3],                 // (in)  Tessellation parameters
                   int    edgePointMin,                 // (in)  minimum points along any Edge
                   int    edgePointMax,                 // (in)  maximum points along any Edge
@@ -925,9 +933,8 @@ int fea_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
 
         status = retrieve_CAPSGroupAttr(enodes[i], &attrName);
         if (status != CAPS_SUCCESS) {
-            printf("\tError: no capsGroup attribute found for node - %d!!\n", i+1);
-            printf("Available attributes are:\n");
-            print_AllAttr( enodes[i] );
+            AIM_ERROR(aimInfo, "No capsGroup attribute found for node - %d!!", i+1);
+            print_AllAttr(aimInfo, enodes[i]);
             goto cleanup;
         }
 
@@ -1007,15 +1014,14 @@ int fea_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
 
             status = retrieve_CAPSGroupAttr(eedges[i], &attrName);
             if (status != CAPS_SUCCESS) {
-                printf("\tError: no capsGroup attribute found for edge - %d!!\n", i+1);
-                printf("Available attributes are:\n");
-                print_AllAttr( eedges[i] );
+                AIM_ERROR(aimInfo, "No capsGroup attribute found for edge - %d!!", i+1);
+                print_AllAttr(aimInfo, eedges[i] );
                 goto cleanup;
             }
 
             status = get_mapAttrToIndexIndex(attrMap, attrName, &attrIndex);
             if (status != CAPS_SUCCESS) {
-                printf("\tError: capsGroup name %s not found in attribute to index map\n", attrName);
+                AIM_ERROR(aimInfo, "capsGroup name %s not found in attribute to index map\n", attrName);
                 goto cleanup;
             }
 
@@ -1103,15 +1109,14 @@ int fea_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
 
         status = retrieve_CAPSGroupAttr(efaces[face], &attrName);
         if (status != CAPS_SUCCESS) {
-            printf("Error: no capsGroup attribute found for face - %d!!\n", face+1);
-            printf("Available attributes are:\n");
-            print_AllAttr( efaces[face] );
+            AIM_ERROR(aimInfo, "No capsGroup attribute found for face - %d!!", face+1);
+            print_AllAttr(aimInfo, efaces[face]);
             goto cleanup;
         }
 
         status = get_mapAttrToIndexIndex(attrMap, attrName, &attrIndex);
         if (status != CAPS_SUCCESS) {
-            printf("Error: capsGroup name %s not found in attribute to index map\n", attrName);
+            AIM_ERROR(aimInfo, "capsGroup name %s not found in attribute to index map", attrName);
             goto cleanup;
         }
 
@@ -1311,13 +1316,14 @@ int fea_bodyToBEM(ego    ebody,                        // (in)  EGADS Body
 }
 
 // Set the fea analysis meta data in a mesh
-int fea_setAnalysisData( mapAttrToIndexStruct *attrMap,       // (in)  map from CAPSGroup names to indexes
+int fea_setAnalysisData( void *aimInfo,                       // (in)  AIM structure
+                         mapAttrToIndexStruct *attrMap,       // (in)  map from CAPSGroup names to indexes
                          mapAttrToIndexStruct *coordSystemMap,// (in)  map from CoordSystem names to indexes
                          mapAttrToIndexStruct *constraintMap, // (in)  map from CAPSConstraint names to indexes
                          mapAttrToIndexStruct *loadMap,       // (in)  map from CAPSLoad names to indexes
                          mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                          mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
-                         mapAttrToIndexStruct *responseMap,    // (in)  map from CAPSResponse names to indexes
+                         mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
                          meshStruct *feaMesh)                 // (in/out) FEA mesh structure
 {
     int status = 0; // Function return status
@@ -1408,7 +1414,7 @@ int fea_setAnalysisData( mapAttrToIndexStruct *attrMap,       // (in)  map from 
         if (numNode == 1) {
 
             if (feaMesh->numNode != 1) {
-                printf("NodeBody found, but more than one node being reported!\n");
+                AIM_ERROR(aimInfo, "NodeBody found, but more than one node being reported!\n");
                 status = CAPS_BADVALUE;
                 goto cleanup;
             }
@@ -1416,15 +1422,14 @@ int fea_setAnalysisData( mapAttrToIndexStruct *attrMap,       // (in)  map from 
             i = 0;
             status = retrieve_CAPSGroupAttr(enodes[i], &attrName);
             if (status != CAPS_SUCCESS) {
-                printf("\tError: no capsGroup attribute found for node - %d!!\n", i+1);
-                printf("Available attributes are:\n");
-                print_AllAttr( enodes[i] );
+                AIM_ERROR(aimInfo, "No capsGroup attribute found for node - %d!!", i+1);
+                print_AllAttr(aimInfo, enodes[i] );
                 goto cleanup;
             }
 
             status = get_mapAttrToIndexIndex(attrMap, attrName, &attrIndex);
             if (status != CAPS_SUCCESS) {
-                printf("\tError: capsGroup name %s not found in attribute to index map\n", attrName);
+                AIM_ERROR(aimInfo, "capsGroup name %s not found in attribute to index map", attrName);
                 goto cleanup;
             }
 

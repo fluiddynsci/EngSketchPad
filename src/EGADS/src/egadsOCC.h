@@ -123,6 +123,7 @@
 #include <BRepTools.hxx>
 #include <BRepTools_ReShape.hxx>
 #include <BRepTools_WireExplorer.hxx>
+#include <BRepTopAdaptor_FClass2d.hxx>
 #include <BRepLib.hxx>
 //#include <BRepLib_FuseEdges.hxx>
 #include "BRepLib_FuseEdges.h"
@@ -157,6 +158,7 @@
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepCheck_Result.hxx>
 #include <BRepCheck_Wire.hxx>
+#include <BRepCheck_Face.hxx>
 #include <BRepCheck_ListOfStatus.hxx>
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepClass3d.hxx>

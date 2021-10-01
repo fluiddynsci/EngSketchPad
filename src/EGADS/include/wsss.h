@@ -62,7 +62,7 @@
 #define WV_REAL64        5
 
 
-typedef void (*wvCB) (void *, char *t, int);
+typedef void (*wvCB) (/*@null@*/ void *, char *t, int);
 
 typedef struct {
   int    dataType;              /* VBO type */

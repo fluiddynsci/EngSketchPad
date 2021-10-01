@@ -176,15 +176,12 @@ enum aimOutputs
  *
  * Geometric attribution that the AIM makes use is provided in \ref attributeAVL.
  *
- * Upon running preAnalysis the AIM generates two files, 1) "avlInput.txt" which contains the input information and
- * control sequence for AVL to execute and 2) "caps.avl" which contains the geometry to be analyzed.
+ * The AVL AIM can automatically execute avl, with details provided in \ref aimExecuteAVL.
+ *
  * To populate output data the AIM expects files, "capsTotalForce.txt", "capsStripForce.txt", "capsStatbilityDeriv.txt", "capsBodyAxisDeriv.txt", and
  * "capsHingeMoment.txt" to exist after running AVL
  * (see \ref aimOutputsAVL for additional information). An example execution for AVL looks like:
  *
- * \code{.sh}
- * avl caps < avlInput.txt > avlOutput.txt"
- * \endcode
  *
  * \section assumptionsAVL Assumptions
  * The AVL coordinate system assumption (X -- downstream, Y -- out the right wing, Z -- up) needs to be followed.
@@ -277,18 +274,10 @@ enum aimOutputs
  * After the AIM is loaded the Mach number and angle of attack are set, though all \ref aimInputsAVL are available.
  * \snippet avl_PyTest.py setInputs
  *
- * Once all the inputs have been set, preAnalysis needs to be executed. During this operation, all the necessary files to
- * run AVL are generated and placed in the analysis working directory (analysisDir)
- * \snippet avl_PyTest.py preAnalysis
+ * Once all the inputs have been set, outputs can be directly requested. The avl
+ * analysis will be automatically executed just-in-time (\ref aimExecuteAvl).
  *
- * An OS system call is then made from Python to execute AVL.
- * \snippet avl_PyTest.py runAVL
- *
- * A call to postAnalysis is then made to check to see if AVL executed successfully and the expected files were generated.
- * \snippet avl_PyTest.py postAnalysis
- *
- * Similar to the AIM inputs, after the execution of AVL and postAnalysis any of the AIM's output
- * variables (\ref aimOutputsAVL) are readily available; for example,
+ * Any of the AIM's output variables (\ref aimOutputsAVL) are readily available; for example,
  * \snippet avl_PyTest.py output
  *
  * results in
@@ -1021,7 +1010,7 @@ static int read_EigenValues(void *aimInfo, int *length, capsTuple **eigen_out)
     char eigenValueFile[] = "capsEigenValues.txt";
 
     // ignore if file does not exist
-    if (aim_isfile(aimInfo, eigenValueFile) == CAPS_NOTFOUND) {
+    if (aim_isFile(aimInfo, eigenValueFile) == CAPS_NOTFOUND) {
         return CAPS_SUCCESS;
     }
 
@@ -1117,7 +1106,7 @@ static int get_controlDeriv(void *aimInfo, int controlIndex, int outputIndex, do
     char *fileToOpen;
 
     char *coeff = NULL;
-    char key[10];
+    char key[42];
 
     // Stability axis
     if        (outputIndex == CLtot) {
@@ -1166,7 +1155,7 @@ static int get_controlDeriv(void *aimInfo, int controlIndex, int outputIndex, do
         coeff = "Cn";
 
     } else {
-        printf("Unrecognized output variable for control derivatives!\n");
+        AIM_ERROR(aimInfo, "Unrecognized output variable for control derivatives!");
         status = CAPS_MISMATCH;
         goto cleanup;
     }
@@ -1174,13 +1163,12 @@ static int get_controlDeriv(void *aimInfo, int controlIndex, int outputIndex, do
     sprintf(key, "%sd%d =", coeff, controlIndex);
 
     status = read_Data(aimInfo, fileToOpen, key, data);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS (aimInfo, status);
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
-    cleanup:
-        return status;
+cleanup:
+    return status;
 }
 
 
@@ -1229,6 +1217,89 @@ static int parse_controlName(aimStorage *avlInstance, char string[],
 
 cleanup:
     return status;
+}
+
+
+static int
+stabilityAngleDerivatives(void *aimInfo, capsValue *val)
+{
+  int i, status = CAPS_SUCCESS;
+
+  int nderiv = 2;
+
+  AIM_REALL(val->derivs, val->nderiv+nderiv, capsDeriv, aimInfo, status);
+  for (i = val->nderiv; i < val->nderiv+nderiv; i++) {
+    val->derivs[i].name  = NULL;
+    val->derivs[i].deriv = NULL;
+    val->derivs[i].rank  = 1;
+    AIM_ALLOC(val->derivs[i].deriv, 1, double, aimInfo, status);
+  }
+
+  i = val->nderiv;
+  AIM_STRDUP(val->derivs[i+0].name, "Alpha", aimInfo, status);
+  AIM_STRDUP(val->derivs[i+1].name, "Beta", aimInfo, status);
+  val->nderiv += nderiv;
+
+cleanup:
+  return status;
+}
+
+
+static int
+bodyRateDerivatives(void *aimInfo, capsValue *val)
+{
+  int i, status = CAPS_SUCCESS;
+
+  int nderiv = 3;
+
+  AIM_REALL(val->derivs, val->nderiv+nderiv, capsDeriv, aimInfo, status);
+  for (i = val->nderiv; i < val->nderiv+nderiv; i++) {
+    val->derivs[i].name  = NULL;
+    val->derivs[i].deriv = NULL;
+    val->derivs[i].rank  = 1;
+    AIM_ALLOC(val->derivs[i].deriv, 1, double, aimInfo, status);
+  }
+
+  i = val->nderiv;
+  AIM_STRDUP(val->derivs[i+0].name, "RollRate", aimInfo, status);
+  AIM_STRDUP(val->derivs[i+1].name, "PitchRate", aimInfo, status);
+  AIM_STRDUP(val->derivs[i+2].name, "YawRate", aimInfo, status);
+  val->nderiv += nderiv;
+
+cleanup:
+  return status;
+}
+
+
+static int
+controlDerivatives(void *aimInfo, int outIndex, aimStorage *avlInstance, capsValue *val)
+{
+  int i, status = CAPS_SUCCESS;
+
+  int nderiv = avlInstance->controlMap.numAttribute;
+
+  if (nderiv == 0) return CAPS_SUCCESS;
+
+  AIM_REALL(val->derivs, val->nderiv+nderiv, capsDeriv, aimInfo, status);
+  for (i = val->nderiv; i < val->nderiv+nderiv; i++) {
+    val->derivs[i].name  = NULL;
+    val->derivs[i].deriv = NULL;
+    val->derivs[i].rank  = 1;
+    AIM_ALLOC(val->derivs[i].deriv, 1, double, aimInfo, status);
+  }
+
+  // Loop through control surfaces
+  for (i = 0; i < avlInstance->controlMap.numAttribute; i++) {
+    AIM_STRDUP(val->derivs[val->nderiv+i].name, avlInstance->controlMap.attributeName[i], aimInfo, status);
+
+    status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
+                              outIndex, val->derivs[val->nderiv+i].deriv);
+    AIM_STATUS(aimInfo, status);
+  }
+  val->nderiv += nderiv;
+
+cleanup:
+  return status;
 }
 
 
@@ -1379,6 +1450,7 @@ cleanup:
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
               int index, char **ainame, capsValue *defval)
 {
@@ -1629,6 +1701,7 @@ cleanup:
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 {
     int status; // Function return status
@@ -1707,6 +1780,10 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         return CAPS_NULLVALUE;
     }
 
+    // Container for attribute to index map
+    status = initiate_mapAttrToIndexStruct(&attrMap);
+    AIM_STATUS(aimInfo, status);
+
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
     AIM_STATUS(aimInfo, status);
 
@@ -1718,10 +1795,6 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // Destroy previous controlMap (in case it already exists)
     status = destroy_mapAttrToIndexStruct(&avlInstance->controlMap);
-    AIM_STATUS(aimInfo, status);
-
-    // Container for attribute to index map
-    status = initiate_mapAttrToIndexStruct(&attrMap);
     AIM_STATUS(aimInfo, status);
 
     // Get capsGroup name and index mapping to make sure all bodies have a capsGroup value
@@ -1743,10 +1816,16 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         AIM_STATUS(aimInfo, status);
 
     } else {
-        AIM_ERROR(aimInfo, "No AVL_SURFACE tuple specified\n");
+        AIM_ERROR(aimInfo, "No AVL_Surface specified!");
         status = CAPS_NOTFOUND;
         goto cleanup;
     }
+
+    // Accumulate section data
+    status = vlm_getSections(numBody, bodies, NULL, attrMap, vlmGENERIC,
+                             numAVLSurface, &avlSurface);
+    AIM_STATUS(aimInfo, status);
+    AIM_NOTNULL(avlSurface, aimInfo, status);
 
     // Get AVL control surface information
     if (aimInputs[inAVL_Control-1].nullVal == NotNull) {
@@ -1758,21 +1837,15 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         AIM_STATUS(aimInfo, status);
     }
 
-    // Accumulate section data
-    status = vlm_getSections(numBody, bodies, NULL, attrMap, vlmGENERIC,
-                             numAVLSurface, &avlSurface);
-    if (status != CAPS_SUCCESS) goto cleanup;
-    AIM_NOTNULL(avlSurface, aimInfo, status);
-
     // Loop through surfaces and transfer control surface data to sections
     for (surf = 0; surf < numAVLSurface; surf++) {
 /*@-nullpass@*/
-        status = get_ControlSurface(bodies,
+        status = get_ControlSurface(aimInfo,
                                     numAVLControl,
                                     avlControl,
                                     &avlSurface[surf]);
 /*@+nullpass@*/
-        if (status != CAPS_SUCCESS) goto cleanup;
+        AIM_STATUS (aimInfo, status);
     }
 
     // Compute auto spacing
@@ -2004,42 +2077,42 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     fprintf(fp, "X\n"); // Execute the calculation
 
     fprintf(fp, "S\n\n"); // save caps.run file
-    if (aim_isfile(aimInfo, "caps.run") == CAPS_SUCCESS) {
+    if (aim_isFile(aimInfo, "caps.run") == CAPS_SUCCESS) {
         fprintf(fp, "y\n");
     }
 
     // Get Total forces
     fprintf(fp,"FT\n");
     fprintf(fp,"%s\n", totalForceFile);
-    if (aim_isfile(aimInfo, totalForceFile) == CAPS_SUCCESS) {
+    if (aim_isFile(aimInfo, totalForceFile) == CAPS_SUCCESS) {
         fprintf(fp, "O\n");
     }
 
     // Get strip forces
     fprintf(fp,"FS\n");
     fprintf(fp,"%s\n", stripForceFile);
-    if (aim_isfile(aimInfo, stripForceFile) == CAPS_SUCCESS) {
+    if (aim_isFile(aimInfo, stripForceFile) == CAPS_SUCCESS) {
         fprintf(fp, "O\n");
     }
 
     // Get stability derivatives
     fprintf(fp,"ST\n");
     fprintf(fp,"%s\n", stabilityFile);
-    if (aim_isfile(aimInfo, stabilityFile) == CAPS_SUCCESS) {
+    if (aim_isFile(aimInfo, stabilityFile) == CAPS_SUCCESS) {
         fprintf(fp, "O\n");
     }
 
     // Get stability (body axis) derivatives
     fprintf(fp,"SB\n");
     fprintf(fp,"%s\n", bodyAxisFile);
-    if (aim_isfile(aimInfo, bodyAxisFile) == CAPS_SUCCESS) {
+    if (aim_isFile(aimInfo, bodyAxisFile) == CAPS_SUCCESS) {
         fprintf(fp, "O\n");
     }
 
     // Get hinge moments
     fprintf(fp,"HM\n");
     fprintf(fp,"%s\n", hingeMomentFile);
-    if (aim_isfile(aimInfo, hingeMomentFile) == CAPS_SUCCESS) {
+    if (aim_isFile(aimInfo, hingeMomentFile) == CAPS_SUCCESS) {
         fprintf(fp, "O\n");
     }
 
@@ -2051,7 +2124,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         fprintf(fp, "n\n");                   // compute eigen values
         fprintf(fp, "w\n");                   // write eigen values to file
         fprintf(fp, "%s\n", eigenValueFile);
-        if (aim_isfile(aimInfo, eigenValueFile) == CAPS_SUCCESS) {
+        if (aim_isFile(aimInfo, eigenValueFile) == CAPS_SUCCESS) {
             fprintf(fp, "Y\n");
         }
         fprintf(fp, "\n"); // back to main menu
@@ -2290,14 +2363,69 @@ cleanup:
 }
 
 
-/* no longer optional and needed for restart */
+// ********************** AIM Function Break *****************************
+int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+               int *state)
+{
+  /*! \page aimExecuteAVL AIM Execution
+   *
+   * If auto execution is enabled when creating an AVL AIM,
+   * the AIM will execute avl just-in-time with the command line:
+   *
+   * \code{.sh}
+   * avl caps < avlInput.txt > avlOutput.txt
+   * \endcode
+   *
+   * where preAnalysis generated the two files: 1) "avlInput.txt" which contains the input information and
+   * control sequence for AVL to execute and 2) "caps.avl" which contains the geometry to be analyzed.
+   *
+   * The analysis can be also be explicitly executed with caps_execute in the C-API
+   * or via Analysis.runAnalysis in the pyCAPS API.
+   *
+   * Calling preAnalysis and postAnalysis is NOT allowed when auto execution is enabled.
+   *
+   * Auto execution can also be disabled when creating an AVL AIM object.
+   * In this mode, caps_execute and Analysis.runAnalysis can be used to run the analysis,
+   * or avl can be executed by calling preAnalysis, system call, and posAnalysis as demonstrated
+   * below with a pyCAPS example:
+   *
+   * \code{.py}
+   * print ("\n\preAnalysis......")
+   * avl.preAnalysis()
+   *
+   * print ("\n\nRunning......")
+   * currentDirectory = os.getcwd() # Get our current working directory
+   *
+   * os.chdir(avl.analysisDir) # Move into test directory
+   * os.system("avl caps < avlInput.txt > avlOutput.txt"); # Run via system call
+   *
+   * os.chdir(currentDirectory) # Move back to top directory
+   *
+   * print ("\n\postAnalysis......")
+   * avl.postAnalysis()
+   * \endcode
+   */
+
+  *state = 0;
+  return aim_system(aimInfo, NULL, "avl caps < avlInput.txt > avlOutput.txt");
+}
+
+
+// ********************** AIM Function Break *****************************
 int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                     /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
 {
+  // check an AVL output file
+  if (aim_isFile(aimInfo, "capsTotalForce.txt") != CAPS_SUCCESS) {
+    AIM_ERROR(aimInfo, "avl execution did not produce capsTotalForce.txt");
+    return CAPS_EXECERR;
+  }
+
   return CAPS_SUCCESS;
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                int index, char **aoname, capsValue *form)
 {
@@ -2315,57 +2443,68 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
      * Optional outputs that echo the inputs.  These are parsed from the resulting output and can be used as a sanity check.
      */
 
+    if (index >= 90) {
+        form->type       = Tuple;
+        form->dim        = Vector;
+        form->vals.tuple = NULL;
+        form->nullVal    = IsNull;
+        form->lfixed     = form->sfixed = Change;
+    } else {
+        form->type = Double;
+        form->vals.real = 0;
+    }
+
 #ifdef DEBUG
     printf(" avlAIM/aimOutputs instance = %d  index = %d!\n", inst, index);
 #endif
 
     // Echo AVL flow conditions
-    if (index == 1) {
+    if (index == Alpha) {
         *aoname = EG_strdup("Alpha");
 
         /*! \page aimOutputsAVL
          * - <B> Alpha </B> = Angle of attack.
          */
-    } else if (index == 2) {
+    } else if (index == Beta) {
         *aoname = EG_strdup("Beta");
 
         /*! \page aimOutputsAVL
          * - <B> Beta </B> = Sideslip angle.
          */
-    } else if (index == 3) {
+    } else if (index == Mach) {
         *aoname = EG_strdup("Mach");
 
         /*! \page aimOutputsAVL
          * - <B> Mach </B> = Mach number.
          */
 
-    } else if (index == 4) {
+    } else if (index == pbd2V) {
         *aoname = EG_strdup("pb/2V");
 
         /*! \page aimOutputsAVL
          * - <B> pb/2V </B> = Non-dimensional roll rate.
          */
-    } else if (index == 5) {
+    } else if (index == qcd2V) {
         *aoname = EG_strdup("qc/2V");
 
         /*! \page aimOutputsAVL
          * - <B> qc/2V </B> = Non-dimensional pitch rate.
          */
-    } else if (index == 6) {
+    } else if (index == rbd2V) {
         *aoname = EG_strdup("rb/2V");
 
         /*! \page aimOutputsAVL
          * - <B> rb/2V </B> = Non-dimensional yaw rate.
          */
 
-    } else if (index == 7) {
+    } else if (index == pPbd2V) {
         *aoname = EG_strdup("p'b/2V");
 
         /*! \page aimOutputsAVL
          * - <B> p'b/2V </B> = Non-dimensional roll acceleration.
          */
 
-    } else if (index == 8) {
+    } else if (index == rPbd2V) {
         *aoname = EG_strdup("r'b/2V");
 
         /*! \page aimOutputsAVL
@@ -2373,117 +2512,126 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          */
 
         // Body control derivatives
-    } else if (index == 9) {
+    } else if (index == CXtot) {
         *aoname = EG_strdup("CXtot");
+        form->type = DoubleDeriv;
 
         /*! \page aimOutputsAVL
          * Forces and moments:
          * - <B> CXtot </B> = X-component of total force in body axis
          */
 
-    } else if (index == 10) {
+    } else if (index == CYtot) {
         *aoname = EG_strdup("CYtot");
+        form->type = DoubleDeriv;
 
         /*! \page aimOutputsAVL
          * - <B> CYtot </B> = Y-component of total force in body axis
          */
-    } else if (index == 11) {
+    } else if (index == CZtot) {
         *aoname = EG_strdup("CZtot");
+        form->type = DoubleDeriv;
 
         /*! \page aimOutputsAVL
          * - <B> CZtot </B> = Z-component of total force in body axis
          */
-    } else if (index == 12) {
+    } else if (index == Cltot) {
         *aoname = EG_strdup("Cltot");
+        form->type = DoubleDeriv;
 
         /*! \page aimOutputsAVL
          * - <B> Cltot </B> = X-component of moment in body axis
          */
-    } else if (index == 13) {
+    } else if (index == Cmtot) {
         *aoname = EG_strdup("Cmtot");
+        form->type = DoubleDeriv;
 
         /*! \page aimOutputsAVL
          * - <B> Cmtot </B> = Y-component of moment in body axis
          */
-    } else if (index == 14) {
+    } else if (index == Cntot) {
         *aoname = EG_strdup("Cntot");
+        form->type = DoubleDeriv;
 
         /*! \page aimOutputsAVL
          * - <B> Cntot </B> = Z-component of moment in body axis
          */
-    } else if (index == 15) {
+    } else if (index == ClPtot) {
         *aoname = EG_strdup("Cl'tot");
+        form->type = DoubleDeriv;
 
         /*! \page aimOutputsAVL
          * - <B> Cl'tot </B> = x-component of moment in stability axis
          */
-    } else if (index == 16) {
+    } else if (index == CnPtot) {
         *aoname = EG_strdup("Cn'tot");
+        form->type = DoubleDeriv;
 
         /*! \page aimOutputsAVL
          * - <B> Cn'tot </B> = z-component of moment in stability axis
          */
-    } else if (index == 17) {
+    } else if (index == CLtot) {
         *aoname = EG_strdup("CLtot");
+        form->type = DoubleDeriv;
 
         /*! \page aimOutputsAVL
          * - <B> CLtot </B> = total lift in stability axis
          */
-    } else if (index == 18) {
+    } else if (index == CDtot) {
         *aoname = EG_strdup("CDtot");
 
         /*! \page aimOutputsAVL
          * - <B> CDtot </B> = total drag in stability axis
          */
-    } else if (index == 19) {
+    } else if (index == CDvis) {
         *aoname = EG_strdup("CDvis");
 
         /*! \page aimOutputsAVL
          * - <B> CDvis </B> = viscous drag component
          */
-    } else if (index == 20) {
+    } else if (index == CLff) {
         *aoname = EG_strdup("CLff");
 
         /*! \page aimOutputsAVL
          * - <B> CLff </B> = trefftz plane lift force
          */
-    } else if (index == 21) {
+    } else if (index == CYff) {
         *aoname = EG_strdup("CYff");
 
         /*! \page aimOutputsAVL
          * - <B> CYff </B> = trefftz plane side force
          */
-    } else if (index == 22) {
+    } else if (index == CDind) {
         *aoname = EG_strdup("CDind");
 
         /*! \page aimOutputsAVL
          * - <B> CDind </B> = induced drag force
          */
-    } else if (index == 23) {
+    } else if (index == CDff) {
         *aoname = EG_strdup("CDff");
 
         /*! \page aimOutputsAVL
          * - <B> CDff </B> = trefftz plane drag force
          */
-    } else if (index == 24) {
+    } else if (index == e) {
         *aoname = EG_strdup("e");
 
         /*! \page aimOutputsAVL
          * - <B> e = </B> Oswald Efficiency
          */
-    } else if (index == 25) { // Alpha stability derivatives
+    } else if (index == CLa) { // Alpha stability derivatives
         *aoname = EG_strdup("CLa");
 
-    } else if (index == 26) {
+    } else if (index == CYa) {
         *aoname = EG_strdup("CYa");
 
-    } else if (index == 27) {
+    } else if (index == ClPa) {
         *aoname = EG_strdup("Cl'a");
 
-    } else if (index == 28) {
+    } else if (index == Cma) {
         *aoname = EG_strdup("Cma");
 
-    } else if (index == 29) {
+    } else if (index == CnPa) {
         *aoname = EG_strdup("Cn'a");
 
         /*! \page aimOutputsAVL
@@ -2495,19 +2643,19 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cn'a</B> = z' moment, Cn', with respect to alpha.
          */
 
-    } else if (index == 30) { // Beta stability derivatives
+    } else if (index == CLb) { // Beta stability derivatives
         *aoname = EG_strdup("CLb");
 
-    } else if (index == 31) {
+    } else if (index == CYb) {
         *aoname = EG_strdup("CYb");
 
-    } else if (index == 32) {
+    } else if (index == ClPb) {
         *aoname = EG_strdup("Cl'b");
 
-    } else if (index == 33) {
+    } else if (index == Cmb) {
         *aoname = EG_strdup("Cmb");
 
-    } else if (index == 34) {
+    } else if (index == CnPb) {
         *aoname = EG_strdup("Cn'b");
 
         /*! \page aimOutputsAVL
@@ -2518,19 +2666,19 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cmb</B> = y moment, Cm, with respect to beta.
          * - <B>Cn'b</B> = z' moment, Cn', with respect to beta.
          */
-    } else if (index == 35) { // Roll rate stability derivatives
+    } else if (index == CLpP) { // Roll rate stability derivatives
         *aoname = EG_strdup("CLp'");
 
-    } else if (index == 36) {
+    } else if (index == CYpP) {
         *aoname = EG_strdup("CYp'");
 
-    } else if (index == 37) {
+    } else if (index == ClPpP) {
         *aoname = EG_strdup("Cl'p'");
 
-    } else if (index == 38) {
+    } else if (index == CmpP) {
         *aoname = EG_strdup("Cmp'");
 
-    } else if (index == 39) {
+    } else if (index == CnPpP) {
         *aoname = EG_strdup("Cn'p'");
 
         /*! \page aimOutputsAVL
@@ -2541,19 +2689,19 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cmp'</B> = y moment, Cm, with respect to roll rate, p'.
          * - <B>Cn'p'</B> = z' moment, Cn', with respect to roll rate, p'.
          */
-    } else if (index == 40) { // Pitch rate stability derivatives
+    } else if (index == CLqP) { // Pitch rate stability derivatives
         *aoname = EG_strdup("CLq'");
 
-    } else if (index == 41) {
+    } else if (index == CYqP) {
         *aoname = EG_strdup("CYq'");
 
-    } else if (index == 42) {
+    } else if (index == ClPqP) {
         *aoname = EG_strdup("Cl'q'");
 
-    } else if (index == 43) {
+    } else if (index == CmqP) {
         *aoname = EG_strdup("Cmq'");
 
-    } else if (index == 44) {
+    } else if (index == CnPqP) {
         *aoname = EG_strdup("Cn'q'");
 
         /*! \page aimOutputsAVL
@@ -2564,19 +2712,19 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cmq'</B> = y moment, Cm, with respect to pitch rate, q'.
          * - <B>Cn'q'</B> = z' moment, Cn', with respect to pitch rate, q'.
          */
-    } else if (index == 45) { // Yaw rate stability derivatives
+    } else if (index == CLrP) { // Yaw rate stability derivatives
         *aoname = EG_strdup("CLr'");
 
-    } else if (index == 46) {
+    } else if (index == CYrP) {
         *aoname = EG_strdup("CYr'");
 
-    } else if (index == 47) {
+    } else if (index == ClPrP) {
         *aoname = EG_strdup("Cl'r'");
 
-    } else if (index == 48) {
+    } else if (index == CmrP) {
         *aoname = EG_strdup("Cmr'");
 
-    } else if (index == 49) {
+    } else if (index == CnPrP) {
         *aoname = EG_strdup("Cn'r'");
 
         /*! \page aimOutputsAVL
@@ -2587,22 +2735,22 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cmr'</B> = y moment, Cm, with respect to yaw rate, r'.
          * - <B>Cn'r'</B> = z' moment, Cn', with respect to yaw rate, r'.
          */
-    } else if (index == 50) { // Axial velocity stability derivatives
+    } else if (index == CXu) { // Axial velocity stability derivatives
         *aoname = EG_strdup("CXu");
 
-    } else if (index == 51) {
+    } else if (index == CYu) {
         *aoname = EG_strdup("CYu");
 
-    } else if (index == 52) {
+    } else if (index == CZu) {
         *aoname = EG_strdup("CZu");
 
-    } else if (index == 53) {
+    } else if (index == Clu) {
         *aoname = EG_strdup("Clu");
 
-    } else if (index == 54) {
+    } else if (index == Cmu) {
         *aoname = EG_strdup("Cmu");
 
-    } else if (index == 55) {
+    } else if (index == Cnu) {
         *aoname = EG_strdup("Cnu");
 
         /*! \page aimOutputsAVL
@@ -2614,22 +2762,22 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cmu</B> = y moment, Cm, with respect to axial velocity, u.
          * - <B>Cnu</B> = z moment, Cn, with respect to axial velocity, u.
          */
-    } else if (index == 56) { // Sideslip velocity stability derivatives
+    } else if (index == CXv) { // Sideslip velocity stability derivatives
         *aoname = EG_strdup("CXv");
 
-    } else if (index == 57) {
+    } else if (index == CYv) {
         *aoname = EG_strdup("CYv");
 
-    } else if (index == 58) {
+    } else if (index == CZv) {
         *aoname = EG_strdup("CZv");
 
-    } else if (index == 59) {
+    } else if (index == Clv) {
         *aoname = EG_strdup("Clv");
 
-    } else if (index == 60) {
+    } else if (index == Cmv) {
         *aoname = EG_strdup("Cmv");
 
-    } else if (index == 61) {
+    } else if (index == Cnv) {
         *aoname = EG_strdup("Cnv");
 
         /*! \page aimOutputsAVL
@@ -2641,17 +2789,17 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cmv</B> = y moment, Cm, with respect to sideslip velocity, v.
          * - <B>Cnv</B> = z moment, Cn, with respect to sideslip velocity, v.
          */
-    } else if (index == 62) { // Normal velocity stability derivatives
+    } else if (index == CXw) { // Normal velocity stability derivatives
         *aoname = EG_strdup("CXw");
-    } else if (index == 63) {
+    } else if (index == CYw) {
         *aoname = EG_strdup("CYw");
-    } else if (index == 64) {
+    } else if (index == CZw) {
         *aoname = EG_strdup("CZw");
-    } else if (index == 65) {
+    } else if (index == Clw) {
         *aoname = EG_strdup("Clw");
-    } else if (index == 66) {
+    } else if (index == Cmw) {
         *aoname = EG_strdup("Cmw");
-    } else if (index == 67) {
+    } else if (index == Cnw) {
         *aoname = EG_strdup("Cnw");
 
         /*! \page aimOutputsAVL
@@ -2663,17 +2811,17 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cmw</B> = y moment, Cm, with respect to normal velocity, w.
          * - <B>Cnw</B> = z moment, Cn, with respect to normal velocity, w.
          */
-    } else if (index == 68) { // Roll rate stability derivatives
+    } else if (index == CXp) { // Roll rate stability derivatives
         *aoname = EG_strdup("CXp");
-    } else if (index == 69) {
+    } else if (index == CYp) {
         *aoname = EG_strdup("CYp");
-    } else if (index == 70) {
+    } else if (index == CZp) {
         *aoname = EG_strdup("CZp");
-    } else if (index == 71) {
+    } else if (index == Clp) {
         *aoname = EG_strdup("Clp");
-    } else if (index == 72) {
+    } else if (index == Cmp) {
         *aoname = EG_strdup("Cmp");
-    } else if (index == 73) {
+    } else if (index == Cnp) {
         *aoname = EG_strdup("Cnp");
 
         /*! \page aimOutputsAVL
@@ -2685,17 +2833,17 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cmp</B> = y moment, Cm, with respect to roll rate, p.
          * - <B>Cnp</B> = z moment, Cn, with respect to roll rate, p.
          */
-    } else if (index == 74) { // Pitch rate stability derivatives
+    } else if (index == CXq) { // Pitch rate stability derivatives
         *aoname = EG_strdup("CXq");
-    } else if (index == 75) {
+    } else if (index == CYq) {
         *aoname = EG_strdup("CYq");
-    } else if (index == 76) {
+    } else if (index == CZq) {
         *aoname = EG_strdup("CZq");
-    } else if (index == 77) {
+    } else if (index == Clq) {
         *aoname = EG_strdup("Clq");
-    } else if (index == 78) {
+    } else if (index == Cmq) {
         *aoname = EG_strdup("Cmq");
-    } else if (index == 79) {
+    } else if (index == Cnq) {
         *aoname = EG_strdup("Cnq");
 
         /*! \page aimOutputsAVL
@@ -2707,17 +2855,17 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cmq</B> = y moment, Cm, with respect to pitch rate, q.
          * - <B>Cnq</B> = z moment, Cn, with respect to pitch rate, q.
          */
-    } else if (index == 80) { // Yaw rate stability derivatives
+    } else if (index == CXr) { // Yaw rate stability derivatives
         *aoname = EG_strdup("CXr");
-    } else if (index == 81) {
+    } else if (index == CYr) {
         *aoname = EG_strdup("CYr");
-    } else if (index == 82) {
+    } else if (index == CZr) {
         *aoname = EG_strdup("CZr");
-    } else if (index == 83) {
+    } else if (index == Clr) {
         *aoname = EG_strdup("Clr");
-    } else if (index == 84) {
+    } else if (index == Cmr) {
         *aoname = EG_strdup("Cmr");
-    } else if (index == 85) {
+    } else if (index == Cnr) {
         *aoname = EG_strdup("Cnr");
 
         /*! \page aimOutputsAVL
@@ -2730,22 +2878,22 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Cnr</B> = z moment, Cn, with respect to yaw rate, r.
          */
 
-    } else if (index == 86) {
+    } else if (index == Xnp) {
         *aoname = EG_strdup("Xnp");
         if (units->length != NULL) {
           AIM_STRDUP(form->units, units->length, aimInfo, status);
         }
-    } else if (index == 87) {
+    } else if (index == Xcg) {
         *aoname = EG_strdup("Xcg");
         if (units->length != NULL) {
           AIM_STRDUP(form->units, units->length, aimInfo, status);
         }
-    } else if (index == 88) {
+    } else if (index == Ycg) {
         *aoname = EG_strdup("Ycg");
         if (units->length != NULL) {
           AIM_STRDUP(form->units, units->length, aimInfo, status);
         }
-    } else if (index == 89) {
+    } else if (index == Zcg) {
         *aoname = EG_strdup("Zcg");
         if (units->length != NULL) {
           AIM_STRDUP(form->units, units->length, aimInfo, status);
@@ -2759,7 +2907,7 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * - <B>Zcg</B> = z CG location
          */
 
-    } else if (index == 90) {
+    } else if (index == ControlStability) {
         *aoname = EG_strdup("ControlStability");
 
         /*! \page aimOutputsAVL
@@ -2768,7 +2916,7 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * structure of ("Control Surface Name", "JSON Dictionary") for all control surfaces in the stability axis frame.
          * The JSON dictionary has the form = {"CLtot":value,"CYtot":value,"Cl'tot":value,"Cmtot":value,"Cn'tot":value}
          */
-    } else if (index == 91) {
+    } else if (index == ControlBody) {
         *aoname = EG_strdup("ControlBody");
 
         /*! \page aimOutputsAVL
@@ -2776,14 +2924,14 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * structure of ("Control Surface Name", "JSON Dictionary") for all control surfaces in the body axis frame.
          * The JSON dictionary has the form = {"CXtot":value,"CYtot":value,"CZtot":value,"Cltot":value,"Cmtot":value,"Cntot":value}
          */
-    } else if (index == 92) {
+    } else if (index == HingeMoment) {
         *aoname = EG_strdup("HingeMoment");
 
         /*! \page aimOutputsAVL
          * - <B>HingeMoment</B> = a (or an array of) tuple(s) with a
          * structure of ("Control Surface Name", "HingeMoment")
          */
-    } else if (index == 93) {
+    } else if (index == StripForces) {
         *aoname = EG_strdup("StripForces");
 
         /*! \page aimOutputsAVL
@@ -2791,7 +2939,7 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * structure of ("Surface Name", "JSON Dictionary") for all surfaces.
          * The JSON dictionary has the form = {"cl":[value0,value1,value2],"cd":[value0,value1,value2]...}
          */
-    } else if (index == 94) {
+    } else if (index == EigenValues) {
         *aoname = EG_strdup("EigenValues");
 
         /*! \page aimOutputsAVL
@@ -2805,25 +2953,12 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
         return CAPS_NOTFOUND;
     }
 
-    if (index >= 90) {
-        form->type       = Tuple;
-        form->dim        = Vector;
-        form->vals.tuple = NULL;
-        form->nullVal    = IsNull;
-        form->lfixed     = form->sfixed = Change;
-
-    } else {
-
-        form->type = Double;
-        form->vals.real = 0;
-
-    }
-
 cleanup:
     return status;
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                   capsValue *val)
 {
@@ -2832,8 +2967,11 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
 
     int i; // Indexing
 
-    char *key = NULL;
-    char *fileToOpen = "capsTotalForce.txt";
+    const char *key = NULL;
+    const char *fileToOpen = "capsTotalForce.txt";
+    const char *derivFile = NULL;
+    const char *deriv_keys[5] = {NULL,NULL,NULL,NULL,NULL};
+    int nderiv = 0;
     aimStorage *avlInstance;
 
     double tempVal[6];
@@ -2856,468 +2994,617 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
     avlInstance = (aimStorage *) instStore;
 
     val->vals.real = 0.0;
-
+/*@-observertrans@*/
     switch (index) {
-    case 1:
+    case Alpha:
         fileToOpen= "capsTotalForce.txt";
         key = "Alpha =";
         break;
-    case 2:
+    case Beta:
         fileToOpen= "capsTotalForce.txt";
         key = "Beta  =";
         break;
-    case 3:
+    case Mach:
         fileToOpen= "capsTotalForce.txt";
         key = "Mach  =";
         break;
-    case 4:
+    case pbd2V:
         fileToOpen= "capsTotalForce.txt";
         key = "pb/2V =";
         break;
-    case 5:
+    case qcd2V:
         fileToOpen= "capsTotalForce.txt";
         key = "qc/2V =";
         break;
-    case 6:
+    case rbd2V:
         fileToOpen= "capsTotalForce.txt";
         key = "rb/2V =";
         break;
-    case 7:
+    case pPbd2V:
         fileToOpen= "capsTotalForce.txt";
         key = "p'b/2V =";
         break;
-    case 8:
+    case rPbd2V:
         fileToOpen= "capsTotalForce.txt";
         key = "r'b/2V =";
         break;
-    case 9:
+    case CXtot:
         fileToOpen= "capsTotalForce.txt";
         key = "CXtot =";
+
+        status = bodyRateDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        derivFile= "capsBodyAxisDeriv.txt";
+        nderiv = 3;
+        deriv_keys[0] = "CXp =";
+        deriv_keys[1] = "CXq =";
+        deriv_keys[2] = "CXr =";
+
+        status = controlDerivatives(aimInfo, CXtot, avlInstance, val);
+        AIM_STATUS(aimInfo, status);
+
         break;
-    case 10:
+    case CYtot:
         fileToOpen= "capsTotalForce.txt";
         key = "CYtot =";
+
+        status = stabilityAngleDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        deriv_keys[0] = "CYa =";
+        deriv_keys[1] = "CYb =";
+        for (i = 0; i < 2; i++) {
+          status = read_Data(aimInfo, "capsStatbilityDeriv.txt", deriv_keys[i], val->derivs[i].deriv);
+          AIM_STATUS(aimInfo, status);
+        }
+
+        status = bodyRateDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        deriv_keys[0] = "CYp =";
+        deriv_keys[1] = "CYq =";
+        deriv_keys[2] = "CYr =";
+        for (i = 0; i < 3; i++) {
+          status = read_Data(aimInfo, "capsBodyAxisDeriv.txt", deriv_keys[i], val->derivs[i+2].deriv);
+          AIM_STATUS(aimInfo, status);
+        }
+
+        status = controlDerivatives(aimInfo, CYtot, avlInstance, val);
+        AIM_STATUS(aimInfo, status);
+
         break;
-    case 11:
+    case CZtot:
         fileToOpen= "capsTotalForce.txt";
         key = "CZtot =";
+
+        status = bodyRateDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        derivFile= "capsBodyAxisDeriv.txt";
+        nderiv = 3;
+        deriv_keys[0] = "CZp =";
+        deriv_keys[1] = "CZq =";
+        deriv_keys[2] = "CZr =";
+
+        status = controlDerivatives(aimInfo, CZtot, avlInstance, val);
+        AIM_STATUS(aimInfo, status);
+
         break;
-    case 12:
+    case Cltot:
         fileToOpen= "capsTotalForce.txt";
         key = "Cltot =";
+
+        status = bodyRateDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        derivFile= "capsBodyAxisDeriv.txt";
+        nderiv = 3;
+        deriv_keys[0] = "Clp =";
+        deriv_keys[1] = "Clq =";
+        deriv_keys[2] = "Clr =";
+
+        status = controlDerivatives(aimInfo, Cltot, avlInstance, val);
+        AIM_STATUS(aimInfo, status);
+
         break;
-    case 13:
+    case Cmtot:
         fileToOpen= "capsTotalForce.txt";
         key = "Cmtot =";
+
+        status = stabilityAngleDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        deriv_keys[0] = "Cma =";
+        deriv_keys[1] = "Cmb =";
+        for (i = 0; i < 2; i++) {
+          status = read_Data(aimInfo, "capsStatbilityDeriv.txt", deriv_keys[i], val->derivs[i].deriv);
+          AIM_STATUS(aimInfo, status);
+        }
+
+        status = bodyRateDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        deriv_keys[0] = "Cmp =";
+        deriv_keys[1] = "Cmq =";
+        deriv_keys[2] = "Cmr =";
+        for (i = 0; i < 3; i++) {
+          status = read_Data(aimInfo, "capsBodyAxisDeriv.txt", deriv_keys[i], val->derivs[i+2].deriv);
+          AIM_STATUS(aimInfo, status);
+        }
+
+        status = controlDerivatives(aimInfo, Cmtot, avlInstance, val);
+        AIM_STATUS(aimInfo, status);
+
         break;
-    case 14:
+    case Cntot:
         fileToOpen= "capsTotalForce.txt";
         key = "Cntot =";
+
+        status = bodyRateDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        derivFile= "capsBodyAxisDeriv.txt";
+        nderiv = 3;
+        deriv_keys[0] = "Cnp =";
+        deriv_keys[1] = "Cnq =";
+        deriv_keys[2] = "Cnr =";
+
+        status = controlDerivatives(aimInfo, Cntot, avlInstance, val);
+        AIM_STATUS(aimInfo, status);
+
         break;
-    case 15:
+    case ClPtot:
         fileToOpen= "capsTotalForce.txt";
         key = "Cl'tot =";
+
+        status = stabilityAngleDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        derivFile = "capsStatbilityDeriv.txt";
+        nderiv = 2;
+        deriv_keys[0] = "Cla =";
+        deriv_keys[1] = "Clb =";
+
+        status = controlDerivatives(aimInfo, ClPtot, avlInstance, val);
+        AIM_STATUS(aimInfo, status);
+
         break;
-    case 16:
+    case CnPtot:
         fileToOpen= "capsTotalForce.txt";
         key = "Cn'tot =";
+
+        status = stabilityAngleDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        derivFile = "capsStatbilityDeriv.txt";
+        nderiv = 2;
+        deriv_keys[0] = "Cna =";
+        deriv_keys[1] = "Cnb =";
+
+        status = controlDerivatives(aimInfo, CnPtot, avlInstance, val);
+        AIM_STATUS(aimInfo, status);
+
         break;
-    case 17:
+    case CLtot:
         fileToOpen= "capsTotalForce.txt";
         key = "CLtot =";
+
+        status = stabilityAngleDerivatives(aimInfo, val);
+        AIM_STATUS(aimInfo, status);
+
+        derivFile = "capsStatbilityDeriv.txt";
+        nderiv = 2;
+        deriv_keys[0] = "CLa =";
+        deriv_keys[1] = "CLb =";
+
+        status = controlDerivatives(aimInfo, CLtot, avlInstance, val);
+        AIM_STATUS(aimInfo, status);
+
         break;
-    case 18:
+    case CDtot:
         fileToOpen= "capsTotalForce.txt";
         key = "CDtot =";
         break;
-    case 19:
+    case CDvis:
         fileToOpen= "capsTotalForce.txt";
         key = "CDvis =";
         break;
-    case 20:
+    case CLff:
         fileToOpen= "capsTotalForce.txt";
         key = "CLff  =";
         break;
-    case 21:
+    case CYff:
         fileToOpen= "capsTotalForce.txt";
         key = "CYff  =";
         break;
-    case 22:
+    case CDind:
         fileToOpen= "capsTotalForce.txt";
         key = "CDind =";
         break;
-    case 23:
+    case CDff:
         fileToOpen= "capsTotalForce.txt";
         key = "CDff  =";
         break;
-    case 24:
+    case e:
         fileToOpen= "capsTotalForce.txt";
         key = "e =";
         break;
 
         // Alpha stability derivatives
-    case 25:
+    case CLa:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "CLa =";
         break;
 
-    case 26:
+    case CYa:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "CYa =";
         break;
 
-    case 27:
+    case ClPa:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cla =";
         break;
 
-    case 28:
+    case Cma:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cma =";
         break;
 
-    case 29:
+    case CnPa:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cna =";
         break;
 
         // Beta stability derivatives
-    case 30:
+    case CLb:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "CLb =";
         break;
 
-    case 31:
+    case CYb:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "CYb =";
         break;
 
-    case 32:
+    case ClPb:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Clb =";
         break;
 
-    case 33:
+    case Cmb:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cmb =";
         break;
 
-    case 34:
+    case CnPb:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cnb =";
         break;
 
         // Roll rate p' stability derivatives
-    case 35:
+    case CLpP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "CLp =";
         break;
 
-    case 36:
+    case CYpP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "CYp =";
         break;
 
-    case 37:
+    case ClPpP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Clp =";
         break;
 
-    case 38:
+    case CmpP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cmp =";
         break;
 
-    case 39:
+    case CnPpP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cnp =";
         break;
 
         // Pitch rate q' stability derivatives
-    case 40:
+    case CLqP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "CLq =";
         break;
 
-    case 41:
+    case CYqP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "CYq =";
         break;
 
-    case 42:
+    case ClPqP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Clq =";
         break;
 
-    case 43:
+    case CmqP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cmq =";
         break;
 
-    case 44:
+    case CnPqP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cnq =";
         break;
 
         // Yaw rate r' stability derivatives
-    case 45:
+    case CLrP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "CLr =";
         break;
 
-    case 46:
+    case CYrP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "CYr =";
         break;
 
-    case 47:
+    case ClPrP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Clr =";
         break;
 
-    case 48:
+    case CmrP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cmr =";
         break;
 
-    case 49:
+    case CnPrP:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Cnr =";
         break;
 
 
         // Axial vel (body axis)  stability derivatives
-    case 50:
+    case CXu:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CXu =";
         break;
 
-    case 51:
+    case CYu:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CYu =";
         break;
 
-    case 52:
+    case CZu:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CZu =";
         break;
 
-    case 53:
+    case Clu:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Clu =";
         break;
 
-    case 54:
+    case Cmu:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cmu =";
         break;
 
-    case 55:
+    case Cnu:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cnu =";
         break;
 
 
-    // Slidslip vel (body axis) stability derivatives
-    case 56:
+        // Slidslip vel (body axis) stability derivatives
+    case CXv:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CXv =";
         break;
 
-    case 57:
+    case CYv:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CYv =";
         break;
 
-    case 58:
+    case CZv:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CZv =";
         break;
 
-    case 59:
+    case Clv:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Clv =";
         break;
 
-    case 60:
+    case Cmv:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cmv =";
         break;
 
-    case 61:
+    case Cnv:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cnv =";
         break;
 
         // Normal vel (body axis)  stability derivatives
-    case 62:
+    case CXw:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CXw =";
         break;
 
-    case 63:
+    case CYw:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CYw =";
         break;
 
-    case 64:
+    case CZw:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CZw =";
         break;
 
-    case 65:
+    case Clw:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Clw =";
         break;
 
-    case 66:
+    case Cmw:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cmw =";
         break;
 
-    case 67:
+    case Cnw:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cnw =";
         break;
 
         // Roll rate (body axis)  stability derivatives
-    case 68:
+    case CXp:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CXp =";
         break;
 
-    case 69:
+    case CYp:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CYp =";
         break;
 
-    case 70:
+    case CZp:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CZp =";
         break;
 
-    case 71:
+    case Clp:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Clp =";
         break;
 
-    case 72:
+    case Cmp:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cmp =";
         break;
 
-    case 73:
+    case Cnp:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cnp =";
         break;
 
         // Pitch rate (body axis)  stability derivatives
-    case 74:
+    case CXq:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CXq =";
         break;
 
-    case 75:
+    case CYq:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CYq =";
         break;
 
-    case 76:
+    case CZq:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CZq =";
         break;
 
-    case 77:
+    case Clq:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Clq =";
         break;
 
-    case 78:
+    case Cmq:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cmq =";
         break;
 
-    case 79:
+    case Cnq:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cnq =";
         break;
 
         // Yaw rate (body axis)  stability derivatives
-    case 80:
+    case CXr:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CXr =";
         break;
 
-    case 81:
+    case CYr:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CYr =";
         break;
 
-    case 82:
+    case CZr:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "CZr =";
         break;
 
-    case 83:
+    case Clr:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Clr =";
         break;
 
-    case 84:
+    case Cmr:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cmr =";
         break;
 
-    case 85:
+    case Cnr:
         fileToOpen= "capsBodyAxisDeriv.txt";
         key = "Cnr =";
         break;
 
-    case 86:
+    case Xnp:
         fileToOpen = "capsStatbilityDeriv.txt";
         key = "Xnp =";
         break;
 
-    case 87:
+    case Xcg:
         fileToOpen= "caps.run";
         key = "X_cg      =";
         break;
 
-    case 88:
+    case Ycg:
         fileToOpen= "caps.run";
         key = "Y_cg      =";
         break;
 
-    case 89:
+    case Zcg:
         fileToOpen= "caps.run";
         key = "Z_cg      =";
         break;
 
-    case 90:
+    case ControlStability:
+    case ControlBody:
+    case HingeMoment:
         fileToOpen = "capsHingeMoment.txt";
         break;
 
-    case 91:
+    case StripForces:
         fileToOpen = "capsStripForce.txt";
         break;
 
-    case 92:
+    case EigenValues:
         fileToOpen = "capsEigenValues.txt";
         break;
     }
+/*@+observertrans@*/
 
-    if (index <= 89) {
+    if (index < ControlStability) {
 
       if (key == NULL) {
-          printf("No string key found!\n");
+          AIM_ERROR(aimInfo, "Developer error: No string key found!");
           status = CAPS_NOTFOUND;
           goto cleanup;
       }
 
       status = read_Data(aimInfo, fileToOpen, key, &val->vals.real);
-      if (status != CAPS_SUCCESS) goto cleanup;
+      AIM_STATUS(aimInfo, status);
+      
+      /* read derivatives */
+      for (i = 0; i < nderiv; i++) {
+        /*@-nullpass@*/
+        status = read_Data(aimInfo, derivFile, deriv_keys[i], val->derivs[i].deriv);
+        AIM_STATUS(aimInfo, status);
+        /*@+nullpass@*/
+      }
 
-    } else if (index >= 90 && index <= 92) { // Need to build something for control output
+    } else if (index >= ControlStability && index <= HingeMoment) { // Need to build something for control output
 
         // Initiate tuple base on number of control surfaces
         val->nrow = avlInstance->controlMap.numAttribute;
@@ -3342,7 +3629,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
             val->vals.tuple[i].name = EG_strdup(avlInstance->controlMap.attributeName[i]);
 
             // Stability axis
-            if (index == 90) {
+            if (index == ControlStability) {
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           CLtot, &tempVal[0]);
                 if (status != CAPS_SUCCESS) goto cleanup;
@@ -3374,7 +3661,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                         "Cn'tot", tempVal[4]);
                 val->vals.tuple[i].value = EG_strdup(jsonOut);
 
-            } else if (index == 91) {
+            } else if (index == ControlBody) {
 
                 // Body axis
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
@@ -3409,7 +3696,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                         "Cltot", tempVal[3], "Cmtot", tempVal[4], "Cntot", tempVal[5]);
                 val->vals.tuple[i].value = EG_strdup(jsonOut);
 
-            } else if (index == 92) {
+            } else if (index == HingeMoment) {
 
                 status = read_Data(aimInfo, fileToOpen, val->vals.tuple[i].name, &tempVal[0]);
                 if (status != CAPS_SUCCESS) goto cleanup;
@@ -3425,13 +3712,13 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
 
         }
 
-    } else if (index == 93) {
+    } else if (index == StripForces) {
 
       // Read in the strip forces
       status = read_StripForces(aimInfo, &val->nrow, &val->vals.tuple);
       if (status != CAPS_SUCCESS) goto cleanup;
 
-    } else if (index == 94) {
+    } else if (index == EigenValues) {
 
       // Read in the strip forces
       status = read_EigenValues(aimInfo, &val->nrow, &val->vals.tuple);
@@ -3451,6 +3738,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
 }
 
 
+// ********************** AIM Function Break *****************************
 void aimCleanup(void *instStore)
 {
 
@@ -3470,7 +3758,7 @@ void aimCleanup(void *instStore)
 
 }
 
-
+// ********************** AIM Function Break *****************************
 // Back function used to calculate sensitivities
 int aimBackdoor(void *instStore, void *aimInfo, const char *JSONin,
                 char **JSONout)

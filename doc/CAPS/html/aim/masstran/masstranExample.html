@@ -214,7 +214,7 @@ Performing analysis using pyCAPS</h1>
 <div class="fragment"><div class="line">geometryScript = os.path.join(<span class="stringliteral">&quot;..&quot;</span>,<span class="stringliteral">&quot;csmData&quot;</span>,<span class="stringliteral">&quot;feaWingBEM.csm&quot;</span>)</div>
 <div class="line">myProblem = pyCAPS.Problem(problemName=workDir,</div>
 <div class="line">                           capsFile=geometryScript,</div>
-<div class="line">                           outLevel=args.verbosity)</div>
+<div class="line">                           outLevel=args.outLevel)</div>
 </div><!-- fragment --><p> After the geometry is loaded, a structural mesh is generated using the egadsTessAIM. </p><div class="fragment"><div class="line"><span class="comment"># Load egadsTess aim</span></div>
 <div class="line">myProblem.analysis.create( aim = <span class="stringliteral">&quot;egadsTessAIM&quot;</span>,</div>
 <div class="line">                           name = <span class="stringliteral">&quot;tess&quot;</span> )</div>
@@ -225,9 +225,7 @@ Performing analysis using pyCAPS</h1>
 <div class="line"><span class="comment"># Set global tessellation parameters</span></div>
 <div class="line">myProblem.analysis[<span class="stringliteral">&quot;tess&quot;</span>].input.Tess_Params = [.05,.5,15]</div>
 <div class="line"> </div>
-<div class="line"><span class="comment"># Generate the surface mesh</span></div>
-<div class="line">myProblem.analysis[<span class="stringliteral">&quot;tess&quot;</span>].preAnalysis()</div>
-<div class="line">myProblem.analysis[<span class="stringliteral">&quot;tess&quot;</span>].postAnalysis()</div>
+<div class="line"><span class="comment"># The surfaces mesh is generated automatically just-in-time</span></div>
 </div><!-- fragment --><p> Next, the Masstran AIM is instantiated. </p><div class="fragment"><div class="line">masstranAIM = myProblem.analysis.create(aim = <span class="stringliteral">&quot;masstranAIM&quot;</span>,</div>
 <div class="line">                                        name = <span class="stringliteral">&quot;masstran&quot;</span>)</div>
 </div><!-- fragment --><p> Once loaded analysis parameters specific to Masstran need to be set (see <a class="el" href="aimInputsMasstran.html">AIM Inputs</a>). Here, the mesh from the surface egadsTessAIM is linked to the masstranAIM.</p>
@@ -256,8 +254,7 @@ Performing analysis using pyCAPS</h1>
 <div class="line">          <span class="stringliteral">&quot;shearMembraneRatio&quot;</span>  : 5.0/6.0} <span class="comment"># Default }</span></div>
 <div class="line"> </div>
 <div class="line">masstranAIM.input.Property = {<span class="stringliteral">&quot;Ribs_and_Spars&quot;</span>: shell}</div>
-</div><!-- fragment --><p> After all desired options are set aimPreAnalysis needs to be executed by calling the pre/post-Analysis. The MasstrainAIM will compute all mass properties in memory without writing files. </p><div class="fragment"><div class="line">masstranAIM.preAnalysis()</div>
-<div class="line">masstranAIM.postAnalysis()</div>
+</div><!-- fragment --><p> The MasstrainAIM will execute automatically and compute all mass properties in memory when an output is reqested below. </p><div class="fragment"><div class="line"> </div>
 </div><!-- fragment --><p> Finally, available AIM outputs (see <a class="el" href="aimOutputsMasstran.html">AIM Outputs</a>) may be retrieved, for example: </p><div class="fragment"><div class="line"><span class="comment"># Get mass properties</span></div>
 <div class="line"><span class="keywordflow">print</span> (<span class="stringliteral">&quot;\nGetting results mass properties.....\n&quot;</span>)</div>
 <div class="line">Area     = masstranAIM.output.Area</div>
@@ -306,7 +303,7 @@ Executing pyCAPS script</h1>
 </div><!-- PageDoc -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Fri May 28 2021 11:08:45 for Masstran Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
+Generated on Fri Sep 17 2021 06:42:17 for Masstran Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
 </small></address>
 </body>
 </html>

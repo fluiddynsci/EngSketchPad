@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description = 'Masstran AGARD445.6 Pytest Examp
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -25,7 +25,7 @@ workDir = os.path.join(str(args.workDir[0]), "masstranAGARD445")
 geometryScript = os.path.join("..","csmData","feaAGARD445.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load astros aim
 myAnalysis = myProblem.analysis.create(aim = "masstranAIM",
@@ -60,11 +60,9 @@ shell  = {"propertyType" : "Shell",
 
 myAnalysis.input.Property = {"yatesPlate": shell}
 
-# Run AIM pre-analysis
-myAnalysis.preAnalysis()
-
-# Run AIM post-analysis
-myAnalysis.postAnalysis()
+#####################################
+## masstran executes automatically ##
+#####################################
 
 # Get mass properties
 print ("\nGetting results mass properties.....\n")

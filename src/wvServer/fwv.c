@@ -428,6 +428,43 @@ iv_setkey_(INT8 *cntxt, int *nCol, float *colors, float *beg, float *end,
 }
 
 
+int
+#ifdef WIN32
+IV_POSTMESSAGE (int *index, char *text, int textLen)
+#else
+iv_postmessage_(int *index, char *text, int textLen)
+#endif
+{
+  int  stat;
+  char *name;
+
+  name = IV_f2c(text, textLen);
+  if (name == NULL) return -1;
+  stat = wv_postMessage(*index, name);
+  free(name);
+  return stat;
+}
+
+int
+#ifdef WIN32
+IV_MAKEMESSAGE (INT8 *WSI, char *text, int textLen)
+#else
+iv_makemessage_(INT8 *WSI, char *text, int textLen)
+#endif
+{
+  int  stat;
+  char *name;
+  void *wsi;
+
+  name = IV_f2c(text, textLen);
+  if (name == NULL) return -1;
+  wsi  = (void *) *WSI;
+  stat = wv_makeMessage(wsi, name);
+  free(name);
+  return stat;
+}
+
+
 void
 #ifdef WIN32
 IV_BROADCASTTEXT (char *text, int textLen)

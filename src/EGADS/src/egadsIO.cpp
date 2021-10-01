@@ -20,6 +20,7 @@
 #include "egadsInternals.h"
 #include "egadsClasses.h"
 #include <IGESControl_Controller.hxx>
+#include <IGESData_IGESModel.hxx>
 #include <IGESBasic_Name.hxx>
 #ifdef STEPATTRS
 #include <StepBasic_Product.hxx>
@@ -819,6 +820,43 @@ EG_readTess(FILE *fp, egObject *body, egObject **tess)
 }
 
 
+static void
+EG_importScale(const char *reader, const char *units, double *scale)
+{
+  if ((strcasecmp(units,"inch")   == 0) ||
+      (strcasecmp(units,"inches") == 0) ||
+      (strcasecmp(units,"in")     == 0)) {
+    *scale = 1.0/25.4;
+    printf("  %s Reader Info: Using %s\n", reader, units);
+  } else if ((strcasecmp(units,"foot") == 0) ||
+             (strcasecmp(units,"feet") == 0) ||
+             (strcasecmp(units,"ft")   == 0)) {
+    *scale = 1.0/304.8;
+    printf("  %s Reader Info: Using %s\n", reader, units);
+  } else if ((strcasecmp(units,"metre")  == 0) ||
+             (strcasecmp(units,"meter")  == 0) ||
+             (strcasecmp(units,"meters") == 0) ||
+             (strcasecmp(units,"m")      == 0)) {
+    *scale = 1.0/1000.0;
+    printf("  %s Reader Info: Using %s\n", reader, units);
+  } else if ((strcasecmp(units,"centimetre")  == 0) ||
+             (strcasecmp(units,"centimeter")  == 0) ||
+             (strcasecmp(units,"centimeters") == 0) ||
+             (strcasecmp(units,"cm")          == 0)) {
+    *scale = 1.0/100.0;
+    printf("  %s Reader Info: Using %s\n", reader, units);
+  } else if ((strcasecmp(units,"millimetre")  == 0) ||
+             (strcasecmp(units,"millimeter")  == 0) ||
+             (strcasecmp(units,"millimeters") == 0) ||
+             (strcasecmp(units,"mm")          == 0)) {
+    printf("  %s Reader Info: Using %s\n", reader, units);
+  } else {
+    printf(" EGADS %s Info: Cannot convert %s -- using millimeters!\n",
+           reader, units);
+  }
+}
+
+
 int
 EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
 {
@@ -894,32 +932,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         if (unitLength.Length() > 1)
           printf(" EGADS Info: # unitLengths = %d\n", unitLength.Length());
         units = unitLength(1).ToCString();
-        if ((strcasecmp(units,"inch")   == 0) ||
-            (strcasecmp(units,"inches") == 0)) {
-          scale = 1.0/25.4;
-          printf("  STEP Reader Info: Using %s\n", units);
-        } else if ((strcasecmp(units,"foot") == 0) ||
-                   (strcasecmp(units,"feet") == 0)) {
-          scale = 1.0/304.8;
-          printf("  STEP Reader Info: Using %s\n", units);
-        } else if ((strcasecmp(units,"metre")  == 0) ||
-                   (strcasecmp(units,"meter")  == 0) ||
-                   (strcasecmp(units,"meters") == 0)) {
-          scale = 1.0/1000.0;
-          printf("  STEP Reader Info: Using %s\n", units);
-        } else if ((strcasecmp(units,"centimetre")  == 0) ||
-                   (strcasecmp(units,"centimeter")  == 0) ||
-                   (strcasecmp(units,"centimeters") == 0)) {
-          scale = 1.0/100.0;
-          printf("  STEP Reader Info: Using %s\n", units);
-        } else if ((strcasecmp(units,"millimetre")  == 0) ||
-                   (strcasecmp(units,"millimeter")  == 0) ||
-                   (strcasecmp(units,"millimeters") == 0)) {
-          printf("  STEP Reader Info: Using %s\n", units);
-        } else {
-          printf(" EGADS STEP Info: Cannot convert %s -- using millimeters!\n",
-                 units);
-        }
+        EG_importScale("STEP", units, &scale);
       }
     }
 
@@ -1062,6 +1075,16 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
                name, stats);
       return EGADS_NOLOAD;
     }
+    if ((bflg&4) == 0) {
+      Handle(IGESData_IGESModel) aModel =
+                         Handle(IGESData_IGESModel)::DownCast(iReader.Model());
+      if(!aModel.IsNull()) {
+        Handle(TCollection_HAsciiString) aUnitName =
+                                            aModel->GlobalSection().UnitName();
+        units = aUnitName->ToCString();
+        EG_importScale("IGES", units, &scale);
+      }
+    }
     iReader.TransferRoots();
     if ((bflg&16) != 0) egads = -1;
 
@@ -1099,6 +1122,18 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         aShape = uShape.Shape();
       }
       labels[i-1].shape = aShape;
+      if (scale != 1.0) {
+        gp_Trsf form = gp_Trsf();
+        form.SetValues(scale, 0.0,   0.0,   0.0,
+                       0.0,   scale, 0.0,   0.0,
+                       0.0,   0.0,   scale, 0.0);
+        BRepBuilderAPI_Transform xForm(aShape, form, Standard_True);
+        if (!xForm.IsDone()) {
+          printf(" EGADS Warning: Can't scale Body %d (EG_loadModel)!\n", i);
+        } else {
+          aShape = xForm.ModifiedShape(aShape);
+        }
+      }
       builder3D.Add(compound, aShape);
     }
     source = compound;
@@ -1978,7 +2013,9 @@ EG_saveModel(const egObject *model, const char *name)
 
     try {
       IGESControl_Controller::Init();
-      IGESControl_Writer iWrite;
+      Standard_CString unit = "mm";
+      Standard_Integer modecr = 1;    // BRep export
+      IGESControl_Writer iWrite(unit, modecr);
       TopExp_Explorer Exp;
       for (Exp.Init(wshape, TopAbs_WIRE,  TopAbs_FACE);
            Exp.More(); Exp.Next()) iWrite.AddShape(Exp.Current());

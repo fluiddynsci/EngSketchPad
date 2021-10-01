@@ -78,9 +78,9 @@ Awave AIM Overview</h1>
 <p>"Awave is a streamlined, modified version of the Harris far-field wave drag program described in the reference. It has all of the capabilities and accuracy of the original program plus the ability to include the approximate effects of angle of attack. It is an order of magnitude faster, and improvements to the integration schemes have reduced numerical integration errors by an order of magnitude. A formatted input echo has been added so that those not intimately familiar with the code can tell what has been input.</p>
 <p>Reference: Harris, Roy V., Jr. An Analysis and Correlation of Aircraft Wave Drag. NASA TMX-947. March 1964. "</p>
 <p>An outline of the AIM's inputs, outputs and attributes are provided in <a class="el" href="aimInputsAwave.html">AIM Inputs</a> and <a class="el" href="aimOutputsAwave.html">AIM Outputs</a> and <a class="el" href="attributeAwave.html">AIM Attributes</a>, respectively.</p>
-<p>Upon running preAnalysis the AIM generates a single file, "awaveInput.txt" which contains the input information and control sequence for Awave to execute. An example execution for Awave looks like (Linux and OSX executable being used - see <a class="el" href="index.html#AwaveModification">Awave Modifications</a>):</p>
-<div class="fragment"><div class="line">awave awaveInput.txt</div>
-</div><!-- fragment --><h1><a class="anchor" id="AwaveModification"></a>
+<p>Upon running preAnalysis the AIM generates a single file, "awaveInput.txt" which contains the input information and control sequence for Awave to execute (see <a class="el" href="index.html#AwaveModification">Awave Modifications</a>).</p>
+<p>The Awave AIM can automatically execute Awave, with details provided in <a class="el" href="aimExecuteAwave.html">AIM Execution</a>.</p>
+<h1><a class="anchor" id="AwaveModification"></a>
 Awave Modifications</h1>
 <p>The AIM assumes that a modified version of Awave is being used. The modified version allows for longer input and output file name lengths, as well as other I/O modifications. This modified version of Awave, awavemod.f, is not currently supplied with the AIM due to licensing issues, please contact the CAPS creators for additional details. Once this source code is obtained, it is automatically built with the AIM. During compilation, the source code is compiled into an executable with the name <em>awave</em> (Linux and OSX) or <em>awave.exe</em> (Windows)</p>
 <h1><a class="anchor" id="AwaveExample"></a>
@@ -90,7 +90,7 @@ Examples</h1>
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Fri May 28 2021 11:08:14 for Awave Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
+Generated on Fri Sep 17 2021 06:41:49 for Awave Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
 </small></address>
 </body>
 </html>

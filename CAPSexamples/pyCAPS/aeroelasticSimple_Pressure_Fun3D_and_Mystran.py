@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description = 'Aeroelastic Pressure Fun3D and M
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
 parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot data")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -29,7 +29,7 @@ projectName = "aeroelasticSimple_Pressure"
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransferSimple.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AIMs
 surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
@@ -50,7 +50,8 @@ fun3d.input["Mesh"].link(mesh.output["Volume_Mesh"])
 
 mystran = myProblem.analysis.create(aim = "mystranAIM",
                                     name = "mystran",
-                                    capsIntent = "STRUCTURE")
+                                    capsIntent = "STRUCTURE",
+                                    autoExec = True)
 
 # Create the data transfer connections
 boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
@@ -77,7 +78,7 @@ surfMesh.input.Tess_Params = [.05, 0.01, 20.0]
 
 # Set inputs for tetgen 
 mesh.input.Preserve_Surf_Mesh = True
-mesh.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+mesh.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set inputs for fun3d
 speedofSound = 340.0 # m/s
@@ -135,24 +136,6 @@ constraint = {"groupName" : "Rib_Root",
 mystran.input.Constraint = {"edgeConstraint": constraint}
 
 
-####### EGADS ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "tetgen")
-surfMesh.preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "tetgen")
-surfMesh.postAnalysis()
-#######################################
-
-####### Tetgen ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "tetgen")
-mesh.preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "tetgen")
-mesh.postAnalysis()
-#######################################
-
 ####### Run fun3d ####################
 # Set scaling factor for pressure
 fun3d.input.Pressure_Scale_Factor = 0.5*refDensity*refVelocity**2
@@ -172,29 +155,11 @@ if os.path.getsize("Info.out") == 0: #
 os.chdir(currentDirectory) # Move back to top directory
 #######################################
 
-####### Run mystran ####################
 load = {"loadType" : "PressureExternal"} # Add pressure load card
 mystran.input.Load = {"pressureAero": load}
 
-# Re-run the preAnalysis
-print ("\nRunning PreAnalysis ......", "mystran")
-mystran.preAnalysis()
-
-# Run mystran
-print ("\n\nRunning Mystran......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(mystran.analysisDir) # Move into test directory
-
-#--write_aero_loads_to_file
-os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run fun3d via system call
-
-if os.path.getsize("Info.out") == 0: #
-    raise SystemError("Mystran excution failed\n")
-
-os.chdir(currentDirectory) # Move back to top directory
-
-print ("\nRunning PostAnalysis ......", i)
-# Run AIM post-analysis
-mystran.postAnalysis()
+####### Run mystran ####################
+# Re-run the analysis
+print ("\nRunning ......", "mystran")
+mystran.runAnalysis()
 #######################################

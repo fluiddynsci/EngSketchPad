@@ -33,17 +33,18 @@
 #endif
 
 #define CAPSMAJOR      1
-#define CAPSMINOR     19
-#define CAPSPROP      CAPSprop: Revision 1.19
+#define CAPSMINOR     20
+#define CAPSPROP      CAPSprop: Revision 1.20
 
 #define CAPSMAGIC     1234321
 #define MAXANAL       64
+#define MAXWRITER     16
 
 
-
+enum capsoFlag   {oFileName, oMODL, oEGO, oPhaseName, oContinue};
 enum capsoType   {BODIES=-2, ATTRIBUTES, UNUSED, PROBLEM, VALUE, ANALYSIS,
                   BOUND, VERTEXSET, DATASET};
-enum capssType   {NONE, STATIC, PARAMETRIC, GEOMETRYIN, GEOMETRYOUT, BRANCH,
+enum capssType   {NONE, STATIC, PARAMETRIC, GEOMETRYIN, GEOMETRYOUT,
                   PARAMETER, USER, ANALYSISIN, ANALYSISOUT, CONNECTED,
                   UNCONNECTED};
 enum capseType   {CONTINUATION=-1, CINFO, CWARN, CERROR, CSTAT};
@@ -51,7 +52,8 @@ enum capsfType   {FieldIn, FieldOut, GeomSens, TessSens, User, BuiltIn};
 enum capsjType   {jInteger, jDouble, jString, jStrings, jTuple, jPointer,
                   jPtrFree, jObject, jObjs, jValObj, jErr, jOwn, jOwns, jEgos};
 enum capsBoolean {False=false, True=true};
-enum capsvType   {Boolean, Integer, Double, String, Tuple, Pointer, DoubleDeriv};
+enum capsvType   {Boolean, Integer, Double, String, Tuple, Pointer, DoubleDeriv,
+                  PointerMesh};
 enum capsvDim    {Scalar, Vector, Array2D};
 enum capsFixed   {Change, Fixed};
 enum capsNull    {NotAllowed, NotNull, IsNull, IsPartial};
@@ -255,8 +257,8 @@ typedef struct {
                                  /* including optional [n] or [n,m]
                                     for vectors/arrays */
   int    rank;                   /* the number of members in the derivative */
-  double *dot;                   /* the dot values -- rank*length in length */
-} capsDot;
+  double *deriv;                 /* the derivative values -- rank in length */
+} capsDeriv;
 
 
 /*
@@ -288,11 +290,12 @@ typedef struct {
     double     dlims[2];        /* double limits */
   } limits;
   char         *units;          /* the units for the values */
+  char         *meshWriter;     /* the mesh writer (linked AnalysisIn) */
   capsObject   *link;           /* the linked object (or NULL) */
   int          linkMethod;      /* the link method */
   int          *partial;        /* NULL or vector/array element NULL handling */
-  int          ndot;            /* the number of derivatives */
-  capsDot      *dots;           /* the derivatives associated with the Value */
+  int          nderiv;          /* the number of derivatives */
+  capsDeriv    *derivs;         /* the derivatives associated with the Value */
 } capsValue;
 
 
@@ -367,6 +370,9 @@ typedef int  (*aimDa)(/*@null@*/ void *, void *, const char *, enum capsvType *,
 typedef int  (*aimBd)(/*@null@*/ void *, void *, const char *, char **);
 typedef void (*aimCU)(void *);
 
+typedef int          (*AIMwriter)(void *, void *);
+typedef const char*  (*AIMext)(void);
+
 typedef struct {
   int   aim_nAnal;
   char *aimName[MAXANAL];
@@ -379,7 +385,9 @@ typedef struct {
   aimIn aimInput[MAXANAL];
   aimA  aimPAnal[MAXANAL];
   aimEx aimExec[MAXANAL];
+#ifdef ASYNCEXEC
   aimEx aimCheck[MAXANAL];
+#endif
   aimPo aimPost[MAXANAL];
   aimO  aimOutput[MAXANAL];
   aimC  aimCalc[MAXANAL];
@@ -419,14 +427,12 @@ typedef struct {
   capsOwn    writer;             /* the owning info of a Problem writer */
   int        stFlag;             /* Problem startup flag */
   FILE       *jrnl;              /* journal file */
-  int        outLevel;		 /* output level for messages
+  int        outLevel;           /* output level for messages
                                     0 none, 1 minimal, 2 verbose, 3 debug */
   int        funID;              /* active function index */
   void       *modl;              /* OpenCSM model void pointer or static ego */
   int        nParam;             /* number of parameters */
   capsObject **params;           /* list of parameter objects */
-  int        nBranch;            /* number of branches -- 0 static */
-  capsObject **branchs;          /* list of branch objects */
   int        nGeomIn;            /* number of geometryIn (params) -- 0 static */
   capsObject **geomIn;           /* list of geometryIn objects */
   int        nGeomOut;           /* number of geometryOut objects */
@@ -443,6 +449,8 @@ typedef struct {
   int        nEGADSmdl;          /* the number of journalled EGADS Models */
   int        nRegGIN;            /* number of Registered GeometryIn Values */
   capsRegGIN *regGIN;            /* sensitivity slots for GeometryIn Values */
+  int        nExec;              /* number of analyses that have executed */
+  capsObject **execs;            /* list of executed Analysis objects */
   CAPSLONG   sNum;               /* sequence number */
 #ifdef WIN32
   __int64    jpos;               /* journal position for last success */
@@ -453,18 +461,31 @@ typedef struct {
 
 
 /*
+ * structure for dynamically loading AIM mesh writers
+ */
+typedef struct {
+  int        aimWriterNum;
+  char      *aimWriterName[MAXWRITER];
+  DLL        aimWriterDLL[MAXWRITER];
+  AIMext     aimExtension[MAXWRITER];
+  AIMwriter  aimWriter[MAXWRITER];
+} writerContext;
+
+
+/*
  * structure for AIM Information
  */
 typedef struct {
-  int         magicnumber;     /* the magic number */
-  int         instance;        /* instance index */
-  int         pIndex;          /* the OpenCSM parameter index - sensitivities */
-  int         irow;            /* the parameter row index */
-  int         icol;            /* the parameter column index */
-  capsProblem *problem;        /* problem structure */
+  int           magicnumber;   /* the magic number */
+  int           instance;      /* instance index */
+  int           pIndex;        /* the OpenCSM parameter index - sensitivities */
+  int           irow;          /* the parameter row index */
+  int           icol;          /* the parameter column index */
+  capsProblem   *problem;      /* problem structure */
 /*@dependent@*/
-  void        *analysis;       /* specific analysis structure */
-  capsErrs    errs;            /* accumulate the AIMs error/warnings */
+  void          *analysis;     /* specific analysis structure */
+  capsErrs      errs;          /* accumulate the AIMs error/warnings */
+  writerContext wCntxt;        /* volume mesh writer DLL info */
 } aimInfo;
 
 
@@ -479,7 +500,7 @@ typedef struct {
   int        major;             /* the major version */
   int        minor;             /* the minor version */
   void       *instStore;        /* the AIM's instance storage */
-  int        exec;              /* execution request from API */
+  int        autoexec;          /* execution can be lazy */
   int        eFlag;             /* execution flag - 1 AIM executes analysis */
 /*@null@*/
   char       *intents;          /* the intents requested for the instance

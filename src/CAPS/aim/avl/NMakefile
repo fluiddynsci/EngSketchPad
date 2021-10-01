@@ -13,7 +13,7 @@ ODIR  = .
 !ENDIF
 
 
-$(LDIR)\avlAIM.dll:	$(ODIR)\avlAIM.obj $(LDIR)\utils.lib
+$(LDIR)\avlAIM.dll:	avlAIM.def $(ODIR)\avlAIM.obj $(LDIR)\utils.lib
 	-del $(LDIR)\avlAIM.dll $(LDIR)\avlAIM.lib $(LDIR)\avlAIM.exp
 	link /out:$(LDIR)\avlAIM.dll /dll /def:avlAIM.def \
 		$(ODIR)\avlAIM.obj /LIBPATH:$(LDIR) aimUtil.lib utils.lib \

@@ -17,27 +17,7 @@ import pyCAPS
 #parser.add_argument('-workDir', default = "./", nargs=1, type=str, help = 'Set working/run directory')
 #parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 #args = parser.parse_args()
-
-
-def run_xfoil(xfoil):
-    # Run AIM pre-analysis
-    xfoil.preAnalysis()
-
-    ####### Run xfoil ####################
-    print ("\n\nRunning xFoil......")
-    currentDirectory = os.getcwd() # Get our current working directory
-
-    os.chdir(xfoil.analysisDir) # Move into test directory
-
-    #if (args.noAnalysis == False): # Don't run xfoil if noAnalysis is set
-    os.system("xfoil < xfoilInput.txt > Info.out"); # Run xfoil via system call
-
-    os.chdir(currentDirectory) # Move back to top directory
-
-    # Run AIM post-analysis
-    xfoil.postAnalysis()
-
-
+ 
 class Testxfoil_NACA(unittest.TestCase):
 
     @classmethod
@@ -50,7 +30,8 @@ class Testxfoil_NACA(unittest.TestCase):
 
         # Initialize Problem object
         cls.myProblem = pyCAPS.Problem(problemName = cls.problemName,
-                                       capsFile = os.path.join("..","csmData","airfoilSection.csm"))
+                                       capsFile = os.path.join("..","csmData","airfoilSection.csm"),
+                                       outLevel = 0)
 
         # Change a design parameter - area in the geometry
         cls.myProblem.geometry.despmtr.camber = 0.02
@@ -88,9 +69,6 @@ class Testxfoil_NACA(unittest.TestCase):
 
         # Set custom AoA
         self.xfoil.input.Alpha = AlphaTrue
-
-        # run xfoil
-        run_xfoil(self.xfoil)
 
         # Retrieve results
         Alpha = self.xfoil.output.Alpha
@@ -132,9 +110,6 @@ class Testxfoil_NACA(unittest.TestCase):
         # Set AoA seq
         self.xfoil.input.Alpha_Increment = [1.0, 2.0, 0.10]
 
-        # run xfoil
-        run_xfoil(self.xfoil)
-
         # Retrieve results
         Alpha = self.xfoil.output.Alpha
         Cl    = self.xfoil.output.CL
@@ -175,9 +150,6 @@ class Testxfoil_NACA(unittest.TestCase):
         # Set custom Cl
         self.xfoil.input.CL = 0.1
 
-        # run xfoil
-        run_xfoil(self.xfoil)
-
         # Retrieve results
         Alpha = self.xfoil.output.Alpha
         Cl    = self.xfoil.output.CL
@@ -206,9 +178,6 @@ class Testxfoil_NACA(unittest.TestCase):
 
         # Set Cl seq
         self.xfoil.input.CL_Increment = [0.0, 1.0, .25]
-
-        # run xfoil
-        run_xfoil(self.xfoil)
 
         # Retrieve results
         Alpha = self.xfoil.output.Alpha
@@ -251,7 +220,7 @@ class Testxfoil_NACA(unittest.TestCase):
         self.xfoil.input.Alpha = 0.0
 
         # run xfoil
-        run_xfoil(self.xfoil)
+        self.xfoil.runAnalysis()
 
         # Append the polar file if it already exists - otherwise the AIM will delete the file
         self.xfoil.input.Append_PolarFile = True
@@ -260,7 +229,7 @@ class Testxfoil_NACA(unittest.TestCase):
         self.xfoil.input.Alpha = 3.0
 
         # run xfoil
-        run_xfoil(self.xfoil)
+        self.xfoil.runAnalysis()
 
         # Retrieve results
         Alpha = self.xfoil.output.Alpha
@@ -305,7 +274,8 @@ class Testxfoil_Kulfan(unittest.TestCase):
 
         # Load CSM file
         cls.myProblem = pyCAPS.Problem(problemName = cls.problemName,
-                                       capsFile = os.path.join("..","csmData","kulfanSection.csm"))
+                                       capsFile = os.path.join("..","csmData","kulfanSection.csm"),
+                                       outLevel = 0)
 
         # Load xfoil aim
         cls.xfoil = cls.myProblem.analysis.create(aim = "xfoilAIM")
@@ -340,9 +310,6 @@ class Testxfoil_Kulfan(unittest.TestCase):
 
         # Set custom AoA
         self.xfoil.input.Alpha = AlphaTrue
-
-        # run xfoil
-        run_xfoil(self.xfoil)
 
         # Retrieve results
         Alpha = self.xfoil.output.Alpha
@@ -383,9 +350,6 @@ class Testxfoil_Kulfan(unittest.TestCase):
 
         # Set custom Cl
         self.xfoil.input.CL = 0.1
-
-        # run xfoil
-        run_xfoil(self.xfoil)
 
         # Retrieve results
         Alpha = self.xfoil.output.Alpha

@@ -79,6 +79,7 @@ static int freePrivateData(void *data);
                                ATTRREAL     double  input
                               -ATTRREAL     double  output
                                ATTRREALSENS double input (for which a sensitivity can be calculated)
+                               ATTRFILE     file input
       argIdefs: default value for ATTRINT
       argDdefs: default value for ATTRREAL or ATTRREALSENS */
 static char  *argNames[NUMUDPARGS] = {"dx",        "dy",        "dz",        "center",    "area",    "volume", };

@@ -14,6 +14,12 @@
 #include <string.h>
 
 #include "egads.h"
+/*@-redef@*/
+typedef int    INT_;
+typedef INT_   INT_3D[3];
+typedef double DOUBLE_2D[2];
+/*@+redef@*/
+#include "uvmap_struct.h"
 
   extern int EG_outLevel( const egObject *object );
   extern int EG_flattenBSpline( egObject *object, egObject **result );
@@ -758,7 +764,7 @@ EG_writeGeometry(egObject *gobject, const egGeoMap *maps, stream_T *fp)
 
 
 static int
-EG_writeBody(egObject *bobject, stream_T *fp)
+EG_exportBody(egObject *bobject, stream_T *fp)
 {
   int      i, n, m, no, nchild, stat, oclass, mtype, iref, ntypes[8], *senses;
   int      outLevel;
@@ -1428,12 +1434,381 @@ EG_writeBody(egObject *bobject, stream_T *fp)
 }
 
 
+static int
+EG_exportTess(egObject *tess, stream_T *fp)
+{
+  int          status, len;
+  int          ntri, iedge, iface, nedge, nface;
+  const double *pxyz  = NULL, *puv    = NULL, *pt    = NULL;
+  const int    *ptype = NULL, *pindex = NULL, *ptris = NULL, *ptric = NULL;
+  egTessel     *btess;
+  egObject     *body;
+
+  if (tess == NULL)                 return EGADS_NULLOBJ;
+  if (tess->magicnumber != MAGIC)   return EGADS_NOTOBJ;
+  if (tess->oclass != TESSELLATION) return EGADS_NOTTESS;
+  if (tess->blind == NULL)          return EGADS_NODATA;
+
+  /* get the body from tessellation */
+  btess = (egTessel *) tess->blind;
+  body  = btess->src;
+
+  /* get the sizes */
+  if (body->oclass == EBODY) {
+    status = EG_getBodyTopos(body, NULL, EEDGE, &nedge, NULL);
+    if (status != EGADS_SUCCESS) return status;
+    status = EG_getBodyTopos(body, NULL, EFACE, &nface, NULL);
+    if (status != EGADS_SUCCESS) return status;
+  } else {
+    status = EG_getBodyTopos(body, NULL, EDGE,  &nedge, NULL);
+    if (status != EGADS_SUCCESS) return status;
+    status = EG_getBodyTopos(body, NULL, FACE,  &nface, NULL);
+    if (status != EGADS_SUCCESS) return status;
+  }
+
+  /* write the number of edges and faces */
+  if (Fwrite(&nedge, sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+  if (Fwrite(&nface, sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+
+  /* write out the edge tessellation */
+  for (iedge = 0; iedge < nedge; iedge++) {
+    status = EG_getTessEdge(tess, iedge+1, &len, &pxyz, &pt);
+    if (status != EGADS_SUCCESS) return status;
+    if (Fwrite(&len, sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+    if (len == 0) continue;
+/*@-nullpass@*/
+    if (Fwrite((void *) pxyz, sizeof(double), 3*len, fp) != 3*len)
+      return EGADS_WRITERR;
+    if (Fwrite((void *) pt,   sizeof(double),   len, fp) !=   len)
+      return EGADS_WRITERR;
+/*@+nullpass@*/
+  }
+
+  /* write out face tessellations */
+  for (iface = 0; iface < nface; iface++) {
+    status = EG_getTessFace(tess, iface+1, &len, &pxyz, &puv, &ptype, &pindex,
+                            &ntri, &ptris, &ptric);
+    if (status != EGADS_SUCCESS) return status;
+    if (Fwrite(&len,  sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+    if (Fwrite(&ntri, sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+    if ((len == 0) || (ntri == 0)) continue;
+    ntri *= 3;
+/*@-nullpass@*/
+    if (Fwrite((void *) pxyz,  sizeof(double), 3*len, fp) != 3*len)
+      return EGADS_WRITERR;
+    if (Fwrite((void *) puv,   sizeof(double), 2*len, fp) != 2*len)
+      return EGADS_WRITERR;
+    if (Fwrite((void *) ptris, sizeof(int),     ntri, fp) !=  ntri)
+      return EGADS_WRITERR;
+/*@+nullpass@*/
+  }
+
+  /* write out the tessellation attributes */
+  return EG_writeAttrs(fp, (egAttrs *) tess->attrs);
+}
+
+
+static int
+EG_uvmapExport(void *uvmap, int *trmap, stream_T *fp)
+{
+  int          i, ival, trmp = 0, msrch = 0;
+  uvmap_struct *uvstruct;
+  
+  uvstruct = (uvmap_struct *) uvmap;
+  if (uvstruct->mdef  != 1) return EGADS_UVMAP;
+  if (uvstruct->ndef  != 1) return EGADS_UVMAP;
+  if (uvstruct->msrch != NULL) msrch = 1;
+  if (trmap           != NULL) trmp  = 1;
+  ival = (int) uvstruct->isrch;
+  if (Fwrite(&ival,  sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+  ival = (int) uvstruct->ibface;
+  if (Fwrite(&ival,  sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+  ival = (int) uvstruct->nbface;
+  if (Fwrite(&ival,  sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+  ival = (int) uvstruct->nnode;
+  if (Fwrite(&ival,  sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+  if (Fwrite(&msrch, sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+  if (Fwrite(&trmp,  sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+  
+  if (Fwrite(&uvstruct->idibf[1], sizeof(int), uvstruct->nbface, fp) !=
+      uvstruct->nbface) return EGADS_WRITERR;
+  
+  for (i = 1; i <= uvstruct->nbface; i++) {
+    if (Fwrite(uvstruct->inibf[i],  sizeof(int), 3, fp) != 3)
+      return EGADS_WRITERR;
+    if (Fwrite(uvstruct->ibfibf[i], sizeof(int), 3, fp) != 3)
+      return EGADS_WRITERR;
+  }
+        
+  for (i = 1; i <= uvstruct->nnode; i++)
+    if (Fwrite(uvstruct->u[i], sizeof(double), 2, fp) != 2)
+      return EGADS_WRITERR;
+  
+  if (uvstruct->msrch != NULL)
+    if (Fwrite(&uvstruct->msrch[1], sizeof(int), uvstruct->nbface, fp) !=
+        uvstruct->nbface) return EGADS_WRITERR;
+
+  if (trmap != NULL)
+    if (Fwrite(trmap, sizeof(int), uvstruct->nbface, fp) != uvstruct->nbface)
+      return EGADS_WRITERR;
+    
+  return EGADS_SUCCESS;
+}
+
+
+static int
+EG_exportEBody(egObject *EBody, stream_T *fp)
+{
+  int      i, j, k, stat, nds[2];
+  double   real = 0.0;
+  egObject *body, *obj;
+  egEBody  *ebody;
+  egEShell *eshell;
+  egEFace  *eface;
+  egELoop  *eloop;
+  egEEdge  *eedge;
+  
+  if (EBody == NULL)               return EGADS_NULLOBJ;
+  if (EBody->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (EBody->oclass != EBODY)      return EGADS_NOTTESS;
+  
+  ebody = (egEBody *) EBody->blind;
+  if (ebody == NULL) {
+    printf(" EGADS Error: NULL Blind Object (EG_exportEBody)!\n");
+    return EGADS_NOTFOUND;
+  }
+  if (ebody->done == 0) {
+    printf(" EGADS Error: EBody not finialized (EG_exportEBody)!\n");
+    return EGADS_EFFCTOBJ;
+  }
+  body = ebody->ref;
+  if (Fwrite(&EBody->mtype,         sizeof(int),    1, fp) != 1)
+    return EGADS_WRITERR;
+  stat = EG_writeAttrs(fp, (egAttrs *) EBody->attrs);
+  if (stat != EGADS_SUCCESS) return stat;
+  
+  if (Fwrite(&ebody->eedges.nobjs,  sizeof(int),    1, fp) != 1)
+    return EGADS_WRITERR;
+  if (Fwrite(&ebody->eloops.nobjs,  sizeof(int),    1, fp) != 1)
+    return EGADS_WRITERR;
+  if (Fwrite(&ebody->efaces.nobjs,  sizeof(int),    1, fp) != 1)
+    return EGADS_WRITERR;
+  if (Fwrite(&ebody->eshells.nobjs, sizeof(int),    1, fp) != 1)
+    return EGADS_WRITERR;
+  if (Fwrite(&ebody->nedge,         sizeof(int),    1, fp) != 1)
+    return EGADS_WRITERR;
+  if (Fwrite(&ebody->angle,         sizeof(double), 1, fp) != 1)
+    return EGADS_WRITERR;
+
+  if (body->mtype == SOLIDBODY)
+    if (Fwrite(ebody->senses, sizeof(int), ebody->eshells.nobjs, fp) !=
+        ebody->eshells.nobjs) return EGADS_WRITERR;
+  
+  /* source Edges */
+  for (j = 0; j < ebody->nedge; j++) {
+    nds[0] = EG_indexBodyTopo(body, ebody->edges[j].edge);
+    if (nds[0] <= EGADS_SUCCESS) {
+      printf(" EGADS Error: Source Edge = %d (EG_exportEBody)!\n", nds[0]);
+      return EGADS_TOPOERR;
+    }
+    if (Fwrite(&nds[0],                sizeof(int),    1, fp) != 1)
+      return EGADS_WRITERR;
+    if (Fwrite(&ebody->edges[j].curve, sizeof(int),    1, fp) != 1)
+      return EGADS_WRITERR;
+    if (Fwrite(&ebody->edges[j].npts,  sizeof(int),    1, fp) != 1)
+      return EGADS_WRITERR;
+    if (Fwrite(ebody->edges[j].dstart, sizeof(double), 3, fp) != 3)
+      return EGADS_WRITERR;
+    if (Fwrite(ebody->edges[j].dend,   sizeof(double), 3, fp) != 3)
+      return EGADS_WRITERR;
+    if (Fwrite(ebody->edges[j].ts,     sizeof(double), ebody->edges[j].npts,
+               fp) != ebody->edges[j].npts) return EGADS_WRITERR;
+  }
+  
+  /* EEdges */
+  for (i = 0; i < ebody->eedges.nobjs; i++) {
+    obj    = ebody->eedges.objs[i];
+    eedge  = (egEEdge *) obj->blind;
+    nds[0] = EG_indexBodyTopo(body, eedge->nodes[0]);
+    nds[1] = EG_indexBodyTopo(body, eedge->nodes[1]);
+    if ((nds[0] <= EGADS_SUCCESS) || (nds[1] <= EGADS_SUCCESS)) {
+      printf(" EGADS Error: Node indices = %d %d (EG_exportEBody)!\n",
+             nds[0], nds[1]);
+      return EGADS_TOPOERR;
+    }
+    if (Fwrite(&obj->mtype,   sizeof(short),  1, fp) != 1) return EGADS_WRITERR;
+    if (Fwrite(&eedge->nsegs, sizeof(int),    1, fp) != 1) return EGADS_WRITERR;
+    if (Fwrite(nds,           sizeof(int),    2, fp) != 2) return EGADS_WRITERR;
+    if (Fwrite(eedge->trange, sizeof(double), 2, fp) != 2) return EGADS_WRITERR;
+    for (j = 0; j < eedge->nsegs; j++) {
+      nds[0] = 0;
+      if (eedge->segs[j].nstart != NULL)
+        nds[0] = EG_indexBodyTopo(body, eedge->segs[j].nstart);
+      if (nds[0] < EGADS_SUCCESS) {
+        printf(" EGADS Error: Node start = %d (EG_exportEBody)!\n", nds[0]);
+        return EGADS_TOPOERR;
+      }
+      if (Fwrite(&eedge->segs[j].iedge,  sizeof(int),    1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(&eedge->segs[j].sense,  sizeof(int),    1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(&nds[0],                sizeof(int),    1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(&eedge->segs[j].tstart, sizeof(double), 1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(&eedge->segs[j].tend,   sizeof(double), 1, fp) != 1)
+        return EGADS_WRITERR;
+    }
+    stat = EG_writeAttrs(fp, (egAttrs *) obj->attrs);
+    if (stat != EGADS_SUCCESS) return stat;
+  }
+  
+  /* ELoops */
+  for (i = 0; i < ebody->eloops.nobjs; i++) {
+    obj   = ebody->eloops.objs[i];
+    eloop = (egELoop *) obj->blind;
+    if (Fwrite(&obj->mtype, sizeof(short), 1, fp) != 1) return EGADS_WRITERR;
+    if (eloop == NULL) {
+      nds[0] = nds[1] = 0;
+      if (Fwrite(nds,   sizeof(int),    2, fp) != 2) return EGADS_WRITERR;
+      if (Fwrite(&real, sizeof(double), 1, fp) != 1) return EGADS_WRITERR;
+      continue;
+    }
+    if (Fwrite(&eloop->eedges.nobjs, sizeof(int),    1, fp) != 1)
+      return EGADS_WRITERR;
+    if (Fwrite(&eloop->nedge,        sizeof(int),    1, fp) != 1)
+      return EGADS_WRITERR;
+    if (Fwrite(&eloop->area,         sizeof(double), 1, fp) != 1)
+      return EGADS_WRITERR;
+    for (j = 0; j < eloop->eedges.nobjs; j++) {
+      k = EG_indexBodyTopo(EBody, eloop->eedges.objs[j]);
+      if (k <= EGADS_SUCCESS) {
+        printf(" EGADS Error: EEdge %d index = %d in ELoop %d (EG_exportEBody)!\n",
+               k, j+1, i+1);
+        return EGADS_TOPOERR;
+      }
+      if (Fwrite(&k, sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+    }
+    if (Fwrite(eloop->senses, sizeof(int), eloop->eedges.nobjs, fp) !=
+        eloop->eedges.nobjs) return EGADS_WRITERR;
+    for (j = 0; j < eloop->nedge; j++) {
+      k = EG_indexBodyTopo(body, eloop->edgeUVs[j].edge);
+      if (k <= EGADS_SUCCESS) {
+        printf(" EGADS Error: Edge %d index = %d in ELoop %d (EG_exportEBody)!\n",
+               k, j+1, i+1);
+        return EGADS_TOPOERR;
+      }
+      if (Fwrite(&k,                       sizeof(int), 1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(&eloop->edgeUVs[j].sense, sizeof(int), 1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(&eloop->edgeUVs[j].npts,  sizeof(int), 1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(eloop->edgeUVs[j].iuv,    sizeof(int), eloop->edgeUVs[j].npts,
+                 fp) != eloop->edgeUVs[j].npts) return EGADS_WRITERR;
+    }
+    stat = EG_writeAttrs(fp, (egAttrs *) obj->attrs);
+    if (stat != EGADS_SUCCESS) return stat;
+  }
+  
+  /* EFaces */
+  for (i = 0; i < ebody->efaces.nobjs; i++) {
+    obj   = ebody->efaces.objs[i];
+    eface = (egEFace *) obj->blind;
+    if (Fwrite(&obj->mtype,          sizeof(short), 1, fp) != 1)
+      return EGADS_WRITERR;
+    if (Fwrite(&eface->npatch,       sizeof(int),   1, fp) != 1)
+      return EGADS_WRITERR;
+    if (Fwrite(&eface->eloops.nobjs, sizeof(int),   1, fp) != 1)
+      return EGADS_WRITERR;
+    if (Fwrite(&eface->last,         sizeof(int),   1, fp) != 1)
+      return EGADS_WRITERR;
+    if (eface->npatch != 1) {
+      stat = EG_uvmapExport(eface->uvmap, eface->trmap, fp);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EGADS Error: EFace %d  uvmapExport = %d (EG_exportEBody)!\n",
+               i+1, stat);
+        return stat;
+      }
+    } else {
+      if (Fwrite(eface->range, sizeof(double), 4, fp) != 4)
+        return EGADS_WRITERR;
+    }
+    for (j = 0; j < eface->eloops.nobjs; j++) {
+      k = EG_indexBodyTopo(EBody, eface->eloops.objs[j]);
+      if (k <= EGADS_SUCCESS) {
+        printf(" EGADS Error: Loop %d index = %d in EFace %d (EG_exportEBody)!\n",
+               k, j+1, i+1);
+        return EGADS_TOPOERR;
+      }
+      if (Fwrite(&k, sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+    }
+    if (Fwrite(eface->senses, sizeof(int), eface->eloops.nobjs, fp) !=
+        eface->eloops.nobjs) return EGADS_WRITERR;
+    for (j = 0; j < eface->npatch; j++) {
+      k = EG_indexBodyTopo(body, eface->patches[j].face);
+      if (k <= EGADS_SUCCESS) {
+        printf(" EGADS Error: Face %d index = %d in EFace %d (EG_exportEBody)!\n",
+               k, j+1, i+1);
+        return EGADS_TOPOERR;
+      }
+      if (Fwrite(&k,                          sizeof(int), 1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(&eface->patches[j].start,    sizeof(int), 1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(&eface->patches[j].nuvs,     sizeof(int), 1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(&eface->patches[j].ndeflect, sizeof(int), 1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(&eface->patches[j].ntris,    sizeof(int), 1, fp) != 1)
+        return EGADS_WRITERR;
+      if (Fwrite(eface->patches[j].uvtris,    sizeof(int),
+                 3*eface->patches[j].ntris, fp) != 3*eface->patches[j].ntris)
+        return EGADS_WRITERR;
+      if (Fwrite(eface->patches[j].uvs,       sizeof(double),
+                 2*eface->patches[j].nuvs, fp) != 2*eface->patches[j].nuvs)
+        return EGADS_WRITERR;
+      if (Fwrite(eface->patches[j].deflect,   sizeof(double),
+                 3*eface->patches[j].ndeflect, fp) !=
+          3*eface->patches[j].ndeflect) return EGADS_WRITERR;
+    }
+    stat = EG_writeAttrs(fp, (egAttrs *) obj->attrs);
+    if (stat != EGADS_SUCCESS) return stat;
+  }
+  
+  /* EShells */
+  for (i = 0; i < ebody->eshells.nobjs; i++) {
+    obj    = ebody->eshells.objs[i];
+    eshell = (egEShell *) obj->blind;
+    if (Fwrite(&obj->mtype,           sizeof(short), 1, fp) != 1)
+      return EGADS_WRITERR;
+    if (Fwrite(&eshell->efaces.nobjs, sizeof(int),   1, fp) != 1)
+      return EGADS_WRITERR;
+    for (j = 0; j < eshell->efaces.nobjs; j++) {
+      k = EG_indexBodyTopo(EBody, eshell->efaces.objs[j]);
+      if (k <= EGADS_SUCCESS) {
+        printf(" EGADS Error: Face %d index = %d in EFace %d (EG_exportEBody)!\n",
+               k, j+1, i+1);
+        return EGADS_TOPOERR;
+      }
+      if (Fwrite(&k, sizeof(int), 1, fp) != 1) return EGADS_WRITERR;
+    }
+    stat = EG_writeAttrs(fp, (egAttrs *) obj->attrs);
+    if (stat != EGADS_SUCCESS) return stat;
+  }
+  
+  return EGADS_SUCCESS;
+}
+
+
 int
 EG_exportModel(ego mobject, size_t *nbytes, char **stream)
 {
-  int      i, n, oclass, mtype, nbody, *senses, rev[2] = {1, 0};
+  int      i, j, n, oclass, mtype, nbody, *senses, rev[2] = {1, 1};
   double   bbox[6];
   egObject *ref, **bodies;
+  egTessel *btess;
+  egEBody  *ebody;
   stream_T myStream;
   stream_T *fp = &(myStream);
 
@@ -1457,23 +1832,23 @@ EG_exportModel(ego mobject, size_t *nbytes, char **stream)
 
   /* put header */
   i = MAGIC;
-  n = Fwrite(&i,     sizeof(int),    1, fp);
+  n = Fwrite(&i,        sizeof(int),    1, fp);
   if (n != 1) {
     Fclose(fp);
     return EGADS_WRITERR;
   }
-  n = Fwrite(rev,    sizeof(int),    2, fp);
+  n = Fwrite(rev,       sizeof(int),    2, fp);
   if (n != 2) {
     Fclose(fp);
     return EGADS_WRITERR;
   }
 
-  n = Fwrite(bbox,   sizeof(double), 6, fp);
+  n = Fwrite(bbox,      sizeof(double), 6, fp);
   if (n != 6) {
     Fclose(fp);
     return EGADS_WRITERR;
   }
-  n = Fwrite(&nbody, sizeof(int),    1, fp);
+  n = Fwrite(&nbody,    sizeof(int),    1, fp);
   if (n != 1) {
     Fclose(fp);
     return EGADS_WRITERR;
@@ -1486,11 +1861,66 @@ EG_exportModel(ego mobject, size_t *nbytes, char **stream)
 
   /* write all of the bodies */
   for (n = 0; n < nbody; n++) {
-    i = EG_writeBody(bodies[n], fp);
+    i = EG_exportBody(bodies[n], fp);
     if (i == EGADS_SUCCESS) continue;
     /* errorred out -- cleanup */
     Fclose(fp);
     return i;
+  }
+  
+  /* write possible tessellation and EBody Objects */
+  n = Fwrite(&mtype,    sizeof(int),    1, fp);
+  if (n != 1) {
+    Fclose(fp);
+    return EGADS_WRITERR;
+  }
+  for (i = nbody; i < mtype; i++) {
+    oclass = bodies[i]->oclass;
+    if (oclass == TESSELLATION) {
+      btess = (egTessel *) bodies[i]->blind;
+      ref   = btess->src;
+    } else if (oclass == EBODY) {
+      ebody = (egEBody *)  bodies[i]->blind;
+      ref   = ebody->ref;
+    } else {
+      printf(" Export Error: %d Entry in Model has class = %d!\n", i+1, oclass);
+      Fclose(fp);
+      return EGADS_NOTBODY;
+    }
+    j = Fwrite(&oclass, sizeof(int),    1, fp);
+    if (j != 1) {
+      Fclose(fp);
+      return EGADS_WRITERR;
+    }
+    for (n = 0; n < i; n++)
+      if (ref == bodies[n]) break;
+    if (n == nbody) {
+      printf(" Export Error: %d Entry in Model cannot find Body!\n", i+1);
+      Fclose(fp);
+      return EGADS_NOTBODY;
+    }
+    n++;
+    j = Fwrite(&n,      sizeof(int),    1, fp);
+    if (j != 1) {
+      Fclose(fp);
+      return EGADS_WRITERR;
+    }
+      
+    if (bodies[i]->oclass == TESSELLATION) {
+      n = EG_exportTess(bodies[i], fp);
+      if (n != EGADS_SUCCESS) {
+        /* errorred out -- cleanup */
+        Fclose(fp);
+        return n;
+      }
+    } else if (bodies[i]->oclass == EBODY) {
+      n = EG_exportEBody(bodies[i], fp);
+      if (n != EGADS_SUCCESS) {
+        /* errorred out -- cleanup */
+        Fclose(fp);
+        return n;
+      }
+    }
   }
 
   /* return results */

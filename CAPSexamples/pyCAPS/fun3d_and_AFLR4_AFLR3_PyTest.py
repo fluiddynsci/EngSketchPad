@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description = 'FUN3D and AFLR Pytest Example',
 parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Working directory
@@ -27,7 +27,7 @@ workDir = os.path.join(str(args.workDir[0]), "FUN3DandAFRLMeshTest")
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AFLR4 aim
 aflr4 = myProblem.analysis.create(aim = "aflr4AIM", name = "aflr4")
@@ -36,7 +36,7 @@ aflr4 = myProblem.analysis.create(aim = "aflr4AIM", name = "aflr4")
 aflr4.input.Proj_Name = "pyCAPS_AFLR4_AFLR3"
 
 # Set AIM verbosity
-aflr4.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+aflr4.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set output grid format since a project name is being supplied - Tecplot  file
 aflr4.input.Mesh_Format = "Tecplot"
@@ -47,16 +47,6 @@ aflr4.input.ff_cdfr = 1.4
 # Set maximum and minimum edge lengths relative to capsMeshLength
 aflr4.input.max_scale = 0.5
 aflr4.input.min_scale = 0.05
-
-# Run AIM pre-analysis
-aflr4.preAnalysis()
-
-#######################################
-## AFRL4 was ran during preAnalysis ##
-#######################################
-
-# Run AIM post-analysis
-aflr4.postAnalysis()
 
 #######################################
 ## Build volume mesh off of surface  ##
@@ -69,7 +59,7 @@ aflr3 = myProblem.analysis.create(aim = "aflr3AIM", name = "aflr3")
 aflr3.input["Surface_Mesh"].link(aflr4.output["Surface_Mesh"])
 
 # Set AIM verbosity
-aflr3.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+aflr3.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set project name - so a mesh file is generated
 aflr3.input.Proj_Name = "pyCAPS_AFLR4_AFLR3_VolMesh"
@@ -78,19 +68,12 @@ aflr3.input.Proj_Name = "pyCAPS_AFLR4_AFLR3_VolMesh"
 aflr3.input.Mesh_Format = "Tecplot"
 
 # Set AIM verbosity
-aflr3.input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
-
-# Run AIM pre-analysis
-aflr3.preAnalysis()
+aflr3.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 #######################################
-## AFLR3 was ran during preAnalysis ##
+## Load FUN3D aim                    ##
 #######################################
 
-# Run AIM post-analysis
-aflr3.postAnalysis()
-
-# Load FUN3D aim - child of AFLR3 AIM
 fun3d = myProblem.analysis.create(aim = "fun3dAIM", name = "fun3d")
 
 fun3d.input["Mesh"].link(aflr3.output["Volume_Mesh"])

@@ -3,7 +3,7 @@
 SET wing:name    $Wing1
 SET wing:aspect  6.00
 SET wing:taper   0.60
-SET wing:xOffset 2.5
+SET wing:xOffset 0
 SET wing:hinge   0
 SET wing:AvlNcut 3
 

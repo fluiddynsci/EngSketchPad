@@ -57,7 +57,7 @@ class TestProblem(unittest.TestCase):
         myProblem = pyCAPS.Problem(self.probemName + str(self.iProb), capsFile=u"unitGeom.csm", outLevel=0); self.__class__.iProb += 1
 
 #==============================================================================
-    # Multiple problems
+    # Cannot add Python attributes
     def test_static(self):
 
         # cannot set non-existing attributes on Problem Object
@@ -72,12 +72,31 @@ class TestProblem(unittest.TestCase):
     # Multiple problems
     def test_multiProblem(self):
 
-        myProblemNew = pyCAPS.Problem(self.probemName + str(self.iProb), capsFile=self.file, outLevel=0); self.__class__.iProb += 1
+        name = self.probemName + str(self.iProb); self.__class__.iProb += 1
+
+        myProblemNew = pyCAPS.Problem(name, capsFile=self.file, outLevel=0)
         self.assertNotEqual(self.myProblem, myProblemNew)
+        
+        self.assertEqual(myProblemNew.name, name)
 
         # Test a problemName with a relative path
-        #myProblemNew = pyCAPS.Problem(os.path.join("..", self.probemName + str(self.iProb)), capsFile=self.file, outLevel=0); self.__class__.iProb += 1
-        #self.assertNotEqual(self.myProblem, myProblemNew)
+        name = os.path.join("..", self.probemName + str(self.iProb)); self.__class__.iProb += 1
+        myProblemNew = pyCAPS.Problem(name, capsFile=self.file, outLevel=0)
+        self.assertNotEqual(self.myProblem, myProblemNew)
+
+        del myProblemNew # close the problem
+        shutil.rmtree(name)
+
+
+        # Create a problem, close it, and re-create with the same name
+        name = self.probemName + str(self.iProb); self.__class__.iProb += 1
+        myProblemNew = pyCAPS.Problem(name, capsFile=self.file, outLevel=0)
+
+        del myProblemNew # close the problem
+
+        # create the problem again with the same name
+        myProblemNew = pyCAPS.Problem(name, capsFile=self.file, outLevel=0)
+
 
 #==============================================================================
     # Set outLevel

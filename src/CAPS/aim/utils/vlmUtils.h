@@ -49,7 +49,7 @@ int destroy_vlmSurfaceStruct(vlmSurfaceStruct  *surface);
 
 // Populate vlmSurface-section control surfaces from geometry attributes, modify control properties based on
 // incoming vlmControl structures
-int get_ControlSurface(ego bodies[],
+int get_ControlSurface(void *aimInfo,
                        int numControl,
                        vlmControlStruct vlmControl[],
                        vlmSurfaceStruct *vlmSurface);

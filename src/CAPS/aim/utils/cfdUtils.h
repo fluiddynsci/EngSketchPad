@@ -21,11 +21,10 @@ int cfd_getModalAeroelastic(int numTuple,
                             cfdModalAeroelasticStruct *modalAeroelastic);
 
 // Get the design variables from a capsTuple
-int cfd_getDesignVariable(int numDesignVariableTuple,
+int cfd_getDesignVariable(void *aimInfo,
+                          int numDesignVariableTuple,
                           capsTuple designVariableTuple[],
-                          void *aimInfo,
                           int numAnalysisVal, capsValue *analysisVal,
-                          int numGeomVal, capsValue *geomVal,
                           int *numDesignVariable,
                           cfdDesignVariableStruct *variable[]);
 

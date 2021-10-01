@@ -40,13 +40,12 @@ static int    CAPSextSgnl = 1;
 
 extern /*@null@*/
        void *caps_initUnits();
+extern void  caps_initFunIDs();
 extern int   caps_freeError(/*@only@*/ capsErrs *errs);
 extern int   caps_Aprx1DFree(/*@only@*/ capsAprx1D *approx);
 extern int   caps_Aprx2DFree(/*@only@*/ capsAprx2D *approx);
 extern int   caps_checkDiscr(capsDiscr *discr, int l, char *line);
 extern int   caps_filter(capsProblem *problem, capsAnalysis *analysis);
-extern int   caps_transferValueX(capsObject *source, enum capstMethod method,
-                                 capsObject *trgt, int *nErr, capsErrs **errors);
 extern int   caps_statFile(const char *path);
 extern int   caps_rmFile(const char *path);
 extern int   caps_rmDir(const char *path);
@@ -71,12 +70,39 @@ caps_rmLock(void)
   EG_free(CAPSlocks);
   CAPSnLock = 0;
   CAPSlocks = NULL;
+  
+  /* cleanup udp storage */
+  ocsmFree(NULL);
+}
+
+
+void
+caps_rmLockOnClose(const char* root)
+{
+  int i, j;
+
+  for (i = 0; i < CAPSnLock; i++) {
+    if ((CAPSlocks[i] != NULL) &&
+        (strncmp(CAPSlocks[i], root, strlen(root)) == 0)) {
+      caps_rmFile(CAPSlocks[i]);
+      EG_free(CAPSlocks[i]);
+      for (j = i; j < CAPSnLock-1; j++)
+        CAPSlocks[j] = CAPSlocks[j+1];
+      CAPSnLock--;
+      break;
+    }
+  }
 }
 
 
 void
 caps_externSignal()
 {
+  if (CAPSextSgnl == 1) {
+    atexit(caps_rmLock);
+    caps_initFunIDs();
+  }
+
   CAPSextSgnl = 0;
 }
 
@@ -93,8 +119,8 @@ caps_intHandler(int sig)
 static void
 caps_initSignals()
 {
-  atexit(caps_rmLock);
   if (CAPSextSgnl <= 0) return;
+  atexit(caps_rmLock);
   (void) signal(SIGSEGV, caps_intHandler);
   (void) signal(SIGINT,  caps_intHandler);
 #ifdef WIN32
@@ -105,7 +131,8 @@ caps_initSignals()
   (void) signal(SIGBUS,  caps_intHandler);
 /*@+unrecog@*/
 #endif
-  
+  caps_initFunIDs();
+
   CAPSextSgnl = -1;
 }
 
@@ -188,7 +215,8 @@ caps_freeValue(capsValue *value)
 
   if (value == NULL) return;
 
-  if (value->units != NULL) EG_free(value->units);
+  if (value->units      != NULL) EG_free(value->units);
+  if (value->meshWriter != NULL) EG_free(value->meshWriter);
   if ((value->type == Boolean) || (value->type == Integer)) {
     if (value->length > 1) EG_free(value->vals.integers);
   } else if ((value->type == Double) || (value->type == DoubleDeriv)) {
@@ -199,12 +227,12 @@ caps_freeValue(capsValue *value)
     caps_freeTuple(value->length, value->vals.tuple);
   }
   if (value->partial != NULL) EG_free(value->partial);
-  if (value->dots == NULL) return;
-  for (i = 0; i < value->ndot; i++) {
-    if (value->dots[i].name != NULL) EG_free(value->dots[i].name);
-    if (value->dots[i].dot  != NULL) EG_free(value->dots[i].dot);
+  if (value->derivs == NULL) return;
+  for (i = 0; i < value->nderiv; i++) {
+    if (value->derivs[i].name != NULL) EG_free(value->derivs[i].name);
+    if (value->derivs[i].deriv  != NULL) EG_free(value->derivs[i].deriv);
   }
-  EG_free(value->dots);
+  EG_free(value->derivs);
 }
 
 
@@ -253,8 +281,7 @@ caps_hierarchy(capsObject *obj, char **full)
   capsBound  *bound;
   capsValue  *value;
   static char type[7] = {'U', 'P', 'V', 'A', 'B', 'S', 'D'};
-  static char sub[12] = {'N', 'S', 'P', 'I', 'O', 'B', 'P', 'U', 'I', 'O',
-                         'C', 'N'};
+  static char sub[11] = {'N', 'S', 'P', 'I', 'O', 'P', 'U', 'I', 'O', 'C', 'N'};
   
   *full = NULL;
   if (obj == NULL) return CAPS_SUCCESS;
@@ -326,8 +353,7 @@ caps_string2obj(capsProblem *problem, /*@null@*/ const char *full,
   capsBound     *bound;
   capsVertexSet *vs;
   static char   type[7] = {'U', 'P', 'V', 'A', 'B', 'S', 'D'};
-  static char   sub[12] = {'N', 'S', 'P', 'I', 'O', 'B', 'P', 'U', 'I', 'O',
-                           'C', 'N'};
+  static char   sub[11] = {'N', 'S', 'P', 'I', 'O', 'P', 'U', 'I', 'O', 'C', 'N'};
   
   *object = NULL;
   if (full == NULL) return CAPS_SUCCESS;
@@ -347,7 +373,7 @@ caps_string2obj(capsProblem *problem, /*@null@*/ const char *full,
       return CAPS_BADOBJECT;
     }
     pos++;
-    for (is = 0; is < 12; is++)
+    for (is = 0; is < 11; is++)
       if (full[pos] == sub[is]) break;
     if (is == 12) {
       printf(" CAPS Error: subtype %c not found (caps_string2obj)\n", full[pos]);
@@ -391,13 +417,6 @@ caps_string2obj(capsProblem *problem, /*@null@*/ const char *full,
               return CAPS_BADINDEX;
             }
             obj = problem->geomOut[index-1];
-          } else if (is == 5) {
-            if (index > problem->nBranch) {
-              printf(" CAPS Error: Bad index %d for bValue (caps_string2obj)\n",
-                     index);
-              return CAPS_BADINDEX;
-            }
-            obj = problem->branchs[index-1];
           } else {
             printf(" CAPS Error: incorrect sub %d for Value (caps_string2obj)\n",
                    is);
@@ -796,7 +815,7 @@ caps_writeValue(FILE *fp, capsOwn writer, capsObject *obj)
   if (n != 1) return CAPS_IOERR;
   n = fwrite(&value->gInType, sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
-  n = fwrite(&value->ndot,    sizeof(int), 1, fp);
+  n = fwrite(&value->nderiv,    sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
 
   if (value->type == Integer) {
@@ -808,6 +827,8 @@ caps_writeValue(FILE *fp, capsOwn writer, capsObject *obj)
   }
 
   stat = caps_writeString(fp, value->units);
+  if (stat != CAPS_SUCCESS) return stat;
+  stat = caps_writeString(fp, value->meshWriter);
   if (stat != CAPS_SUCCESS) return stat;
   name = NULL;
   if (value->link != NULL) {
@@ -821,7 +842,8 @@ caps_writeValue(FILE *fp, capsOwn writer, capsObject *obj)
   if (n != 1) return CAPS_IOERR;
 
   if ((value->length == 1)     && (value->type != String) &&
-      (value->type != Pointer) && (value->type != Tuple)) {
+      (value->type != Pointer) && (value->type != Tuple)  &&
+      (value->type != PointerMesh)) {
     if ((value->type == Double) || (value->type == DoubleDeriv)) {
       n = fwrite(&value->vals.real, sizeof(double), 1, fp);
       if (n != 1) return CAPS_IOERR;
@@ -830,7 +852,7 @@ caps_writeValue(FILE *fp, capsOwn writer, capsObject *obj)
       if (n != 1) return CAPS_IOERR;
     }
   } else {
-    if (value->type == Pointer) {
+    if ((value->type == Pointer) || (value->type == PointerMesh)) {
       /* what do we do? */
     } else if ((value->type == Double) || (value->type == DoubleDeriv)) {
       n = fwrite(value->vals.reals, sizeof(double), value->length, fp);
@@ -853,18 +875,18 @@ caps_writeValue(FILE *fp, capsOwn writer, capsObject *obj)
     if (n != value->length) return CAPS_IOERR;
   }
 
-  if (value->ndot != 0) {
-    for (i = 0; i < value->ndot; i++) {
-      stat = caps_writeString(fp, value->dots[i].name);
+  if (value->nderiv != 0) {
+    for (i = 0; i < value->nderiv; i++) {
+      stat = caps_writeString(fp, value->derivs[i].name);
       if (stat != CAPS_SUCCESS) return stat;
-      n = fwrite(&value->dots[i].rank,  sizeof(int), 1, fp);
+      n = fwrite(&value->derivs[i].rank,  sizeof(int), 1, fp);
       if (n != 1) return CAPS_IOERR;
-      j = value->length*value->dots[i].rank;
-      if (value->dots[i].dot == NULL) j = 0;
+      j = value->length*value->derivs[i].rank;
+      if (value->derivs[i].deriv == NULL) j = 0;
       n = fwrite(&j,                    sizeof(int), 1, fp);
       if (n != 1) return CAPS_IOERR;
       if (j != 0) {
-        n = fwrite(value->dots[i].dot, sizeof(double), j, fp);
+        n = fwrite(value->derivs[i].deriv, sizeof(double), j, fp);
         if (n != j) return CAPS_IOERR;
       }
     }
@@ -930,31 +952,6 @@ caps_dumpGeomVals(capsProblem *problem, int flag)
   snprintf(current, PATH_MAX, "%s/capsRestart",  problem->root);
   snprintf(temp,    PATH_MAX, "%s/xxTempxx",     current);
 #endif
-  
-  if (flag == 0)
-    for (i = 0; i < problem->nBranch; i++) {
-#ifdef WIN32
-      snprintf(filename, PATH_MAX, "%s\\VB-%4.4d", current, i+1);
-#else
-      snprintf(filename, PATH_MAX, "%s/VB-%4.4d",  current, i+1);
-#endif
-      fp = fopen(temp, "wb");
-      if (fp == NULL) {
-        printf(" CAPS Error: Cannot open %s!\n", filename);
-        return CAPS_DIRERR;
-      }
-      status = caps_writeValue(fp, problem->writer, problem->branchs[i]);
-      fclose(fp);
-      if (status != CAPS_SUCCESS) {
-        printf(" CAPS Error: Cannot write %s!\n", filename);
-        return status;
-      }
-      status = caps_rename(temp, filename);
-      if (status != CAPS_SUCCESS) {
-        printf(" CAPS Error: Cannot rename %s!\n", filename);
-        return status;
-      }
-    }
 
   if ((flag == 0) || (flag == 1))
     for (i = 0; i < problem->nGeomIn; i++) {
@@ -1037,13 +1034,13 @@ caps_writeAnalysis(FILE *fp, capsProblem *problem, capsObject *aobject)
   if (stat != CAPS_SUCCESS) return stat;
   stat = caps_writeString(fp, analysis->intents);
   if (stat != CAPS_SUCCESS) return stat;
-  n = fwrite(&analysis->major,  sizeof(int), 1, fp);
+  n = fwrite(&analysis->major,    sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
-  n = fwrite(&analysis->minor,  sizeof(int), 1, fp);
+  n = fwrite(&analysis->minor,    sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
-  n = fwrite(&analysis->exec,   sizeof(int), 1, fp);
+  n = fwrite(&analysis->autoexec, sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
-  n = fwrite(&analysis->nField, sizeof(int), 1, fp);
+  n = fwrite(&analysis->nField,   sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
   for (i = 0; i < analysis->nField; i++) {
     stat = caps_writeString(fp, analysis->fields[i]);
@@ -1776,9 +1773,9 @@ caps_jrnlWrite(capsProblem *problem, capsObject *obj, int status,
   n = fwrite(&status,         sizeof(int),      1, problem->jrnl);
   if (n != 1) goto jwrterr;
 /*
-  printf(" *** Writing from FunID = %d  status = %d ***\n",
-         problem->funID, status);
- */
+  printf(" *** Writing from FunID = %s  status = %d ***\n",
+         caps_funID[problem->funID], status);
+*/
   if (status == CAPS_SUCCESS) {
     n = fwrite(&obj->last.sNum, sizeof(CAPSLONG), 1, problem->jrnl);
     if (n != 1) goto jwrterr;
@@ -1920,23 +1917,28 @@ caps_jrnlWrite(capsProblem *problem, capsObject *obj, int status,
           break;
 
         case jEgos:
-          n = fwrite(&problem->nEGADSmdl, sizeof(int), 1, problem->jrnl);
-          if (n != 1) goto jwrterr;
+          if (args[i].members.model == NULL) {
+            j = -1;
+            n = fwrite(&j, sizeof(int), 1, problem->jrnl);
+            if (n != 1) goto jwrterr;
+          } else {
+            n = fwrite(&problem->nEGADSmdl, sizeof(int), 1, problem->jrnl);
+            if (n != 1) goto jwrterr;
 #ifdef WIN32
-          snprintf(filename, PATH_MAX, "%s\\capsRestart\\model%4.4d.egads",
-                   problem->root, problem->nEGADSmdl);
+            snprintf(filename, PATH_MAX, "%s\\capsRestart\\model%4.4d.egads",
+                     problem->root, problem->nEGADSmdl);
 #else
-          snprintf(filename, PATH_MAX, "%s/capsRestart/model%4.4d.egads",
-                   problem->root, problem->nEGADSmdl);
+            snprintf(filename, PATH_MAX, "%s/capsRestart/model%4.4d.egads",
+                     problem->root, problem->nEGADSmdl);
 #endif
-          stat = EG_saveModel(args[i].members.model, filename);
-          if (stat != CAPS_SUCCESS)
-            printf(" CAPS Warning: EG_saveModel = %d (caps_jrnlWrite)!\n",
-                   stat);
-          if (args[i].members.model->oclass == MODEL)
-            EG_deleteObject(args[i].members.model);
-          problem->nEGADSmdl++;
-
+            stat = EG_saveModel(args[i].members.model, filename);
+            if (stat != CAPS_SUCCESS)
+              printf(" CAPS Warning: EG_saveModel = %d (caps_jrnlWrite)!\n",
+                     stat);
+            if (args[i].members.model->oclass == MODEL)
+             EG_deleteObject(args[i].members.model);
+            problem->nEGADSmdl++;
+          }
         }
       }
   
@@ -2398,7 +2400,7 @@ caps_readValue(FILE *fp, capsProblem *problem, capsObject *obj)
   if (n != 1) return CAPS_IOERR;
   n = fread(&value->gInType, sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
-  n = fread(&value->ndot,    sizeof(int), 1, fp);
+  n = fread(&value->nderiv,    sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
 
   if (value->type == Integer) {
@@ -2411,6 +2413,8 @@ caps_readValue(FILE *fp, capsProblem *problem, capsObject *obj)
 
   stat = caps_readString(fp, &value->units);
   if (stat != CAPS_SUCCESS) return stat;
+  stat = caps_readString(fp, &value->meshWriter);
+  if (stat != CAPS_SUCCESS) return stat;
   stat = caps_readString(fp, &name);
   if (stat != CAPS_SUCCESS) return stat;
   stat = caps_string2obj(problem, name, &value->link);
@@ -2420,7 +2424,8 @@ caps_readValue(FILE *fp, capsProblem *problem, capsObject *obj)
   if (n != 1) return CAPS_IOERR;
 
   if ((value->length == 1)     && (value->type != String) &&
-      (value->type != Pointer) && (value->type != Tuple)) {
+      (value->type != Pointer) && (value->type != Tuple)  &&
+      (value->type != PointerMesh)) {
     if ((value->type == Double) || (value->type == DoubleDeriv)) {
       n = fread(&value->vals.real, sizeof(double), 1, fp);
       if (n != 1) return CAPS_IOERR;
@@ -2429,7 +2434,7 @@ caps_readValue(FILE *fp, capsProblem *problem, capsObject *obj)
       if (n != 1) return CAPS_IOERR;
     }
   } else {
-    if (value->type == Pointer) {
+    if ((value->type == Pointer) || (value->type == PointerMesh)) {
       /* what do we do? */
     } else if ((value->type == Double) || (value->type == DoubleDeriv)) {
       value->vals.reals = EG_alloc(value->length*sizeof(double));
@@ -2461,25 +2466,25 @@ caps_readValue(FILE *fp, capsProblem *problem, capsObject *obj)
     if (n != value->length) return CAPS_IOERR;
   }
 
-  if (value->ndot != 0) {
-    value->dots = (capsDot *) EG_alloc(value->ndot*sizeof(capsDot));
-    if (value->dots == NULL) return EGADS_MALLOC;
-    for (i = 0; i < value->ndot; i++) {
-      value->dots[i].name = NULL;
-      value->dots[i].rank = 0;
-      value->dots[i].dot  = NULL;
+  if (value->nderiv != 0) {
+    value->derivs = (capsDeriv *) EG_alloc(value->nderiv*sizeof(capsDeriv));
+    if (value->derivs == NULL) return EGADS_MALLOC;
+    for (i = 0; i < value->nderiv; i++) {
+      value->derivs[i].name = NULL;
+      value->derivs[i].rank = 0;
+      value->derivs[i].deriv  = NULL;
     }
-    for (i = 0; i < value->ndot; i++) {
-      stat = caps_readString(fp, &value->dots[i].name);
+    for (i = 0; i < value->nderiv; i++) {
+      stat = caps_readString(fp, &value->derivs[i].name);
       if (stat != CAPS_SUCCESS) return stat;
-      n = fread(&value->dots[i].rank, sizeof(int), 1, fp);
+      n = fread(&value->derivs[i].rank, sizeof(int), 1, fp);
       if (n != 1) return CAPS_IOERR;
-      value->dots[i].dot = (double *) EG_alloc(
-                           value->length*value->dots[i].rank*sizeof(double));
-      if (value->dots[i].dot == NULL) return EGADS_MALLOC;
-      n = fread(value->dots[i].dot, sizeof(double),
-                value->length*value->dots[i].rank, fp);
-      if (n != value->length*value->dots[i].rank) return CAPS_IOERR;
+      value->derivs[i].deriv = (double *) EG_alloc(
+                           value->length*value->derivs[i].rank*sizeof(double));
+      if (value->derivs[i].deriv == NULL) return EGADS_MALLOC;
+      n = fread(value->derivs[i].deriv, sizeof(double),
+                value->length*value->derivs[i].rank, fp);
+      if (n != value->length*value->derivs[i].rank) return CAPS_IOERR;
     }
   }
 
@@ -2616,7 +2621,7 @@ caps_jrnlRead(capsProblem *problem, capsObject *obj, int nargs, capsJrnl *args,
   n = fread(&funID,   sizeof(int),      1, problem->jrnl);
   if (n != 1) goto jreaderr;
   if (funID != problem->funID) {
-    printf(" CAPS Fatal: FunID = %d, should be %d!\n", funID, problem->funID);
+    printf(" CAPS Fatal: FunID = %s, should be '%s'!\n", caps_funID[funID], caps_funID[problem->funID]);
     goto jreadfatal;
   }
   n = fread(&sNum0,   sizeof(CAPSLONG), 1, problem->jrnl);
@@ -2624,8 +2629,8 @@ caps_jrnlRead(capsProblem *problem, capsObject *obj, int nargs, capsJrnl *args,
   n = fread(status,   sizeof(int),      1, problem->jrnl);
   if (n != 1) goto jreaderr;
 /*
-  printf(" *** Reading from FunID = %d  status = %d ***\n", funID, *status);
- */
+  printf(" *** Reading from FunID = %s  status = %d ***\n", caps_funID[funID], *status);
+*/
   if (*status == CAPS_SUCCESS) {
     n = fread(&objSN, sizeof(CAPSLONG), 1, problem->jrnl);
     if (n != 1) goto jreaderr;
@@ -2902,34 +2907,37 @@ caps_jrnlRead(capsProblem *problem, capsObject *obj, int nargs, capsJrnl *args,
           break;
 
         case jEgos:
+          args[i].members.model = NULL;
           n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
           if (n != 1) goto jreaderr;
+          if (args[i].num != -1) {
 #ifdef WIN32
-          snprintf(filename, PATH_MAX, "%s\\capsRestart\\model%4.4d.egads",
-                   problem->root, args[i].num);
+            snprintf(filename, PATH_MAX, "%s\\capsRestart\\model%4.4d.egads",
+                     problem->root, args[i].num);
 #else
-          snprintf(filename, PATH_MAX, "%s/capsRestart/model%4.4d.egads",
-                   problem->root, args[i].num);
+            snprintf(filename, PATH_MAX, "%s/capsRestart/model%4.4d.egads",
+                     problem->root, args[i].num);
 #endif
-          stat = EG_loadModel(problem->context, 1, filename,
-                              &args[i].members.model);
-          if (stat != CAPS_SUCCESS) {
-            printf(" CAPS Warning: EG_loadModel = %d (caps_jrnlRead)!\n",
-                   stat);
-            goto jreaderr;
-          }
-          if (obj != NULL) {
-            flist = (capsFList *) EG_alloc(sizeof(capsFList));
-            if (flist == NULL) {
-              printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
-            } else {
-              flist->type         = jEgos;
-              flist->num          = args[i].num;
-              flist->member.model = args[i].members.model;
-              flist->sNum         = objSN;
-              flist->next         = NULL;
-              if (obj->flist != NULL) flist->next = obj->flist;
-              obj->flist         = flist;
+            stat = EG_loadModel(problem->context, 1, filename,
+                                &args[i].members.model);
+            if (stat != CAPS_SUCCESS) {
+              printf(" CAPS Warning: EG_loadModel = %d (caps_jrnlRead)!\n",
+                     stat);
+              goto jreaderr;
+            }
+            if (obj != NULL) {
+              flist = (capsFList *) EG_alloc(sizeof(capsFList));
+              if (flist == NULL) {
+                printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
+              } else {
+                flist->type         = jEgos;
+                flist->num          = args[i].num;
+                flist->member.model = args[i].members.model;
+                flist->sNum         = objSN;
+                flist->next         = NULL;
+                if (obj->flist != NULL) flist->next = obj->flist;
+                obj->flist         = flist;
+              }
             }
           }
           
@@ -2945,7 +2953,7 @@ caps_jrnlRead(capsProblem *problem, capsObject *obj, int nargs, capsJrnl *args,
            funID, problem->funID);
     goto jreadfatal;
   }
-  if (sNum >= problem->sNum) {
+  if (sNum > problem->sNum) {
     printf(" CAPS Info: Hit ending serial number -- going live!\n");
     problem->stFlag = 0;
     fclose(problem->jrnl);
@@ -2961,7 +2969,6 @@ caps_jrnlRead(capsProblem *problem, capsObject *obj, int nargs, capsJrnl *args,
       printf(" CAPS Error: Cannot open %s (caps_readJrnl)\n", filename);
       return CAPS_DIRERR;
     }
-    return CAPS_SUCCESS;
   }
 
   *serial = sNum;
@@ -3522,13 +3529,13 @@ caps_readAnalysis(capsProblem *problem, capsObject *aobject)
   if (stat != CAPS_SUCCESS) goto raerr;
   stat = caps_readString(fp, &analysis->intents);
   if (stat != CAPS_SUCCESS) goto raerr;
-  n = fread(&analysis->major,  sizeof(int), 1, fp);
+  n = fread(&analysis->major,    sizeof(int), 1, fp);
   if (n != 1) goto raerr;
-  n = fread(&analysis->minor,  sizeof(int), 1, fp);
+  n = fread(&analysis->minor,    sizeof(int), 1, fp);
   if (n != 1) goto raerr;
-  n = fread(&analysis->exec,   sizeof(int), 1, fp);
+  n = fread(&analysis->autoexec, sizeof(int), 1, fp);
   if (n != 1) goto raerr;
-  n = fread(&analysis->nField, sizeof(int), 1, fp);
+  n = fread(&analysis->nField,   sizeof(int), 1, fp);
   if (n != 1) goto raerr;
   if (analysis->nField != 0) {
     analysis->fields = (char **) EG_alloc(analysis->nField*sizeof(char *));
@@ -3595,6 +3602,7 @@ caps_readAnalysis(capsProblem *problem, capsObject *aobject)
   analysis->info.instance = stat;
   analysis->instStore     = instStore;
   analysis->eFlag         = eFlag;
+  if ((analysis->autoexec == 1) && (eFlag == 0)) analysis->autoexec = 0;
   if (fields != NULL) {
     for (i = 0; i < nField; i++) EG_free(fields[i]);
     EG_free(fields);
@@ -3767,8 +3775,7 @@ caps_readState(capsObject *pobject)
 #endif
   fptxt = fopen(filename, "r");
   if (fptxt != NULL) {
-    fscanf(fptxt, "%d %d %d",
-           &problem->nBranch, &problem->nGeomIn, &problem->nGeomOut);
+    fscanf(fptxt, "%d %d", &problem->nGeomIn, &problem->nGeomOut);
     fclose(fptxt);
   }
   
@@ -3812,16 +3819,8 @@ caps_readState(capsObject *pobject)
         analysis->minor             = CAPSMINOR;
         analysis->instStore         = NULL;
         analysis->intents           = NULL;
+        analysis->autoexec          = 0;
         analysis->eFlag             = 0;
-        analysis->info.magicnumber  = CAPSMAGIC;
-        analysis->info.instance     = -1;
-        analysis->info.problem      = problem;
-        analysis->info.analysis     = analysis;
-        analysis->info.pIndex       = 0;
-        analysis->info.irow         = 0;
-        analysis->info.icol         = 0;
-        analysis->info.errs.nError  = 0;
-        analysis->info.errs.errors  = NULL;
         analysis->nField            = 0;
         analysis->fields            = NULL;
         analysis->ranks             = NULL;
@@ -3840,6 +3839,16 @@ caps_readState(capsObject *pobject)
         analysis->pre.pID           = NULL;
         analysis->pre.user          = NULL;
         analysis->pre.sNum          = 0;
+        analysis->info.magicnumber         = CAPSMAGIC;
+        analysis->info.instance            = stat;
+        analysis->info.problem             = problem;
+        analysis->info.analysis            = analysis;
+        analysis->info.pIndex              = 0;
+        analysis->info.irow                = 0;
+        analysis->info.icol                = 0;
+        analysis->info.errs.nError         = 0;
+        analysis->info.errs.errors         = NULL;
+        analysis->info.wCntxt.aimWriterNum = 0;
         for (j = 0; j < 6; j++) analysis->pre.datetime[j] = 0;
         
         /* make the analysis value objects */
@@ -3866,14 +3875,15 @@ caps_readState(capsObject *pobject)
             value[j].lfixed          = value[j].sfixed = Fixed;
             value[j].nullVal         = NotAllowed;
             value[j].units           = NULL;
+            value[j].meshWriter      = NULL;
             value[j].link            = NULL;
             value[j].vals.reals      = NULL;
             value[j].limits.dlims[0] = value[j].limits.dlims[1] = 0.0;
             value[j].linkMethod      = Copy;
             value[j].gInType         = 0;
             value[j].partial         = NULL;
-            value[j].ndot            = 0;
-            value[j].dots            = NULL;
+            value[j].nderiv            = 0;
+            value[j].derivs            = NULL;
           }
           for (j = 0; j < nIn; j++) {
             stat = caps_readInitObj(&analysis->analysisIn[j], VALUE, ANALYSISIN,
@@ -3918,14 +3928,15 @@ caps_readState(capsObject *pobject)
             value[j].lfixed          = value[j].sfixed = Fixed;
             value[j].nullVal         = NotAllowed;
             value[j].units           = NULL;
+            value[j].meshWriter      = NULL;
             value[j].link            = NULL;
             value[j].vals.reals      = NULL;
             value[j].limits.dlims[0] = value[j].limits.dlims[1] = 0.0;
             value[j].linkMethod      = Copy;
             value[j].gInType         = 0;
             value[j].partial         = NULL;
-            value[j].ndot            = 0;
-            value[j].dots            = NULL;
+            value[j].nderiv            = 0;
+            value[j].derivs            = NULL;
           }
           for (j = 0; j < nOut; j++) {
             stat = caps_readInitObj(&analysis->analysisOut[j], VALUE, ANALYSISOUT,
@@ -4036,48 +4047,6 @@ caps_readState(capsObject *pobject)
 /*@+kepttrans@*/
     }
   }
-
-  if (problem->nBranch > 0) {
-    problem->branchs = (capsObject **)
-                       EG_alloc(problem->nBranch*sizeof(capsObject *));
-    if (problem->branchs == NULL) return EGADS_MALLOC;
-    for (i = 0; i < problem->nBranch; i++) problem->branchs[i] = NULL;
-    value = (capsValue *) EG_alloc(problem->nBranch*sizeof(capsValue));
-    if (value == NULL) return EGADS_MALLOC;
-    for (i = 0; i < problem->nBranch; i++) {
-      value[i].length          = value[i].nrow = value[i].ncol = 1;
-      value[i].type            = Integer;
-      value[i].dim             = value[i].pIndex = 0;
-      value[i].index           = i+1;
-      value[i].lfixed          = value[i].sfixed = Fixed;
-      value[i].nullVal         = NotAllowed;
-      value[i].units           = NULL;
-      value[i].link            = NULL;
-      value[i].vals.reals      = NULL;
-      value[i].limits.ilims[0] = OCSM_ACTIVE;
-      value[i].limits.ilims[1] = OCSM_DEFERRED;
-      value[i].linkMethod      = Copy;
-      value[i].gInType         = 0;
-      value[i].partial         = NULL;
-      value[i].ndot            = 0;
-      value[i].dots            = NULL;
-    }
-    for (i = 0; i < problem->nBranch; i++) {
-      stat = caps_readInitObj(&problem->branchs[i], VALUE, BRANCH, NULL,
-                              problem->mySelf);
-      if (stat != CAPS_SUCCESS) {
-        printf(" CAPS Error: Brnch %d caps_readInitObj = %d (caps_open)!\n",
-               i, stat);
-        EG_free(value);
-        EG_free(problem->branchs);
-        problem->branchs = NULL;
-        return stat;
-      }
-/*@-immediatetrans@*/
-      problem->branchs[i]->blind = &value[i];
-/*@+immediatetrans@*/
-    }
-  }
   
   if (problem->nGeomIn > 0) {
     problem->geomIn = (capsObject **)
@@ -4096,6 +4065,7 @@ caps_readState(capsObject *pobject)
       value[i].lfixed          = value[i].sfixed = Fixed;
       value[i].nullVal         = NotAllowed;
       value[i].units           = NULL;
+      value[i].meshWriter      = NULL;
       value[i].link            = NULL;
       value[i].vals.reals      = NULL;
       value[i].limits.dlims[0] = value[i].limits.dlims[1] = 0.0;
@@ -4103,8 +4073,8 @@ caps_readState(capsObject *pobject)
       value[i].length          = 1;
       value[i].gInType         = 0;
       value[i].partial         = NULL;
-      value[i].ndot            = 0;
-      value[i].dots            = NULL;
+      value[i].nderiv            = 0;
+      value[i].derivs            = NULL;
     }
     for (i = 0; i < problem->nGeomIn; i++) {
       stat = caps_readInitObj(&problem->geomIn[i], VALUE, GEOMETRYIN, NULL,
@@ -4141,14 +4111,15 @@ caps_readState(capsObject *pobject)
       value[i].lfixed          = value[i].sfixed = Change;
       value[i].nullVal         = IsNull;
       value[i].units           = NULL;
+      value[i].meshWriter      = NULL;
       value[i].link            = NULL;
       value[i].vals.reals      = NULL;
       value[i].limits.dlims[0] = value[i].limits.dlims[1] = 0.0;
       value[i].linkMethod      = Copy;
       value[i].gInType         = 0;
       value[i].partial         = NULL;
-      value[i].ndot            = 0;
-      value[i].dots            = NULL;
+      value[i].nderiv            = 0;
+      value[i].derivs            = NULL;
     }
     for (i = 0; i < problem->nGeomOut; i++) {
       stat = caps_readInitObj(&problem->geomOut[i], VALUE, GEOMETRYOUT, NULL,
@@ -4193,30 +4164,6 @@ caps_readState(capsObject *pobject)
     }
   }
   
-  if (problem->branchs != NULL) {
-    for (i = 0; i < problem->nBranch; i++) {
-#ifdef WIN32
-      snprintf(filename, PATH_MAX, "%s\\capsRestart\\VB-%4.4d",
-               problem->root, i+1);
-#else
-      snprintf(filename, PATH_MAX, "%s/capsRestart/VB-%4.4d",
-               problem->root, i+1);
-#endif
-      fp = fopen(filename, "rb");
-      if (fp == NULL) {
-        printf(" CAPS Error: Cannot open %s (caps_open)!\n", filename);
-        return CAPS_DIRERR;
-      }
-      stat = caps_readValue(fp, problem, problem->branchs[i]);
-      fclose(fp);
-      if (stat != CAPS_SUCCESS) {
-        printf(" CAPS Error: branch %d/%d readValue = %d (caps_open)!\n",
-               i+1, problem->nBranch, stat);
-        return stat;
-      }
-    }
-  }
-  
   if (problem->geomIn != NULL) {
     for (i = 0; i < problem->nGeomIn; i++) {
 #ifdef WIN32
@@ -4235,7 +4182,7 @@ caps_readState(capsObject *pobject)
       fclose(fp);
       if (stat != CAPS_SUCCESS) {
         printf(" CAPS Error: geomIn %d/%d readValue = %d (caps_open)!\n",
-               i+1, problem->nBranch, stat);
+               i+1, problem->nGeomIn, stat);
         return stat;
       }
     }
@@ -4259,7 +4206,7 @@ caps_readState(capsObject *pobject)
       fclose(fp);
       if (stat != CAPS_SUCCESS) {
         printf(" CAPS Error: geomOut %d/%d readValue = %d (caps_open)!\n",
-               i+1, problem->nBranch, stat);
+               i+1, problem->nGeomOut, stat);
         return stat;
       }
     }
@@ -4299,7 +4246,7 @@ int
 caps_close(capsObject *pobject, int complete, /*@null@*/ const char *phName)
 {
   int          i, j, stat, state, npts;
-  char         closeName[PATH_MAX];
+  char         path[PATH_MAX];
   ego          model, body;
   capsProblem  *problem;
   capsAnalysis *analysis;
@@ -4318,11 +4265,11 @@ caps_close(capsObject *pobject, int complete, /*@null@*/ const char *phName)
 
   if (complete == 1) {
 #ifdef WIN32
-    snprintf(closeName, PATH_MAX, "%s\\capsClosed", problem->root);
+    snprintf(path, PATH_MAX, "%s\\capsClosed", problem->root);
 #else
-    snprintf(closeName, PATH_MAX, "%s/capsClosed",  problem->root);
+    snprintf(path, PATH_MAX, "%s/capsClosed",  problem->root);
 #endif
-    fp = fopen(closeName, "w");
+    fp = fopen(path, "w");
     if (fp == NULL) {
       printf(" CAPS Warning: Failed to open capsClosed!\n");
     } else {
@@ -4333,18 +4280,18 @@ caps_close(capsObject *pobject, int complete, /*@null@*/ const char *phName)
   if ((phName != NULL) && (complete == 1)) {
     if (problem->phName == NULL) {
 #ifdef WIN32
-      snprintf(closeName, PATH_MAX, "%s\\..\\%s", problem->root, phName);
+      snprintf(path, PATH_MAX, "%s\\..\\%s", problem->root, phName);
 #else
-      snprintf(closeName, PATH_MAX, "%s/../%s",   problem->root, phName);
+      snprintf(path, PATH_MAX, "%s/../%s",   problem->root, phName);
 #endif
-      caps_prunePath(closeName);
-      stat = caps_statFile(closeName);
+      caps_prunePath(path);
+      stat = caps_statFile(path);
       if (stat != EGADS_NOTFOUND) {
-        printf(" CAPS Warning: %s is not empty -- not renamed!\n", closeName);
+        printf(" CAPS Warning: %s is not empty -- not renamed!\n", path);
       } else {
-        stat = caps_rename(problem->root, closeName);
+        stat = caps_rename(problem->root, path);
         if (stat != CAPS_SUCCESS) {
-          printf(" CAPS Warning: Cannot rename %s!\n", closeName);
+          printf(" CAPS Warning: Cannot rename %s!\n", path);
           return stat;
         }
       }
@@ -4352,6 +4299,9 @@ caps_close(capsObject *pobject, int complete, /*@null@*/ const char *phName)
       printf("CAPS Warning: New Phase Name not available for nonScratch!\n");
     }
   }
+
+  /* remove the lock file */
+  caps_rmLockOnClose(problem->root);
 
   if (problem->phName != NULL) EG_free(problem->phName);
   if (problem->lunits != NULL) {
@@ -4394,8 +4344,6 @@ caps_close(capsObject *pobject, int complete, /*@null@*/ const char *phName)
       if (problem->stFlag != 1) {
         /* close up OpenCSM */
         ocsmFree(problem->modl);
-        /* remove tmp files (if they exist) and cleanup udp storage */
-        ocsmFree(NULL);
       }
       if (problem->bodies != NULL) EG_free(problem->bodies);
     } else {
@@ -4408,7 +4356,6 @@ caps_close(capsObject *pobject, int complete, /*@null@*/ const char *phName)
 
   /* deal with the CAPS Problem level Objects */
   caps_freeValueObjects(1, problem->nParam,   problem->params);
-  caps_freeValueObjects(0, problem->nBranch,  problem->branchs);
   caps_freeValueObjects(0, problem->nGeomIn,  problem->geomIn);
   caps_freeValueObjects(0, problem->nGeomOut, problem->geomOut);
 
@@ -4445,6 +4392,7 @@ caps_close(capsObject *pobject, int complete, /*@null@*/ const char *phName)
   if (problem->root     != NULL) EG_free(problem->root);
   if ((problem->context != NULL) && (problem->stFlag != 2))
     EG_close(problem->context);
+  EG_free(problem->execs);
   EG_free(problem);
 
   /* cleanup and invalidate the object */
@@ -4606,16 +4554,30 @@ caps_phaseState(const char *prPath, /*@null@*/ const char *phName, int *bFlag)
 
 
 int
+caps_journalState(const capsObject *pobject)
+{
+  capsProblem *problem;
+  
+  if (pobject == NULL)                   return CAPS_NULLOBJ;
+  if (pobject->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
+  if (pobject->type != PROBLEM)          return CAPS_BADTYPE;
+  if (pobject->blind == NULL)            return CAPS_NULLBLIND;
+  problem = (capsProblem *) pobject->blind;
+  
+  return problem->stFlag;
+}
+
+
+int
 caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
           void *ptr, int outLevel, capsObject **pobject,
           int *nErr, capsErrs **errors)
 {
   int           i, j, k, n, len, status, oclass, mtype, *senses, idot = 0;
-  int           type, class, actv, ichld, ileft, irite, nattr, ngIn, ngOut;
-  int           narg, nrow, ncol, nbrch, npmtr, nbody, ivec[2];
-  int           buildTo, builtTo, ibody;
+  int           type, nattr, ngIn, ngOut, buildTo, builtTo, ibody;
+  int           nrow, ncol, nbrch, npmtr, nbody, ivec[2];
   char          byte, *units, *env, root[PATH_MAX], current[PATH_MAX];
-  char          name[MAX_NAME_LEN], bname[MAX_STRVAL_LEN];
+  char          name[MAX_NAME_LEN];
   char          filename[PATH_MAX], temp[PATH_MAX], **tmp, line[129];
   CAPSLONG      fileLen, ret, sNum;
   double        dot, lower, upper, data[4], *reals;
@@ -5012,24 +4974,14 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
     if (*errors != NULL) *nErr = (*errors)->nError;
     return CAPS_DIRERR;
   }
-  if (CAPSlocks == NULL) {
-    CAPSlocks = (char **) EG_alloc(sizeof(char *));
-    if (CAPSlocks == NULL) {
-      caps_makeSimpleErr(NULL, CERROR, "Allocating Locks storage (caps_open)!",
-                         NULL, NULL, errors);
-      if (*errors != NULL) *nErr = (*errors)->nError;
-      return EGADS_MALLOC;
-    }
-  } else {
-    tmp = (char **) EG_reall(CAPSlocks, (CAPSnLock+1)*sizeof(char *));
-    if (tmp == NULL) {
-      caps_makeSimpleErr(NULL, CERROR, "ReAllocating Locks storage (caps_open)!",
-                         NULL, NULL, errors);
-      if (*errors != NULL) *nErr = (*errors)->nError;
-      return EGADS_MALLOC;
-    }
-    CAPSlocks = tmp;
+  tmp = (char **) EG_reall(CAPSlocks, (CAPSnLock+1)*sizeof(char *));
+  if (tmp == NULL) {
+    caps_makeSimpleErr(NULL, CERROR, "ReAllocating Locks storage (caps_open)!",
+                       NULL, NULL, errors);
+    if (*errors != NULL) *nErr = (*errors)->nError;
+    return EGADS_MALLOC;
   }
+  CAPSlocks = tmp;
   CAPSlocks[CAPSnLock] = EG_strdup(current);
   CAPSnLock++;
   fp = fopen(current, "w");
@@ -5041,7 +4993,15 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
   }
   fclose(fp);
   caps_initSignals();
-  
+
+  /* check the outLevel env (mostly used for testing) */
+  env = getenv("CAPS_OUTLEVEL");
+  if (env != NULL && (env[0] == '0' ||
+                      env[0] == '1' ||
+                      env[0] == '2')) {
+    outLevel = atoi(env);
+  }
+
   /* we are OK -- make the Problem */
 
   problem = (capsProblem *) EG_alloc(sizeof(capsProblem));
@@ -5060,8 +5020,6 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
   problem->modl            = NULL;
   problem->nParam          = 0;
   problem->params          = NULL;
-  problem->nBranch         = 0;
-  problem->branchs         = NULL;
   problem->nGeomIn         = 0;
   problem->geomIn          = NULL;
   problem->nGeomOut        = 0;
@@ -5084,6 +5042,8 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
   problem->nEGADSmdl       = 0;
   problem->nRegGIN         = 0;
   problem->regGIN          = NULL;
+  problem->nExec           = 0;
+  problem->execs           = NULL;
   problem->sNum            = problem->writer.sNum = 1;
   problem->jpos            = 0;
   problem->writer.nLines   = 0;
@@ -5194,21 +5154,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
         return status;
       }
       fflush(stdout);
-      /* reset the GeomIns & Branchs */
-      if (problem->branchs != NULL)
-        for (i = 0; i < problem->nBranch; i++) {
-          if (problem->branchs[i] == NULL) continue;
-          value  = (capsValue *) problem->branchs[i]->blind;
-          status = ocsmSetBrch(problem->modl, i+1, value->vals.integer);
-          if ((status != SUCCESS) && (status != OCSM_CANNOT_BE_SUPPRESSED)) {
-            snprintf(temp, PATH_MAX, "ocsmSetBrch[%d] fails with %d (caps_open)!",
-                     i, status);
-            caps_makeSimpleErr(NULL, CERROR, temp, NULL, NULL, errors);
-            if (*errors != NULL) *nErr = (*errors)->nError;
-            caps_close(object, 0, NULL);
-            return status;
-          }
-        }
+      /* reset the GeomIns */
       if (problem->geomIn != NULL)
         for (i = 0; i < problem->nGeomIn; i++) {
           if (problem->geomIn[i] == NULL) continue;
@@ -5312,14 +5258,6 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
         if (type == OCSM_DESPMTR) ngIn++;
         if (type == OCSM_CFGPMTR) ngIn++;
         if (type == OCSM_CONPMTR) ngIn++;
-      }
-      if (nbrch != problem->nBranch) {
-        snprintf(temp, PATH_MAX, "# Branch = %d -- from %s = %d (caps_open)!",
-                 nbrch, filename, problem->nBranch);
-        caps_makeSimpleErr(NULL, CERROR, temp, NULL, NULL, errors);
-        if (*errors != NULL) *nErr = (*errors)->nError;
-        caps_close(object, 0, NULL);
-        return CAPS_MISMATCH;
       }
       if (ngIn != problem->nGeomIn) {
         snprintf(temp, PATH_MAX, "# Design Vars = %d -- from %s = %d (caps_open)!",
@@ -5550,73 +5488,6 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
       caps_close(object, 0, NULL);
       return status;
     }
-    /* allocate the objects for the branches */
-    if (nbrch != 0) {
-      problem->branchs = (capsObject **) EG_alloc(nbrch*sizeof(capsObject *));
-      if (problem->branchs == NULL) {
-        caps_close(object, 0, NULL);
-        return EGADS_MALLOC;
-      }
-      for (i = 0; i < nbrch; i++) problem->branchs[i] = NULL;
-      value = (capsValue *) EG_alloc(nbrch*sizeof(capsValue));
-      if (value == NULL) {
-        caps_close(object, 0, NULL);
-        return EGADS_MALLOC;
-      }
-      for (i = 0; i < nbrch; i++) {
-        value[i].length          = value[i].nrow = value[i].ncol = 1;
-        value[i].type            = Integer;
-        value[i].dim             = value[i].pIndex = value[i].index = 0;
-        value[i].lfixed          = value[i].sfixed = Fixed;
-        value[i].nullVal         = NotAllowed;
-        value[i].units           = NULL;
-        value[i].link            = NULL;
-        value[i].vals.reals      = NULL;
-        value[i].limits.ilims[0] = OCSM_ACTIVE;
-        value[i].limits.ilims[1] = OCSM_DEFERRED;
-        value[i].linkMethod      = Copy;
-        value[i].gInType         = 0;
-        value[i].partial         = NULL;
-        value[i].ndot            = 0;
-        value[i].dots            = NULL;
-
-        status = caps_makeObject(&objs);
-        if (status != CAPS_SUCCESS) {
-          EG_free(value);
-          caps_close(object, 0, NULL);
-          return EGADS_MALLOC;
-        }
-        if (i == 0) objs->blind = value;
-/*@-kepttrans@*/
-        objs->parent    = object;
-/*@+kepttrans@*/
-        objs->name      = NULL;
-        objs->type      = VALUE;
-        objs->subtype   = BRANCH;
-        objs->last.sNum = 1;
-/*@-immediatetrans@*/
-        objs->blind     = &value[i];
-/*@+immediatetrans@*/
-        problem->branchs[i] = objs;
-      }
-      problem->nBranch = nbrch;
-      for (i = 0; i < nbrch; i++) {
-        status = ocsmGetName(problem->modl, i+1, bname);
-        if (status != SUCCESS) {
-          caps_close(object, 0, NULL);
-          return status;
-        }
-        problem->branchs[i]->name = EG_strdup(bname);
-        status = ocsmGetBrch(problem->modl, i+1, &type, &class, &actv, &ichld,
-                             &ileft, &irite, &narg, &nattr);
-        if (status != CAPS_SUCCESS) {
-          caps_close(object, 0, NULL);
-          return status;
-        }
-        value[i].index        = i+1;
-        value[i].vals.integer = actv;
-      }
-    }
 
     /* count the GeomIns and GeomOuts */
     for (ngIn = ngOut = i = 0; i < npmtr; i++) {
@@ -5658,6 +5529,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
         value[i].lfixed          = value[i].sfixed = Fixed;
         value[i].nullVal         = NotAllowed;
         value[i].units           = NULL;
+        value[i].meshWriter      = NULL;
         value[i].link            = NULL;
         value[i].vals.reals      = NULL;
         value[i].limits.dlims[0] = value[i].limits.dlims[1] = 0.0;
@@ -5672,8 +5544,8 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
         if (type == OCSM_CFGPMTR) value[i].gInType = 1;
         if (type == OCSM_CONPMTR) value[i].gInType = 2;
         value[i].partial         = NULL;
-        value[i].ndot            = 0;
-        value[i].dots            = NULL;
+        value[i].nderiv            = 0;
+        value[i].derivs            = NULL;
 
         status = caps_makeObject(&objs);
         if (status != CAPS_SUCCESS) {
@@ -5760,14 +5632,15 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
         value[i].lfixed          = value[i].sfixed = Change;
         value[i].nullVal         = IsNull;
         value[i].units           = NULL;
+        value[i].meshWriter      = NULL;
         value[i].link            = NULL;
         value[i].vals.reals      = NULL;
         value[i].limits.dlims[0] = value[i].limits.dlims[1] = 0.0;
         value[i].linkMethod      = Copy;
         value[i].gInType         = 0;
         value[i].partial         = NULL;
-        value[i].ndot            = 0;
-        value[i].dots            = NULL;
+        value[i].nderiv            = 0;
+        value[i].derivs            = NULL;
         caps_geomOutUnits(name, units, &value[i].units);
 
         status = caps_makeObject(&objs);
@@ -5882,14 +5755,15 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
           value[i].lfixed           = value[i].sfixed = Fixed;
           value[i].nullVal          = NotAllowed;
           value[i].units            = NULL;
+          value[i].meshWriter       = NULL;
           value[i].link             = NULL;
           value[i].vals.reals       = NULL;
           value[i].limits.dlims[0]  = value[i].limits.dlims[1] = 0.0;
           value[i].linkMethod       = Copy;
           value[i].gInType          = (strncmp(aname, "_cfgpmtr_", 9) == 0) ? 1 : 0;
           value[i].partial          = NULL;
-          value[i].ndot             = 0;
-          value[i].dots             = NULL;
+          value[i].nderiv             = 0;
+          value[i].derivs             = NULL;
           value[i].length           = len;
           if (len > 1) value[i].dim = Vector;
 
@@ -5959,14 +5833,15 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
           value[i].lfixed           = value[i].sfixed = Fixed;
           value[i].nullVal          = NotAllowed;
           value[i].units            = NULL;
+          value[i].meshWriter       = NULL;
           value[i].link             = NULL;
           value[i].vals.reals       = NULL;
           value[i].limits.dlims[0]  = value[i].limits.dlims[1] = 0.0;
           value[i].linkMethod       = Copy;
           value[i].gInType          = 0;
           value[i].partial          = NULL;
-          value[i].ndot             = 0;
-          value[i].dots             = NULL;
+          value[i].nderiv             = 0;
+          value[i].derivs             = NULL;
           value[i].length           = len;
           if (len > 1) value[i].dim = Vector;
 
@@ -6058,8 +5933,22 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
     }
     fprintf(fp, "%d %d\n", CAPSMAJOR, CAPSMINOR);
     env = getenv("ESP_ARCH");
+    if (env == NULL) {
+      snprintf(temp, PATH_MAX, "ESP_ARCH env variable is not set! (caps_open)");
+      caps_makeSimpleErr(NULL, CERROR, temp, NULL, NULL, errors);
+      if (*errors != NULL) *nErr = (*errors)->nError;
+      caps_close(object, 0, NULL);
+      return CAPS_JOURNALERR;
+    }
     fprintf(fp, "%s\n", env);
     env = getenv("CASREV");
+    if (env == NULL) {
+      snprintf(temp, PATH_MAX, "CASREV env variable is not set! (caps_open)");
+      caps_makeSimpleErr(NULL, CERROR, temp, NULL, NULL, errors);
+      if (*errors != NULL) *nErr = (*errors)->nError;
+      caps_close(object, 0, NULL);
+      return CAPS_JOURNALERR;
+    }
     fprintf(fp, "%s\n", env);
     fclose(fp);
 #ifdef WIN32
@@ -6130,8 +6019,9 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
         if (aobject  == NULL) continue;
         analysis = (capsAnalysis *) aobject->blind;
         if (analysis == NULL) continue;
+        if (analysis->pre.sNum == 0)   continue;
         if (aobject->last.sNum > sNum) continue;
-        if (aobject->last.sNum <= ret)  continue;
+        if (aobject->last.sNum <= ret) continue;
         n    = i;
         sNum = aobject->last.sNum;
       }
@@ -6155,8 +6045,8 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
       }
       for (i = 0; i < analysis->nAnalysisOut; i++) {
         value = analysis->analysisOut[i]->blind;
-        if (value == NULL) continue;
-        if (value->type != Pointer) continue;
+        if  (value == NULL) continue;
+        if ((value->type != Pointer) && (value->type != PointerMesh)) continue;
         status = aim_CalcOutput(problem->aimFPTR, analysis->loadName,
                               analysis->instStore, &analysis->info, i+1, value);
         if (status != CAPS_SUCCESS)
@@ -6320,11 +6210,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
       caps_close(object, 0, NULL);
       return CAPS_DIRERR;
     }
-    fprintf(fp, "%d %d %d\n",
-            problem->nBranch, problem->nGeomIn, problem->nGeomOut);
-    if (problem->branchs != NULL)
-      for (i = 0; i < problem->nBranch; i++)
-        fprintf(fp, "%s\n", problem->branchs[i]->name);
+    fprintf(fp, "%d %d\n", problem->nGeomIn, problem->nGeomOut);
     if (problem->geomIn != NULL)
       for (i = 0; i < problem->nGeomIn; i++)
         fprintf(fp, "%s\n", problem->geomIn[i]->name);
@@ -6370,8 +6256,22 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
   }
   fprintf(fp, "%d %d\n", CAPSMAJOR, CAPSMINOR);
   env = getenv("ESP_ARCH");
+  if (env == NULL) {
+    snprintf(temp, PATH_MAX, "ESP_ARCH env variable is not set! (caps_open)");
+    caps_makeSimpleErr(NULL, CERROR, temp, NULL, NULL, errors);
+    if (*errors != NULL) *nErr = (*errors)->nError;
+    caps_close(object, 0, NULL);
+    return CAPS_JOURNALERR;
+  }
   fprintf(fp, "%s\n", env);
   env = getenv("CASREV");
+  if (env == NULL) {
+    snprintf(temp, PATH_MAX, "CASREV env variable is not set! (caps_open)");
+    caps_makeSimpleErr(NULL, CERROR, temp, NULL, NULL, errors);
+    if (*errors != NULL) *nErr = (*errors)->nError;
+    caps_close(object, 0, NULL);
+    return CAPS_JOURNALERR;
+  }
   fprintf(fp, "%s\n", env);
   fclose(fp);
 #ifdef WIN32
@@ -6429,18 +6329,17 @@ owrterr:
 int
 caps_build(capsObject *pobject, int *nErr, capsErrs **errors)
 {
-  int              i, j, k, m, n, stat, status, gstatus, state, npts;
-  int              type, nrow, ncol, buildTo, builtTo, nbody, ibody;
-  char             name[MAX_NAME_LEN], error[129], vstr[MAX_STRVAL_LEN], *units;
-  double           dot, *values;
-  enum capstMethod method;
-  ego              body;
-  modl_T           *MODL;
-  capsValue        *value;
-  capsProblem      *problem;
-  capsAnalysis     *analy;
-  capsObject       *source, *object, *last;
-  capsErrs         *errs;
+  int          i, j, k, m, n, stat, status, gstatus, state, npts;
+  int          type, nrow, ncol, buildTo, builtTo, nbody, ibody;
+  char         name[MAX_NAME_LEN], error[129], vstr[MAX_STRVAL_LEN], *units;
+  double       dot, *values;
+  ego          body;
+  modl_T       *MODL;
+  capsValue    *value;
+  capsProblem  *problem;
+  capsAnalysis *analy;
+  capsObject   *source, *object, *last;
+  capsErrs     *errs;
 
   *nErr    = 0;
   *errors  = NULL;
@@ -6450,54 +6349,14 @@ caps_build(capsObject *pobject, int *nErr, capsErrs **errors)
   if (pobject->blind       == NULL)      return CAPS_NULLBLIND;
   problem  = (capsProblem *)  pobject->blind;
 
+  /* nothing to do for static geometry */
+  if (pobject->subtype == STATIC)        return CAPS_CLEAN;
+
   /* do we need new geometry? */
+  /* check for dirty geometry inputs */
   gstatus = 0;
-  if (pobject->subtype == PARAMETRIC) {
-    /* check for dirty geometry inputs */
-    for (i = 0; i < problem->nGeomIn; i++) {
-      source = object = problem->geomIn[i];
-      do {
-        if (source->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
-        if (source->type        != VALUE)     return CAPS_BADTYPE;
-        if (source->blind       == NULL)      return CAPS_NULLBLIND;
-        value = (capsValue *) source->blind;
-        if (value->link == object)            return CAPS_CIRCULARLINK;
-        last   = source;
-        source = value->link;
-      } while (value->link != NULL);
-      if (last->last.sNum > problem->geometry.sNum) {
-        gstatus = 1;
-        break;
-      }
-    }
-    /* check for dirty branchs */
-    for (i = 0; i < problem->nBranch; i++) {
-      source = object = problem->branchs[i];
-      do {
-        if (source->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
-        if (source->type        != VALUE)     return CAPS_BADTYPE;
-        if (source->blind       == NULL)      return CAPS_NULLBLIND;
-        value = (capsValue *) source->blind;
-        if (value->link == object)            return CAPS_CIRCULARLINK;
-        last   = source;
-        source = value->link;
-      } while (value->link != NULL);
-      if (last->last.sNum > problem->geometry.sNum) {
-        gstatus = 1;
-        break;
-      }
-    }
-  }
-  if (gstatus == 0) return CAPS_CLEAN;
-
-  /* generate new geometry */
-  MODL           = (modl_T *) problem->modl;
-  MODL->context  = problem->context;
-  MODL->userdata = problem;
-
-  /* update the dirty values in OpenCSM -- Geometry In already updated */
-  for (i = 0; i < problem->nBranch; i++) {
-    source = object = problem->branchs[i];
+  for (i = 0; i < problem->nGeomIn; i++) {
+    source = object = problem->geomIn[i];
     do {
       if (source->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
       if (source->type        != VALUE)     return CAPS_BADTYPE;
@@ -6507,40 +6366,19 @@ caps_build(capsObject *pobject, int *nErr, capsErrs **errors)
       last   = source;
       source = value->link;
     } while (value->link != NULL);
-    if (last != object) {
-      value  = (capsValue *) object->blind;
-      source = value->link;
-      method = value->linkMethod;
-      status = caps_transferValueX(last, method, object, nErr, errors);
-      value->link       = source;
-      value->linkMethod = method;
-      if (status != CAPS_SUCCESS) return status;
-      caps_freeOwner(&object->last);
-      object->last       = last->last;
-      object->last.pname = EG_strdup(last->last.pname);
-      object->last.pID   = EG_strdup(last->last.pID);
-      object->last.user  = EG_strdup(last->last.user);
-    }
-    if (object->last.sNum > problem->geometry.sNum) {
-      value = (capsValue *) object->blind;
-      if (value         == NULL)    return CAPS_NULLVALUE;
-      if (value->type   != Integer) return CAPS_BADTYPE;
-      if (value->length != 1)       return CAPS_BADVALUE;
-      status = ocsmSetBrch(problem->modl, i+1, value->vals.integer);
-      if ((status != SUCCESS) && (status != OCSM_CANNOT_BE_SUPPRESSED)) {
-        snprintf(error, 129, "Cannot change %d Branch %s to %d!",
-                 i+1, object->name, value->vals.integer);
-        caps_makeSimpleErr(object, CERROR,
-                           "caps_build Error: ocsmSetBrch fails!",
-                           error, NULL, errors);
-        if (*errors != NULL) {
-          errs  = *errors;
-          *nErr = errs->nError;
-        }
-        return status;
-      }
+    if (last->last.sNum > problem->geometry.sNum) {
+      gstatus = 1;
+      break;
     }
   }
+  if ((gstatus == 0) && (problem->geometry.sNum > 0)) return CAPS_CLEAN;
+
+  /* generate new geometry */
+  MODL           = (modl_T *) problem->modl;
+  MODL->context  = problem->context;
+  MODL->userdata = problem;
+
+  /* Note: Geometry In already updated */
 
   /* have OpenCSM do the rebuild */
   if (problem->bodies != NULL) {
@@ -6573,6 +6411,10 @@ caps_build(capsObject *pobject, int *nErr, capsErrs **errors)
         analy->bodies = NULL;
         analy->nBody  = 0;
       }
+      /* remove tracked sensitivity calculations */
+      analy->info.pIndex = 0;
+      analy->info.irow   = 0;
+      analy->info.icol   = 0;
     }
     EG_free(problem->bodies);
     EG_free(problem->lunits);
@@ -6653,15 +6495,15 @@ caps_build(capsObject *pobject, int *nErr, capsErrs **errors)
     if (problem->geomOut[i]->type        != VALUE)     continue;
     if (problem->geomOut[i]->blind       == NULL)      continue;
     value = (capsValue *) problem->geomOut[i]->blind;
-    if (value->dots != NULL) {
+    if (value->derivs != NULL) {
       /* clear all dots */
-      for (j = 0; j < value->ndot; j++) {
-        if (value->dots[j].name != NULL) EG_free(value->dots[j].name);
-        if (value->dots[j].dot  != NULL) EG_free(value->dots[j].dot);
+      for (j = 0; j < value->nderiv; j++) {
+        if (value->derivs[j].name != NULL) EG_free(value->derivs[j].name);
+        if (value->derivs[j].deriv  != NULL) EG_free(value->derivs[j].deriv);
       }
-      EG_free(value->dots);
-      value->dots = NULL;
-      value->ndot = 0;
+      EG_free(value->derivs);
+      value->derivs = NULL;
+      value->nderiv = 0;
     }
     if (value->type == String) {
       EG_free(value->vals.string);

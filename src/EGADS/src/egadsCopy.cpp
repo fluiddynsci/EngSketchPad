@@ -904,11 +904,20 @@ EG_flipAttrTopo(egadsBody *pbody, egadsBody *tbody, const egObject *src,
 
   } else if (dst->oclass == LOOP) {
   
-    int      *senses = NULL, closed = 0, ne = 0;
-    egObject **edgeo = NULL;
-    egadsLoop *ploop = (egadsLoop *) dst->blind;
-    TopoDS_Wire Wire = ploop->loop;
+    TopoDS_Vertex V1, V2;
+    int           *senses = NULL, closed = 0, ne = 0;
+    egObject      **edgeo = NULL;
+    egadsLoop     *ploop = (egadsLoop *) dst->blind;
+    TopoDS_Wire   Wire = ploop->loop;
     if (Wire.Closed()) closed = 1;
+    // more reliable for checking closure of Wires
+    TopExp::Vertices(Wire, V1, V2);
+    if (!V1.IsNull() && !V2.IsNull())
+      if (V1.IsSame(V2)) {
+        closed = 1;
+      } else {
+        closed = 0;
+      }
     if ((ploop->surface == NULL) && (dst == topObj)) {
       egadsLoop *sloop = (egadsLoop *) src->blind;
       if (sloop->surface != NULL) {
@@ -982,7 +991,8 @@ EG_flipAttrTopo(egadsBody *pbody, egadsBody *tbody, const egObject *src,
           pedge = (egadsEdge *) obj->blind;
           // reversed -- pick up correct periodic Edge
           if (( Edge.IsSame( pedge->edge)) && 
-              (!Edge.IsEqual(pedge->edge))) {
+              //(!Edge.IsEqual(pedge->edge))) { // Edge Orientation may be inconsistent with senses when the Loop is created with EG_makeTopology
+              (senses[k] != sloop->senses[j])) {
             index = j;
             break;
           }
@@ -1128,28 +1138,21 @@ int
 EG_flipTopology(const egObject *topo, egObject **copy)
 {
   int             i, nent, outLevel;
-  egObject        *context, *obj, *geom;
+  egObject        *context, *obj;
   egadsBody       ebody, tbody;
   TopoDS_Shape    shape, nTopo;
-  egadsEdge       *pedges = NULL;
   TopExp_Explorer Exp;
   
   if  (topo == NULL)               return EGADS_NULLOBJ;
   if  (topo->magicnumber != MAGIC) return EGADS_NOTOBJ;
-  if ((topo->oclass < EDGE) || (topo->oclass > SHELL))
+  if ((topo->oclass < LOOP) || (topo->oclass > SHELL))
                                    return EGADS_NOTTOPO;
   if  (topo->blind == NULL)        return EGADS_NODATA;
-  if (EG_sameThread(topo))         return EGADS_CNTXTHRD;
+  if  (EG_sameThread(topo))        return EGADS_CNTXTHRD;
   context  = EG_context(topo);
   outLevel = EG_outLevel(topo);
 
-  if (topo->oclass == EDGE) {
-
-    if (topo->mtype == DEGENERATE) return EGADS_DEGEN;
-    pedges = (egadsEdge *) topo->blind;
-    shape  = pedges->edge;
-    
-  } else if (topo->oclass == LOOP) {
+  if (topo->oclass == LOOP) {
   
     egadsLoop *ploop = (egadsLoop *) topo->blind;
     shape = ploop->loop;
@@ -1168,18 +1171,7 @@ EG_flipTopology(const egObject *topo, egObject **copy)
 
   // got the OCC topology -- now copy and flip
   nTopo = shape.Reversed();
-  if (topo->oclass == EDGE) {
-    double t1, t2;
-    int stat = EG_makeObject(context, &geom);
-    if (stat != EGADS_SUCCESS) {
-      if (outLevel > 0)
-        printf(" EGADS Error: Cannot make Geom object (EG_flipTopology)!\n");
-      return stat;
-    }
-    TopoDS_Edge Edge = TopoDS::Edge(nTopo);
-    Handle(Geom_Curve) hCurve = BRep_Tool::Curve(Edge, t1, t2);
-    EG_completeCurve(geom, hCurve);
-  }
+
   // got the new shape -- parse and fill
   int stat = EG_makeObject(context, &obj);
   if (stat != EGADS_SUCCESS) {
@@ -1190,28 +1182,7 @@ EG_flipTopology(const egObject *topo, egObject **copy)
   
   // allocate our Maps for attribute retrieval and minimal copy
   
-  if (topo->oclass == EDGE) {
-
-    egadsEdge *pedge   = new egadsEdge;
-    TopoDS_Edge Edge   = TopoDS::Edge(nTopo);
-    pedge->edge        = Edge;
-    pedge->curve       = geom;
-    pedge->nodes[0]    = pedges->nodes[1];
-    pedge->nodes[1]    = pedges->nodes[0];
-    pedge->topFlg      = 0;
-    pedge->bbox.filled = 0;
-    BRep_Tool::Range(Edge, pedge->trange[0], pedge->trange[1]);
-    pedge->filled      = 0;
-    pedge->trange_dot[0] = pedge->trange_dot[1] = 0;
-    obj->oclass        = EDGE;
-    obj->blind         = pedge;
-    obj->mtype         = topo->mtype;
-    EG_referenceObject(geom,            obj);
-    EG_referenceObject(pedge->nodes[0], obj);
-    EG_referenceObject(pedge->nodes[1], obj);
-    EG_attributeDup(topo, obj);
-
-  } else if (topo->oclass == LOOP) {
+  if (topo->oclass == LOOP) {
   
     TopExp::MapShapes(shape, TopAbs_VERTEX, tbody.nodes.map);
     nent = tbody.nodes.map.Extent();
@@ -1284,8 +1255,8 @@ EG_flipTopology(const egObject *topo, egObject **copy)
     pface->bbox.filled = 0;
     BRepTools::UVBounds(Face, pface->urange[0], pface->urange[1],
                               pface->vrange[0], pface->vrange[1]);
-    obj->blind       = pface;
-    obj->oclass      = FACE;
+    obj->blind         = pface;
+    obj->oclass        = FACE;
     EG_flipAttrTopo(&ebody, &tbody, topo, obj, obj);
     EG_attributeDup(topo, obj);
   
@@ -1361,7 +1332,6 @@ EG_flipTopology(const egObject *topo, egObject **copy)
 }
 
 
-#ifndef BBOX
 static void
 EG_edgeBBox(TopoDS_Edge edge, double *ebx)
 {
@@ -1398,7 +1368,6 @@ EG_edgeBBox(TopoDS_Edge edge, double *ebx)
     if (xyz.Z() > ebx[5]) ebx[5] = xyz.Z();
   }
 }
-#endif
 
 
 int

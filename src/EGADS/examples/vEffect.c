@@ -541,7 +541,7 @@ int main(int argc, char *argv[])
   ego          quads;
 #endif
 #ifdef SAVEMODEL
-  ego          save[2];
+  ego          save[3];
 #endif
   wvData       items[5];
   float        eye[3]      = {0.0, 0.0, 7.0};
@@ -1053,12 +1053,12 @@ int main(int argc, char *argv[])
 
   /* finish up */
   EG_free(nodes);
-  EG_deleteObject(tess);
   
 #ifdef SAVEMODEL
   save[0] = body;
   save[1] = ebody;
-  stat = EG_makeTopology(context, NULL, MODEL, 2, NULL, 1, save, NULL, &model);
+  save[2] = tess;
+  stat = EG_makeTopology(context, NULL, MODEL, 3, NULL, 1, save, NULL, &model);
   if (stat != EGADS_SUCCESS) {
     printf(" EG_makeTopology on Model = %d\n", stat);
     EG_deleteObject(ebody);
@@ -1072,7 +1072,8 @@ int main(int argc, char *argv[])
   EG_deleteObject(model);
 
 #else
-  
+
+  EG_deleteObject(tess);
 #ifndef NOEFFECT
   EG_deleteObject(ebody);
 #endif

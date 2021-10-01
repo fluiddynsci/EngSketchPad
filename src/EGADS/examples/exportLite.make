@@ -16,8 +16,8 @@ $(TDIR)/exportLite:	$(ODIR)/exportLite.o $(LDIR)/$(SHLIB)
 
 $(ODIR)/exportLite.o:	../src/egadsExport.c $(IDIR)/egads.h \
 		$(IDIR)/egadsTypes.h $(IDIR)/egadsErrors.h 
-	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) ../src/egadsExport.c \
-		-o $(ODIR)/exportLite.o -DSTANDALONE
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../util/uvmap \
+		../src/egadsExport.c -o $(ODIR)/exportLite.o -DSTANDALONE
 
 clean:
 	-rm $(ODIR)/exportLite.o

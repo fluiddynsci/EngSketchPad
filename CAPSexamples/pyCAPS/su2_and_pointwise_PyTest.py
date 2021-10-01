@@ -5,6 +5,7 @@ import pyCAPS
 import os
 import argparse
 import platform
+import time
 
 # Import SU2 Python interface module
 from parallel_computation import parallel_computation as su2Run
@@ -17,7 +18,7 @@ parser = argparse.ArgumentParser(description = 'SU2 and Pointwise Pytest Example
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 workDir = os.path.join(str(args.workDir[0]), "SU2PointwiseAnalysisTest")
@@ -28,7 +29,7 @@ projectName = "pyCAPS_SU2_Pointwise"
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load pointwise aim
 pointwise = myProblem.analysis.create(aim = "pointwiseAIM",
@@ -47,11 +48,16 @@ currentDir = os.getcwd()
 os.chdir(pointwise.analysisDir)
 
 CAPS_GLYPH = os.environ["CAPS_GLYPH"]
-if platform.system() == "Windows":
-    PW_HOME = os.environ["PW_HOME"]
-    os.system(PW_HOME + "\\win64\\bin\\tclsh.exe " + CAPS_GLYPH + "\\GeomToMesh.glf caps.egads capsUserDefaults.glf")
-else:
-    os.system("pointwise -b " + CAPS_GLYPH + "/GeomToMesh.glf caps.egads capsUserDefaults.glf")
+for i in range(30):
+    if platform.system() == "Windows":
+        PW_HOME = os.environ["PW_HOME"]
+        os.system(PW_HOME + "\\win64\\bin\\tclsh.exe " + CAPS_GLYPH + "\\GeomToMesh.glf caps.egads capsUserDefaults.glf")
+    else:
+        os.system("pointwise -b " + CAPS_GLYPH + "/GeomToMesh.glf caps.egads capsUserDefaults.glf")
+
+    time.sleep(1) # let the harddrive breathe
+    if os.path.isfile('caps.GeomToMesh.gma') and os.path.isfile('caps.GeomToMesh.ugrid'): break
+    time.sleep(10) # wait and try again
 
 os.chdir(currentDir)
 ##########################################

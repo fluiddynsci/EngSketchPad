@@ -52,7 +52,7 @@ class TestAFLR4(unittest.TestCase):
         myAnalysis.input.Mesh_Length_Factor = -1
 
         with self.assertRaises(pyCAPS.CAPSError) as e:
-            myAnalysis.preAnalysis()
+            myAnalysis.runAnalysis()
 
         self.assertEqual(e.exception.errorName, "CAPS_BADVALUE")
 
@@ -89,9 +89,8 @@ class TestAFLR4(unittest.TestCase):
         myAnalysis.input.Mesh_Quiet_Flag = True
 
         # Run
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
-        
+        myAnalysis.runAnalysis()
+
         # Assert AnalysisOutVals
         self.assertTrue(myAnalysis.output.Done)
 
@@ -110,8 +109,7 @@ class TestAFLR4(unittest.TestCase):
         myAnalysis.input.Mesh_Quiet_Flag = True
 
         # Run
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
+        myAnalysis.runAnalysis()
 
     def test_reenter(self):
 
@@ -125,22 +123,20 @@ class TestAFLR4(unittest.TestCase):
         myAnalysis.input.Mesh_Length_Factor = 1
 
         # Run 1st time
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
+        myAnalysis.runAnalysis()
 
         myAnalysis.input.Mesh_Length_Factor = 2
 
         # Run 2nd time coarser
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
+        myAnalysis.runAnalysis()
 
 
     def test_box(self):
 
         # Load aflr4 aim
         aflr4 = self.myProblem.analysis.create(aim = "aflr4AIM",
-                                           name = "Box",
-                                           capsIntent = ["box", "farfield"])
+                                               name = "Box",
+                                               capsIntent = ["box", "farfield"])
 
         aflr4.input.Mesh_Quiet_Flag = True
 
@@ -149,15 +145,14 @@ class TestAFLR4(unittest.TestCase):
         aflr4.input.ff_cdfr   = 1.4
 
         # Just make sure it runs without errors...
-        aflr4.preAnalysis()
-        aflr4.postAnalysis()
+        aflr4.runAnalysis()
 
     def test_cylinder(self):
 
         # Load aflr4 aim
         aflr4 = self.myProblem.analysis.create(aim = "aflr4AIM",
-                                           name = "Cylinder",
-                                           capsIntent = ["cylinder", "farfield"])
+                                               name = "Cylinder",
+                                               capsIntent = ["cylinder", "farfield"])
 
         aflr4.input.Mesh_Quiet_Flag = True
 
@@ -166,15 +161,14 @@ class TestAFLR4(unittest.TestCase):
         aflr4.input.ff_cdfr   = 1.4
 
         # Just make sure it runs without errors...
-        aflr4.preAnalysis()
-        aflr4.postAnalysis()
+        aflr4.runAnalysis()
 
     def test_cone(self):
 
         # Load aflr4 aim
         aflr4 = self.myProblem.analysis.create(aim = "aflr4AIM",
-                                           name = "Cone",
-                                           capsIntent = ["cone", "farfield"])
+                                               name = "Cone",
+                                               capsIntent = ["cone", "farfield"])
 
         aflr4.input.Mesh_Quiet_Flag = True
 
@@ -183,15 +177,14 @@ class TestAFLR4(unittest.TestCase):
         aflr4.input.ff_cdfr   = 1.4
 
         # Just make sure it runs without errors...
-        aflr4.preAnalysis()
-        aflr4.postAnalysis()
+        aflr4.runAnalysis()
 
     def test_torus(self):
 
         # Load aflr4 aim
         aflr4 = self.myProblem.analysis.create(aim = "aflr4AIM",
-                                           name = "Torus",
-                                           capsIntent = ["torus", "farfield"])
+                                               name = "Torus",
+                                               capsIntent = ["torus", "farfield"])
 
         aflr4.input.Mesh_Quiet_Flag = True
 
@@ -200,17 +193,16 @@ class TestAFLR4(unittest.TestCase):
         aflr4.input.ff_cdfr   = 1.4
 
         # Just make sure it runs without errors...
-        aflr4.preAnalysis()
-        aflr4.postAnalysis()
+        aflr4.runAnalysis()
 
-        #aflr4.viewGeometry()
+        #aflr4.geometry.view()
 
     def test_sphere(self):
 
         # Load aflr4 aim
         aflr4 = self.myProblem.analysis.create(aim = "aflr4AIM",
-                                           name = "Sphere",
-                                           capsIntent = ["sphere", "farfield"])
+                                               name = "Sphere",
+                                               capsIntent = ["sphere", "farfield"])
 
         aflr4.input.Mesh_Quiet_Flag = True
 
@@ -219,17 +211,16 @@ class TestAFLR4(unittest.TestCase):
         aflr4.input.ff_cdfr   = 1.4
 
         # Just make sure it runs without errors...
-        aflr4.preAnalysis()
-        aflr4.postAnalysis()
+        aflr4.runAnalysis()
 
-        #aflr4.viewGeometry()
+        #aflr4.geometry.view()
 
     def off_test_boxhole(self):
 
         # Load aflr4 aim
         aflr4 = self.myProblem.analysis.create(aim = "aflr4AIM",
-                                           name = "BoxHole",
-                                           capsIntent = ["boxhole", "farfield"])
+                                               name = "BoxHole",
+                                               capsIntent = ["boxhole", "farfield"])
 
         aflr4.input.Mesh_Quiet_Flag = True
 
@@ -238,17 +229,16 @@ class TestAFLR4(unittest.TestCase):
         aflr4.input.ff_cdfr   = 1.4
 
         # Just make sure it runs without errors...
-        aflr4.preAnalysis()
-        aflr4.postAnalysis()
+        aflr4.runAnalysis()
 
-        #aflr4.viewGeometry()
+        #aflr4.geometry.view()
 
     def test_bullet(self):
 
         # Load aflr4 aim
         aflr4 = self.myProblem.analysis.create(aim = "aflr4AIM",
-                                           name = "Bullet",
-                                           capsIntent = ["bullet", "farfield"])
+                                               name = "Bullet",
+                                               capsIntent = ["bullet", "farfield"])
 
         aflr4.input.Mesh_Quiet_Flag = True
 
@@ -257,17 +247,16 @@ class TestAFLR4(unittest.TestCase):
         aflr4.input.ff_cdfr   = 1.4
 
         # Just make sure it runs without errors...
-        aflr4.preAnalysis()
-        aflr4.postAnalysis()
+        aflr4.runAnalysis()
 
-        #aflr4.viewGeometry()
+        #aflr4.geometry.view()
 
     def test_all(self):
 
         # Load aflr4 aim
         aflr4 = self.myProblem.analysis.create(aim = "aflr4AIM",
-                                           name = "All",
-                                           capsIntent = ["box", "cylinder", "cone", "torus", "sphere", "farfield"]) #, "boxhole"
+                                               name = "All",
+                                               capsIntent = ["box", "cylinder", "cone", "torus", "sphere", "farfield"]) #, "boxhole"])
 
         aflr4.input.Mesh_Quiet_Flag = True
 
@@ -276,10 +265,9 @@ class TestAFLR4(unittest.TestCase):
         aflr4.input.ff_cdfr   = 1.4
 
         # Just make sure it runs without errors...
-        aflr4.preAnalysis()
-        aflr4.postAnalysis()
+        aflr4.runAnalysis()
 
-        #aflr4.viewGeometry()
+        #aflr4.geometry.view()
 
 
 if __name__ == '__main__':

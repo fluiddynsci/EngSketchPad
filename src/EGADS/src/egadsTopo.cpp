@@ -23,6 +23,12 @@
 //#define OCC_MAKEFACE
 
 #define UVTOL    1.e-4
+#define MAX(a,b)      ((a) > (b) ? (a) : (b))
+
+/* number of t-values to check Edge Curve-to-PCurve tolerance
+ * taken from BrepCheck_Edge.cxx and mimicking Validate function in that file
+ */
+static const Standard_Integer NCONTROL=23;
 
 /* structures */
 
@@ -34,7 +40,7 @@
     double CG[4];               /* Center of Gravity, then Length */
   } edgeID;
 
-
+  extern "C" int  EG_flipObject(const egObject *object, egObject **copy);
   extern "C" int  EG_destroyTopology( egObject *topo );
   extern "C" int  EG_copyObject( const egObject *object, /*@null@*/ void *ptr,
                                        egObject **copy );
@@ -168,6 +174,10 @@
                                        /*@null@*/ const double *xform_dot,
                                        egObject *copy );
   extern "C" int  EG_hasGeometry_dot( const egObject *obj );
+             int  EG_getGeometry_dot( const egObject *obj, SurrealS<1> **data_dot );
+             int  EG_makeGeometry(egObject *context, int oclass, int mtype,
+                                  egObject *refGeom, const int *ints,
+                                  const SurrealS<1> *data_dot, egObject **geom);
   extern     int  EG_attriBodyDup( const egObject *src, egObject *dst );
   extern     void EG_attriBodyTrav(const egObject *obj, const TopoDS_Shape& shape,
                                    egadsBody *pbody);
@@ -211,6 +221,8 @@
                                       /*@null@*/ const int *ivec,
                                       const double *rvec,
                                       const double *rvec_dot );
+
+  static int EG_orientWire(int nChildren, int iChild, egObject *loop, int mtype, egObject *surface, TopoDS_Wire &wire, int &itry, TopoDS_Face &Face);
 
 
 static void
@@ -258,21 +270,21 @@ EG_printStatus(BRepCheck_Status cStatus)
   } else if (cStatus == BRepCheck_InvalidRange) {
     printf(" EGADS Fault: Invalid Range\n");
   } else if (cStatus == BRepCheck_EmptyWire) {
-    printf(" EGADS Fault: Empty Wire\n");
+    printf(" EGADS Fault: Empty Loop\n");
   } else if (cStatus == BRepCheck_RedundantEdge) {
     printf(" EGADS Fault: Redundant Edge\n");
   } else if (cStatus == BRepCheck_SelfIntersectingWire) {
-    printf(" EGADS Fault: Self Intersecting Wire\n");
+    printf(" EGADS Fault: Self Intersecting Loop\n");
   } else if (cStatus == BRepCheck_NoSurface) {
     printf(" EGADS Fault: No Surface\n");
   } else if (cStatus == BRepCheck_InvalidWire) {
-    printf(" EGADS Fault: Invalid Wire\n");
+    printf(" EGADS Fault: Invalid Loop\n");
   } else if (cStatus == BRepCheck_RedundantWire) {
-    printf(" EGADS Fault: Redundant Wire\n");
+    printf(" EGADS Fault: Redundant Loop\n");
   } else if (cStatus == BRepCheck_IntersectingWires) {
-    printf(" EGADS Fault: Intersecting Wires\n");
+    printf(" EGADS Fault: Intersecting Loops\n");
   } else if (cStatus == BRepCheck_InvalidImbricationOfWires) {
-    printf(" EGADS Fault: Invalid Imbrication Of Wires\n");
+    printf(" EGADS Fault: Invalid Imbrication Of Loops\n");
   } else if (cStatus == BRepCheck_EmptyShell) {
     printf(" EGADS Fault: Empty Shell\n");
   } else if (cStatus == BRepCheck_RedundantFace) {
@@ -1273,11 +1285,11 @@ EG_traverseBody(egObject *context, int i, egObject *bobj,
         hCurve = new Geom_Line(A); /* dummy curve for indexing into the map */
       } else {
         hCurve = BRep_Tool::Curve(Edge, t1, t2);
+#ifndef __clang_analyzer__
+        curves_map.Add(hCurve);
+#endif
       }
       curves_vec.Append(hCurve);
-#ifndef __clang_analyzer__
-      curves_map.Add(hCurve);
-#endif
     }
     int nCurv = curves_map.Extent();
 
@@ -1378,16 +1390,13 @@ EG_traverseBody(egObject *context, int i, egObject *bobj,
     egadsEdge *pedge = new egadsEdge;
     obj              = body->edges.objs[j];
     shape            = body->edges.map(j+1);
-    geom             = curves_obj[curves_map.FindIndex(curves_vec(j))-1];
+    geom             = NULL;
     TopoDS_Edge Edge = TopoDS::Edge(shape);
-    if (geom->oclass == NIL) {
-      geom->topObj = topObj;
-      if (BRep_Tool::Degenerated(Edge)) {
-        degen        = 1;
-        geom->oclass = CURVE;
-        geom->mtype  = DEGENERATE;
-        geom->blind  = NULL;
-      } else {
+    if (BRep_Tool::Degenerated(Edge)) {
+      degen          = 1;
+    } else {
+      geom           = curves_obj[curves_map.FindIndex(curves_vec(j))-1];
+      if (geom->oclass == NIL) {
         BRep_Tool::Range(Edge, t1, t2); /* get parameters */
         Handle(Geom_Curve) hCurve = curves_vec(j);
         EG_completeCurve(geom, hCurve);
@@ -1848,6 +1857,7 @@ EG_tolerance(const egObject *topo, double *tol)
 int
 EG_getTolerance(const egObject *topo, double *tol)
 {
+  if  (tol == NULL)                return EGADS_NODATA;
   *tol = 0.0;
   if  (topo == NULL)               return EGADS_NULLOBJ;
   if  (topo->magicnumber != MAGIC) return EGADS_NOTOBJ;
@@ -2212,10 +2222,9 @@ EG_getTopology(const egObject *topo, egObject **geom, int *oclass,
 
 
 static void
-EG_makePCurves(TopoDS_Face& face, egObject *surfo, egObject *loopo,
-               Standard_Real prec, int flag)
+EG_makePCurves(TopoDS_Face& face, egObject *surfo, egObject *loopo, int itry = 0)
 {
-  int      i = 0, j, *periodic=NULL;
+  int      i = 0, j, ip, icurv, *periodic=NULL;
   egObject *geom;
 
   egadsLoop *ploop = (egadsLoop *) loopo->blind;
@@ -2248,43 +2257,45 @@ EG_makePCurves(TopoDS_Face& face, egObject *surfo, egObject *loopo,
   BRep_Builder           Builder;
   BRepTools_WireExplorer ExpWE;
   for (i = 0, ExpWE.Init(wire); ExpWE.More(); ExpWE.Next(), i++) {
-    geom                = ploop->edges[ploop->nedges+i];
-    egadsPCurve *ppcurv = (egadsPCurve *) geom->blind;
+
     TopoDS_Shape shape  = ExpWE.Current();
     TopoDS_Edge  edge   = TopoDS::Edge(shape);
-    if (ppcurv == NULL) continue;
-    Handle(Geom2d_Curve) hCurv2d = ppcurv->handle;
 
-    if ((flag == 0) || (outLevel > 2)) {
-      TopoDS_Vertex V1, V2;
-      Standard_Real t, t1, t2, delta, mdelta;
-      gp_Pnt        pnt, pnte, pv1, pv2;
-      gp_Pnt2d      uv;
+    TopoDS_Vertex V1, V2;
+    Standard_Real t, t1, t2, delta, delta1, delta2, mdelta=0;
+    gp_Pnt        pnt, pnte, pv1, pv2;
+    gp_Pnt2d      uv;
 
-      egadsSurface *psurf = (egadsSurface *) surfo->blind;
-      Handle(Geom_Surface) hSurface = psurf->handle;
-      if (edge.Orientation() == TopAbs_REVERSED) {
-        TopExp::Vertices(edge, V2, V1, Standard_True);
-      } else {
-        TopExp::Vertices(edge, V1, V2, Standard_True);
-      }
-      Handle(Geom_Curve) hCurve = BRep_Tool::Curve(edge, t1, t2);
-      pv1 = BRep_Tool::Pnt(V1);
-      pv2 = BRep_Tool::Pnt(V2);
-      if (outLevel > 2)
-        printf(" PCurve #%d: Limits = %lf %lf    prec = %le\n",
-               i, t1, t2, prec);
+    egadsSurface *psurf = (egadsSurface *) surfo->blind;
+    Handle(Geom_Surface) hSurface = psurf->handle;
+    if (edge.Orientation() == TopAbs_REVERSED) {
+      TopExp::Vertices(edge, V2, V1, Standard_True);
+    } else {
+      TopExp::Vertices(edge, V1, V2, Standard_True);
+    }
+    Handle(Geom_Curve) hCurve = BRep_Tool::Curve(edge, t1, t2);
+    pv1 = BRep_Tool::Pnt(V1);
+    pv2 = BRep_Tool::Pnt(V2);
+    Standard_Real prec = 0;
+
+    icurv = i;
+
+    /* check the Curve-to-Surface (via PCurve) distance
+     * on both sides of a possibly periodic Edge */
+    for (ip = 0; ip < 2; ip++) {
+      geom  = ploop->edges[ploop->nedges+icurv];
+      egadsPCurve *ppcurv = (egadsPCurve *) geom->blind;
+      if (ppcurv == NULL) continue;
+      Handle(Geom2d_Curve) hCurv2d = ppcurv->handle;
+
       hCurv2d->D0(t1, uv);
       hSurface->D0(uv.X(), uv.Y(), pnt);
-      mdelta = sqrt((pnt.X()-pv1.X())*(pnt.X()-pv1.X()) +
-                    (pnt.Y()-pv1.Y())*(pnt.Y()-pv1.Y()) +
-                    (pnt.Z()-pv1.Z())*(pnt.Z()-pv1.Z()));
+      delta1 = pnt.Distance(pv1);
       if (outLevel > 2)
         printf("            delta for 1st Node     = %le  %lf %lf %lf\n",
-               mdelta, pv1.X(), pv1.Y(), pv1.Z());
-      delta = 0.0;
-      for (int j = 1; j < 36; j++) {
-        t = t1 + j*(t2-t1)/36.0;
+               delta1, pv1.X(), pv1.Y(), pv1.Z());
+      for (int j = 0; j < NCONTROL; j++) {
+        t = t1 + j*(t2-t1)/(NCONTROL-1);
         hCurv2d->D0(t, uv);
         hSurface->D0(uv.X(), uv.Y(), pnt);
         if (BRep_Tool::Degenerated(edge)) {
@@ -2292,26 +2303,33 @@ EG_makePCurves(TopoDS_Face& face, egObject *surfo, egObject *loopo,
         } else {
           hCurve->D0(t, pnte);
         }
-        delta += sqrt((pnt.X()-pnte.X())*(pnt.X()-pnte.X()) +
-                      (pnt.Y()-pnte.Y())*(pnt.Y()-pnte.Y()) +
-                      (pnt.Z()-pnte.Z())*(pnt.Z()-pnte.Z()));
+        delta = pnt.Distance(pnte);
+        mdelta = MAX(delta, mdelta);
       }
-      delta /= 35;
       if (outLevel > 2)
-        printf("            ave delta against Edge = %le\n", delta);
-      if (delta > mdelta) mdelta = delta;
+        printf("            max delta against Edge = %le\n", mdelta);
       hCurv2d->D0(t2, uv);
       hSurface->D0(uv.X(), uv.Y(), pnt);
-      delta = sqrt((pnt.X()-pv2.X())*(pnt.X()-pv2.X()) +
-                   (pnt.Y()-pv2.Y())*(pnt.Y()-pv2.Y()) +
-                   (pnt.Z()-pv2.Z())*(pnt.Z()-pv2.Z()));
+      delta2 = pnt.Distance(pv2);
       if (outLevel > 2)
         printf("            delta for 2nd Node     = %le  %lf %lf %lf\n",
-               delta, pv2.X(), pv2.Y(), pv2.Z());
-      if (delta > mdelta) mdelta = delta;
-      if ((flag == 0) && (mdelta*1.001 > prec))
-        Builder.SameParameter(edge, Standard_False);
+               delta2, pv2.X(), pv2.Y(), pv2.Z());
+      prec = mdelta*1.001;
+      if (outLevel > 2)
+        printf(" PCurve #%d: Limits = %lf %lf    prec = %le\n",
+               icurv, t1, t2, prec);
+
+      if (periodic != NULL && periodic[i] > 0) {
+        icurv = periodic[i];
+      } else {
+        break;
+      }
     }
+
+    geom  = ploop->edges[ploop->nedges+i];
+    egadsPCurve *ppcurv = (egadsPCurve *) geom->blind;
+    if (ppcurv == NULL) continue;
+    Handle(Geom2d_Curve) hCurv2d = ppcurv->handle;
 
     if (periodic != NULL && periodic[i] < 0) continue; /* periodic edge already processed */
     if (periodic != NULL && periodic[i] > 0) {
@@ -2319,11 +2337,17 @@ EG_makePCurves(TopoDS_Face& face, egObject *surfo, egObject *loopo,
       egadsPCurve *ppcurvR = (egadsPCurve *) geomR->blind;
       Handle(Geom2d_Curve) hCurv2dR = ppcurvR->handle;
 
-      if (edge.Orientation() == face.Orientation())
-        Builder.UpdateEdge(edge, hCurv2d, hCurv2dR, face, prec);
+      if (itry <= 1)
+        if (edge.Orientation() == wire.Orientation())
+          Builder.UpdateEdge(edge, hCurv2d, hCurv2dR, face, prec);
+        else
+          Builder.UpdateEdge(edge, hCurv2dR, hCurv2d, face, prec);
       else
-        Builder.UpdateEdge(edge, hCurv2dR, hCurv2d, face, prec);
-    } else {
+        if (edge.Orientation() == wire.Orientation())
+          Builder.UpdateEdge(edge, hCurv2dR, hCurv2d, face, prec);
+        else
+          Builder.UpdateEdge(edge, hCurv2d, hCurv2dR, face, prec);
+   } else {
       Builder.UpdateEdge(edge, hCurv2d, face, prec);
     }
   }
@@ -2632,13 +2656,13 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
     }
     if ((nChildren != 1) && (nChildren != 2)) {
       if (outLevel > 0)
-        printf(" EGADS Error: Edge with %d Verts (EG_makeTopology)!\n",
+        printf(" EGADS Error: Edge with %d Nodes (EG_makeTopology)!\n",
                nChildren);
       return EGADS_TOPOERR;
     }
     if (children[0] == NULL) {
       if (outLevel > 0)
-        printf(" EGADS Error: Edge with Vert[0] NULL (EG_makeTopology)!\n");
+        printf(" EGADS Error: Edge with Child[0] NULL (EG_makeTopology)!\n");
       return EGADS_NULLOBJ;
     }
     if (children[0]->oclass != NODE) {
@@ -2659,7 +2683,7 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
     if (nChildren == 2) {
       if (children[1] == NULL) {
         if (outLevel > 0)
-          printf(" EGADS Error: Edge with Vert[1] NULL (EG_makeTopology)!\n");
+          printf(" EGADS Error: Edge with Child[1] NULL (EG_makeTopology)!\n");
         return EGADS_NULLOBJ;
       }
       if (children[1]->oclass != NODE) {
@@ -2681,7 +2705,14 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
     egadsCurve *pcurve = (egadsCurve *) geom->blind;
     egadsNode  *pnode1 = (egadsNode *)  children[0]->blind;
     egadsNode  *pnode2 = (egadsNode *)  children[0]->blind;
-    if (nChildren == 2) pnode2 = (egadsNode *) children[1]->blind;
+    if (nChildren == 2) {
+      pnode2 = (egadsNode *) children[1]->blind;
+      if (pnode1->node.IsSame(pnode2->node)) {
+        if (outLevel > 0)
+          printf(" EGADS Error: TWONODE Edge with same Nodes (should be ONENODE/DEGNERATE) (EG_makeTopology)!\n");
+        return EGADS_TOPOERR;
+      }
+    }
 
     P1 = limits[0];
     P2 = limits[1];
@@ -2701,6 +2732,17 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
               pnode2->xyz[0], pnode2->xyz[1], pnode2->xyz[2]);
       printf("      vert = %lf %lf %lf\n", pv2.X(), pv2.Y(), pv2.Z());
     }
+
+    if (nChildren == 2) {
+      Standard_Real maxtol = MAX(BRep_Tool::Tolerance(V1), BRep_Tool::Tolerance(V1));
+      if (pv1.Distance(pv2) < maxtol) {
+        if (outLevel > 0)
+          printf(" EGADS Error: TWONODE Edge with Nodes within tolerance (%e) (EG_makeTopology)!\n",
+                 maxtol);
+        return EGADS_GEOMERR;
+      }
+    }
+
     double delta1 = sqrt((pnt1.X()-pv1.X())*(pnt1.X()-pv1.X()) +
                          (pnt1.Y()-pv1.Y())*(pnt1.Y()-pv1.Y()) +
                          (pnt1.Z()-pv1.Z())*(pnt1.Z()-pv1.Z()));
@@ -2858,6 +2900,33 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
         return EGADS_MIXCNTX;
       }
     }
+
+    // check that edges share nodes between the children
+    for (i = 0; i < nChildren-1; i++) {
+      egadsEdge *pedge0 = (egadsEdge *) children[i+0]->blind;
+      egadsEdge *pedge1 = (egadsEdge *) children[i+1]->blind;
+
+      egadsNode *pnode0;
+      if (senses[i+0] == SFORWARD)
+        pnode0 = (egadsNode *) pedge0->nodes[1]->blind;
+      else
+        pnode0 = (egadsNode *) pedge0->nodes[0]->blind;
+
+      egadsNode *pnode1;
+      if (senses[i+1] == SFORWARD)
+        pnode1 = (egadsNode *) pedge1->nodes[0]->blind;
+      else
+        pnode1 = (egadsNode *) pedge1->nodes[1]->blind;
+
+      if (!pnode0->node.IsSame(pnode1->node)) {
+        if (outLevel > 0) {
+          printf(" EGADS Error: Node not shared between Edge %d (sense %d) and Edge %d (sense %d) (EG_makeTopology)!\n",
+                 i+1, senses[i+0], i+2, senses[i+1]);
+          return EGADS_CONSTERR;
+        }
+      }
+    }
+
     BRepBuilderAPI_MakeWire MW;
     for (i = 0; i < nChildren; i++) {
       egadsEdge *pedge = (egadsEdge *) children[i]->blind;
@@ -2876,7 +2945,7 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
                                       pnode->node, pnode->node,
                                       pedge->trange[0], pedge->trange[1]);
         if (!MEdge.IsDone()) {
-          printf(" EGADS Error: Degen Edge %d in Loop is invalid (EG_makeTopology)!\n",
+          printf(" EGADS Error: Degenerate Edge %d in Loop is invalid (EG_makeTopology)!\n",
                  i+1);
           return EGADS_TOPOERR;
         }
@@ -2887,14 +2956,13 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
         BRepCheck_Analyzer eCheck(edge);
         if (!eCheck.IsValid()) {
           if (outLevel > 0)
-            printf(" EGADS Info: Degen Edge %d in Loop is invalid!\n", i+1);
+            printf(" EGADS Info: Degenerate Edge %d in Loop is invalid!\n", i+1);
           EG_checkStatus(eCheck.Result(edge));
           return EGADS_CONSTERR;
         }
         if (!BRep_Tool::Degenerated(edge))
           printf(" EGADS Info: Degenerate Edge %d in Loop NOT Degenerate!\n",
                  i+1);
-        pedge->edge = edge;
       } else {
         edge = pedge->edge;
       }
@@ -2938,6 +3006,38 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
     BRepTools_WireExplorer ExpWE;
     for (ExpWE.Init(wire), i = 0; ExpWE.More(); ExpWE.Next(), i++) {
       TopoDS_Edge Edge = ExpWE.Current();
+
+      if (children[i]->mtype == TWONODE) {
+        TopTools_IndexedMapOfShape nmap;
+        TopExp::MapShapes(Edge, TopAbs_VERTEX, nmap);
+
+        if (nmap.Extent() != 2) {
+          if (outLevel > 0) {
+            egadsEdge *pedge  = (egadsEdge *) children[i]->blind;
+            egadsNode *pnode0 = (egadsNode *) pedge->nodes[0]->blind;
+            egadsNode *pnode1 = (egadsNode *) pedge->nodes[1]->blind;
+            printf(" EGADS Error: Loop with collapsed Edge %d. Node tolerances are too loose (%e, %e) (EG_makeTopology)!\n",
+                   i+1, BRep_Tool::Tolerance(pnode0->node), BRep_Tool::Tolerance(pnode1->node));
+          }
+          return EGADS_CONSTERR;
+        }
+        const TopoDS_Vertex& V0 = TopoDS::Vertex(nmap(1));
+        const TopoDS_Vertex& V1 = TopoDS::Vertex(nmap(2));
+
+        gp_Pnt P0 = BRep_Tool::Pnt(V0);
+        gp_Pnt P1 = BRep_Tool::Pnt(V1);
+
+        Standard_Real l = P0.Distance(P1);
+
+        if ((l < BRep_Tool::Tolerance(V0)) ||
+            (l < BRep_Tool::Tolerance(V1))) {
+          if (outLevel > 0)
+            printf(" EGADS Error: Loop with collapsed Edge %d. Node tolerances are too loose (%e, %e). (EG_makeTopology)!\n",
+                   i+1, BRep_Tool::Tolerance(V0), BRep_Tool::Tolerance(V1));
+          return EGADS_CONSTERR;
+        }
+      }
+
       int sense = 1;
       if (Edge.Orientation() == TopAbs_REVERSED) sense = -1;
       egadsEdge *pedge = (egadsEdge *) children[i]->blind;
@@ -2997,7 +3097,10 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
 
       if (!(pnode0->node.IsSame(V1) &&
             pnodeN->node.IsSame(V1))) {
-        printf(" EGADS Warning: First and last Node in Closed Loop are not same (EG_makeTopology)!\n");
+        if (outLevel > 0) {
+          printf(" EGADS Error: First and last Node in Closed Loop are not same (EG_makeTopology)!\n");
+          return EGADS_CONSTERR;
+        }
       }
     }
 
@@ -3088,7 +3191,13 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
                nChildren);
       return EGADS_RANGERR;
     }
+    if ((nChildren > 1) && (senses == NULL)) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Face with nChildren > 1 and NULL senses Input (EG_makeTopology)!\n");
+      return EGADS_NODATA;
+    }
 
+    int nOuter = 0;
     for (i = 0; i < nChildren; i++) {
       if (children[i] == NULL) {
         if (outLevel > 0)
@@ -3127,38 +3236,68 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
                  i);
         return EGADS_MIXCNTX;
       }
+      if (senses != NULL) {
+        if ((senses[i] != SOUTER) && (senses[i] != SINNER)) {
+          if (outLevel > 0)
+            printf(" EGADS Error: Face with Loop[%d] sense %d (EG_makeTopology)!\n",
+                   i+1, senses[i]);
+          return EGADS_RANGERR;
+        }
+        if (senses[i] == SOUTER) nOuter++;
+      }
+    }
+    if (senses != NULL && nOuter != 1) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Face with %d Outer loops (EG_makeTopology)!\n",
+               nOuter);
+      return EGADS_GEOMERR;
     }
 
     TopoDS_Face face;
-    BRepBuilderAPI_MakeFace MFace;
-    Standard_Real old = BRepBuilderAPI::Precision();
-    Standard_Real prc = old;
-    int nTrys = 5;              // # of tol attempts before setting SameParam = F
-    for (int itry = 0; itry < nTrys; itry++) {
-      if (itry != 0) face.Nullify();
-      if (itry == nTrys-1) {    // last attempt -- set tol back
-        prc = old;
-        BRepBuilderAPI::Precision(old);
+
+    // First make a list of properly oriented wires
+    TopTools_ListOfShape Wires;
+    int outerItry = 0, itry = 0;
+    for (i = 0; i < nChildren; i++) {
+      egadsLoop *ploop = (egadsLoop *) children[i]->blind;
+      TopoDS_Wire wire = ploop->loop;
+
+      /* make sure the Loop is oriented as an Outer wire first
+       * then reverse any inner Loops */
+      stat = EG_orientWire(nChildren, i, children[i], mtype, geom, wire, itry, face);
+      if (stat != EGADS_SUCCESS) {
+        if (outLevel > 0)
+          printf(" EGADS Error: Cannot orient Loop %d (EG_makeTopology)!\n",
+                 i+1);
+        return stat;
       }
-//    this can change the underlying surface!
-//             a copy prevents this when the surface is shared between Faces
-/*    gp_Trsf               form  = gp_Trsf();
-      Handle(Geom_Surface)  hSurf = psurf->handle;
-      Handle(Geom_Geometry) nGeom = hSurf->Transformed(form);
-      Handle(Geom_Surface)  nSurf = Handle(Geom_Surface)::DownCast(nGeom);
+      if (senses != NULL) {
+        if (senses[i] == SINNER) wire.Reverse();
+        else outerItry = itry;
+      }
+      Wires.Append(wire);
+    }
+
+    if (face.IsNull() || Wires.Extent() > 1) {
+      BRepBuilderAPI_MakeFace MFace;
+
+//      this can change the underlying surface!
+//               a copy prevents this when the surface is shared between Faces
+/*      gp_Trsf               form  = gp_Trsf();
+        Handle(Geom_Surface)  hSurf = psurf->handle;
+        Handle(Geom_Geometry) nGeom = hSurf->Transformed(form);
+        Handle(Geom_Surface)  nSurf = Handle(Geom_Surface)::DownCast(nGeom);
  */
       Handle(Geom_Surface)  nSurf = psurf->handle;
-      MFace.Init(nSurf, Standard_False, prc);
-      for (i = 0; i < nChildren; i++) {
-        egadsLoop *ploop = (egadsLoop *) children[i]->blind;
-        TopoDS_Wire wire = ploop->loop;
-        if (mtype == SREVERSE) wire.Reverse();
-        MFace.Add(wire);
+      MFace.Init(nSurf, Standard_False, 0.0);
+
+      TopTools_ListIteratorOfListOfShape it(Wires);
+      for (i = 0; it.More(); it.Next(), i++) {
+        MFace.Add(TopoDS::Wire(it.Value()));
         if (MFace.Error()) {
           if (outLevel > 0)
             printf(" EGADS Error: Problem with Loop %d (EG_makeTopology)!\n",
                    i+1);
-          BRepBuilderAPI::Precision(old);
           return EGADS_NODATA;
         }
       }
@@ -3171,57 +3310,61 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
         }
         if (ignorePCurves == 0)
           for (i = 0; i < nChildren; i++)
-            EG_makePCurves(face, geom, children[i], prc, nTrys-itry-1);
+            EG_makePCurves(face, geom, children[i], outerItry);
         BRepLib::SameParameter(face);
-        BRepCheck_Analyzer oCheck(face);
-        if (oCheck.IsValid()) break;
+      } else {
+        if (outLevel > 0)
+          printf(" EGADS Error: Problem with the Face (EG_makeTopology)!\n");
+        return EGADS_NODATA;
       }
-      prc *= 10.0;
-      BRepBuilderAPI::Precision(prc);
-      if (outLevel > 1)
-        printf(" EGADS Info: Adjusting Precision for Face - itry = %d  prec = %lf\n",
-               itry, prc);
-    }
-    BRepBuilderAPI::Precision(old);
-    if (!MFace.IsDone()) {
-      if (outLevel > 0)
-        printf(" EGADS Error: Problem with the Face (EG_makeTopology)!\n");
-      return EGADS_NODATA;
-    }
-    for (i = 0; i < nChildren; i++) {
-      egadsLoop *ploop = (egadsLoop *) children[i]->blind;
-      BRepCheck_Wire wireCheck(ploop->loop);
-      try {
-        wireCheck.InContext(face);
-        BRepCheck_ListOfStatus stati;
-        stati = wireCheck.Status();
-        if (stati.Extent() > 0) {
-          BRepCheck_Status cStatus = stati.First();
-          if (outLevel > 0)
-            EG_printStatus(cStatus);
-          if (cStatus != BRepCheck_NoError) return EGADS_GEOMERR;
+
+      it.Init(Wires);
+      for (i = 0; it.More(); it.Next(), i++) {
+        BRepCheck_Wire wireCheck(TopoDS::Wire(it.Value()));
+        try {
+          wireCheck.InContext(face);
+          BRepCheck_ListOfStatus stati;
+          stati = wireCheck.Status();
+          if (stati.Extent() > 0) {
+            BRepCheck_Status cStatus = stati.First();
+            if (outLevel > 0)
+              EG_printStatus(cStatus);
+            if (cStatus != BRepCheck_NoError) return EGADS_GEOMERR;
+          }
         }
-      }
-      catch (const Standard_Failure& e) {
-        printf(" EGADS Warning: Cannot Check Wire Intersections (EG_makeTopology)!\n");
-        printf("                %s\n", e.GetMessageString());
-/*      return EGADS_TOPOERR;  */
-      }
-      catch (...) {
-        printf(" EGADS Warning: Cannot Check Wire Intersections (EG_makeTopology)!\n");
-/*      return EGADS_TOPOERR;  */
+        catch (const Standard_Failure& e) {
+          printf(" EGADS Warning: Cannot Check Loop Intersections (EG_makeTopology)!\n");
+          printf("                %s\n", e.GetMessageString());
+  /*      return EGADS_TOPOERR;  */
+        }
+        catch (...) {
+          printf(" EGADS Warning: Cannot Check Loop Intersections (EG_makeTopology)!\n");
+  /*      return EGADS_TOPOERR;  */
+        }
       }
     }
     BRepCheck_Analyzer fCheck(face);
     if (!fCheck.IsValid()) {
+#ifdef THIS_TRIES_TO_FIX_TOO_MUCH
       // try to fix the fault
       Handle_ShapeFix_Shape sfs = new ShapeFix_Shape(face);
+      sfs->FixFreeShellMode() = Standard_False;
       sfs->FixFaceTool()->FixIntersectingWiresMode() = Standard_False;
       sfs->FixFaceTool()->FixMissingSeamMode() = Standard_False;
+      sfs->FixFaceTool()->FixOrientationMode() = Standard_False;
       sfs->FixWireTool()->ModifyGeometryMode() = Standard_False;
       sfs->FixWireTool()->ClosedWireMode()     = Standard_False;
       sfs->Perform();
       TopoDS_Shape fixedFace = sfs->Shape();
+#endif
+      ShapeFix_Face sff(face);
+      sff.FixIntersectingWiresMode() = Standard_False;
+      sff.FixMissingSeamMode() = Standard_False;
+      sff.FixOrientationMode() = Standard_False;
+      sff.FixWireMode() = Standard_False;
+      sff.Perform();
+      TopoDS_Shape fixedFace = sff.Result();
+
       if (fixedFace.IsNull()) {
         if (outLevel > 0) {
           printf(" EGADS Error: Invalid Face w/ NULL Fix (EG_makeTopology)!\n");
@@ -3238,8 +3381,8 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
         return  EGADS_CONSTERR;
       }
       face = TopoDS::Face(fixedFace);
-      if (outLevel > 0)
-        printf(" EGADS Warning: Face has been fixed (EG_makeTopology)!\n");
+      //if (outLevel > 0)
+      printf(" EGADS Warning: Face has been fixed (EG_makeTopology)!\n");
       stat = EG_examineFace(face, nChildren, children, outLevel);
       if (stat != EGADS_SUCCESS) return stat;
     }
@@ -3261,9 +3404,9 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
     for (ExpW.Init(face, TopAbs_WIRE), i = 0; ExpW.More(); ExpW.Next(), i++) {
       TopoDS_Wire Wire = TopoDS::Wire(ExpW.Current());
       loopo[i]  = children[i];
-      lsense[i] = -1;
-      if (Wire.IsSame(oWire)) lsense[i] = 1;
-      EG_referenceTopObj(children[i], obj);
+      lsense[i] = SINNER;
+      if (Wire.IsSame(oWire)) lsense[i] = SOUTER;
+      EG_referenceTopObj(loopo[i], obj);
     }
     pface->face        = face;
     pface->surface     = geom;
@@ -4244,6 +4387,33 @@ EG_getPlane(const egObject *object, egObject **plane)
     return EGADS_GEOMERR;
   }
 
+  // Flip the surface to be consistent with the orientation of the loop
+  try {
+    BRepLib_MakeFace MFace(hSurface, ploop->loop);
+    TopoDS_Face Face = MFace.Face();
+
+    // did making the Face flip the Loop?
+    TopExp_Explorer ExpW;
+    for (ExpW.Init(Face, TopAbs_WIRE); ExpW.More(); ExpW.Next()) {
+      TopoDS_Shape shapw = ExpW.Current();
+      TopoDS_Wire  wire  = TopoDS::Wire(shapw);
+      if (!wire.IsSame(ploop->loop)) continue;
+      if (!wire.IsEqual(ploop->loop)) hSurface->UReverse(); // Flip the surface
+    }
+  }
+  catch (const Standard_Failure& e) {
+    if (outLevel > 0) {
+      printf(" EGADS Error: Cannot Orient Plane (EG_getPlane)!\n");
+      printf("              %s\n", e.GetMessageString());
+      return EGADS_GEOMERR;
+    }
+  }
+  catch (...) {
+    if (outLevel > 0)
+      printf(" EGADS Error: Cannot Orient Plane (EG_getPlane)!\n");
+    return EGADS_GEOMERR;
+  }
+
   egObject *obj;
   stat = EG_makeObject(context, &obj);
   if (stat != EGADS_SUCCESS) {
@@ -4275,7 +4445,6 @@ EG_getPlane(const egObject *object, egObject **plane)
 int
 EG_getAreX(egObject *object, /*@null@*/ const double *limits, double *area)
 {
-  double      sense = 1.0;
   TopoDS_Face Face;
 
   *area = 0.0;
@@ -4344,15 +4513,6 @@ EG_getAreX(egObject *object, /*@null@*/ const double *limits, double *area)
         return EGADS_CONSTERR;
       }
 
-      // did making the Face flip the Loop?
-      TopExp_Explorer ExpW;
-      for (ExpW.Init(Face, TopAbs_WIRE); ExpW.More(); ExpW.Next()) {
-        TopoDS_Shape shapw = ExpW.Current();
-        TopoDS_Wire  wire  = TopoDS::Wire(shapw);
-        if (!wire.IsSame(ploop->loop)) continue;
-        if (!wire.IsEqual(ploop->loop)) sense = -1.0;
-      }
-
     } else {
 
       // make a standard Face
@@ -4364,50 +4524,74 @@ EG_getAreX(egObject *object, /*@null@*/ const double *limits, double *area)
       }
       egadsSurface *psurf = (egadsSurface *) geom->blind;
       BRepBuilderAPI_MakeFace MFace;
-      Standard_Real old = BRepBuilderAPI::Precision();
-      Standard_Real prc = old;
-      int nTrys = 5;              // # of tol attempts before setting SameParam = F
-      for (int itry = 0; itry < nTrys; itry++) {
-        if (itry != 0) Face.Nullify();
-        if (itry == nTrys-1) {    // last attempt -- set tol back
-          prc = old;
-          BRepBuilderAPI::Precision(old);
-        }
-        MFace.Init(psurf->handle, Standard_False, prc);
-        MFace.Add(ploop->loop);
-        if (MFace.Error()) {
-          if (outLevel > 0)
-            printf(" EGADS Error: Problem with Loop (EG_getArea)!\n");
-          return EGADS_NODATA;
-        }
-        if (MFace.IsDone()) {
-          Face = MFace.Face();
-          EG_makePCurves(Face, ploop->surface, object, prc, nTrys-itry-1);
-          BRepLib::SameParameter(Face);
-          BRepCheck_Analyzer oCheck(Face);
-          if (oCheck.IsValid()) break;
-        }
-        prc *= 10.0;
-        BRepBuilderAPI::Precision(prc);
-        if (outLevel > 1)
-          printf(" EGADS Info: Adjusting Precision for Face - itry = %d  prec = %lf\n",
-                 itry, prc);
-      }
-      BRepBuilderAPI::Precision(old);
-      if (!MFace.IsDone()) {
+      MFace.Init(psurf->handle, Standard_False, 0.0);
+      MFace.Add(ploop->loop);
+      if (MFace.Error()) {
         if (outLevel > 0)
-          printf(" EGADS Error: Problem making the Face (EG_getArea)!\n");
-        return EGADS_NODATA;
+          printf(" EGADS Error: Problem with Loop (EG_getArea)!\n");
+        return EGADS_CONSTERR;
       }
+      if (MFace.IsDone()) {
+        Face = MFace.Face();
+        EG_makePCurves(Face, ploop->surface, object);
+        BRepLib::SameParameter(Face);
 
+        bool isValid = true;
+        BRepCheck_Wire wireCheck(ploop->loop);
+        BRepCheck_Status cStatus = wireCheck.Closed();
+        if (cStatus != BRepCheck_NoError) {
+          isValid = false;
+          if (outLevel > 0) {
+            printf(" EGADS Error: Loop is not closed (EG_makeTopology)!\n");
+            EG_printStatus(cStatus);
+          }
+        }
+        cStatus = wireCheck.Closed2d(Face);
+        if (cStatus != BRepCheck_NoError) {
+          isValid = false;
+          if (outLevel > 0) {
+            printf(" EGADS Error: Loop is not closed in 2d (EG_makeTopology)!\n");
+            EG_printStatus(cStatus);
+          }
+        }
+        cStatus = wireCheck.Orientation(Face);
+        if (cStatus != BRepCheck_NoError) {
+          isValid = false;
+          if (outLevel > 0) {
+            printf(" EGADS Error: Loop Edge orientations are invalid (likely DEGENERATE Edge orientation) (EG_makeTopology)!\n");
+            EG_printStatus(cStatus);
+          }
+        }
+        TopoDS_Edge E1, E2;
+        cStatus = wireCheck.SelfIntersect(Face, E1, E1);
+        if (cStatus != BRepCheck_NoError) {
+          isValid = false;
+          TopTools_IndexedMapOfShape emap;
+          TopExp::MapShapes(ploop->loop, TopAbs_EDGE, emap);
+          int e1 = 0, e2 = 0;
+          if (!E1.IsNull()) e1 = emap.FindIndex(E1);
+          if (!E2.IsNull()) e2 = emap.FindIndex(E2);
+
+          if (e2 > 0)
+            printf(" EGADS Error: Loop with self intersecting Edges %d and %d (EG_makeTopology)!\n",
+                   e1, e2);
+          else
+            printf(" EGADS Error: Loop with self intersecting Edge %d (EG_makeTopology)!\n",
+                   e1);
+          EG_printStatus(cStatus);
+        }
+
+        if (!isValid) {
+          return EGADS_CONSTERR;
+        }
+      }
     }
-
   }
 
   BRepGProp    BProps;
   GProp_GProps SProps;
   BProps.SurfaceProperties(Face, SProps);
-  *area = sense*SProps.Mass();
+  *area = SProps.Mass();
 
   return EGADS_SUCCESS;
 }
@@ -4417,6 +4601,7 @@ int
 EG_getArea(egObject *object, /*@null@*/ const double *limits, double *area)
 {
 
+  if  (area == NULL)                 return EGADS_NODATA;
   *area = 0.0;
   if  (object == NULL)               return EGADS_NULLOBJ;
   if  (object->magicnumber != MAGIC) return EGADS_NOTOBJ;
@@ -4425,6 +4610,160 @@ EG_getArea(egObject *object, /*@null@*/ const double *limits, double *area)
   if ((object->oclass != SURFACE) && (object->oclass != LOOP) &&
       (object->oclass != FACE))      return EGADS_GEOMERR;
   return EG_getAreX(object, limits, area);
+}
+
+
+static int
+EG_orientWire(int nChildren, int iChild, egObject *loop, int mtype, egObject *surface,
+              TopoDS_Wire &loop_wire, int &itry, TopoDS_Face &Face)
+{
+  if (loop == NULL)               return EGADS_NULLOBJ;
+  if (loop->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (loop->blind == NULL)        return EGADS_NODATA;
+  if (loop->oclass != LOOP)       return EGADS_GEOMERR;
+  int outLevel = EG_outLevel(loop);
+
+  egadsLoop *ploop  = (egadsLoop *) loop->blind;
+  if (ploop->surface == NULL) {
+
+    if (surface == NULL)               return EGADS_NULLOBJ;
+    if (surface->magicnumber != MAGIC) return EGADS_NOTOBJ;
+    if (surface->blind == NULL)        return EGADS_NODATA;
+    if (surface->oclass != SURFACE)    return EGADS_GEOMERR;
+    if (surface-> mtype != PLANE)      return EGADS_GEOMERR;
+
+    egadsSurface *psurf = (egadsSurface *)surface->blind;
+    Handle(Geom_Surface) hSurface = psurf->handle;
+
+    try {
+      BRepLib_MakeFace MFace(hSurface, ploop->loop);
+      Face = MFace.Face();
+    }
+    catch (const Standard_Failure& e) {
+      return EGADS_CONSTERR;
+    }
+    catch (...) {
+      return EGADS_CONSTERR;
+    }
+
+    // did making the Face flip the Loop?
+    TopExp_Explorer ExpW;
+    for (ExpW.Init(Face, TopAbs_WIRE); ExpW.More(); ExpW.Next()) {
+      TopoDS_Shape shapw = ExpW.Current();
+      TopoDS_Wire  wire  = TopoDS::Wire(shapw);
+      if (!wire.IsSame(ploop->loop)) continue;
+      if (!wire.IsEqual(ploop->loop)) loop_wire.Reverse();
+    }
+
+    if (mtype == SREVERSE) {
+      Face.Orientation(TopAbs_REVERSED);
+    } else {
+      Face.Orientation(TopAbs_FORWARD);
+    }
+
+    if (nChildren == 1) {
+      // update the edge tolerances
+      BRepLib::SameParameter(Face);
+    }
+
+  } else {
+
+    if (ploop->surface != surface) {
+      return EGADS_NOTGEOM;
+    }
+
+    // make a standard Face
+    egObject *geom = ploop->surface;
+    if (geom->blind == NULL) {
+      return EGADS_NOTGEOM;
+    }
+    Standard_Boolean validFace = Standard_False;
+    egadsSurface *psurf = (egadsSurface *) geom->blind;
+    BRepBuilderAPI_MakeFace MFace;
+
+    for (itry = 0; itry < 4; itry++) {
+      MFace.Init(psurf->handle, Standard_False, 0.0);
+      MFace.Add(loop_wire);
+      if (MFace.Error()) break;
+      if (!MFace.IsDone()) continue;
+      Face = MFace.Face();
+      EG_makePCurves(Face, ploop->surface, loop, itry);
+      BRepLib::SameParameter(Face);
+      BRepCheck_Analyzer oCheck(Face);
+      validFace = oCheck.IsValid();
+      if (validFace) break;
+      // try reversing the loop
+      loop_wire.Reverse();
+    }
+
+    if (!MFace.IsDone() || !validFace) {
+
+      if (outLevel > 0) {
+        BRepCheck_Wire wireCheck(loop_wire);
+        BRepCheck_Status cStatus = wireCheck.Closed();
+        if (cStatus != BRepCheck_NoError) {
+          printf(" EGADS Error: Loop %d is not closed (EG_makeTopology)!\n",
+                 iChild + 1);
+          EG_printStatus(cStatus);
+        }
+        cStatus = wireCheck.Closed2d(Face);
+        if (cStatus != BRepCheck_NoError) {
+          printf(" EGADS Error: Loop %d is not closed in 2d (EG_makeTopology)!\n",
+                 iChild + 1);
+          EG_printStatus(cStatus);
+        }
+        cStatus = wireCheck.Orientation(Face);
+        if (cStatus != BRepCheck_NoError) {
+          printf(" EGADS Error: Loop %d Edge orientations are invalid (likely DEGENERATE Edge orientation) (EG_makeTopology)!\n",
+                 iChild+1);
+          EG_printStatus(cStatus);
+        }
+        TopoDS_Edge E1, E2;
+        cStatus = wireCheck.SelfIntersect(Face, E1, E1);
+        if (cStatus != BRepCheck_NoError) {
+          TopTools_IndexedMapOfShape emap;
+          TopExp::MapShapes(loop_wire, TopAbs_EDGE, emap);
+          int e1 = 0, e2 = 0;
+          if (!E1.IsNull()) e1 = emap.FindIndex(E1);
+          if (!E2.IsNull()) e2 = emap.FindIndex(E2);
+
+          if (e2 > 0)
+            printf(" EGADS Error: Loop %d with self intersecting Edges %d and %d (EG_makeTopology)!\n",
+                   iChild+1, e1, e2);
+          else
+            printf(" EGADS Error: Loop %d with self intersecting Edge %d (EG_makeTopology)!\n",
+                   iChild+1, e1);
+          EG_printStatus(cStatus);
+        }
+
+        BRepCheck_Face faceCheck(Face);
+        cStatus = faceCheck.OrientationOfWires();
+        if (cStatus != BRepCheck_NoError) {
+          printf(" EGADS Error: Loop %d orientations are invalid (EG_makeTopology)!\n",
+                 iChild+1);
+          EG_printStatus(cStatus);
+        }
+      }
+
+      return EGADS_CONSTERR;
+    }
+
+    // Use the area to check the orientation of the wire, reverse if area is negative
+    // taken from BRepLib_MakeFace.cxx BRepLib_MakeFace::CheckInside
+    BRepTopAdaptor_FClass2d FClass(Face,0.);
+    if ( FClass.PerformInfinitePoint() == TopAbs_IN) {
+      loop_wire.Reverse();
+      Face.Nullify();
+    } else {
+      if (mtype == SREVERSE) {
+        Face.Orientation(TopAbs_REVERSED);
+      } else {
+        Face.Orientation(TopAbs_FORWARD);
+      }
+    }
+  }
+
+  return EGADS_SUCCESS;
 }
 
 
@@ -4477,36 +4816,23 @@ EG_getUVinfo(egObject *surface, egObject *loop, double *box, double *area)
   egadsLoop *ploop    = (egadsLoop *) loop->blind;
   TopoDS_Wire wire    = ploop->loop;
 
+  Handle(Geom_Surface) nSurf = psurf->handle;
   BRepBuilderAPI_MakeFace MFace;
-  Standard_Real old = BRepBuilderAPI::Precision();
-  Standard_Real prc = old;
-  int nTrys = 5;
-  for (int itry = 0; itry < nTrys; itry++) {
-    Handle(Geom_Surface) nSurf = psurf->handle;
-    MFace.Init(nSurf, Standard_False, prc);
-    MFace.Add(wire);
-    if (MFace.Error()) {
-      if (outLevel > 0)
-        printf(" EGADS Error: Problem with Loop (EG_getUVinfo)!\n");
-      BRepBuilderAPI::Precision(old);
-      return EGADS_NODATA;
-    }
-    if (MFace.IsDone()) break;
-
-    prc *= 10.0;
-    BRepBuilderAPI::Precision(prc);
-    if (outLevel > 1)
-      printf(" EGADS Info: Adjusting Precision for Face - itry = %d  prec = %lf\n",
-             itry, prc);
+  MFace.Init(nSurf, Standard_False, 0.0);
+  MFace.Add(wire);
+  if (MFace.Error()) {
+    if (outLevel > 0)
+      printf(" EGADS Error: Problem with Loop (EG_getUVinfo)!\n");
+    return EGADS_NODATA;
   }
-  BRepBuilderAPI::Precision(old);
+
   if (!MFace.IsDone()) {
     if (outLevel > 0)
       printf(" EGADS Error: Problem with the Face (EG_getUVinfo)!\n");
     return EGADS_NODATA;
   }
   TopoDS_Face Face = MFace.Face();
-  EG_makePCurves(Face, surface, loop, prc, 0);
+  EG_makePCurves(Face, surface, loop);
   BRepLib::SameParameter(Face);
 
   BRepCheck_Analyzer fCheck(Face);
@@ -4934,6 +5260,34 @@ EG_makeFace(egObject *object, int mtype,
     try {
       BRepLib_MakeFace MFace(hSurface, ploop->loop);
       Face = MFace.Face();
+
+      // did making the Face flip the Loop?
+      int sense = SFORWARD;
+      TopExp_Explorer ExpW;
+      for (ExpW.Init(Face, TopAbs_WIRE); ExpW.More(); ExpW.Next()) {
+        TopoDS_Shape shapw = ExpW.Current();
+        TopoDS_Wire  wire  = TopoDS::Wire(shapw);
+        if (!wire.IsSame(ploop->loop)) continue;
+        if (!wire.IsEqual(ploop->loop)) sense = SREVERSE;
+      }
+
+      // If the loop fliped, then reverse the surface
+      if (sense == SREVERSE) {
+        egObject *geomflip = NULL;
+        stat = EG_flipObject(geom, &geomflip);
+        if (stat != EGADS_SUCCESS) {
+          EG_deleteObject(geom);
+          return stat;
+        }
+        EG_deleteObject(geom);
+        geom = geomflip;
+        psurf = (egadsSurface *)geom->blind;
+        hSurface = psurf->handle;
+
+        BRepLib_MakeFace MFace(hSurface, ploop->loop);
+        Face = MFace.Face();
+      }
+
       if (mtype == SREVERSE) {
         Face.Orientation(TopAbs_REVERSED);
       } else {
@@ -4981,12 +5335,12 @@ EG_makeFace(egObject *object, int mtype,
         BRepCheck_Analyzer sfCheck(fixedFace);
         if (!sfCheck.IsValid()) {
           if (outLevel > 0)
-            printf(" EGADS Error: Face may be invalid (EG_makeFace)!\n");
+            printf(" EGADS Error: Face is invalid (EG_makeFace)!\n");
           return EGADS_CONSTERR;
         } else {
           Face = TopoDS::Face(fixedFace);
-          if (outLevel > 0)
-            printf(" EGADS Warning: Face has been fixed (EG_makeFace)!\n");
+          //if (outLevel > 0)
+          printf(" EGADS Warning: Face has been fixed (EG_makeFace)!\n");
         }
       }
     }
@@ -5015,7 +5369,9 @@ EG_makeFace(egObject *object, int mtype,
     EG_completeSurf(geom, hSurface);
     EG_referenceObject(geom, obj);
 #else
-    EG_referenceTopObj(geom, obj);
+    geom->topObj = obj;
+    EG_referenceObject(geom, obj);
+    EG_dereferenceObject(geom, context);
 #endif
   }
 
@@ -5050,7 +5406,10 @@ EG_makeFace_dot(egObject *face, egObject *object,
                 /*@null@*/ const double *limits_dot)
 {
   int      stat, outLevel;
-  egObject *geom = NULL;
+  int      oclass, mtype, *iplane=NULL, *isurf=NULL;
+  double   *rplane=NULL, *rsurf=NULL;
+  SurrealS<1> *rplaneS=NULL;
+  egObject *context, *geom = NULL, *geomflip=NULL, *eref;
 
   if (object == NULL)               return EGADS_NULLOBJ;
   if (object->magicnumber != MAGIC) return EGADS_NOTOBJ;
@@ -5058,7 +5417,6 @@ EG_makeFace_dot(egObject *face, egObject *object,
       (object->oclass != FACE))     return EGADS_GEOMERR;
   if (object->blind == NULL)        return EGADS_NODATA;
   if (EG_sameThread(object))        return EGADS_CNTXTHRD;
-  outLevel = EG_outLevel(object);
 
   if (face == NULL)               return EGADS_NULLOBJ;
   if (face->magicnumber != MAGIC) return EGADS_NOTOBJ;
@@ -5066,6 +5424,8 @@ EG_makeFace_dot(egObject *face, egObject *object,
   if (face->blind == NULL)        return EGADS_NODATA;
   if (EG_sameThread(face))        return EGADS_CNTXTHRD;
 
+  outLevel = EG_outLevel(object);
+  context  = EG_context(object);
 
   if (object->oclass == LOOP) {
     egadsLoop *ploop = (egadsLoop *) object->blind;
@@ -5116,19 +5476,52 @@ EG_makeFace_dot(egObject *face, egObject *object,
     }
     egadsFace *pface  = (egadsFace *) face->blind;
 
+    stat = EG_getGeometry(geom, &oclass, &mtype, &eref, &iplane, &rplane);
+    if (stat != EGADS_SUCCESS) goto cleanup;
+
+    stat = EG_getGeometry(pface->surface, &oclass, &mtype, &eref, &isurf, &rsurf);
+    if (stat != EGADS_SUCCESS) goto cleanup;
+
+    // check if the surface was flipped
+    if (rplane[3]*rsurf[3] + rplane[4]*rsurf[4] + rplane[5]*rsurf[5] < 0) {
+
+      stat = EG_getGeometry_dot(geom, &rplaneS);
+      if (stat != EGADS_SUCCESS) goto cleanup;
+
+      // flip the u-vector
+      rplaneS[3] *= -1;
+      rplaneS[4] *= -1;
+      rplaneS[5] *= -1;
+
+      stat = EG_makeGeometry(context, SURFACE, PLANE, NULL, NULL, rplaneS, &geomflip);
+      if (stat != EGADS_SUCCESS) goto cleanup;
+
+      EG_deleteObject(geom);
+      geom = geomflip;
+    }
+
     stat = EG_copyGeometry_dot(geom, NULL, NULL, pface->surface);
     if (stat != EGADS_SUCCESS) {
       if (outLevel > 0)
         printf(" EGADS Error: Surface missmatch (EG_makeFace_dot)!\n");
       return EGADS_GEOMERR;
     }
+    EG_deleteObject(geom);
+
   } else {
     if (outLevel > 1)
       printf(" EGADS Error: EG_makeFace_dot only implemented for Loop (EG_makeFace_dot)!\n");
     return EGADS_GEOMERR;
   }
 
-  return EGADS_SUCCESS;
+  stat = EGADS_SUCCESS;
+cleanup:
+  EG_free(iplane);
+  EG_free(rplane);
+  EG_free(rplaneS);
+  EG_free(isurf);
+  EG_free(rsurf);
+  return stat;
 }
 
 
@@ -6679,7 +7072,6 @@ int
 EG_getEdgeUV(const egObject *face, const egObject *topo, int sense, double t,
              double *uv)
 {
-
   if (face == NULL)               return EGADS_NULLOBJ;
   if (face->magicnumber != MAGIC) return EGADS_NOTOBJ;
   if (face->blind == NULL)        return EGADS_NODATA;
@@ -8521,6 +8913,13 @@ EG_replaceFaces(const egObject *body, int nobj, egObject **objs,
     newShape = reshape.Apply(pshell->shell, TopAbs_FACE);
   } else {
     newShape = reshape.Apply(pbody->shape, TopAbs_FACE);
+  }
+  BRepCheck_Analyzer sCheck(newShape);
+  if (!sCheck.IsValid()) {
+    if (outLevel > 0)
+      printf(" EGADS Error: Result is Invalid (EG_replaceFaces)!\n");
+    delete [] amap;
+    return EGADS_CONSTERR;
   }
 
   // check our result -- sheet body

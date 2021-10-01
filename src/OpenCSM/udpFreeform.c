@@ -402,27 +402,27 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     }
 
     /* plot the data */
-    #ifdef GRAFIC
-        {
-            int  io_kbd=5, io_scr=6, indgr=1+2+4+16+64;
-            char pltitl[80];
+#ifdef GRAFIC
+    {
+        int  io_kbd=5, io_scr=6, indgr=1+2+4+16+64;
+        char pltitl[80];
 
-            sprintf(pltitl, "~x~y~ imax=%d  jmax=%d  kmax=%d", imax, jmax, kmax);
+        sprintf(pltitl, "~x~y~ imax=%d  jmax=%d  kmax=%d", imax, jmax, kmax);
 
-            grinit_(&io_kbd, &io_scr, "udpFreeform", strlen("udpFreeform"));
-            grctrl_(plotData, &indgr, pltitl,
-                    (void*)(&imax),
-                    (void*)(&jmax),
-                    (void*)(&kmax),
-                    (void*)(udps[numUdp].arg[5].val),
-                    (void*)(udps[numUdp].arg[6].val),
-                    (void*)(udps[numUdp].arg[7].val),
-                    (void*)NULL,
-                    (void*)NULL,
-                    (void*)NULL,
+        grinit_(&io_kbd, &io_scr, "udpFreeform", strlen("udpFreeform"));
+        grctrl_(plotData, &indgr, pltitl,
+                (void*)(&imax),
+                (void*)(&jmax),
+                (void*)(&kmax),
+                (void*)(udps[numUdp].arg[5].val),
+                (void*)(udps[numUdp].arg[6].val),
+                (void*)(udps[numUdp].arg[7].val),
                 (void*)NULL,
-                    strlen(pltitl));
-        }
+                (void*)NULL,
+                (void*)NULL,
+                (void*)NULL,
+                strlen(pltitl));
+    }
     #endif
 
     /* allocate necessary (oversized) 2D arrays */
@@ -901,83 +901,80 @@ spline1d(ego    context,
         /* convergence check */
         if (dxyzmax < dxyztol) break;
 
-        /* to enable this plotting:
-           1. set USING_GRAFIC to 1 in Makefile
-           2. change ${LINKC} to ${LINKF} in link line for freeform.so
-           3. add ${GRAFIC} before -legads in link line for freeform.so */
-//$$$        {
-//$$$            int    itype;
-//$$$            int    io_kbd = 5;
-//$$$            int    io_scr = 6;
-//$$$            int    indgr  = 1 + 4 + 8 + 16 + 64;
-//$$$            int    izero  = 0;
-//$$$            int    nline, ilin[2], isym[2], nper[2];
-//$$$            float  tplot[2001], xplot[2001], yplot[2001], zplot[2001];
-//$$$            float  xmin, xmax, ymin, ymax;
-//$$$            double t;
-//$$$            char   pltitl[80];
-//$$$
-//$$$            nline   =  1;
-//$$$            ilin[0] = +1;
-//$$$            isym[0] = -1;
-//$$$            nper[0] = 1001;
-//$$$
-//$$$            for (i = 0; i < 1001; i++) {
-//$$$                t        = (imax-1) * (double)(i) / (double)(1000);
-//$$$                status = EG_evaluate(*ecurv, &t, data);
-//$$$                tplot[i] = (float)(t);
-//$$$                xplot[i] = (float)(data[0]);
-//$$$                yplot[i] = (float)(data[1]);
-//$$$                zplot[i] = (float)(data[2]);
-//$$$            }
-//$$$
-//$$$            nline   =  2;
-//$$$            ilin[1] = -2;
-//$$$            isym[1] = +2;
-//$$$            nper[1] = imax;
-//$$$
-//$$$            for (i = 0; i < imax; i++) {
-//$$$                tplot[1001+i] = (float)(  i );
-//$$$                xplot[1001+i] = (float)(x[i]);
-//$$$                yplot[1001+i] = (float)(y[i]);
-//$$$                zplot[1001+i] = (float)(z[i]);
-//$$$            }
-//$$$
-//$$$            if (iter == 0) {
-//$$$                grinit_(&io_kbd, &io_scr, "udpFreeform", strlen("udpFreeform"));
-//$$$                grinpi_("0 for x, 1 for y, 2 for z", &itype, strlen("0 for x, 1 for y, 2 for z"));
-//$$$            } else {
-//$$$                indgr = 4 + 8 + 16 + 64;
-//$$$                grsset_(&xmin, &xmax, &ymin, &ymax);
-//$$$            }
-//$$$
-//$$$            if        (itype == 0) {
-//$$$                sprintf(pltitl, "~t~x~ iter=%d, dxyzmax=%12.3e", iter, dxyzmax);
-//$$$                grline_(ilin, isym, &nline, pltitl, &indgr, tplot, xplot, nper, strlen(pltitl));
-//$$$            } else if (itype == 1) {
-//$$$                sprintf(pltitl, "~t~y~ iter=%d, dxyzmax=%12.3e", iter, dxyzmax);
-//$$$                grline_(ilin, isym, &nline, pltitl, &indgr, tplot, yplot, nper, strlen(pltitl));
-//$$$            } else {
-//$$$                sprintf(pltitl, "~t~z~ iter=%d, dxyzmax=%12.3e", iter, dxyzmax);
-//$$$                grline_(ilin, isym, &nline, pltitl, &indgr, tplot, zplot, nper, strlen(pltitl));
-//$$$            }
-//$$$
-//$$$            if (iter == 0) {
-//$$$                grvalu_("XMINGR", &izero, &xmin, " ", strlen("XMINGR"), strlen(" "));
-//$$$                grvalu_("XMAXGR", &izero, &xmax, " ", strlen("XMAXGR"), strlen(" "));
-//$$$                grvalu_("YMINGR", &izero, &ymin, " ", strlen("YMINGR"), strlen(" "));
-//$$$                grvalu_("YMAXGR", &izero, &ymax, " ", strlen("YMAXGR"), strlen(" "));
-//$$$            }
-//$$$        }
-//$$$
+#ifdef GRAFIC
+        {
+            int    itype  = 0;
+            int    io_kbd = 5;
+            int    io_scr = 6;
+            int    indgr  = 1 + 4 + 8 + 16 + 64;
+            int    izero  = 0;
+            int    nline, ilin[2], isym[2], nper[2];
+            float  tplot[2001], xplot[2001], yplot[2001], zplot[2001];
+            float  xmin, xmax, ymin, ymax;
+            double t;
+            char   pltitl[80];
+
+            nline   =  1;
+            ilin[0] = +1;
+            isym[0] = -1;
+            nper[0] = 1001;
+
+            for (i = 0; i < 1001; i++) {
+                t        = (imax-1) * (double)(i) / (double)(1000);
+                status = EG_evaluate(*ecurv, &t, data);
+                tplot[i] = (float)(t);
+                xplot[i] = (float)(data[0]);
+                yplot[i] = (float)(data[1]);
+                zplot[i] = (float)(data[2]);
+            }
+
+            nline   =  2;
+            ilin[1] = -2;
+            isym[1] = +2;
+            nper[1] = imax;
+
+            for (i = 0; i < imax; i++) {
+                tplot[1001+i] = (float)(  i );
+                xplot[1001+i] = (float)(x[i]);
+                yplot[1001+i] = (float)(y[i]);
+                zplot[1001+i] = (float)(z[i]);
+            }
+
+            if (iter == 0) {
+                grinit_(&io_kbd, &io_scr, "udpFreeform", strlen("udpFreeform"));
+                grinpi_("0 for x, 1 for y, 2 for z", &itype, strlen("0 for x, 1 for y, 2 for z"));
+            } else {
+                indgr = 4 + 8 + 16 + 64;
+                grsset_(&xmin, &xmax, &ymin, &ymax);
+            }
+
+            if        (itype == 0) {
+                sprintf(pltitl, "~t~x~ iter=%d, dxyzmax=%12.3e", iter, dxyzmax);
+                grline_(ilin, isym, &nline, pltitl, &indgr, tplot, xplot, nper, strlen(pltitl));
+            } else if (itype == 1) {
+                sprintf(pltitl, "~t~y~ iter=%d, dxyzmax=%12.3e", iter, dxyzmax);
+                grline_(ilin, isym, &nline, pltitl, &indgr, tplot, yplot, nper, strlen(pltitl));
+            } else {
+                sprintf(pltitl, "~t~z~ iter=%d, dxyzmax=%12.3e", iter, dxyzmax);
+                grline_(ilin, isym, &nline, pltitl, &indgr, tplot, zplot, nper, strlen(pltitl));
+            }
+
+            if (iter == 0) {
+                grvalu_("XMINGR", &izero, &xmin, " ", strlen("XMINGR"), strlen(" "));
+                grvalu_("XMAXGR", &izero, &xmax, " ", strlen("XMAXGR"), strlen(" "));
+                grvalu_("YMINGR", &izero, &ymin, " ", strlen("YMINGR"), strlen(" "));
+                grvalu_("YMAXGR", &izero, &ymax, " ", strlen("YMAXGR"), strlen(" "));
+            }
+        }
+#endif
+
         /* make the new curve (after deleting old one) */
-//$$$        status = EG_deleteObject(*ecurv);
-//$$$        if (status != EGADS_SUCCESS) goto cleanup;
-//$$$
-//$$$        status = EG_makeGeometry(context, CURVE, BSPLINE, NULL,
-//$$$                                 header, cp, ecurv);
-//$$$        if (status != EGADS_SUCCESS) goto cleanup;
-//$$$    }
+        status = EG_deleteObject(*ecurv);
+        if (status != EGADS_SUCCESS) goto cleanup;
+
+        status = EG_makeGeometry(context, CURVE, BSPLINE, NULL,
+                                 header, cp, ecurv);
+        if (status != EGADS_SUCCESS) goto cleanup;
     }
 
 cleanup:

@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser(description = 'Aeroelastic SU2 and Mystran Exam
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["." + os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-numberProc', default = 1, nargs=1, type=float, help = 'Number of processors')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create working directory variable
@@ -33,13 +33,13 @@ workDir = os.path.join(str(args.workDir[0]), "AeroelasticSimple_Iterative")
 projectName = "aeroelasticSimple_Iterative_SM"
 
 # Set the number of transfer iterations
-numTransferIteration = 2
+numTransferIteration = 4
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","aeroelasticDataTransferSimple.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load AIMs
 myProblem.analysis.create(aim = "egadsTessAIM",
@@ -60,7 +60,8 @@ myProblem.analysis["su2"].input["Mesh"].link(myProblem.analysis["tetgen"].output
 
 myProblem.analysis.create(aim = "mystranAIM",
                           name = "mystran",
-                          capsIntent = "STRUCTURE")
+                          capsIntent = "STRUCTURE",
+                          autoExec = True)
 
 # Create the data transfer connections
 boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
@@ -89,10 +90,11 @@ for boundName in boundNames:
 
 # Set inputs for EGADS
 myProblem.analysis["egads"].input.Tess_Params = [.6, 0.05, 20.0]
+myProblem.analysis["egads"].input.Edge_Point_Max = 4
 
 # Set inputs for tetgen
 myProblem.analysis["tetgen"].input.Preserve_Surf_Mesh = True
-myProblem.analysis["tetgen"].input.Mesh_Quiet_Flag = True if args.verbosity == 0 else False
+myProblem.analysis["tetgen"].input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set inputs for su2
 speedofSound = 340.0 # m/s
@@ -152,23 +154,6 @@ constraint = {"groupName" : "Rib_Root",
               "dofConstraint" : 123456}
 myProblem.analysis["mystran"].input.Constraint = {"edgeConstraint": constraint}
 
-####### EGADS ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "egads")
-myProblem.analysis["egads"].preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "egads")
-myProblem.analysis["egads"].postAnalysis()
-#######################################
-
-####### Tetgen ########################
-# Run pre/post-analysis for tetgen
-print ("\nRunning PreAnalysis ......", "tetgen")
-myProblem.analysis["tetgen"].preAnalysis()
-
-print ("\nRunning PostAnalysis ......", "tetgen")
-myProblem.analysis["tetgen"].postAnalysis()
-#######################################
 
 # Aeroelastic iteration loop
 for iter in range(numTransferIteration):
@@ -201,26 +186,33 @@ for iter in range(numTransferIteration):
     print ("\nRunning PostAnalysis ......", "su2")
     myProblem.analysis["su2"].postAnalysis()
     #######################################
-
+    
+    # Get Lift and Drag coefficients
+    Cl = myProblem.analysis["su2"].output.CLtot
+    Cd = myProblem.analysis["su2"].output.CDtot
 
     ####### Mystran #######################
-    print ("\nRunning PreAnalysis ......", "mystran")
-    myProblem.analysis["mystran"].preAnalysis()
-
-    #------------------------------
-    print ("\n\nRunning Mystran......")
-    currentDirectory = os.getcwd() # Get our current working directory
-
-    os.chdir(myProblem.analysis["mystran"].analysisDir) # Move into test directory
-
-    os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run mystran via system call
-
-    if os.path.getsize("Info.out") == 0:
-        raise SystemError("Mystran excution failed\n")
-
-    os.chdir(currentDirectory) # Move back to top directory
-    #------------------------------
-
-    print ("\nRunning PostAnalysis ......", "mystran")
-    myProblem.analysis["mystran"].postAnalysis()
+    # print ("\nRunning PreAnalysis ......", "mystran")
+    # myProblem.analysis["mystran"].preAnalysis()
+    #
+    # #------------------------------
+    # print ("\n\nRunning Mystran......")
+    # currentDirectory = os.getcwd() # Get our current working directory
+    #
+    # os.chdir(myProblem.analysis["mystran"].analysisDir) # Move into test directory
+    #
+    # os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run mystran via system call
+    #
+    # if os.path.getsize("Info.out") == 0:
+    #     raise SystemError("Mystran excution failed\n")
+    #
+    # os.chdir(currentDirectory) # Move back to top directory
+    # #------------------------------
+    #
+    # print ("\nRunning PostAnalysis ......", "mystran")
+    # myProblem.analysis["mystran"].postAnalysis()
     #######################################
+
+# Print lift and drag
+print("Cl = ", Cl)
+print("Cd = ", Cd)

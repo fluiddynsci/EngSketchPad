@@ -1804,43 +1804,61 @@ int solveLU(int n, double A[], double b[], double x[] )
 }
 
 // Prints all attributes on an ego
-int print_AllAttr( ego obj )
+int print_AllAttr( void *aimInfo, ego obj )
 {
+#define NBUF 512
     int          status;
     int          i, j, nattr, atype, alen;
+    char         buffer[NBUF], tmp[NBUF];
     const int    *pints;
     const char   *name, *pstr;
     const double *preals;
 
+    AIM_ADDLINE(aimInfo, "Available attributes are:");
+
     nattr = 0;
     status  = EG_attributeNum(obj, &nattr);
-    printf("--------------\n");
     if ((status == EGADS_SUCCESS) && (nattr != 0)) {
         for (i = 1; i <= nattr; i++) {
             status = EG_attributeGet(obj, i, &name, &atype, &alen,
                                    &pints, &preals, &pstr);
             if (status != EGADS_SUCCESS) continue;
-            printf("   %s: ", name);
+            snprintf(buffer, NBUF, "   %s:", name);
             if (atype == ATTRINT) {
-                for (j = 0; j < alen; j++) printf("%d ", pints[j]);
+                for (j = 0; j < alen; j++) {
+                  snprintf(tmp, NBUF, "%s %d", buffer, pints[j]);
+                  strcpy(buffer, tmp);
+                }
             } else if (atype == ATTRREAL) {
-                for (j = 0; j < alen; j++) printf("%lf ", preals[j]);
+                for (j = 0; j < alen; j++) {
+                  snprintf(tmp, NBUF, "%s %lf", buffer, preals[j]);
+                  strcpy(buffer, tmp);
+                }
             } else if (atype == ATTRSTRING) {
-                printf("%s", pstr);
+                snprintf(tmp, NBUF, "%s %s", buffer, pstr);
+                strcpy(buffer, tmp);
             } else if (atype == ATTRCSYS) {
-                printf("csys ");
-                for (j = 0; j < alen; j++) printf("%lf ", preals[j]);
+                snprintf(tmp, NBUF, "%s csys", buffer);
+                strcpy(buffer, tmp);
+                for (j = 0; j < alen; j++) {
+                  snprintf(tmp, NBUF, "%s %lf", buffer, preals[j]);
+                  strcpy(buffer, tmp);
+                }
             } else if (atype == ATTRPTR) {
-                printf("pointer");
+                snprintf(tmp, NBUF, "%s pointer", buffer);
+                strcpy(buffer, tmp);
             } else {
-              printf("unknown attribute type!");
+                snprintf(tmp, NBUF, "%s unknown attribute type!", buffer);
+                strcpy(buffer, tmp);
             }
-            printf("\n");
+            AIM_ADDLINE(aimInfo, buffer);
         }
     }
-    printf("--------------\n");
+
+    status = CAPS_SUCCESS;
 
     return status;
+#undef NBUF
 }
 
 // Search a mapAttrToIndex structure for a given keyword and set/return the corresponding index
@@ -1901,7 +1919,7 @@ int set_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMap, const char *keyWord,
 
     for (i = 0; i < attrMap->numAttribute; i++) {
 
-        if (strcmp(attrMap->attributeName[i], (char *) keyWord ) == 0) {
+        if (strcmp(attrMap->attributeName[i], keyWord ) == 0) {
 
             attrMap->attributeIndex[i] = index;
             return CAPS_SUCCESS;
@@ -2018,7 +2036,6 @@ int copy_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMapIn, mapAttrToIndexStr
 
     int status; // Function return status
     int i, j; // Indexing
-    int stringLength;
     char *keyWord = NULL;
 
     if (attrMapIn  == NULL) return CAPS_NULLVALUE;
@@ -2028,15 +2045,7 @@ int copy_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMapIn, mapAttrToIndexStr
     status =  destroy_mapAttrToIndexStruct(attrMapOut);
     if (status != CAPS_SUCCESS) return status;
 
-    stringLength = strlen(attrMapIn->mapName);
-
-    attrMapOut->mapName = (char *) EG_alloc((stringLength+1)*sizeof(char));
-    if (attrMapOut->mapName == NULL) return EGADS_MALLOC;
-
-    memcpy(attrMapOut->mapName,
-            attrMapIn->mapName,
-            stringLength*sizeof(char));
-    attrMapOut->mapName[stringLength] = '\0';
+    attrMapOut->mapName = EG_strdup(attrMapIn->mapName);
 
     attrMapOut->numAttribute = attrMapIn->numAttribute;
 

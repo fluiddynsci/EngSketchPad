@@ -467,6 +467,7 @@ main(int argc, char *argv[])
         }
       }
       /* clear all then set */
+      ocsmSetDtime(modl, 0);
       ocsmSetVelD(modl, 0,     0,    0,    0.0);
       ocsmSetVelD(modl, ipmtr, irow, icol, 1.0);
       buildTo = 0;

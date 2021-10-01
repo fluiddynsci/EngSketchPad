@@ -23,7 +23,7 @@ box            -1.00     -1.00     -1.00      2.00      2.00      2.00
    attribute  456       1+3;2+3;3+3;
    set        theBox    @nbody
 getattr   nattr   $_nattr_
-assert    nattr   14
+assert    nattr   13
 
 # set attributes on the Faces and Edges of the box
    set        nedge     @nedge
@@ -44,7 +44,7 @@ cylinder        0.90      0.00      0.00      0.90      2.00      0.00      0.50
    attribute  myName    $myCylinder
    set        theCyl    @nbody
 getattr    nattr   $_nattr_
-assert     nattr   9
+assert     nattr   8
 
 # set attributes on the Faces of the cylinder
    set     nface    @nface
@@ -65,14 +65,15 @@ sphere         -1.10     -0.75      0.90      1.00
    attribute  number     one
    set        theSph    @nbody
 getattr    nattr   $_nattr_
-assert     nattr   12
+assert     nattr   11
 
 # combine sphere with box/cylinder
 union
    name       UnionOfTheThree
    attribute  status    $done
 getattr    nattr   $_nattr_
-assert     nattr   9
+# nattr depends on whether or not we've already tessellated
+assert     ifzero(nattr-8,1,0)+ifzero(nattr-9,1,0)  1
 
 # get the number of global Attributes
 getattr    nattr   $_nattr_  1

@@ -22,8 +22,10 @@ enum aimInputs
 
 
 extern
-int aflr3_Volume_Mesh (void *aimInfo, capsValue *aimInputs,
+int aflr3_Volume_Mesh (void *aimInfo,
+                       capsValue *aimInputs,
                        meshInputStruct meshInput,
+                       const char *fileName,
                        int createBL,
                        int blFlag[],
                        double blSpacing[],

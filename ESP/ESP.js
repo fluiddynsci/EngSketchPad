@@ -19,9 +19,8 @@
 //    MA  02110-1301  USA
 
 // interface functions that a tool can provide (provided below for tool=main)
-//    enterTool()
-//    initialize()
-//    cmdLoad()
+//    launch()
+//
 //    cmdUndo()
 //    cmdSolve()
 //    cmdSave()
@@ -44,6 +43,11 @@
 //    keyPress(e)          key presses
 //    keyDown(e)
 //    keyUp(e)
+//    keyPressPart1(myKeyPress)
+//    keyPressPart2(picking, gprim)
+//
+//    sceneUpdated()
+//    updateKeyWindow()
 
 // functions expected by wv
 //    wvInitUI()                called by wv-render.js
@@ -51,6 +55,7 @@
 //    wvServerMessage(text)     called by wv-socket.js
 //    wvServerDown()            called by wv-socket.js
 //    wvUpdateCanvas(gl)        called by ESP.html
+//    wv.sceneUpdated()
 
 // functions associated with button presses (and associated button presses)
 //    cmdFile()
@@ -70,6 +75,7 @@
 //       cmdCollabPass(e,indx)
 //       cmdCollabSync()
 //       cmdCollabUnsync()
+//       cmdCollabMessage()
 
 // functions associated with menu selections (and associated button presses)
 //    addPmtr()
@@ -193,36 +199,6 @@
 //    CodeMirror.defineSimpleMode(mode, options)
 
 "use strict";
-
-
-//
-// function to initialize a tool
-//
-var enterTool = function() {
-    if (wv.curTool.enterTool !== undefined) {
-        wv.curTool.enterTool();
-    }
-};
-
-
-//
-// function to initialize a tool
-//
-var initialize = function() {
-    if (wv.curTool.initialize !== undefined) {
-        wv.curTool.initialize();
-    }
-};
-
-
-//
-// function to load a tool
-//
-var cmdLoad = function() {
-    if (wv.curTool.cmdLoad !== undefined) {
-        wv.curTool.cmdLoad();
-    }
-};
 
 
 //
@@ -415,7 +391,7 @@ var mouseUp = function (e) {
 var mouseWheel = function (e) {
     if (wv.curTool.mouseWheel !== undefined) {
         wv.curTool.mouseWheel(e);
-    } else if (wv.usingMain == 1 && myRole != -1) {
+    } else if (wv.usingMain == 1 && wv.myRole != 1) {
         main.mouseWheel(e);
     }
 };
@@ -427,7 +403,7 @@ var mouseWheel = function (e) {
 var mouseLeftCanvas = function (e) {
     if (wv.curTool.mouseLeftCanvas !== undefined) {
         wv.curTool.mouseLeftCanvas(e);
-    } else if (wv.usingMain == 1 && myRole != -1) {
+    } else if (wv.usingMain == 1 && wv.myRole != 1) {
         main.mouseLeftCanvas(e);
     }
 };
@@ -437,8 +413,14 @@ var mouseLeftCanvas = function (e) {
 // callback when a key is pressed (when wv.usingMain==1)
 //
 var keyPress = function (e) {
-    if (wv.curTool.keyPress !== undefined) {
-        wv.curTool.keyPress(e);
+    if (wv.curTool == main) {
+        main.keyPress(e);
+    } else if (wv.curTool.keyPress !== undefined) {
+        var handled = wv.curTool.keyPress(e);
+
+        if (handled == 0) {
+            main.keyPress(e);
+        }
     } else if (wv.usingMain == 1) {
         main.keyPress(e);
     }
@@ -520,7 +502,7 @@ var wvInitUI = function () {
     wv.userNames = "";             // bar-separatede list of userNames
     wv.myName    = "*host*";       // my username
     wv.lastXform = null;           // last xfrom received while not sync'd
-    wv.plotType  =  0;             // =0 mono, =1 ubar, =2 vbar, =3 cmin, =4 cmax, =5 gc, =6 erep
+    wv.plotType  =  0;             // =0 mono, =1 ubar, =2 vbar, =3 cmin, =4 cmax, =5 gc, =10 erep, =11 mitten, =12 plugs
     wv.loLimit   = -1;             // lower limit in key
     wv.upLimit   = +1;             // upper limit in key
     wv.nchanges  = 0;              // number of Branch or Parameter changes by browser
@@ -584,14 +566,14 @@ var wvInitUI = function () {
     canvas.addEventListener(  'mouseout',   mouseLeftCanvas,      false);
 
     var sketcher = document.getElementById("sketcher");
-    sketcher.addEventListener('mousedown',  sket.mouseDown,       false);
-    sketcher.addEventListener('mousemove',  sket.mouseMove,       false);
-    sketcher.addEventListener('mouseup',    sket.mouseUp,         false);
+    sketcher.addEventListener('mousedown',  sketch.mouseDown,       false);
+    sketcher.addEventListener('mousemove',  sketch.mouseMove,       false);
+    sketcher.addEventListener('mouseup',    sketch.mouseUp,         false);
 
     var gloves = document.getElementById("gloves");
-    gloves.addEventListener(  'mousedown',  glov.mouseDown,       false);
-    gloves.addEventListener(  'mousemove',  glov.mouseMove,       false);
-    gloves.addEventListener(  'mouseup',    glov.mouseUp,         false);
+    gloves.addEventListener(  'mousedown',  gloves.mouseDown,       false);
+    gloves.addEventListener(  'mousemove',  gloves.mouseMove,       false);
+    gloves.addEventListener(  'mouseup',    gloves.mouseUp,         false);
 
     var keycan = document.getElementById(wv.canvasKY);
     keycan.addEventListener(  'mouseup',    setKeyLimits,         false);
@@ -1459,8 +1441,8 @@ var wvServerMessage = function (text) {
             wv.server = textList[1];
             postMessage("ESP has been initialized and is attached to '"+wv.server+"'");
 
-            if (wv.server != "serveCSM") {
-                alert("You must be attached to \"serveCSM\"");
+            if (wv.server != "serveCSM" && wv.server != "serveESP") {
+                alert("You must be attached to \"serveCSM\" or \"serveESP\"");
             }
 
             if (Number(textList[2]) > 1) {
@@ -1569,7 +1551,7 @@ var wvServerMessage = function (text) {
             browserToServer("getPmtrs|");
             wv.pmtrStat = 6000;
         }
-        
+
 
     // if it starts with "delPmtr|" do nothing
     } else if (text.substring(0,8) == "delPmtr|") {
@@ -1739,8 +1721,8 @@ var wvServerMessage = function (text) {
         } else {
             // open the Sketcher
             changeMode(8);
-            sket.initialize();
-            sket.cmdLoad(textList[1], textList[2], textList[3], textList[4]);
+            sketcherInitialize();
+            sketcherLoad(textList[1], textList[2], textList[3], textList[4]);
         }
 
     // if it starts with "solveSketch|" update the Sketcher
@@ -1775,6 +1757,41 @@ var wvServerMessage = function (text) {
             var button = document.getElementById("solveButton");
             button["innerHTML"] = "ShowEBodys";
         }
+
+    // if it starts with "timLoad|" pass to curTool or postMessage
+    } else if (text.substring(0,8) == "timLoad|") {
+        if (wv.curTool.timLoadCB !== undefined) {
+            wv.curTool.timLoadCB(text.substring(8));
+        } else {
+            postMessage(text);
+        }
+
+    // if it starts with "timSave|" pass to curTool or postMessage
+    } else if (text.substring(0,8) == "timSave|") {
+        if (wv.curTool.timSaveCB !== undefined) {
+            wv.curTool.timSaveCB(text.substring(8));
+        } else {
+            postMessage(text);
+        }
+
+    // if it starts with "timQuit|" pass to curTool or postMessage
+    } else if (text.substring(0,8) == "timQuit|") {
+        if (wv.curTool.timQuitCB !== undefined) {
+            wv.curTool.timQuitCB(text.substring(8));
+        } else {
+            postMessage(text);
+        }
+
+    // if it starts with "timMesg|" pass to curTool or postMessage
+    } else if (text.substring(0,8) == "timMesg|") {
+        if (wv.curTool.timMesgCB !== undefined) {
+            wv.curTool.timMesgCB(text.substring(8));
+        } else {
+            postMessage(text);
+        }
+
+    // if it starts with "timDraw|" do nothing
+    } else if (text.substring(0,8) == "timDraw|") {
 
     // if it starts with "setLims|" do nothing
     } else if (text.substring(0,8) == "setLims|") {
@@ -1813,21 +1830,21 @@ var wvServerMessage = function (text) {
         if (wv.curMode == 9) {
 
             // load Gloves from wv.curFile
-            glov.cmdLoad();
+            glovesLoad();
 
             // if wv.curFile does not have a Gloves section, ask for a component
-            if (glov.comp.length == 0) {
-                glov.cmdSolve();
+            if (gloves.comp.length == 0) {
+                gloves.cmdSolve();
             }
 
             // if there are still no Gloves components, quit Gloves
-            if (glov.comp.length == 0) {
-                glov.cmdQuit();
+            if (gloves.comp.length == 0) {
+                gloves.cmdQuit();
 
             // if there is at least one component, show it/them
             } else {
                 glovesDraw();
-                glov.cmdHome();
+                gloves.cmdHome();
             }
 
             return;
@@ -2000,7 +2017,14 @@ var wvServerMessage = function (text) {
             var inode = Number(textList[1]);
             var icol  = Number(textList[2]);
             var state =        textList[3];
-            myTree.prop(inode, icol, state);
+
+            if        (inode == -1) {
+                myTree.delay = 1;
+            } else if (inode == -2) {
+                myTree.delay = 0;
+            } else {
+                myTree.prop(inode, icol, state);
+            }
 
             myTree.update();
         }
@@ -2009,6 +2033,10 @@ var wvServerMessage = function (text) {
     // settings to everyone
     } else if (text.substring(0,10) == "sendState|") {
         if (wv.myRole == 0) {
+
+            // tell synced browser to delay updating their trees
+            browserToServer("toggle|-1|0|0|");
+
             for (var inode = 0; inode < myTree.parent.length; inode++) {
 
                 // skip if one of the headers
@@ -2059,6 +2087,9 @@ var wvServerMessage = function (text) {
                     }
                 }
             }
+
+            // tell synced browsers to update their trees now
+            browserToServer("toggle|-2|0|0|");
 
             // send current transform
             browserToServer("xform|"+wv.width+"|"+wv.height+"|"+wv.scale+"|"+wv.uiMatrix.getAsArray()+"|");
@@ -2330,7 +2361,7 @@ var cmdFile = function () {
     /* remove previous menu entries */
     var menu = document.getElementById("myFileMenu");
     while (menu.firstChild !== null) {
-        menu.removeChild(menu.firstChild)
+        menu.removeChild(menu.firstChild);
     }
 
     /* add entries for New, Open, Export, and Edit for all files */
@@ -2458,7 +2489,7 @@ var cmdFileOpen = function () {
 
     if (wv.curMode == 0) {
         var filelist = wv.filenames.split("|");
-        var filename = prompt("Enter filename to open:", filelist[0]);
+        var filename = prompt("Enter filename to open:", filelist[1]);
         if (filename !== null) {
             if (filename.length == 0) {
                 alert("empty filename given");
@@ -2649,8 +2680,9 @@ var editCsmOk = function () {
     // tell user if no changes were made
     var newFile = wv.codeMirror.getDoc().getValue();
 
-    if (wv.curFile == newFile && wv.nchanges == 0) {
-        alert("No changes were made");
+    if (wv.curFile == newFile && wv.nchanges == 0 &&
+        confirm("No changes were made.  Reload file anyway?") !== true) {
+
         wv.curFile = "";
 
         // remove from editor
@@ -2899,6 +2931,52 @@ var cmdTool = function () {
 
     // if myCollabMenu is currently posted, delete it now
     document.getElementById("myCollabMenu").classList.remove("showCollabMenu");
+
+    /* remove previous menu entries */
+    var menu = document.getElementById("myToolMenu");
+    while (menu.firstChild !== null) {
+        menu.removeChild(menu.firstChild);
+    }
+
+    /* add entries based upon the server */
+    var button;
+
+    button = document.createElement("input");
+    button.type    = "button";
+    button.title   = "Launch Sketcher";
+    button.value   = "Sketch";
+    button.onclick = sketch.launch;
+    menu.appendChild(button);
+
+    if (wv.server == "serveESP") {
+        button = document.createElement("input");
+        button.type    = "button";
+        button.title   = "Launch Gloves";
+        button.value   = "Gloves";
+        button.onclick = gloves.launch;
+        menu.appendChild(button);
+
+        button = document.createElement("input");
+        button.type    = "button";
+        button.title   = "Launch ErepEd";
+        button.value   = "ErepEd";
+        button.onclick = ereped.launch;
+        menu.appendChild(button);
+
+//        button = document.createElement("input");
+//        button.type    = "button";
+//        button.title   = "Launch Mitten";
+//        button.value   = "Mitten";
+//        button.onclick = mitten.launch;
+//        menu.appendChild(button);
+
+        button = document.createElement("input");
+        button.type    = "button";
+        button.title   = "Launch Plugs";
+        button.value   = "Plugs";
+        button.onclick = plugs.launch;
+        menu.appendChild(button);
+    }
 };
 
 
@@ -3354,7 +3432,7 @@ var editPmtr = function (e) {
                 for (jnode = 0; jnode < myTree.name.length; jnode++) {
                     var parent = myTree.parent[jnode];
                     while (parent > 0) {
-                        if (parent == 3 && 
+                        if (parent == 3 &&
                             myTree.name[jnode].replace(/\u00a0/g, "").replace(/>/g, "") == brch[ibrch].name) {
                             document.getElementById("node"+jnode+"col1").className = "childTD";
                         }
@@ -3487,7 +3565,7 @@ var compGeomSens = function () {
 
     // if a scalar...
     if (pmtr[ipmtr].nrow == 1 && pmtr[ipmtr].ncol == 1) {
-        
+
         // clear any previous velocities
         browserToServer("clrVels|geom|");
         for (jpmtr = 0; jpmtr < pmtr.length; jpmtr++) {
@@ -3550,7 +3628,7 @@ var compGeomSens = function () {
             }
         }
     }
-    
+
     // rebuild
     browserToServer("build|0|");
 
@@ -3692,7 +3770,7 @@ var compTessSens = function () {
             }
         }
     }
-        
+
     // rebuild
     browserToServer("build|0|");
 
@@ -4856,10 +4934,10 @@ var editBrchOk = function () {
 
     //otherwise enter the sketcher
     } else {
-        sket.ibrch = ibrch + 1;
+        sketch.ibrch = ibrch + 1;
 
         // send the message to the server
-        browserToServer("loadSketch|"+sket.ibrch+"|");
+        browserToServer("loadSketch|"+sketch.ibrch+"|");
 
         // inactivate buttons until build is done
         changeMode(-1);
@@ -5289,8 +5367,6 @@ main.mouseMove = function(e) {
 main.mouseUp = function(e) {
     wv.dragging = false;
 
-    if (wv.myRole == 1) return;
-
     // send matrix to server in case there are any users who are sync'd
     if (wv.myRole == 0 && wv.numUsers > 1) {
         browserToServer("xform|"+wv.width+"|"+wv.height+"|"+wv.scale+"|"+wv.uiMatrix.getAsArray()+"|");
@@ -5334,6 +5410,11 @@ main.mouseLeftCanvas = function(e) {
     if (wv.dragging) {
         wv.dragging = false;
     }
+
+    // send matrix to server in case there are any users who are sync'd
+    if (wv.myRole == 0 && wv.numUsers > 1) {
+        browserToServer("xform|"+wv.width+"|"+wv.height+"|"+wv.scale+"|"+wv.uiMatrix.getAsArray()+"|");
+    }
 };
 
 
@@ -5342,7 +5423,6 @@ main.mouseLeftCanvas = function(e) {
 //
 main.keyPress = function(e) {
 //    if (!e) var e = event;
-    // alert("in main.keyPress(e="+e+")");
 
     // if <esc> was pressed, return to base mode
     if (e.charCode == 0 && e.keyCode == 27) {
@@ -5802,7 +5882,8 @@ var modifyDisplayType = function (e) {
                            "   3  minimum curvature\n"+
                            "   4  maximum curvature\n"+
                            "   5  Gaussian curvature\n"+
-                           "   6  Erep", "0");
+                           "   6  normals\n"+
+                           "  10  Erep", "0");
 
         if (ptype === null) {
             return;
@@ -5812,7 +5893,7 @@ var modifyDisplayType = function (e) {
         } else {
             wv.plotType = Number(ptype);
 
-            if (wv.plotType > 0 && wv.plotType < 6) {
+            if (wv.plotType > 0 && wv.plotType < 7) {
                 setKeyLimits(null);
             } else {
                 // send the limits back to the server
@@ -6337,6 +6418,9 @@ var Tree = function (doc, treeId) {
     this.cbck3[ 0]  = null;
     this.opened[0]  = +1;
 
+    // initially, delay is not on
+    this.delay = 0;
+
     // add methods
     this.addNode  = TreeAddNode;
     this.expand   = TreeExpand;
@@ -6749,6 +6833,11 @@ var TreeProp = function (inode, iprop, onoff) {
 var TreeUpdate = function () {
     // alert("in TreeUpdate()");
 
+    // delay will be turned on during the sync operation
+    if (this.delay == 1) {
+        return;
+    }
+
     var doc = this.document;
 
     // traverse the Nodes using depth-first search
@@ -7010,8 +7099,7 @@ var changeMode = function (newMode) {
 
     var wvKey            = document.getElementById("WVkey");
     var sketcherStatus   = document.getElementById("sketcherStatus");
-    var glovesStatus     = document.getElementById("glovesStatus");
-    var erepedStatus     = document.getElementById("erepedStatus");
+    var timStatus        = document.getElementById("timStatus");
     var ESPlogo          = document.getElementById("ESPlogo");
 
     if (newMode < 0) {
@@ -7037,8 +7125,7 @@ var changeMode = function (newMode) {
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
-        glovesStatus.hidden     = true;
-        erepedStatus.hidden     = true;
+        timStatus.hidden        = true;
         ESPlogo.hidden          = false;
 
         wv.curMode   = 0;
@@ -7063,8 +7150,7 @@ var changeMode = function (newMode) {
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
-        glovesStatus.hidden     = true;
-        erepedStatus.hidden     = true;
+        timStatus.hidden        = true;
         ESPlogo.hidden          = false;
 
         // unselect all items
@@ -7088,8 +7174,7 @@ var changeMode = function (newMode) {
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
-        glovesStatus.hidden     = true;
-        erepedStatus.hidden     = true;
+        timStatus.hidden        = true;
         ESPlogo.hidden          = false;
 
         addBrchHeader.hidden    = false;
@@ -7116,8 +7201,7 @@ var changeMode = function (newMode) {
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
-        glovesStatus.hidden     = true;
-        erepedStatus.hidden     = true;
+        timStatus.hidden        = true;
         ESPlogo.hidden          = false;
 
         addBrchHeader.hidden    = true;
@@ -7146,8 +7230,7 @@ var changeMode = function (newMode) {
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
-        glovesStatus.hidden     = true;
-        erepedStatus.hidden     = true;
+        timStatus.hidden        = true;
         ESPlogo.hidden          = false;
 
         addPmtrHeader.hidden    = false;
@@ -7177,8 +7260,7 @@ var changeMode = function (newMode) {
         ESPlogo.hidden          = false;
 
         addPmtrHeader.hidden    = true;
-        glovesStatus.hidden     = true;
-        erepedStatus.hidden     = true;
+        timStatus.hidden        = true;
         editPmtrHeader.hidden   = false;
 
         if (wv.getFocus !== undefined) {
@@ -7219,8 +7301,7 @@ var changeMode = function (newMode) {
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
-        glovesStatus.hidden     = true;
-        erepedStatus.hidden     = true;
+        timStatus.hidden        = true;
         ESPlogo.hidden          = false;
 
         wv.curTool = main;
@@ -7238,11 +7319,10 @@ var changeMode = function (newMode) {
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = false;
-        glovesStatus.hidden     = true;
-        erepedStatus.hidden     = true;
+        timStatus.hidden        = true;
         ESPlogo.hidden          = true;
 
-        wv.curTool = sket;
+        wv.curTool = sketch;
         wv.curMode = 8;
     } else if (newMode == 9) {
         wv.usingMain = 0;
@@ -7257,11 +7337,10 @@ var changeMode = function (newMode) {
         glovesForm.hidden       = false;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
-        glovesStatus.hidden     = false;
-        erepedStatus.hidden     = true;
+        timStatus.hidden        = false;
         ESPlogo.hidden          = true;
 
-        wv.curTool = glov;
+        wv.curTool = gloves;
         wv.curMode = 9;
     } else if (newMode == 10) {
         wv.usingMain = 1;
@@ -7276,12 +7355,47 @@ var changeMode = function (newMode) {
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
-        glovesStatus.hidden     = true;
-        erepedStatus.hidden     = false;
+        timStatus.hidden        = false;
         ESPlogo.hidden          = true;
 
-        wv.curTool = erep;
+        wv.curTool = ereped;
         wv.curMode = 10;
+    } else if (newMode == 11) {
+        wv.usingMain = 1;
+
+        webViewer.hidden        = false;
+        addBrchForm.hidden      = true;
+        editBrchForm.hidden     = true;
+        editPmtrForm.hidden     = true;
+        showOutpmtrsForm.hidden = true;
+        editCsmForm.hidden      = true;
+        sketcherForm.hidden     = true;
+        glovesForm.hidden       = true;
+        wvKey.hidden            = true;
+        sketcherStatus.hidden   = true;
+        timStatus.hidden        = false;
+        ESPlogo.hidden          = true;
+
+        wv.curTool = mitten;
+        wv.curMode = 11;
+    } else if (newMode == 12) {
+        wv.usingMain = 1;
+
+        webViewer.hidden        = false;
+        addBrchForm.hidden      = true;
+        editBrchForm.hidden     = true;
+        editPmtrForm.hidden     = true;
+        showOutpmtrsForm.hidden = true;
+        editCsmForm.hidden      = true;
+        sketcherForm.hidden     = true;
+        glovesForm.hidden       = true;
+        wvKey.hidden            = true;
+        sketcherStatus.hidden   = true;
+        timStatus.hidden        = false;
+        ESPlogo.hidden          = true;
+
+        wv.curTool = plugs;
+        wv.curMode = 12;
     } else {
         alert("Bad new mode = "+newMode);
     }
@@ -7848,8 +7962,8 @@ var setupEditBrchForm = function () {
         defValue = ["",      "",      "",      "",      "",      "",      ""      ];
         suppress = 1;
     } else if (type == "connect") {
-        argList  = ["faceList1", "faceList2", "edgelist1", "edgelist2"];
-        defValue = ["",          ""         , "0",         "0"        ];
+        argList  = ["faceList1", "faceList2", "edgelist1", "edgelist2", "toler"];
+        defValue = ["",          ""         , "0",         "0",         "0"    ];
     } else if (type == "cylinder") {
         argList  = ["xbeg", "ybeg", "zbeg", "xend", "yend", "zend", "radius"];
         defValue = ["",     "",     "",     "",     "",     "",     ""      ];
@@ -8829,7 +8943,7 @@ var cmdEditHint = function () {
     } else if (curLine.match(/^\s*cone/i) !== null) {
         hintText =        "hint:: CONE      xvrtx yvrtx zvrtx xbase ybase zbase radius";
     } else if (curLine.match(/^\s*connect/i) !== null) {
-        hintText =        "hint:: CONNECT   faceList1 faceList2";
+        hintText =        "hint:: CONNECT   faceList1 faceList2 edgeList1=0 edgeList2=0 toler=0";
     } else if (curLine.match(/^\s*conpmtr/i) !== null) {
         hintText =        "hint:: CONPMTR   $pmtrName value";
     } else if (curLine.match(/^\s*csystem/i) !== null) {

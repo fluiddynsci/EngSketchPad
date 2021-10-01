@@ -28,27 +28,27 @@ default:	$(LDIR)/libegadsliteNR.so
 endif
 
 $(LDIR)/libegadsliteNR.so:	$(OBJS) liteTess.o liteTris.o liteQuads.o \
-				liteTessInp.o egadsRobust.o emp.o \
-				ratLite.o liteRegQuads.o \
+				liteTessInp.o egadsRobust.o emp.o liteUVmap.o \
+				ratLite.o liteRegQuads.o liteEffect.o \
 				evaluateNR.o liteGeomNR.o liteTopoNR.o
 	touch $(LDIR)/libegadsliteNR.so
 	rm $(LDIR)/libegadsliteNR.so
 	(cd $(ODIR); $(CC) -shared -Wl,-no-undefined \
 		-o $(LDIR)/libegadsliteNR.so $(OBJS) liteTess.o liteTris.o \
 		liteQuads.o liteTessInp.o egadsRobust.o emp.o ratLite.o \
-		liteRegQuads.o evaluateNR.o liteGeomNR.o \
-		liteTopoNR.o -lpthread -lm )
+		liteEffect.o liteUVmap.o liteRegQuads.o evaluateNR.o \
+		liteGeomNR.o liteTopoNR.o -lpthread -lm )
 
 $(LDIR)/libegadsliteNR.dylib:	$(OBJS) liteTess.o liteTris.o liteQuads.o \
 				liteTessInp.o egadsRobust.o emp.o ratLite.o \
-				liteRegQuads.o evaluateNR.o \
-				liteGeomNR.o liteTopoNR.o
+				liteEffect.o liteUVmap.o liteRegQuads.o \
+				evaluateNR.o liteGeomNR.o liteTopoNR.o
 	touch $(LDIR)/libegadsliteNR.dylib
 	rm $(LDIR)/libegadsliteNR.dylib
 	(cd $(ODIR); $(CC) -dynamiclib -o $(LDIR)/libegadsliteNR.dylib \
                 $(OBJS) liteTess.o liteTris.o liteQuads.o liteTessInp.o \
-		egadsRobust.o emp.o ratLite.o liteRegQuads.o \
-		evaluateNR.o liteGeomNR.o liteTopoNR.o \
+		egadsRobust.o emp.o ratLite.o liteRegQuads.o liteUVmap.o \
+		evaluateNR.o liteGeomNR.o liteTopoNR.o liteEffect.o \
 		-undefined error -install_name '@rpath/libegadsliteNR.dylib' \
                 -current_version $(EGREV) )
 

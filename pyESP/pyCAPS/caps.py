@@ -21,6 +21,11 @@ from sys import version_info
 
 from pyEGADS import egads
 
+try:
+    import numpy
+except ImportError:
+    numpy = None
+
 # get the value of _ESP_ROOT
 try:
     _ESP_ROOT = os.environ["ESP_ROOT"]
@@ -101,10 +106,10 @@ c_capsObject.__slots__ = [
     'magicnumber',
     'type',
     'subtype',
-    'sn',
     'name',
     'attrs',
     'blind',
+    'flist',
     'nHistory',
     'history',
     'last',
@@ -114,10 +119,10 @@ c_capsObject._fields_ = [
     ('magicnumber', c_int),
     ('type', c_int),
     ('subtype', c_int),
-    ('sn', c_int),
     ('name', c_char_p),
     ('attrs', POINTER(egads.c_egAttrs)),
     ('blind', POINTER(None)),
+    ('flist', POINTER(None)),
     ('nHistory', c_int),
     ('history', POINTER(c_capsOwn)),
     ('last', c_capsOwn),
@@ -189,8 +194,6 @@ union_capsValue_vals.__slots__ = [
     'reals',
     'string',
     'tuple',
-    'object',
-    'objects',
     'AIMptr',
 ]
 union_capsValue_vals._fields_ = [
@@ -200,8 +203,6 @@ union_capsValue_vals._fields_ = [
     ('reals', POINTER(c_double)),
     ('string', c_char_p),
     ('tuple', POINTER(c_capsTuple)),
-    ('object', POINTER(c_capsObject)),
-    ('objects', POINTER(POINTER(c_capsObject))),
     ('AIMptr', POINTER(None)),
 ]
 
@@ -229,6 +230,7 @@ c_capsValue.__slots__ = [
     'lfixed',
     'sfixed',
     'nullVal',
+    'index',
     'pIndex',
     'gInType',
     'vals',
@@ -249,6 +251,7 @@ c_capsValue._fields_ = [
     ('lfixed', c_int),
     ('sfixed', c_int),
     ('nullVal', c_int),
+    ('index', c_int),
     ('pIndex', c_int),
     ('gInType', c_int),
     ('vals', union_capsValue_vals),
@@ -334,6 +337,12 @@ _caps.caps_setAttr.restype = c_int
 _caps.caps_deleteAttr.argtypes = [c_capsObj, c_char_p]
 _caps.caps_deleteAttr.restype = c_int
 
+_caps.caps_phaseState.argtypes = [c_char_p, c_char_p, POINTER(c_int)]
+_caps.caps_phaseState.restype = c_int
+
+_caps.caps_journalState.argtypes = [c_capsObj]
+_caps.caps_journalState.restype = c_int
+
 _caps.caps_open.argtypes = [c_char_p, c_char_p, c_int, c_void_p, c_int, POINTER(c_capsObj), POINTER(c_int), POINTER(POINTER(c_capsErrs))]
 _caps.caps_open.restype = c_int
 
@@ -358,7 +367,7 @@ _caps.caps_getOutput.restype = c_int
 _caps.caps_AIMbackdoor.argtypes = [c_capsObj, c_char_p, POINTER(c_char_p)]
 _caps.caps_AIMbackdoor.restype = c_int
 
-_caps.caps_makeAnalysis.argtypes = [c_capsObj, c_char_p, c_char_p, c_char_p, c_char_p, c_int, POINTER(c_capsObj), POINTER(c_int), POINTER(POINTER(c_capsErrs))]
+_caps.caps_makeAnalysis.argtypes = [c_capsObj, c_char_p, c_char_p, c_char_p, c_char_p, POINTER(c_int), POINTER(c_capsObj), POINTER(c_int), POINTER(POINTER(c_capsErrs))]
 _caps.caps_makeAnalysis.restype = c_int
 
 _caps.caps_dupAnalysis.argtypes = [c_capsObj, c_char_p, POINTER(c_capsObj)]
@@ -376,11 +385,11 @@ _caps.caps_analysisInfo.restype = c_int
 _caps.caps_preAnalysis.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_capsErrs))]
 _caps.caps_preAnalysis.restype = c_int
 
-_caps.caps_runAnalysis.argtypes = [c_capsObj, POINTER(c_int), POINTER(c_int), POINTER(POINTER(c_capsErrs))]
-_caps.caps_runAnalysis.restype = c_int
+_caps.caps_system.argtypes = [c_capsObj, c_char_p, c_char_p]
+_caps.caps_system.restype = c_int
 
-_caps.caps_checkAnalysis.argtypes = [c_capsObj, POINTER(c_int), POINTER(c_int), POINTER(POINTER(c_capsErrs))]
-_caps.caps_checkAnalysis.restype = c_int
+_caps.caps_execute.argtypes = [c_capsObj, POINTER(c_int), POINTER(c_int), POINTER(POINTER(c_capsErrs))]
+_caps.caps_execute.restype = c_int
 
 _caps.caps_postAnalysis.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_capsErrs))]
 _caps.caps_postAnalysis.restype = c_int
@@ -460,7 +469,7 @@ _caps.caps_transferValues.restype = c_int
 _caps.caps_linkValue.argtypes = [c_capsObj, enum_capstMethod, c_capsObj, POINTER(c_int), POINTER(POINTER(c_capsErrs))]
 _caps.caps_linkValue.restype = c_int
 
-_caps.caps_hasDeriv.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_char_p))]
+_caps.caps_hasDeriv.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_char_p)), POINTER(c_int), POINTER(POINTER(c_capsErrs))]
 _caps.caps_hasDeriv.restype = c_int
 
 _caps.caps_getDeriv.argtypes = [c_capsObj, c_char_p, POINTER(c_int), POINTER(c_int), POINTER(POINTER(c_double)), POINTER(c_int), POINTER(POINTER(c_capsErrs))]
@@ -522,6 +531,13 @@ del lines
 del define
 
 # Extract CAPS enums
+class oFlag:   
+    oFileName  = 0
+    oMODL      = 1
+    oEGO       = 2
+    oPhaseName = 3
+    oContinue  = 4
+
 __all__.append("oType")
 class oType:
      BODIES     = -2
@@ -541,13 +557,12 @@ class sType:
     PARAMETRIC  = 2
     GEOMETRYIN  = 3
     GEOMETRYOUT = 4
-    BRANCH      = 5
-    PARAMETER   = 6
-    USER        = 7
-    ANALYSISIN  = 8
-    ANALYSISOUT = 9
-    CONNECTED   = 10
-    UNCONNECTED = 11
+    PARAMETER   = 5
+    USER        = 6
+    ANALYSISIN  = 7
+    ANALYSISOUT = 8
+    CONNECTED   = 9
+    UNCONNECTED = 10
 
 __all__.append("eType")
 class eType:
@@ -770,7 +785,7 @@ def _caps_freeOwner(owner):
     stat = _caps.caps_freeOwner(owner)
     if stat: _raiseStatus(stat, msg = "while freeing CAPS capsOwner")
 
-#=============================================================================-
+#==============================================================================
 __all__.append("capsOwn")
 class capsOwn:
     """
@@ -794,13 +809,13 @@ class capsOwn:
         if freeOwner:
             self._finalize = egads.finalize(self, _caps_freeOwner, self._owner)
 
-#=============================================================================-
+#==============================================================================
     def __del__(self):
         # free the owner
         if self._finalize is not None:
             self._finalize()
 
-#=============================================================================-
+#==============================================================================
     def info(self):
         """
         Retrieve owner information
@@ -857,7 +872,7 @@ def _caps_freeError(errors):
     stat = _caps.caps_freeError(errors)
     if stat: _raiseStatus(stat, msg = "while freeing CAPS capsErrs structure")
 
-#=============================================================================-
+#==============================================================================
 __all__.append("capsErrs")
 class capsErrs:
     """
@@ -882,13 +897,13 @@ class capsErrs:
         self._errors = errors
         self._finalize = egads.finalize(self, _caps_freeError, self._errors)
 
-#=============================================================================-
+#==============================================================================
     def __del__(self):
         # free the errors
         if self._finalize is not None:
             self._finalize()
 
-#=============================================================================-
+#==============================================================================
     def info(self):
         """
         Retrieve error information
@@ -920,7 +935,7 @@ def _close_capsProblem(problemObj):
     stat = _caps.caps_close(problemObj, 0, None)
     if stat: _raiseStatus(stat, msg = "while closing CAPS Problem")
 
-#=============================================================================-
+#==============================================================================
 
 # free a CAPS Object (only User defined Value and Bound Objects)
 def _caps_delete(obj):
@@ -928,9 +943,9 @@ def _caps_delete(obj):
     stat = _caps.caps_delete(obj)
     if stat: _raiseStatus(stat, msg = "while deleting CAPS Object")
 
-#=============================================================================-
+#==============================================================================
 __all__.append("open")
-def open(prName, phName, ptr, outLevel=1):
+def open(prName, phName, ptr, outLevel=1, useJournal=False):
     """
     Open a CAPS Problem Object
 
@@ -953,21 +968,26 @@ def open(prName, phName, ptr, outLevel=1):
 
     outLevel:
         0 - minimal, 1 - standard (default), 2 - debug
+
+    useJournal:
+        0 - minimal, 1 - standard (default), 2 - debug
     """
     prName = prName.encode() if isinstance(prName, str) else prName
     phName = phName.encode() if isinstance(phName, str) else phName
     if isinstance(ptr, (str, bytes)) or \
        (version_info.major <= 2 and isinstance(ptr, unicode)):
         pptr = c_char_p(ptr if isinstance(ptr, bytes) else ptr.encode())
-        flag = 0
+        flag = oFlag.oFileName
         pptr = ctypes.cast(pptr, c_void_p)
     elif hasattr(ptr, "_modl"):
-        flag = 1
+        flag=oFlag.oMODL
         if not isinstance(ptr._modl, c_void_p):
             raise CAPSError(CAPS_BADVALUE, "ptr has _modl that is not a ctypes.c_void_p. Is it an intance of pyOCSM.Ocsm? ptr = {!r}".format(ptr))
         pptr = ptr._modl
     else:
         raise CAPSError(CAPS_BADVALUE, "ptr type should be str, bytes, or pyOCSM.Ocsm: ptr = {!r}".format(ptr))
+
+    if useJournal: flag=oFlag.oContinue
 
     nErr = c_int()
     errs = POINTER(c_capsErrs)()
@@ -982,12 +1002,12 @@ def open(prName, phName, ptr, outLevel=1):
 
     return capsObj(problemObj, None, deleteFunction=_close_capsProblem)
 
-#=============================================================================-
+#==============================================================================
 class capsObj:
     """
     Base class Wrapper to represent a CAPS Object
     """
-#=============================================================================-
+#==============================================================================
     def __init__(self, obj, problemObj, deleteFunction):
         """
         Constructor only intended for internal use.
@@ -1011,31 +1031,41 @@ class capsObj:
         if deleteFunction is not None:
             self._finalize = egads.finalize(self, deleteFunction, self._obj)
 
-#=============================================================================-
+#==============================================================================
     def __del__(self):
-        # free the value object
+        self.close()
+
+#==============================================================================
+    def close(self):
+        """
+        Closes (or deletes) the object and invalidates all pointers
+        """
+        # free the object
         if self._finalize is not None:
             self._finalize()
+        self._obj = None
+        self._finalize = None
+        self._problemObj = None
 
-#=============================================================================-
+#==============================================================================
     def __eq__(self, obj):
         """
         checks pointer equality of underlying c_capsObj memory address
         """
         return isinstance(obj, capsObj) and ctypes.addressof(obj._obj.contents) == ctypes.addressof(self._obj.contents)
 
-#=============================================================================-
+#==============================================================================
     def __ne__(self, obj):
         return not self == obj
 
-#=============================================================================-
+#==============================================================================
     def problemObj(self):
         """
         Returns the problemObj associated with this capsObj (self of self is a problemObj)
         """
         return self if self._problemObj is None else self._problemObj
 
-#=============================================================================-
+#==============================================================================
     def info(self):
         """
         Return information about the object
@@ -1079,7 +1109,28 @@ class capsObj:
         
         return name, otype, stype, link, parent, last
 
-#=============================================================================-
+#==============================================================================
+    def journalState(self):
+        """
+        Get the journal state for a problem object
+        
+        Note: Needed to determine if restarting when explicitly executing analyses.
+
+        Parameters
+        ----------
+        self:
+           a CAPS Problem Object
+
+        Returns
+        -------
+        True if Journaling False otherwise
+        """
+        stat = _caps.caps_journalState(self._obj)
+        if stat == 0: return False
+        if stat == 4: return True
+        _raiseStatus(stat)
+
+#==============================================================================
     def size(self, type, stype):
         """
         Children sizing information from a Patent Object
@@ -1104,7 +1155,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
         return size.value
 
-#=============================================================================-
+#==============================================================================
     def childByName(self, otype, stype, name):
         """
         Retrieve a CAPS child object by name
@@ -1133,7 +1184,7 @@ class capsObj:
         if stat: _raiseStatus(stat)
         return capsObj(child, self.problemObj(), None)
 
-#=============================================================================-
+#==============================================================================
     def childByIndex(self, otype, stype, index):
         """
         Retrieve a CAPS child object by name
@@ -1161,7 +1212,7 @@ class capsObj:
         if stat: _raiseStatus(stat)
         return capsObj(child, self.problemObj(), None)
 
-#=============================================================================-
+#==============================================================================
     def addHistory(self, history):
         """
         Add history to a CAPS Object
@@ -1174,7 +1225,7 @@ class capsObj:
         stat = _caps.caps_addHistory(self._obj, history._owner)
         if stat: _raiseStatus(stat)
     
-#=============================================================================-
+#==============================================================================
     def getHistory(self):
         """
         Retrieve history of a CAPS Object
@@ -1195,7 +1246,7 @@ class capsObj:
 
         return hist
 
-#=============================================================================-
+#==============================================================================
     def addHistory(self, hist):
         """
         Add history to a CAPS Object
@@ -1208,7 +1259,7 @@ class capsObj:
         stat = _caps.caps_addHistory(self._obj, hist._owner)
         if stat: _raiseStatus(stat)
 
-#=============================================================================-
+#==============================================================================
     def attrByName(self, name):
         """
         Retrieve an attribute by name
@@ -1233,7 +1284,7 @@ class capsObj:
 
         return capsObj(attr, self.problemObj(), deleteFunction=deleteFunc)
 
-#=============================================================================-
+#==============================================================================
     def attrByIndex(self, index):
         """
         Retrieve an Attribute by index
@@ -1256,7 +1307,7 @@ class capsObj:
 
         return capsObj(attr, self.problemObj(), deleteFunction=deleteFunc)
 
-#=============================================================================-
+#==============================================================================
     def setAttr(self, attr, name=None):
         """
         Set an Attribute
@@ -1276,7 +1327,7 @@ class capsObj:
         stat = _caps.caps_setAttr(self._obj, name, attr._obj)
         if stat: _raiseStatus(stat)
 
-#=============================================================================-
+#==============================================================================
     def deleteAttr(self, name):
         """
         Set an Attribute
@@ -1292,7 +1343,7 @@ class capsObj:
         stat = _caps.caps_deleteAttr(self._obj, name)
         if stat: _raiseStatus(stat)
 
-#=============================================================================-
+#==============================================================================
     def setOutLevel(self, outlevel=1):
         """
         Sets the CAPS verbosity level
@@ -1310,7 +1361,7 @@ class capsObj:
         if stat < 0: _raiseStatus(stat)
         return stat
 
-#=============================================================================-
+#==============================================================================
     def bodyByIndex(self, index):
         """
         Retrived an EGADS body ego based on index
@@ -1336,7 +1387,7 @@ class capsObj:
         if units: units = Unit(_decode(units.value))
         return egads.c_to_py(body), units
 
-#=============================================================================-
+#==============================================================================
     def getBodies(self):
         """
         Retrived EGADS ego bodies from an Analysis Object
@@ -1358,7 +1409,7 @@ class capsObj:
         
         return bodies
 
-#=============================================================================-
+#==============================================================================
     def getRootPath(self):
         """
         Retrieve the problem root path
@@ -1375,7 +1426,7 @@ class capsObj:
         
         return _decode(fullPath.value)
 
-#=============================================================================-
+#==============================================================================
     def convertValue(self, inVal, inUnit):
         """
         Perform unit conversion
@@ -1400,7 +1451,7 @@ class capsObj:
         
         return outVal.value
 
-#=============================================================================-
+#==============================================================================
     def reset(self):
         """
         Reset the problem. This is equivalent to a clean slate restart.
@@ -1410,7 +1461,7 @@ class capsObj:
         stat = _caps.caps_reset(self._obj, ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def writeParameters(self, fileName):
         """
         This outputs an OpenCSM Design Parameter file.
@@ -1425,7 +1476,7 @@ class capsObj:
         stat = _caps.caps_writeParameters(self._obj, fileName)
         if stat: _raiseStatus(stat)
 
-#=============================================================================-
+#==============================================================================
     def readParameters(self, fileName):
         """
         This reads an OpenCSM Design Parameter file and overwrites (makes dirty) 
@@ -1441,7 +1492,7 @@ class capsObj:
         stat = _caps.caps_readParameters(self._obj, fileName)
         if stat: _raiseStatus(stat)
 
-#=============================================================================-
+#==============================================================================
     def writeGeometry(self, fileName, flag = 1):
         """
         Writes all bodies in the Problem/Analysis Object to a file
@@ -1466,7 +1517,7 @@ class capsObj:
         stat = _caps.caps_writeGeometry(self._obj, c_int(flag), fileName, ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def setOwner(self, pname, lines, owner):
         """
         Sets owner data
@@ -1494,7 +1545,7 @@ class capsObj:
         stat = _caps.caps_setOwner(self._obj, pname, c_int(nLines), plines, owner._owner)
         if stat: _raiseStatus(stat)
 
-#=============================================================================-
+#==============================================================================
     def makeValue(self, vname, stype, data):
         """
         Create a value object
@@ -1543,7 +1594,7 @@ class capsObj:
 
         return capsObj(val, self.problemObj(), deleteFunction=deleteFunc)
 
-#=============================================================================-
+#==============================================================================
     def queryAnalysis(self, aname):
         """
         Query Analysis -- Does not 'load' or create an object
@@ -1582,25 +1633,24 @@ class capsObj:
 
         return nIn, nOut, execute
 
-#=============================================================================-
+#==============================================================================
     def getInput(self):
         raise CAPSError(msg="Implement")
 
-#=============================================================================-
+#==============================================================================
     def getOutput(self):
         raise CAPSError(msg="Implement")
 
-#=============================================================================-
-    def makeAnalysis(self, aname, name, unitSys=None, intent=None, execute=2):
+#==============================================================================
+    def makeAnalysis(self, aname, name, unitSys=None, intent=None, execute=1):
         """
         Load Analysis into the Problem
 
         Notes: 
             This causes the the DLL/Shared-Object to be loaded (if not already resident)
 
-            If execute is 2 and the AIM has aimExecute, aimExecute automatically runs after preAnalysis
+            If execute is 1 and the AIM has aimExecute, aimExecute automatically runs after preAnalysis
             and if the execution is not asynchronous aimPostAnalysis is automatically run. 
-            Any errors can be retrieved via a call to checkAnalysis.
 
         Parameters
         ----------
@@ -1618,7 +1668,7 @@ class capsObj:
             the intent string used to pass Bodies to the AIM, None - no filtering
 
         execute: 
-            the execution flag:  0 - no exec, 1 - AIM Execute performs analysis, 2 - Auto Exec
+            the execution flag:  0 - No auto execution, 1 - Auto execute if available
 
         Returns
         -------
@@ -1641,11 +1691,12 @@ class capsObj:
 
         if intent == b"": intent = None 
         analysis = c_capsObj()
+        execute = c_int(execute)
         nErr = c_int()
         errs = POINTER(c_capsErrs)()
 
         stat = _caps.caps_makeAnalysis(self._obj, aname, name, unitSys, intent,
-                                       c_int(execute), ctypes.byref(analysis), 
+                                       ctypes.byref(execute), ctypes.byref(analysis), 
                                        ctypes.byref(nErr), ctypes.byref(errs))
         if stat:
             msg = "Failed to make AIM '" + _decode(aname) + "'"
@@ -1655,7 +1706,7 @@ class capsObj:
 
         return capsObj(analysis, self.problemObj(), None)
 
-#=============================================================================-
+#==============================================================================
     def makeBound(self, dim, bname):
         """
         Creates an Bound Object
@@ -1680,7 +1731,7 @@ class capsObj:
 
         return capsObj(bound, self.problemObj(), deleteFunction=_caps_delete)
 
-#=============================================================================-
+#==============================================================================
     def getValue(self):
         """
         Returns the data in the Value Object
@@ -1704,7 +1755,7 @@ class capsObj:
                                    ctypes.byref(pdata), ctypes.byref(partial), 
                                    ctypes.byref(units), ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
-        
+
         vtype = vtype.value
         nrow = nrow.value
         ncol = ncol.value
@@ -1755,9 +1806,15 @@ class capsObj:
                     except:
                         pass
 
-                    data[name] = valu
+                    if partial and partial[i*ncol+j] == Null.IsNull:
+                        data[name] = None
+                    else:
+                        data[name] = valu
 
             return data
+
+        if partial:
+            data = [[data[i][j] if partial[i*ncol+j] == Null.NotNull else None for j in range(ncol)] for i in range(nrow)]
 
         if nrow == 1 and ncol == 1:
             data = data[0][0]
@@ -1766,7 +1823,7 @@ class capsObj:
 
         return _withUnits(data, units)
 
-#=============================================================================-
+#==============================================================================
     def getValueUnit(self):
         """
         Returns the unit in the Value Object
@@ -1798,16 +1855,21 @@ class capsObj:
         
         return Unit(units)
 
-#=============================================================================-
+#==============================================================================
     # Determine the equivalent CAPS value object type for a Python object     
     def _getType(self, data, level = 0):
     
         # If we have a list loop back in to see what type of value the element is 
-        if isinstance(data, list):
+        if isinstance(data, list) or \
+           isinstance(data, tuple):
             vtype = self._getType(data[0], level+1)
             for i in range(1,len(data)):
                 # Allow convertsion from Integer to Double
                 vtypei = self._getType(data[i])
+                if vtype == vType.Null:
+                    vtype = vtypei
+                if vtypei == vType.Null:
+                    vtypei = vtype
                 if vtype == vType.Integer and vtypei == vType.Double:
                     vtype = vType.Double
                 if vtypei == vType.Integer and vtype == vType.Double:
@@ -1821,22 +1883,18 @@ class capsObj:
         
         if isinstance(data, int):
             return vType.Integer
-        
+
+        if numpy and (isinstance(data, numpy.int32) or isinstance(data, numpy.int64)):
+            return vType.Integer
+
         if isinstance(data, float):
             return vType.Double
-        
-        if isinstance(data, tuple):
-            vtype = self._getType(data[0], level+1)
-            for i in range(1,len(data)):
-                # Allow convertsion from Integer to Double
-                vtypei = self._getType(data[i], level+1)
-                if (vtype  == vType.Integer and vtypei == vType.Double) or \
-                   (vtypei == vType.Integer and vtype  == vType.Double):
-                    vtype = vType.Double
-                if vtype != vtypei:
-                    raise CAPSError(CAPS_BADVALUE, "Tuple entries must all be same type! data: {!r}".format(data))
-        
-            return vtype
+
+        if numpy and (isinstance(data, numpy.float32) or isinstance(data, numpy.float64)):
+            return vType.Double
+
+        if numpy and isinstance(data, numpy.ndarray):
+            return self._getType(data[0], level+1)
 
         if isinstance(data, str):
             return vType.String
@@ -1853,7 +1911,7 @@ class capsObj:
 
         raise CAPSError(CAPS_BADVALUE, "Unsupported data type! type: {!r}, data: {!r}".format(type(data), data))
 
-#=============================================================================-
+#==============================================================================
     def _getShape(self, vtype, data):
         
         nrow = len(data)
@@ -1864,6 +1922,11 @@ class capsObj:
         elif isinstance(data[0], list) or \
            isinstance(data[0], tuple):
             ncol = len(data[0])
+        elif numpy and isinstance(data, numpy.ndarray):
+            if len(data.shape) == 1:
+                return data.shape[0], 1
+            else:
+                return data.shape
         else:
             ncol = 1
             
@@ -1875,18 +1938,17 @@ class capsObj:
         
         return nrow, ncol
 
-#=============================================================================-
+#==============================================================================
     def _convertData(self, data):
 
         vtype = self._getType(data)
         
         # Convert data to list 
-        if not isinstance(data, list) and not isinstance(data, dict):
+        if  not (isinstance(data, list) or 
+                 isinstance(data, tuple) or 
+                (numpy and isinstance(data, numpy.ndarray)) or 
+                 isinstance(data, dict)):
             data = [data] # Convert to list
-
-        # Convert row to column
-        if isinstance(data, list) and isinstance(data[0], list) and len(data) == 1:
-            data = data[0]
 
         nrow, ncol = self._getShape(vtype, data)
 
@@ -1896,7 +1958,9 @@ class capsObj:
         # Boolean, Integer, or Double
         if vtype == vType.Boolean or vtype == vType.Integer or vtype == vType.Double:
             
-            partial = (enum_capsNull*(length))(Null.NotNull)
+            partial = (enum_capsNull*(length))()
+            for i in range(length):
+                partial[i] = Null.NotNull
             isPartial = False
 
             if vtype == vType.Double:
@@ -1906,7 +1970,7 @@ class capsObj:
         
             for i in range(nrow):
                 for j in range(ncol):
-                    if ncol == 1:
+                    if not hasattr(data[i], "__len__"):
                         if data[i] is None:
                             partial[i*ncol+j] = Null.IsNull
                             val[i*ncol+j] = 0.0
@@ -1939,11 +2003,8 @@ class capsObj:
 
             for i, key in enumerate(sorted(data.keys())):
                
-                if isinstance(data[key], (str, bytes)):
-                    temp = data[key]
-                else:
-                    temp = json.dumps(data[key], cls=UnitTupleEncoder)
-
+                temp = json.dumps(data[key], cls=UnitTupleEncoder)
+                
                 byteName   = key.encode() if isinstance(key, str) else key
                 byteString = temp.encode() if isinstance(temp, str) else temp
 
@@ -1966,7 +2027,7 @@ class capsObj:
 
         return vtype, nrow, ncol, val, partial
 
-#=============================================================================-
+#==============================================================================
     def setValue(self, data):
         """
         Set data in the Value object
@@ -2001,7 +2062,7 @@ class capsObj:
             name, otype, stype, link, parent, last = self.info()
             _raiseStatus(stat, msg="Trying to set value for: {!r}".format(name), errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def getLimits(self):
         """
         Returns the value limits
@@ -2036,7 +2097,7 @@ class capsObj:
 
         return _withUnits(limits, units)
 
-#=============================================================================-
+#==============================================================================
     def setLimits(self, limits):
         """
         Set the value limits
@@ -2087,7 +2148,7 @@ class capsObj:
                                     ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def getValueProps(self):
         """
         Returns the value properties
@@ -2128,7 +2189,7 @@ class capsObj:
 
         return dim, pmtr, lfix, sfix, ntype
 
-#=============================================================================-
+#==============================================================================
     def setValueProps(self, dim, lfix, sfix, ntype):
         """
         Sets the value properties (only for the User & Parameter subtypes) 
@@ -2155,32 +2216,32 @@ class capsObj:
                                         ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
-    def transferValues(self, tmethod, dst):
+#==============================================================================
+    def transferValues(self, tmethod, src):
         """
-        Transfers values from Value Object (not for AIM pointer or Tuple vtypes) - or - DataSet Object
-        to a destination Value Object
+        Transfers values from src Value Object (not for AIM pointer or Tuple vtypes) - or - DataSet Object
+        to self Value Object
         
         Parameters
         ----------
-        tmethod:
-            0 - copy, 1 - integrate, 2 - weighted average  -- (1 & 2 only for DataSet self)
-            
-        dst:
-            the destination Value Object to receive the data
+        self:
+            the self Value Object to receive the data
             Notes: 
                 Must not be GeometryOut or AnalysisOut
                 Shapes must be compatible
                 Overwrites any Linkage
+
+        tmethod:
+            0 - copy, 1 - integrate, 2 - weighted average  -- (1 & 2 only for DataSet src)
         """
         nErr = c_int()
         errs = POINTER(c_capsErrs)()
 
-        stat = _caps.caps_transferValues(self._obj, c_int(tmethod), dst._obj,
+        stat = _caps.caps_transferValues(src._obj, c_int(tmethod), self._obj,
                                          ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def linkValue(self, link, tmethod):
         """
         Links values from Value Object (not for Tuple vtype or Value subtype User)  - or - DataSet Object
@@ -2216,7 +2277,7 @@ class capsObj:
                                     ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def removeLink(self):
         """
         Remove a link to this Value Object
@@ -2227,7 +2288,7 @@ class capsObj:
                                     ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def hasDeriv(self):
         """
         Get a list of the Derivatives available
@@ -2242,9 +2303,12 @@ class capsObj:
         
         ndot = c_int()
         pnames = POINTER(c_char_p)()
-        
-        stat = _caps.caps_hasDeriv(self._obj, ctypes.byref(ndot), ctypes.byref(pnames))
-        if stat: _raiseStatus(stat)
+        nErr = c_int()
+        errs = POINTER(c_capsErrs)()
+
+        stat = _caps.caps_hasDeriv(self._obj, ctypes.byref(ndot), ctypes.byref(pnames),
+                                   ctypes.byref(nErr), ctypes.byref(errs))
+        if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
         
         if not pnames:
             return None
@@ -2258,7 +2322,7 @@ class capsObj:
         
         return names
 
-#=============================================================================-
+#==============================================================================
     def getDeriv(self, name):
         """
         Get Derivative values
@@ -2283,7 +2347,7 @@ class capsObj:
         errs = POINTER(c_capsErrs)()
 
         stat = _caps.caps_getDeriv(self._obj, name, ctypes.byref(len), ctypes.byref(rank), ctypes.byref(pdot),
-                                 ctypes.byref(nErr), ctypes.byref(errs))
+                                   ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
         
         len = len.value
@@ -2304,16 +2368,22 @@ class capsObj:
         
         return dot
 
-#=============================================================================-
+#==============================================================================
     def dupAnalysis(self, name):
         """
         Initializeds a new analysis based on this Analysis Object
         
         Parameters
         ----------
+        self:
+            CAPS Analysis Object
+            
         name:
             the name of the duplicated analysis object
-
+            
+        Returns
+        -------
+            a copy of the CAPS Analsysis Object
         """
         analysis = c_capsObj()
         name = name.encode() if isinstance(name,str) else name
@@ -2322,7 +2392,7 @@ class capsObj:
 
         return capsObj(analysis, self.problemObj(), None)
 
-#=============================================================================-
+#==============================================================================
     def resetAnalysis(self):
         """
         Reset the Analysis
@@ -2332,7 +2402,7 @@ class capsObj:
         stat = _caps.caps_resetAnalysis(self._obj, ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def dirtyAnalysis(self):
         """
         Resturns the list of dirty Analysis Objects
@@ -2348,7 +2418,7 @@ class capsObj:
 
         return anlysis
 
-#=============================================================================-
+#==============================================================================
     def analysisInfo(self):
         """
         Get information about the Anaysis Object
@@ -2424,7 +2494,7 @@ class capsObj:
 
         return dir, unitSys, major, minor, intent, fnames, franks, fInOut, execute, status
 
-#=============================================================================-
+#==============================================================================
     def preAnalysis(self):
         """
         Generate Analysis Inputs
@@ -2434,24 +2504,44 @@ class capsObj:
         stat = _caps.caps_preAnalysis(self._obj, ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
-    def runAnalysis(self):
+#==============================================================================
+    def system(self, cmd, rpath=None):
+        """
+        Execute the Command Line String
+        
+        Notes: 
+            1. only needed when explicitly executing the appropriate analysis solver (i.e., not using the AIM)
+            2. should be invoked after caps_preAnalysis and before caps_postAnalysis
+            3. this must be used instead of the OS system call to ensure that journaling properly functions
+                
+        Parameters
+        ----------
+        self:
+            CAPS Analysis Object
+
+        cmd:
+            the command line string to execute
+
+        rpath:
+            the relative path from the Analysis' directory or None (in the Analysis path)
+        """
+        cmd = cmd.encode() if isinstance(cmd,str) else cmd
+        rpath = rpath.encode() if isinstance(rpath,str) else rpath
+        stat = _caps.caps_system(self._obj, rpath, cmd)
+        if stat: _raiseStatus(stat)
+
+#==============================================================================
+    def execute(self):
         """
         Execute Analysis if AIM does execution or AutoExec
-        
-        Returns
-        -------
-        integer status (0 - done, 1 - running)
         """
         status = c_int()
         nErr = c_int()
         errs = POINTER(c_capsErrs)()
-        stat = _caps.caps_runAnalysis(self._obj, ctypes.byref(status), ctypes.byref(nErr), ctypes.byref(errs))
+        stat = _caps.caps_execute(self._obj, ctypes.byref(status), ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
-        
-        return status.value
 
-#=============================================================================-
+#==============================================================================
     def postAnalysis(self):
         """
         Mark Analysis as run
@@ -2463,32 +2553,7 @@ class capsObj:
         stat = _caps.caps_postAnalysis(self._obj, ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
-    def checkAnalysis(self):
-        """
-        Has the analysis completed?
-        
-        Returns
-        -------
-        status:
-            CAPS_SUCCESS - completed, CAPS_RUNNING - not done
-            
-        phase:
-            the returned phase where errors were generated:
-            0 - no errors, 1 - during the check, 2 - execution, 3 - post (if automatic)
-            
-        errors:
-            caps.capsErrs object with error information
-        """
-        phase = c_int()
-        nErr = c_int()
-        errs = POINTER(c_capsErrs)()
-        stat = _caps.caps_checkAnalysis(self._obj, ctypes.byref(phase), ctypes.byref(nErr), ctypes.byref(errs))
-        if stat < 0: _raiseStatus(stat)
-        
-        return stat, phase, capsErrs(nErr, errs)
-
-#=============================================================================-
+#==============================================================================
     def boundInfo(self):
         """
         Get information about the Bound Object
@@ -2519,7 +2584,7 @@ class capsObj:
         
         return state, dim, plims
 
-#=============================================================================-
+#==============================================================================
     def closeBound(self):
         """
         Completes the Bound Object
@@ -2527,7 +2592,7 @@ class capsObj:
         stat = _caps.caps_closeBound(self._obj)
         if stat: _raiseStatus(stat)
 
-#=============================================================================-
+#==============================================================================
     def makeVertexSet(self, analysis, vname=None):
         """
         Create a VertexSet on the Bound Object
@@ -2556,7 +2621,7 @@ class capsObj:
         
         return capsObj(vset, self.problemObj(), None)
 
-#=============================================================================-
+#==============================================================================
     def getDataSets(self, dname):
         """
         Get DataSet Objects by name
@@ -2577,7 +2642,7 @@ class capsObj:
         
         return datasets
 
-#=============================================================================-
+#==============================================================================
     def triangulate(self):
         """
         Get Triangulations for a 2D VertexSet
@@ -2611,7 +2676,7 @@ class capsObj:
         
         return Gtris, Dtris
 
-#=============================================================================-
+#==============================================================================
     def vertexSetInfo(self):
         """
         Get information about the VertexSet Object
@@ -2645,7 +2710,7 @@ class capsObj:
         
         return nGpts, nDpts, bound, analysis
 
-#=============================================================================-
+#==============================================================================
     def fillUnVertexSet(self, xyzs):
         """
         Fill an Unconnected VertexSet
@@ -2663,7 +2728,7 @@ class capsObj:
         stat = _caps.caps_fillUnVertexSets(self._obj, c_int(npts), pxyzs)
         if stat: _raiseStatus(stat)
 
-#=============================================================================-
+#==============================================================================
     def makeDataSet(self, dname, dmethod, rank=0):
         """
         Create a DataSet Object -- associated Bound must be Open
@@ -2690,7 +2755,7 @@ class capsObj:
 
         return capsObj(dset, self.problemObj(), None)
 
-#=============================================================================-
+#==============================================================================
     def dataSetInfo(self):
         """
         Returns info about a DataSet Object
@@ -2719,7 +2784,7 @@ class capsObj:
 
         return ftype.value, link, dmethod.value
 
-#=============================================================================-
+#==============================================================================
     def linkDataSet(self, link, dmethod):
         """
         Links data from DataSet Object
@@ -2749,7 +2814,7 @@ class capsObj:
                                       ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def initDataSet(self, startup):
         """
         Initialize DataSet for cyclic/incremental startup
@@ -2772,7 +2837,7 @@ class capsObj:
                                       ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def getData(self):
         """
         Get data from the DataSet
@@ -2807,7 +2872,7 @@ class capsObj:
         
         return _withUnits(data, units)
 
-#=============================================================================-
+#==============================================================================
     def setData(self, data):
         """
         Set data for the DataSet
@@ -2837,7 +2902,7 @@ class capsObj:
                                   pdata, units, ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-#=============================================================================-
+#==============================================================================
     def fillUnVertexSet(self, xyzs):
         """
         Fill an Unconnected VertexSet
@@ -2855,7 +2920,7 @@ class capsObj:
         stat = _caps.caps_fillUnVertexSets(self._obj, c_int(npts), pxyzs)
         if stat: _raiseStatus(stat)
 
-#=============================================================================-
+#==============================================================================
     def AIMbackdoor(self, JSONin):
         
         JSONin = JSONin.encode() if isinstance(JSONin, str) else JSONin
@@ -2870,7 +2935,7 @@ class capsObj:
         return JSONout
 
 
-#=============================================================================-
+#==============================================================================
 # Helper function to return Unit class or values
 def _withUnits(value, units):
     if units is None:
@@ -2878,14 +2943,14 @@ def _withUnits(value, units):
     else:
         return Quantity(value, Unit(units))
 
-#=============================================================================-
+#==============================================================================
 __all__.append("Unit")
 class Unit(object):
     """
     Represents a unit which can be manipulated into other units
     """
 
-#=============================================================================-
+#==============================================================================
     def __init__(self, units):
         """
         Parameters
@@ -2904,23 +2969,23 @@ class Unit(object):
         else:
             _raiseStatus(CAPS_UNITERR, "Unit.__init__ accepts str, Unit, or Quantity")
 
-#=============================================================================-
+#==============================================================================
     def __hash__(self):
         return hash( (self.__class__.__name__, self._units) )
 
-#=============================================================================-
+#==============================================================================
     def __repr__(self):
         '''x.__repr__() <==> repr(x)
         '''
         return '<{0} {1}>'.format(self.__class__.__name__, self)
 
-#=============================================================================-
+#==============================================================================
     def __str__(self):
         '''x.__str__() <==> str(x)
         '''
         return self._units
 
-#=============================================================================-
+#==============================================================================
     def __copy__(self):
         return self.__class__(self._unit)
 
@@ -2931,7 +2996,7 @@ class Unit(object):
         memo[id(self)] = other
         return other
 
-#=============================================================================-
+#==============================================================================
     def __eq__(self, other):
         '''Comparison operator: x.__eq__(y) <==> x == y
         '''
@@ -2943,13 +3008,13 @@ class Unit(object):
         else:
             return False
 
-#=============================================================================-
+#==============================================================================
     def __ne__(self, other):
         '''Comparison operator: x.__ne__(y) <==> x != y
         '''
         return not self.__eq__(other)
 
-#=============================================================================-
+#==============================================================================
     def __gt__(self, other):
         '''Comparison operator: x.__gt__(y) <==> x > y
         '''
@@ -2961,7 +3026,7 @@ class Unit(object):
         if stat: _raiseStatus(stat, "Cannot {!r} > {!r}".format(self, other))
         return compare.value > 0
 
-#=============================================================================-
+#==============================================================================
     def __ge__(self, other):
         '''Comparison operator: x.__ge__(y) <==> x >= y
         '''
@@ -2973,7 +3038,7 @@ class Unit(object):
         if stat: _raiseStatus(stat, "Cannot {!r} >= {!r}".format(self, other))
         return compare.value >= 0
 
-#=============================================================================-
+#==============================================================================
     def __lt__(self, other):
         '''Comparison operator: x.__lt__(y) <==> x < y
         '''
@@ -2985,7 +3050,7 @@ class Unit(object):
         if stat: _raiseStatus(stat, "Cannot {!r} < {!r}".format(self, other))
         return compare.value < 0
 
-#=============================================================================-
+#==============================================================================
     def __le__(self, other):
         '''Comparison operator: x.__le__(y) <==> x <= y
         '''
@@ -2997,7 +3062,7 @@ class Unit(object):
         if stat: _raiseStatus(stat, "Cannot {!r} <= {!r}".format(self, other))
         return compare.value <= 0
 
-#=============================================================================-
+#==============================================================================
     def __sub__(self, other):
         '''Binary operator: x.__sub__(y) <==> x - y
         '''
@@ -3013,7 +3078,7 @@ class Unit(object):
 
         return Unit(units)
 
-#=============================================================================-
+#==============================================================================
     def __add__(self, other):
         '''Binary operator: x.__add__(y) <==> x + y
         '''
@@ -3029,7 +3094,7 @@ class Unit(object):
 
         return Unit(units)
 
-#=============================================================================-
+#==============================================================================
     def __mul__(self, other):
         '''Binary operator: x.__mul__(y) <==> x * y
         '''
@@ -3048,7 +3113,7 @@ class Unit(object):
 
         #_raiseStatus(CAPS_BADVALUE, "Cannot {!r} * {!r}".format(self, other))
 
-#=============================================================================-
+#==============================================================================
     def __div__(self, other):
         '''Binary operator: x.__div__(y) <==> x/y
         '''
@@ -3067,7 +3132,7 @@ class Unit(object):
 
         #_raiseStatus(CAPS_BADVALUE, "Cannot {!r} / {!r}".format(self, other))
 
-#=============================================================================-
+#==============================================================================
     def __pow__(self, other, modulo=None):
         '''Binary operator: x.__pow__(y) <==> x ** y
         '''
@@ -3086,7 +3151,7 @@ class Unit(object):
 
         return Unit(units)
 
-#=============================================================================-
+#==============================================================================
     def __isub__(self, other):
         '''In-place operator: x.__isub__(y) <==> x -= y
         '''
@@ -3097,7 +3162,7 @@ class Unit(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} -= {!r}".format(self, other))
 
-#=============================================================================-
+#==============================================================================
     def __iadd__(self, other):
         '''In-place operator: x.__iadd__(y) <==> x += y
         '''
@@ -3108,7 +3173,7 @@ class Unit(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} += {!r}".format(self, other))
 
-#=============================================================================-
+#==============================================================================
     def __imul__(self, other):
         '''In-place operator: x.__imul__(y) <==> x *= y
         '''
@@ -3119,7 +3184,7 @@ class Unit(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} *= {!r}".format(self, other))
 
-#=============================================================================-
+#==============================================================================
     def __idiv__(self, other):
         '''In-place operator: x.__idiv__(y) <==> x /= y
         '''
@@ -3130,7 +3195,7 @@ class Unit(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} /= {!r}".format(self, other))
 
-#=============================================================================-
+#==============================================================================
     def __ipow__(self, other):
         '''In-place operator: x.__ipow__(y) <==> x **= y
         '''
@@ -3141,7 +3206,7 @@ class Unit(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} **= {!r}".format(self, other))
 
-#=============================================================================-
+#==============================================================================
     def __rsub__(self, other):
         '''Reflected binary operator: x.__rsub__(y) <==> y - x
         '''
@@ -3150,19 +3215,19 @@ class Unit(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} - {!r}".format(other, self))
 
-#=============================================================================-
+#==============================================================================
     def __radd__(self, other):
         '''Reflected binary operator: x.__radd__(y) <==> y + x
         '''
         return self + other
 
-#=============================================================================-
+#==============================================================================
     def __rmul__(self, other):
         '''Reflected binary operator: x.__rmul__(y) <==> y * x
         '''
         return self * other
 
-#=============================================================================-
+#==============================================================================
     def __rdiv__(self, other):
         '''Reflected binary operator: x.__rdiv__(y) <==> y / x
         '''
@@ -3171,19 +3236,19 @@ class Unit(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} / {!r}".format(other, self))
 
-#=============================================================================-
+#==============================================================================
     def __floordiv__(self, other):
         '''x.__floordiv__(y) <==> x//y <==> x / y
         '''
         return self / other
 
-#=============================================================================-
+#==============================================================================
     def __ifloordiv__(self, other):
         '''x.__ifloordiv__(y) <==> x//=y <==> x /= y
         '''
         return self / other
 
-#=============================================================================-
+#==============================================================================
     def __rfloordiv__(self, other):
         '''x.__rfloordiv__(y) <==> y//x <==> y / x
         '''
@@ -3192,44 +3257,44 @@ class Unit(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} // {!r}".format(other, self))
 
-#=============================================================================-
+#==============================================================================
     def __truediv__(self, other):
         '''x.__truediv__(y) <==> x / y
         '''
         return self.__div__(other)
 
-#=============================================================================-
+#==============================================================================
     def __itruediv__(self, other):
         '''x.__itruediv__(y) <==> x /= y
         '''
         return self.__idiv__(other)
 
-#=============================================================================-
+#==============================================================================
     def __rtruediv__(self, other):
         '''x.__rtruediv__(y) <==> y / x
         '''
         return self.__rdiv__(other)
 
-#=============================================================================-
+#==============================================================================
     def __mod__(self, other):
         '''x.__mod__(y) <==> y % x
         '''
         _raiseStatus(CAPS_UNITERR, "Cannot {!r} % {!r}".format(self, other))
 
-#=============================================================================-
+#==============================================================================
     def __neg__(self):
         '''Unary operator: x.__neg__() <==> -x
         '''
         return self * Unit(-1)
 
-#=============================================================================-
+#==============================================================================
     def __pos__(self):
         '''Unary operator: x.__pos__() <==> +x
         '''
         return self
 
 
-#=============================================================================-
+#==============================================================================
 __all__.append("Quantity")
 class Quantity(object):
     """
@@ -3241,7 +3306,7 @@ class Quantity(object):
     #
     __array_priority__ = 20.0
 
-#=============================================================================-
+#==============================================================================
     def __init__(self, value, units):
         """
         Parameters
@@ -3260,21 +3325,21 @@ class Quantity(object):
         else:
             raise CAPSError(CAPS_UNITERROR, "units must be str or Unit")
 
-#=============================================================================-
+#==============================================================================
     def value(self):
         """
         Returns the Value in the Quantity
         """
         return self._value
 
-#=============================================================================-
+#==============================================================================
     def unit(self):
         """
         Returns the Unit in the Quantity
         """
         return self._unit
 
-#=============================================================================-
+#==============================================================================
     def convert(self, toUnits):
         """
         Convertes to other units
@@ -3324,23 +3389,23 @@ class Quantity(object):
    
         return Quantity(value, toUnits)
 
-#=============================================================================-
+#==============================================================================
     def __hash__(self):
         return hash( (self.__class__.__name__, self._value, self._units) )
 
-#=============================================================================-
+#==============================================================================
     def __repr__(self):
         '''x.__repr__() <==> repr(x)
         '''
         return '<{0} {1}>'.format(self.__class__.__name__, self)
 
-#=============================================================================-
+#==============================================================================
     def __str__(self):
         '''x.__str__() <==> str(x)
         '''
         return str(self._value) + ' ' + self._units._units
 
-#=============================================================================-
+#==============================================================================
     def __copy__(self):
         return self.__class__(self._value, self._unit)
 
@@ -3351,7 +3416,7 @@ class Quantity(object):
         memo[id(self)] = other
         return other
 
-#=============================================================================-
+#==============================================================================
     def __bool__(self):
         '''Truth value testing and the built-in operation ``bool``
 
@@ -3360,15 +3425,15 @@ class Quantity(object):
         '''
         return bool(self._value)
 
-#=============================================================================-
+#==============================================================================
     def __float__(self): # conversion to float (makes trig functions work)
         return self / self.__class__(1, "rad")
 
-#=============================================================================-
+#==============================================================================
     def __len__(self):
         return len(self._value)
 
-#=============================================================================-
+#==============================================================================
     def __getitem__(self,index):
         ''' returns self's value sliced to index with self's units
         '''
@@ -3379,7 +3444,7 @@ class Quantity(object):
         else:
             raise IndexError
 
-#=============================================================================-
+#==============================================================================
     def __setitem__(self,index,other):
         ''' makes a slice assignment on self's value based on index
         '''
@@ -3391,7 +3456,7 @@ class Quantity(object):
         else:
            raise IndexError
 
-#=============================================================================-
+#==============================================================================
     def __eq__(self, other):
         '''Comparison operator: x.__eq__(y) <==> x == y
         '''
@@ -3408,13 +3473,13 @@ class Quantity(object):
                 return self._value == 0
             return False
 
-#=============================================================================-
+#==============================================================================
     def __ne__(self, other):
         '''Comparison operator: x.__ne__(y) <==> x != y
         '''
         return not self.__eq__(other)
 
-#=============================================================================-
+#==============================================================================
     def __gt__(self, other):
         '''Comparison operator: x.__gt__(y) <==> x > y
         '''
@@ -3425,7 +3490,7 @@ class Quantity(object):
 
         return self._value > other._value
 
-#=============================================================================-
+#==============================================================================
     def __ge__(self, other):
         '''Comparison operator: x.__ge__(y) <==> x >= y
         '''
@@ -3436,7 +3501,7 @@ class Quantity(object):
 
         return self._value >= other._value
 
-#=============================================================================-
+#==============================================================================
     def __lt__(self, other):
         '''Comparison operator: x.__lt__(y) <==> x < y
         '''
@@ -3447,7 +3512,7 @@ class Quantity(object):
 
         return self._value < other._value
 
-#=============================================================================-
+#==============================================================================
     def __le__(self, other):
         '''Comparison operator: x.__le__(y) <==> x <= y
         '''
@@ -3458,7 +3523,7 @@ class Quantity(object):
 
         return self._value <= other._value
 
-#=============================================================================-
+#==============================================================================
     def __sub__(self, other):
         '''Binary operator: x.__sub__(y) <==> x - y
         '''
@@ -3469,7 +3534,7 @@ class Quantity(object):
 
         return self.__class__(self._value - other._value, self._units)
 
-#=============================================================================-
+#==============================================================================
     def __add__(self, other):
         '''Binary operator: x.__add__(y) <==> x + y
         '''
@@ -3480,7 +3545,7 @@ class Quantity(object):
 
         return self.__class__(self._value + other._value, self._units)
 
-#=============================================================================-
+#==============================================================================
     def __mul__(self, other):
         '''Binary operator: x.__mul__(y) <==> x * y
         '''
@@ -3531,7 +3596,7 @@ class Quantity(object):
 
         _raiseStatus(CAPS_BADVALUE, "Cannot {!r} * {!r}".format(self, other))
 
-#=============================================================================-
+#==============================================================================
     def __div__(self, other):
         '''Binary operator: x.__div__(y) <==> x/y
         '''
@@ -3570,7 +3635,7 @@ class Quantity(object):
 
         _raiseStatus(CAPS_UNITERR, "Cannot {!r} / {!r}".format(self, other))
 
-#=============================================================================-
+#==============================================================================
     def __pow__(self, other, modulo=None):
         '''Binary operator: x.__pow__(y) <==> x ** y
         '''
@@ -3582,7 +3647,7 @@ class Quantity(object):
 
         return self.__class__(self._value**other, self._units**other)
 
-#=============================================================================-
+#==============================================================================
     def __isub__(self, other):
         '''In-place operator: x.__isub__(y) <==> x -= y
         '''
@@ -3594,7 +3659,7 @@ class Quantity(object):
 
         return self
 
-#=============================================================================-
+#==============================================================================
     def __iadd__(self, other):
         '''In-place operator: x.__iadd__(y) <==> x += y
         '''
@@ -3606,7 +3671,7 @@ class Quantity(object):
 
         return self
 
-#=============================================================================-
+#==============================================================================
     def __imul__(self, other):
         '''In-place operator: x.__imul__(y) <==> x *= y
         '''
@@ -3619,7 +3684,7 @@ class Quantity(object):
         self._units = newval._units
         return self
 
-#=============================================================================-
+#==============================================================================
     def __idiv__(self, other):
         '''In-place operator: x.__idiv__(y) <==> x /= y
         '''
@@ -3632,7 +3697,7 @@ class Quantity(object):
         self._units = newval._units
         return self
 
-#=============================================================================-
+#==============================================================================
     def __ipow__(self, other):
         '''In-place operator: x.__ipow__(y) <==> x **= y
         '''
@@ -3645,7 +3710,7 @@ class Quantity(object):
         self._units = newval._units
         return self
 
-#=============================================================================-
+#==============================================================================
     def __rsub__(self, other):
         '''Reflected binary operator: x.__rsub__(y) <==> y - x
         '''
@@ -3654,19 +3719,19 @@ class Quantity(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} - {!r}".format(other, self))
 
-#=============================================================================-
+#==============================================================================
     def __radd__(self, other):
         '''Reflected binary operator: x.__radd__(y) <==> y + x
         '''
         return self + other
 
-#=============================================================================-
+#==============================================================================
     def __rmul__(self, other):
         '''Reflected binary operator: x.__rmul__(y) <==> y * x
         '''
         return self * other
 
-#=============================================================================-
+#==============================================================================
     def __rdiv__(self, other):
         '''Reflected binary operator: x.__rdiv__(y) <==> y / x
         '''
@@ -3675,19 +3740,19 @@ class Quantity(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} / {!r}".format(other, self))
 
-#=============================================================================-
+#==============================================================================
     def __floordiv__(self, other):
         '''x.__floordiv__(y) <==> x//y <==> x / y
         '''
         return self / other
 
-#=============================================================================-
+#==============================================================================
     def __ifloordiv__(self, other):
         '''x.__ifloordiv__(y) <==> x//=y <==> x /= y
         '''
         return self / other
 
-#=============================================================================-
+#==============================================================================
     def __rfloordiv__(self, other):
         '''x.__rfloordiv__(y) <==> y//x <==> y / x
         '''
@@ -3696,25 +3761,25 @@ class Quantity(object):
         except CAPSError as e:
             raise CAPSError(e.errorCode, "Cannot {!r} // {!r}".format(other, self))
 
-#=============================================================================-
+#==============================================================================
     def __truediv__(self, other):
         '''x.__truediv__(y) <==> x / y
         '''
         return self.__div__(other)
 
-#=============================================================================-
+#==============================================================================
     def __itruediv__(self, other):
         '''x.__itruediv__(y) <==> x /= y
         '''
         return self.__idiv__(other)
 
-#=============================================================================-
+#==============================================================================
     def __rtruediv__(self, other):
         '''x.__rtruediv__(y) <==> y / x
         '''
         return self.__rdiv__(other)
 
-#=============================================================================-
+#==============================================================================
     def __mod__(self, other):
         '''x.__mod__(y) <==> y % x
         '''
@@ -3725,31 +3790,31 @@ class Quantity(object):
 
         return  self.__class__(self._value % other._value, self._units)
 
-#=============================================================================-
+#==============================================================================
     def __round__(self, n=None):
         '''Unary operator: x.__round__(n) <==> round(x, n)
         '''
         return self.__class__(round(self._value, n), self._units)
 
-#=============================================================================-
+#==============================================================================
     def __abs__(self):
         '''Unary operator: x.__abs__() <==> abs(x)
         '''
         return self.__class__(abs(self._value), self._units)
 
-#=============================================================================-
+#==============================================================================
     def __neg__(self):
         '''Unary operator: x.__neg__() <==> -x
         '''
         return self * -1
 
-#=============================================================================-
+#==============================================================================
     def __pos__(self):
         '''Unary operator: x.__pos__() <==> +x
         '''
         return self
 
-#=============================================================================-
+#==============================================================================
 # class units:
 #     # Collection of all available units
 #     pass

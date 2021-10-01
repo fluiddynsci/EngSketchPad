@@ -58,8 +58,8 @@ class TestAnalysis(unittest.TestCase):
         if os.path.isfile("myAnalysisGeometry.egads"):
             os.remove("myAnalysisGeometry.egads")
 
-        if os.path.isfile("fun3dAIM.html"):
-            os.remove("fun3dAIM.html")
+        if os.path.isfile("su2.html"):
+            os.remove("su2.html")
 
         if os.path.isfile("d3.v3.min.js"):
             os.remove("d3.v3.min.js")
@@ -409,10 +409,42 @@ class TestAnalysis(unittest.TestCase):
         nastran = problem.analysis.create(aim="nastranAIM",
                                           name="nastran",
                                           capsIntent = "OML")
-        
+
         x = {'DESMAX': 200, 'CONV1': 1e-15, 'CONVDV':1e-15, 'CONVPR':1e-15, 'P1':'a', 'P2':'b'}
         nastran.input.Design_Opt_Param = x
         self.assertEqual(nastran.input.Design_Opt_Param, x)
+
+#==============================================================================
+    # Circularly linked analysis with auto execution
+    def test_circularAutoExec(self):
+
+        self.problem = pyCAPS.Problem(self.problemName + str(self.iProb), capsFile="airfoilSection.csm", outLevel=0); self.__class__.iProb += 1
+
+        self.xfoil0 = self.problem.analysis.create(aim="xfoilAIM",
+                                                   name="xfoil0")
+
+        self.xfoil1 = self.problem.analysis.create(aim="xfoilAIM",
+                                                   name="xfoil1")
+
+        self.xfoil2 = self.problem.analysis.create(aim="xfoilAIM",
+                                                   name="xfoil2")
+        
+        self.xfoil1.input["Alpha"].link(self.xfoil0.output["Alpha"])
+        
+        with self.assertRaises(pyCAPS.CAPSError) as e:
+            self.xfoil0.input["CL"].link(self.xfoil1.output["CL"])
+        self.assertEqual(e.exception.errorName, "CAPS_CIRCULARLINK")
+
+        self.xfoil2.input["Alpha"].link(self.xfoil1.output["Alpha"])
+
+        with self.assertRaises(pyCAPS.CAPSError) as e:
+            self.xfoil0.input["CL"].link(self.xfoil2.output["CL"])
+        self.assertEqual(e.exception.errorName, "CAPS_CIRCULARLINK")
+        
+        del self.problem
+        del self.xfoil0
+        del self.xfoil1
+        del self.xfoil2
 
 #==============================================================================
     # Analysis exectution and outputs
@@ -421,7 +453,7 @@ class TestAnalysis(unittest.TestCase):
         inch = pyCAPS.Unit("inch")
         m    = pyCAPS.Unit("meter")
         kg   = pyCAPS.Unit("kg")
-        
+
         problem = pyCAPS.Problem(self.problemName + str(self.iProb), capsFile=self.file, outLevel=0); self.__class__.iProb += 1
 
         masstran = problem.analysis.create(aim="masstranAIM",
@@ -431,7 +463,7 @@ class TestAnalysis(unittest.TestCase):
 
         # Min/Max number of points on an edge for quadding
         masstran.input.Edge_Point_Min = 2
-        masstran.input.Edge_Point_Max = 20
+        masstran.input.Edge_Point_Max = 10
 
         madeupium    = {"materialType" : "isotropic",
                         "density"      : 10*kg/m**3}
@@ -451,18 +483,14 @@ class TestAnalysis(unittest.TestCase):
 
         masstran.input.Property = {"Wing1" : shell1, "Wing2" : shell2}
 
-        # compute Mass properties
-        masstran.preAnalysis()
-        masstran.postAnalysis()
-
-        # get properties
+        # get properties (computed automatically)
         Area     = masstran.output.Area
         Mass     = masstran.output.Mass
         Centroid = masstran.output.Centroid
         CG       = masstran.output.CG
         I        = masstran.output.I_Vector
         II       = masstran.output.I_Tensor
-        
+
         # Check that unit conversion works with the output
         Area.convert("m**2")
         Mass.convert("g")

@@ -17,7 +17,7 @@ ODIR  = .
 !ENDIF
 
 
-$(LDIR)\tetgenAIM.dll:	$(ODIR)\tetgenAIM.obj $(ODIR)\tetgen_Interface.obj \
+$(LDIR)\tetgenAIM.dll:	tetgenAIM.def $(ODIR)\tetgenAIM.obj $(ODIR)\tetgen_Interface.obj \
 		$(ODIR)\tetgen.obj $(ODIR)\predicates.obj $(LDIR)\utils.lib tetgenAIM.def
 	-del $(LDIR)\tetgenAIM.dll $(LDIR)\tetgenAIM.lib $(LDIR)\tetgenAIM.exp
 	 link /out:$(LDIR)\tetgenAIM.dll /dll /def:tetgenAIM.def \
@@ -31,7 +31,7 @@ $(ODIR)\tetgenAIM.obj:	tetgenAIM.cpp $(IDIR)\capsTypes.h ..\utils\meshUtils.h
 	cl /c $(CPPOPT) $(DEFINE) /I$(IDIR) /I..\utils tetgenAIM.cpp \
 		/Fo$(ODIR)\tetgenAIM.obj
 
-$(ODIR)\tetgen_Interface.obj:	tetgen_Interface.cpp ..\utils\meshUtils.h
+$(ODIR)\tetgen_Interface.obj:	$(TETGEN)\tetgen.h tetgen_Interface.cpp ..\utils\meshUtils.h
 	cl /c $(CPPOPT) $(DEFINE) /I$(IDIR) /DTETLIBRARY /I$(TETGEN) \
 		/I..\utils tetgen_Interface.cpp /Fo$(ODIR)\tetgen_Interface.obj
 

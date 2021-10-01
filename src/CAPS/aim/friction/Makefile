@@ -23,14 +23,14 @@ endif
 
 $(LDIR)/frictionAIM.so:	$(ODIR)/frictionAIM.o $(LDIR)/libutils.a  $(LDIR)/libaimUtil.a
 	$(CC) $(SOFLGS) -o $(LDIR)/frictionAIM.so $(ODIR)/frictionAIM.o \
-		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -lm
+		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -ldl -lm
 
 $(ODIR)/frictionAIM.o:	frictionAIM.c $(IDIR)/capsTypes.h
 	$(CC) -c $(COPTS) $(DEFINE) -Wno-format -I$(IDIR) -I../utils frictionAIM.c \
 		-o $(ODIR)/frictionAIM.o
 
 $(TDIR)/friction:	$(ODIR)/friction.o
-	$(FCOMP) -o $(TDIR)/friction $(ODIR)/friction.o
+	$(FCOMP) -o $(TDIR)/friction $(ODIR)/friction.o $(ESPFLIBS)
 
 $(ODIR)/friction.o:	friction_eja_mod.f
 	$(FCOMP) -c $(FOPTS) friction_eja_mod.f -o $(ODIR)/friction.o

@@ -36,11 +36,16 @@
 #include <unistd.h>
 #include <assert.h>
 
-#define PLUGS_PRUNE             0      // if >0, prune points and write new.cloud
-#define PLUGS_CREATE_CSM_FILES  0      // create plugs_pass_xx.csm files
-#define PLUGS_CREATE_FINAL_PLOT 0      // create final.plot        file
-#define PLUGS_SHOW_SENSITIVITY  0      // show sensitivity in final results via inverse evaluations */
-//#define MIXED_TESS              1      // display mixed tri/quads tessellations
+#define PLUGS_PRUNE              0      // if >0, prune points and write new.cloud
+#define PLUGS_CREATE_CSM_FILES   0      // create plugs_pass_xx.csm files
+#define PLUGS_CREATE_FINAL_PLOT  0      // create final.plot        file
+#define PLUGS_CREATE_EGADS_FILES 0      // create plugs_x_y.egads   files (use data/plugs/showHistory.csm to see)
+#define PLUGS_SHOW_SENSITIVITY   0      // show sensitivity in final results via inverse evaluations */
+//#define MIXED_TESS               1      // display mixed tri/quads tessellations
+
+#define TESS_PARAM_0             0.0250
+#define TESS_PARAM_1             0.0075
+#define TESS_PARAM_2             20.0
 
 #ifdef WIN32
     #define WIN32_LEAN_AND_MEAN
@@ -239,7 +244,7 @@ static float color_map[256*3] =
 /***********************************************************************/
 
 /* global variable holding a MODL */
-static void       *modl;               /* pointer to MODL */
+static void       *modl      = NULL;   /* pointer to current MODL */
 static int        addVerify  = 0;      /* =1 to create .csm_verify file */
 static int        allVels    = 0;      /* =1 to compute Node/Edge/Faces vels */
 static int        batch      = 0;      /* =0 to enable visualization */
@@ -352,6 +357,7 @@ static int        processBrowserToServer(char text[]);
        void       sizeCallbackFromOpenCSM(void *modl, int ipmtr, int nrow, int ncel);
 static void       spec_col(float scalar, float out[]);
 static int        storeUndo(char cmd[], char arg[]);
+static int        updateModl(modl_T *src_MODL, modl_T *tgt_MODL);
 
 static int        addToHistogram(double entry, int nhist, double dhist[], int hist[]);
 static int        printHistogram(int nhist, double dhist[], int hist[]);
@@ -366,7 +372,7 @@ static int        plugsPhase2(modl_T *modl, int npass, int ibody, int npmtr, int
 static int        matsol(double A[], double b[], int n, double x[]);
 static int        solsvd(double A[], double b[], int mrow, int ncol, double W[], double x[]);
 static int        tridiag(int n, double a[], double b[], double c[], double d[], double x[]);
-static int        writeTessFile(modl_T *modl, int ibody, char filename[]);
+static int        writeSensFile(modl_T *modl, int ibody, char filename[]);
 
 
 /***********************************************************************/
@@ -714,8 +720,12 @@ main(int       argc,                    /* (in)  number of arguments */
                    strstr(casename, ".STEP" ) != NULL   ) {
             auto_fp = fopen("autoStep.csm", "w");
             if (auto_fp != NULL) {
+                strcpy(filename, casename);
+                for (i = 0; i < strlen(filename); i++) {
+                    if (filename[i] == '\\') filename[i] = '/';
+                }
                 fprintf(auto_fp, "# autoStep.csm (automatically generated)\n");
-                fprintf(auto_fp, "IMPORT  %s  -1\n", casename);
+                fprintf(auto_fp, "IMPORT  %s  -1\n", filename);
                 fprintf(auto_fp, "END\n");
                 fclose(auto_fp);
 
@@ -728,8 +738,12 @@ main(int       argc,                    /* (in)  number of arguments */
                    strstr(casename, ".IGES" ) != NULL   ) {
             auto_fp = fopen("autoIges.csm", "w");
             if (auto_fp != NULL) {
+                strcpy(filename, casename);
+                for (i = 0; i < strlen(filename); i++) {
+                    if (filename[i] == '\\') filename[i] = '/';
+                }
                 fprintf(auto_fp, "# autoIges.csm (automatically generated)\n");
-                fprintf(auto_fp, "IMPORT  %s  -1\n", casename);
+                fprintf(auto_fp, "IMPORT  %s  -1\n", filename);
                 fprintf(auto_fp, "END\n");
                 fclose(auto_fp);
 
@@ -740,8 +754,12 @@ main(int       argc,                    /* (in)  number of arguments */
                    strstr(casename, ".EGADS") != NULL   ) {
             auto_fp = fopen("autoEgads.csm", "w");
             if (auto_fp != NULL) {
+                strcpy(filename, casename);
+                for (i = 0; i < strlen(filename); i++) {
+                    if (filename[i] == '\\') filename[i] = '/';
+                }
                 fprintf(auto_fp, "# autoEgads.csm (automatically generated)\n");
-                fprintf(auto_fp, "IMPORT  %s  -1\n", casename);
+                fprintf(auto_fp, "IMPORT  %s  -1\n", filename);
                 fprintf(auto_fp, "END\n");
                 fclose(auto_fp);
 
@@ -984,57 +1002,42 @@ main(int       argc,                    /* (in)  number of arguments */
             }
         }
 
-        /* there is an uncaught signal */
-//$$$        if (builtTo < 0) {
-//$$$            if (batch == 0) {
-//$$$                SPRINT2(0, "build() detected \"%s\" at %s",
-//$$$                        ocsmGetText(buildStatus), MODL->brch[1-builtTo].name);
-//$$$                SPRINT0(0, "Configuration only built up to detected error\a");
-//$$$                pendingError = -builtTo;
-//$$$            } else {
-//$$$                status = -999;
-//$$$                goto cleanup;
-//$$$            }
-//$$$
-        /* error in ocsmBuild that does not cause a signal to be raised */
-//$$$        } else if (buildStatus != SUCCESS) {
-//$$$            SPRINT2(0, "ERROR:: build() detected %d (%s)",
-//$$$                    buildStatus, ocsmGetText(buildStatus));
-//$$$            status = -999;
-//$$$            goto cleanup;
-//$$$
-        /* error in ocsmCheck */
-//$$$        } else if (status != SUCCESS) {
-//$$$            if (batch == 0) {
-//$$$                SPRINT2(0, "ERROR:: build() detected %d (%s)",
-//$$$                        status, ocsmGetText(status));
-//$$$            } else {
-//$$$                goto cleanup;
-//$$$            }
-//$$$        }
-
         /* if the -dxdd option is set, process it now */
         if (strlen(dxddname) > 0) {
             int  nbody;
-            char tessfilename[MAX_FILENAME_LEN+1];
+            char sensfilename[MAX_FILENAME_LEN+1], *beg, *mid, *end;
 
-            /* for now do not let name include a subscript */
-            if (strchr(dxddname, '[') != NULL ||
-                strchr(dxddname, ']') != NULL   ) {
-                SPRINT1(0, "ERROR:: %s should not include a subscript", dxddname);
-                status = -999;
-                goto cleanup;
+            strcpy(sensfilename, dxddname);
+            strcat(sensfilename, ".sens");
+
+            /* extract row and/or column is given */
+            if (strlen(dxddname) > 0 && strchr(dxddname, '[') != NULL) {
+                beg = strchr(dxddname, '[');
+                mid = strchr(dxddname, ',');
+                end = strchr(dxddname, ']');
+
+                if (beg == NULL || mid == NULL || end == NULL) {
+                    SPRINT0(0, "if -dxdd is given, dxddname must be of form \"name\" or \"name[irow,icol]\"\a");
+                    SPRINT0(0, "STOPPING...\a");
+                    return EXIT_FAILURE;
+                }
+
+                *end = '\0';
+                icol = atoi(mid+1);
+
+                *mid = '\0';
+                irow = atoi(beg+1);
+
+                *beg = '\0';
+            } else {
+                irow = 1;
+                icol = 1;
             }
-
-            strcpy(tessfilename, dxddname);
-            strcat(tessfilename, ".tess");
 
             /* set the velocity of the DESPMTR */
             ipmtr = -1;
-            irow  =  1;
-            icol  =  1;
             for (jpmtr = 1; jpmtr <= MODL->npmtr; jpmtr++) {
-                if (MODL->pmtr[jpmtr].type == OCSM_DESPMTR       &&
+                if (MODL->pmtr[jpmtr].type == OCSM_DESPMTR   &&
                     strcmp(MODL->pmtr[jpmtr].name, dxddname) == 0  ) {
                     ipmtr = jpmtr;
                     break;
@@ -1042,7 +1045,15 @@ main(int       argc,                    /* (in)  number of arguments */
             }
 
             if (ipmtr < 0) {
-                SPRINT1(0, "ERROR:: dxddname=%s not found", dxddname);
+                SPRINT1(0, "ERROR:: no DESPMTR named \"%s\" found", dxddname);
+                status = -999;
+                goto cleanup;
+            } else if (irow < 1 || irow > MODL->pmtr[ipmtr].nrow) {
+                SPRINT2(0, "ERROR:: irow=%d is not between 1 and %d\n", irow, MODL->pmtr[ipmtr].nrow);
+                status = -999;
+                goto cleanup;
+            } else if (icol < 1 || icol > MODL->pmtr[ipmtr].ncol) {
+                SPRINT2(0, "ERROR:: icol=%d is not between 1 and %d\n", icol, MODL->pmtr[ipmtr].ncol);
                 status = -999;
                 goto cleanup;
             }
@@ -1071,14 +1082,14 @@ main(int       argc,                    /* (in)  number of arguments */
             }
 
             /* write the .tess file and exit */
-            status = writeTessFile(MODL, MODL->nbody, tessfilename);
+            status = writeSensFile(MODL, MODL->nbody, sensfilename);
             if (status != SUCCESS) {
-                SPRINT1(0, "ERROR:: writeTessFile -> status=%d\n", status);
+                SPRINT1(0, "ERROR:: writeSensFile -> status=%d\n", status);
                 status = -999;
                 goto cleanup;
             }
 
-            SPRINT1(0, "==> \"%s\" has been written", tessfilename);
+            SPRINT1(0, "==> \"%s\" has been written", sensfilename);
             goto cleanup;
         }
     }
@@ -1332,7 +1343,7 @@ main(int       argc,                    /* (in)  number of arguments */
         if (mutex == NULL) {
             SPRINT0(0, "WARNING:: lock could not be created");
         }
-        
+
         status = SUCCESS;
         serverNum = wv_startServer(port, NULL, NULL, NULL, 0, cntxt);
         if (serverNum == 0) {
@@ -2163,7 +2174,7 @@ browserMessage(
 
     /* send filenames if they have been updated */
     if (updatedFilelist == 1) {
-        MODL = (modl_T*) modl;
+        MODL = (modl_T *) modl;
         if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
@@ -2225,6 +2236,9 @@ browserMessage(
         } else if (plotType == 5) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Gaussian Curv");
             wv_broadcastText("setWvKey|on|");
+        } else if (plotType == 6) {
+            status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "normals");
+            wv_broadcastText("setWvKey|on|");
         } else {
             status = wv_setKey(cntxt,   0, NULL,      lims[0], lims[1], NULL            );
             SPRINT0(2, "\n<<< server2browser: setWvKey|off|");
@@ -2280,7 +2294,7 @@ cleanup:
     if (mutex != NULL) {
         EMP_LockRelease(mutex);
     }
-    
+
     return;
 }
 
@@ -2351,7 +2365,7 @@ buildBodys(int     buildTo,             /* (in)  last Branch to execute */
         MODL->tessAtEnd = 1 - skipTess;
 
         /* set the build erep flag */
-        if (plotType == 6) {
+        if (plotType == 10) {
             MODL->erepAtEnd = 1;
         } else {
             MODL->erepAtEnd = 0;
@@ -2506,7 +2520,7 @@ buildSceneGraph()
     float     color[18], *pcolors=NULL, *plotdata=NULL, *segments=NULL, *tuft=NULL;
     double    bigbox[6], box[6], size, size2=0, xyz_dum[6], *vel=NULL, velmag;
     double    uvlimits[4], ubar, vbar, rcurv, xplot, yplot, zplot, fplot;
-    double    data[18], normx, normy, normz, axis[18], *cp;
+    double    data[18], normx, normy, normz, norm, axis[18], *cp;
     CDOUBLE   *xyz, *uv, *t;
     char      gpname[MAX_STRVAL_LEN], bname[MAX_NAME_LEN], temp[MAX_FILENAME_LEN];
     char      text[1025], dum[81];
@@ -2641,16 +2655,12 @@ buildSceneGraph()
             EG_getBodyTopos(ebody, NULL, NODE, &nnode, &enodes);
             EG_getBodyTopos(ebody, NULL, EDGE, &nedge, &eedges);
             EG_getBodyTopos(ebody, NULL, FACE, &nface, &efaces);
-
-            printf("Body %d has %d Nodes, %d Edges, and %d Faces\n", ibody, nnode, nedge, nface);
         } else {
             ebody = MODL->body[ibody].eebody;
 
             EG_getBodyTopos(ebody, NULL, NODE,  &nnode, &enodes);
             EG_getBodyTopos(ebody, NULL, EEDGE, &nedge, &eedges);
             EG_getBodyTopos(ebody, NULL, EFACE, &nface, &efaces);
-
-            printf("EBody %d has %d Nodes, %d EEdges, and %d EFaces\n", ibody, nnode, nedge, nface);
         }
 
         /* set up Body name */
@@ -3584,6 +3594,79 @@ buildSceneGraph()
             }
             sgMetaDataUsed--;
             addToSgMetaData("],");
+
+            /* surface Normals */
+            if (plotType == 6) {
+                status = EG_getTessFace(etess, iface,
+                                        &npnt, &xyz, &uv, &ptype, &pindx,
+                                        &ntri, &tris, &tric);
+                if (status != SUCCESS) {
+                    SPRINT3(0, "ERROR:: EG_getTessFace(%d,%d) -> status=%d", ibody, iface, status);
+                    goto cleanup;
+                }
+
+                nitems = 0;
+
+                /* name and attributes */
+                snprintf(gpname, MAX_STRVAL_LEN-1, "PlotLine: Face_%d:%d_norms", ibody, iface);
+                attrs = WV_ON;
+
+                /* create tufts */
+                MALLOC(tuft, float, 6*npnt);
+
+                status = EG_getTopology(MODL->body[ibody].face[iface].eface, &eref, &oclass, &mtype,
+                                        data, &nchild, &echilds, &senses);
+                if (status != SUCCESS) {
+                    SPRINT3(0, "ERROR:: EG_getTopology(%d,%d) -> status=%d", ibody, iface, status);
+                    goto cleanup;
+                }
+
+                for (ipnt = 0; ipnt < npnt; ipnt++) {
+                    status = EG_evaluate(MODL->body[ibody].face[iface].eface, &(uv[2*ipnt]), data);
+                    if (status != SUCCESS) {
+                        SPRINT3(0, "ERROR:: EG_evaluate(%d,%d) -> status=%d", ibody, iface, status);
+                        goto cleanup;
+                    }
+
+                    normx = (data[4] * data[8] - data[5] * data[7]);
+                    normy = (data[5] * data[6] - data[3] * data[8]);
+                    normz = (data[6] * data[7] - data[4] * data[6]);
+                    norm  = sqrt(normx*normx + normy*normy + normz*normz);
+
+                    tuft[6*ipnt  ] = xyz[3*ipnt  ];
+                    tuft[6*ipnt+1] = xyz[3*ipnt+1];
+                    tuft[6*ipnt+2] = xyz[3*ipnt+2];
+                    tuft[6*ipnt+3] = xyz[3*ipnt  ] + mtype * lims[1] * normx / norm;
+                    tuft[6*ipnt+4] = xyz[3*ipnt+1] + mtype * lims[1] * normy / norm;
+                    tuft[6*ipnt+5] = xyz[3*ipnt+2] + mtype * lims[1] * normz / norm;
+                }
+
+                status = wv_setData(WV_REAL32, 2*npnt, (void*)tuft, WV_VERTICES, &(items[nitems]));
+
+                FREE(tuft);
+
+                if (status != SUCCESS) {
+                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
+                }
+
+                wv_adjustVerts(&(items[nitems]), sgFocus);
+                nitems++;
+
+                /* tuft color */
+                color[0] = 0;   color[1] = 0;   color[2] = 1;
+                status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
+                if (status != SUCCESS) {
+                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
+                }
+                nitems++;
+
+                /* make graphic primitive for tufts */
+                igprim = wv_addGPrim(cntxt, gpname, WV_LINE, attrs, nitems, items);
+                if (igprim < 0) {
+                    SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
+                }
+
+            }
         }
 
         /* loop through the Edges within the current Body */
@@ -4949,8 +5032,8 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
     int       *segs=NULL, *ivrts=NULL;
     CINT      *ptype, *pindx, *tris, *tric;
     float     color[18];
+    double    xyz_dum[6], bbox[6], size, params[3];
     CDOUBLE   *xyz, *uv, *t;
-    double    xyz_dum[6];
     char      gpname[MAX_STRVAL_LEN];
     ego       etess;
 
@@ -4975,10 +5058,38 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
     if (etess == NULL) {
         status = EG_attributeRet(MODL->body[ibody].ebody, "_tParams",
                                  &atype, &alen, &tempIlist, &tempRlist, &tempClist);
+        if (status == EGADS_NOTFOUND) {
+            status = EG_attributeRet(MODL->body[ibody].ebody, ".tParams",
+                                     &atype, &alen, &tempIlist, &tempRlist, &tempClist);
+            if (status == SUCCESS && alen == 3) {
+                params[0] = tempRlist[0];
+                params[1] = tempRlist[1];
+                params[2] = tempRlist[2];
 
+            } else {
+                status = EG_getBoundingBox(MODL->body[ibody].ebody, bbox);
+                CHECK_STATUS(EG_getBoundingBox);
+
+                size = sqrt(SQR(bbox[3]-bbox[0]) + SQR(bbox[4]-bbox[1]) + SQR(bbox[5]-bbox[2]));
+
+                params[0] = TESS_PARAM_0 * size;
+                params[1] = TESS_PARAM_1 * size;
+                params[2] = TESS_PARAM_2;
+            }
+
+            status = EG_attributeAdd(MODL->body[ibody].ebody, "_tParams",
+                                     ATTRREAL, 3, NULL, params, NULL);
+            CHECK_STATUS(EG_attributeAdd);
+        }
+
+        status = EG_attributeRet(MODL->body[ibody].ebody, "_tParams",
+                                 &atype, &alen, &tempIlist, &tempRlist, &tempClist);
         if (status == SUCCESS && atype == ATTRREAL && alen == 3) {
             status = EG_makeTessBody(MODL->body[ibody].ebody, (double*)tempRlist,
                                      &(etess));
+            if (etess != NULL) {
+                MODL->body[ibody].etess = etess;
+            }
         } else {
             SPRINT1(0, "ERROR:: cannot tessellate ibody %d", ibody);
         }
@@ -5303,6 +5414,8 @@ cleanupMemory(int    quiet)             /* (in)  =1 for no messages */
     modl_T    *MODL = (modl_T*)modl;
 
     /* --------------------------------------------------------------- */
+
+    if (MODL == NULL) return;
 
     /* remember the EGADS context (since it will be needed after
        MODL is removed) */
@@ -5687,7 +5800,7 @@ processBrowserToServer(char    text[])
     int       itoken1, itoken2, itoken3, ibody, onstack, direction=1, nwarn;
     int       nclient;
     CINT      *tempIlist;
-    double    scale, dihedral;
+    double    scale, dihedral, value, dot;
     CDOUBLE   *tempRlist;
     char      *pEnd, bname[MAX_NAME_LEN+1];
     CCHAR     *tempClist;
@@ -5752,9 +5865,9 @@ processBrowserToServer(char    text[])
     } else if (strncmp(text, "identify|", 9) == 0) {
 
         nclient = wv_nClientServer(serverNum);
-        printf("********************************************\n");
-        printf("server %d has %d clients\n", serverNum, nclient);
-        printf("********************************************\n");
+        SPRINT0(1, "********************************************");
+        SPRINT2(1, "server %d has %d clients", serverNum, nclient);
+        SPRINT0(1, "********************************************");
 
         /* build the response */
         snprintf(response, max_resp_len, "identify|serveCSM|%d|", nclient);
@@ -6020,6 +6133,14 @@ processBrowserToServer(char    text[])
                 if (MODL->pmtr[ipmtr].type != OCSM_LOCALVAR &&
                     MODL->pmtr[ipmtr].type != OCSM_OUTPMTR  ) continue;
 
+                /* make sure the mass properties have been set up */
+                if (MODL->pmtr[ipmtr].name[0] == '@') {
+                    status = ocsmGetValu(MODL, ipmtr, 1, 1, &value, &dot);
+                    if (status != SUCCESS) {
+                        SPRINT2(0, "ERROR:: ocsmGetValu(%s) detected %s", MODL->pmtr[ipmtr].name, ocsmGetText(status));
+                    }
+                }
+
                 /* skip if string-valued */
                 if (MODL->pmtr[ipmtr].nrow == 0 || MODL->pmtr[ipmtr].ncol == 0) {
                     continue;
@@ -6151,7 +6272,6 @@ processBrowserToServer(char    text[])
 
             if (getToken(text, 4, '|', arg4)) {
                 status = ocsmSetValu(MODL, ipmtr, irow, icol, arg4);
-                printf("ocsmSetValu -> status=%d\n", status);
                 if (status != SUCCESS) {
                     SPRINT5(0, "ERROR:: ocsmSetValu(%d,%d,%d,%s) detected: %s",
                             ipmtr, irow, icol, arg4, ocsmGetText(status));
@@ -6161,7 +6281,6 @@ processBrowserToServer(char    text[])
             }
 
             /* build the response */
-            printf("before building response -> status=%d\n", status);
             if (status == SUCCESS) {
                 snprintf(response, max_resp_len, "setPmtr|");
             } else {
@@ -6861,11 +6980,8 @@ processBrowserToServer(char    text[])
         /* extract argument */
         getToken(text, 1, '|', filename);
 
-        /* free up the current MODL */
-        status = ocsmFree(MODL);
-        if (status != SUCCESS) {
-            SPRINT1(0, "ERROR:: ocsmFree -> status=%d", status);
-        }
+        /* save the current MODL (to be deleted below) */
+        saved_MODL = (modl_T *)modl;
 
         /* load the new MODL */
         status = ocsmLoad(filename, &modl);
@@ -6879,20 +6995,29 @@ processBrowserToServer(char    text[])
         } else {
             MODL = (modl_T *) modl;
 
-            status = ocsmLoadDict(modl, dictname);
+            status = ocsmLoadDict(MODL, dictname);
             if (status != SUCCESS) {
                 SPRINT2(0, "ERROR:: ocsmLoadDict(%s) detected %s",
                         dictname, ocsmGetText(status));
             }
 
-            status = ocsmRegMesgCB(modl, mesgCallbackFromOpenCSM);
+            status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
             if (status < EGADS_SUCCESS) goto cleanup;
 
-            status = ocsmRegSizeCB(modl, sizeCallbackFromOpenCSM);
+            status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
             if (status < EGADS_SUCCESS) goto cleanup;
 
             if (strlen(despname) > 0) {
                 status = ocsmUpdateDespmtrs(MODL, despname);
+                if (status < EGADS_SUCCESS) goto cleanup;
+            }
+
+            /* apply and free up a saved MODL (if it exists) */
+            if (saved_MODL != NULL) {
+                status = updateModl(saved_MODL, MODL);
+                if (status < EGADS_SUCCESS) goto cleanup;
+
+                status = ocsmFree(saved_MODL);
                 if (status < EGADS_SUCCESS) goto cleanup;
             }
 
@@ -6915,7 +7040,6 @@ processBrowserToServer(char    text[])
             messages_len = 0;
         }
 
-        MODL = (modl_T*)modl;
         if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
@@ -7087,135 +7211,13 @@ processBrowserToServer(char    text[])
                 if (status < EGADS_SUCCESS) goto cleanup;
             }
 
-            /* move the Body info from the saved_MODL into the
-               new MODL so that recycling might happen */
-            MODL->nbody = saved_MODL->nbody;
-            MODL->mbody = saved_MODL->mbody;
-            MODL->body  = saved_MODL->body;
-
-            saved_MODL->nbody = 0;
-            saved_MODL->mbody = 0;
-            saved_MODL->body  = NULL;
-
-            /* use saved_MODL's context in MODL */
-            if (MODL->context != NULL) {
-                status = EG_close(MODL->context);
-                CHECK_STATUS(EG_close);
-            }
-
-            MODL->context = saved_MODL->context;
-
-            /* starting at the beginning of the Branches, mark the Branch
-               as  dirty if its type, name, arguements (except tmp_OpenCSM_),
-               or attributes differ from the saved_MODL */
-            for (ibrch = 1; ibrch <= MODL->nbrch; ibrch++) {
-                MODL->brch[ibrch].dirty = 0;
-
-                if (ibrch > saved_MODL->nbrch) {
-                    MODL->brch[ibrch].dirty = 1;
-                    goto recycle_message;
-                } else if (MODL->brch[ibrch].type != saved_MODL->brch[ibrch].type) {
-                    MODL->brch[ibrch].dirty = 1;
-                    goto recycle_message;
-                } else if (strcmp(MODL->brch[ibrch].name, saved_MODL->brch[ibrch].name) != 0) {
-                    MODL->brch[ibrch].dirty = 1;
-                    goto recycle_message;
-                } else if (MODL->brch[ibrch].narg != saved_MODL->brch[ibrch].narg) {
-                    MODL->brch[ibrch].dirty = 1;
-                    goto recycle_message;
-                }
-
-                if (MODL->brch[ibrch].narg >= 1) {
-                    if (strcmp(MODL->brch[ibrch].arg1, saved_MODL->brch[ibrch].arg1) != 0) {
-                        MODL->brch[ibrch].dirty = 1;
-                        goto recycle_message;
-                    }
-                }
-                if (MODL->brch[ibrch].narg >= 2) {
-                    if (strcmp(MODL->brch[ibrch].arg2, saved_MODL->brch[ibrch].arg2) != 0) {
-                        MODL->brch[ibrch].dirty = 1;
-                        goto recycle_message;
-                    }
-                }
-                if (MODL->brch[ibrch].narg >= 3) {
-                    if        (MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(MODL->brch[ibrch].arg3, "tmp_OpenCSM_", 12) != 0) {
-                    } else if (MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(MODL->brch[ibrch].arg3, "tmp_OpenCSM_", 12) != 0) {
-                    } else if (strcmp(MODL->brch[ibrch].arg3, saved_MODL->brch[ibrch].arg3) != 0) {
-                        MODL->brch[ibrch].dirty = 1;
-                        goto recycle_message;
-                    }
-                }
-                if (MODL->brch[ibrch].narg >= 4) {
-                    if (strcmp(MODL->brch[ibrch].arg4, saved_MODL->brch[ibrch].arg4) != 0) {
-                        MODL->brch[ibrch].dirty = 1;
-                        goto recycle_message;
-                    }
-                }
-                if (MODL->brch[ibrch].narg >= 5) {
-                    if        (MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(MODL->brch[ibrch].arg5, "tmp_OpenCSM_", 12) != 0) {
-                    } else if (MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(MODL->brch[ibrch].arg5, "tmp_OpenCSM_", 12) != 0) {
-                    } else if (strcmp(MODL->brch[ibrch].arg5, saved_MODL->brch[ibrch].arg5) != 0) {
-                        MODL->brch[ibrch].dirty = 1;
-                        goto recycle_message;
-                    }
-                }
-                if (MODL->brch[ibrch].narg >= 6) {
-                    if (strcmp(MODL->brch[ibrch].arg6, saved_MODL->brch[ibrch].arg6) != 0) {
-                        MODL->brch[ibrch].dirty = 1;
-                        goto recycle_message;
-                    }
-                }
-                if (MODL->brch[ibrch].narg >= 7) {
-                    if        (MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(MODL->brch[ibrch].arg7, "tmp_OpenCSM_", 12) != 0) {
-                    } else if (MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(MODL->brch[ibrch].arg7, "tmp_OpenCSM_", 12) != 0) {
-                    } else if (strcmp(MODL->brch[ibrch].arg7, saved_MODL->brch[ibrch].arg7) != 0) {
-                        MODL->brch[ibrch].dirty = 1;
-                        goto recycle_message;
-                    }
-                }
-                if (MODL->brch[ibrch].narg >= 8) {
-                    if (strcmp(MODL->brch[ibrch].arg8, saved_MODL->brch[ibrch].arg8) != 0) {
-                        MODL->brch[ibrch].dirty = 1;
-                        goto recycle_message;
-                    }
-                }
-                if (MODL->brch[ibrch].narg >= 9) {
-                    if        (MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(MODL->brch[ibrch].arg9, "tmp_OpenCSM_", 12) != 0) {
-                    } else if (MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(MODL->brch[ibrch].arg9, "tmp_OpenCSM_", 12) != 0) {
-                    } else if (strcmp(MODL->brch[ibrch].arg9, saved_MODL->brch[ibrch].arg9) != 0) {
-                        MODL->brch[ibrch].dirty = 1;
-                        goto recycle_message;
-                    }
-                }
-
-                if (MODL->brch[ibrch].nattr != saved_MODL->brch[ibrch].nattr) {
-                    MODL->brch[ibrch].dirty = 1;
-                } else {
-                    for (iattr = 0; iattr < MODL->brch[ibrch].nattr; iattr++) {
-                        if        (strcmp(MODL->brch[ibrch].attr[iattr].name, saved_MODL->brch[ibrch].attr[iattr].name) != 0) {
-                            MODL->brch[ibrch].dirty = 1;
-                            goto recycle_message;
-                        } else if (strcmp(MODL->brch[ibrch].attr[iattr].defn, saved_MODL->brch[ibrch].attr[iattr].defn) != 0) {
-                            MODL->brch[ibrch].dirty = 1;
-                            goto recycle_message;
-                        } else if (MODL->brch[ibrch].attr[iattr].type != saved_MODL->brch[ibrch].attr[iattr].type) {
-                            MODL->brch[ibrch].dirty = 1;
-                            goto recycle_message;
-                        }
-                    }
-                }
-
-            recycle_message:
-                if (MODL->brch[ibrch].dirty > 0) {
-                    SPRINT1(1, "    recycling disabled starting at Branch %d because of file differences", ibrch);
-                    break;
-                }
-            }
+            status = updateModl(saved_MODL, MODL);
+            if (status < EGADS_SUCCESS) goto cleanup;
 
             snprintf(response, max_resp_len, "load|");
         }
 
-        MODL = (modl_T*)modl;
+        MODL = (modl_T *)modl;
         if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
@@ -7524,7 +7526,7 @@ processBrowserToServer(char    text[])
         if (getToken(text, 3, '|', arg3)) lims[1]  = strtod(arg3, &pEnd);
 
         /* handle special case of Ereps */
-        if (plotType < 6) {
+        if (plotType < 7) {
             if (MODL->erepAtEnd == 1) {
                 status = buildBodys(0, &builtTo, &buildStatus, &nwarn);
                 if (status != SUCCESS) goto cleanup;
@@ -7633,6 +7635,7 @@ sizeCallbackFromOpenCSM(void   *Modl,   /* (in)  pointer to MODL */
 
     int    status=SUCCESS, irow, icol, index;
 
+    double value, dot;
     char   *entry=NULL;
 
     modl_T *MODL = (modl_T*)Modl;
@@ -7752,6 +7755,14 @@ sizeCallbackFromOpenCSM(void   *Modl,   /* (in)  pointer to MODL */
         for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
             if (MODL->pmtr[ipmtr].type != OCSM_LOCALVAR &&
                 MODL->pmtr[ipmtr].type != OCSM_OUTPMTR  ) continue;
+
+            /* make sure the mass properties have been set up */
+            if (MODL->pmtr[ipmtr].name[0] == '@') {
+                status = ocsmGetValu(MODL, ipmtr, 1, 1, &value, &dot);
+                if (status != SUCCESS) {
+                    SPRINT2(0, "ERROR:: ocsmGetValu(%s) detected %s", MODL->pmtr[ipmtr].name, ocsmGetText(status));
+                }
+            }
 
             /* skip if string-valued */
             if (MODL->pmtr[ipmtr].nrow == 0 || MODL->pmtr[ipmtr].ncol == 0) {
@@ -7909,6 +7920,154 @@ storeUndo(char   cmd[],                 /* (in)  current command */
 cleanup:
     FREE(text);
 
+    return status;
+}
+
+
+/***********************************************************************/
+/*                                                                     */
+/*   updateModl - update Bodys and mark Branches as dirty from prev MODL */
+/*                                                                     */
+/***********************************************************************/
+
+static int
+updateModl(modl_T *src_MODL,            /* (in)   source MODL */
+           modl_T *tgt_MODL)            /* (both) target MODL */
+{
+    int       status = SUCCESS;         /* return status */
+
+    int       ibrch, iattr;
+
+    ROUTINE(updateModl);
+
+    /* --------------------------------------------------------------- */
+
+    /* move the Body info from the src_MODL into the
+       new tgt_MODL so that recycling might happen */
+    tgt_MODL->nbody = src_MODL->nbody;
+    tgt_MODL->mbody = src_MODL->mbody;
+    tgt_MODL->body  = src_MODL->body;
+
+    src_MODL->nbody = 0;
+    src_MODL->mbody = 0;
+    src_MODL->body  = NULL;
+
+    /* use src_MODL's context in tgt_MODL */
+    if (tgt_MODL->context != NULL) {
+        status = EG_close(tgt_MODL->context);
+        CHECK_STATUS(EG_close);
+    }
+
+    tgt_MODL->context = src_MODL->context;
+
+    /* starting at the beginning of the Branches, mark the Branch
+       as  dirty if its type, name, arguements (except tmp_OpenCSM_),
+       or attributes differ from the src_MODL */
+    for (ibrch = 1; ibrch <= tgt_MODL->nbrch; ibrch++) {
+        tgt_MODL->brch[ibrch].dirty = 0;
+
+        if (ibrch > src_MODL->nbrch) {
+            tgt_MODL->brch[ibrch].dirty = 1;
+            goto recycle_message;
+        } else if (tgt_MODL->brch[ibrch].type != src_MODL->brch[ibrch].type) {
+            tgt_MODL->brch[ibrch].dirty = 1;
+            goto recycle_message;
+        } else if (strcmp(tgt_MODL->brch[ibrch].name, src_MODL->brch[ibrch].name) != 0) {
+            tgt_MODL->brch[ibrch].dirty = 1;
+            goto recycle_message;
+        } else if (tgt_MODL->brch[ibrch].narg != src_MODL->brch[ibrch].narg) {
+            tgt_MODL->brch[ibrch].dirty = 1;
+            goto recycle_message;
+        }
+
+        if (tgt_MODL->brch[ibrch].narg >= 1) {
+            if (strcmp(tgt_MODL->brch[ibrch].arg1, src_MODL->brch[ibrch].arg1) != 0) {
+                tgt_MODL->brch[ibrch].dirty = 1;
+                goto recycle_message;
+            }
+        }
+        if (tgt_MODL->brch[ibrch].narg >= 2) {
+            if (strcmp(tgt_MODL->brch[ibrch].arg2, src_MODL->brch[ibrch].arg2) != 0) {
+                tgt_MODL->brch[ibrch].dirty = 1;
+                goto recycle_message;
+            }
+        }
+        if (tgt_MODL->brch[ibrch].narg >= 3) {
+            if        (tgt_MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(tgt_MODL->brch[ibrch].arg3, "tmp_OpenCSM_", 12) != 0) {
+            } else if (tgt_MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(tgt_MODL->brch[ibrch].arg3, "tmp_OpenCSM_", 12) != 0) {
+            } else if (strcmp(tgt_MODL->brch[ibrch].arg3, src_MODL->brch[ibrch].arg3) != 0) {
+                tgt_MODL->brch[ibrch].dirty = 1;
+                goto recycle_message;
+            }
+        }
+        if (tgt_MODL->brch[ibrch].narg >= 4) {
+            if (strcmp(tgt_MODL->brch[ibrch].arg4, src_MODL->brch[ibrch].arg4) != 0) {
+                tgt_MODL->brch[ibrch].dirty = 1;
+                goto recycle_message;
+            }
+        }
+        if (tgt_MODL->brch[ibrch].narg >= 5) {
+            if        (tgt_MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(tgt_MODL->brch[ibrch].arg5, "tmp_OpenCSM_", 12) != 0) {
+            } else if (tgt_MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(tgt_MODL->brch[ibrch].arg5, "tmp_OpenCSM_", 12) != 0) {
+            } else if (strcmp(tgt_MODL->brch[ibrch].arg5, src_MODL->brch[ibrch].arg5) != 0) {
+                tgt_MODL->brch[ibrch].dirty = 1;
+                goto recycle_message;
+            }
+        }
+        if (tgt_MODL->brch[ibrch].narg >= 6) {
+            if (strcmp(tgt_MODL->brch[ibrch].arg6, src_MODL->brch[ibrch].arg6) != 0) {
+                tgt_MODL->brch[ibrch].dirty = 1;
+                goto recycle_message;
+            }
+        }
+        if (tgt_MODL->brch[ibrch].narg >= 7) {
+            if        (tgt_MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(tgt_MODL->brch[ibrch].arg7, "tmp_OpenCSM_", 12) != 0) {
+            } else if (tgt_MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(tgt_MODL->brch[ibrch].arg7, "tmp_OpenCSM_", 12) != 0) {
+            } else if (strcmp(tgt_MODL->brch[ibrch].arg7, src_MODL->brch[ibrch].arg7) != 0) {
+                tgt_MODL->brch[ibrch].dirty = 1;
+                goto recycle_message;
+            }
+        }
+        if (tgt_MODL->brch[ibrch].narg >= 8) {
+            if (strcmp(tgt_MODL->brch[ibrch].arg8, src_MODL->brch[ibrch].arg8) != 0) {
+                tgt_MODL->brch[ibrch].dirty = 1;
+                goto recycle_message;
+            }
+        }
+        if (tgt_MODL->brch[ibrch].narg >= 9) {
+            if        (tgt_MODL->brch[ibrch].type == OCSM_UDPARG && strncmp(tgt_MODL->brch[ibrch].arg9, "tmp_OpenCSM_", 12) != 0) {
+            } else if (tgt_MODL->brch[ibrch].type == OCSM_UDPRIM && strncmp(tgt_MODL->brch[ibrch].arg9, "tmp_OpenCSM_", 12) != 0) {
+            } else if (strcmp(tgt_MODL->brch[ibrch].arg9, src_MODL->brch[ibrch].arg9) != 0) {
+                tgt_MODL->brch[ibrch].dirty = 1;
+                goto recycle_message;
+            }
+        }
+
+        if (tgt_MODL->brch[ibrch].nattr != src_MODL->brch[ibrch].nattr) {
+            tgt_MODL->brch[ibrch].dirty = 1;
+        } else {
+            for (iattr = 0; iattr < tgt_MODL->brch[ibrch].nattr; iattr++) {
+                if        (strcmp(tgt_MODL->brch[ibrch].attr[iattr].name, src_MODL->brch[ibrch].attr[iattr].name) != 0) {
+                    tgt_MODL->brch[ibrch].dirty = 1;
+                    goto recycle_message;
+                } else if (strcmp(tgt_MODL->brch[ibrch].attr[iattr].defn, src_MODL->brch[ibrch].attr[iattr].defn) != 0) {
+                    tgt_MODL->brch[ibrch].dirty = 1;
+                    goto recycle_message;
+                } else if (tgt_MODL->brch[ibrch].attr[iattr].type != src_MODL->brch[ibrch].attr[iattr].type) {
+                    tgt_MODL->brch[ibrch].dirty = 1;
+                    goto recycle_message;
+                }
+            }
+        }
+
+    recycle_message:
+        if (tgt_MODL->brch[ibrch].dirty > 0) {
+            SPRINT1(1, "    recycling disabled starting at Branch %d because of file differences", ibrch);
+            break;
+        }
+    }
+
+cleanup:
     return status;
 }
 
@@ -8506,6 +8665,8 @@ plugsMain(modl_T *MODL,                 /* (in)  pointer to MODL */
     int     npmtr, ipmtr, ibody, jbody;
     int     *pmtrindx=NULL;
     double  rms;
+    char    egadsname[81];
+    ego     emodel;
     clock_t old_time, new_time;
     FILE    *fp_plugs=NULL;
 
@@ -8559,9 +8720,25 @@ plugsMain(modl_T *MODL,                 /* (in)  pointer to MODL */
 
         fprintf(fp_plugs, " %4d %4d", -1, 0);
         for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
-            fprintf(fp_plugs, " %11.5f", MODL->pmtr[pmtrindx[ipmtr]].value[0]);
+            fprintf(fp_plugs, " %11.6f", MODL->pmtr[pmtrindx[ipmtr]].value[0]);
         }
         fprintf(fp_plugs, "\n");
+    }
+
+    if (PLUGS_CREATE_EGADS_FILES > 0) {
+        status = EG_makeTopology(MODL->context, NULL, MODEL, 0, NULL,
+                                 1, &(MODL->body[MODL->nbody].ebody), NULL, &emodel);
+        CHECK_STATUS(EG_makeTopology);
+
+        snprintf(egadsname, 80, "plugs_%d_%d.egads", -1, 0);
+
+        (void) remove(egadsname);
+
+        status = EG_saveModel(emodel, egadsname);
+        CHECK_STATUS(EG_saveModel);
+
+        status = EG_deleteObject(emodel);
+        CHECK_STATUS(EG_deleteObject);
     }
 
     /* ensure that there is only one Body on the stack */
@@ -8662,6 +8839,8 @@ plugsPhase1(modl_T *MODL,               /* (in)  pointer to MODL */
     int     icloud, ipmtr, jpmtr, inode, builtTo, nbody, ierr, iter, niter=20, idone, oldOutLevel;
     double  bbox_cloud[6], bbox_modl[6], vel[3], qerr[6], rms, lambda, value, dot, lbound, ubound, dmax;
     double  *ajac=NULL, *ajtj=NULL, *ajtq=NULL, *delta=NULL, *pmtrbest=NULL, *W=NULL;
+    char    egadsname[81];
+    ego     emodel;
     clock_t old_time, new_time;
 
     ROUTINE(plugsPhase1);
@@ -8949,6 +9128,39 @@ plugsPhase1(modl_T *MODL,               /* (in)  pointer to MODL */
             SPRINT1x(1, " %10.5f", value);
         }
 
+        /* store history */
+        if (fp_plugs != NULL) {
+            fprintf(fp_plugs, " %4d %4d", 0, iter);
+            for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
+                status = ocsmGetValu(MODL, pmtrindx[ipmtr], 1, 1, &value, &dot);
+                CHECK_STATUS(ocsmGetPmtr);
+
+                fprintf(fp_plugs, " %11.6f", value);
+            }
+            if (rms < *rmsbest) {
+                fprintf(fp_plugs, "%11.5f ACCEPT\n", rms);
+            } else {
+                fprintf(fp_plugs, "%11.5f\n", rms);
+            }
+            fflush(fp_plugs);
+        }
+
+        if (PLUGS_CREATE_EGADS_FILES > 0) {
+            status = EG_makeTopology(MODL->context, NULL, MODEL, 0, NULL,
+                                     1, &(MODL->body[MODL->nbody].ebody), NULL, &emodel);
+            CHECK_STATUS(EG_makeTopology);
+
+            snprintf(egadsname, 80, "plugs_%d_%d.egads", 0, iter);
+
+            (void) remove(egadsname);
+
+            status = EG_saveModel(emodel, egadsname);
+            CHECK_STATUS(EG_saveModel);
+
+            status = EG_deleteObject(emodel);
+            CHECK_STATUS(EG_deleteObject);
+        }
+
         /* if this new solution is better, accept it and decrease lambda
            (making it more newton-like) */
         if (rms < *rmsbest) {
@@ -8959,19 +9171,6 @@ plugsPhase1(modl_T *MODL,               /* (in)  pointer to MODL */
             *rmsbest = rms;
             lambda   = MAX(1.0e-10, lambda/2);
             SPRINT1(1, "  accepted: lambda=%10.3e", lambda);
-
-            /* store history */
-            if (fp_plugs != NULL) {
-                fprintf(fp_plugs, " %4d %4d", -1, iter);
-                for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
-                    status = ocsmGetValu(MODL, pmtrindx[ipmtr], 1, 1, &value, &dot);
-                    CHECK_STATUS(ocsmGetPmtr);
-
-                    fprintf(fp_plugs, " %11.5f", value);
-                }
-                fprintf(fp_plugs, "%11.5f\n", rms);
-                fflush(fp_plugs);
-            }
 
             /* check for convergence */
             idone = 1;
@@ -9034,17 +9233,20 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
 
     int     iface, icloud, ipmtr, jpmtr, npnt, ntri, itri, ip0, ip1, ip2;
     int     nerr, nvar, ivar, count, unclass, reclass, ireclass, ipass, restart, iter, niter=50;
-    int     nbody, builtTo, oldOutLevel, periodic, ibest, scaleDiag, naccept, iperturb;
+    int     nbody, builtTo, oldOutLevel, periodic, ibest, scaleDiag, naccept, iperturb, limit;
     int     *face=NULL, *prevface=NULL;
     CINT    *ptype, *pindx, *tris, *tric;
     double  bbox_cloud[6], dtest, value, dot, lbound, ubound, rms, data[18], rmsperturb, valperturb;
     double  dmax, lambda, uvrange[4], dbest, scaleFact, uv_guess[2], xyz_guess[3];
+    double  atotal, massprops[14];
     double  *dist=NULL, *uvface=NULL, *velface=NULL;
     double  *beta=NULL, *delta=NULL, *qerr=NULL, *qerrbest=NULL, *ajac=NULL;
     double  *atri=NULL, *btri=NULL, *ctri=NULL, *dtri=NULL, *xtri=NULL;
     double  *mat=NULL, *rhs=NULL, *xxx=NULL;
     double  *pmtrbest=NULL, *pmtrlast=NULL;
     CDOUBLE *xyz, *uv;
+    char    egadsname[81];
+    ego     emodel;
     clock_t old_time, new_time;
     FILE    *fp2;
 
@@ -9128,6 +9330,10 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
     restart = 0;
     for (ipass = 1; ipass <= npass; ipass++) {
 
+        if (fp_plugs != NULL) {
+            fprintf(fp_plugs, "\n");
+        }
+
         /* note: odd printout is to always print pass number
            so as to void Jenkins timeouts */
         SPRINT0(1, "  ");
@@ -9140,6 +9346,12 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
         oldOutLevel = ocsmSetOutLevel(0);
         status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
         (void) ocsmSetOutLevel(oldOutLevel);
+        CHECK_STATUS(ocsmBuild);
+
+        /* remember Face associations from the last time */
+        for (icloud = 0; icloud < ncloud; icloud++) {
+            prevface[icloud] = face[icloud];
+        }
 
         /* only classify points that are within 0.25 of the bounding box size */
         dmax = 0.25 * MAX(MAX(bbox_cloud[3]-bbox_cloud[0],
@@ -9147,30 +9359,11 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                               bbox_cloud[5]-bbox_cloud[2]);
 
         /* associate each cloud point with the closest tessellation point */
-        if (ipass == 1) {
-            for (icloud = 0; icloud < ncloud; icloud++) {
-                face[  icloud  ] = 0;
-                dist[  icloud  ] = dmax * dmax;
-                beta[2*icloud  ] = 0;
-                beta[2*icloud+1] = 0;
-            }
-        } else {
-            for (icloud = 0; icloud < ncloud; icloud++) {
-                iface = face[icloud];
-                if (iface > 0) {
-                    status = EG_evaluate(MODL->body[ibody].face[iface].eface, &(beta[2*icloud]), data);
-                    CHECK_STATUS(EG_evaluate);
-
-                    dist[icloud] = (cloud[3*icloud  ]-data[0]) * (cloud[3*icloud  ]-data[0])
-                                 + (cloud[3*icloud+1]-data[1]) * (cloud[3*icloud+1]-data[1])
-                                 + (cloud[3*icloud+2]-data[2]) * (cloud[3*icloud+2]-data[2]);
-                } else {
-                    face[  icloud  ] = 0;
-                    dist[  icloud  ] = dmax * dmax;
-                    beta[2*icloud  ] = 0;
-                    beta[2*icloud+1] = 0;
-                }
-            }
+        for (icloud = 0; icloud < ncloud; icloud++) {
+            face[  icloud  ] = 0;
+            dist[  icloud  ] = dmax * dmax;
+            beta[2*icloud  ] = 0;
+            beta[2*icloud+1] = 0;
         }
 
         for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
@@ -9204,15 +9397,28 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
             }
         }
 
-        /* if the Face has no cloud points, arbitrarily reclassify up to 5 cloud
-           points that are closest to the center of the Face */
+        /* each Face must have its share of cloud points, defined as the larger of
+           (arbitrarily) a tenth of the fractional area (as compared with the whole Body's area
+           or (arbitrarily) 5, whichever is larger.  for Faces with fewer points,
+           reclassify the cloud points that are closest to the center of the Face */
+        status = EG_getMassProperties(MODL->body[ibody].ebody, massprops);
+        CHECK_STATUS(EG_getMassProperties);
+
+        atotal = massprops[1];
+
         for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
             count = 0;
             for (icloud = 0; icloud < ncloud; icloud++) {
                 if (face[icloud] == iface) count++;
             }
 
-            for (ireclass = count; ireclass < 5; ireclass++) {
+            status = EG_getMassProperties(MODL->body[ibody].face[iface].eface, massprops);
+            CHECK_STATUS(EG_getMassProperties);
+
+            limit = 0.10 * ncloud * massprops[1] / atotal;
+            if (limit < 5) limit = 5;
+
+            for (ireclass = count; ireclass < limit; ireclass++) {
                 status = EG_getRange(MODL->body[ibody].face[iface].eface, uvrange, &periodic);
                 CHECK_STATUS(EG_getRange);
 
@@ -9288,11 +9494,6 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
             restart = 0;
         } else {
             reclass = ncloud;
-        }
-
-        /* remember Face associations for next time */
-        for (icloud = 0; icloud < ncloud; icloud++) {
-            prevface[icloud] = face[icloud];
         }
 
         /* compute the errors and the rms */
@@ -9566,6 +9767,39 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 SPRINT1x(1, " %10.5f", value);
             }
 
+            /* store history */
+            if (fp_plugs != NULL) {
+                fprintf(fp_plugs, " %4d %4d", ipass, iter);
+                for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
+                    status = ocsmGetValu(MODL, pmtrindx[ipmtr], 1, 1, &value, &dot);
+                    CHECK_STATUS(ocsmGetPmtr);
+
+                    fprintf(fp_plugs, " %11.6f", value);
+                }
+                if (rms < *rmsbest) {
+                    fprintf(fp_plugs, "%11.5f ACCEPT\n", rms);
+                } else {
+                    fprintf(fp_plugs, "%11.5f\n", rms);
+                }
+                fflush( fp_plugs);
+            }
+
+            if (PLUGS_CREATE_EGADS_FILES > 0) {
+                status = EG_makeTopology(MODL->context, NULL, MODEL, 0, NULL,
+                                         1, &(MODL->body[MODL->nbody].ebody), NULL, &emodel);
+                CHECK_STATUS(EG_makeTopology);
+
+                snprintf(egadsname, 80, "plugs_%d_%d.egads", ipass, iter);
+
+                (void) remove(egadsname);
+
+                status = EG_saveModel(emodel, egadsname);
+                CHECK_STATUS(EG_saveModel);
+
+                status = EG_deleteObject(emodel);
+                CHECK_STATUS(EG_deleteObject);
+            }
+
             /* if this new solution is better, accept it and decrease lambda
                (making it more newton-like) */
             if (rms < *rmsbest) {
@@ -9578,19 +9812,6 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 naccept++;
                 lambda    = MAX(1.0e-10, lambda/2);
                 SPRINT1(1, "  accepted: lambda=%10.3e", lambda);
-
-                /* store history */
-                if (fp_plugs != NULL) {
-                    fprintf(fp_plugs, " %4d %4d", ipass, iter);
-                    for (ipmtr = 0; ipmtr < npmtr; ipmtr++) {
-                        status = ocsmGetValu(MODL, pmtrindx[ipmtr], 1, 1, &value, &dot);
-                        CHECK_STATUS(ocsmGetPmtr);
-
-                        fprintf(fp_plugs, " %11.5f", value);
-                    }
-                    fprintf(fp_plugs, "%11.5f\n", rms);
-                    fflush( fp_plugs);
-                }
 
             /* otherwise reject the step and increase lambda
                (making it more steepest-descent-like) */
@@ -9739,20 +9960,25 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
             CHECK_STATUS(ocsmBuild);
             (void) ocsmSetOutLevel(oldOutLevel);
 
-            rms = 0;
+            rms     = 0;
+            unclass = 0;
             for (icloud = 0; icloud < ncloud; icloud++) {
                 iface       = face[  icloud  ];
                 uv_guess[0] = beta[2*icloud  ];
                 uv_guess[1] = beta[2*icloud+1];
 
-                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
-                CHECK_STATUS(EG_invEvaluateGuess);
+                if (iface > 0) {
+                    status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                    CHECK_STATUS(EG_invEvaluateGuess);
 
-                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
-                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
-                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                    rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                         + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                         + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                } else {
+                    unclass++;
+                }
             }
-            rms = sqrt(rms / (3*ncloud));
+            rms = sqrt(rms / (3*(ncloud-unclass)));
 
             SPRINT1(0, "    baseline                     rms=%12.5e\n", rms);
             iperturb   = 0;
@@ -9780,20 +10006,25 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 CHECK_STATUS(ocsmBuild);
                 (void) ocsmSetOutLevel(oldOutLevel);
 
-                rms = 0;
+                rms     = 0;
+                unclass = 0;
                 for (icloud = 0; icloud < ncloud; icloud++) {
                     iface       = face[  icloud  ];
                     uv_guess[0] = beta[2*icloud  ];
                     uv_guess[1] = beta[2*icloud+1];
 
-                    status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
-                    CHECK_STATUS(EG_invEvaluateGuess);
+                    if (iface > 0) {
+                        status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                        CHECK_STATUS(EG_invEvaluateGuess);
 
-                    rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
-                         + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
-                         + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                        rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                             + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                             + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                    } else {
+                        unclass++;
+                    }
                 }
-                rms = sqrt(rms / (3*ncloud));
+                rms = sqrt(rms / (3*(ncloud-unclass)));
 
                 SPRINT4(1, "    ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/best=%10.5f", ipmtr, value, rms, rms/rmsperturb);
 
@@ -9818,20 +10049,25 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
                 CHECK_STATUS(ocsmBuild);
                 (void) ocsmSetOutLevel(oldOutLevel);
 
-                rms = 0;
+                rms     = 0;
+                unclass = 0;
                 for (icloud = 0; icloud < ncloud; icloud++) {
                     iface       = face[  icloud  ];
                     uv_guess[0] = beta[2*icloud  ];
                     uv_guess[1] = beta[2*icloud+1];
 
-                    status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
-                    CHECK_STATUS(EG_invEvaluateGuess);
+                    if (iface > 0) {
+                        status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                        CHECK_STATUS(EG_invEvaluateGuess);
 
-                    rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
-                        + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
-                        + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                        rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                             + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                             + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                    } else {
+                        unclass++;
+                    }
                 }
-                rms = sqrt(rms / (3*ncloud));
+                rms = sqrt(rms / (3*(ncloud-unclass)));
 
                 SPRINT4(1, "    ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/best=%10.5f\n", ipmtr, value, rms, rms/rmsperturb);
 
@@ -9916,24 +10152,29 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
         status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
         (void) ocsmSetOutLevel(oldOutLevel);
 
-        rms = 0;
-        rmsuv = 0;
+        rms     = 0;
+        rmsuv   = 0;
+        unclass = 0;
         for (icloud = 0; icloud < ncloud; icloud++) {
             iface       = face[  icloud  ];
             uv_guess[0] = beta[2*icloud  ];
             uv_guess[1] = beta[2*icloud+1];
 
-            status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
-            CHECK_STATUS(EG_invEvaluateGuess);
+            if (iface > 0) {
+                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                CHECK_STATUS(EG_invEvaluateGuess);
 
-            rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
-                 + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
-                 + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
-            rmsuv += (uv_guess[0]-beta[2*icloud  ]) * (uv_guess[0]-beta[2*icloud  ])
-                   + (uv_guess[1]-beta[2*icloud+1]) * (uv_guess[1]-beta[2*icloud+1]);
+                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                rmsuv += (uv_guess[0]-beta[2*icloud  ]) * (uv_guess[0]-beta[2*icloud  ])
+                       + (uv_guess[1]-beta[2*icloud+1]) * (uv_guess[1]-beta[2*icloud+1]);
+            } else {
+                unclass++;
+            }
         }
-        rms = sqrt(rms / (3*ncloud));
-        rmsuv = sqrt(rmsuv / (2*ncloud));
+        rms   = sqrt(rms   / (3*(ncloud-unclass)));
+        rmsuv = sqrt(rmsuv / (2*(ncloud-unclass)));
 
         SPRINT2(1, "baseline                     rms=%12.5e, rmsuv=%12.5e\n", rms, rmsuv);
         baseline = rms;
@@ -9955,20 +10196,25 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
             status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
             (void) ocsmSetOutLevel(oldOutLevel);
 
-            rms = 0;
+            rms     = 0;
+            unclass = 0;
             for (icloud = 0; icloud < ncloud; icloud++) {
                 iface       = face[  icloud  ];
                 uv_guess[0] = beta[2*icloud  ];
                 uv_guess[1] = beta[2*icloud+1];
 
-                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
-                CHECK_STATUS(EG_invEvaluateGuess);
+                if (iface > 0) {
+                    status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                    CHECK_STATUS(EG_invEvaluateGuess);
 
-                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
-                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
-                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                    rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                         + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                         + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                } else {
+                    unclass++;
+                }
             }
-            rms = sqrt(rms / (3*ncloud));
+            rms = sqrt(rms / (3*(ncloud-unclass)));
 
             SPRINT4(1, "ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/baseline=%10.5f", ipmtr, value, rms, rms/baseline);
 
@@ -9986,20 +10232,25 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
             status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
             (void) ocsmSetOutLevel(oldOutLevel);
 
-            rms = 0;
+            rms     = 0;
+            unclass = 0;
             for (icloud = 0; icloud < ncloud; icloud++) {
                 iface       = face[  icloud  ];
                 uv_guess[0] = beta[2*icloud  ];
                 uv_guess[1] = beta[2*icloud+1];
 
-                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
-                CHECK_STATUS(EG_invEvaluateGuess);
+                if (iface > 0) {
+                    status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                    CHECK_STATUS(EG_invEvaluateGuess);
 
-                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
-                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
-                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                    rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                         + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                         + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                } else {
+                    unclass++;
+                }
             }
-            rms = sqrt(rms / (3*ncloud));
+            rms = sqrt(rms / (3*(ncloud-unclass)));
 
             SPRINT4(1, "ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/baseline=%10.5f", ipmtr, value, rms, rms/baseline);
 
@@ -10019,20 +10270,25 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
             status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
             (void) ocsmSetOutLevel(oldOutLevel);
 
-            rms = 0;
+            rms     = 0;
+            unclass = 0;
             for (icloud = 0; icloud < ncloud; icloud++) {
                 iface       = face[  icloud  ];
                 uv_guess[0] = beta[2*icloud  ];
                 uv_guess[1] = beta[2*icloud+1];
 
-                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
-                CHECK_STATUS(EG_invEvaluateGuess);
+                if (iface > 0) {
+                    status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                    CHECK_STATUS(EG_invEvaluateGuess);
 
-                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
-                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
-                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                    rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                         + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                         + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                } else {
+                    unclass++;
+                }
             }
-            rms = sqrt(rms / (3*ncloud));
+            rms = sqrt(rms / (3*(ncloud-unclass)));
 
             SPRINT4(1, "ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/baseline=%10.5f", ipmtr, value, rms, rms/baseline);
 
@@ -10050,20 +10306,25 @@ plugsPhase2(modl_T *MODL,               /* (in)  pointer to MODL */
             status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
             (void) ocsmSetOutLevel(oldOutLevel);
 
-            rms = 0;
+            rms     = 0;
+            unclass = 0;
             for (icloud = 0; icloud < ncloud; icloud++) {
                 iface       = face[  icloud  ];
                 uv_guess[0] = beta[2*icloud  ];
                 uv_guess[1] = beta[2*icloud+1];
 
-                status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
-                CHECK_STATUS(EG_invEvaluateGuess);
+                if (iface > 0) {
+                    status = EG_invEvaluateGuess(MODL->body[MODL->nbody].face[iface].eface, &(cloud[3*icloud]), uv_guess, xyz_guess);
+                    CHECK_STATUS(EG_invEvaluateGuess);
 
-                rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
-                     + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
-                     + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                    rms += (cloud[3*icloud  ]-xyz_guess[0]) * (cloud[3*icloud  ]-xyz_guess[0])
+                        + (cloud[3*icloud+1]-xyz_guess[1]) * (cloud[3*icloud+1]-xyz_guess[1])
+                        + (cloud[3*icloud+2]-xyz_guess[2]) * (cloud[3*icloud+2]-xyz_guess[2]);
+                } else {
+                    unclass++;
+                }
             }
-            rms = sqrt(rms / (3*ncloud));
+            rms = sqrt(rms / (3*(ncloud-unclass)));
 
             SPRINT4(1, "ipmtr=%2d, valu=%12.7f, rms=%12.5e, rms/baseline=%10.5f\n", ipmtr, value, rms, rms/baseline);
 
@@ -10630,7 +10891,7 @@ cleanup:
 /*
  ************************************************************************
  *                                                                      *
- *   writeTessFile - write ASCII .tess file                             *
+ *   writeSensFile - write ASCII .sens file                             *
  *                                                                      *
  ************************************************************************
  */
@@ -10640,25 +10901,51 @@ cleanup:
  */
 
 static int
-writeTessFile(modl_T *MODL,             /* (in)  pointer to MODL */
-              int    ibody,             /* (in)  Body index (1->MODL->nbody) */
-              char   Filename[])        /* (in)  filename */
+writeSensFile(modl_T *MODL,             /* (in)  pointer to MODL */
+              int    ibody,             /* (in)  Body index (1:nbody) */
+              char   filename[])        /* (in)  filename */
 {
     int    status = SUCCESS;            /* (out) return status */
 
-    int     inode, iedge, iface, npnt, ipnt, ntri, itri;
-    CINT    *ptype, *pindx, *tris, *tric;
-    CDOUBLE *xyz, *uv;
+    int     count, ipmtr, i, inode, iedge, iface, npnt, ipnt, ntri, itri;
+    CINT    *pindx, *ptype, *tris, *tric;
+    double  *vels=NULL;
+    CDOUBLE *xyz, *uv, *Vels;
     FILE    *fp;
 
-    ROUTINE(writeTessFile);
+    ROUTINE(writeSensFile);
 
     /* --------------------------------------------------------------- */
 
-    fp = fopen(Filename, "w");
+    /* count the number od DESPMTRs */
+    count = 0;
+    for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
+        if (MODL->pmtr[ipmtr].type == OCSM_DESPMTR) {
+            count++;
+        }
+    }
+
+    /* open the file */
+    fp = fopen(filename, "w");
     if (fp == NULL) {
         status = OCSM_FILE_NOT_FOUND;
         goto cleanup;
+    }
+
+    /* write the DESPMTRs in the header of the file */
+    fprintf(fp, "%8d\n", count);
+
+    for (ipmtr = 1; ipmtr <= MODL->npmtr; ipmtr++) {
+        if (MODL->pmtr[ipmtr].type == OCSM_DESPMTR) {
+            fprintf(fp, "%8d %s\n",
+                    MODL->pmtr[ipmtr].nrow*MODL->pmtr[ipmtr].ncol,
+                    MODL->pmtr[ipmtr].name);
+
+            for (i = 0; i < MODL->pmtr[ipmtr].nrow*MODL->pmtr[ipmtr].ncol; i++) {
+                fprintf(fp, "     %22.15e %22.15e\n",
+                        MODL->pmtr[ipmtr].value[i], MODL->pmtr[ipmtr].dot[i]);
+            }
+        }
     }
 
     fprintf(fp, "%8d %8d %8d\n",
@@ -10666,36 +10953,57 @@ writeTessFile(modl_T *MODL,             /* (in)  pointer to MODL */
             MODL->body[ibody].nedge,
             MODL->body[ibody].nface);
 
+    /* write Nodes to the files */
     for (inode = 1; inode <= MODL->body[ibody].nnode; inode++) {
-        fprintf(fp, "%22.15e %22.15e %22.15e\n",
+        MALLOC(vels, double, 3);
+
+        status = ocsmGetVel(MODL, ibody, OCSM_NODE, inode, 1, NULL, vels);
+        CHECK_STATUS(ocsmGetVel);
+
+        fprintf(fp, "%22.15e %22.15e %22.15e %22.15e %22.15e %22.15e\n",
                 MODL->body[ibody].node[inode].x,
                 MODL->body[ibody].node[inode].y,
-                MODL->body[ibody].node[inode].z);
+                MODL->body[ibody].node[inode].z,
+                vels[0], vels[1], vels[2]);
+
+        FREE(vels);
     }
 
+    /* write Edges to the file */
     for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
         status = EG_getTessEdge(MODL->body[ibody].etess, iedge,
                                 &npnt, &xyz, &uv);
         CHECK_STATUS(EG_getTessEdge);
 
+        status = ocsmGetTessVel(MODL, ibody, OCSM_EDGE, iedge, &Vels);
+        CHECK_STATUS(ocsmGetTessVel);
+
         fprintf(fp, "%8d\n", npnt);
         for (ipnt = 0; ipnt < npnt; ipnt++) {
-            fprintf(fp, "%22.15e %22.15e %22.15e %22.15e\n",
-                    xyz[3*ipnt], xyz[3*ipnt+1], xyz[3*ipnt+2], uv[ipnt]);
+            fprintf(fp, "%22.15e %22.15e %22.15e %22.15e %22.15e %22.15e %22.15e\n",
+                    xyz[ 3*ipnt], xyz[ 3*ipnt+1], xyz[ 3*ipnt+2],
+                    Vels[3*ipnt], Vels[3*ipnt+1], Vels[3*ipnt+2],
+                    uv[    ipnt]);
         }
     }
 
+    /* write Faces to the file */
     for (iface = 1; iface <= MODL->body[ibody].nface; iface++) {
         status = EG_getTessFace(MODL->body[ibody].etess, iface,
                                 &npnt, &xyz, &uv, &pindx, &ptype,
                                 &ntri, &tris, &tric);
         CHECK_STATUS(EG_getTessFace);
 
+        status = ocsmGetTessVel(MODL, ibody, OCSM_FACE, iface, &Vels);
+        CHECK_STATUS(ocsmGetTessVel);
+
         fprintf(fp, "%8d %8d\n", npnt, ntri);
         for (ipnt = 0; ipnt < npnt; ipnt++) {
-            fprintf(fp, "%22.15e %22.15e %22.15e %22.15e %22.15e %8d %8d\n",
-                    xyz[3*ipnt], xyz[3*ipnt+1], xyz[3*ipnt+2],
-                    uv[ 2*ipnt], uv[ 2*ipnt+1], ptype[ipnt], pindx[ipnt]);
+            fprintf(fp, "%22.15e %22.15e %22.15e %22.15e %22.15e %22.15e %22.15e %22.15e %8d %8d\n",
+                    xyz[ 3*ipnt], xyz[ 3*ipnt+1], xyz[ 3*ipnt+2],
+                    Vels[3*ipnt], Vels[3*ipnt+1], Vels[3*ipnt+2],
+                    uv[  2*ipnt], uv[  2*ipnt+1],
+                    ptype[ ipnt], pindx[ ipnt  ]);
         }
         for (itri = 0; itri < ntri; itri++) {
             fprintf(fp, "%8d %8d %8d %8d %8d %8d\n",
@@ -10704,6 +11012,7 @@ writeTessFile(modl_T *MODL,             /* (in)  pointer to MODL */
         }
     }
 
+    /* finalize the file */
     fclose(fp);
 
 cleanup:

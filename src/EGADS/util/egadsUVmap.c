@@ -64,11 +64,11 @@ EG_triRemap(int *trmap, int itri, int flag, int *verts, double *ws)
   w[0]     = ws[0];
   w[1]     = ws[1];
   w[2]     = ws[2];
-  
+/*@-shiftimplementation@*/
   i1       =  trmap[itri-1]       & 3;
   i2       = (trmap[itri-1] >> 2) & 3;
   i3       = (trmap[itri-1] >> 4) & 3;
-  
+/*@+shiftimplementation@*/
   if (flag == 1) {
     /* EGADS tri is source -- uvmap is destination */
     verts[0] = tris[i1-1];
@@ -290,10 +290,13 @@ EG_uvmapMake(int ntri, int *tris, int *itris, int nvrt, double *vrts,
         printf(" EGADS Error: Tri mapping %d %d %d  %d %d %d (EG_uvmapMake)!\n",
                tris[3*i-3], tris[3*i-2], tris[3*i-1], uvstruct->inibf[i][0],
                uvstruct->inibf[i][1], uvstruct->inibf[i][2]);
+        EG_free(map);
         uvmap_struct_free(uvmap);
         return EGADS_UVMAP;
       }
+/*@-shiftimplementation@*/
       map[i-1] = (i2 << 4) + (i1 << 2) + i0;
+/*@+shiftimplementation@*/
     }
     *trmap = map;
   }
@@ -694,14 +697,11 @@ EG_uvmapRead(FILE *fp, double *range, void **uvmap, int **trmap)
   return EGADS_SUCCESS;
   
 malloc:
-/*@+dependenttrans@*/
-  uvmap_free(uvstruct->idibf);
-/*@-nullpass@*/
-  uvmap_free(uvstruct->msrch);
-/*@+nullpass@*/
-  uvmap_free(uvstruct->inibf);
-  uvmap_free(uvstruct->ibfibf);
-  uvmap_free(uvstruct->u);
+  if (uvstruct->idibf  != NULL) uvmap_free(uvstruct->idibf);
+  if (uvstruct->msrch  != NULL) uvmap_free(uvstruct->msrch);
+  if (uvstruct->inibf  != NULL) uvmap_free(uvstruct->inibf);
+  if (uvstruct->ibfibf != NULL) uvmap_free(uvstruct->ibfibf);
+  if (uvstruct->u      != NULL) uvmap_free(uvstruct->u);
   uvmap_free(uvstruct);
   return stat;
 }

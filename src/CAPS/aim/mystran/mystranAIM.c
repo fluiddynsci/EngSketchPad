@@ -15,11 +15,13 @@
  * A module in the Computational Aircraft Prototype Syntheses (CAPS) has been developed to interact (primarily
  * through input files) with the finite element structural solver MYSTRAN \cite MYSTRAN. MYSTRAN is an open source,
  * general purpose, linear finite element analysis computer program written by Dr. Bill Case. Available at,
- * http://www.mystran.com/ , MYSTRAN currently supports Linux and Windows operating systems.
+ * http://www.mystran.com/, MYSTRAN currently supports Linux and Windows operating systems.
  *
  *
  * An outline of the AIM's inputs, outputs and attributes are provided in \ref aimInputsMYSTRAN and
  * \ref aimOutputsMYSTRAN and \ref attributeMYSTRAN, respectively.
+ *
+ * The MYSTRAN AIM can automatically execute MYSTRAN, with details provided in \ref aimExecuteMYSTRAN.
  *
  * Details of the AIM's automated data transfer capabilities are outlined in \ref dataTransferMYSTRAN
  *
@@ -213,7 +215,7 @@ static int destroy_aimStorage(aimStorage *mystranInstance)
               printf("Error: Status %d during destroy_meshStruct!\n", status);
         }
 
-        EG_free(mystranInstance->feaMesh);
+        AIM_FREE(mystranInstance->feaMesh);
     }
 
     mystranInstance->feaMesh = NULL;
@@ -645,7 +647,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     char *analysisType = NULL;
 
     // File IO
-    char *filename = NULL; // Output file name
+    char filename[PATH_MAX]; // Output file name
     FILE *fp = NULL; // Output file pointer
   
     aimStorage *mystranInstance;
@@ -737,33 +739,15 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     } else printf("\nAnalysis tuple is NULL\n");
 
     // Write Nastran Mesh
-/*@-unrecog@*/
-    filename = (char *) EG_alloc((PATH_MAX +1)*sizeof(char));
-/*@+unrecog@*/
-    if (filename == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
-
-    strcpy(filename, mystranInstance->projectName);
-
     status = mesh_writeNASTRAN(aimInfo,
-                               filename,
+                               mystranInstance->projectName,
                                1,
                                &mystranInstance->feaProblem.feaMesh,
                                mystranInstance->feaProblem.feaFileFormat.gridFileType,
                                1.0);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    if (filename != NULL) EG_free(filename);
-
     // Write mystran input file
-    filename = (char *) EG_alloc((PATH_MAX +1)*sizeof(char));
-    if (filename == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
-
     strcpy(filename, mystranInstance->projectName);
     strcat(filename, ".dat");
 
@@ -774,8 +758,6 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         status = CAPS_IOERR;
         goto cleanup;
     }
-    if (filename != NULL) EG_free(filename);
-    filename = NULL;
 
     //////////////// Executive control ////////////////
     fprintf(fp, "ID CAPS generated Problem FOR MYSTRAN\n");
@@ -787,9 +769,9 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     else if(strcasecmp(analysisType, "Static")        == 0) fprintf(fp, "SOL 1\n");
     else if(strcasecmp(analysisType, "Craig-Bampton") == 0) fprintf(fp, "SOL 31\n");
     else {
-        printf("Unrecognized \"Analysis_Type\", %s, defaulting to \"Modal\" analysis\n", analysisType);
-        analysisType = "Modal";
-        fprintf(fp, "SOL 3\n");
+        AIM_ERROR(aimInfo, "Unrecognized \"Analysis_Type\", %s", analysisType);
+        status = CAPS_BADVALUE;
+        goto cleanup;
     }
 
     if (strcasecmp(analysisType, "Modal") == 0) fprintf(fp, "OUTPUT4 EIGEN_VAL, EIGEN_VEC, GEN_MASS, , // -1/21 $\n"); // Binary output of eigenvalues and vectors
@@ -1118,14 +1100,69 @@ cleanup:
 
     if (fp != NULL) fclose(fp);
 
-    EG_free(tempIntegerArray);
-
-    if (filename != NULL) EG_free(filename);
+    AIM_FREE(tempIntegerArray);
 
     return status;
 }
 
 
+// ********************** AIM Function Break *****************************
+int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+               int *state)
+{
+  /*! \page aimExecuteMYSTRAN AIM Execution
+   *
+   * If auto execution is enabled when creating an MYSTRAN AIM,
+   * the AIM will execute MYSTRAN just-in-time with the command line:
+   *
+   * \code{.sh}
+   * mystran $Proj_Name.dat > Info.out
+   * \endcode
+   *
+   * where preAnalysis generated the file Proj_Name + ".dat" which contains the input information.
+   *
+   * The analysis can be also be explicitly executed with caps_execute in the C-API
+   * or via Analysis.runAnalysis in the pyCAPS API.
+   *
+   * Calling preAnalysis and postAnalysis is NOT allowed when auto execution is enabled.
+   *
+   * Auto execution can also be disabled when creating an MYSTRAN AIM object.
+   * In this mode, caps_execute and Analysis.runAnalysis can be used to run the analysis,
+   * or MYSTRAN can be executed by calling preAnalysis, system call, and posAnalysis as demonstrated
+   * below with a pyCAPS example:
+   *
+   * \code{.py}
+   * print ("\n\preAnalysis......")
+   * mystran.preAnalysis()
+   *
+   * print ("\n\nRunning......")
+   * currentDirectory = os.getcwd() # Get our current working directory
+   *
+   * os.chdir(mystran.analysisDir) # Move into test directory
+   * os.system("mystran " + mystran.input.Proj_Name + ".dat > Info.out"); # Run via system call
+   *
+   * os.chdir(currentDirectory) # Move back to top directory
+   *
+   * print ("\n\postAnalysis......")
+   * mystran.postAnalysis()
+   * \endcode
+   */
+
+  char command[PATH_MAX];
+  aimStorage *mystranInstance;
+  *state = 0;
+
+  mystranInstance = (aimStorage *) instStore;
+  if (mystranInstance == NULL) return CAPS_NULLVALUE;
+
+  snprintf(command, PATH_MAX, "mystran %s.dat > Info.out",
+           mystranInstance->projectName);
+
+  return aim_system(aimInfo, NULL, command);
+}
+
+
+// ********************** AIM Function Break *****************************
 // Check that MYSTRAN ran without errors
 int aimPostAnalysis(void *instStore, /*@unused@*/ void *aimInfo,
                     /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)

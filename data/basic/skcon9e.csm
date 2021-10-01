@@ -36,6 +36,11 @@ skbeg     xbase     ybase     zbase
    linseg ::x[6]  ::y[6]  ::z[6]
    linseg ::x[1]  ::y[1]  ::z[1]
 skend
+
+assert    0   1
+catbeg    $underconstrained
+catend
+
 extrude   0   0   depth
 
 end

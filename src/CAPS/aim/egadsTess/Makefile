@@ -17,7 +17,8 @@ $(LDIR)/egadsTessAIM.so:	$(ODIR)/egadsTessAIM.o $(LDIR)/libutils.a $(LDIR)/libai
 	touch $(LDIR)/egadsTessAIM.so
 	rm $(LDIR)/egadsTessAIM.so
 	$(CC) $(SOFLGS) -o $(LDIR)/egadsTessAIM.so $(ODIR)/egadsTessAIM.o \
-		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 $(RPATH) -lm
+		-L$(LDIR) -lutils -laimUtil -locsm -legads -ludunits2 -ldl \
+		$(RPATH) -lm
 
 $(ODIR)/egadsTessAIM.o:	egadsTessAIM.c $(IDIR)/capsTypes.h \
 			../utils/meshUtils.h

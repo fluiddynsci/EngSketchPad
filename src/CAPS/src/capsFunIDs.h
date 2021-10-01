@@ -66,6 +66,8 @@
 #define CAPS_CHECKANALYSIS   50
 #define CAPS_POSTANALYSIS    51
 #define CAPS_RESETANALYSIS   52
+#define CAPS_GETTESSELS      53
+#define CAPS_SYSTEM          54
 #define CAPS_AIMBACKDOOR     59
   
   
@@ -104,5 +106,10 @@
 #define CAPS_HASDERIV        91
 #define CAPS_GETDERIV        92
 
+/* string conversion for the funIDs */
+
+#define CAPS_NFUNID          93
+
+extern const char* caps_funID[CAPS_NFUNID];
 
 #endif

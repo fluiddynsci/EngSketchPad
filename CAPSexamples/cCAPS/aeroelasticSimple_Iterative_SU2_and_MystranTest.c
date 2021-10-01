@@ -265,6 +265,7 @@ int main(int argc, char *argv[])
 
     int status; // Function return status;
     int i, iter; // Indexing
+    int outLevel = 1;
 
     // CAPS objects
     capsObj  problemObj, surfMeshObj, meshObj, su2Obj, mystranObj;
@@ -292,6 +293,7 @@ int main(int argc, char *argv[])
 
     int major, minor, nFields, *ranks, *fInOut, dirty, exec;
     char *analysisPath=NULL, *unitSystem, *intents, **fnames;
+
     const char projectName[] = "aeroelasticSimple_Iterative";
     char currentPath[PATH_MAX];
 
@@ -299,23 +301,18 @@ int main(int argc, char *argv[])
 
     int numIteration = 2;
 
-    int runAnalysis = (int) true;
-
     printf("\n\nAttention: aeroelasticIterativeTest is hard coded to look for ../csmData/aeroelasticDataTransferSimple.csm\n");
-    printf("To not make system calls to the su2 and mystran executables the third"
-           "command line option may be supplied - 0 = no analysis, >0 run analysis (default).\n\n");
 
     if (argc > 2) {
-        printf(" usage: aeroelasticSimple_Iterative_SU2_and_Mystran runAnalysis!\n");
+        printf(" usage: aeroelasticSimple_Iterative_SU2_and_Mystran outLevel!\n");
         return 1;
+    } else if (argc == 2) {
+        outLevel = atoi(argv[1]);
     }
 
-    if (argc == 2) {
-        if (strcasecmp(argv[1], "0") == 0) runAnalysis = (int) false;
-    }
 
     status = caps_open("SU2_MyStran_Aeroelastic_Interative_Example", NULL, 0,
-                       "../csmData/aeroelasticDataTransferSimple.csm", 1,
+                       "../csmData/aeroelasticDataTransferSimple.csm", outLevel,
                        &problemObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
@@ -323,23 +320,27 @@ int main(int argc, char *argv[])
     /* --------------------------------------------------------------- */
 
     // Load the AIMs
-    status = caps_makeAnalysis(problemObj, "egadsTessAIM", NULL, NULL, NULL, 0,
-                               &surfMeshObj, &nErr, &errors);
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "egadsTessAIM", NULL, NULL, NULL,
+                               &exec, &surfMeshObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS)  goto cleanup;
 
-    status = caps_makeAnalysis(problemObj, "tetgenAIM", NULL, NULL, NULL, 0,
-                               &meshObj, &nErr, &errors);
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "tetgenAIM", NULL, NULL, NULL,
+                               &exec, &meshObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS)  goto cleanup;
 
-    status = caps_makeAnalysis(problemObj, "su2AIM", NULL, NULL, NULL, 0,
-                               &su2Obj, &nErr, &errors);
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "su2AIM", NULL, NULL, NULL,
+                               &exec, &su2Obj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = caps_makeAnalysis(problemObj, "mystranAIM", NULL, NULL, NULL, 0,
-                               &mystranObj, &nErr, &errors);
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "mystranAIM", NULL, NULL, NULL,
+                               &exec, &mystranObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
@@ -621,16 +622,13 @@ int main(int argc, char *argv[])
             goto cleanup;
         }
 
-        if (runAnalysis == (int) true) {
-
-            printf("\n\nRunning su2!\n\n");
-
-            if (iter > 0) system("SU2_DEF aeroelasticSimple_Iterative.cfg > su2DEFOut.txt");
-            system("SU2_CFD aeroelasticSimple_Iterative.cfg > su2CFDOut.txt");
-        } else {
-
-            printf("\n\nNOT Running su2!\n\n");
+        if (iter > 0) {
+          printf("\n\nRunning SU2_DEF!\n\n");
+          system("SU2_DEF aeroelasticSimple_Iterative.cfg > su2DEFOut.txt");
         }
+
+        printf("\n\nRunning SU2_CFD!\n\n");
+        system("SU2_CFD aeroelasticSimple_Iterative.cfg > su2CFDOut.txt");
 
         (void) chdir(currentPath);
 
@@ -672,12 +670,8 @@ int main(int argc, char *argv[])
             goto cleanup;
         }
 
-        if (runAnalysis == (int) true) {
-            printf("\n\nRunning mystran!\n\n");
-            system("mystran.exe aeroelasticSimple_Iterative.dat > mystranOut.txt");
-        } else {
-            printf("\n\nNOT Running mystran!\n\n");
-        }
+        printf("\n\nRunning mystran!\n\n");
+        system("mystran.exe aeroelasticSimple_Iterative.dat > mystranOut.txt");
 
         (void) chdir(currentPath);
 

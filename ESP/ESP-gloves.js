@@ -19,29 +19,35 @@
 //    MA  02110-1301  USA
 
 // interface functions that ESP-gloves.js provides
-//    glov.launch()
-//    glov.initialize()
-//    glov.cmdLoad()
-//    glov.cmdUndo()
-//    glov.cmdSolve()
-//    glov.cmdSave()
-//    glov.cmdQuit()
+//    gloves.launch()
+//    gloves.cmdUndo()
+//    gloves.cmdSolve()
+//    gloves.cmdSave()
+//    gloves.cmdQuit()
 //
-//    glov.cmdHome()
-//    glov.cmdLeft()
-//    glov.cmdRite()
-//    glov.cmdBotm()
-//    glov.cmdTop()
-//    glov.cmdIn()
-//    glov.cmdOut()
+//    gloves.cmdHome()
+//    gloves.cmdLeft()
+//    gloves.cmdRite()
+//    gloves.cmdBotm()
+//    gloves.cmdTop()
+//    gloves.cmdIn()
+//    gloves.cmdOut()
 //
-//    glov.mouseDown(e)
-//    glov.mouseMove(e)
-//    glov.mouseUp(e)
+//    gloves.mouseDown(e)
+//    gloves.mouseMove(e)
+//    gloves.mouseUp(e)
 //
-//    glov.keyPress(e)
-//    glov.getKeyDown(e)
-//    glov.getKeyUp(e)
+//    gloves.keyPress(e)
+//    gloves.keyDown(e)
+//    gloves.keyUp(e)
+//    gloves.keyPressPart1(myKeyPress)    not provided
+//    gloves.keyPressPart2(picking, gprim)not provided
+//    gloves.updateKeyWindow()
+//
+//    gloves.timLoadCB(text)              not provided
+//    gloves.timSaveCB(text)              not provided
+//    gloves.timQuitCB(text)              not provided
+//    gloves.timMesgCB(text)              not provided
 
 // functions associated with Gloves
 //    glovesAddFuse(name)
@@ -51,6 +57,7 @@
 //    glovesCompCoords(icomp)
 //    glovesDraw()
 //    glovesDrawOutline(context, icomp)
+//    glovesLoad()
 
 "use strict";
 
@@ -58,8 +65,8 @@
 //
 // callback when Gloves is launched
 //
-glov.launch = function () {
-    // alert("in glov.launch()");
+gloves.launch = function () {
+    // alert("in gloves.launch()");
 
     // close the Tools menu
     var menu = document.getElementsByClassName("toolMenu-contents");
@@ -81,51 +88,51 @@ glov.launch = function () {
     button.style.backgroundColor = "#FFFF3F";
 
     // initialize GUI variables
-    glov.mode      =  0;         // current mode
-                                 // =0 initialization
-                                 // =1 point selected and menu posted
-                                 // =2 design variable selected and drag basis defined
+    gloves.mode      =  0;         // current mode
+                                   // =0 initialization
+                                   // =1 point selected and menu posted
+                                   // =2 design variable selected and drag basis defined
 
-    glov.view      = "Isometric view: ";
-    glov.cursorX   = -1;         // x-screen coordinate of cursor
-    glov.cursorY   = -1;         // y-screen coordinate of cursor
-    glov.dragX     = undefined;  // x-screen at start of drag
-    glov.dragY     = undefined;  // y-screen at start of drag
-    glov.dragBase  = undefined;  // variable value at start of drag
-    glov.dragging  = false;      // true during drag operation
-    glov.startX    =  0;         // start of dragging operation
-    glov.startY    =  0;
-    glov.button    = -1;         // button pressed
-    glov.modifier  =  0;         // modifier (shift,alt,cntl) bitflag
-    glov.flying    =  1;         // flying multiplier ( do not set to 0)
-    glov.halo      = 10;         // size of halo around points
+    gloves.view      = "Isometric view: ";
+    gloves.cursorX   = -1;         // x-screen coordinate of cursor
+    gloves.cursorY   = -1;         // y-screen coordinate of cursor
+    gloves.dragX     = undefined;  // x-screen at start of drag
+    gloves.dragY     = undefined;  // y-screen at start of drag
+    gloves.dragBase  = undefined;  // variable value at start of drag
+    gloves.dragging  = false;      // true during drag operation
+    gloves.startX    =  0;         // start of dragging operation
+    gloves.startY    =  0;
+    gloves.button    = -1;         // button pressed
+    gloves.modifier  =  0;         // modifier (shift,alt,cntl) bitflag
+    gloves.flying    =  1;         // flying multiplier ( do not set to 0)
+    gloves.halo      = 10;         // size of halo around points
 
-    glov.menuitems = {};         // bounding box of each menu item
+    gloves.menuitems = {};         // bounding box of each menu item
 
-    glov.curComp   = -1;         // component that is currently highlighted (or -1)
-    glov.curPnt    = -1;         // point     that is currently highlighted (or -1)
-    glov.curMenu   = -1;         // menu item that is currently highlighed (or -1)
-    glov.curDvar   = -1;         // design variable being editted (or -1)
+    gloves.curComp   = -1;         // component that is currently highlighted (or -1)
+    gloves.curPnt    = -1;         // point     that is currently highlighted (or -1)
+    gloves.curMenu   = -1;         // menu item that is currently highlighed (or -1)
+    gloves.curDvar   = -1;         // design variable being editted (or -1)
 
-    glov.filename  = "";         // name of .csm file
+    gloves.filename  = "";         // name of .csm file
 
     // initialize case data
-    glov.comp      = [];         // list of components
-    glov.dvar      = [];         // list of DESPMTRs
+    gloves.comp      = [];         // list of components
+    gloves.dvar      = [];         // list of DESPMTRs
 
-    glov.uiMatrix  = new J3DIMatrix4();
+    gloves.uiMatrix  = new J3DIMatrix4();
 
-    // set up mouse listeners
+    // set up mouse and keyboard listeners
     var canvas = document.getElementById("gloves");
-    canvas.addEventListener('mousedown',  glov.getMouseDown,    false);
-    canvas.addEventListener('mousemove',  glov.getMouseMove,    false);
-    canvas.addEventListener('mouseup',    glov.getMouseUp,      false);
-    canvas.addEventListener("wheel",      glov.getMouseRoll,    false);
-    canvas.addEventListener('mouseout',   glov.mouseLeftCanvas, false);
+    canvas.addEventListener('mousedown',  gloves.mouseDown,    false);
+    canvas.addEventListener('mousemove',  gloves.mouseMove,    false);
+    canvas.addEventListener('mouseup',    gloves.mouseUp,      false);
+//    canvas.addEventListener("wheel",      gloves.mouseRoll,    false);
+//    canvas.addEventListener('mouseout',   gloves.mouseLeftCanvas, false);
 
-    document.addEventListener("keypress",   glov.getKeyPress,     false);
-    document.addEventListener("keydown",    glov.getKeyDown,      false);
-    document.addEventListener("keyup",      glov.getKeyUp,        false);
+    canvas.addEventListener("keypress",   gloves.keyPress,     false);
+    canvas.addEventListener("keydown",    gloves.keyDown,      false);
+    canvas.addEventListener("keyup",      gloves.keyUp,        false);
 
     // initialize context properties
     var context = canvas.getContext("2d");
@@ -162,110 +169,16 @@ glov.launch = function () {
     // otherwise, ask the user for a component
     } else {
 
-        glov.cmdSolve();
+        gloves.cmdSolve();
 
         // if there are stll no components loaded, quit Gloves
-        if (glov.comp.length == 0) {
-            glov.cmdQuit();
+        if (gloves.comp.length == 0) {
+            gloves.cmdQuit();
 
         // of there is at least one component, show it/them
         } else {
             glovesDraw();
-            glov.cmdHome();
-        }
-    }
-};
-
-
-//
-// Initialize Gloves
-//
-glov.initialize = function () {
-    // alert("in glov.initialize()");
-
-};
-
-
-//
-// glov.cmdload - load Gloves from .csm file
-//
-glov.cmdLoad = function () {
-    // alert("in glov.cmdLoad()");
-
-    // make sure wv.curFile exists
-    if (wv.curFile.length == 0) {
-        alert("curFile is empty");
-        return;
-    }
-
-    // look for the Gloves header
-    var ibeg = wv.curFile.search("### begin Gloves section ###\n\n");
-    if (ibeg < 0) {
-        alert("begin not found");
-        return;
-    }
-    ibeg += 30;
-
-    var iend = wv.curFile.search("### end Gloves section ###\n");
-    if (iend < 0) {
-        alert("end not found");
-        return;
-    }
-    iend --;
-
-    var fileLines = wv.curFile.substring(ibeg, iend).split("\n");
-    var icomp     = 0;
-    var idvar     = 0;
-
-    for (var iline = 0; iline < fileLines.length; iline++) {
-        var tokens = fileLines[iline].split(/ +/);
-
-        if        (tokens[0] == "#") {
-            
-        } else if (tokens[0] == "CFGPMTR") {
-            
-        } else if (tokens[0] == "DIMENSION") {
-            
-        } else if (tokens[0] == "SET" && tokens[1] == "compName") {
-            glov.comp[icomp] = {};
-            glov.comp[icomp].name = tokens[2].substring(1);
-
-        } else if (tokens[0] == "UDPRIM") {
-            glov.comp[icomp].type = tokens[1];
-            glov.comp[icomp].head = "";
-            glov.comp[icomp].dvar = -1;
-            glov.comp[icomp].bbox = [];
-            glov.comp[icomp].xpnt = [];
-            glov.comp[icomp].ypnt = [];
-            glov.comp[icomp].labl = {};
-
-            glovesAddLabelsAndHeader(icomp);
-
-            icomp++;
-
-        } else if (tokens[0] == "DESPMTR") {
-            glov.dvar[idvar] = {};
-            glov.dvar[idvar].name = tokens[1];
-            glov.dvar[idvar].valu = Number(tokens[2]);
-
-        } else if (tokens[0] == "LBOUND") {
-            glov.dvar[idvar].lbnd = Number(tokens[2]);
-
-        } else if (tokens[0] == "UBOUND") {
-            glov.dvar[idvar].ubnd = Number(tokens[2]);
-
-            idvar++;
-        }
-    }
-
-    // update the comp.dvar entries
-    for (icomp = 0; icomp < glov.comp.length; icomp++) {
-        for (idvar = 0; idvar < glov.dvar.length; idvar++) {
-            var parts = glov.dvar[idvar].name.split(":");
-            if (parts[0] == glov.comp[icomp].name) {
-                glov.comp[icomp].dvar = idvar;
-                break;
-            }
+            gloves.cmdHome();
         }
     }
 };
@@ -274,16 +187,16 @@ glov.cmdLoad = function () {
 //
 // callback when "Gloves->Undo" is pressed (called by ESP.html)
 //
-glov.cmdUndo = function () {
-    alert("glov.cmdUndo is not implemented");
+gloves.cmdUndo = function () {
+    alert("gloves.cmdUndo() is not implemented");
 };
 
 
 //
 // callback when "solveButton" is pressed
 //
-glov.cmdSolve = function () {
-    // alert("in glov.cmdSolve()");
+gloves.cmdSolve = function () {
+    // alert("in gloves.cmdSolve()");
 
     var ctype = prompt("Enter component type\n"  +
                        "  1 for wing/htail\n"    +
@@ -320,8 +233,8 @@ glov.cmdSolve = function () {
 //
 // callback when "Gloves->Save" is pressed (called by ESP.html)
 //
-glov.cmdSave = function () {
-    // alert("in glov.cmdSave()");
+gloves.cmdSave = function () {
+    // alert("in gloves.cmdSave()");
 
     // close the Gloves menu
     var menu = document.getElementsByClassName("doneMenu-contents");
@@ -335,11 +248,11 @@ glov.cmdSave = function () {
     // use filename if it exists
     if (wv.filenames != "|") {
         var filelist = wv.filenames.split("|");
-        glov.filename = filelist[1];
+        gloves.filename = filelist[1];
 
     // otherwise ask the user for the name of the .csm file to write
     } else {
-        var filename = prompt("Enter name of .csm file to write", glov.filename);
+        var filename = prompt("Enter name of .csm file to write", gloves.filename);
         if (filename == null) {
             alert("No filename given");
             return;
@@ -352,7 +265,7 @@ glov.cmdSave = function () {
             filename += ".csm";
         }
 
-        glov.filename = filename;
+        gloves.filename = filename;
     }
 
     // create an image of the new file
@@ -374,26 +287,26 @@ glov.cmdSave = function () {
 
     // component headers
     fileimage += "# Component headers\n";
-    for (var icomp = 0; icomp < glov.comp.length; icomp++) {
-        if (glov.comp[icomp].head.length > 0) {
-            fileimage += glov.comp[icomp].head+"\n";
+    for (var icomp = 0; icomp < gloves.comp.length; icomp++) {
+        if (gloves.comp[icomp].head.length > 0) {
+            fileimage += gloves.comp[icomp].head+"\n";
         }
     }
     fileimage += "\n";
 
     // current components
     fileimage += "# Components\n";
-    for (var icomp = 0; icomp < glov.comp.length; icomp++) {
-        fileimage += "SET       compName     $"+glov.comp[icomp].name+"\n";
-        fileimage += "UDPRIM    "+              glov.comp[icomp].type+"\n\n";
+    for (var icomp = 0; icomp < gloves.comp.length; icomp++) {
+        fileimage += "SET       compName     $"+gloves.comp[icomp].name+"\n";
+        fileimage += "UDPRIM    "+              gloves.comp[icomp].type+"\n\n";
     }
 
     // current design variables (with bounds)
     fileimage += "# DESPMTRs\n";
-    for (var idvar = 0; idvar < glov.dvar.length; idvar++) {
-        fileimage += "DESPMTR   "+glov.dvar[idvar].name+"  "+glov.dvar[idvar].valu+"\n";
-        fileimage += "LBOUND    "+glov.dvar[idvar].name+"  "+glov.dvar[idvar].lbnd+"\n";
-        fileimage += "UBOUND    "+glov.dvar[idvar].name+"  "+glov.dvar[idvar].ubnd+"\n\n";
+    for (var idvar = 0; idvar < gloves.dvar.length; idvar++) {
+        fileimage += "DESPMTR   "+gloves.dvar[idvar].name+"  "+gloves.dvar[idvar].valu+"\n";
+        fileimage += "LBOUND    "+gloves.dvar[idvar].name+"  "+gloves.dvar[idvar].lbnd+"\n";
+        fileimage += "UBOUND    "+gloves.dvar[idvar].name+"  "+gloves.dvar[idvar].ubnd+"\n\n";
     }
 
     fileimage += "### end Gloves section ###\n";
@@ -423,7 +336,7 @@ glov.cmdSave = function () {
     var ichar    = 0;
     var part     = fileimage.substring(ichar, ichar+maxMessageSize);
 
-    browserToServer("setCsmFileBeg|"+glov.filename+"|"+part);
+    browserToServer("setCsmFileBeg|"+gloves.filename+"|"+part);
     ichar += maxMessageSize;
 
     while (ichar < fileimage.length) {
@@ -435,9 +348,9 @@ glov.cmdSave = function () {
     browserToServer("setCsmFileEnd|");
 
     // remember the edited .csm file
-    wv.curFile = glov.filename;
+    wv.curFile = gloves.filename;
 
-    postMessage("'"+glov.filename+"' file has been changed.");
+    postMessage("'"+gloves.filename+"' file has been changed.");
     wv.fileindx = -1;
 
     // get an updated version of the Parameters and Branches
@@ -465,8 +378,8 @@ glov.cmdSave = function () {
 //
 // callback when "Gloves->Quit" is pressed (called by ESP.html)
 //
-glov.cmdQuit = function () {
-    // alert("in glov.cmdQuit()");
+gloves.cmdQuit = function () {
+    // alert("in gloves.cmdQuit()");
 
     // close the Gloves menu
     var menu = document.getElementsByClassName("doneMenu-contents");
@@ -496,29 +409,29 @@ glov.cmdQuit = function () {
 //
 // callback when "homeButton" is pressed
 //
-glov.cmdHome = function () {
-    // alert("in glov.cmsHome()");
+gloves.cmdHome = function () {
+    // alert("in gloves.cmsHome()");
 
-    glov.view = "Isometric view: ";
+    gloves.view = "Isometric view: ";
 
     var bbox = [];
-    for (var icomp = 0; icomp < glov.comp.length; icomp++) {
+    for (var icomp = 0; icomp < gloves.comp.length; icomp++) {
         glovesCompCoords(icomp);
 
         if (icomp == 0) {
-            bbox[0] = glov.comp[0].bbox[0];
-            bbox[1] = glov.comp[0].bbox[1];
-            bbox[2] = glov.comp[0].bbox[2];
-            bbox[3] = glov.comp[0].bbox[3];
-            bbox[4] = glov.comp[0].bbox[4];
-            bbox[5] = glov.comp[0].bbox[5];
+            bbox[0] = gloves.comp[0].bbox[0];
+            bbox[1] = gloves.comp[0].bbox[1];
+            bbox[2] = gloves.comp[0].bbox[2];
+            bbox[3] = gloves.comp[0].bbox[3];
+            bbox[4] = gloves.comp[0].bbox[4];
+            bbox[5] = gloves.comp[0].bbox[5];
         } else {
-            bbox[0] = Math.min(bbox[0], glov.comp[icomp].bbox[0]);
-            bbox[1] = Math.max(bbox[1], glov.comp[icomp].bbox[1]);
-            bbox[2] = Math.min(bbox[2], glov.comp[icomp].bbox[2]);
-            bbox[3] = Math.max(bbox[3], glov.comp[icomp].bbox[3]);
-            bbox[4] = Math.min(bbox[4], glov.comp[icomp].bbox[4]);
-            bbox[5] = Math.max(bbox[5], glov.comp[icomp].bbox[5]);
+            bbox[0] = Math.min(bbox[0], gloves.comp[icomp].bbox[0]);
+            bbox[1] = Math.max(bbox[1], gloves.comp[icomp].bbox[1]);
+            bbox[2] = Math.min(bbox[2], gloves.comp[icomp].bbox[2]);
+            bbox[3] = Math.max(bbox[3], gloves.comp[icomp].bbox[3]);
+            bbox[4] = Math.min(bbox[4], gloves.comp[icomp].bbox[4]);
+            bbox[5] = Math.max(bbox[5], gloves.comp[icomp].bbox[5]);
         }
     }
 
@@ -554,7 +467,7 @@ glov.cmdHome = function () {
     mVals[14] = 0;
     mVals[15] = 1;
 
-    glov.uiMatrix.load(mVals)
+    gloves.uiMatrix.load(mVals)
 
     glovesDraw();
 };
@@ -563,8 +476,8 @@ glov.cmdHome = function () {
 //
 // callback when "leftButton" is pressed
 //
-glov.cmdLeft = function () {
-    // alert("in glov.cmdLeft()");
+gloves.cmdLeft = function () {
+    // alert("in gloves.cmdLeft()");
 
 };
 
@@ -572,21 +485,21 @@ glov.cmdLeft = function () {
 //
 // callback when "riteButton" is pressed
 //
-glov.cmdRite = function () {
-    // alert("in glov.cmdRite()");
+gloves.cmdRite = function () {
+    // alert("in gloves.cmdRite()");
 
-    glov.view = "Side view: ";
+    gloves.view = "Side view: ";
 
     var bbox = [+Infinity, -Infinity, +Infinity, -Infinity, +Infinity, -Infinity];
-    for (var icomp = 0; icomp < glov.comp.length; icomp++) {
+    for (var icomp = 0; icomp < gloves.comp.length; icomp++) {
         glovesCompCoords(icomp);
 
-        bbox[0] = Math.min(bbox[0], glov.comp[icomp].bbox[0]);
-        bbox[1] = Math.max(bbox[1], glov.comp[icomp].bbox[1]);
-        bbox[2] = Math.min(bbox[2], glov.comp[icomp].bbox[2]);
-        bbox[3] = Math.max(bbox[3], glov.comp[icomp].bbox[3]);
-        bbox[4] = Math.min(bbox[4], glov.comp[icomp].bbox[4]);
-        bbox[5] = Math.max(bbox[5], glov.comp[icomp].bbox[5]);
+        bbox[0] = Math.min(bbox[0], gloves.comp[icomp].bbox[0]);
+        bbox[1] = Math.max(bbox[1], gloves.comp[icomp].bbox[1]);
+        bbox[2] = Math.min(bbox[2], gloves.comp[icomp].bbox[2]);
+        bbox[3] = Math.max(bbox[3], gloves.comp[icomp].bbox[3]);
+        bbox[4] = Math.min(bbox[4], gloves.comp[icomp].bbox[4]);
+        bbox[5] = Math.max(bbox[5], gloves.comp[icomp].bbox[5]);
     }
 
     var canvas = document.getElementById("gloves");
@@ -601,7 +514,7 @@ glov.cmdRite = function () {
                            0,    0,    fact, dy,
                            0,    fact, 0,    0,
                            0,    0,    0,    1);
-    glov.uiMatrix.load(mVals);
+    gloves.uiMatrix.load(mVals);
 
     glovesDraw();
 };
@@ -610,21 +523,21 @@ glov.cmdRite = function () {
 //
 // callback when "botmButton" is pressed
 //
-glov.cmdBotm = function () {
-    // alert("in glov.cmdBotm()");
+gloves.cmdBotm = function () {
+    // alert("in gloves.cmdBotm()");
 
-    glov.view = "Front view: ";
+    gloves.view = "Front view: ";
 
     var bbox = [+Infinity, -Infinity, +Infinity, -Infinity, +Infinity, -Infinity];
-    for (var icomp = 0; icomp < glov.comp.length; icomp++) {
+    for (var icomp = 0; icomp < gloves.comp.length; icomp++) {
         glovesCompCoords(icomp);
 
-        bbox[0] = Math.min(bbox[0], glov.comp[icomp].bbox[0]);
-        bbox[1] = Math.max(bbox[1], glov.comp[icomp].bbox[1]);
-        bbox[2] = Math.min(bbox[2], glov.comp[icomp].bbox[2]);
-        bbox[3] = Math.max(bbox[3], glov.comp[icomp].bbox[3]);
-        bbox[4] = Math.min(bbox[4], glov.comp[icomp].bbox[4]);
-        bbox[5] = Math.max(bbox[5], glov.comp[icomp].bbox[5]);
+        bbox[0] = Math.min(bbox[0], gloves.comp[icomp].bbox[0]);
+        bbox[1] = Math.max(bbox[1], gloves.comp[icomp].bbox[1]);
+        bbox[2] = Math.min(bbox[2], gloves.comp[icomp].bbox[2]);
+        bbox[3] = Math.max(bbox[3], gloves.comp[icomp].bbox[3]);
+        bbox[4] = Math.min(bbox[4], gloves.comp[icomp].bbox[4]);
+        bbox[5] = Math.max(bbox[5], gloves.comp[icomp].bbox[5]);
     }
 
     var canvas = document.getElementById("gloves");
@@ -639,7 +552,7 @@ glov.cmdBotm = function () {
                            0,    0,    fact, dy,
                            fact, 0,    0,    0,
                            0,    0,    0,    1);
-    glov.uiMatrix.load(mVals);
+    gloves.uiMatrix.load(mVals);
 
     glovesDraw();
 };
@@ -648,21 +561,21 @@ glov.cmdBotm = function () {
 //
 // callback when "topButton" is pressed
 //
-glov.cmdTop = function () {
-    // alert("in glov.cmdTop()");
+gloves.cmdTop = function () {
+    // alert("in gloves.cmdTop()");
 
-    glov.view = "Top view: ";
+    gloves.view = "Top view: ";
 
     var bbox = [+Infinity, -Infinity, +Infinity, -Infinity, +Infinity, -Infinity];
-    for (var icomp = 0; icomp < glov.comp.length; icomp++) {
+    for (var icomp = 0; icomp < gloves.comp.length; icomp++) {
         glovesCompCoords(icomp);
 
-        bbox[0] = Math.min(bbox[0], glov.comp[icomp].bbox[0]);
-        bbox[1] = Math.max(bbox[1], glov.comp[icomp].bbox[1]);
-        bbox[2] = Math.min(bbox[2], glov.comp[icomp].bbox[2]);
-        bbox[3] = Math.max(bbox[3], glov.comp[icomp].bbox[3]);
-        bbox[4] = Math.min(bbox[4], glov.comp[icomp].bbox[4]);
-        bbox[5] = Math.max(bbox[5], glov.comp[icomp].bbox[5]);
+        bbox[0] = Math.min(bbox[0], gloves.comp[icomp].bbox[0]);
+        bbox[1] = Math.max(bbox[1], gloves.comp[icomp].bbox[1]);
+        bbox[2] = Math.min(bbox[2], gloves.comp[icomp].bbox[2]);
+        bbox[3] = Math.max(bbox[3], gloves.comp[icomp].bbox[3]);
+        bbox[4] = Math.min(bbox[4], gloves.comp[icomp].bbox[4]);
+        bbox[5] = Math.max(bbox[5], gloves.comp[icomp].bbox[5]);
     }
 
     var canvas = document.getElementById("gloves");
@@ -677,7 +590,7 @@ glov.cmdTop = function () {
                            0,    fact, 0,    dy,
                            0,    0,    fact, 0,
                            0,    0,    0,    1);
-    glov.uiMatrix.load(mVals);
+    gloves.uiMatrix.load(mVals);
 
     glovesDraw();
 };
@@ -686,13 +599,13 @@ glov.cmdTop = function () {
 //
 // callback when "inButton" is pressed
 //
-glov.cmdIn = function () {
-    // alert("in glov.cmdIn()");
+gloves.cmdIn = function () {
+    // alert("in gloves.cmdIn()");
 
     var canvas = document.getElementById("gloves");
     var fact   = 1.25;
 
-    var mVals  = glov.uiMatrix.getAsArray();
+    var mVals  = gloves.uiMatrix.getAsArray();
 
     mVals[ 0] *= fact;
     mVals[ 1] *= fact;
@@ -708,7 +621,7 @@ glov.cmdIn = function () {
     mVals[ 3] = mVals[ 3] * fact + canvas.width  * (1 - fact) / 2;
     mVals[ 7] = mVals[ 7] * fact + canvas.height * (1 - fact) / 2;
 
-    glov.uiMatrix.load(mVals);
+    gloves.uiMatrix.load(mVals);
 
     glovesDraw();
 };
@@ -717,13 +630,13 @@ glov.cmdIn = function () {
 //
 // callback when "outButton" is pressed
 //
-glov.cmdOut = function () {
-    // alert("in glov.cmdOut()");
+gloves.cmdOut = function () {
+    // alert("in gloves.cmdOut()");
 
     var canvas = document.getElementById("gloves");
     var fact   = 0.8;
 
-    var mVals  = glov.uiMatrix.getAsArray();
+    var mVals  = gloves.uiMatrix.getAsArray();
 
     mVals[ 0] *= fact;
     mVals[ 1] *= fact;
@@ -739,7 +652,7 @@ glov.cmdOut = function () {
     mVals[ 3] = mVals[ 3] * fact + canvas.width  * (1 - fact) / 2;
     mVals[ 7] = mVals[ 7] * fact + canvas.height * (1 - fact) / 2;
 
-    glov.uiMatrix.load(mVals);
+    gloves.uiMatrix.load(mVals);
 
     glovesDraw();
 };
@@ -748,24 +661,24 @@ glov.cmdOut = function () {
 //
 // callback when any mouse is pressed  (when wv.curMode==7)
 //
-glov.mouseDown = function (e) {
-    // alert("in glov.mouseDown(e="+e+")");
+gloves.mouseDown = function (e) {
+    // alert("in gloves.mouseDown(e="+e+")");
 
     if (!e) var e = event;
 
-                    glov.modifier  = 0;
-    if (e.shiftKey) glov.modifier |= 1;
-    if (e.altKey  ) glov.modifier |= 2;
-    if (e.ctrlKey ) glov.modifier |= 4;
+                    gloves.modifier  = 0;
+    if (e.shiftKey) gloves.modifier |= 1;
+    if (e.altKey  ) gloves.modifier |= 2;
+    if (e.ctrlKey ) gloves.modifier |= 4;
 
     // turn on dragging mode
-    if (glov.modifier != 0) {
+    if (gloves.modifier != 0) {
         var canvas = document.getElementById("gloves");
 
-        glov.startX   = e.clientX - canvas.offsetLeft - 1;
-        glov.startY   = e.clientY - canvas.offsetTop  - 1;
-        glov.dragging = true;
-        glov.button   = e.button;
+        gloves.startX   = e.clientX - canvas.offsetLeft - 1;
+        gloves.startY   = e.clientY - canvas.offsetTop  - 1;
+        gloves.dragging = true;
+        gloves.button   = e.button;
     }
 };
 
@@ -773,50 +686,50 @@ glov.mouseDown = function (e) {
 //
 // callback when the mouse moves
 //
-glov.mouseMove = function (e) {
-    // alert("in glov.mouseMove(e="+e+")");
+gloves.mouseMove = function (e) {
+    // alert("in gloves.mouseMove(e="+e+")");
 
     if (!e) var e = event;
 
     var canvas = document.getElementById("gloves");
 
-    glov.cursorX  = e.clientX - canvas.offsetLeft - 1;
-    glov.cursorY  = e.clientY - canvas.offsetTop  - 1;
+    gloves.cursorX  = e.clientX - canvas.offsetLeft - 1;
+    gloves.cursorY  = e.clientY - canvas.offsetTop  - 1;
 
     // highlight point within halo
-    if (glov.mode == 0) {
-        glov.curComp = -1;
-        glov.curPnt  = -1;
+    if (gloves.mode == 0) {
+        gloves.curComp = -1;
+        gloves.curPnt  = -1;
 
-        for (var icomp = 0; icomp < glov.comp.length; icomp++) {
-            for (var ipnt = 0; ipnt < glov.comp[icomp].xpnt.length; ipnt++) {
-                if (Math.abs(glov.comp[icomp].xpnt[ipnt]-glov.cursorX) < glov.halo &&
-                    Math.abs(glov.comp[icomp].ypnt[ipnt]-glov.cursorY) < glov.halo   ) {
-                        glov.curComp = icomp;
-                        glov.curPnt  = ipnt;
-                        glov.mode    = 1;
+        for (var icomp = 0; icomp < gloves.comp.length; icomp++) {
+            for (var ipnt = 0; ipnt < gloves.comp[icomp].xpnt.length; ipnt++) {
+                if (Math.abs(gloves.comp[icomp].xpnt[ipnt]-gloves.cursorX) < gloves.halo &&
+                    Math.abs(gloves.comp[icomp].ypnt[ipnt]-gloves.cursorY) < gloves.halo   ) {
+                        gloves.curComp = icomp;
+                        gloves.curPnt  = ipnt;
+                        gloves.mode    = 1;
                         break;
                 }
             }
-            if (glov.mode == 1) {
+            if (gloves.mode == 1) {
                 break;
             }
         }
 
     // select menu item
-    } else if (glov.mode == 1) {
-        glov.curMenu = -1;
-        glov.curDvar = -1;
+    } else if (gloves.mode == 1) {
+        gloves.curMenu = -1;
+        gloves.curDvar = -1;
 
-        for (var item = 0; item < glov.menuitems.length; item++) {
-            if (glov.cursorX >= glov.menuitems[item].xmin-glov.halo &&
-                glov.cursorX <= glov.menuitems[item].xmax+glov.halo &&
-                glov.cursorY >= glov.menuitems[item].ymin           &&
-                glov.cursorY <= glov.menuitems[item].ymax             ) {
-                glov.curMenu = item;
-                for (var idvar = 0; idvar < glov.dvar.length; idvar++) {
-                    if (glov.dvar[idvar].name == glov.menuitems[item].labl) {
-                        glov.curDvar = idvar;
+        for (var item = 0; item < gloves.menuitems.length; item++) {
+            if (gloves.cursorX >= gloves.menuitems[item].xmin-gloves.halo &&
+                gloves.cursorX <= gloves.menuitems[item].xmax+gloves.halo &&
+                gloves.cursorY >= gloves.menuitems[item].ymin           &&
+                gloves.cursorY <= gloves.menuitems[item].ymax             ) {
+                gloves.curMenu = item;
+                for (var idvar = 0; idvar < gloves.dvar.length; idvar++) {
+                    if (gloves.dvar[idvar].name == gloves.menuitems[item].labl) {
+                        gloves.curDvar = idvar;
                         break;
                     }
                 }
@@ -825,41 +738,41 @@ glov.mouseMove = function (e) {
             }
         }
 
-        if (glov.curMenu < 0) {
-            if (Math.abs(glov.comp[glov.curComp].xpnt[glov.curPnt]-glov.cursorX) > glov.halo ||
-                Math.abs(glov.comp[glov.curComp].ypnt[glov.curPnt]-glov.cursorY) > glov.halo   ) {
-                glov.mode = 0;
+        if (gloves.curMenu < 0) {
+            if (Math.abs(gloves.comp[gloves.curComp].xpnt[gloves.curPnt]-gloves.cursorX) > gloves.halo ||
+                Math.abs(gloves.comp[gloves.curComp].ypnt[gloves.curPnt]-gloves.cursorY) > gloves.halo   ) {
+                gloves.mode = 0;
             }
         }
 
     // update design variable by tracking mouse
-    } else if (glov.mode == 2) {
+    } else if (gloves.mode == 2) {
 
         // vary design variable until selected point is at cursor
-        var idvar = glov.curDvar;
-        var dvar0 = glov.dvar[idvar].valu;
-        var dist0 = (glov.comp[glov.curComp].xpnt[glov.curPnt] - glov.cursorX) * (glov.comp[glov.curComp].xpnt[glov.curPnt] - glov.cursorX)
-                  + (glov.comp[glov.curComp].ypnt[glov.curPnt] - glov.cursorY) * (glov.comp[glov.curComp].ypnt[glov.curPnt] - glov.cursorY);
+        var idvar = gloves.curDvar;
+        var dvar0 = gloves.dvar[idvar].valu;
+        var dist0 = (gloves.comp[gloves.curComp].xpnt[gloves.curPnt] - gloves.cursorX) * (gloves.comp[gloves.curComp].xpnt[gloves.curPnt] - gloves.cursorX)
+                  + (gloves.comp[gloves.curComp].ypnt[gloves.curPnt] - gloves.cursorY) * (gloves.comp[gloves.curComp].ypnt[gloves.curPnt] - gloves.cursorY);
         var delta = 0.1 * Math.max(dvar0, 1);
-        if (dvar0 >= glov.dvar[idvar].ubnd) {
+        if (dvar0 >= gloves.dvar[idvar].ubnd) {
             delta *= -1;
         }
 
         while (dist0 > 5) {
 
             // modify the design variable and compute distance to cursor
-            var dvar1 = Math.min(Math.max(glov.dvar[idvar].lbnd, dvar0+delta), glov.dvar[idvar].ubnd);
-            glov.dvar[idvar].valu = dvar1;
+            var dvar1 = Math.min(Math.max(gloves.dvar[idvar].lbnd, dvar0+delta), gloves.dvar[idvar].ubnd);
+            gloves.dvar[idvar].valu = dvar1;
 
-            for (var icomp = 0; icomp < glov.comp.length; icomp++) {
+            for (var icomp = 0; icomp < gloves.comp.length; icomp++) {
                 glovesCompCoords(icomp);
             }
 
-            var dist1 = (glov.comp[glov.curComp].xpnt[glov.curPnt] - glov.cursorX) * (glov.comp[glov.curComp].xpnt[glov.curPnt] - glov.cursorX)
-                      + (glov.comp[glov.curComp].ypnt[glov.curPnt] - glov.cursorY) * (glov.comp[glov.curComp].ypnt[glov.curPnt] - glov.cursorY);
+            var dist1 = (gloves.comp[gloves.curComp].xpnt[gloves.curPnt] - gloves.cursorX) * (gloves.comp[gloves.curComp].xpnt[gloves.curPnt] - gloves.cursorX)
+                      + (gloves.comp[gloves.curComp].ypnt[gloves.curPnt] - gloves.cursorY) * (gloves.comp[gloves.curComp].ypnt[gloves.curPnt] - gloves.cursorY);
 
             // propose next step
-            if (dvar1 <= glov.dvar[idvar].lbnd || dvar1 >= glov.dvar[idvar].ubnd) {
+            if (dvar1 <= gloves.dvar[idvar].lbnd || dvar1 >= gloves.dvar[idvar].ubnd) {
                 break;
             } else if (Math.abs(dist0 - dist1) < 5) {
                 break;
@@ -880,20 +793,20 @@ glov.mouseMove = function (e) {
 //
 // callback when the mouse is released
 //
-glov.mouseUp = function (e) {
-    // alert("in glov.mouseUp(e="+e+")");
+gloves.mouseUp = function (e) {
+    // alert("in gloves.mouseUp(e="+e+")");
 
-    if (glov.modifier == 0) {
+    if (gloves.modifier == 0) {
 
         try {
-            if        (glov.mode == 1) {
-                glov.dragBase = glov.dvar[glov.curDvar].valu;
+            if        (gloves.mode == 1) {
+                gloves.dragBase = gloves.dvar[gloves.curDvar].valu;
 
-                glov.mode  = 2;
-                glov.dragX = glov.cursorX;
-                glov.dragY = glov.cursorY;
-            } else if (glov.mode == 2) {
-                glov.mode = 0;
+                gloves.mode  = 2;
+                gloves.dragX = gloves.cursorX;
+                gloves.dragY = gloves.cursorY;
+            } else if (gloves.mode == 2) {
+                gloves.mode = 0;
             }
         } catch (err) {
             // nothing is selected
@@ -907,42 +820,50 @@ glov.mouseUp = function (e) {
 //
 // process a key press in Gloves
 //
-glov.keyPress = function (e) {
-    // alert("in glov.keyPress(e="+e+")");
+gloves.keyPress = function (e) {
+    // alert("in gloves.keyPress(e="+e+")");
 
-                    glov.modifier  = 0;
-    if (e.shiftKey) glov.modifier |= 1;
-    if (e.altKey  ) glov.modifier |= 2;
-    if (e.ctrlKey ) glov.modifier |= 4;
+                    gloves.modifier  = 0;
+    if (e.shiftKey) gloves.modifier |= 1;
+    if (e.altKey  ) gloves.modifier |= 2;
+    if (e.ctrlKey ) gloves.modifier |= 4;
 
-    // if <esc> was pressed, return to base mode
+    // if <esc> was pressed, return to base mode (handled in keyDown)
     if (e.charCode == 0 && e.keyCode == 27) {
-        if (glov.mode == 2 && glov.curDvar >= 0) {
-            glov.dvar[glov.curDvar].valu = glov.dragBase;
-        }
 
-        glov.mode = 0;
-
-    // if <return> was pressed, treat it as a MouseUp
+    // if <return> was pressed, treat it as a MouseUp (handled in keyDown)
     } else if (e.charCode == 0 && e.keyCode == 13) {
-        glov.getMouseUp();
 
     } else {
-        console.log("e.charCode="+e.charCode+"   e.keyCode="+e.keyCode+"   glov.modifier="+glov.modifier);
+        console.log("e.charCode="+e.charCode+"   e.keyCode="+e.keyCode+"   gloves.modifier="+gloves.modifier);
     }
-
-    glovesDraw();
 };
 
 
 //
 // callback when a key is down
 //
-glov.getKeyDown = function (e) {
-    // alert("in glov.getKeyDown(e="+e+")");
+gloves.keyDown = function (e) {
+    // alert("in gloves.keyDown(e="+e+")");
 
     if (e.charCode == 0 && e.keyCode == 16) {    // shift
-        glov.modifier = 1;
+        gloves.modifier = 1;
+    }
+
+    // if <esc> was pressed, return to base mode
+    if (e.charCode == 0 && e.keyCode == 27) {
+        if (gloves.mode == 2 && gloves.curDvar >= 0) {
+            gloves.dvar[gloves.curDvar].valu = gloves.dragBase;
+        }
+
+        gloves.mode = 0;
+
+        glovesDraw();
+
+    // if <return> was pressed, treat it as a MouseUp
+    } else if (e.charCode == 0 && e.keyCode == 13) {
+        gloves.mouseUp();
+
     }
 };
 
@@ -950,13 +871,69 @@ glov.getKeyDown = function (e) {
 //
 // callback when a key is up
 //
-glov.getKeyUp = function (e) {
-    // alert("in glov.getKeyUp(e="+e+")");
+gloves.keyUp = function (e) {
+    // alert("in gloves.keyUp(e="+e+")");
 
     if (e.charCode == 0 && e.keyCode == 16) {    // shift
-        glov.modifier = 0;
+        gloves.modifier = 0;
     }
 };
+
+
+//
+// callback for first part of a keypress that is not recognized by wvUpdateUI
+//
+//gloves.keyPressPart1 = function(myKeyPress) {
+//    // alert("in gloves.keyPressPart1(myKeyPress="+myKeyPress+")");
+//    return 0;
+//};
+
+
+//
+// callback for second part of a keypress that is not recognized by wvUpdateUI
+//
+//gloves.keyPressPart2 = function(picking, gprim) {
+//    // alert("in gloves.keyPressPart2(picking="+picking+"   gprim="+gprim+")");
+//};
+
+
+//
+// function to update the key window
+//
+//gloves.updateKeyWindow = function () {
+//}
+
+
+//
+// callback when timLoad returns
+//
+//gloves.timLoadCB = function (text) {
+//    postMessage("in gloves.timLoadCB: "+text);
+//}
+
+
+//
+// callback when timSave returns
+//
+//gloves.timSaveCB = function (text) {
+//    postMessage("in gloves.timSaveCB: "+text);
+//}
+
+
+//
+// callback when timQuit returns
+//
+//gloves.timQuitCB = function (text) {
+//    postMessage("in gloves.timQuitCB: "+text);
+//}
+
+
+//
+// callback when timMesg returns
+//
+//gloves.timMesgCB = function (text) {
+//    postMessage("in gloves.timMesgCB: "+text);
+//}
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -967,133 +944,133 @@ glov.getKeyUp = function (e) {
 var glovesAddFuse = function (name) {
     // alert("in glovesAddFuse(name="+name+")");
 
-    var idvar = glov.dvar.length;
-    var icomp = glov.comp.length;
+    var idvar = gloves.dvar.length;
+    var icomp = gloves.comp.length;
 
     var nsect = 4;
 
-    glov.comp[icomp] = {};
-    glov.comp[icomp].name = name;
-    glov.comp[icomp].type = "$$/glovesFuse";
-    glov.comp[icomp].head = "";
-    glov.comp[icomp].dvar = idvar;
-    glov.comp[icomp].bbox = [];
-    glov.comp[icomp].xpnt = [];
-    glov.comp[icomp].ypnt = [];
-    glov.comp[icomp].labl = {};
+    gloves.comp[icomp] = {};
+    gloves.comp[icomp].name = name;
+    gloves.comp[icomp].type = "$$/glovesFuse";
+    gloves.comp[icomp].head = "";
+    gloves.comp[icomp].dvar = idvar;
+    gloves.comp[icomp].bbox = [];
+    gloves.comp[icomp].xpnt = [];
+    gloves.comp[icomp].ypnt = [];
+    gloves.comp[icomp].labl = {};
 
     glovesAddLabelsAndHeader(icomp);
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":xloc[1]";
-    glov.dvar[idvar].valu =   0.0;
-    glov.dvar[idvar].lbnd =   0.0;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":xloc[1]";
+    gloves.dvar[idvar].valu =   0.0;
+    gloves.dvar[idvar].lbnd =   0.0;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":ymax[1]";
-    glov.dvar[idvar].valu =   0.5;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":ymax[1]";
+    gloves.dvar[idvar].valu =   0.5;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":ztop[1]";
-    glov.dvar[idvar].valu =   0.0;
-    glov.dvar[idvar].lbnd = -20.0;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":ztop[1]";
+    gloves.dvar[idvar].valu =   0.0;
+    gloves.dvar[idvar].lbnd = -20.0;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":zbot[1]";
-    glov.dvar[idvar].valu =  -0.5;
-    glov.dvar[idvar].lbnd = -20.0;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":zbot[1]";
+    gloves.dvar[idvar].valu =  -0.5;
+    gloves.dvar[idvar].lbnd = -20.0;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":xloc[2]";
-    glov.dvar[idvar].valu =   2.0;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":xloc[2]";
+    gloves.dvar[idvar].valu =   2.0;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":ymax[2]";
-    glov.dvar[idvar].valu =   1.5;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":ymax[2]";
+    gloves.dvar[idvar].valu =   1.5;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":ztop[2]";
-    glov.dvar[idvar].valu =   1.0;
-    glov.dvar[idvar].lbnd = -20.0;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":ztop[2]";
+    gloves.dvar[idvar].valu =   1.0;
+    gloves.dvar[idvar].lbnd = -20.0;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":zbot[2]";
-    glov.dvar[idvar].valu =  -1.0;
-    glov.dvar[idvar].lbnd = -20.0;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":zbot[2]";
+    gloves.dvar[idvar].valu =  -1.0;
+    gloves.dvar[idvar].lbnd = -20.0;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":xloc[3]";
-    glov.dvar[idvar].valu =   8.0;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":xloc[3]";
+    gloves.dvar[idvar].valu =   8.0;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":ymax[3]";
-    glov.dvar[idvar].valu =   1.5;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":ymax[3]";
+    gloves.dvar[idvar].valu =   1.5;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":ztop[3]";
-    glov.dvar[idvar].valu =   1.0;
-    glov.dvar[idvar].lbnd = -20.0;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":ztop[3]";
+    gloves.dvar[idvar].valu =   1.0;
+    gloves.dvar[idvar].lbnd = -20.0;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":zbot[3]";
-    glov.dvar[idvar].valu =  -1.0;
-    glov.dvar[idvar].lbnd = -20.0;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":zbot[3]";
+    gloves.dvar[idvar].valu =  -1.0;
+    gloves.dvar[idvar].lbnd = -20.0;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":xloc[4]";
-    glov.dvar[idvar].valu =  15.0;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":xloc[4]";
+    gloves.dvar[idvar].valu =  15.0;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":ymax[4]";
-    glov.dvar[idvar].valu =   0.5;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":ymax[4]";
+    gloves.dvar[idvar].valu =   0.5;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":ztop[4]";
-    glov.dvar[idvar].valu =   1.0;
-    glov.dvar[idvar].lbnd = -20.0;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":ztop[4]";
+    gloves.dvar[idvar].valu =   1.0;
+    gloves.dvar[idvar].lbnd = -20.0;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":zbot[4]";
-    glov.dvar[idvar].valu =   0.5;
-    glov.dvar[idvar].lbnd = -20.0;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":zbot[4]";
+    gloves.dvar[idvar].valu =   0.5;
+    gloves.dvar[idvar].lbnd = -20.0;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
     icomp++;
@@ -1106,75 +1083,75 @@ var glovesAddFuse = function (name) {
 var glovesAddWing = function (name) {
     // alert("in glovesAddWing(name="+name+")");
 
-    var idvar = glov.dvar.length;
-    var icomp = glov.comp.length;
+    var idvar = gloves.dvar.length;
+    var icomp = gloves.comp.length;
 
-    glov.comp[icomp] = {};
-    glov.comp[icomp].name = name;
-    glov.comp[icomp].type = "$$/glovesWing";
-    glov.comp[icomp].head = "";
-    glov.comp[icomp].dvar = idvar;
-    glov.comp[icomp].bbox = [];
-    glov.comp[icomp].xpnt = [];
-    glov.comp[icomp].ypnt = [];
-    glov.comp[icomp].labl = {};
+    gloves.comp[icomp] = {};
+    gloves.comp[icomp].name = name;
+    gloves.comp[icomp].type = "$$/glovesWing";
+    gloves.comp[icomp].head = "";
+    gloves.comp[icomp].dvar = idvar;
+    gloves.comp[icomp].bbox = [];
+    gloves.comp[icomp].xpnt = [];
+    gloves.comp[icomp].ypnt = [];
+    gloves.comp[icomp].labl = {};
 
     glovesAddLabelsAndHeader(icomp);
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":Xroot";
-    glov.dvar[idvar].valu = 3.0;
-    glov.dvar[idvar].lbnd = 0.1;
-    glov.dvar[idvar].ubnd = 20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":Xroot";
+    gloves.dvar[idvar].valu = 3.0;
+    gloves.dvar[idvar].lbnd = 0.1;
+    gloves.dvar[idvar].ubnd = 20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":Zroot";
-    glov.dvar[idvar].valu =  -0.5;
-    glov.dvar[idvar].lbnd = -10.0;
-    glov.dvar[idvar].ubnd =  10.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":Zroot";
+    gloves.dvar[idvar].valu =  -0.5;
+    gloves.dvar[idvar].lbnd = -10.0;
+    gloves.dvar[idvar].ubnd =  10.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":area";
-    glov.dvar[idvar].valu =  48.0;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd = 100.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":area";
+    gloves.dvar[idvar].valu =  48.0;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd = 100.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":aspect";
-    glov.dvar[idvar].valu =   5.0;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":aspect";
+    gloves.dvar[idvar].valu =   5.0;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":taper";
-    glov.dvar[idvar].valu =   0.5;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =   2.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":taper";
+    gloves.dvar[idvar].valu =   0.5;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =   2.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":sweep";
-    glov.dvar[idvar].valu =  30.0;
-    glov.dvar[idvar].lbnd = -45.0;
-    glov.dvar[idvar].ubnd =  45.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":sweep";
+    gloves.dvar[idvar].valu =  30.0;
+    gloves.dvar[idvar].lbnd = -45.0;
+    gloves.dvar[idvar].ubnd =  45.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":dihedral";
-    glov.dvar[idvar].valu =   5.0;
-    glov.dvar[idvar].lbnd = -10.0;
-    glov.dvar[idvar].ubnd =  10.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":dihedral";
+    gloves.dvar[idvar].valu =   5.0;
+    gloves.dvar[idvar].lbnd = -10.0;
+    gloves.dvar[idvar].ubnd =  10.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":thick";
-    glov.dvar[idvar].valu =   0.1;
-    glov.dvar[idvar].lbnd =   0.01;
-    glov.dvar[idvar].ubnd =   1.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":thick";
+    gloves.dvar[idvar].valu =   0.1;
+    gloves.dvar[idvar].lbnd =   0.01;
+    gloves.dvar[idvar].ubnd =   1.0;
     idvar++;
 
     icomp++;
@@ -1187,75 +1164,75 @@ var glovesAddWing = function (name) {
 var glovesAddVtail = function (name) {
     // alert("in glovesAddVtail(name="+name+")");
 
-    var idvar = glov.dvar.length;
-    var icomp = glov.comp.length;
+    var idvar = gloves.dvar.length;
+    var icomp = gloves.comp.length;
 
-    glov.comp[icomp] = {};
-    glov.comp[icomp].name = name;
-    glov.comp[icomp].type = "$$/glovesVtail";
-    glov.comp[icomp].head = "";
-    glov.comp[icomp].dvar = idvar;
-    glov.comp[icomp].bbox = [];
-    glov.comp[icomp].xpnt = [];
-    glov.comp[icomp].ypnt = [];
-    glov.comp[icomp].labl = {};
+    gloves.comp[icomp] = {};
+    gloves.comp[icomp].name = name;
+    gloves.comp[icomp].type = "$$/glovesVtail";
+    gloves.comp[icomp].head = "";
+    gloves.comp[icomp].dvar = idvar;
+    gloves.comp[icomp].bbox = [];
+    gloves.comp[icomp].xpnt = [];
+    gloves.comp[icomp].ypnt = [];
+    gloves.comp[icomp].labl = {};
 
     glovesAddLabelsAndHeader(icomp);
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":Xroot";
-    glov.dvar[idvar].valu = 13.3;
-    glov.dvar[idvar].lbnd = 0.1;
-    glov.dvar[idvar].ubnd = 20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":Xroot";
+    gloves.dvar[idvar].valu = 13.3;
+    gloves.dvar[idvar].lbnd = 0.1;
+    gloves.dvar[idvar].ubnd = 20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":Yroot";
-    glov.dvar[idvar].valu = 0.0;
-    glov.dvar[idvar].lbnd = -20.0;
-    glov.dvar[idvar].ubnd = 20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":Yroot";
+    gloves.dvar[idvar].valu = 0.0;
+    gloves.dvar[idvar].lbnd = -20.0;
+    gloves.dvar[idvar].ubnd = 20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":Zroot";
-    glov.dvar[idvar].valu =   0.8;
-    glov.dvar[idvar].lbnd = -10.0;
-    glov.dvar[idvar].ubnd =  10.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":Zroot";
+    gloves.dvar[idvar].valu =   0.8;
+    gloves.dvar[idvar].lbnd = -10.0;
+    gloves.dvar[idvar].ubnd =  10.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":area";
-    glov.dvar[idvar].valu =   3.0;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd = 100.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":area";
+    gloves.dvar[idvar].valu =   3.0;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd = 100.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":aspect";
-    glov.dvar[idvar].valu =   2.5;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =  20.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":aspect";
+    gloves.dvar[idvar].valu =   2.5;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =  20.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":taper";
-    glov.dvar[idvar].valu =   0.5;
-    glov.dvar[idvar].lbnd =   0.1;
-    glov.dvar[idvar].ubnd =   2.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":taper";
+    gloves.dvar[idvar].valu =   0.5;
+    gloves.dvar[idvar].lbnd =   0.1;
+    gloves.dvar[idvar].ubnd =   2.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":sweep";
-    glov.dvar[idvar].valu =  30.0;
-    glov.dvar[idvar].lbnd = -45.0;
-    glov.dvar[idvar].ubnd =  45.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":sweep";
+    gloves.dvar[idvar].valu =  30.0;
+    gloves.dvar[idvar].lbnd = -45.0;
+    gloves.dvar[idvar].ubnd =  45.0;
     idvar++;
 
-    glov.dvar[idvar] = {};
-    glov.dvar[idvar].name = name+":thick";
-    glov.dvar[idvar].valu =   0.1;
-    glov.dvar[idvar].lbnd =   0.01;
-    glov.dvar[idvar].ubnd =   1.0;
+    gloves.dvar[idvar] = {};
+    gloves.dvar[idvar].name = name+":thick";
+    gloves.dvar[idvar].valu =   0.1;
+    gloves.dvar[idvar].lbnd =   0.01;
+    gloves.dvar[idvar].ubnd =   1.0;
     idvar++;
 
     icomp++;
@@ -1268,200 +1245,200 @@ var glovesAddVtail = function (name) {
 var glovesAddLabelsAndHeader = function (icomp) {
     // alert("glovesAddLabelsAndHeader(icomp="+icomp+")");
 
-    var name = glov.comp[icomp].name;
+    var name = gloves.comp[icomp].name;
 
     // fuselage
-    if (glov.comp[icomp].type == "$$/glovesFuse") {
+    if (gloves.comp[icomp].type == "$$/glovesFuse") {
         var nsect = 4;        
 
-        glov.comp[icomp].labl[ 0] = name+":xloc[1];"
-            +                       name+":ymax[1];"
-            +                       name+":zbot[1]";
-        glov.comp[icomp].labl[ 1] = name+":xloc[1];"
-            +                       name+":ymax[1];"
-            +                       name+":zbot[1]";
-        glov.comp[icomp].labl[ 2] = name+":xloc[1];"
-            +                       name+":ymax[1];"
-            +                       name+":ztop[1]";
-        glov.comp[icomp].labl[ 3] = name+":xloc[1];"
-            +                       name+":ymax[1];"
-            +                       name+":ztop[1]";
-        glov.comp[icomp].labl[ 4] = name+":xloc[2];"
-            +                       name+":ymax[2];"
-            +                       name+":zbot[2]";
-        glov.comp[icomp].labl[ 5] = name+":xloc[2];"
-            +                       name+":ymax[2];"
-            +                       name+":zbot[2]";
-        glov.comp[icomp].labl[ 6] = name+":xloc[2];"
-            +                       name+":ymax[2];"
-            +                       name+":ztop[2]";
-        glov.comp[icomp].labl[ 7] = name+":xloc[2];"
-            +                       name+":ymax[2];"
-            +                       name+":ztop[2]";
-        glov.comp[icomp].labl[ 8] = name+":xloc[3];"
-            +                       name+":ymax[3];"
-            +                       name+":zbot[3]";
-        glov.comp[icomp].labl[ 9] = name+":xloc[3];"
-            +                       name+":ymax[3];"
-            +                       name+":zbot[3]";
-        glov.comp[icomp].labl[10] = name+":xloc[3];"
-            +                       name+":ymax[3];"
-            +                       name+":ztop[3]";
-        glov.comp[icomp].labl[11] = name+":xloc[3];"
-            +                       name+":ymax[3];"
-            +                       name+":ztop[3]";
-        glov.comp[icomp].labl[12] = name+":xloc[4];"
-            +                       name+":ymax[4];"
-            +                       name+":zbot[4]";
-        glov.comp[icomp].labl[13] = name+":xloc[4];"
-            +                       name+":ymax[4];"
-            +                       name+":zbot[4]";
-        glov.comp[icomp].labl[14] = name+":xloc[4];"
-            +                       name+":ymax[4];"
-            +                       name+":ztop[4]";
-        glov.comp[icomp].labl[15] = name+":xloc[4];"
-            +                       name+":ymax[4];"
-            +                       name+":ztop[4]";
+        gloves.comp[icomp].labl[ 0] = name+":xloc[1];"
+            +                         name+":ymax[1];"
+            +                         name+":zbot[1]";
+        gloves.comp[icomp].labl[ 1] = name+":xloc[1];"
+            +                         name+":ymax[1];"
+            +                         name+":zbot[1]";
+        gloves.comp[icomp].labl[ 2] = name+":xloc[1];"
+            +                         name+":ymax[1];"
+            +                         name+":ztop[1]";
+        gloves.comp[icomp].labl[ 3] = name+":xloc[1];"
+            +                         name+":ymax[1];"
+            +                         name+":ztop[1]";
+        gloves.comp[icomp].labl[ 4] = name+":xloc[2];"
+            +                         name+":ymax[2];"
+            +                         name+":zbot[2]";
+        gloves.comp[icomp].labl[ 5] = name+":xloc[2];"
+            +                         name+":ymax[2];"
+            +                         name+":zbot[2]";
+        gloves.comp[icomp].labl[ 6] = name+":xloc[2];"
+            +                         name+":ymax[2];"
+            +                         name+":ztop[2]";
+        gloves.comp[icomp].labl[ 7] = name+":xloc[2];"
+            +                         name+":ymax[2];"
+            +                         name+":ztop[2]";
+        gloves.comp[icomp].labl[ 8] = name+":xloc[3];"
+            +                         name+":ymax[3];"
+            +                         name+":zbot[3]";
+        gloves.comp[icomp].labl[ 9] = name+":xloc[3];"
+            +                         name+":ymax[3];"
+            +                         name+":zbot[3]";
+        gloves.comp[icomp].labl[10] = name+":xloc[3];"
+            +                         name+":ymax[3];"
+            +                         name+":ztop[3]";
+        gloves.comp[icomp].labl[11] = name+":xloc[3];"
+            +                         name+":ymax[3];"
+            +                         name+":ztop[3]";
+        gloves.comp[icomp].labl[12] = name+":xloc[4];"
+            +                         name+":ymax[4];"
+            +                         name+":zbot[4]";
+        gloves.comp[icomp].labl[13] = name+":xloc[4];"
+            +                         name+":ymax[4];"
+            +                         name+":zbot[4]";
+        gloves.comp[icomp].labl[14] = name+":xloc[4];"
+            +                         name+":ymax[4];"
+            +                         name+":ztop[4]";
+        gloves.comp[icomp].labl[15] = name+":xloc[4];"
+            +                         name+":ymax[4];"
+            +                         name+":ztop[4]";
 
-        glov.comp[icomp].head = "CFGPMTR   "+name+":nsect   "+nsect+"\n"
-            +                   "DIMENSION "+name+":xloc    "+nsect+"  1\n"
-            +                   "DIMENSION "+name+":ymax    "+nsect+"  1\n"
-            +                   "DIMENSION "+name+":zbot    "+nsect+"  1\n"
-            +                   "DIMENSION "+name+":ztop    "+nsect+"  1";
+        gloves.comp[icomp].head = "CFGPMTR   "+name+":nsect   "+nsect+"\n"
+            +                     "DIMENSION "+name+":xloc    "+nsect+"  1\n"
+            +                     "DIMENSION "+name+":ymax    "+nsect+"  1\n"
+            +                     "DIMENSION "+name+":zbot    "+nsect+"  1\n"
+            +                     "DIMENSION "+name+":ztop    "+nsect+"  1";
 
     // wing or htail
-    } else if (glov.comp[icomp].type == "$$/glovesWing") {
-        glov.comp[icomp].labl[ 0] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":sweep;"
-            +                       name+":dihedral";
-        glov.comp[icomp].labl[ 1] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":sweep;"
-            +                       name+":dihedral";
-        glov.comp[icomp].labl[ 2] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":sweep;"
-            +                       name+":dihedral;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[ 3] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":sweep;"
-            +                       name+":dihedral";
-        glov.comp[icomp].labl[ 4] = name+":Xroot;"
-            +                       name+":Zroot";
-        glov.comp[icomp].labl[ 5] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper";
-        glov.comp[icomp].labl[ 6] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[ 7] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[ 8] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":sweep;"
-            +                       name+":dihedral";
-        glov.comp[icomp].labl[ 9] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":sweep;"
-            +                       name+":dihedral";
-        glov.comp[icomp].labl[10] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":sweep;"
-            +                       name+":dihedral;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[11] = name+":Xroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":sweep;"
-            +                       name+":dihedral";
+    } else if (gloves.comp[icomp].type == "$$/glovesWing") {
+        gloves.comp[icomp].labl[ 0] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":sweep;"
+            +                         name+":dihedral";
+        gloves.comp[icomp].labl[ 1] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":sweep;"
+            +                         name+":dihedral";
+        gloves.comp[icomp].labl[ 2] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":sweep;"
+            +                         name+":dihedral;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[ 3] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":sweep;"
+            +                         name+":dihedral";
+        gloves.comp[icomp].labl[ 4] = name+":Xroot;"
+            +                         name+":Zroot";
+        gloves.comp[icomp].labl[ 5] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper";
+        gloves.comp[icomp].labl[ 6] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[ 7] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[ 8] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":sweep;"
+            +                         name+":dihedral";
+        gloves.comp[icomp].labl[ 9] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":sweep;"
+            +                         name+":dihedral";
+        gloves.comp[icomp].labl[10] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":sweep;"
+            +                         name+":dihedral;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[11] = name+":Xroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":sweep;"
+            +                         name+":dihedral";
 
     // vtail
-    } else if (glov.comp[icomp].type == "$$/glovesVtail") {
-        glov.comp[icomp].labl[ 0] = name+":Xroot;"
-            +                       name+":Yroot;"
-            +                       name+":Zroot;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[ 1] = name+":Xroot;"
-            +                       name+":Yroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[ 2] = name+":Xroot;"
-            +                       name+":Yroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[ 3] = name+":Xroot;"
-            +                       name+":Yroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[ 4] = name+":Xroot;"
-            +                       name+":Yroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":sweep;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[ 5] = name+":Xroot;"
-            +                       name+":Yroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":sweep;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[ 6] = name+":Xroot;"
-            +                       name+":Yroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":sweep;"
-            +                       name+":thick";
-        glov.comp[icomp].labl[ 7] = name+":Xroot;"
-            +                       name+":Yroot;"
-            +                       name+":Zroot;"
-            +                       name+":area;"
-            +                       name+":aspect;"
-            +                       name+":taper;"
-            +                       name+":sweep;"
-            +                       name+":thick";
+    } else if (gloves.comp[icomp].type == "$$/glovesVtail") {
+        gloves.comp[icomp].labl[ 0] = name+":Xroot;"
+            +                         name+":Yroot;"
+            +                         name+":Zroot;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[ 1] = name+":Xroot;"
+            +                         name+":Yroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[ 2] = name+":Xroot;"
+            +                         name+":Yroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[ 3] = name+":Xroot;"
+            +                         name+":Yroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[ 4] = name+":Xroot;"
+            +                         name+":Yroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":sweep;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[ 5] = name+":Xroot;"
+            +                         name+":Yroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":sweep;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[ 6] = name+":Xroot;"
+            +                         name+":Yroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":sweep;"
+            +                         name+":thick";
+        gloves.comp[icomp].labl[ 7] = name+":Xroot;"
+            +                         name+":Yroot;"
+            +                         name+":Zroot;"
+            +                         name+":area;"
+            +                         name+":aspect;"
+            +                         name+":taper;"
+            +                         name+":sweep;"
+            +                         name+":thick";
 
     }
 }
@@ -1477,15 +1454,15 @@ var glovesCompCoords = function (icomp) {
     var z = [];
 
     // fuselage
-    if (glov.comp[icomp].type == "$$/glovesFuse") {
-        var ndvar = glov.comp[icomp].dvar;
+    if (gloves.comp[icomp].type == "$$/glovesFuse") {
+        var ndvar = gloves.comp[icomp].dvar;
 
         var nsect = 4;
         for (var i = 0; i < nsect; i++) {
-            var xloc = glov.dvar[ndvar++].valu;
-            var ymax = glov.dvar[ndvar++].valu;
-            var ztop = glov.dvar[ndvar++].valu;
-            var zbot = glov.dvar[ndvar++].valu;
+            var xloc = gloves.dvar[ndvar++].valu;
+            var ymax = gloves.dvar[ndvar++].valu;
+            var ztop = gloves.dvar[ndvar++].valu;
+            var zbot = gloves.dvar[ndvar++].valu;
 
             x[4*i  ] =  xloc;
             y[4*i  ] = -ymax;
@@ -1505,16 +1482,16 @@ var glovesCompCoords = function (icomp) {
         }
 
     // wing or htail
-    } else if (glov.comp[icomp].type == "$$/glovesWing") {
-        var ndvar     = glov.comp[icomp].dvar;
-        var Xroot     = glov.dvar[ndvar++].valu;
-        var Zroot     = glov.dvar[ndvar++].valu;
-        var area      = glov.dvar[ndvar++].valu;
-        var aspect    = glov.dvar[ndvar++].valu;
-        var taper     = glov.dvar[ndvar++].valu;
-        var sweep     = glov.dvar[ndvar++].valu * Math.PI / 180;
-        var dihedral  = glov.dvar[ndvar++].valu * Math.PI / 180;
-        var thick     = glov.dvar[ndvar++].valu;
+    } else if (gloves.comp[icomp].type == "$$/glovesWing") {
+        var ndvar     = gloves.comp[icomp].dvar;
+        var Xroot     = gloves.dvar[ndvar++].valu;
+        var Zroot     = gloves.dvar[ndvar++].valu;
+        var area      = gloves.dvar[ndvar++].valu;
+        var aspect    = gloves.dvar[ndvar++].valu;
+        var taper     = gloves.dvar[ndvar++].valu;
+        var sweep     = gloves.dvar[ndvar++].valu * Math.PI / 180;
+        var dihedral  = gloves.dvar[ndvar++].valu * Math.PI / 180;
+        var thick     = gloves.dvar[ndvar++].valu;
 
         var span   = Math.sqrt(area * aspect);
         var cmean  = area / span;
@@ -1570,16 +1547,16 @@ var glovesCompCoords = function (icomp) {
         z[11] = Zroot + span/2 * Math.sin(dihedral) + thick * ctip;
 
     // vtail
-    } else if (glov.comp[icomp].type == "$$/glovesVtail") {
-        var ndvar     = glov.comp[icomp].dvar;
-        var Xroot     = glov.dvar[ndvar++].valu;
-        var Yroot     = glov.dvar[ndvar++].valu;
-        var Zroot     = glov.dvar[ndvar++].valu;
-        var area      = glov.dvar[ndvar++].valu;
-        var aspect    = glov.dvar[ndvar++].valu;
-        var taper     = glov.dvar[ndvar++].valu;
-        var sweep     = glov.dvar[ndvar++].valu * Math.PI / 180;
-        var thick     = glov.dvar[ndvar++].valu;
+    } else if (gloves.comp[icomp].type == "$$/glovesVtail") {
+        var ndvar     = gloves.comp[icomp].dvar;
+        var Xroot     = gloves.dvar[ndvar++].valu;
+        var Yroot     = gloves.dvar[ndvar++].valu;
+        var Zroot     = gloves.dvar[ndvar++].valu;
+        var area      = gloves.dvar[ndvar++].valu;
+        var aspect    = gloves.dvar[ndvar++].valu;
+        var taper     = gloves.dvar[ndvar++].valu;
+        var sweep     = gloves.dvar[ndvar++].valu * Math.PI / 180;
+        var thick     = gloves.dvar[ndvar++].valu;
 
         var span   = Math.sqrt(area * aspect);
         var cmean  = area / span;
@@ -1619,25 +1596,25 @@ var glovesCompCoords = function (icomp) {
         z[ 7] = Zroot + span;
 
     } else {
-        alert("Unknown component type: "+glov.comp[icomp].type);
+        alert("Unknown component type: "+gloves.comp[icomp].type);
     }
 
     // convert physical coordinates to screen coordinates
     var canvas = document.getElementById("gloves");
-    var mVals  = glov.uiMatrix.getAsArray();
+    var mVals  = gloves.uiMatrix.getAsArray();
 
     for (var i = 0; i < x.length; i++) {
-        glov.comp[icomp].xpnt[i] =                 mVals[0] * x[i] + mVals[1] * y[i] + mVals[2] * z[i] + mVals[3];
-        glov.comp[icomp].ypnt[i] = canvas.height - mVals[4] * x[i] - mVals[5] * y[i] - mVals[6] * z[i] - mVals[7];
+        gloves.comp[icomp].xpnt[i] =                 mVals[0] * x[i] + mVals[1] * y[i] + mVals[2] * z[i] + mVals[3];
+        gloves.comp[icomp].ypnt[i] = canvas.height - mVals[4] * x[i] - mVals[5] * y[i] - mVals[6] * z[i] - mVals[7];
     }
 
     // keep track of bounding box
-    glov.comp[icomp].bbox[0] = Math.min(...x);
-    glov.comp[icomp].bbox[1] = Math.max(...x);
-    glov.comp[icomp].bbox[2] = Math.min(...y);
-    glov.comp[icomp].bbox[3] = Math.max(...y);
-    glov.comp[icomp].bbox[4] = Math.min(...z);
-    glov.comp[icomp].bbox[5] = Math.max(...z);
+    gloves.comp[icomp].bbox[0] = Math.min(...x);
+    gloves.comp[icomp].bbox[1] = Math.max(...x);
+    gloves.comp[icomp].bbox[2] = Math.min(...y);
+    gloves.comp[icomp].bbox[3] = Math.max(...y);
+    gloves.comp[icomp].bbox[4] = Math.min(...z);
+    gloves.comp[icomp].bbox[5] = Math.max(...z);
 };
 
 
@@ -1657,32 +1634,32 @@ var glovesDraw = function () {
 
         // write the prompt
         context.fillStyle = "black";
-        if (glov.mode == 0) {
-            context.fillText(glov.view+"Hover over a point to edit", 5, 5);
-        } else if (glov.mode == 1) {
-            context.fillText(glov.view+"Click on a design variable to edit (or <esc> to quit)", 5, 5);
-        } else if (glov.mode == 2) {
-            context.fillText(glov.view+"Move mouse to change \""+glov.dvar[glov.curDvar].name+"\" (<click> to save or <esc> to quit)", 5, 5);
+        if (gloves.mode == 0) {
+            context.fillText(gloves.view+"Hover over a point to edit", 5, 5);
+        } else if (gloves.mode == 1) {
+            context.fillText(gloves.view+"Click on a design variable to edit (or <esc> to quit)", 5, 5);
+        } else if (gloves.mode == 2) {
+            context.fillText(gloves.view+"Move mouse to change \""+gloves.dvar[gloves.curDvar].name+"\" (<click> to save or <esc> to quit)", 5, 5);
 
             // write current design variable values
             var ifirst =  0;
             var ilast  = -1;
 
-            if (glov.curComp >= 0 && glov.curComp < glov.comp.length-1) {
-                ifirst = glov.comp[glov.curComp].dvar;
-                ilast  = glov.comp[glov.curComp+1].dvar ;
-            } else if (glov.curComp == glov.comp.length-1) {
-                ifirst = glov.comp[glov.curComp].dvar;
-                ilast  = glov.dvar.length;
+            if (gloves.curComp >= 0 && gloves.curComp < gloves.comp.length-1) {
+                ifirst = gloves.comp[gloves.curComp].dvar;
+                ilast  = gloves.comp[gloves.curComp+1].dvar ;
+            } else if (gloves.curComp == gloves.comp.length-1) {
+                ifirst = gloves.comp[gloves.curComp].dvar;
+                ilast  = gloves.dvar.length;
             }
 
             for (var idvar = ifirst; idvar < ilast; idvar++) {
-                context.fillText(glov.dvar[idvar].name + "=" +glov.dvar[idvar].valu.toPrecision(3), 5, (idvar-ifirst+2)*15);
+                context.fillText(gloves.dvar[idvar].name + "=" +gloves.dvar[idvar].valu.toPrecision(3), 5, (idvar-ifirst+2)*15);
             }
         }
 
         // find the point coordinates on canvas
-        for (var icomp = 0; icomp < glov.comp.length; icomp++) {
+        for (var icomp = 0; icomp < gloves.comp.length; icomp++) {
             glovesCompCoords(icomp);
         }
 
@@ -1690,30 +1667,30 @@ var glovesDraw = function () {
         context.lineWidth = 1;
         context.strokeStyle = "black";
 
-        for (icomp = 0; icomp < glov.comp.length; icomp++) {
+        for (icomp = 0; icomp < gloves.comp.length; icomp++) {
             glovesDrawOutline(context, icomp);
         }
 
         // draw the points
-        if (glov.mode == 0) {
+        if (gloves.mode == 0) {
             context.lineWidth = 5;
             context.fillStyle = "black";
-            for (icomp = 0; icomp < glov.comp.length; icomp++) {
-                for (var ipnt = 0; ipnt < glov.comp[icomp].xpnt.length; ipnt++) {
-                    context.fillRect(glov.comp[icomp].xpnt[ipnt]-3, glov.comp[icomp].ypnt[ipnt]-3, 7, 7);
+            for (icomp = 0; icomp < gloves.comp.length; icomp++) {
+                for (var ipnt = 0; ipnt < gloves.comp[icomp].xpnt.length; ipnt++) {
+                    context.fillRect(gloves.comp[icomp].xpnt[ipnt]-3, gloves.comp[icomp].ypnt[ipnt]-3, 7, 7);
                 }
             }
 
         // draw selected point and post menu
-        } else if (glov.mode == 1) {
+        } else if (gloves.mode == 1) {
 
             // draw selected point
             context.lineWidth = 5;
             context.fillStyle = "red";
-            context.fillRect(glov.comp[glov.curComp].xpnt[glov.curPnt]-3, glov.comp[glov.curComp].ypnt[glov.curPnt]-3, 7, 7);
+            context.fillRect(gloves.comp[gloves.curComp].xpnt[gloves.curPnt]-3, gloves.comp[gloves.curComp].ypnt[gloves.curPnt]-3, 7, 7);
 
             // create menu
-            var menuitems = glov.comp[glov.curComp].labl[glov.curPnt].split(";");
+            var menuitems = gloves.comp[gloves.curComp].labl[gloves.curPnt].split(";");
             var width     = context.measureText(menuitems[0]).width;
             for (var item = 1; item < menuitems.length; item++) {
                 var foo = context.measureText(menuitems[item]).width;
@@ -1723,46 +1700,46 @@ var glovesDraw = function () {
             }
             var height = 16;
 
-            glov.menuitems = [];
+            gloves.menuitems = [];
             for (var imenu = 0; imenu < menuitems.length; imenu++) {
-                glov.menuitems[imenu] = {};
-                glov.menuitems[imenu].labl = menuitems[imenu];
-                glov.menuitems[imenu].xmin = glov.comp[glov.curComp].xpnt[glov.curPnt] + 10;
-                glov.menuitems[imenu].xmax = glov.comp[glov.curComp].xpnt[glov.curPnt] + 10 + width + 4;
-                glov.menuitems[imenu].ymin = glov.comp[glov.curComp].ypnt[glov.curPnt] + imenu * height - height / 2 - 2;
-                glov.menuitems[imenu].ymax = glov.comp[glov.curComp].ypnt[glov.curPnt] + imenu * height - height / 2 - 2 + height + 2;
+                gloves.menuitems[imenu] = {};
+                gloves.menuitems[imenu].labl = menuitems[imenu];
+                gloves.menuitems[imenu].xmin = gloves.comp[gloves.curComp].xpnt[gloves.curPnt] + 10;
+                gloves.menuitems[imenu].xmax = gloves.comp[gloves.curComp].xpnt[gloves.curPnt] + 10 + width + 4;
+                gloves.menuitems[imenu].ymin = gloves.comp[gloves.curComp].ypnt[gloves.curPnt] + imenu * height - height / 2 - 2;
+                gloves.menuitems[imenu].ymax = gloves.comp[gloves.curComp].ypnt[gloves.curPnt] + imenu * height - height / 2 - 2 + height + 2;
             }
 
             // post menu
             for (imenu = 0; imenu < menuitems.length; imenu++) {
-                if (imenu == glov.curMenu) {
+                if (imenu == gloves.curMenu) {
                     context.fillStyle = "blue";
-                    context.fillRect(glov.menuitems[imenu].xmin-1,
-                                     glov.menuitems[imenu].ymin-2,
-                                     glov.menuitems[imenu].xmax-glov.menuitems[imenu].xmin,
-                                     glov.menuitems[imenu].ymax-glov.menuitems[imenu].ymin);
+                    context.fillRect(gloves.menuitems[imenu].xmin-1,
+                                     gloves.menuitems[imenu].ymin-2,
+                                     gloves.menuitems[imenu].xmax-gloves.menuitems[imenu].xmin,
+                                     gloves.menuitems[imenu].ymax-gloves.menuitems[imenu].ymin);
 
                     context.fillStyle = "white";
-                    context.fillText(glov.menuitems[imenu].labl, glov.menuitems[imenu].xmin, glov.menuitems[imenu].ymin);
+                    context.fillText(gloves.menuitems[imenu].labl, gloves.menuitems[imenu].xmin, gloves.menuitems[imenu].ymin);
                 } else {
                     context.fillStyle = "white";
-                    context.fillRect(glov.menuitems[imenu].xmin-1,
-                                     glov.menuitems[imenu].ymin-2,
-                                     glov.menuitems[imenu].xmax-glov.menuitems[imenu].xmin,
-                                     glov.menuitems[imenu].ymax-glov.menuitems[imenu].ymin);
+                    context.fillRect(gloves.menuitems[imenu].xmin-1,
+                                     gloves.menuitems[imenu].ymin-2,
+                                     gloves.menuitems[imenu].xmax-gloves.menuitems[imenu].xmin,
+                                     gloves.menuitems[imenu].ymax-gloves.menuitems[imenu].ymin);
 
                     context.fillStyle = "black";
-                    context.fillText(glov.menuitems[imenu].labl, glov.menuitems[imenu].xmin, glov.menuitems[imenu].ymin);
+                    context.fillText(gloves.menuitems[imenu].labl, gloves.menuitems[imenu].xmin, gloves.menuitems[imenu].ymin);
                 }
             }
 
         // draw selected point with red square
-        } else if (glov.mode == 2) {
+        } else if (gloves.mode == 2) {
 
             // draw selected point
             context.lineWidth = 5;
             context.fillStyle = "red";
-            context.fillRect(glov.comp[glov.curComp].xpnt[glov.curPnt]-3, glov.comp[glov.curComp].ypnt[glov.curPnt]-3, 7, 7);
+            context.fillRect(gloves.comp[gloves.curComp].xpnt[gloves.curPnt]-3, gloves.comp[gloves.curComp].ypnt[gloves.curPnt]-3, 7, 7);
 
         }
     }
@@ -1775,22 +1752,107 @@ var glovesDraw = function () {
 var glovesDrawOutline = function (context, icomp) {
     // alert("in glovesDrawOutline(icomp="+icomp+")");
 
-    for (var k = 0; k < glov.comp[icomp].xpnt.length; k += 4) {
+    for (var k = 0; k < gloves.comp[icomp].xpnt.length; k += 4) {
         context.beginPath();
-        context.moveTo(glov.comp[icomp].xpnt[k  ], glov.comp[icomp].ypnt[k  ]);
-        context.lineTo(glov.comp[icomp].xpnt[k+1], glov.comp[icomp].ypnt[k+1]);
-        context.lineTo(glov.comp[icomp].xpnt[k+3], glov.comp[icomp].ypnt[k+3]);
-        context.lineTo(glov.comp[icomp].xpnt[k+2], glov.comp[icomp].ypnt[k+2]);
-        context.lineTo(glov.comp[icomp].xpnt[k  ], glov.comp[icomp].ypnt[k  ]);
+        context.moveTo(gloves.comp[icomp].xpnt[k  ], gloves.comp[icomp].ypnt[k  ]);
+        context.lineTo(gloves.comp[icomp].xpnt[k+1], gloves.comp[icomp].ypnt[k+1]);
+        context.lineTo(gloves.comp[icomp].xpnt[k+3], gloves.comp[icomp].ypnt[k+3]);
+        context.lineTo(gloves.comp[icomp].xpnt[k+2], gloves.comp[icomp].ypnt[k+2]);
+        context.lineTo(gloves.comp[icomp].xpnt[k  ], gloves.comp[icomp].ypnt[k  ]);
         context.stroke();
     }
 
     for (var i = 0; i < 4; i++) {
         context.beginPath();
-        context.moveTo(glov.comp[icomp].xpnt[i], glov.comp[icomp].ypnt[i]);
-        for (k = 4; k < glov.comp[icomp].xpnt.length; k += 4) {
-            context.lineTo(glov.comp[icomp].xpnt[k+i], glov.comp[icomp].ypnt[k+i]);
+        context.moveTo(gloves.comp[icomp].xpnt[i], gloves.comp[icomp].ypnt[i]);
+        for (k = 4; k < gloves.comp[icomp].xpnt.length; k += 4) {
+            context.lineTo(gloves.comp[icomp].xpnt[k+i], gloves.comp[icomp].ypnt[k+i]);
         }
         context.stroke();
+    }
+};
+
+
+//
+// glovesLoad - load Gloves from .csm file
+//
+var glovesLoad = function () {
+    // alert("in glovesLoad()");
+
+    // make sure wv.curFile exists
+    if (wv.curFile.length == 0) {
+        alert("curFile is empty");
+        return;
+    }
+
+    // look for the Gloves header
+    var ibeg = wv.curFile.search("### begin Gloves section ###\n\n");
+    if (ibeg < 0) {
+        alert("begin not found");
+        return;
+    }
+    ibeg += 30;
+
+    var iend = wv.curFile.search("### end Gloves section ###\n");
+    if (iend < 0) {
+        alert("end not found");
+        return;
+    }
+    iend --;
+
+    var fileLines = wv.curFile.substring(ibeg, iend).split("\n");
+    var icomp     = 0;
+    var idvar     = 0;
+
+    for (var iline = 0; iline < fileLines.length; iline++) {
+        var tokens = fileLines[iline].split(/ +/);
+
+        if        (tokens[0] == "#") {
+            
+        } else if (tokens[0] == "CFGPMTR") {
+            
+        } else if (tokens[0] == "DIMENSION") {
+            
+        } else if (tokens[0] == "SET" && tokens[1] == "compName") {
+            gloves.comp[icomp] = {};
+            gloves.comp[icomp].name = tokens[2].substring(1);
+
+        } else if (tokens[0] == "UDPRIM") {
+            gloves.comp[icomp].type = tokens[1];
+            gloves.comp[icomp].head = "";
+            gloves.comp[icomp].dvar = -1;
+            gloves.comp[icomp].bbox = [];
+            gloves.comp[icomp].xpnt = [];
+            gloves.comp[icomp].ypnt = [];
+            gloves.comp[icomp].labl = {};
+
+            glovesAddLabelsAndHeader(icomp);
+
+            icomp++;
+
+        } else if (tokens[0] == "DESPMTR") {
+            gloves.dvar[idvar] = {};
+            gloves.dvar[idvar].name = tokens[1];
+            gloves.dvar[idvar].valu = Number(tokens[2]);
+
+        } else if (tokens[0] == "LBOUND") {
+            gloves.dvar[idvar].lbnd = Number(tokens[2]);
+
+        } else if (tokens[0] == "UBOUND") {
+            gloves.dvar[idvar].ubnd = Number(tokens[2]);
+
+            idvar++;
+        }
+    }
+
+    // update the comp.dvar entries
+    for (icomp = 0; icomp < gloves.comp.length; icomp++) {
+        for (idvar = 0; idvar < gloves.dvar.length; idvar++) {
+            var parts = gloves.dvar[idvar].name.split(":");
+            if (parts[0] == gloves.comp[icomp].name) {
+                gloves.comp[icomp].dvar = idvar;
+                break;
+            }
+        }
     }
 };

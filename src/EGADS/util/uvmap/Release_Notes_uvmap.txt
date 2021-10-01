@@ -1,5 +1,20 @@
 
 ================================================================
+uvmap RELEASE NOTES: 08/27/21 RELEASE VERSION 1.7.1
+================================================================
+
+Enhancements/ Additions:
+------------------------
+
+* Define max character string length UG_MAX_CHAR_STRING_LENGTH
+  and added typedef for CHAR_UG_MAX.
+
+Bugs Fixed:
+-----------
+
+* 
+
+================================================================
 uvmap RELEASE NOTES: 04/30/21 RELEASE VERSION 1.6.3
 ================================================================
 

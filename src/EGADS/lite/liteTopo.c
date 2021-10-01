@@ -52,6 +52,23 @@ __PROTO_H_AND_D__ int EG_getRange( const egObject *geom, double *range,
 __PROTO_H_AND_D__ int EG_inFaceX( const egObject *face, const double *uva,
                                   /*@null@*/ double *pt,
                                   /*@null@*/ double *uvx );
+__PROTO_H_AND_D__ int EG_eBoundingBox( const egObject *topo, double *bbox );
+__PROTO_H_AND_D__ int EG_getETopology( const egObject *topo, egObject **geom,
+                                       int *oclass, int *type,
+                                       /*@null@*/ double *limits, int *nChild,
+                                       egObject ***children, int **senses );
+__PROTO_H_AND_D__ int EG_getEBodyTopos( const egObject *body,
+                                        /*@null@*/ egObject *src, int oclass,
+                                        int *ntop, /*@null@*/ egObject ***top );
+__PROTO_H_AND_D__ int EG_indexEBodyTopo( const egObject *body,
+                                         const egObject *src );
+__PROTO_H_AND_D__ int EG_objectEBodyTopo( const egObject *body, int oclass,
+                                          int index, egObject **obj );
+__PROTO_H_AND_D__ int EG_tolEObject( const egObject *topo, double *tol );
+__PROTO_H_AND_D__ int EG_getEEdgeUV( const egObject *face, const egObject *topo,
+                                     int sensx, double t, double *uv );
+__PROTO_H_AND_D__ int EG_inEFace( const egObject *face, const double *uv );
+
 
 
 __HOST_AND_DEVICE__ int
@@ -66,6 +83,9 @@ EG_getTopology(const egObject *topo, egObject **geom, int *oclass,
   *senses    = NULL;
   if (topo == NULL)               return EGADS_NULLOBJ;
   if (topo->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (topo->oclass > MODEL)       return EG_getETopology(topo, geom, oclass,
+                                                         type, limits, nChildren,
+                                                         children, senses);
   if (topo->oclass < NODE)        return EGADS_NOTTOPO;
   *oclass = topo->oclass;
   *type   = topo->mtype;
@@ -298,8 +318,11 @@ EG_contained(egObject *obj, egObject *src)
 __HOST_AND_DEVICE__ int
 EG_getTolerance(const egObject *topo, double *toler)
 {
+  *toler = 0.0;
   if  (topo == NULL)               return EGADS_NULLOBJ;
   if  (topo->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if ((topo->oclass >= EEDGE) &&
+      (topo->oclass <= EBODY))     return EGADS_SUCCESS;
   if  (topo->blind == NULL)        return EGADS_NODATA;
   if ((topo->oclass != NODE) && (topo->oclass != EDGE) &&
       (topo->oclass != FACE))      return EGADS_NOTTOPO;
@@ -328,12 +351,15 @@ EG_tolerance(const egObject *topo, double *toler)
   int    i, stat;
   double tol;
 
-  if  (topo == NULL)                                  return EGADS_NULLOBJ;
-  if  (topo->magicnumber != MAGIC)                    return EGADS_NOTOBJ;
-  if  (topo->blind == NULL)                           return EGADS_NODATA;
-  if ((topo->oclass < NODE) || (topo->oclass > BODY)) return EGADS_NOTTOPO;
-  
   *toler = 0.0;
+  if  (topo == NULL)               return EGADS_NULLOBJ;
+  if  (topo->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if  (topo->blind == NULL)        return EGADS_NODATA;
+  if ((topo->oclass >= EEDGE) &&
+      (topo->oclass <= EBODY))     return EG_tolEObject(topo, toler);
+  if ((topo->oclass < NODE) ||
+      (topo->oclass > BODY))       return EGADS_NOTTOPO;
+  
   if (topo->oclass == NODE) {
     liteNode *pnode;
     pnode  = (liteNode *) topo->blind;
@@ -397,9 +423,11 @@ EG_getBodyTopos(const egObject *body, /*@null@*/ egObject *src,
   liteMap  map;
 
   *ntopo = 0;
-  if (topos != NULL) *topos = NULL;
+  if  (topos != NULL) *topos = NULL;
   if  (body == NULL)                       return EGADS_NULLOBJ;
   if  (body->magicnumber != MAGIC)         return EGADS_NOTOBJ;
+  if  (body->oclass == EBODY)
+    return EG_getEBodyTopos(body, src, oclass, ntopo, topos);
   if  (body->oclass != BODY)               return EGADS_NOTBODY;
   if  (body->blind == NULL)                return EGADS_NODATA;
   if ((oclass < NODE) || (oclass > SHELL)) return EGADS_NOTTOPO;
@@ -488,8 +516,9 @@ EG_indexBodyTopo(const egObject *body, const egObject *src)
   
   if (body == NULL)               return EGADS_NULLOBJ;
   if (body->magicnumber != MAGIC) return EGADS_NOTOBJ;
-  if (body->oclass != BODY)       return EGADS_NOTBODY;
   if (body->blind == NULL)        return EGADS_NODATA;
+  if (body->oclass == EBODY)      return EG_indexEBodyTopo(body, src);
+  if (body->oclass != BODY)       return EGADS_NOTBODY;
   if (src->magicnumber != MAGIC)  return EGADS_NOTOBJ;
   if ((src->oclass < NODE) || (src->oclass > SHELL))
                                   return EGADS_NOTTOPO;
@@ -525,8 +554,10 @@ EG_objectBodyTopo(const egObject *body, int oclass, int index, egObject **obj)
   
   if  (body == NULL)                       return EGADS_NULLOBJ;
   if  (body->magicnumber != MAGIC)         return EGADS_NOTOBJ;
-  if  (body->oclass != BODY)               return EGADS_NOTBODY;
   if  (body->blind == NULL)                return EGADS_NODATA;
+  if  (body->oclass == EBODY)
+    return EG_objectEBodyTopo(body, oclass, index, obj);
+  if  (body->oclass != BODY)               return EGADS_NOTBODY;
   if ((oclass < NODE) || (oclass > SHELL)) return EGADS_NOTTOPO;
   if  (index <= 0)                         return EGADS_INDEXERR;
   
@@ -550,7 +581,7 @@ EG_objectBodyTopo(const egObject *body, int oclass, int index, egObject **obj)
 
 
 __HOST_AND_DEVICE__ int
-EG_getBoundingBox(const egObject *topo, double *bbox)
+EG_getBoundingBX(const egObject *topo, double *bbox)
 {
   int i;
   
@@ -605,8 +636,22 @@ EG_getBoundingBox(const egObject *topo, double *bbox)
 
 
 __HOST_AND_DEVICE__ int
-EG_getEdgeUV(const egObject *face, const egObject *edge, int sense, double t,
-             double *result)
+EG_getBoundingBox(const egObject *topo, double *bbox)
+{
+  if  (topo == NULL)               return EGADS_NULLOBJ;
+  if  (topo->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if  (topo->blind == NULL)        return EGADS_NODATA;
+  if  (topo->oclass < NODE)        return EGADS_NOTTOPO;
+  if ((topo->oclass >= EEDGE) &&
+      (topo->oclass <= EBODY))     return EG_eBoundingBox(topo, bbox);
+  if  (topo->oclass > MODEL)       return EGADS_NOTTOPO;
+  return EG_getBoundingBX(topo, bbox);
+}
+
+
+__HOST_AND_DEVICE__ int
+EG_getEdgeUVX(const egObject *face, const egObject *edge, int sense, double t,
+              double *result)
 {
   int      i, j, stat, found;
   double   data[9], xyz[3];
@@ -673,6 +718,19 @@ EG_getEdgeUV(const egObject *face, const egObject *edge, int sense, double t,
   }
   
   return EGADS_NOTFOUND;
+}
+
+
+__HOST_AND_DEVICE__ int
+EG_getEdgeUV(const egObject *face, const egObject *topo, int sense, double t,
+             double *uv)
+{
+  if (face == NULL)               return EGADS_NULLOBJ;
+  if (face->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (face->blind == NULL)        return EGADS_NODATA;
+  if (face->oclass == EFACE)      return EG_getEEdgeUV(face, topo, sense,t, uv);
+  if (face->oclass != FACE)       return EGADS_NOTTOPO;
+  return EG_getEdgeUVX(face, topo, sense,t, uv);
 }
 
 
@@ -802,18 +860,29 @@ EG_getBody(const egObject *obj, egObject **body)
 {
   int       i;
   liteModel *pmodel;
+  egEBody   *ebody;
   egObject  *topObj, *bod;
   
   *body = NULL;
   if (obj == NULL)                  return EGADS_NULLOBJ;
   if (obj->magicnumber != MAGIC)    return EGADS_NOTOBJ;
   if (obj->blind == NULL)           return EGADS_NODATA;
-  if ((obj->oclass < NODE) ||
-      (obj->oclass > SHELL))        return EGADS_NOTTOPO;
   topObj = obj->topObj;
   if (topObj == NULL)               return EGADS_NULLOBJ;
   if (topObj->magicnumber != MAGIC) return EGADS_NOTOBJ;
   
+  if (obj->oclass == EBODY) {
+    ebody = (egEBody *) obj->blind;
+    *body = ebody->ref;
+  }
+  
+  if ((obj->oclass >= EEDGE) || (obj->oclass < EBODY)) {
+    *body = topObj;
+    return EGADS_SUCCESS;
+  }
+  
+  if ((obj->oclass < NODE) ||
+      (obj->oclass > SHELL))        return EGADS_NOTTOPO;
   if (topObj->oclass == BODY) {
     *body = topObj;
   } else if (topObj->oclass == MODEL) {
@@ -836,6 +905,11 @@ EG_getBody(const egObject *obj, egObject **body)
 __HOST_AND_DEVICE__ int
 EG_inFace(const egObject *face, const double *uv)
 {
+  if (face == NULL)               return EGADS_NULLOBJ;
+  if (face->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (face->blind == NULL)        return EGADS_NODATA;
+  if (face->oclass == EFACE)      return EG_inEFace(face, uv);
+
   return EG_inFaceX(face, uv, NULL, NULL);
 }
 

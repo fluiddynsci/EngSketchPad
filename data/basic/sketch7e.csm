@@ -1,4 +1,4 @@
-# sketch7d
+# sketch7e
 # written by John Dannenhoffer
 
 DESPMTR   length  4.0   # length
@@ -32,5 +32,9 @@ skbeg     0   0   0   1
    linseg    ::x[6]   ::y[6]   0
    linseg    ::x[1]   ::y[1]   0
 skend     0
+
+assert    0  1
+catbeg    $underconstrained
+catend
 
 end

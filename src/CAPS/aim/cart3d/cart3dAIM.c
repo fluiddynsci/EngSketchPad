@@ -644,7 +644,7 @@ aimPreAnalysis(void *instStore, void *aimInfo, capsValue *inputs)
          inputs[1].vals.real, inputs[2].vals.integer,
          inputs[3].vals.integer);
     printf(" Executing: %s\n", line);
-    status = aim_system(aimInfo, line);
+    status = aim_system(aimInfo, NULL, line);
     if (status != 0) {
       printf(" ERROR: autoInputs return = %d\n", status);
       return CAPS_EXECERR;
@@ -653,7 +653,7 @@ aimPreAnalysis(void *instStore, void *aimInfo, capsValue *inputs)
     snprintf(line, 128, "cubes -reorder -sf %d",
         inputs[9].vals.integer);
     printf(" Executing: %s\n", line);
-    status = aim_system(aimInfo, line);
+    status = aim_system(aimInfo, NULL, line);
     if (status != 0) {
       printf(" ERROR: cubes return = %d\n", status);
       return CAPS_EXECERR;
@@ -662,7 +662,7 @@ aimPreAnalysis(void *instStore, void *aimInfo, capsValue *inputs)
     snprintf(line, 128, "mgPrep -n %d",
         inputs[10].vals.integer);
     printf(" Executing: %s\n", line);
-    status = aim_system(aimInfo, line);
+    status = aim_system(aimInfo, NULL, line);
     if (status != 0) {
       printf(" ERROR: mgPrep return = %d\n", status);
       return CAPS_EXECERR;

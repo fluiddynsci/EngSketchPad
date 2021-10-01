@@ -54,11 +54,29 @@ printErrors(int nErr, capsErrs *errors)
 }
 
 
+static void
+freeTuple(int tlen,          /* (in)  length of the tuple */
+          capsTuple *tuple)  /* (in)  tuple freed */
+{
+    int i;
+
+    if (tuple != NULL) {
+        for (i = 0; i < tlen; i++) {
+
+            EG_free(tuple[i].name);
+            EG_free(tuple[i].value);
+        }
+    }
+    EG_free(tuple);
+}
+
+
 int main(int argc, char *argv[])
 {
 
     int status; // Function return status;
     int i; // Indexing
+    int outLevel = 1;
 
     // CAPS objects
     capsObj          problemObj, avlObj, tempObj;
@@ -86,28 +104,23 @@ int main(int argc, char *argv[])
     char *analysisPath, *unitSystem, *intents, **fnames;
     char currentPath[PATH_MAX];
 
-    int runAnalysis = (int) true;
-
     printf("\n\nAttention: avlTest is hard coded to look for ../csmData/avlWingTail.csm\n");
-    printf("To not make system calls to the avl executable the third command line option"
-           " may be supplied - 0 = no analysis , >0 run analysis (default).\n\n");
 
     if (argc > 2) {
-        printf(" usage: avlTest noAnalysis!\n");
+        printf(" usage: avlTest outLevel\n");
         return 1;
-    }
-
-    if (argc == 2) {
-        if (strcasecmp(argv[1], "0") == 0) runAnalysis = (int) false;
+    } else if (argc == 2) {
+        outLevel = atoi(argv[1]);
     }
 
     status = caps_open("AVL_Example", NULL, 0, "../csmData/avlWingTail.csm",
-                       1, &problemObj, &nErr, &errors);
+                       outLevel, &problemObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    // Now load the avlAIM
-    status = caps_makeAnalysis(problemObj, "avlAIM", NULL, NULL, NULL, 0,
+    // Now load the avlAIM (disabled auto execution)
+    exec   = 0;
+    status = caps_makeAnalysis(problemObj, "avlAIM", NULL, NULL, NULL, &exec,
                                &avlObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
@@ -188,17 +201,13 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-    if (runAnalysis == (int) false) {
-        printf("\n\nNot Running AVL!\n\n");
-    } else {
-        printf("\n\nRunning AVL!\n\n");
+    printf("\n\nRunning AVL!\n\n");
 
 #ifdef WIN32
-        system("avl.exe caps < avlInput.txt > avlOutput.txt");
+    system("avl.exe caps < avlInput.txt > avlOutput.txt");
 #else
-        system("avl caps < avlInput.txt > avlOutput.txt");
+    system("avl caps < avlInput.txt > avlOutput.txt");
 #endif
-    }
 
     (void) chdir(currentPath);
 
@@ -237,24 +246,10 @@ cleanup:
     if (status != CAPS_SUCCESS) printf("\n\nPremature exit - status = %d\n",
                                        status);
 
-    if (surfaceTuple != NULL) {
-        for (i = 0; i < surfaceSize; i++) {
-            if (surfaceTuple[i].name  != NULL) EG_free(surfaceTuple[i].name);
-            if (surfaceTuple[i].value != NULL) EG_free(surfaceTuple[i].value);
-        }
-        EG_free(surfaceTuple);
-    }
+    freeTuple(surfaceSize, surfaceTuple);
+    freeTuple(flapSize, flapTuple);
 
-    if (flapTuple != NULL) {
-        for (i = 0; i < flapSize; i++) {
-
-          if (flapTuple[i].name  != NULL) EG_free(flapTuple[i].name);
-          if (flapTuple[i].value != NULL) EG_free(flapTuple[i].value);
-        }
-        EG_free(flapTuple);
-    }
-
-    if (stringVal != NULL) EG_free(stringVal);
+    EG_free(stringVal);
 
     i = 0;
     if (status == CAPS_SUCCESS) i = 1;

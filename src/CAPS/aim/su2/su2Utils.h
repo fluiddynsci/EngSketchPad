@@ -4,10 +4,13 @@ enum aimInputs
   Proj_Name = 1,                 /* index is 1-based */
   Mach,
   Re,
+  Math_Problem,
   Physical_Problem,
   Equation_Type,
+  Turbulence_Model,
   Alpha,
   Beta,
+  Init_Option,
   Overwrite_CFG,
   Num_Iter,
   CFL_Number,
@@ -60,7 +63,7 @@ int su2_writeSurfaceMotion(void *aimInfo,
 // Write SU2 data transfer files
 int su2_dataTransfer(void *aimInfo,
                      char *projectName,
-                     meshStruct volumeMesh);
+                     aimMeshRef *meshRef);
 
 // Writes out surface indexes for a marker list
 int su2_marker(void *aimInfo, const char* iname, capsValue *aimInputs, FILE *fp,
@@ -68,18 +71,22 @@ int su2_marker(void *aimInfo, const char* iname, capsValue *aimInputs, FILE *fp,
 
 // Write SU2 configuration file for version Cardinal (4.0)
 int su2_writeCongfig_Cardinal(void *aimInfo, capsValue *aimInputs,
+                              const char *meshfilename,
                               cfdBoundaryConditionStruct bcProps);
 
 // Write SU2 configuration file for version Raven (5.0)
 int su2_writeCongfig_Raven(void *aimInfo, capsValue *aimInputs,
+                           const char *meshfilename,
                            cfdBoundaryConditionStruct bcProps);
 
 // Write SU2 configuration file for version Falcon (6.1)
 int su2_writeCongfig_Falcon(void *aimInfo, capsValue *aimInputs,
+                            const char *meshfilename,
                             cfdBoundaryConditionStruct bcProps, int withMotion);
 
 // Write SU2 configuration file for version Falcon (7.0.7)
 int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
+                               const char *meshfilename,
                                cfdBoundaryConditionStruct bcProps, int withMotion);
 
 // Retrieve SU2 units based on the unitSystem ("SI" or "US")

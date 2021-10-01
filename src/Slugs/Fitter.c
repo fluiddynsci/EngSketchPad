@@ -1205,7 +1205,7 @@ fit2dCloud(int    m,                    /* (in)  number of points in cloud */
            double *normf,               /* (out) RMS of distances between cloud and fit */
            double *maxf,                /* (out) maximum distance between cloud and fit */
  /*@null@*/int    *nmin,                /* (out) minimum number of cloud points in any interval */
-           int    *numiter,             /* (in)  if >-, number of iterations allowed */
+           int    *numiter,             /* (in)  if >0, number of iterations allowed */
                                         /* (out) number of iterations executed */
  /*@null@*/FILE   *fp)                  /* (in)  file for progress outputs (or NULL) */
 {

@@ -19,30 +19,43 @@
 //    MA  02110-1301  USA
 
 // interface functions that ESP-ereped.js provides
-//    erep.launch()
-//    erep.cmdLoad()
-//    erep.cmdUndo()
-//    erep.cmdSolve()
-//    erep.cmdSave()
-//    erep.cmdQuit()
+//    ereped.launch()
+//    ereped.cmdUndo()
+//    ereped.cmdSolve()
+//    ereped.cmdSave()
+//    ereped.cmdQuit()
 //
-//    erep.cmdHome()
-//    erep.cmdLeft()
-//    erep.cmdRite()
-//    erep.cmdBotm()
-//    erep.cmdTop()
-//    erep.cmdIn()
-//    erep.cmdOut()
+//    ereped.cmdHome()                    not provided
+//    ereped.cmdLeft()                    not provided
+//    ereped.cmdRite()                    not provided
+//    ereped.cmdBotm()                    not provided
+//    ereped.cmdTop()                     not provided
+//    ereped.cmdIn()                      not provided
+//    ereped.cmdOut()                     not provided
 //
-//    erep.keyPress(e)
-//    erep.keyDown(e)
-//    erep.keyUp(e)
-//    erep.keyPressPart1(myKeyPress)
-//    erep.keyPressPart2(picking, gprim)
+//    ereped.mouseDown(e)                 not provided
+//    ereped.mouseMove(e)                 not provided
+//    ereped.mouseUp(e)                   not provided
+//    ereped.mouseWheel(e)                not provided
+//    ereped.mouseLeftCanvas(e)           not provided
+//
+//    ereped.keyPress(e)                  not provided
+//    ereped.keyDown(e)                   not provided
+//    ereped.keyUp(e)                     not provided
+//    ereped.keyPressPart1(myKeyPress)
+//    ereped.keyPressPart2(picking, gprim)
+//
+//    ereped.sceneUpdated()
+//    ereped.updateKeyWindow()
+//
+//    ereped.timLoadCB(text)              not provided
+//    ereped.timSaveCB(text)              not provided
+//    ereped.timQuitCB(text)              not provided
+//    ereped.timMesgCB(text)              not provided
 
 // functions associated with ErepEd
-//    erep.initialize(getNewName)
-//    erep.redraw()
+//    erepInitialize(getNewName)
+//    erepRedraw()
 
 "use strict";
 
@@ -50,8 +63,8 @@
 //
 // callback when ErepEd is launched
 //
-erep.launch = function () {
-    // alert("in erep.launch()");
+ereped.launch = function () {
+    // alert("in ereped.launch()");
 
     // close the Tools menu
     var menu = document.getElementsByClassName("toolMenu-contents");
@@ -63,45 +76,48 @@ erep.launch = function () {
     }
 
     // make sure we do not enter if we are looking at an Erep already
-    if (wv.plotType == 6) {
+    if (wv.plotType == 10) {
         alert("You cannot enter the Erep Editor while looking at an EBody\n"+
               "Switch the \"DisplayType\" back to \"0\" first");
         return;
     }
 
     // initialize GUI variables
-    erep.attrName  = "_erep";
-    erep.uncolored = 0;
-    erep.keptNodes = 0;
-    erep.keptEdges = 0;
-    erep.lastColor = -1;
-    erep.dihedral  = -1;
-    erep.colors    = [];
+    ereped.attrName  = "_erep";
+    ereped.uncolored = 0;
+    ereped.keptNodes = 0;
+    ereped.keptEdges = 0;
+    ereped.lastColor = -1;
+    ereped.dihedral  = -1;
+    ereped.colors    = [];
 
     // spectrum of colors
-    erep.spectrum = [0.87, 0.87, 0.87,       // light grey
-                     1.00, 0.87, 0.87,       // light red
-                     0.87, 1.00, 0.87,       // light green
-                     0.87, 0.87, 1.00,       // light blue
-                     0.87, 1.00, 1.00,       // light cyan
-                     1.00, 0.87, 1.00,       // light magenta
-                     1.00, 1.00, 0.87,       // light yellow
-                     1.00, 0.50, 0.50,       // medium red
-                     0.50, 1.00, 0.50,       // medium green
-                     0.50, 0.50, 1.00,       // medium blue
-                     0.50, 1.00, 1.00,       // medium cyan
-                     1.00, 0.50, 1.00,       // medium magenta
-                     1.00, 1.00, 0.50];      // medium yellow
+    ereped.spectrum = [0.87, 0.87, 0.87,       // light grey
+                       1.00, 0.87, 0.87,       // light red
+                       0.87, 1.00, 0.87,       // light green
+                       0.87, 0.87, 1.00,       // light blue
+                       0.87, 1.00, 1.00,       // light cyan
+                       1.00, 0.87, 1.00,       // light magenta
+                       1.00, 1.00, 0.87,       // light yellow
+                       1.00, 0.50, 0.50,       // medium red
+                       0.50, 1.00, 0.50,       // medium green
+                       0.50, 0.50, 1.00,       // medium blue
+                       0.50, 1.00, 1.00,       // medium cyan
+                       1.00, 0.50, 1.00,       // medium magenta
+                       1.00, 1.00, 0.50];      // medium yellow
 
     // uncolor all entities
     for (var gprim in wv.sceneGraph) {
-        erep.colors[gprim] = -1;
+        ereped.colors[gprim] = -1;
     }
-    
+
     // initialize the application
-    if (erep.initialize(1) > 0) {
+    if (erepInitialize(1) > 0) {
         return;
     }
+
+    // load the tim (which does nothing)
+    browserToServer("timLoad|ereped|");
 
     // change done button legend
     var button = document.getElementById("doneMenuBtn");
@@ -120,26 +136,18 @@ erep.launch = function () {
 
 
 //
-// erep.cmdload - not implemented
-//
-erep.cmdLoad = function () {
-    alert("erep.cmdLoad() is not implemented");
-};
-
-
-//
 // callback when "ErepEd->Undo" is pressed (called by ESP.html)
 //
-erep.cmdUndo = function () {
-    alert("erep.cmdUndo() is not implemented");
+ereped.cmdUndo = function () {
+    alert("ereped.cmdUndo() is not implemented");
 };
 
 
 //
 // callback when "solveButton" is pressed
 //
-erep.cmdSolve = function () {
-    // alert("in erep.cmdSolve()");
+ereped.cmdSolve = function () {
+    // alert("in ereped.cmdSolve()");
 
     // if we are now showing the Ebody, switch back to showing the Bodys
     var button = document.getElementById("solveButton");
@@ -157,12 +165,16 @@ erep.cmdSolve = function () {
             }
         }
 
-        browserToServer("makeEBody|"+ibody+"|0|.|");
-        
+        // remove the Ebody
+        browserToServer("timMesg|ereped|makeEBody|"+ibody+"|0|.|");
+
+        // update the display
+        browserToServer("timDraw|ereped|");
+
         return;
     }
 
-    if (erep.dihedral < 0) {
+    if (ereped.dihedral < 0) {
         var dihedral = prompt("Enter maximum dihedral angle", "5");
         if (dihedral === null) {
             return;
@@ -174,9 +186,9 @@ erep.cmdSolve = function () {
             return;
         }
 
-        erep.dihedral = dihedral;
+        ereped.dihedral = dihedral;
     }
-        
+
     button["innerHTML"] = "EditErep";
 
     // get the Body number
@@ -190,30 +202,30 @@ erep.cmdSolve = function () {
         }
     }
 
-    var mesg = "makeEBody|" + ibody + "|" + erep.dihedral + "|";
-    
+    var mesg = "timMesg|ereped|makeEBody|" + ibody + "|" + ereped.dihedral + "|";
+
 
     // add Nodes to the mesg
-    mesg += erep.keptNodes + ";";
+    mesg += ereped.keptNodes + ";";
 
     for (var gprim in wv.sceneGraph) {
         var gprimList = gprim.trim().split(" ");
 
         if (gprimList[gprimList.length-2] == "Node") {
-            if (erep.colors[gprim] == -3) {
+            if (ereped.colors[gprim] == -3) {
                 mesg += gprimList[gprimList.length-1] + ";";
             }
         }
     }
 
     // add Edges to the mesg
-    mesg += erep.keptEdges + ";";
+    mesg += ereped.keptEdges + ";";
 
     for (var gprim in wv.sceneGraph) {
         var gprimList = gprim.trim().split(" ");
 
         if (gprimList[gprimList.length-2] == "Edge") {
-            if (erep.colors[gprim] == -2) {
+            if (ereped.colors[gprim] == -2) {
                 mesg += gprimList[gprimList.length-1] + ";";
             }
         }
@@ -222,7 +234,7 @@ erep.cmdSolve = function () {
     // add Faces (in groups) to the mesg
     var colored = 0;
     for (gprim in wv.sceneGraph) {
-        if (erep.colors[gprim] > 0) {
+        if (ereped.colors[gprim] > 0) {
             colored++;
         }
     }
@@ -231,7 +243,7 @@ erep.cmdSolve = function () {
         var nface = 0;
 
         for (gprim in wv.sceneGraph) {
-            if (erep.colors[gprim] == igroup) {
+            if (ereped.colors[gprim] == igroup) {
                 nface++;
             }
         }
@@ -240,7 +252,7 @@ erep.cmdSolve = function () {
             mesg += nface + ";";
 
             for (gprim in wv.sceneGraph) {
-                if (erep.colors[gprim] == igroup) {
+                if (ereped.colors[gprim] == igroup) {
                     gprimList = gprim.trim().split(" ");
 
                     mesg += gprimList[gprimList.length-1] + ";";
@@ -253,16 +265,20 @@ erep.cmdSolve = function () {
             break;
         }
     }
-    
+
+    // make the Ebody
     browserToServer(mesg+"0|");
+
+    // update the display
+    browserToServer("timDraw|ereped|");
 };
 
 
 //
 // callback when "ErepEd->Save" is pressed (called by ESP.html)
 //
-erep.cmdSave = function () {
-    // alert("in erep.cmdSave()");
+ereped.cmdSave = function () {
+    // alert("in ereped.cmdSave()");
 
     var ibrch    = brch.length;
     var nchange  = 0;
@@ -285,7 +301,7 @@ erep.cmdSave = function () {
     }
 
     // if we do not have a dihedral yet, ask for it now
-    if (erep.dihedral < 0) {
+    if (ereped.dihedral < 0) {
         var dihedral = prompt("Enter maximum dihedral angle", "5");
         if (dihedral === null) {
             return;
@@ -297,20 +313,20 @@ erep.cmdSave = function () {
             return;
         }
 
-        erep.dihedral = dihedral;
+        ereped.dihedral = dihedral;
     }
 
     // send the changed attributes on Faces back to the server
     for (var gprim in wv.sceneGraph) {
         if (gprim.indexOf(" Face ") < 0) continue;
-        
-        var icolor = erep.colors[gprim];
+
+        var icolor = ereped.colors[gprim];
         if (icolor > 0) {
 
             // skip if we already have the attribute
             var attrs = wv.sgData[gprim];
             for (var i = 0; i < attrs.length; i+=2) {
-                if (attrs[i] == erep.attrName && attrs[i+1] == icolor) {
+                if (attrs[i] == ereped.attrName && attrs[i+1] == icolor) {
                     icolor = 0;
                     break;
                 }
@@ -331,14 +347,14 @@ erep.cmdSave = function () {
 
                     prevBody = nameList[1];
 
-                    browserToServer("setAttr|"+ibrch+"|_erepAttr|1|$"+erep.attrName+"|");
-                    browserToServer("setAttr|"+ibrch+"|_erepAngle|1|"+erep.dihedral+"|");
+                    browserToServer("setAttr|"+ibrch+"|_erepAttr|1|$"+ereped.attrName+"|");
+                    browserToServer("setAttr|"+ibrch+"|_erepAngle|1|"+ereped.dihedral+"|");
                 }
 
                 browserToServer("newBrch|"+ibrch+"|select|$FACE|"+nameList[3]+"|||||||||");
                 ibrch++;
 
-                browserToServer("setAttr|"+ibrch+"|"+erep.attrName+"|1|"+icolor+"|");
+                browserToServer("setAttr|"+ibrch+"|"+ereped.attrName+"|1|"+icolor+"|");
 
                 nchange++;
             } else {
@@ -355,11 +371,11 @@ erep.cmdSave = function () {
             var attrs = wv.sgData[gprim];
 
             // Edge is black (so it should not be kept)
-            if (erep.colors[gprim] == -1) {
+            if (ereped.colors[gprim] == -1) {
                 for (var i = 0; i < attrs.length; i+=2) {
                     if (attrs[i] == ".Keep") {
                         postMessage("removing .Keep from "+gprim);
-                        
+
                         var nameList = gprim.trim().split(" ");
 
                         browserToServer("newBrch|"+ibrch+"|select|$BODY|"+nameList[1]+"|||||||||");
@@ -371,7 +387,7 @@ erep.cmdSave = function () {
                         browserToServer("setAttr|"+ibrch+"|.Keep|1|<DeLeTe>|");
 
                         nchange++;
-                        
+
                         break;
                     }
                 }
@@ -388,17 +404,17 @@ erep.cmdSave = function () {
 
                 if (found == 0) {
                     postMessage("adding .Keep to "+gprim);
-                    
+
                     var nameList = gprim.trim().split(" ");
-                    
+
                     browserToServer("newBrch|"+ibrch+"|select|$BODY|"+nameList[1]+"|||||||||");
                     ibrch++;
-                    
+
                     browserToServer("newBrch|"+ibrch+"|select|$EDGE|"+nameList[3]+"|||||||||");
                     ibrch++;
-                    
+
                     browserToServer("setAttr|"+ibrch+"|.Keep|1|1|");
-                    
+
                     nchange++;
                 }
             }
@@ -409,13 +425,13 @@ erep.cmdSave = function () {
     // send the changes to the .Keep attribute on Nodes back to the server
     for (var gprim in wv.sceneGraph) {
         if (gprim.indexOf(" Node ") < 0) continue;
-        
+
         // Node is black (so it should not be kept)
-        if (erep.colors[gprim] == -1) {
+        if (ereped.colors[gprim] == -1) {
             for (var i = 0; i < attrs.length; i+=2) {
                 if (attrs[i] == ".Keep") {
                     postMessage("removing .Keep from "+gprim);
-                        
+
                     var nameList = gprim.trim().split(" ");
 
                     browserToServer("newBrch|"+ibrch+"|select|$BODY|"+nameList[1]+"|||||||||");
@@ -444,7 +460,7 @@ erep.cmdSave = function () {
 
             if (found == 0) {
                 postMessage("adding .Keep to "+gprim);
-                        
+
                 var nameList = gprim.trim().split(" ");
 
                 browserToServer("newBrch|"+ibrch+"|select|$BODY|"+nameList[1]+"|||||||||");
@@ -460,16 +476,19 @@ erep.cmdSave = function () {
         }
     }
 
+    // execute save in the tim (which does nothing)
+    browserToServer("timSave|ereped|");
+
     // add a DUMP if any changes were made
 //    if (nchange > 0) {
-        browserToServer("newBrch|"+ibrch+"|dump|"+erep.attrName+".egads|||||||||");
+        browserToServer("newBrch|"+ibrch+"|dump|"+ereped.attrName+".egads|||||||||");
 
         postMessage("====> Re-build is needed <====");
 //    }
 
     // update the key window if any changes were made
     if (nchange > 0) {
-        erep.updateKeyWindow();
+        ereped.updateKeyWindow();
     }
 
     changeMode(0);
@@ -484,8 +503,8 @@ erep.cmdSave = function () {
 //
 // callback when "ErepEd->Quit" is pressed (called by ESP.html)
 //
-erep.cmdQuit = function () {
-    // alert("in erep.cmdQuit()");
+ereped.cmdQuit = function () {
+    // alert("in ereped.cmdQuit()");
 
     // close the ErepEd menu
     var menu = document.getElementsByClassName("doneMenu-contents");
@@ -501,6 +520,9 @@ erep.cmdQuit = function () {
     button["innerHTML"] = "Up to date";
     button.style.backgroundColor = "#FFFFFF";
 
+    // execute quit in the tim (which does nothing)
+    browserToServer("timQuit|ereped|");
+
     changeMode(0);
 
     // get original colors back
@@ -511,7 +533,7 @@ erep.cmdQuit = function () {
 //
 // callback when "homeButton" is pressed (calles by ESP.html)
 //
-//erep.cmdHome = function () {
+//ereped.cmdHome = function () {
 //    main.cmdHome();
 //};
 
@@ -519,7 +541,7 @@ erep.cmdQuit = function () {
 //
 // callback when "leftButton" is pressed (calles by ESP.html)
 //
-//erep.cmdLeft = function () {
+//ereped.cmdLeft = function () {
 //    main.cmdLeft();
 //};
 
@@ -527,7 +549,7 @@ erep.cmdQuit = function () {
 //
 // callback when "riteButton" is pressed (calles by ESP.html)
 //
-//erep.cmdRite = function () {
+//ereped.cmdRite = function () {
 //    main.cmdRite();
 //};
 
@@ -535,7 +557,7 @@ erep.cmdQuit = function () {
 //
 // callback when "botmButton" is pressed (calles by ESP.html)
 //
-//erep.cmdBotm = function () {
+//ereped.cmdBotm = function () {
 //    main.cmdBotm();
 //};
 
@@ -543,7 +565,7 @@ erep.cmdQuit = function () {
 //
 // callback when "topButton" is pressed (calles by ESP.html)
 //
-//erep.cmdTop = function () {
+//ereped.cmdTop = function () {
 //    main.cmdTop();
 //};
 
@@ -551,7 +573,7 @@ erep.cmdQuit = function () {
 //
 // callback when "inButton" is pressed (calles by ESP.html)
 //
-//erep.cmdIn = function () {
+//ereped.cmdIn = function () {
 //    main.cmdIn();
 //};
 
@@ -559,15 +581,55 @@ erep.cmdQuit = function () {
 //
 // callback when "outButton" is pressed (calles by ESP.html)
 //
-//erep.cmdOut = function () {
+//ereped.cmdOut = function () {
 //    main.cmdOut();
 //};
 
 
 //
+// callback when any mouse is pressed in canvas
+//
+//ereped.mouseDown = function(e) {
+//    main.mouseDown(e);
+//}
+
+
+//
+// callback when any mouse moves in canvas
+//
+//ereped.mouseMove = function(e) {
+//    main.mouseMove(e);
+//}
+
+
+//
+// callback when the mouse is released in canvas
+//
+//ereped.mouseUp = function(e) {
+//    main.mouseUp(e);
+//}
+
+
+//
+// callback when the mouse wheel is rolled in canvas
+//
+//ereped.mouseWheel = function(e) {
+//    main.mouseWheel(e);
+//}
+
+
+//
+// callback when the mouse leaves the canvas
+//
+//ereped.mouseLeftCanvas = function(e) {
+//    main.mouseLeftCanvas(e);
+//}
+
+
+//
 // callback when a key is pressed
 //
-//erep.keyPress = function (e) {
+//ereped.keyPress = function (e) {
 //    main.keyPress(e);
 //};
 
@@ -575,7 +637,7 @@ erep.cmdQuit = function () {
 //
 // callback when an arror... or shift is pressed (needed for Chrome)
 //
-//erep.keyDown = function (e) {
+//ereped.keyDown = function (e) {
 //    main.keyDown(e);
 //};
 
@@ -583,29 +645,16 @@ erep.cmdQuit = function () {
 //
 // callback when a shift is released (needed for Chrome)
 //
-//erep.keyUp = function (e) {
+//ereped.keyUp = function (e) {
 //    main.keyUp(e);
 //};
 
 
 //
-// callback when the scene graph has been updated
-//
-erep.sceneUpdated = function () {
-    // alert("in erep.sceneUpdated()");
-    
-    var button = document.getElementById("solveButton");
-    if (button["innerHTML"] != "EditErep") {
-        erep.redraw();
-    }
-};
-
-
-//
 // callback for first part of a keypress that is not recognized by wvUpdateUI
 //
-erep.keyPressPart1 = function(myKeyPress) {
-    // alert("in erep.keyPressPart1(myKeyPress="+myKeyPress+")");
+ereped.keyPressPart1 = function(myKeyPress) {
+    // alert("in ereped.keyPressPart1(myKeyPress="+myKeyPress+")");
 
     var button = document.getElementById("solveButton");
     var done = 0;
@@ -615,7 +664,7 @@ erep.keyPressPart1 = function(myKeyPress) {
             alert("You must be in editing mode (press "+button["innerHTML"]+")");
             return;
         }
-    
+
         wv.picking  = 99;
         wv.pick     = 1;
         wv.sceneUpd = 1;
@@ -626,7 +675,7 @@ erep.keyPressPart1 = function(myKeyPress) {
             alert("You must be in editing mode (press "+button["innerHTML"]+")");
             return;
         }
-    
+
         wv.picking  = 107;
         wv.pick     = 1;
         wv.sceneUpd = 1;
@@ -637,12 +686,12 @@ erep.keyPressPart1 = function(myKeyPress) {
             alert("You must be in editing mode (press "+button["innerHTML"]+")");
             return;
         }
-    
+
         var attrName = prompt("Enter Attribute name to import");
         if (attrName === null) {
             return;
         }
-        
+
         var attrValu = prompt("Enter Attribute value to import (or -1 for all)");
         if (attrValu === null) {
             return;
@@ -650,11 +699,11 @@ erep.keyPressPart1 = function(myKeyPress) {
 
         // user provided an attribute value
         var nchange = 0;
-        
+
         if (attrValu > 0) {
             var newColor = prompt("Enter <0 for first unused color\n"+
                                   "or    =0 to uncolor\n"+
-                                  "or    >0 to select color", erep.lastColor);
+                                  "or    >0 to select color", ereped.lastColor);
             if (newColor === null) {
                 return;
             }
@@ -664,7 +713,7 @@ erep.keyPressPart1 = function(myKeyPress) {
             while (newColor < 0) {
                 newColor = icolor;
                 for (var gprim1 in wv.sceneGraph) {
-                    if (erep.colors[gprim1] == newColor) {
+                    if (ereped.colors[gprim1] == newColor) {
                         newColor = -1;
                         icolor++;
                         break;
@@ -681,17 +730,17 @@ erep.keyPressPart1 = function(myKeyPress) {
 
                         for (var i = 0; i < attrs.length; i+=2) {
                             if (attrs[i] == attrName && Number(attrs[i+1]) == Number(attrValu)) {
-                                if (erep.colors[gprim] != newColor) {
-                                    erep.colors[gprim] = newColor;
-                                    erep.uncolored--;
+                                if (ereped.colors[gprim] != newColor) {
+                                    ereped.colors[gprim] = newColor;
+                                    ereped.uncolored--;
 
                                     if (newColor == 0) {
                                         icolor = 0;
                                     } else {
                                         icolor = 1 + (newColor - 1) % 12;
                                     }
-                                    wv.sceneGraph[gprim].fColor = [erep.spectrum[3*icolor], erep.spectrum[3*icolor+1], erep.spectrum[3*icolor+2]];
-                                    
+                                    wv.sceneGraph[gprim].fColor = [ereped.spectrum[3*icolor], ereped.spectrum[3*icolor+1], ereped.spectrum[3*icolor+2]];
+
                                     nchange++;
                                     postMessage("Changed color of "+gprim+" to "+newColor);
                                 }
@@ -704,7 +753,7 @@ erep.keyPressPart1 = function(myKeyPress) {
             }
 
             // remember last color (for next time)
-            erep.lastColor = newColor;
+            ereped.lastColor = newColor;
 
         // user asked for all
         } else {
@@ -716,8 +765,8 @@ erep.keyPressPart1 = function(myKeyPress) {
             // if user responded with negative, find last color
             newColor = 0;
             for (var gprim1 in wv.sceneGraph) {
-                if (erep.colors[gprim1] > newColor) {
-                    newColor = erep.colors[gprim1];
+                if (ereped.colors[gprim1] > newColor) {
+                    newColor = ereped.colors[gprim1];
                 }
             }
 
@@ -731,13 +780,13 @@ erep.keyPressPart1 = function(myKeyPress) {
                         for (var i = 0; i < attrs.length; i+=2) {
                             if (attrs[i] == attrName) {
                                 var tempColor = Number(newColor) + Number(attrs[i+1]);
-                                if (erep.colors[gprim] != tempColor) {
-                                    erep.colors[gprim] = tempColor;
-                                    erep.uncolored--;
+                                if (ereped.colors[gprim] != tempColor) {
+                                    ereped.colors[gprim] = tempColor;
+                                    ereped.uncolored--;
 
                                     icolor = 1 + (tempColor - 1) % 12;
-                                    wv.sceneGraph[gprim].fColor = [erep.spectrum[3*icolor], erep.spectrum[3*icolor+1], erep.spectrum[3*icolor+2]];
-                                    
+                                    wv.sceneGraph[gprim].fColor = [ereped.spectrum[3*icolor], ereped.spectrum[3*icolor+1], ereped.spectrum[3*icolor+2]];
+
                                     nchange++;
                                     postMessage("Changed color of "+gprim+" to "+tempColor);
                                 }
@@ -752,7 +801,7 @@ erep.keyPressPart1 = function(myKeyPress) {
 
         if (nchange > 0) {
             // update the Key Window
-            erep.updateKeyWindow();
+            ereped.updateKeyWindow();
 
             // update the picture
             wv.sceneUpd = 1;
@@ -768,8 +817,8 @@ erep.keyPressPart1 = function(myKeyPress) {
 //
 // callback for second part of a keypress that is not recognized by wvUpdateUI
 //
-erep.keyPressPart2 = function(picking, gprim) {
-    // alert("in erep.keyPressPart2(picking="+picking+"   gprim="+gprim+")");
+ereped.keyPressPart2 = function(picking, gprim) {
+    // alert("in ereped.keyPressPart2(picking="+picking+"   gprim="+gprim+")");
 
     // second part of 'c' operation
     if (picking == 99) {
@@ -777,16 +826,16 @@ erep.keyPressPart2 = function(picking, gprim) {
             alert("Only Faces can be colored");
             return;
         }
-        
-        var oldColor  = erep.colors[gprim];
+
+        var oldColor  = ereped.colors[gprim];
         var nextColor = oldColor;
 
         // Face is currently not colored, so suggest last color (or 1 if first time)
         if (nextColor == 0) {
-            if (erep.lastColor < 0) {
+            if (ereped.lastColor < 0) {
                 nextColor = 1;
             } else {
-                nextColor = erep.lastColor;
+                nextColor = ereped.lastColor;
             }
         }
 
@@ -803,7 +852,7 @@ erep.keyPressPart2 = function(picking, gprim) {
         while (newColor < 0) {
             newColor = icolor;
             for (var gprim1 in wv.sceneGraph) {
-                if (erep.colors[gprim1] == newColor) {
+                if (ereped.colors[gprim1] == newColor) {
                     newColor = -1;
                     icolor++;
                     break;
@@ -812,7 +861,7 @@ erep.keyPressPart2 = function(picking, gprim) {
         }
 
         // save the color and change the color of the Face
-        erep.colors[gprim] = newColor;
+        ereped.colors[gprim] = newColor;
         postMessage("Changed color of "+gprim+" to "+newColor);
 
         if (newColor == 0) {
@@ -820,20 +869,20 @@ erep.keyPressPart2 = function(picking, gprim) {
         } else {
             icolor = 1 + (newColor - 1) % 12;
         }
-        wv.sceneGraph[gprim].fColor = [erep.spectrum[3*icolor], erep.spectrum[3*icolor+1], erep.spectrum[3*icolor+2]];
+        wv.sceneGraph[gprim].fColor = [ereped.spectrum[3*icolor], ereped.spectrum[3*icolor+1], ereped.spectrum[3*icolor+2]];
 
         // remember last color (for next time)
-        erep.lastColor = newColor;
+        ereped.lastColor = newColor;
 
         // adjust number of colored Faces
         if (oldColor == 0 && newColor > 0) {
-            erep.uncolored--;
+            ereped.uncolored--;
         } else if (oldColor > 0 && newColor == 0) {
-            erep.uncolored++;
+            ereped.uncolored++;
         }
 
         // update the Key Window
-        erep.updateKeyWindow();
+        ereped.updateKeyWindow();
 
     // second part of 'k' operation
     } else if (picking == 107) {
@@ -849,36 +898,36 @@ erep.keyPressPart2 = function(picking, gprim) {
 
         // toggle the color of a Node
         if (isEdge == 0) {
-            if (erep.colors[gprim] == -1) {
+            if (ereped.colors[gprim] == -1) {
                 wv.sceneGraph[gprim].pColor = [1., 0., 0.];
-                erep.colors[gprim] = -3;
-                
+                ereped.colors[gprim] = -3;
+
                 postMessage("Marking "+gprim+" to be kept");
-                erep.keptNodes++;
-                erep.updateKeyWindow();
+                ereped.keptNodes++;
+                ereped.updateKeyWindow();
             } else {
                 wv.sceneGraph[gprim].pColor = [0., 0., 0.];
-                erep.colors[gprim] = -1;
+                ereped.colors[gprim] = -1;
 
                 postMessage("Unmarking "+gprim+" to be kept");
-                erep.keptNodes--;
-                erep.updateKeyWindow();
+                ereped.keptNodes--;
+                ereped.updateKeyWindow();
             }
         } else {
-            if (erep.colors[gprim] == -1) {
+            if (ereped.colors[gprim] == -1) {
                 wv.sceneGraph[gprim].lColor = [1., 0., 0.];
-                erep.colors[gprim] = -2;
+                ereped.colors[gprim] = -2;
 
                 postMessage("Marking "+gprim+" to be kept");
-                erep.keptEdges++;
-                erep.updateKeyWindow();
+                ereped.keptEdges++;
+                ereped.updateKeyWindow();
             } else {
                 wv.sceneGraph[gprim].lColor = [0., 0., 0.];
-                erep.colors[gprim] = -1;
+                ereped.colors[gprim] = -1;
 
                 postMessage("Unmarking "+gprim+" to be kept");
-                erep.keptEdges--;
-                erep.updateKeyWindow();
+                ereped.keptEdges--;
+                ereped.updateKeyWindow();
             }
         }
     }
@@ -886,15 +935,28 @@ erep.keyPressPart2 = function(picking, gprim) {
 
 
 //
+// callback when the scene graph has been updated
+//
+ereped.sceneUpdated = function () {
+    // alert("in ereped.sceneUpdated()");
+
+    var button = document.getElementById("solveButton");
+    if (button["innerHTML"] != "EditErep") {
+        erepRedraw();
+    }
+};
+
+
+//
 // function to update the key window
 //
-erep.updateKeyWindow = function () {
+ereped.updateKeyWindow = function () {
     var mesg = "Erep Editor\n\n";
 
-    mesg +=    "attrName          = " + erep.attrName  + "\n";
-    mesg +=    "# uncolored Faces = " + erep.uncolored + "  (in grey)\n";
-    mesg +=    "# kept Nodes      = " + erep.keptNodes + "  (in red)\n";
-    mesg +=    "# kept Edges      = " + erep.keptEdges + "  (in red)\n\n";
+    mesg +=    "attrName          = " + ereped.attrName  + "\n";
+    mesg +=    "# uncolored Faces = " + ereped.uncolored + "  (in grey)\n";
+    mesg +=    "# kept Nodes      = " + ereped.keptNodes + "  (in red)\n";
+    mesg +=    "# kept Edges      = " + ereped.keptEdges + "  (in red)\n\n";
 
     mesg +=    "Valid commands:\n";
     mesg +=    "  'c' color or uncolor a Face\n";
@@ -905,10 +967,42 @@ erep.updateKeyWindow = function () {
     var text = document.createTextNode(mesg);
     pre.appendChild(text);
 
-    var erepstat = document.getElementById("erepedStatus");
-    
-    erepstat.replaceChild(pre, erepstat.lastChild);
+    var timStatus = document.getElementById("timStatus");
+
+    timStatus.replaceChild(pre, timStatus.lastChild);
 }
+
+
+//
+// callback when timLoad returns
+//
+//ereped.timLoadCB = function (text) {
+//    postMessage("in ereped.timLoadCB: "+text);
+//}
+
+
+//
+// callback when timSave returns
+//
+//ereped.timSaveCB = function (text) {
+//    postMessage("in ereped.timSaveCB: "+text);
+//}
+
+
+//
+// callback when timQuit returns
+//
+//ereped.timQuitCB = function (text) {
+//    postMessage("in ereped.timQuitCB: "+text);
+//}
+
+
+//
+// callback when timMesg returns
+//
+//ereped.timMesgCB = function (text) {
+//    postMessage("in ereped.timMesgCB: "+text);
+//}
 
 // /////////////////////////////////////////////////////////////////////
 
@@ -916,48 +1010,48 @@ erep.updateKeyWindow = function () {
 //
 // Initialize ErepEd
 //
-erep.initialize = function (getNewName) {
-    // alert("in erep.initialize(getNewName="+getNewName+")");
+var erepInitialize = function (getNewName) {
+    // alert("in erepInitialize(getNewName="+getNewName+")");
 
     if (getNewName == 1) {
-        var attrName = prompt("Enter attribute name:", erep.attrName);
+        var attrName = prompt("Enter attribute name:", ereped.attrName);
         if (attrName === null) {
             return 1;
         } else if (attrName.length <= 0) {
             return 1;
         } else {
-            erep.attrName = attrName;
+            ereped.attrName = attrName;
         }
     }
 
-    // make sure that any Faces that have erep.attrName have it as
+    // make sure that any Faces that have ereped.attrName have it as
     //    only a single number
     for (var gprim in wv.sceneGraph) {
         var gprimList = gprim.trim().split(" ");
         if        ((gprimList.length == 3 && gprimList[1] == "Face") ||
                    (gprimList.length == 4 && gprimList[2] == "Face")   ) {
-            if (erep.colors[gprim] == -1) {
-                erep.colors[gprim] = 0;
-                erep.uncolored++;
+            if (ereped.colors[gprim] == -1) {
+                ereped.colors[gprim] = 0;
+                ereped.uncolored++;
 
                 try {
                     var attrs = wv.sgData[gprim];
 
                     for (var i = 0; i < attrs.length; i+=2) {
-                        if (attrs[i] == erep.attrName) {
+                        if (attrs[i] == ereped.attrName) {
                             if (parseInt(attrs[i+1]) != Number(attrs[i+1])) {
-                                alert("\""+erep.attrName+"\" cannot be used because "+gprim+
+                                alert("\""+ereped.attrName+"\" cannot be used because "+gprim+
                                       "\nalready has that attribute, and it is not a single integer");
-                                erep.attrname = "";
+                                ereped.attrname = "";
                                 return 0;
                             } else if (Number(attrs[i+1]) < 0) {
-                                alert("\""+erep.attrName+"\" cannot be used because "+gprim+
+                                alert("\""+ereped.attrName+"\" cannot be used because "+gprim+
                                       "\nalready has that attribute, and it has a negative value");
-                                erep.attrname = "";
+                                ereped.attrname = "";
                                 return 0;
                             } else {
-                                erep.colors[gprim] = Number(attrs[i+1]);
-                                erep.uncolored--;
+                                ereped.colors[gprim] = Number(attrs[i+1]);
+                                ereped.uncolored--;
                             }
                         }
                     }
@@ -967,13 +1061,13 @@ erep.initialize = function (getNewName) {
         }
     }
 
-    erep.redraw();
+    erepRedraw();
 
     // change mode
     changeMode(10);
 
     // update the Key Window
-    erep.updateKeyWindow();
+    ereped.updateKeyWindow();
 
     return 0;
 };
@@ -982,8 +1076,8 @@ erep.initialize = function (getNewName) {
 //
 // redraw the erep
 //
-erep.redraw = function () {
-    // alert("in erep.redraw()");
+var erepRedraw = function () {
+    // alert("in erepRedraw()");
 
     for (var gprim in wv.sceneGraph) {
         var gprimList = gprim.trim().split(" ");
@@ -991,20 +1085,20 @@ erep.redraw = function () {
         // color Edges black (or red if they have a .Keep attribute */
         if ((gprimList.length == 3 && gprimList[1] == "Edge") ||
             (gprimList.length == 4 && gprimList[2] == "Edge")   ) {
-            if (erep.colors[gprim] == -2) {
+            if (ereped.colors[gprim] == -2) {
                 wv.sceneGraph[gprim].lColor = [1.0, 0.0, 0.0];
             } else {
                 wv.sceneGraph[gprim].lColor = [0.0, 0.0, 0.0];
-                erep.colors[  gprim] = -1;
+                ereped.colors[  gprim] = -1;
 
                 try {
                     var attrs = wv.sgData[gprim];
 
                     for (var i = 0; i < attrs.length; i+=2) {
                         if (attrs[i] == ".Keep") {
-                            erep.keptEdges++;
+                            ereped.keptEdges++;
                             wv.sceneGraph[gprim].lColor = [1.0, 0.0, 0.0];
-                            erep.colors[  gprim] = -2;
+                            ereped.colors[  gprim] = -2;
                             break;
                         }
                     }
@@ -1015,20 +1109,20 @@ erep.redraw = function () {
         // color Nodes black (or red if they have a .Keep attribute */
         } else if ((gprimList.length == 3 && gprimList[1] == "Node") ||
                    (gprimList.length == 4 && gprimList[2] == "Node")   ) {
-            if (erep.colors[gprim] == -3) {
+            if (ereped.colors[gprim] == -3) {
                 wv.sceneGraph[gprim].pColor = [1.0, 0.0, 0.0];
             } else {
                 wv.sceneGraph[gprim].pColor = [0.0, 0.0, 0.0];
-                erep.colors[  gprim] = -1;
+                ereped.colors[  gprim] = -1;
 
                 try {
                     var attrs = wv.sgData[gprim];
 
                     for (var i = 0; i < attrs.length; i+=2) {
                         if (attrs[i] == ".Keep") {
-                            erep.keptNodes++;
+                            ereped.keptNodes++;
                             wv.sceneGraph[gprim].pColor = [1.0, 0.0, 0.0];
-                            erep.colors[  gprim] = -3;
+                            ereped.colors[  gprim] = -3;
                             break;
                         }
                     }
@@ -1040,12 +1134,13 @@ erep.redraw = function () {
 
     // color the Faces
     for (gprim in wv.sceneGraph) {
-        if (erep.colors[gprim] == 0) {
-            wv.sceneGraph[gprim].fColor = [erep.spectrum[0], erep.spectrum[1], erep.spectrum[2]];
-        } else if (erep.colors[gprim] > 0) {
-            var icolor = 1 + (erep.colors[gprim]-1) % 12;
-            wv.sceneGraph[gprim].fColor = [erep.spectrum[3*icolor], erep.spectrum[3*icolor+1], erep.spectrum[3*icolor+2]];
+        if (ereped.colors[gprim] == 0) {
+            wv.sceneGraph[gprim].fColor = [ereped.spectrum[0], ereped.spectrum[1], ereped.spectrum[2]];
+        } else if (ereped.colors[gprim] > 0) {
+            var icolor = 1 + (ereped.colors[gprim]-1) % 12;
+            wv.sceneGraph[gprim].fColor = [ereped.spectrum[3*icolor], ereped.spectrum[3*icolor+1], ereped.spectrum[3*icolor+2]];
         }
     }
 };
 
+// /////////////////////////////////////////////////////////////////////

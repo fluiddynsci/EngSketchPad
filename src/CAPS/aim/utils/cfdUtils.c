@@ -88,13 +88,9 @@ int cfd_getBoundaryCondition(void *aimInfo,
         //bcIndex = bcIndex -1;
 
         // Copy boundary condition name
-        if (bcProps->surfaceProp[i].name != NULL) EG_free(bcProps->surfaceProp[i].name);
+        AIM_FREE(bcProps->surfaceProp[i].name);
 
-        bcProps->surfaceProp[i].name = (char *) EG_alloc((strlen(bcTuple[i].name) + 1)*sizeof(char));
-        if (bcProps->surfaceProp[i].name == NULL) return EGADS_MALLOC;
-
-        memcpy(bcProps->surfaceProp[i].name, bcTuple[i].name, strlen(bcTuple[i].name)*sizeof(char));
-        bcProps->surfaceProp[i].name[strlen(bcTuple[i].name)] = '\0';
+        AIM_STRDUP(bcProps->surfaceProp[i].name, bcTuple[i].name, aimInfo, status);
 
         // Do we have a json string?
         if (strncmp(bcTuple[i].value, "{", 1) == 0) {
@@ -182,30 +178,25 @@ int cfd_getBoundaryCondition(void *aimInfo,
                 else if (strcasecmp(keyValue, "\"FixedOutflow\"")    == 0) bcProps->surfaceProp[i].surfaceType = FixedOutflow;
                 else {
 
-                    AIM_ERROR(aimInfo, "\tUnrecognized \"%s\" specified (%s) for Boundary_Condition tuple %s, current options (not all options "
+                    AIM_ERROR(aimInfo, "Unrecognized \"%s\" specified (%s) for Boundary_Condition tuple %s, current options (not all options "
                             "are valid for this analysis tool - see AIM documentation) are "
                             "\" Inviscid, Viscous, Farfield, Extrapolate, Freestream, BackPressure, Symmetry, "
                             "SubsonicInflow, SubsonicOutflow, MassflowIn, MassflowOut, MachOutflow, "
                             "FixedInflow, FixedOutflow"
                             "\"",
                             keyWord, keyValue, bcTuple[i].name);
-
-                    AIM_FREE(keyValue);
-
-                    return CAPS_NOTFOUND;
+                    status = CAPS_NOTFOUND;
+                    goto cleanup;
                 }
 
             } else {
-
-                printf("\tNo \"%s\" specified for tuple %s in json string , defaulting to Inviscid\n", keyWord,
+                AIM_ERROR(aimInfo, "\tNo \"%s\" specified for tuple %s in json string", keyWord,
                         bcTuple[i].name);
-                bcProps->surfaceProp[i].surfaceType = Inviscid;
+                status = CAPS_BADVALUE;
+                goto cleanup;
             }
 
-            if (keyValue != NULL) {
-                EG_free(keyValue);
-                keyValue = NULL;
-            }
+            AIM_FREE(keyValue);
 
             // Wall specific properties
 
@@ -238,11 +229,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
                 bcProps->surfaceProp[i].wallTemperatureFlag = (int) true;
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].wallTemperature);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             /*! \page cfdBoundaryConditions
@@ -271,11 +259,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
                 bcProps->surfaceProp[i].wallTemperature = -10;
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].wallHeatFlux);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             // Stagnation quantities
@@ -310,11 +295,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].totalPressure);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             /*! \page cfdBoundaryConditions
@@ -344,11 +326,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].totalTemperature);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             /*! \page cfdBoundaryConditions
@@ -369,11 +348,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].totalDensity);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             // Static quantities
@@ -403,11 +379,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].staticPressure);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             /*! \page cfdBoundaryConditions
@@ -428,11 +401,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].staticTemperature);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             /*! \page cfdBoundaryConditions
@@ -453,11 +423,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].staticDensity);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
 
@@ -480,11 +447,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].uVelocity);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             /*! \page cfdBoundaryConditions
@@ -505,11 +469,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].vVelocity);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             /*! \page cfdBoundaryConditions
@@ -529,11 +490,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].wVelocity);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             /*! \page cfdBoundaryConditions
@@ -557,11 +515,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].machNumber);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
             // Massflow
@@ -587,11 +542,8 @@ int cfd_getBoundaryCondition(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &bcProps->surfaceProp[i].massflow);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
                 AIM_STATUS(aimInfo, status);
+                AIM_FREE(keyValue);
             }
 
         } else {
@@ -624,30 +576,37 @@ int cfd_getBoundaryCondition(void *aimInfo,
             //{UnknownBoundary, Inviscid, Viscous, Farfield, Extrapolate, Freestream,
             // BackPressure, Symmetry, SubsonicInflow, SubsonicOutflow,
             // MassflowIn, MassflowOut, FixedInflow, FixedOutflow, MachOutflow}
-            if      (strcasecmp(bcTuple[i].value, "Inviscid" ) == 0) bcProps->surfaceProp[i].surfaceType = Inviscid;
-            else if (strcasecmp(bcTuple[i].value, "Viscous"  ) == 0) bcProps->surfaceProp[i].surfaceType = Viscous;
-            else if (strcasecmp(bcTuple[i].value, "Farfield" ) == 0) bcProps->surfaceProp[i].surfaceType = Farfield;
-            else if (strcasecmp(bcTuple[i].value, "Extrapolate" ) == 0) bcProps->surfaceProp[i].surfaceType = Extrapolate;
-            else if (strcasecmp(bcTuple[i].value, "Freestream" ) == 0)  bcProps->surfaceProp[i].surfaceType = Freestream;
-            else if (strcasecmp(bcTuple[i].value, "SymmetryX") == 0) {
+
+            keyValue = string_removeQuotation(bcTuple[i].value);
+            if (keyValue == NULL) {
+              status = EGADS_MALLOC;
+              goto cleanup;
+            }
+
+            if      (strcasecmp(keyValue, "Inviscid" ) == 0) bcProps->surfaceProp[i].surfaceType = Inviscid;
+            else if (strcasecmp(keyValue, "Viscous"  ) == 0) bcProps->surfaceProp[i].surfaceType = Viscous;
+            else if (strcasecmp(keyValue, "Farfield" ) == 0) bcProps->surfaceProp[i].surfaceType = Farfield;
+            else if (strcasecmp(keyValue, "Extrapolate" ) == 0) bcProps->surfaceProp[i].surfaceType = Extrapolate;
+            else if (strcasecmp(keyValue, "Freestream" ) == 0)  bcProps->surfaceProp[i].surfaceType = Freestream;
+            else if (strcasecmp(keyValue, "SymmetryX") == 0) {
                 bcProps->surfaceProp[i].surfaceType = Symmetry;
                 bcProps->surfaceProp[i].symmetryPlane = 1;
             }
-            else if (strcasecmp(bcTuple[i].value, "SymmetryY") == 0) {
+            else if (strcasecmp(keyValue, "SymmetryY") == 0) {
                 bcProps->surfaceProp[i].surfaceType = Symmetry;
                 bcProps->surfaceProp[i].symmetryPlane = 2;
             }
-            else if (strcasecmp(bcTuple[i].value, "SymmetryZ") == 0) {
+            else if (strcasecmp(keyValue, "SymmetryZ") == 0) {
                 bcProps->surfaceProp[i].surfaceType = Symmetry;
                 bcProps->surfaceProp[i].symmetryPlane = 3;
             }
             else {
-                printf("\tUnrecognized bcType (%s) in tuple %s defaulting to an"
-                        " inviscid boundary (index = %d)!\n", bcTuple[i].value,
-                                                              bcProps->surfaceProp[i].name,
-                                                              bcProps->surfaceProp[i].bcID);
-                bcProps->surfaceProp[i].surfaceType = Inviscid;
+                AIM_ERROR(aimInfo, "\tUnrecognized bcType (%s) for BC %s!\n", keyValue,
+                                                                              bcProps->surfaceProp[i].name);
+                status = CAPS_BADVALUE;
+                goto cleanup;
             }
+            AIM_FREE(keyValue);
         }
     }
 
@@ -670,6 +629,7 @@ int cfd_getBoundaryCondition(void *aimInfo,
 
     status = CAPS_SUCCESS;
 cleanup:
+    AIM_FREE(keyValue);
     return status;
 }
 
@@ -898,10 +858,9 @@ int cfd_getModalAeroelastic(int numTuple,
     return CAPS_SUCCESS;
 }
 
-static int _setDesignVariable(const char *name,
-                              void *aimInfo,
+static int _setDesignVariable(void *aimInfo,
+                              const char *name,
                  /*@unused@*/ int numAnalysisVal, capsValue *analysisVal,
-                              int numGeomVal, capsValue *geomVal,
                               cfdDesignVariableStruct *variable) {
 
     int status;
@@ -909,13 +868,21 @@ static int _setDesignVariable(const char *name,
     int found = (int) false;
     int i, j, index;
 
+    int numGeomIn;
+    capsValue *geomInVal;
     const char *geomInName;
 
+    numGeomIn = aim_getIndex(aimInfo, NULL, GEOMETRYIN);
+    if (numGeomIn <= 0) {
+        AIM_ERROR(aimInfo, "No DESPMTR available!");
+        return CAPS_NULLVALUE;
+    }
+
     // Loop through geometry
-    for (i = 0; i < numGeomVal; i++) {
+    for (i = 0; i < numGeomIn; i++) {
 
         status = aim_getName(aimInfo, i+1, GEOMETRYIN, &geomInName);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         if (strcasecmp(name, geomInName) != 0)  continue;
 
@@ -925,37 +892,38 @@ static int _setDesignVariable(const char *name,
             goto cleanup;
         }
 
-        index = i;
+        status = aim_getValue(aimInfo, i+1, GEOMETRYIN, &geomInVal);
+        AIM_STATUS(aimInfo, status);
 
-        status = allocate_cfdDesignVariableStruct(name, geomVal[index].length, variable);
+        status = allocate_cfdDesignVariableStruct(name, geomInVal->length, variable);
         if (status != CAPS_SUCCESS) goto cleanup;
 
         variable->type = DesignVariableGeometry;
 
-        for (j = 0; j< geomVal[index].length; j++) {
+        for (j = 0; j< geomInVal->length; j++) {
 
-            if (geomVal[index].type == Double) {
+            if (geomInVal->type == Double) {
 
-                if (geomVal[index].length == 1) {
-                    variable->initialValue[j] = geomVal[index].vals.real;
+                if (geomInVal->length == 1) {
+                    variable->initialValue[j] = geomInVal->vals.real;
                 } else {
-                    variable->initialValue[j] = geomVal[index].vals.reals[j];
+                    variable->initialValue[j] = geomInVal->vals.reals[j];
                 }
 
-                variable->upperBound[j] = geomVal[index].limits.dlims[0];
-                variable->lowerBound[j] = geomVal[index].limits.dlims[1];
+                variable->upperBound[j] = geomInVal->limits.dlims[0];
+                variable->lowerBound[j] = geomInVal->limits.dlims[1];
 
             }
 
-            if (geomVal[index].type == Integer) {
-                if (geomVal[index].length == 1) {
-                    variable->initialValue[j] = (double) geomVal[index].vals.integer;
+            if (geomInVal->type == Integer) {
+                if (geomInVal->length == 1) {
+                    variable->initialValue[j] = (double) geomInVal->vals.integer;
                 } else {
-                    variable->initialValue[j] = (double) geomVal[index].vals.integers[j];
+                    variable->initialValue[j] = (double) geomInVal->vals.integers[j];
                 }
 
-                variable->upperBound[j] = (double) geomVal[index].limits.ilims[0];
-                variable->lowerBound[j] = (double) geomVal[index].limits.ilims[1];
+                variable->upperBound[j] = (double) geomInVal->limits.ilims[0];
+                variable->lowerBound[j] = (double) geomInVal->limits.ilims[1];
             }
         }
 
@@ -1021,21 +989,19 @@ static int _setDesignVariable(const char *name,
         goto cleanup;
     }
 
-    status = CAPS_SUCCESS;
-    goto cleanup;
+status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in _setDesignVariable status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS) printf("Error: Premature exit in _setDesignVariable status = %d\n", status);
 
-        return status;
+    return status;
 }
 
 // Get the design variables from a capsTuple
-int cfd_getDesignVariable(int numDesignVariableTuple,
+int cfd_getDesignVariable(void *aimInfo,
+                          int numDesignVariableTuple,
                           capsTuple designVariableTuple[],
-                          void *aimInfo,
                           int numAnalysisVal, capsValue *analysisVal,
-                          int numGeomVal, capsValue *geomVal,
                           int *numDesignVariable,
                           cfdDesignVariableStruct *variable[]) {
 
@@ -1065,11 +1031,11 @@ int cfd_getDesignVariable(int numDesignVariableTuple,
     if (*variable != NULL) {
         for (i = 0; i < *numDesignVariable; i++) {
             status = destroy_cfdDesignVariableStruct(&(*variable)[i]);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
         }
     }
 
-    if (*variable != NULL) EG_free(*variable);
+    AIM_FREE(*variable);
     *variable = NULL;
     *numDesignVariable = 0;
 
@@ -1080,12 +1046,7 @@ int cfd_getDesignVariable(int numDesignVariableTuple,
     printf("\tNumber of design variables - %d\n", numDesignVariableTuple);
 
     if (numDesignVariableTuple > 0) {
-        *variable = (cfdDesignVariableStruct *) EG_alloc(numDesignVariableTuple * sizeof(cfdDesignVariableStruct));
-        if (*variable== NULL) {
-            *numDesignVariable = 0;
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        AIM_ALLOC(*variable, numDesignVariableTuple, cfdDesignVariableStruct, aimInfo, status);
     } else {
         printf("\tNumber of design variable values in input tuple is 0\n");
         status = CAPS_NOTFOUND;
@@ -1107,10 +1068,9 @@ int cfd_getDesignVariable(int numDesignVariableTuple,
 
         printf("\tDesign Variable name - %s\n", designVariableTuple[i].name);
 
-        status = _setDesignVariable(designVariableTuple[i].name,
-                                    aimInfo,
+        status = _setDesignVariable(aimInfo,
+                                    designVariableTuple[i].name,
                                     numAnalysisVal, analysisVal,
-                                    numGeomVal, geomVal,
                                     var);
         if (status != CAPS_SUCCESS) goto cleanup;
 
@@ -1443,8 +1403,8 @@ int initiate_cfdSurfaceStruct(cfdSurfaceStruct *surfaceProps) {
 
     // Wall specific properties
     surfaceProps->wallTemperatureFlag = (int) false; // Wall temperature flag
-    surfaceProps->wallTemperature = 0.0;     // Wall temperature value -1 = adiabatic ; >0 = isothermal
-    surfaceProps->wallHeatFlux = 0.0;	     // Wall heat flux. to use Temperature flag should be true and wallTemperature < 0
+    surfaceProps->wallTemperature = -1.0;            // Wall temperature value -1 = adiabatic ; >0 = isothermal
+    surfaceProps->wallHeatFlux = 0.0;                // Wall heat flux. to use Temperature flag should be true and wallTemperature < 0
 
     // Symmetry plane
     surfaceProps->symmetryPlane = 0; // Symmetry flag / plane
@@ -1484,8 +1444,8 @@ int destroy_cfdSurfaceStruct(cfdSurfaceStruct *surfaceProps) {
     surfaceProps->bcID = 0;             // ID of boundary
 
     // Wall specific properties
-    surfaceProps->wallTemperatureFlag = 0; // Wall temperature flag
-    surfaceProps->wallTemperature = 0;     // Wall temperature value -1 = adiabatic ; >0 = isothermal
+    surfaceProps->wallTemperatureFlag = (int) false; // Wall temperature flag
+    surfaceProps->wallTemperature = -1;              // Wall temperature value -1 = adiabatic ; >0 = isothermal
 
     // Symmetry plane
     surfaceProps->symmetryPlane = 0; // Symmetry flag / plane

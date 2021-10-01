@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description = 'Mystran AGARD445.6 Pytest Exampl
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Create project name
@@ -26,7 +26,7 @@ workDir = os.path.join(str(args.workDir[0]), projectName)
 geometryScript = os.path.join("..","csmData","feaAGARD445.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Change the sweepAngle and span of the Geometry - Demo purposes
 #myProblem.geometry.despmtr.sweepAngle = 5 # From 45 to 5 degrees
@@ -87,26 +87,6 @@ constraint = {"groupName" : "constEdge",
               "dofConstraint" : 123456}
 
 myAnalysis.input.Constraint = {"edgeConstraint": constraint}
-
-# Run AIM pre-analysis
-myAnalysis.preAnalysis()
-
-####### Run MYSTRAN ####################
-print ("\n\nRunning MYSTRAN......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(myAnalysis.analysisDir) # Move into test directory
-
-if (args.noAnalysis == False):
-    os.system("mystran.exe " + projectName +  ".dat"); # Run mystran via system call
-
-os.chdir(currentDirectory) # Move back to working directory
-
-print ("Done running MYSTRAN!")
-########################################
-
-# Run AIM post-analysis
-myAnalysis.postAnalysis()
 
 # Get Eigen-frequencies
 print ("\nGetting results natural frequencies.....")

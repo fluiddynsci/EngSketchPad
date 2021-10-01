@@ -118,9 +118,6 @@ class TestAstros(unittest.TestCase):
 
         mesh.input.Tess_Params = [.25,.01,15]
         
-        mesh.preAnalysis()
-        mesh.postAnalysis()
-
         # Link the mesh
         astros.input["Mesh"].link(mesh.output["Surface_Mesh"])
 
@@ -164,21 +161,21 @@ class TestAstros(unittest.TestCase):
         astros.input.Proj_Name = "astrosPlateSmall"
 
         # Run Small format
-        self.run_astros(astros)
+        astros.runAnalysis()
 
         astros.input.File_Format = "Large"
         astros.input.Mesh_File_Format = "Large"
         astros.input.Proj_Name = "astrosPlateLarge"
 
         # Run Large format
-        self.run_astros(astros)
+        astros.runAnalysis()
 
         astros.input.File_Format = "Free"
         astros.input.Mesh_File_Format = "Free"
         astros.input.Proj_Name = "astrosPlateFree"
 
         # Run Free format
-        self.run_astros(astros)
+        astros.runAnalysis()
 
     def test_Aeroelastic(self):
 
@@ -198,8 +195,6 @@ class TestAstros(unittest.TestCase):
         mesh.input.Mesh_Elements = "Quad"
 
         mesh.input.Tess_Params = [.25,.01,15]
-        mesh.preAnalysis()
-        mesh.postAnalysis()
 
         # Link the mesh
         astros.input["Mesh"].link(mesh.output["Surface_Mesh"])
@@ -274,7 +269,7 @@ class TestAstros(unittest.TestCase):
         astros.input.VLM_Surface = {"Skin_Top": wing}
 
         # Run
-        self.run_astros(astros)
+        astros.runAnalysis()
 
 
 if __name__ == '__main__':

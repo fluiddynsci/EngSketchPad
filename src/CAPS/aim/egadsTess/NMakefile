@@ -13,7 +13,7 @@ ODIR  = .
 !ENDIF
 
 
-$(LDIR)\egadsTessAIM.dll:	$(ODIR)\egadsTessAIM.obj \
+$(LDIR)\egadsTessAIM.dll:	egadsTessAIM.def $(ODIR)\egadsTessAIM.obj \
 			$(LDIR)\utils.lib
 	-del $(LDIR)\egadsTessAIM.dll
 	link /out:$(LDIR)\egadsTessAIM.dll /dll /def:egadsTessAIM.def \

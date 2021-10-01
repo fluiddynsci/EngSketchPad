@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(description = 'Quading Example',
 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Working directory
@@ -22,10 +22,10 @@ workDir = os.path.join(str(args.workDir[0]), "AstrosQuadding")
 geometryScript = os.path.join("..","csmData","feaBoxes.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load astros aim
-astros = myProblem.analysis.create(aim = "astrosAIM", name = "astros")
+astros = myProblem.analysis.create(aim = "astrosAIM", name = "astros", autoExec = False)
 
 # Set project name so a mesh file is generated
 projectName = "quadding_test"

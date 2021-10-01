@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(description = 'autoLink Pytest Link Example',
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noPlotData', action='store_true', default = False, help = "Don't plot data")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 # Define units
@@ -24,41 +24,11 @@ K    = pyCAPS.Unit("Kelvin")
 deg  = pyCAPS.Unit("degree")
 
 
-def runAnalysis(myProblem):
-
-    for i in myProblem.analysis:
-
-        myAnalysis = myProblem.analysis[i]
-
-        # Skip analysis for AVL for Mach numbers > .75
-        if myProblem.parameter["Mach"].value > 0.75 and myAnalysis.name == "avl":
-            continue
-        # Skip analysis for AWave for Mach < 1.0
-        if myProblem.parameter["Mach"].value < 1.0 and myAnalysis.name == "awave":
-            continue
-
-        # Run AIM pre-analysis
-        myAnalysis.preAnalysis()
-
-        # Run the tool
-        print ("Running", myAnalysis.name)
-        currentDirectory = os.getcwd() # Get our current working directory
-        os.chdir(myAnalysis.analysisDir) # Move into test directory
-
-        os.system(myAnalysis.attr.execute) # Execute attribute defined above
-
-        os.chdir(currentDirectory) # Move back to working directory
-
-        # Run AIM post-analysis
-        myAnalysis.postAnalysis()
-
 def combineDrag(myProblem):
 
     drags = ["CDtot", "CDwave", "CDtotal"] # CDtotal = Cdform+Cdfric
     CDTotal = 0
-    for i in myProblem.analysis:
-
-        myAnalysis = myProblem.analysis[i]
+    for myAnalysis in myProblem.analysis.values():
 
         # Skip analysis for AVL for Mach numbers > .75 - We wont have any analysis
         if myProblem.parameter["Mach"].value > 0.75 and myAnalysis.name == "avl":
@@ -92,11 +62,6 @@ awave = myProblem.analysis.create(aim = "awaveAIM",
 avl = myProblem.analysis.create(aim = "avlAIM",
                                 name = "avl",
                                 unitSystem={"mass":kg, "length":m, "time":s, "temperature":K})
-
-# Add attribute to analyses to define execution functions
-fric.attr.create("execute",  "friction frictionInput.txt frictionOutput.txt > Info.out")
-awave.attr.create("execute", "awave awaveInput.txt > Info.out")
-avl.attr.create("execute",   "avl caps < avlInput.txt > avlOutput.txt")
 
 # Create mission parameters
 mach     = myProblem.parameter.create("Mach", 0.1) # Mach number
@@ -160,9 +125,7 @@ for alt in altitudeRange:
         mach.value = ma
         altitude.value = alt
 
-        # Run through the analyses
-        runAnalysis(myProblem)
-
+        # Append the combined drag (analysis is executed automatically just-in-time)
         Cd[-1].append(combineDrag(myProblem))
 
 # Print out drag values

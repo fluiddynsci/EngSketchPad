@@ -21,7 +21,7 @@ default:	$(LDIR)\awaveAIM.dll
 !ENDIF
 
 
-$(LDIR)\awaveAIM.dll:	$(ODIR)\awaveAIM.obj
+$(LDIR)\awaveAIM.dll:	awaveAIM.def $(ODIR)\awaveAIM.obj
 	-del $(LDIR)\awaveAIM.dll $(LDIR)\awaveAIM.lib $(LDIR)\awaveAIM.exp
 	link /out:$(LDIR)\awaveAIM.dll /dll /def:awaveAIM.def \
 		$(ODIR)\awaveAIM.obj /LIBPATH:$(LDIR) utils.lib aimUtil.lib \

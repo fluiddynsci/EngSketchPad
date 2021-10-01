@@ -17,7 +17,7 @@ TDIR  = $(ESP_ROOT)\bin
 OBJS =	$(ODIR)\su2AIM.obj $(ODIR)\su2Utils.obj $(ODIR)\su2_4_Cardinal.obj \
 	$(ODIR)\su2_5_Raven.obj $(ODIR)\su2_6_Falcon.obj $(ODIR)\su2_7_Blackbird.obj
 
-$(LDIR)\su2AIM.dll:	$(OBJS) $(LDIR)\utils.lib
+$(LDIR)\su2AIM.dll:	su2AIM.def $(OBJS) $(LDIR)\utils.lib
 	-del $(LDIR)\su2AIM.dll $(LDIR)\su2AIM.lib $(LDIR)\su2AIM.exp
 	 link /out:$(LDIR)\su2AIM.dll /dll /def:su2AIM.def \
 		$(OBJS) /LIBPATH:$(LDIR) utils.lib aimUtil.lib \
@@ -27,7 +27,7 @@ $(LDIR)\su2AIM.dll:	$(OBJS) $(LDIR)\utils.lib
 
 $(ODIR)\su2AIM.obj:	su2AIM.c su2Utils.h $(IDIR)\capsTypes.h \
 			..\utils\meshUtils.h
-	cl /c $(COPTS) $(DEFINE) /I$(IDIR) /I..\utils su2AIM.c \
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) /I..\meshWriter\su2Writer /I..\utils su2AIM.c \
 		/Fo$(ODIR)\su2AIM.obj
 
 $(ODIR)\su2Utils.obj:	su2Utils.c su2Utils.h

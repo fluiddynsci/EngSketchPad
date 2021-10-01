@@ -4,6 +4,7 @@ aimInitialize
 aimCleanup
 aimInputs
 aimPreAnalysis
-aimOutputs
+aimExecute
 aimPostAnalysis
+aimOutputs
 aimCalcOutput

@@ -54,8 +54,7 @@ class Testaflr2(unittest.TestCase):
                                         "2DSlice"   : {"tessParams" : [0.50, .01, 45]}}
 
         # Run
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
+        myAnalysis.runAnalysis()
 
     def test_reenter(self):
 
@@ -78,15 +77,13 @@ class Testaflr2(unittest.TestCase):
         myAnalysis.input.Proj_Name = "pyCAPS_aflr2_Tri"
 
         # Run 1st time to make triangle mesh
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
+        myAnalysis.runAnalysis()
 
         myAnalysis.input.Mesh_Gen_Input_String = "mquad=1 mpp=3"
         myAnalysis.input.Proj_Name = "pyCAPS_aflr2_Quad"
 
         # Run 2nd time to make quad mesh
-        myAnalysis.preAnalysis()
-        myAnalysis.postAnalysis()
+        myAnalysis.runAnalysis()
 
 if __name__ == '__main__':
     unittest.main()

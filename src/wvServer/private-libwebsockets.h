@@ -107,10 +107,10 @@ static inline
 
 
 /*
- * Mac OSX as well as iOS do not define the MSG_NOSIGNAL flag,
+ * Mac OSX as well as iOS may not define the MSG_NOSIGNAL flag,
  * but happily have something equivalent in the SO_NOSIGPIPE flag.
  */
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(MSG_NOSIGNAL)
 #define MSG_NOSIGNAL SO_NOSIGPIPE
 #endif
 

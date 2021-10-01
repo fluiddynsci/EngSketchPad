@@ -1163,8 +1163,10 @@ class Context:
             (PCURVES follow)
 
         senses:
-            a list of integer senses for the children (required for FACES
-            & LOOPs only)
+            a list of integer senses for the children (required for FACEs
+            & LOOPs only). For LOOPs, the senses are SFORWARD or SREVERSE
+            for each EDGE. For FACEs, the senses are SOUTER or SINNER for
+            (may be None for 1 child).
 
         Returns
         -------
@@ -1233,7 +1235,7 @@ class Context:
 
         nsenses = 0
         psenses = None
-        if oclass == LOOP:
+        if oclass == LOOP or (oclass == FACE and nchildren > 1):
             nsenses = len(senses)
             psenses = (c_int * nsenses)()
             for i in range(nsenses):
@@ -2470,9 +2472,6 @@ class ego:
 
         Returns
         -------
-        geo:
-            The reference geometry object (if none this is returned as None)
-
         oclass:
             is NODE, EGDE, LOOP, FACE, SHELL, BODY or MODEL
 
@@ -2482,6 +2481,9 @@ class ego:
             for FACE is either SFORWARD or SREVERSE
             for SHELL is OPEN or CLOSED
             BODY is either WIREBODY, FACEBODY, SHEETBODY or SOLIDBODY
+
+        geom:
+            The reference geometry object (if none this is returned as None)
 
         reals:
             will retrieve at most 4 doubles:
@@ -2531,7 +2533,7 @@ class ego:
 
         geom = ego(c_ego(geo.contents), self.context) if geo else None
 
-        return geom, oclass, mtype, reals, children, senses
+        return oclass, mtype, geom, reals, children, senses
 
 #=============================================================================-
     def getBodyTopos(self, oclass, ref=None):

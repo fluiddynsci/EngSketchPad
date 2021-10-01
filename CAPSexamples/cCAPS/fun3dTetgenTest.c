@@ -59,6 +59,7 @@ int main(int argc, char *argv[])
 
     int status; // Function return status;
     int i; // Indexing
+    int outLevel = 1;
 
     // CAPS objects
     capsObj          problemObj, surfMeshObj, meshObj, fun3dObj, tempObj;
@@ -83,35 +84,31 @@ int main(int argc, char *argv[])
     printf("\n\nAttention: fun3dTetgenTest is hard coded to look for ../csmData/cfdMultiBody.csm\n");
 
     if (argc > 2) {
-        printf(" usage: fun3dTetgenTest analysisDirectoryPath (ignored)!\n");
+        printf(" usage: fun3dTetgenTest outLevel!\n");
         return 1;
+    } else if (argc == 2) {
+        outLevel = atoi(argv[1]);
     }
 
     status = caps_open("FUN3D_Tetgen_Example", NULL, 0,
-                       "../csmData/cfdMultiBody.csm", 1, &problemObj,
+                       "../csmData/cfdMultiBody.csm", outLevel, &problemObj,
                        &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Load the EGADS Tess AIM */
+    exec   = 1;
     status = caps_makeAnalysis(problemObj, "egadsTessAIM", NULL, NULL, NULL,
-                               0, &surfMeshObj, &nErr, &errors);
+                               &exec, &surfMeshObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS)  goto cleanup;
 
-    // Do the analysis -- actually run EGADS
-    status = caps_preAnalysis(surfMeshObj, &nErr, &errors);
-    if (nErr != 0) printErrors(nErr, errors);
-    if (status != CAPS_SUCCESS) goto cleanup;
-
-    // Everything is done in preAnalysis, so we just do the post
-    status = caps_postAnalysis(surfMeshObj, &nErr, &errors);
-    if (nErr != 0) printErrors(nErr, errors);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    // EGADS executes automatically
 
     // Load the Tetgen AIM */
+    exec   = 1;
     status = caps_makeAnalysis(problemObj, "tetgenAIM", NULL, NULL, NULL,
-                               0, &meshObj, &nErr, &errors);
+                               &exec, &meshObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS)  goto cleanup;
 
@@ -135,23 +132,12 @@ int main(int argc, char *argv[])
       goto cleanup;
     }
 
-    // Do the analysis -- actually run Tetgen
-    status = caps_preAnalysis(meshObj, &nErr, &errors);\
-    if (nErr != 0) printErrors(nErr, errors);
-    if (status != CAPS_SUCCESS) goto cleanup;
-
-    // Everything is done in preAnalysis, so we just do the post
-    status = caps_postAnalysis(meshObj, &nErr, &errors);
-    if (nErr != 0) printErrors(nErr, errors);
-    if (status != CAPS_SUCCESS) goto cleanup;
-
-    // Get our 1 output -- just a complete flag */
-    status = caps_childByName(meshObj, VALUE, ANALYSISOUT, "Done", &tempObj);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    // Tetgen executes automatically
 
     // Now load the fun3dAIM
+    exec   = 0;
     status = caps_makeAnalysis(problemObj, "fun3dAIM", NULL, NULL, NULL,
-                               0, &fun3dObj, &nErr, &errors);
+                               &exec, &fun3dObj, &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 

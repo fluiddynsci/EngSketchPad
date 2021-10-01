@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description = 'FUN3D and Tetgen Pytest Example'
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 
@@ -28,7 +28,7 @@ workDir = os.path.join(str(args.workDir[0]), "FUN3DTetgenAnalysisTest")
 geometryScript = os.path.join("..","csmData","cfdMultiBody.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 ## [loadGeom]
 
 # Change a design parameter - area in the geometry
@@ -60,24 +60,6 @@ meshAIM.input.Preserve_Surf_Mesh = True
 meshAIM.input["Surface_Mesh"].link(myProblem.analysis["egadsTess"].output["Surface_Mesh"])
 ## [setMesh]
 
-## [analysisMesh]
-# Run AIM pre-analysis
-myProblem.analysis["egadsTess"].preAnalysis()
-
-# NO analysis is needed - EGADS was already ran during preAnalysis
-
-# Run AIM post-analysis
-myProblem.analysis["egadsTess"].postAnalysis()
-
-# Run AIM pre-analysis
-meshAIM.preAnalysis()
-
-# NO analysis is needed - Tetgen was already ran during preAnalysis
-
-# Run AIM post-analysis
-meshAIM.postAnalysis()
-## [analysisMesh]
-
 # Load FUN3D aim
 ## [loadFUN3D]
 fun3dAIM = myProblem.analysis.create(aim = "fun3dAIM",
@@ -87,6 +69,9 @@ fun3dAIM = myProblem.analysis.create(aim = "fun3dAIM",
 ##[setFUN3D]
 # Set project name
 fun3dAIM.input.Proj_Name = "fun3dTetgenTest"
+
+# Link the mesh
+fun3dAIM.input["Mesh"].link(meshAIM.output["Volume_Mesh"])
 
 fun3dAIM.input.Mesh_ASCII_Flag = False
 

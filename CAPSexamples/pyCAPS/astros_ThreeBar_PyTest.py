@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser(description = 'Astros ThreeBar PyTest Example',
 #Setup the available commandline options
 parser.add_argument('-workDir', default = ["."+os.sep], nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument("-verbosity", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
+parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
 
 workDir = os.path.join(args.workDir[0], "AstrosThreeBar")
@@ -32,7 +32,7 @@ workDir = os.path.join(args.workDir[0], "AstrosThreeBar")
 geometryScript = os.path.join("..","csmData","feaThreeBar.csm")
 myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript,
-                           outLevel=args.verbosity)
+                           outLevel=args.outLevel)
 
 # Load astros aim
 astrosAIM = myProblem.analysis.create(aim = "astrosAIM",
@@ -85,26 +85,5 @@ value = {"analysisType"       : "Static",
 
 myProblem.analysis["astros"].input.Analysis = {"SingleLoadCase": value}
 
-# Run AIM pre-analysis
-astrosAIM.preAnalysis()
-
-print ("\n\nRunning Astros......")
-currentDirectory = os.getcwd() # Get our current working directory
-os.chdir(astrosAIM.analysisDir) # Move into test directory
-
-# Copy files needed to run astros
-astros_files = ["ASTRO.D01",  # *.DO1 file
-                "ASTRO.IDX"]  # *.IDX file
-for file in astros_files:
-    if not os.path.isfile(file):
-        shutil.copy(ASTROS_ROOT + os.sep + file, file)
-
-if (args.noAnalysis == False):
-    # Run Astros via system call
-    os.system("astros.exe < " + projectName +  ".dat > " + projectName + ".out");
-os.chdir(currentDirectory) # Move back to working directory
-
-print ("Done running Astros!")
-
-# Run AIM post-analysis
-astrosAIM.postAnalysis()
+# Run AIM
+astrosAIM.runAnalysis()

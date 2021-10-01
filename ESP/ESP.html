@@ -31,7 +31,7 @@ written by John Dannenhoffer
         -->
 
     <title>
-      ESP (Engineering Sketch Pad, V1.19)
+      ESP (Engineering Sketch Pad, V1.20)
     </title>
 
     <script type="text/javascript" src="WebViewer/webgl-utils.js"> </script>
@@ -39,11 +39,13 @@ written by John Dannenhoffer
     <script type="text/javascript" src="WebViewer/J3DIMath.js">    </script>
 
     <script>
-      var   wv   = {};            // object to store "globals"
-      var   main = {};            // object to store main mode
-      var   sket = {};            // object to store "sketch"
-      var   glov = {};            // object to store "gloves"
-      var   erep = {};            // object to store "ereped"
+      var   wv     = {};          // object to store "globals"
+      var   main   = {};          // object to store main mode
+      var   sketch = {};          // object to store "sketch"
+      var   gloves = {};          // object to store "gloves"
+      var   ereped = {};          // object to store "ereped"
+      var   mitten = {};          // object to store "mitten"
+      var   plugs  = {};          // object to store "plugs"
     </script>
 
     <script type="text/javascript" src="WebViewer/wv-draw.js">     </script>
@@ -57,6 +59,8 @@ written by John Dannenhoffer
     <script type="text/javascript" src="ESP-sketch.js">            </script>
     <script type="text/javascript" src="ESP-gloves.js">            </script>
     <script type="text/javascript" src="ESP-ereped.js">            </script>
+    <script type="text/javascript" src="ESP-mitten.js">            </script>
+    <script type="text/javascript" src="ESP-plugs.js">             </script>
     <script type="text/javascript" src="ESP.js">                   </script>
 
     <script>
@@ -103,6 +107,8 @@ written by John Dannenhoffer
     <link rel="stylesheet"    type="text/css"  href="ESP-sketch.css" />
     <link rel="stylesheet"    type="text/css"  href="ESP-gloves.css" />
     <link rel="stylesheet"    type="text/css"  href="ESP-ereped.css" />
+    <link rel="stylesheet"    type="text/css"  href="ESP-mitten.css" />
+    <link rel="stylesheet"    type="text/css"  href="ESP-plugs.css"  />
     <link rel="shortcut icon" type="image/png" href="esp_logo.png"   />
   </head>
 
@@ -118,9 +124,6 @@ written by John Dannenhoffer
           <div class="toolMenu" id="toolMenu">
             <button id="toolMenuBtn"             class="toolMenuBtn"            onclick="cmdTool()"       >Tool      </button>
             <div id="myToolMenu"                 class="toolMenu-contents">
-              <button title="Launch Sketcher"                                   onclick="sket.launch()"   >Sketch     </button>
-              <button title="Launch Gloves"                                     onclick="glov.launch()"   >Gloves     </button>
-              <button title="Launch ErepEd"                                     onclick="erep.launch()"   >ErepEd     </button>
             </div>
           </div>
           <div class="doneMenu" id="doneMenu">
@@ -557,10 +560,7 @@ written by John Dannenhoffer
       <div id="sketcherStatus", oncontextmenu="return false;" hidden>
       </div>
 
-      <div id="glovesStatus", oncontextmenu="return false;" hidden>
-      </div>
-
-      <div id="erepedStatus", oncontextmenu="return false;" hidden>
+      <div id="timStatus", oncontextmenu="return false;" hidden>
       </div>
 
       <div id="ESPlogo", oncontextmenu="return false;">

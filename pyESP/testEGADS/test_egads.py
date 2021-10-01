@@ -462,6 +462,11 @@ class TestEGADS(unittest.TestCase):
         nodes[2] = self.context.makeTopology(egads.NODE, reals=[0.25, 0.75, 3.60])
         nodes[3] = self.context.makeTopology(egads.NODE, reals=[0.00, 0.00, 3.00])
 
+        self.context.makeTopology(*nodes[0].getTopology())
+        self.context.makeTopology(*nodes[1].getTopology())
+        self.context.makeTopology(*nodes[2].getTopology())
+        self.context.makeTopology(*nodes[3].getTopology())
+
 
         npts = 4
         idata = [None]*3
@@ -508,26 +513,48 @@ class TestEGADS(unittest.TestCase):
         edges[2] = self.context.makeTopology(egads.EDGE, egads.TWONODE, geom=curves[2], children=nodes[2:4], reals=tdata)
         edges[3] = self.context.makeTopology(egads.EDGE, egads.TWONODE, geom=curves[3], children=[nodes[3],nodes[0]], reals=tdata)
 
+        self.context.makeTopology(*edges[0].getTopology())
+        self.context.makeTopology(*edges[1].getTopology())
+        self.context.makeTopology(*edges[2].getTopology())
+        self.context.makeTopology(*edges[3].getTopology())
+
         pcurves = [surface.otherCurve(edge) for edge in edges]
 
         edges.extend(pcurves)
 
+        # making a face with the loop forward
         loop = self.context.makeTopology(egads.LOOP, egads.CLOSED, geom=surface, children=edges, senses=[egads.SFORWARD]*4)
-
+        self.context.makeTopology(*loop.getTopology())
+        
         self.assertGreater(loop.getArea(), 0)
-
+        self.assertLess(loop.flipObject().getArea(), 0)  # Area is negative as loop is reversed relative to the surface
+        
         face = self.context.makeTopology(egads.FACE, egads.SFORWARD, geom=surface, children=[loop])
+        self.context.makeTopology(*face.getTopology())
+        self.assertGreater(face.getArea(), 0)
+        
+        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=surface, children=[loop])
+        self.context.makeTopology(*face.getTopology())
+        self.assertGreater(face.getArea(), 0)
 
         # making a face with the loop reversed
         edges[2], edges[0] = edges[0], edges[2]
         edges[6], edges[4] = edges[4], edges[6]
         loop = self.context.makeTopology(egads.LOOP, egads.CLOSED, geom=surface, children=edges, senses=[egads.SREVERSE]*4)
 
-        self.assertLess(loop.getArea(), 0)
+        self.assertLess(loop.getArea(), 0) # Area is negative as loop is reversed relative to the surface
+        self.assertGreater(loop.flipObject().getArea(), 0)
 
         face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=surface, children=[loop])
+        self.context.makeTopology(*face.getTopology())
+        self.assertGreater(face.getArea(), 0)
 
+        face = self.context.makeTopology(egads.FACE, egads.SFORWARD, geom=surface, children=[loop])
+        self.context.makeTopology(*face.getTopology())
+        self.assertGreater(face.getArea(), 0)
 
+        # The orientation of the Loops does not matter when making a Face
+        # A single SOUTER loop must be marked with the senses input, all other loops are SINNER
 
         # create Plane
         rdata = [None]*9
@@ -558,7 +585,13 @@ class TestEGADS(unittest.TestCase):
         x3 = [0.75,0.25,0]
         loop_inner = self._makePlanarLoop(x0, x1, x2, x3)
         
-        face = self.context.makeTopology(egads.FACE, egads.SFORWARD, geom=plane, children=[loop_outer, loop_inner])
+        face = self.context.makeTopology(egads.FACE, egads.SFORWARD, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
+        #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
+        #body.saveModel("face0.egads", True)
+
+        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
         #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
         #body.saveModel("face0.egads", True)
 
@@ -576,7 +609,13 @@ class TestEGADS(unittest.TestCase):
         x3 = [0.25,0.75,0]
         loop_inner = self._makePlanarLoop(x0, x1, x2, x3).flipObject()
 
-        face = self.context.makeTopology(egads.FACE, egads.SFORWARD, geom=plane, children=[loop_outer, loop_inner])
+        face = self.context.makeTopology(egads.FACE, egads.SFORWARD, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
+        #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
+        #body.saveModel("face1.egads", True)
+
+        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
         #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
         #body.saveModel("face1.egads", True)
 
@@ -594,7 +633,13 @@ class TestEGADS(unittest.TestCase):
         x3 = [0.75,0.25,0]
         loop_inner = self._makePlanarLoop(x0, x1, x2, x3)
 
-        face = self.context.makeTopology(egads.FACE, egads.SFORWARD, geom=plane, children=[loop_outer, loop_inner])
+        face = self.context.makeTopology(egads.FACE, egads.SFORWARD, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
+        #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
+        #body.saveModel("face2.egads", True)
+
+        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
         #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
         #body.saveModel("face2.egads", True)
 
@@ -614,7 +659,13 @@ class TestEGADS(unittest.TestCase):
         x3 = [0.25,0.75,0]
         loop_inner = self._makePlanarLoop(x0, x1, x2, x3)
 
-        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner])
+        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
+        #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
+        #body.saveModel("face3.egads", True)
+
+        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
         #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
         #body.saveModel("face3.egads", True)
 
@@ -632,7 +683,13 @@ class TestEGADS(unittest.TestCase):
         x3 = [0.75,0.25,0]
         loop_inner = self._makePlanarLoop(x0, x1, x2, x3).flipObject()
 
-        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner])
+        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
+        #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
+        #body.saveModel("face4.egads", True)
+
+        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
         #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
         #body.saveModel("face4.egads", True)
 
@@ -650,10 +707,184 @@ class TestEGADS(unittest.TestCase):
         x3 = [0.25,0.75,0]
         loop_inner = self._makePlanarLoop(x0, x1, x2, x3)
 
-        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner])
-
+        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
         #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
         #body.saveModel("face5.egads", True)
+
+        face = self.context.makeTopology(egads.FACE, egads.SREVERSE, geom=plane, children=[loop_outer, loop_inner], senses=[egads.SOUTER, egads.SINNER])
+        self.context.makeTopology(*face.getTopology())
+        #body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
+        #body.saveModel("face5.egads", True)
+
+
+#==============================================================================
+    def test_makeTopology_periodic(self):
+
+        # radius
+        r = 1
+        xcent = [0, 0, 0]
+
+        # create the Cylindrical
+        rdata = [None]*13
+        rdata[ 0] = xcent[0] # center
+        rdata[ 1] = xcent[1]
+        rdata[ 2] = xcent[2]
+        rdata[ 3] = 1   # x-axis
+        rdata[ 4] = 0
+        rdata[ 5] = 0
+        rdata[ 6] = 0   # y-axis
+        rdata[ 7] = 1
+        rdata[ 8] = 0
+        rdata[ 9] = 0   # z-axis
+        rdata[10] = 0
+        rdata[11] = 1
+        rdata[12] = r   # radius
+
+        cylindrical = self.context.makeGeometry(egads.SURFACE, egads.CYLINDRICAL, rdata)
+
+        (oclass, mtype, rvec, ivec, eref) = cylindrical.getGeometry()
+        
+        # get the axes for the cylinder
+        dx = rvec[3:6]
+        dy = rvec[6:9]
+        dz = rvec[9:12]
+        
+        circle = [None]*2
+
+        # create the Circle curve for the base
+        rdata = [None]*10
+        rdata[0] = rvec[0]; # center
+        rdata[1] = rvec[1];
+        rdata[2] = rvec[2];
+        rdata[3] = dx[0];   # x-axis
+        rdata[4] = dx[1];
+        rdata[5] = dx[2];
+        rdata[6] = dy[0];   # y-axis
+        rdata[7] = dy[1];
+        rdata[8] = dy[2];
+        rdata[9] = r;       # radius
+        circle[0] = self.context.makeGeometry(egads.CURVE, egads.CIRCLE, rdata)
+
+        # create the Circle curve for the top 
+        rdata[0] = rvec[0] + dz[0]*r; # center
+        rdata[1] = rvec[1] + dz[1]*r;
+        rdata[2] = rvec[2] + dz[2]*r;
+        rdata[3] = dx[0];   # x-axis
+        rdata[4] = dx[1];
+        rdata[5] = dx[2];
+        rdata[6] = dy[0];   # y-axis
+        rdata[7] = dy[1];
+        rdata[8] = dy[2];
+        rdata[9] = r;       # radius
+        circle[1] = self.context.makeGeometry(egads.CURVE, egads.CIRCLE, rdata)
+
+        nodes = [None]*2
+ 
+        # create the Node on the Base
+        x0 = [None]*3
+        x0[0] = xcent[0] + dx[0]*r;
+        x0[1] = xcent[1] + dx[1]*r;
+        x0[2] = xcent[2] + dx[2]*r;
+        nodes[0] = self.context.makeTopology(egads.NODE, reals=x0)
+        
+        # create the Node on the Top
+        x1 = [None]*3
+        x1[0] = xcent[0] + dx[0]*r + dz[0]*r;
+        x1[1] = xcent[1] + dx[1]*r + dz[1]*r;
+        x1[2] = xcent[2] + dx[2]*r + dz[2]*r;
+        nodes[1] = self.context.makeTopology(egads.NODE, reals=x1)
+
+        # create Line and Edge connecting the nodes
+        rdata = [None]*6
+        rdata[0] = x0[0]
+        rdata[1] = x0[1]
+        rdata[2] = x0[2]
+        rdata[3] = x1[0] - x0[0]
+        rdata[4] = x1[1] - x0[1]
+        rdata[5] = x1[2] - x0[2]
+        tdata = [0, (rdata[3]**2 + rdata[4]**2 + rdata[5]**2)**0.5]
+
+        edges = [None]*8
+
+        # create Line connecting Base and Top
+        line = self.context.makeGeometry(egads.CURVE, egads.LINE, rdata)
+        edges[0] = self.context.makeTopology(egads.EDGE, egads.TWONODE, geom=line, children=nodes, reals=tdata)
+
+        TWOPI = 2*math.pi
+
+        # create Edge on the Base
+        tdata = [0, TWOPI]
+        edges[1] = self.context.makeTopology(egads.EDGE, egads.ONENODE, geom=circle[0], children=[nodes[0]], reals=tdata)
+        
+        edges[2] = edges[0]; # repeat the line edge */
+
+        # make Edge on the Top
+        edges[3] = self.context.makeTopology(egads.EDGE, egads.ONENODE, geom=circle[1], children=[nodes[1]], reals=tdata)
+
+        # create P-curves 
+        rdata = [None]*4
+        rdata[0] = 0.;    rdata[1] = 0.;    # u == 0 UMIN
+        rdata[2] = 0.;    rdata[3] = 1.;
+        edges[4+0] = self.context.makeGeometry(egads.PCURVE, egads.LINE, rdata)
+        
+        rdata[0] = 0.;    rdata[1] = 0;     # v == 0 VMIN
+        rdata[2] = 1.;    rdata[3] = 0.;
+        edges[4+1] = self.context.makeGeometry(egads.PCURVE, egads.LINE, rdata)
+        
+        rdata[0] = TWOPI; rdata[1] = 0.;    # u == TWOPI UMAX
+        rdata[2] = 0.;    rdata[3] = 1.;
+        edges[4+2] = self.context.makeGeometry(egads.PCURVE, egads.LINE, rdata)
+        
+        rdata[0] = 0.;    rdata[1] = r;      # v == r VMAX
+        rdata[2] = 1.;    rdata[3] = 0.;
+        edges[4+3] = self.context.makeGeometry(egads.PCURVE, egads.LINE, rdata)
+
+        # create the loop
+        senses = [egads.SREVERSE, egads.SFORWARD, egads.SFORWARD, egads.SREVERSE]
+        loop = self.context.makeTopology(egads.LOOP, egads.CLOSED, geom=cylindrical, children=edges, senses=senses)
+
+        # create the face/FaceBody with alternating mtype
+        for mtype in [egads.SFORWARD, egads.SREVERSE]:
+
+            face = self.context.makeTopology(egads.FACE, mtype, geom=cylindrical, children=[loop])
+
+            body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
+
+        # reverse the Line Edge and make again
+
+        # create Line connecting Top and Base
+        # This cannot be done with flipObject
+        rdata = [None]*6
+        rdata[0] = x1[0]
+        rdata[1] = x1[1]
+        rdata[2] = x1[2]
+        rdata[3] = x0[0] - x1[0]
+        rdata[4] = x0[1] - x1[1]
+        rdata[5] = x0[2] - x1[2]
+        tdata = [0, (rdata[3]**2 + rdata[4]**2 + rdata[5]**2)**0.5]
+
+        line = self.context.makeGeometry(egads.CURVE, egads.LINE, rdata)
+        edges[0] = self.context.makeTopology(egads.EDGE, egads.TWONODE, geom=line, children=[nodes[1], nodes[0]], reals=tdata)
+
+        edges[2]   = edges[0]
+
+        # the PCurves can be reversed with flipObject
+        edges[4+0] = edges[4+0].flipObject()
+        edges[4+2] = edges[4+2].flipObject()
+
+        # create the loop with the Line Edge reversed (senses[0]
+        senses[0] = -senses[0]
+        senses[2] = -senses[2]
+        loop = self.context.makeTopology(egads.LOOP, egads.CLOSED, geom=cylindrical, children=edges, senses=senses)
+
+        # create the face/FaceBody with alternating mtype
+        for mtype in [egads.SFORWARD, egads.SREVERSE]:
+
+            face = self.context.makeTopology(egads.FACE, mtype, geom=cylindrical, children=[loop])
+
+            body = self.context.makeTopology(egads.BODY, egads.FACEBODY, children=[face])
+
 
 #==============================================================================
     def test_approximate(self):
@@ -959,7 +1190,7 @@ class TestEGADS(unittest.TestCase):
         nodes[3] = self.context.makeTopology(egads.NODE, reals=x3)
         for i in range(4): nodes[i].name = "node" + str(i)
 
-        (geom, oclass, mtype, lim, children, sens) = nodes[0].getTopology()
+        (oclass, mtype, geom, lim, children, sens) = nodes[0].getTopology()
 
         self.assertEqual(geom, None)
         self.assertEqual((egads.NODE, 0), (oclass, mtype))
@@ -1016,7 +1247,7 @@ class TestEGADS(unittest.TestCase):
         for i in range(4): lines[i].name = "line" + str(i)
         for i in range(4): edges[i].name = "edge" + str(i)
 
-        (geom, oclass, mtype, lim, children, sens) = edges[0].getTopology()
+        (oclass, mtype, geom, lim, children, sens) = edges[0].getTopology()
 
         self.assertTrue(lines[0].isSame(geom))
         self.assertTrue(lines[0].isEquivalent(geom))
@@ -1030,7 +1261,7 @@ class TestEGADS(unittest.TestCase):
         loop = self.context.makeTopology(egads.LOOP, egads.CLOSED, children=edges, senses=sens)
         loop.name = "loop"
 
-        (geom, oclass, mtype, lim, children, sens) = loop.getTopology()
+        (oclass, mtype, geom, lim, children, sens) = loop.getTopology()
 
         self.assertEqual(geom, None)
         self.assertEqual((egads.LOOP, egads.CLOSED), (oclass, mtype))
@@ -1056,7 +1287,7 @@ class TestEGADS(unittest.TestCase):
         face = self.context.makeTopology(egads.FACE, egads.SFORWARD, geom=plane, children=[loop])
         face.name = "face"
 
-        (geom, oclass, mtype, lim, children, sens) = face.getTopology()
+        (oclass, mtype, geom, lim, children, sens) = face.getTopology()
 
         self.assertTrue(plane.isSame(geom))
         self.assertEqual((egads.FACE, egads.SFORWARD), (oclass, mtype))
@@ -1166,7 +1397,7 @@ class TestEGADS(unittest.TestCase):
         edges[3] = context.makeTopology(egads.EDGE, egads.TWONODE, geom=lines[3], children=[nodes[3], nodes[0]], reals=tdata)
 
         # make the loop
-        sens = [1,1,1,1]
+        sens = [egads.SFORWARD]*4
         loop = context.makeTopology(egads.LOOP, egads.CLOSED, children=edges, senses=sens)
 
         # create Plane
@@ -1258,14 +1489,14 @@ class TestEGADS(unittest.TestCase):
         edges = faceBody.getBodyTopos(egads.EDGE)
         faces = faceBody.getBodyTopos(egads.FACE)
 
-        (line, oclass, mtype, lim, children, sens) = edges[0].getTopology()
+        (oclass, mtype, line, lim, children, sens) = edges[0].getTopology()
 
         (trange, periodic) = edges[0].getRange()
 
         # length
         self.assertEqual(line.arcLength(trange[0],trange[1]), 1.0)
 
-        (plane, oclass, mtype, lim, children, sens) = faces[0].getTopology()
+        (oclass, mtype, plane, lim, children, sens) = faces[0].getTopology()
 
         (urange, periodic) = faces[0].getRange()
 
@@ -1338,7 +1569,7 @@ class TestEGADS(unittest.TestCase):
         self.assertTrue( os.path.exists("test.egads") )
         os.remove("test.egads")
 
-        (geom, oclass, mtype, lim, children, sens) = model.getTopology()
+        (oclass, mtype, geom, lim, children, sens) = model.getTopology()
 
         self.assertTrue( faceBody.isEquivalent(children[0]) )
 
@@ -1457,6 +1688,7 @@ class TestEGADS(unittest.TestCase):
 
         plane = self.context.makeGeometry(egads.SURFACE, egads.PLANE, rdata)
 
+        # make Face from a Plane
         face = plane.makeFace(egads.SFORWARD, [0,1, 0,1])
 
         data = face.getInfo()
@@ -1466,6 +1698,22 @@ class TestEGADS(unittest.TestCase):
 
         data = face.getInfo()
         self.assertEqual((egads.FACE, egads.SREVERSE), data[:2])
+
+        # make Face from a Loop. 
+        # This creates a Plane that must be tracked by egads.py
+
+        # make the loop
+        x0 = [0,0,0]
+        x1 = [1,0,0]
+        x2 = [1,1,0]
+        x3 = [0,1,0]
+        loop = self._makePlanarLoop(x0, x1, x2, x3)
+
+        face = loop.makeFace(egads.SFORWARD)
+        
+        data = face.getInfo()
+        self.assertEqual((egads.FACE, egads.SFORWARD), data[:2])
+
 
 #==============================================================================
     def test_filletBody(self):
@@ -1779,7 +2027,7 @@ class TestEGADS(unittest.TestCase):
         faces = box0.getBodyTopos(egads.FACE)
         uvrange, periodic = faces[0].getRange()
 
-        (geom, oclass, mtype, lim, children, sens) = faces[0].getTopology()
+        (oclass, mtype, geom, lim, children, sens) = faces[0].getTopology()
 
         ucurv = geom.isoCline(0, (uvrange[0]+uvrange[1])/2)
         data = ucurv.getInfo()
@@ -2094,28 +2342,28 @@ class TestEGADS(unittest.TestCase):
         ebody.finishEBody()
         
         # check the hierarchy
-        (geom, oclass, mtype, lim, eshells, sens) = ebody.getTopology()
+        (oclass, mtype, geom, lim, eshells, sens) = ebody.getTopology()
         self.assertEqual(egads.EBODY, oclass)
         self.assertEqual(1, len(eshells))
         self.assertEqual(body, geom)
 
         for eshell in eshells:
-            (geom, oclass, mtype, lim, efaces, sens) = eshell.getTopology()
+            (oclass, mtype, geom, lim, efaces, sens) = eshell.getTopology()
             self.assertEqual(oclass, egads.ESHELL)
             self.assertEqual(10, len(efaces))
             
             for eface in efaces:
-                (geom, oclass, mtype, lim, eloops, sens) = eface.getTopology()
+                (oclass, mtype, geom, lim, eloops, sens) = eface.getTopology()
                 self.assertEqual(oclass, egads.EFACE)
                 self.assertEqual(1, len(eloops))
                 
                 for eface in efaces:
-                    (geom, oclass, mtype, lim, eloops, sens) = eface.getTopology()
+                    (oclass, mtype, geom, lim, eloops, sens) = eface.getTopology()
                     self.assertEqual(oclass, egads.EFACE)
                     self.assertEqual(1, len(eloops))
                     
                     for eloop in eloops:
-                        (geom, oclass, mtype, lim, eedges, sens) = eloop.getTopology()
+                        (oclass, mtype, geom, lim, eedges, sens) = eloop.getTopology()
                         self.assertEqual(oclass, egads.ELOOPX)
 
         # check getting the original FACES
@@ -2161,7 +2409,7 @@ class TestEGADS(unittest.TestCase):
 
         model = self.context.makeTopology(egads.MODEL, children=children)
 
-        (geom, oclass, mtype, lim, cldrn, sens) = model.getTopology()
+        (oclass, mtype, geom, lim, cldrn, sens) = model.getTopology()
 
         self.assertEqual(children, cldrn)
 

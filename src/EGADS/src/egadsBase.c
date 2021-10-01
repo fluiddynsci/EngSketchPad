@@ -47,7 +47,8 @@
                                /*@null@*/ double *xform, egObject **copy );
   extern int  EG_copyTopology( /*@null@*/ egObject *cntxt, const egObject *topo,
                                /*@null@*/ double *xform, egObject **copy );
-  extern int  EG_copyEBody( const egObject *body, egObject **EBody );
+  extern int  EG_copyEBody( const egObject *body, /*@null@*/ void *ptr,
+                                  egObject **EBody );
   extern int  EG_flipGeometry( const egObject *geom, egObject **copy );
   extern int  EG_flipTopology( const egObject *topo, egObject **copy );
   extern int  EG_getTopology( const egObject *topo, egObject **geom, 
@@ -809,7 +810,7 @@ EG_deleteObject(egObject *object)
 {
   int      outLevel, total, cnt, nref, stat, oclass, mtype, nbody;
   int      i, *senses, locked = 0;
-  egObject *context, *obj, *next, *pobj, **bodies;
+  egObject *context, *obj, *next, **bodies;
   egCntxt  *cntx;
   egTessel *tess;
   egEBody  *ebody;
@@ -867,8 +868,9 @@ EG_deleteObject(egObject *object)
         }
         obj = next;
       }
-      /* is this necessary or correct? */
+      /* is this necessary or even correct?
       for (i = 0; i < nbody; i++) {
+        egObject *pobj;
         if (bodies[i]->tref == NULL) continue;
         next = bodies[i]->tref;
         pobj = NULL;
@@ -881,9 +883,9 @@ EG_deleteObject(egObject *object)
               cnt++;
             }
           pobj = next;
-          next = (egObject *) pobj->blind;      /* next reference */
+          next = (egObject *) pobj->blind;
         }
-      }
+      } */
       if (cnt > 0) {
         if (outLevel > 0)
           printf(" EGADS Info: Model delete w/ %d active Body Refs!\n", 
@@ -1135,6 +1137,7 @@ EG_copyObject(const egObject *object, /*@null@*/ void *ptr, egObject **copy)
   egObject     *context, *xcontext, *oform, *sobj, *ref, *obj = NULL;
   egObject     **nodes, **objs;
   egTessel     *btess, *ctess;
+  egEBody      *ebody;
 
   *copy = NULL;
   if (object == NULL)               return EGADS_NULLOBJ;
@@ -1167,9 +1170,9 @@ EG_copyObject(const egObject *object, /*@null@*/ void *ptr, egObject **copy)
         printf(" EGADS Error: Source Not an Object (EG_copyObject)!\n");
       return EGADS_NOTOBJ;
     }
-    if (sobj->oclass != BODY) {
+    if ((sobj->oclass != BODY) && (sobj->oclass != EBODY)) {
       if (outLevel > 0)
-        printf(" EGADS Error: Source Not Body (EG_copyObject)!\n");
+        printf(" EGADS Error: Source Not Body/EBody (EG_copyObject)!\n");
       return EGADS_NOTBODY;
     }
     if (btess->done == 0) return EGADS_TESSTATE;
@@ -1177,7 +1180,10 @@ EG_copyObject(const egObject *object, /*@null@*/ void *ptr, egObject **copy)
     oform = (egObject *) ptr;
     if (oform != NULL) {
       if (oform->magicnumber == MAGIC) {
-        if (oform->oclass != BODY) oform = NULL;
+        if ((sobj->oclass ==  BODY) && (oform->oclass !=  BODY)) oform = NULL;
+/*@-nullderef@*/
+        if ((sobj->oclass == EBODY) && (oform->oclass != EBODY)) oform = NULL;
+/*@+nullderef@*/
       } else {
         oform = NULL;
       }
@@ -1389,6 +1395,35 @@ EG_copyObject(const egObject *object, /*@null@*/ void *ptr, egObject **copy)
     ctess->done = 2;
     EG_free(inode);
     return EGADS_SUCCESS;
+
+  } else if (object->oclass == EBODY) {
+    
+    ebody = (egEBody *) object->blind;
+    if (ebody == NULL) {
+      if (outLevel > 0)
+        printf(" EGADS Error: NULL Blind Object (EG_copyObject)!\n");
+      return EGADS_NOTFOUND;
+    }
+    if (ebody->done != 1) {
+      if (outLevel > 0)
+        printf(" EGADS Error: EBody not closed (EG_copyObject)!\n");
+      return EGADS_EFFCTOBJ;
+    }
+    oform = (egObject *) ptr;
+    if (oform != NULL) {
+      if (oform->magicnumber != MAGIC) {
+        if (outLevel > 0)
+          printf(" EGADS Error: 2nd argument not an EGO (EG_copyObject)!\n");
+        return EGADS_NOTOBJ;
+      }
+      if (oform->oclass != BODY) {
+        if (outLevel > 0)
+          printf(" EGADS Error: Other is Not a Body (EG_copyObject)!\n");
+        return EGADS_NOTBODY;
+      }
+    }
+    return EG_copyEBody(object, ptr, copy);
+    
   }
   
   /* get transform/context object (if any) */
@@ -1436,10 +1471,6 @@ EG_copyObject(const egObject *object, /*@null@*/ void *ptr, egObject **copy)
   } else if (object->oclass <= MODEL) {
   
     stat = EG_copyTopology(context, object, xform, &obj);
-
-  } else if (object->oclass == EBODY) {
-    
-    return EG_copyEBody(object, copy);
     
   } else {
     
@@ -1766,6 +1797,12 @@ EG_isSame(const egObject *obj1, const egObject *obj2)
              (xyz1[2]-xyz2[2])*(xyz1[2]-xyz2[2])) > toler) return EGADS_OUTSIDE;
     return EGADS_SUCCESS;
   }
+  
+  /* check for degenerate Edge */
+  if ((obj1->oclass == EDGE) && (obj2->oclass == EDGE)) {
+    if ((obj1->mtype == DEGENERATE) && (obj2->mtype == DEGENERATE)) return EGADS_SUCCESS;
+    if ((obj1->mtype == DEGENERATE) || (obj2->mtype == DEGENERATE)) return EGADS_OUTSIDE;
+  }
 
   /* get the geometric objects */
   geom1  = (egObject *) obj1;
@@ -1785,10 +1822,6 @@ EG_isSame(const egObject *obj1, const egObject *obj2)
     if (stat != EGADS_SUCCESS)       return stat;
     if (geom2 == NULL)               return EGADS_NULLOBJ;
     if (geom2->magicnumber != MAGIC) return EGADS_NOTOBJ;
-  }
-  if (obj1->oclass == EDGE) {
-    if ((mtype1 == DEGENERATE) && (mtype2 == DEGENERATE)) return EGADS_SUCCESS;
-    if ((mtype1 == DEGENERATE) || (mtype2 == DEGENERATE)) return EGADS_OUTSIDE;
   }
   stat = EG_getGeometry(geom1, &oclass1, &mtype1, &ref1, &info1, &rv1);
   if (stat != EGADS_SUCCESS) return stat;

@@ -8173,7 +8173,7 @@
 
  9may21  change ocsmGetEgo so that it always returns the ego rather
              than a copy of the ego
- 
+
  9may21  add ocsmSetEgo to OpenCSM API, pyOCSM, and test_pyOCSM
 
 10may21  change the name of configuration sensitivities to geometric
@@ -8224,7 +8224,7 @@
 
 21may21  if ocsmSave is called to write a .udc file but there is no
              matching UDPRIM statement, write a include-type UDC
-         
+
 24may21  change DisplayFilter so that it posts help via an alert
              instead of the MessageWindow
 
@@ -8245,6 +8245,314 @@
 27may21  do not let .udc file be opened via File->Open
 
 27may21  fix description of adding a sketch to Tutorial 3
+
+*******  v1.19 release
+
+ 8jun21  uprev to v1.20 (ESP.html, ESP-localhost.html, ESP-help.html,
+             OpenCSM.h, ocsm.rc)
+
+ 8jun21  fix ESP Hint associated with CONNECT command
+
+ 8jun21  extend CONNECT so that it can CONNECT Faces in a single Body
+             if there is a Mark before the last SolidBody
+
+ 8jun21  improve detection of matching Edges in CONNECT
+
+ 8jun21  add inletWithWalls* test cases
+
+10jun21  improve speed of udfEditAttr and udpWaffle (on LINUX) when
+             script is very long
+
+11jun21  add Makefile.DARWIN64.gcc for testing with gcc-10; modify
+             testing procedure to also test against gcc-10
+
+11jun21  fix memory error associated with reordering senses in loops
+             (inletWithWalls1)
+
+11jun21  fix seg fault if $order in INTERSECT is given as $xmin (and
+             not xmin); check that only valid $order are given; fix
+             test cases that used invalid $order
+
+13jun21  upgrade to latest version ot Tblade3
+
+14jun21  fix a few typos in the documentation
+
+14jun21  update some training_2021 files
+
+16jun21  fix comments in contains.udc and overlaps.udc
+
+18jun21  add assembly3 and assembly4 test cases
+
+18jun21  allow CATBEG to catch overconstrained and underconstrained
+             errors
+
+18jun21  generate underconstrained, overconstrained, or not_converged
+             signals from SKEND
+
+18jun21  add sketch9* test cases
+
+18jun21  improve convergence tolerance in sketcher
+
+20jun21  fix sign of dip to minimize residual for S and R constraints
+             in sketcher
+
+21jun21  ensure that sweep() function always gives sign that is the
+             same as dab
+
+22jun21  check if a user gave an illegal $order to SUBTRACT
+
+23jun21  add eqn2body.udc and helix* and frustrum* test cases
+
+24jun21  fix bugs associated with SSLOPE statement (especially when a
+             sketch is flipped); add sketch10* test cases
+
+24jun21  fix tolerance checking in sketch solvers
+
+25jun21  add theta[] argument to udpEllipse; add ellipse2 test case
+
+26jun21  fix eqn2body.udc so that it warns (as oposed to errors) if a
+             local variable is being overwritten
+
+26jun21  fix bug that prematurely exits if UDP does not exist and we
+             are recycling
+
+26jun21  add angle argument to applyTparams.udc
+
+26jun21  add .tParams attribute to Body too in applyTparams.udc
+
+26jun21  in udfSlices, if there is a .tParams attribute on the input
+             Body, put it on the slices too
+
+26jun21  change message in udc loader for cases where file is not
+             found (to avoid Jenkins false positive)
+
+27jun21  fix bug in latest commit associated with calling a
+             non-existant UDP/UDF
+
+27jun21  first version of massProps and adjointCSM
+
+27jun21  fixed adjoint calculations in massProps
+
+28jun21  add adjoint* test cases; add testAdjoint target to
+             Makefile.DARWIN64
+
+29jun21  fix token parsing associated with DOS CR (carriage return) in
+             udpWaffle and udfEditAttr
+
+30jun21  update tessellation sensitivity verification data
+
+30jun21  fix bug in mass property derivatives
+
+30jun21  update sew1, sew2, and import5 to account for improvements in
+             IGES writer
+
+30jun21  add Curve, Pcurve, and Surface printouts to ocsmPrintEgo
+
+30jun21  add toler=0 argument to CONNECT command
+
+ 1jul21  break Makefile.DARWIN64 up so that test suite can be run in
+             parallel
+
+ 3jul21  fix bug when starting serveCSM on Windoze from an .egads,
+             .igs, or .stp  file for filename with backslashes; add
+             autoStart test case
+
+ 4jul21  add ability to print call history during sensitivity
+             calculations
+
+ 5jul21  add stickFuselage test case
+
+ 7jul21  extend COMBINE command to close WireBody if needed; add
+             combine8* test cases
+
+ 7jul21  add splitFlap2* and splitFlap3* test cases
+
+ 8jul21  extend CONNECT to work with WireBodys
+
+12jul21  fix bug associated with -dxdd option (incorrectly wrote .tess
+             file instead of .sens file)
+
+13jul21  add mechanism2 test case
+
+16jul21  add esa_logo test case
+
+16jul21  add normals to output from EVALUATE FACE command
+
+16jul21  when SUBTRACTing co-planar SheetBodys, make sure result has
+             same normal as the outer SheetBody; add subtract6j-k test
+             cases
+
+16jul21  allow -dxdd option to be applied to subscripted DESPMTRs
+
+16jul21  fix memory leak associated when COMBINE closes a WireBody in
+             order to make a SheetBody
+
+16jul21  add plotting of normals to DisplayType
+
+17jul21  fix First and last Node warnings associated with COMBINE and
+             with esa_logo
+
+17jul21  fix bug that did not readjust the level when returning from a
+             UDC
+
+19jul21  fix bug when the last line of a UDC (without an END
+            statement) calls a UDC (with an END statement)
+
+19jul21  add supell7* test cases
+
+20jul21  match slopes and curvatures at seams in UDP supell when
+             slpfact<0
+
+21jul21  broadcast view matrix to partners when cursor leaves canvas
+             before mouse up event
+
+21jul21  reorganize mass property calculations
+
+23jul21  update droopInlet* test cases to use slpfact=-1
+
+23jul21  compute mass properties only when needed
+
+23jul21  add warnings when recycling stops
+
+24jul21  significantly speed up recycling
+
+27jul21  fix CONNECT errors associated with non-contiguous Faces; add
+             connect7f test case
+
+27jul21  preserve orientation of Faces during EXTRACT; add extract4
+             test case
+
+28jul21  add sketch11* test cases
+
+28jul21  do not include SSLOPE statments when determining if Sketch
+             points are co-planar
+
+30jul21  update OpenCSM to account for EGADS changes associated with
+             making Faces and degenerate Edges
+
+31jul21  fix bug in Slugs associated with recent EGADS topology
+             changes
+
+ 2aug21  fix plugs bug for unclassified points during
+             reinitialization; mark plugs1c as expected failure (for
+             now)
+
+ 3aug21  more protections in plugs for cases with unclassified points
+
+ 4aug21  add PLUGS_CREATE_EGADS_FILES to serveCSM; add more info to
+             plugs.hist fille; add data/plugs/showHistory.csm to help
+             debug operation of Plugs
+
+ 4aug21  change number of reclassified points in Plugs to be the larger
+             of 5 and a fraction of area associated with a Face
+
+ 5aug21  improve accuracy of udpFreeform; update associated
+             verification data
+
+ 6aug21  initial version of serveESP
+
+ 6aug21  reorganize udp.c to serve as a pattern for serveESP
+
+ 8aug21  small updates to be consistent with recent EGADS changes
+
+16aug21  fixed uninitialized variable in Slugs
+
+19aug21  apply attributes on LINSEG, ARC, CIRARC, BEZIER, SPLINE, and
+             SSLOPE Branches to the Edge that they create
+
+19aug21  add attrSketch* test cases
+
+20aug21  remove Gloves and ErepEd from serveCSM
+
+21aug21  next version of serveESP that uses TIMs
+
+21aug21  move ErepEd to a TIM in serveESP
+
+21aug21  move Gloves to a TIM in serveESP
+
+21aug21  create Mitten as a TIM example
+
+24aug21  fix bug that sometimes uses FD sensitivities when analytic
+             derivatives could be used instead (associated with UDPARG
+             statements)
+
+25aug21  change method for setting mass properties so that rebuild is
+             not needed when changing spectrum limits in ESP
+
+30aug21  remove inside-out test for SolidBodys to improve performance
+
+31aug21  move Plugs to a TIM in serveESP
+
+ 1sep21  do not add _tParams attribute unless the Body will be
+             tessellated; remove coarseBox test case
+
+ 2sep21  fix long delay when browser without ball syncs display
+
+ 2sep21  fix ocsmGetName prototype in ocsm.py
+
+ 2sep21  implement outLevel in timPlugs
+
+ 2sep21  improve -plugs option in serveCSM so that more cases work;
+             mark plugs4c as successful in Jenkins
+
+ 3sep21  modify attribute and getattr1 test cases to account for fact
+             that _tParams only exists when Body is recycled
+
+ 3sep21  add attrScribe test case
+
+ 3sep21  add udpParabaloid and test case
+
+ 5sep21  update ESP-help for v1.20
+
+ 6sep21  fix bug that did not allow a user to EXTRACT multiple Faces
+             from a SolidBody that had an internal hole; add
+             extractShells* test cases
+
+ 6sep21  fix memory leak in udpParabaloid
+
+ 6sep21  update ESP_QuickReference for v1.20
+
+ 8sep21  fix bug in JOIN associated with Faces that share Edges but
+             which have bounding boxes that differ; add halfSpheres
+             test case
+
+ 8sep21  remove spurious printout associated with SKEND command
+
+ 9sep21  disable timMitten for v1.20 release
+
+10sep21  fix minor documentation typos
+
+20sep21  fix bug in StepThru that was introduced when computation of
+             _tParams was delayed
+         
+         update udfNuscale so that BSPLINES are not reconverted; add
+             DEBUG prints in udpNuscale; add sculpt* test cases
+
+         add attrProp test case to show how Edge Attributes get
+             propagated to Faces by EXTRUDE and REVOLVE but not by
+             RULE and BLEND.  attrProp also shows that Edge Attributes
+             are not carried forward by EXTRUDE, REVOLVE, RULE, or
+             BLEND
+         
+         make INTERFACE DIM obsolete; issue WARNING to use DIMENSION
+             statement instead
+
+&&&&&&&
+
+         when browser does not have ball, the 6 option does not
+             display all the attributes
+
+         browser without ball cannot see edits to .csm files
+
+         add goto option in StepThru mode
+
+         fix tessellation sensitivities for adjTest case
+
+         modify DisplayFilter to allow user to show everything except
+             with the given attribute
+
+         add command to remove Faces from a SheetBody or Edges from a
+             WireBody
 
          refactor ESP applications so that they are modular and
              dynamically loadable
