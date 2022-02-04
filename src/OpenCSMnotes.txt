@@ -8524,25 +8524,422 @@
 
 20sep21  fix bug in StepThru that was introduced when computation of
              _tParams was delayed
-         
-         update udfNuscale so that BSPLINES are not reconverted; add
-             DEBUG prints in udpNuscale; add sculpt* test cases
 
-         add attrProp test case to show how Edge Attributes get
+*******  v1.20 release
+
+24sep21  uprev to v1.21 (ESP.html, ESP-localhost.html, ESP-help.html,
+             OpenCSM.h, ocsm.rc)
+
+24sep21  create unpublished routine convertToBSplines.  modify so that
+             BSPLINES are not reconverted; modify udpParabaloid and
+             udfNuscale to use convertToBSplines.  add DEBUG prints in
+             udpNuscale; add sculpt* test cases
+
+24sep21  add attrProp test case to show how Edge Attributes get
              propagated to Faces by EXTRUDE and REVOLVE but not by
              RULE and BLEND.  attrProp also shows that Edge Attributes
              are not carried forward by EXTRUDE, REVOLVE, RULE, or
              BLEND
-         
-         make INTERFACE DIM obsolete; issue WARNING to use DIMENSION
+
+24sep21  make INTERFACE DIM obsolete; issue WARNING to use DIMENSION
              statement instead
+
+24sep21  add udfNacelle and udfNacelle* test cases
+
+30sep21  allow pyOCSM to import an externally-generated MODL
+
+ 1oct21  enable timMitten
+
+ 3oct21  create timPython and data/python/test*
+
+ 3oct21  allow serveESP to start with a .py file
+
+ 5oct21  cosmetic fixes to udpSensitivity in many UDPs and UDFs
+
+ 5oct21  modify udfNacelle* test cases to use DESPMTRs
+
+ 9oct21  add splitWing* test cases
+
+ 9oct21  remove gallery/FJ2 from distribution
+
+ 9oct21  fix bug in udfGuide that did not work properly for an input
+             SheetBody
+
+ 9oct21  add designS* test cases
+
+ 9oct21  fix bug that did not compute sensitivities correctly
+             for UDFs when one (or more) of the input Bodys had
+             non-zero velocities
+
+11oct21  add udpTire testing to Makefile.DARWIN64
+
+11oct21  compute sensitivity correctly with udfCreateBEM, udfCreatePoly,
+             udfEditAttr, udfPrintBbox, udfPrintBrep, and udoPrintEgo;
+             add designS3 test case
+
+15oct21  fix bug associated with expressions that contain mass
+             properties; add designT1 test case
+
+15oct21  fix bug that causes an error to be raised if the mass
+             property sensitivities are computed by FDs before the
+             last Body is built; add designT2 test case
+
+15oct21  add python mode to CodeMirror
+
+16oct21  add esp.py
+
+17oct21  enable esp.SetModl() to see MODL in serveESP after python
+             finishes
+
+19oct21  fix bug associated with (FD) sensitivities for a MODL with a
+             OUTPMTR being set before a FILLET or CHAMFER
+
+19oct21  remove code that protects against calls to EG_replaceFaces in
+             SolidBodys with more than one Shell
+
+22oct21  fix stdout sequencing in timPython
+
+23oct21  get rid of global data in serveESP
+
+23oct21  update data/python/test* files
+
+23oct21  start getting ready for editing .py files
+
+23oct21  separate loading and running in timPython
+
+23oct21  run python in separate thread
+
+24oct21  add @scope at-parameter; add scope test case
+
+24oct21  fix pyOCSM test errors caused by addition of @scope
+
+24oct21  change button to yellow and RunningPython while python is
+             running
+
+24oct21  update Makefile.DARWIN64 to get rpath correct when running a
+             script directly in python (and not serveESP)
+
+26oct21  allow CONPMTR statement if at top-level scope; update scope
+             test case
+
+26oct21  fix bug that did not compute sensitivity correctly when a
+             DESPMTR was used in an include-type UDC
+
+26oct21  fix bug that did not remove UDP cache entries when a Body was
+             deleted (such as during recycling)
+
+26oct21  do not consider DEGENERATE Edges when SELECTing either by
+             bounding box of nearest-to
+
+29oct21  fix hint for SCALE in ESP
+
+29oct21  shorten hint time-out in ESP to 15 sec
+
+29oct21  fix bug in timPython that did not register MesgCB and SizeCB
+             after a timLoad (which caused a problem if started with a
+             .py file)
+
+ 3nov21  add (not-yet-implemented) Debug option in ESP editor
+
+ 3nov21  update ESP editor so that users without the ball can see the
+             edits as they happen
+
+ 3nov21  clean up unneeded routines in TIMs
+
+ 3nov21  add debug and debugged testcases
+
+ 4nov21  add designU* test cases
+
+ 5nov21  updates to way PYTHONHOME is found in timPython
+
+ 9nov21  add designV1 test case
+
+12nov21  set sgFocus in timMitten so that it can start with an empty
+             MODL
+
+12nov21  add ocsmLoadFromModel function
+
+12nov21  add withTess=0 argument to DUMP command; add dumpTest* test
+             cases
+
+13nov21  update Makefile.DARWIN64.gcc
+
+13nov21  update timPython to post stdout to the MessageWindow while
+             python is executing
+
+13nov21  fix postMessage so that blanks lines between messages are
+             eliminated
+
+14nov21  remove tim_data from TIM interface (no longer needed)
+
+17nov21  change NXSECT argument in udpGuide to ATTRREAL so that finite
+             difference sensitivities are triggered
+
+17nov21  remove RAD argument to udpBox in designI2 and designI4 so
+             that finite differences are not triggered
+
+17nov21  fix bug that re-computed velocities when re-computation was
+             not necessary
+
+17nov21  fix bug associated with sensitivities of mass properties
+
+18nov21  update to latest version of Tblade3
+
+19nov21  allow default xaxis=0, yaxis=0, and zaxis=0 in ROTATEX,
+             ROTATEY, and ROTATEZ; add rotate1 test case
+
+19nov21  add LAYOUT to udpWaffle; add waffle3* test case
+
+19nov21  fix memory leak associated with mprp arrays
+
+20nov21  add IFTHEN/ENDIF to udpWaffle; add waffleA* test cases
+
+20nov21  update Makefile.LINUX64
+
+20nov21  fix bug that lost ball if user with ball sends a message
+
+21nov21  update timMesg so that it does not return a response
+
+21nov21  allow non-*host* to initiate file editting
+
+21nov21  fix bug that does not give appropriate error messages when
+             having trouble opening a .py file from the command
+             line
+
+21nov21  fix bug that does not give appropriate error messages when
+             timPython has trouble opening a file from Tools->Python
+
+21nov21  improve sensitivities associated with tip treatments in
+             BLEND;  update designG5 and designG6 test cases
+
+22nov21  fix bug so that wv_broadcastText is not called by a TIM when
+             running in batch mode
+
+24nov21  fix typo in error message associated with COMBINE command
+
+24nov21  make error messages from udpWaffle more explicit
+
+24nov21  fix bug associated with MALLOCs in udpWaffle
+
+25nov21  add closeBody* test cases
+
+25nov21  add collab* test cases
+
+26nov21  add documentation about what happens for a 0 in either SELECT
+             ADD or SELECT SUB statement
+
+27nov21  remove special sensitivity treatment for BLENDs with C0;
+             update sensCSM verification data
+
+27nov21  add blend22* and rule22 test cases
+
+30nov21  use new BLEND C0 treatment, including in sensitivities
+
+ 1dec21  fix bug in timMitten associated with cleanup
+
+ 2dec21  reorganize way TIMs broadcast messages out to the browsers
+
+ 4dec21  do not change outLevel if ocsmSetOutLevel is called with
+             negative argument
+
+ 4dec21  add printout for outLevel.ge.2 when TIM broadcasts a message
+             to the browsers
+
+ 5dec21  add option to plot trim curves associated with all Faces
+
+ 9dec21  fix bug in udfNuscale when zscale=0
+
+ 9dec21  first cut at calling a TIM from the python TIM
+
+10dec21  add timViewer and associated test cases
+
+11dec21  create mechanism to allow a TIM to call a TIM
+
+11dec21  fix a few typos in ESP-help
+
+12dec21  fix mutex problems associated with tim_mesg
+
+12dec21  change locking mechanism for tim_mesg to use ThreadWait
+             instead of a mutex
+
+14dec21  add ability to hold python execution while an overlay
+             (viewer) is executing; update viewer.py
+
+14dec15  update test.py to remove call to removed esp.ViewModl()
+
+15dec21  update timViewer to be able to make changes to the scene
+             graph
+
+15dec21  add ocsmLoadFromModel to pyOCSM; add shapes test case
+
+15dec21  fix initialization bug in ocsm.py
+
+15dec21  create ESP-viewer.js
+
+16dec21  pass callbacks to overlay if they exist
+
+16dec21  reorganize python test cases
+
+16dec21  change verification tests to include serveESP
+
+17dec21  update documentation for DUMP in OpenCSM.h
+
+18dec21  add ability of specifying color of items in a plotfile
+
+18dec21  change udfCompare to group bad points based upon the
+             magnitude of the error
+
+18dec21  update udfCompare to check distances from Nodes and Edges as
+             well as distances from Faces
+
+19dec21  update Makefile.LINUX64
+
+19dec21  fix typo in mitten2.py
+
+22dec21  more improvements to udfCompare (and fix sanitizer error)
+
+22dec21  update GRAFIC plots of trim curves to show the points on the
+             Pcurves
+
+22dec21  increase size of points in plotfile in serveESP
+
+22dec21  add fixture* test cases
+
+23dec21  check for proper result types from SWEEP
+
+23dec21  check mass props before topology in verification files
+
+23dec21  add verification data for OpenCASCADE 7.6.0
+
+24dec21  change copyright to 2022
+
+25dec21  give @version a value before the first Body is built
+
+25dec21  allow DIMENSIONed variable to be returned from a UDC; update
+             expressions test case to demonstrate multi-value returns
+
+27dec21  fix bug if user with ball loaded a new .csm file and then
+             editted (where user without ball saw wrong file)
+
+27dec21  adjust closeBody2 test case to REORDER the Edges so that all
+             the Faces point outward
+
+27dec21  inform users if someone has joined or left a collaboration
+
+27dec21  modify visualization of grids on Faces in serveESP
+         * new-style quads if _makeQuads attribute on Body
+             (.tessType==Quad or .tessType==Mixed)
+         * old-style quads if _makeQuads attribute on Faces
+             (npatch>0)
+         * triangles oherwise
+
+28dec21  fix valgrind error in sensCSM
+
+30dec21  .py files are automatically edited in serveESP
+
+31dec21  update CAPS/myPlane for intent 4 (avl) and 5 (bem)
+
+31dec21  update to special plotting associated with Face velocities
+             for INTERP_VEL=6
+
+ 3jan22  improve tessellation sensitivities for Edges and Faces that
+             are not trimmed by a boolean operation; update .tsen
+             files
+
+ 5jan22  fix bugs associated with running a .py file
+
+ 6jan22  implement Debug in .csm editor
+
+ 6jan22  fix a few bugs in parent/child Body pointers
+
+ 8jan22  update ESP_QuickReference
+
+ 8jan22  update ESP so that double-clicking in MessageWindow takes you
+             to filename:linenum that is clicked on, else takes you to
+             last filename:linenum in MessageWindow
+
+10jan22  update sensCSM to use RMS errors; reduce ratio of
+             errors for alerts from 5 to 2; update .gsen and .tsen
+             files for 7.4.1 and 7.6.0
+
+12jan22  index.lt.0 in RESTORE is now a wildcard, meaning that Bodys
+             in all storages that match name are put onto the stack
+
+13jan22  initial integration of CAPS into serveESP; remove serveESP
+             from Makefile and NMakefile; create serveESP.make and
+             serveESP.mak
+
+15jan22  fix tessellation sensitivity bug associated with SheetBodys
+             that are INTERSECTed with a SolidBody; add designP5* test
+             cases
+
+16jan22  fix Node sensitivity for two parallel Edges
+
+16jan22  move timViewer from Makefile to serveESP.make
+
+17jan22  add tufts for Nodes when displaying tessellation
+             sesnitivities in serveESP
+
+18jan22  ensure that tessellation sensitivities on the boundaries of
+             Face and ends of Edges agree with Edge and Node
+             sensitivities; update .tsen files
+
+19jan22  modify timPython to get around numPy problems associated with
+             Py_Finalize; modify tim interface to allow a tim to
+             perform cleanup at the end of serveESP
+
+20jan22  add growing3.py test case
+
+21jan22  for a UDP/UDF, only use finite differences if one of its
+             arguements is ATTRREAL and has non-zero dots
+
+23jan22  do not show Branches in serveESP when in -caps mode
+
+23jan22  allow serveESP to change .csm file when in -caps mode
+
+23jan22  fix OpenCSM.c to remove stanalizer error
+
+25jan22  update Caps Value handling in ESP
+
+27jan22  fix errors that occur because Py_Finalize cannot be used more
+             than once (because of a numpy bug)
+
+27jan22  fix bug that did not show Cvals for -caps runs in serveESP and
+             Brchs when running without -caps
+
+29jan22  fix bug in ocsmPrintEgo when called on BSPLINE Curve or
+             Surface
+
+29jan22  require positive scale factors in udfNuscale when applied to
+             a SolidBody
+
+30jan22  add initial version of timPlotter and test cases
+
+31jan22  change GetToken in tim.c so that tokens can have unlimited
+             length
+
+         add sensitivities to udpTblade
+
+         sketcher improvements
+         . delete any segment
+         . split a segment
+         . specify sslope
+         . add a fillet
+         . trim a curve ??
+         . move a point on the screen
+         . mirror constraint
+         . shadow background
+         . translate sketch (scroll-bars?)
+         . better help when solver fails
+
+         analytic sensitivities for sketches
+
+         repackage TIMs
 
 &&&&&&&
 
          when browser does not have ball, the 6 option does not
              display all the attributes
-
-         browser without ball cannot see edits to .csm files
 
          add goto option in StepThru mode
 
@@ -8554,9 +8951,6 @@
          add command to remove Faces from a SheetBody or Edges from a
              WireBody
 
-         refactor ESP applications so that they are modular and
-             dynamically loadable
-
          multi-thread tessellation sensitivities
 
          add mass property calculation errors in sensCSM
@@ -8567,8 +8961,6 @@
 
          fix bug that did not generate correct sensitivities for
              scribed Edges
-
-         add mass property sensitivity tests to sensCSM
 
          add ability to specify SSLOPE in ESP sketcher
 
@@ -8603,8 +8995,6 @@
 
          don't require defaults for UDC arguments
 
-         provide sensitivities of mass properties
-
          allow vim or emacs key bindings in editor
 
          make an included oval work in the Sketcher
@@ -8618,8 +9008,6 @@
 
          add thickness attribute in waffle to create thick-walled
              waffle
-
-         allow more arguments to UDPRIM (do not require UDPARG)
 
          compute sensitivities for udpWaffle and udpRadwaf
              analytically
@@ -8648,12 +9036,7 @@
          add optional argument to EXTRACT to be able to extract all
              except the Edges or Faces spacified in the entityList
 
-         allow UDFs to get all Bodys back to Mark
-
          incorporate new Fitter.c into Slugs, OpenCSM, and udp*
-
-         allow GRAFIC-like drawing in ESP (for example, to watch how
-             segments are defined in udpWaffle)
 
          make recycle work on all Branches (and not stop at first
              changed Branch)
@@ -8664,22 +9047,10 @@
              set Design Parameters from application
              modify Feature Tree from application
 
-         add xcent=0, ycent=0, and zcent=0 arguments to SCALE
-
          allow user to use SET within Sketch solver
-
-         update to latest TBlade3
-
-         use file browser for File->Open and File->Save in ESP
-
-         in DisplayFilter in ESP, caret at beginning should be
-             interpreted as NOT
 
          add function to API to tell if a specific Design Parameter
              effects the Bodys on the stack
-
-         in DisplayFilter in ESP, asterisk should match any sequence
-             of characters (glob-style matching)
 
          add ability to edit included .csm files (from udpCsm)
 
@@ -8687,13 +9058,6 @@
 
          determine how to modify the screen to accomodate colorblind
              users
-
-         have commands that use the Mark (BLEND, COMBINE, DUMP, GROUP,
-             JOIN, LOFT, RULE, STORE, and UNION) use all Bodys on
-             stack if the Mark is not set.  also update the
-             documentation on this
-
-         implement thick-walled waffles
 
          try to add lightening holes to all rib Faces in a waffe test
              case

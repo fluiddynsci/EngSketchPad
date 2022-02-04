@@ -247,7 +247,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
      * This also increments numUdp and copies udps[0] to udps[numUdp].
      * Caching should only be performed after checking for valid inputs.
      */
-    status = cacheUdp();
+    status = cacheUdp(NULL);
     if (status < 0) {
         printf(" udpParsec.udpExecute: problem caching arguments\n");
         goto cleanup;

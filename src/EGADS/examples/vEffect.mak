@@ -12,9 +12,9 @@ TDIR  = $(ESP_ROOT)\bin
 !ENDIF
 
 $(TDIR)\vEffect.exe:	$(ODIR)\vEffect.obj $(LDIR)\egads.lib \
-			$(LDIR)\wsserver.lib $(LDIR)\z.lib
+			$(LDIR)\wsserver.lib
 	cl /Fe$(TDIR)\vEffect.exe $(ODIR)\vEffect.obj /link /LIBPATH:$(LDIR) \
-		wsserver.lib z.lib egads.lib ws2_32.lib
+		wsserver.lib egads.lib
 	$(MCOMP) /manifest $(TDIR)\vEffect.exe.manifest \
 		/outputresource:$(TDIR)\vEffect.exe;1
 

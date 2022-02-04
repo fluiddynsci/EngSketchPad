@@ -621,7 +621,8 @@ static int createVLMMesh(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     printf("\nGetting FEA vortex lattice mesh\n");
 
-    status = vlm_getSections(numBody,
+    status = vlm_getSections(aimInfo,
+                             numBody,
                              bodies,
                              "Aerodynamic",
                              astrosInstance->attrMap,
@@ -642,15 +643,17 @@ static int createVLMMesh(void *instStore, void *aimInfo, capsValue *aimInputs)
         else if (vlmSurface[i].NspanSection > 0)
             numSpanWise = (vlmSurface[i].numSection-1)*vlmSurface[i].NspanSection;
         else {
-            printf("Error: Only one of numSpanTotal and numSpanPerSection can be non-zero!\n");
-            printf("       numSpanTotal      = %d\n", vlmSurface[i].NspanTotal);
-            printf("       numSpanPerSection = %d\n", vlmSurface[i].NspanSection);
+            AIM_ERROR(aimInfo  , "Only one of numSpanTotal and numSpanPerSection can be non-zero!");
+            AIM_ADDLINE(aimInfo, "    numSpanTotal      = %d", vlmSurface[i].NspanTotal);
+            AIM_ADDLINE(aimInfo, "    numSpanPerSection = %d", vlmSurface[i].NspanSection);
             status = CAPS_BADVALUE;
             goto cleanup;
         }
 
-        status = vlm_equalSpaceSpanPanels(numSpanWise, vlmSurface[i].numSection, vlmSurface[i].vlmSection);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        status = vlm_equalSpaceSpanPanels(aimInfo, numSpanWise,
+                                          vlmSurface[i].numSection,
+                                          vlmSurface[i].vlmSection);
+        AIM_STATUS(aimInfo, status);
     }
 
     // Split the surfaces that have more than 2 sections into a new surface
@@ -1719,7 +1722,9 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // Set design variables
     if (aimInputs[Design_Variable-1].nullVal == NotNull) {
-        status = fea_getDesignVariable(aimInputs[Design_Variable-1].length,
+        status = fea_getDesignVariable(aimInfo,
+                                       (int)true,
+                                       aimInputs[Design_Variable-1].length,
                                        aimInputs[Design_Variable-1].vals.tuple,
                                        aimInputs[Design_Variable_Relation-1].length,
                                        aimInputs[Design_Variable_Relation-1].vals.tuple,
@@ -2549,7 +2554,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         // If name isn't found in Geometry inputs skip write geometric design variables
         if (j >= nGeomIn) continue;
 
-        if(aim_getGeomInType(aimInfo, j+1) == EGADS_OUTSIDE) {
+        if(aim_getGeomInType(aimInfo, j+1) != 0) {
             printf("Error: Geometric sensitivity not available for CFGPMTR = %s\n", geomInName);
             status = CAPS_NOSENSITVTY;
             goto cleanup;
@@ -2762,12 +2767,7 @@ int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
    * astros.preAnalysis()
    *
    * print ("\n\nRunning......")
-   * currentDirectory = os.getcwd() # Get our current working directory
-   *
-   * os.chdir(astros.analysisDir) # Move into test directory
-   * os.system(ASTROS_ROOT + os.sep + "astros.exe < " + astros.input.Proj_Name + ".dat > " + astros.input.Proj_Name + ".out"); # Run via system call
-   *
-   * os.chdir(currentDirectory) # Move back to top directory
+   * astros.system(ASTROS_ROOT + os.sep + "astros.exe < " + astros.input.Proj_Name + ".dat > " + astros.input.Proj_Name + ".out"); # Run via system call
    *
    * print ("\n\postAnalysis......")
    * astros.postAnalysis()

@@ -13,9 +13,9 @@ TDIR  = $(ESP_ROOT)\bin
 !ENDIF
 
 $(TDIR)\vTess.exe:	$(ODIR)\vTess.obj $(ODIR)\retessFaces.obj \
-			$(LDIR)\egads.lib $(LDIR)\wsserver.lib $(LDIR)\z.lib
+			$(LDIR)\egads.lib $(LDIR)\wsserver.lib
 	cl /Fe$(TDIR)\vTess.exe $(ODIR)\vTess.obj $(ODIR)\retessFaces.obj \
-		/link /LIBPATH:$(LDIR) wsserver.lib z.lib egads.lib ws2_32.lib
+		/link /LIBPATH:$(LDIR) wsserver.lib egads.lib
 	$(MCOMP) /manifest $(TDIR)\vTess.exe.manifest \
 		/outputresource:$(TDIR)\vTess.exe;1
 

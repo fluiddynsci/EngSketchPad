@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
-
+#include <ctype.h>
 
 #include "egads.h"        // Bring in egads utilss
 #include "capsTypes.h"    // Bring in CAPS types
@@ -16,12 +16,13 @@
 #include "cfdUtils.h"
 #include "tecplotUtils.h" // Bring in tecplot utility functions
 #include "fun3dUtils.h"   // Bring in fun3d utility header
-
+#include "fun3dInputs.h"
 #include "ugridWriter.h"
 
 
 #ifdef WIN32
 #define strcasecmp  stricmp
+#define strncasecmp _strnicmp
 #endif
 
 
@@ -1207,7 +1208,8 @@ int fun3d_writeNML(void *aimInfo, capsValue *aimInputs, cfdBoundaryConditionStru
     char fileExt[] ="fun3d.nml";
 
     printf("Writing fun3d.nml\n");
-    if (aimInputs[Design_Variable-1].nullVal == NotNull) {
+    if (aimInputs[Design_Functional-1].nullVal == NotNull ||
+        aimInputs[Design_SensFile-1].vals.integer == (int)true) {
 #ifdef WIN32
         snprintf(filename, PATH_MAX, "Flow\\%s", fileExt);
 #else
@@ -1266,6 +1268,14 @@ int fun3d_writeNML(void *aimInfo, capsValue *aimInputs, cfdBoundaryConditionStru
 
     if (aimInputs[Beta-1].nullVal != IsNull) {
         fprintf(fnml," angle_of_yaw = %f\n", aimInputs[Beta-1].vals.real);
+    }
+
+    if (aimInputs[Reference_Temperature-1].nullVal != IsNull) {
+            fprintf(fnml," temperature = %f\n", aimInputs[Reference_Temperature-1].vals.real);
+
+            if (aimInputs[Reference_Temperature-1].units != NULL) {
+                fprintf(fnml," temperature_units = \'%s\'\n", aimInputs[Reference_Temperature-1].units);
+            }
     }
 
     fprintf(fnml,"/\n\n");
@@ -1606,6 +1616,7 @@ cleanup:
 int  fun3d_writeParameterization(void *aimInfo,
                                  int numDesignVariable,
                                  cfdDesignVariableStruct designVariable[],
+                                 int writeSensitivity,
                                  aimMeshRef *meshRef)
 {
 
@@ -1618,7 +1629,7 @@ int  fun3d_writeParameterization(void *aimInfo,
     // Data transfer Out variables
     char **dataOutName= NULL;
 
-    double **dataOutMatrix = NULL;
+    double ***dataOutMatrix = NULL;
     int *dataOutFormat = NULL;
     int *dataConnectMatrix = NULL;
 
@@ -1634,6 +1645,7 @@ int  fun3d_writeParameterization(void *aimInfo,
     int numPoint;
     double *dxyz = NULL;
 
+    int index;
     int iface, iglobal;
     int state, nFace;
     ego body, *faces=NULL;
@@ -1650,51 +1662,39 @@ int  fun3d_writeParameterization(void *aimInfo,
     char folder[]  = "Rubberize";
     char zoneTitle[100];
 
-    int numGeomIn;
     capsValue *geomInVal;
     int *geomSelect = NULL;
 
-    numGeomIn = aim_getIndex(aimInfo, NULL, GEOMETRYIN);
-    if (numGeomIn <= 0) {
-        AIM_ERROR(aimInfo, "No DESPMTR available!");
-        return CAPS_NULLVALUE;
-    }
-
-    AIM_ALLOC(geomSelect, numGeomIn, int, aimInfo, status);
+    AIM_ALLOC(geomSelect, numDesignVariable, int, aimInfo, status);
 
     // Determine number of geometry input variables
-    for (i = 0; i < numGeomIn; i++) {
+
+    for (i = 0; i < numDesignVariable; i++) {
         geomSelect[i] = (int) false;
 
-        status = aim_getName(aimInfo, i+1, GEOMETRYIN, &geomInName);
-        AIM_STATUS(aimInfo, status);
-
-        for (j = 0; j < numDesignVariable; j++) {
-            if (strcasecmp(designVariable[j].name, geomInName) != 0) continue;
-            break;
+        index = aim_getIndex(aimInfo, designVariable[i].name, GEOMETRYIN);
+        if (index == CAPS_NOTFOUND) continue;
+        if (index < CAPS_SUCCESS ) {
+          status = index;
+          AIM_STATUS(aimInfo, status);
         }
 
-        if (j >= numDesignVariable) continue; // Don't want this geomIn
-
-        if(aim_getGeomInType(aimInfo, i+1) == EGADS_OUTSIDE) {
+        if(aim_getGeomInType(aimInfo, index) != 0) {
             AIM_ERROR(aimInfo, "GeometryIn value %s is a configuration parameter and not a valid design parameter - can't get sensitivity\n",
-                   geomInName);
+                      designVariable[i].name);
             status = CAPS_BADVALUE;
             goto cleanup;
         }
 
-        geomSelect[i] = (int) true;
+        // Fun3D always requires rubberize files, but don't compute sensitivities if not needed
+        geomSelect[i] = writeSensitivity;
 
-        status = aim_getValue(aimInfo, i+1, GEOMETRYIN, &geomInVal);
-        AIM_STATUS(aimInfo, status);
+        if (writeSensitivity == (int)true) {
+          status = aim_getValue(aimInfo, index, GEOMETRYIN, &geomInVal);
+          AIM_STATUS(aimInfo, status);
 
-        numOutVariable += 3*geomInVal->length; // xD1, yD1, zD1, ...
-    }
-
-    if (numOutVariable == 0) {
-        AIM_ERROR(aimInfo, "No geometryIn values were selected for design.\n");
-        status = CAPS_SUCCESS;
-        goto cleanup;
+          numOutVariable += 3*geomInVal->length; // xD1, yD1, zD1, ...
+        }
     }
 
     if (numOutVariable > 99999999) {
@@ -1731,10 +1731,6 @@ int  fun3d_writeParameterization(void *aimInfo,
         }
     }
 
-    // Allocate data arrays that are going to be output
-    AIM_ALLOC(dataOutMatrix, numOutVariable, double*, aimInfo, status);
-    for (i = 0; i < numOutVariable; i++) dataOutMatrix[i] = NULL;
-
     AIM_ALLOC(dataOutFormat, numOutVariable, int, aimInfo, status);
 
     // Set data out formatting
@@ -1746,15 +1742,22 @@ int  fun3d_writeParameterization(void *aimInfo,
         }
     }
 
-    // Write sensitivity files for each body tessellation
+    // Allocate data arrays that are going to be output
+    AIM_ALLOC(dataOutMatrix, meshRef->nmap, double**, aimInfo, status);
+    for (i = 0; i < meshRef->nmap; i++) dataOutMatrix[i] = NULL;
+
+    for (i = 0; i < meshRef->nmap; i++) {
+      AIM_ALLOC(dataOutMatrix[i], numOutVariable, double*, aimInfo, status);
+      for (j = 0; j < numOutVariable; j++) dataOutMatrix[i][j] = NULL;
+    }
 
     for (i = 0; i < meshRef->nmap; i++) {
       status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &numOutDataPoint);
       AIM_STATUS(aimInfo, status);
 
-      // re-allocate data arrays
+      // allocate data arrays
       for (j = 0; j < numOutVariable; j++) {
-        AIM_REALL(dataOutMatrix[j], numOutDataPoint, double, aimInfo, status);
+        AIM_ALLOC(dataOutMatrix[i][j], numOutDataPoint, double, aimInfo, status);
       }
 
       for (iglobal = 0; iglobal < numOutDataPoint; iglobal++) {
@@ -1763,13 +1766,56 @@ int  fun3d_writeParameterization(void *aimInfo,
         AIM_STATUS(aimInfo, status);
 
         // First just set the Coordinates
-        dataOutMatrix[0][iglobal] = xyz[0];
-        dataOutMatrix[1][iglobal] = xyz[1];
-        dataOutMatrix[2][iglobal] = xyz[2];
+        dataOutMatrix[i][0][iglobal] = xyz[0];
+        dataOutMatrix[i][1][iglobal] = xyz[1];
+        dataOutMatrix[i][2][iglobal] = xyz[2];
 
         // Volume mesh node ID
-        dataOutMatrix[3][iglobal] = meshRef->maps[i].map[iglobal];
+        dataOutMatrix[i][3][iglobal] = meshRef->maps[i].map[iglobal];
       }
+    }
+
+    // Loop over the geometry in values and compute sensitivities for all bodies
+    m = 4;
+    for (j = 0; j < numDesignVariable; j++) {
+
+      if (geomSelect[j] == (int) false) continue;
+
+      geomInName = designVariable[j].name;
+      index = aim_getIndex(aimInfo, geomInName, GEOMETRYIN);
+
+      status = aim_getValue(aimInfo, index, GEOMETRYIN, &geomInVal);
+      AIM_STATUS(aimInfo, status);
+
+      for (row = 0; row < geomInVal->nrow; row++) {
+        for (col = 0; col < geomInVal->ncol; col++) {
+
+          for (i = 0; i < meshRef->nmap; i++) {
+            status = aim_tessSensitivity(aimInfo,
+                                         geomInName,
+                                         row+1, col+1, // row, col
+                                         meshRef->maps[i].tess,
+                                         &numPoint, &dxyz);
+            AIM_STATUS(aimInfo, status, "Sensitivity for: %s\n", geomInName);
+            AIM_NOTNULL(dxyz, aimInfo, status);
+
+            for (k = 0; k < numPoint; k++) {
+              dataOutMatrix[i][m+0][k] = dxyz[3*k + 0]; // dx/dGeomIn
+              dataOutMatrix[i][m+1][k] = dxyz[3*k + 1]; // dy/dGeomIn
+              dataOutMatrix[i][m+2][k] = dxyz[3*k + 2]; // dz/dGeomIn
+            }
+            AIM_FREE(dxyz);
+          }
+          m += 3;
+        }
+      }
+    }
+
+    // Write sensitivity files for each body tessellation
+
+    for (i = 0; i < meshRef->nmap; i++) {
+      status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &numOutDataPoint);
+      AIM_STATUS(aimInfo, status);
 
       // check if the tessellation has a mixture of quad and tess
       status = EG_attributeRet(meshRef->maps[i].tess, ".mixed",
@@ -1841,52 +1887,10 @@ int  fun3d_writeParameterization(void *aimInfo,
       }
       AIM_FREE(faces);
 
-
-      // Loop over the geometry in values
-      m = 4;
-      for (j = 0; j < numGeomIn; j++) {
-
-        if (geomSelect[j] == (int) false) continue;
-
-        status = aim_getName(aimInfo, j+1, GEOMETRYIN, &geomInName);
-        AIM_STATUS(aimInfo, status);
-
-        status = aim_getValue(aimInfo, j+1, GEOMETRYIN, &geomInVal);
-        AIM_STATUS(aimInfo, status);
-
-        for (row = 0; row < geomInVal->nrow; row++) {
-          for (col = 0; col < geomInVal->ncol; col++) {
-
-            printf("Computing body %d tessellation sensitivity for: %s[%d,%d]\n", i+1, geomInName, row+1, col+1);
-
-            status = aim_tessSensitivity(aimInfo,
-                                         geomInName,
-                                         row+1, col+1, // row, col
-                                         meshRef->maps[i].tess,
-                                         &numPoint, &dxyz);
-            AIM_STATUS(aimInfo, status, "Sensitivity for: %s\n", geomInName);
-            AIM_NOTNULL(dxyz, aimInfo, status);
-
-            if (numPoint != numOutDataPoint) {
-              AIM_ERROR(aimInfo, "The number of nodes returned by aim_senitivity does NOT match the surface mesh!");
-              status = CAPS_MISMATCH;
-              goto cleanup;
-            }
-
-            for (k = 0; k < numPoint; k++) {
-              dataOutMatrix[m+0][k] = dxyz[3*k + 0]; // dx/dGeomIn
-              dataOutMatrix[m+1][k] = dxyz[3*k + 1]; // dy/dGeomIn
-              dataOutMatrix[m+2][k] = dxyz[3*k + 2]; // dz/dGeomIn
-            }
-
-            m += 3;
-          }
-        }
-
-        AIM_FREE(dxyz);
-      }
-
-      sprintf(message,"%s %d,", "sensitivity file for body", i+1);
+      if (writeSensitivity == (int)true)
+        sprintf(message,"%s %d,", "sensitivity file for body", i+1);
+      else
+        sprintf(message,"%s %d,", "mesh file for body", i+1);
 
       stringLength = strlen(folder) + 1 + strlen(filePre) + 7 + strlen(fileExt) + 1 ;
 
@@ -1907,7 +1911,7 @@ int  fun3d_writeParameterization(void *aimInfo,
                                     numOutVariable,
                                     dataOutName,
                                     numOutDataPoint,
-                                    dataOutMatrix,
+                                    dataOutMatrix[i],
                                     dataOutFormat,
                                     numOutDataConnect,
                                     dataConnectMatrix,
@@ -1919,17 +1923,19 @@ int  fun3d_writeParameterization(void *aimInfo,
     status = CAPS_SUCCESS;
 
 cleanup:
-    if (status != CAPS_SUCCESS)
-        printf("Error: Premature exit in fun3d_writeParameterization status = %d\n",
-               status);
     (void) string_freeArray(numOutVariable, &dataOutName);
 #ifdef S_SPLINT_S
     EG_free(dataOutName);
 #endif
 
     if (dataOutMatrix != NULL) {
-        for (i = 0; i < numOutVariable; i++) {
-            AIM_FREE(dataOutMatrix[i]);
+        for (i = 0; i < meshRef->nmap; i++) {
+          if (dataOutMatrix[i] != NULL) {
+              for (j = 0; j < numOutVariable; j++) {
+                  AIM_FREE(dataOutMatrix[i][j]);
+              }
+          }
+          AIM_FREE(dataOutMatrix[i]);
         }
     }
 
@@ -1946,39 +1952,68 @@ cleanup:
 }
 
 
-static int _writeObjective(void *aimInfo, FILE *fp, cfdDesignObjectiveStruct *objective)
+static int _writeFunctinoalComponent(void *aimInfo, FILE *fp, cfdDesignFunctionalCompStruct *comp)
 {
+    int status = CAPS_SUCCESS;
 
-    int status;
+    const char *names[] = {"cl", "cd",                   // Lift, drag coefficients
+                           "clp", "cdp",                 // Lift, drag coefficients: pressure contributions
+                           "clv", "cdv",                 // Lift, drag coefficients: shear contributions
+                           "cmx", "cmy", "cmz",          // x/y/z-axis moment coefficients
+                           "cmxp", "cmyp", "cmzp",       // x/y/z-axis moment coefficients: pressure contributions
+                           "cmxv", "cmyv", "cmzv",       // x/y/z-axis moment coefficients: shear contributions
+                           "cx", "cy", "cz",             // x/y/z-axis force coefficients
+                           "cxp", "cyp", "czp",          // x/y/z-axis force coefficients: pressure contributions
+                           "cxv", "cyv", "czv",          // x/y/z-axis force coefficients: shear contributions
+                           "powerx", "powery", "powerz", // x/y/z-axis power coefficients
+                           "clcd",                       // Lift-to-drag ratio
+                           "fom"    ,                    // Rotorcraft figure of merit
+                           "propeff",                    // Rotorcraft propulsive efficiency
+                           "rtr"    ,                    // thrust Rotorcraft thrust function
+                           "pstag"  ,                    // RMS of stagnation pressure in cutting plane disk
+                           "distort",                    // Engine inflow distortion
+                           "boom"   ,                    // targ Near-field p/p∞ pressure target
+                           "sboom"  ,                    // Coupled sBOOM ground-based noise metrics
+                           "ae"     ,                    // Supersonic equivalent area target distribution
+                           "press"  ,                    // box RMS of pressure in user-defined box, also pointwise dp/dt, dρ/dt
+                           "cpstar" ,                    // Target pressure distributions
+                           "sgen"                        // Entropy generation
+                          };
 
-    const char *name;
+    int i, found = (int)false;
+    char *function=NULL, *c=NULL;
 
-    if      (objective->objectiveType == ObjectiveCl)   name = "cl";
-    else if (objective->objectiveType == ObjectiveCd)   name = "cd";
-    else if (objective->objectiveType == ObjectiveCmx)  name = "cmx";
-    else if (objective->objectiveType == ObjectiveCmy)  name = "cmy";
-    else if (objective->objectiveType == ObjectiveCmz)  name = "cmz";
-    else if (objective->objectiveType == ObjectiveClCd) name = "clcd";
-    else if (objective->objectiveType == ObjectiveCx)   name = "cx";
-    else if (objective->objectiveType == ObjectiveCy)   name = "cy";
-    else if (objective->objectiveType == ObjectiveCz)   name = "cz";
-    else {
-        AIM_ERROR(aimInfo, "ObjectiveType (%d) not recognized for objective '%s'\n",
-                  objective->objectiveType, objective->name);
+    for (i = 0; i < sizeof(names)/sizeof(char*); i++)
+        if ( strcasecmp(names[i], comp->name) == 0 ) {
+            found = (int)true;
+            break;
+        }
+
+    if (found == (int) false) {
+        AIM_ERROR(aimInfo, "Unknown function: '%s'", comp->name);
+        AIM_ADDLINE(aimInfo, "Available functions:");
+        for (i = 0; i < sizeof(names)/sizeof(char*); i++)
+            AIM_ADDLINE(aimInfo, "'%s'", names[i]);
         status = CAPS_BADVALUE;
         goto cleanup;
     }
 
+    // make the name lower case
+    AIM_STRDUP(function, comp->name, aimInfo, status);
+    for (c = function; *c != '\0'; ++c) *c = tolower(*c);
+
     // fprintf(fp, "Components of function   1: boundary id (0=all)/name/value/weight/target/power\n");
-    fprintf(fp, "0 %s          %f %f %f %f\n", name,
-                                               0.0,
-                                               objective->weight,
-                                               objective->target,
-                                               objective->power);
+    fprintf(fp, " %d %s          %f %f %f %f\n", comp->bcID,
+                                                 function,
+                                                 0.0,
+                                                 comp->weight,
+                                                 comp->target,
+                                                 comp->power);
 
     status = CAPS_SUCCESS;
 
 cleanup:
+    AIM_FREE(function);
     return status;
 }
 
@@ -2004,7 +2039,7 @@ int fun3d_writeRubber(void *aimInfo,
     // Open file
     fp = aim_fopen(aimInfo, file, "w");
     if (fp == NULL) {
-        printf("Unable to open file: %s\n", file);
+        AIM_ERROR(aimInfo, "Unable to open file: %s\n", file);
         status = CAPS_IOERR;
         goto cleanup;
     }
@@ -2016,7 +2051,7 @@ int fun3d_writeRubber(void *aimInfo,
 
         if (design.designVariable[i].type != DesignVariableGeometry) continue;
 
-        numShapeVar += design.designVariable[i].length; // xD1, yD1, zD1, ...
+        numShapeVar += design.designVariable[i].var->length; // xD1, yD1, zD1, ...
     }
 
     fprintf(fp, "################################################################################\n");
@@ -2029,35 +2064,35 @@ int fun3d_writeRubber(void *aimInfo,
 
         if (strcasecmp(design.designVariable[i].name, "Mach") != 0) continue;
 
-        if (design.designVariable[i].length < 1) {
+        if (design.designVariable[i].var->length < 1) {
             status = CAPS_RANGEERR;
             goto cleanup;
         }
 
-        fprintf(fp, "Mach    1   %.15E  %.15E  %.15E\n", design.designVariable[i].initialValue[0],
+        fprintf(fp, "Mach    1   %.15E  %.15E  %.15E\n", design.designVariable[i].value[0],
                                                          design.designVariable[i].lowerBound[0],
                                                          design.designVariable[i].upperBound[0]);
         break;
     }
 
-    if (i >= design.numDesignVariable) fprintf(fp, "Mach    0   0.000000000000000E+00  0.000000000000000E+00  1.200000000000000E+00\n");
+    if (i >= design.numDesignVariable) fprintf(fp, "Mach    0   0.000000000000000E+00  0.000000000000000E+00  0.000000000000000E+00\n");
 
     for (i = 0; i < design.numDesignVariable; i++) {
 
         if (strcasecmp(design.designVariable[i].name, "Alpha") != 0) continue;
 
-        if (design.designVariable[i].length < 1) {
+        if (design.designVariable[i].var->length < 1) {
             status = CAPS_RANGEERR;
             goto cleanup;
         }
 
-        fprintf(fp, "AOA     1   %.15E  %.15E  %.15E\n", design.designVariable[i].initialValue[0],
+        fprintf(fp, "AOA     1   %.15E  %.15E  %.15E\n", design.designVariable[i].value[0],
                                                          design.designVariable[i].lowerBound[0],
                                                          design.designVariable[i].upperBound[0]);
         break;
     }
 
-    if (i >= design.numDesignVariable) fprintf(fp, "AOA     0   0.000000000000000E+00  0.000000000000000E+00  10.00000000000000E+00\n");
+    if (i >= design.numDesignVariable) fprintf(fp, "AOA     0   0.000000000000000E+00  0.000000000000000E+00  0.00000000000000E+00\n");
 
 
     if (fun3dVersion > 12.4) {
@@ -2067,69 +2102,69 @@ int fun3d_writeRubber(void *aimInfo,
 
             if (strcasecmp(design.designVariable[i].name, "Beta") != 0) continue;
 
-            if (design.designVariable[i].length < 1) {
+            if (design.designVariable[i].var->length < 1) {
                 status = CAPS_RANGEERR;
                 goto cleanup;
             }
 
-            fprintf(fp, "Yaw     1   %.15E  %.15E  %.15E\n", design.designVariable[i].initialValue[0],
+            fprintf(fp, "Yaw     1   %.15E  %.15E  %.15E\n", design.designVariable[i].value[0],
                                                              design.designVariable[i].lowerBound[0],
                                                              design.designVariable[i].upperBound[0]);
             break;
         }
 
-        if (i >= design.numDesignVariable) fprintf(fp, "Yaw     0   0.000000000000000E+00  0.000000000000000E+00  10.00000000000000E+00\n");
+        if (i >= design.numDesignVariable) fprintf(fp, "Yaw     0   0.000000000000000E+00  0.000000000000000E+00  0.00000000000000E+00\n");
 
         for (i = 0; i < design.numDesignVariable; i++) {
 
             if (strcasecmp(design.designVariable[i].name, "NonInertial_Rotation_Rate") != 0) continue;
 
-            if (design.designVariable[i].length < 3) {
+            if (design.designVariable[i].var->length < 3) {
                 status = CAPS_RANGEERR;
                 goto cleanup;
             }
 
-            fprintf(fp, "xrate   1   %.15E  %.15E  %.15E\n", design.designVariable[i].initialValue[0],
+            fprintf(fp, "xrate   1   %.15E  %.15E  %.15E\n", design.designVariable[i].value[0],
                                                              design.designVariable[i].lowerBound[0],
                                                              design.designVariable[i].upperBound[0]);
             break;
         }
 
-        if (i >= design.numDesignVariable) fprintf(fp, "xrate   0   0.000000000000000E+00  0.000000000000000E+00  10.00000000000000E+00\n");
+        if (i >= design.numDesignVariable) fprintf(fp, "xrate   0   0.000000000000000E+00  0.000000000000000E+00  0.00000000000000E+00\n");
 
         for (i = 0; i < design.numDesignVariable; i++) {
 
             if (strcasecmp(design.designVariable[i].name, "NonInertial_Rotation_Rate") != 0) continue;
 
-            if (design.designVariable[i].length < 3) {
+            if (design.designVariable[i].var->length < 3) {
                 status = CAPS_RANGEERR;
                 goto cleanup;
             }
 
-            fprintf(fp, "yrate   1   %.15E  %.15E  %.15E\n", design.designVariable[i].initialValue[1],
+            fprintf(fp, "yrate   1   %.15E  %.15E  %.15E\n", design.designVariable[i].value[1],
                                                              design.designVariable[i].lowerBound[1],
                                                              design.designVariable[i].upperBound[1]);
             break;
         }
 
-        if (i >= design.numDesignVariable) fprintf(fp, "yrate   0   0.000000000000000E+00  0.000000000000000E+00  10.00000000000000E+00\n");
+        if (i >= design.numDesignVariable) fprintf(fp, "yrate   0   0.000000000000000E+00  0.000000000000000E+00  0.00000000000000E+00\n");
 
         for (i = 0; i < design.numDesignVariable; i++) {
 
             if (strcasecmp(design.designVariable[i].name, "NonInertial_Rotation_Rate") != 0) continue;
 
-            if (design.designVariable[i].length < 3) {
+            if (design.designVariable[i].var->length < 3) {
                 status = CAPS_RANGEERR;
                 goto cleanup;
             }
 
-            fprintf(fp, "zrate   1   %.15E  %.15E  %.15E\n", design.designVariable[i].initialValue[2],
+            fprintf(fp, "zrate   1   %.15E  %.15E  %.15E\n", design.designVariable[i].value[2],
                                                              design.designVariable[i].lowerBound[2],
                                                              design.designVariable[i].upperBound[2]);
             break;
         }
 
-        if (i >= design.numDesignVariable) fprintf(fp, "zrate   0   0.000000000000000E+00  0.000000000000000E+00  10.00000000000000E+00\n");
+        if (i >= design.numDesignVariable) fprintf(fp, "zrate   0   0.000000000000000E+00  0.000000000000000E+00  0.00000000000000E+00\n");
     }
 
     fprintf(fp, "Number of bodies\n");
@@ -2171,9 +2206,11 @@ int fun3d_writeRubber(void *aimInfo,
 
             if (design.designVariable[j].type != DesignVariableGeometry) continue;
 
-            for (k = 0; k < design.designVariable[j].length; k++ ) {
+            for (k = 0; k < design.designVariable[j].var->length; k++ ) {
 
-                fprintf(fp, "%d    1   %.15E  0.000000000000000E+00  0.000000000000000E+00\n", m, design.designVariable[j].initialValue[k]);
+                fprintf(fp, "%d    1   %.15E  %.15E  %.15E\n", m, design.designVariable[j].value[k],
+                                                                  design.designVariable[j].lowerBound[k],
+                                                                  design.designVariable[j].upperBound[k]);
 
                 m += 1;
             }
@@ -2184,26 +2221,29 @@ int fun3d_writeRubber(void *aimInfo,
     fprintf(fp, "############################### Function Information ###########################\n");
     fprintf(fp, "################################################################################\n");
     fprintf(fp, "Number of composite functions for design problem statement\n");
-    fprintf(fp, "%d\n", design.numDesignObjective);
+    fprintf(fp, "%d\n", design.numDesignFunctional);
 
-    for (i = 0; i < design.numDesignObjective; i++) {
+    for (i = 0; i < design.numDesignFunctional; i++) {
         fprintf(fp, "################################################################################\n");
         fprintf(fp, "Cost function (1) or constraint (2)\n");
         fprintf(fp, "1\n");
         fprintf(fp, "If constraint, lower and upper bounds\n");
         fprintf(fp, "0.0 0.0\n");
-        fprintf(fp, "Number of components for function   %d\n", i);
-        fprintf(fp, "1\n");
+        fprintf(fp, "Number of components for function   %d\n", i+1);
+        fprintf(fp, "%d\n", design.designFunctional[i].numComponent);
         fprintf(fp, "Physical timestep interval where function is defined\n");
         fprintf(fp, "1 1\n");
         fprintf(fp, "Composite function weight, target, and power\n");
         fprintf(fp, "1.0 0.0 1.0\n");
-        fprintf(fp, "Components of function   %d: boundary id (0=all)/name/value/weight/target/power\n", i);
+        fprintf(fp, "Components of function   %d: boundary id (0=all)/name/value/weight/target/power\n", i+1);
 
-        status = _writeObjective(aimInfo, fp, &design.designObjective[i]); //fprintf(fp, "0 clcd          0.000000000000000    1.000   10.00000 2.000\n");
-        if (status != CAPS_SUCCESS) goto cleanup;
+        for (j = 0; j < design.designFunctional[i].numComponent; j++) {
+            //fprintf(fp, "0 clcd          0.000000000000000    1.000   10.00000 2.000\n");
+            status = _writeFunctinoalComponent(aimInfo, fp, &design.designFunctional[i].component[j]);
+            if (status != CAPS_SUCCESS) goto cleanup;
+        }
 
-        fprintf(fp, "Current value of function   %d\n", i);
+        fprintf(fp, "Current value of function   %d\n", i+1);
         fprintf(fp, "0.000000000000000\n");
         fprintf(fp, "Current derivatives of function wrt global design variables\n");
         fprintf(fp, "0.000000000000000\n");
@@ -2240,7 +2280,7 @@ int fun3d_writeRubber(void *aimInfo,
 
                 if (design.designVariable[k].type != DesignVariableGeometry) continue;
 
-                for (m = 0; m < design.designVariable[k].length; m++ ) fprintf(fp, "0.000000000000000\n");
+                for (m = 0; m < design.designVariable[k].var->length; m++ ) fprintf(fp, "0.000000000000000\n");
             }
         }
     }
@@ -2248,13 +2288,13 @@ int fun3d_writeRubber(void *aimInfo,
     status = CAPS_SUCCESS;
 
 cleanup:
-        if (status != CAPS_SUCCESS)
-            printf("Error: Premature exit in fun3d_writeRubber status = %d\n",
-                   status);
+    if (status != CAPS_SUCCESS)
+        printf("Error: Premature exit in fun3d_writeRubber status = %d\n",
+               status);
 
-        if (fp != NULL) fclose(fp);
+    if (fp != NULL) fclose(fp);
 
-        return status;
+    return status;
 
     /* Version 13.1 - template
 	################################################################################
@@ -2262,9 +2302,9 @@ cleanup:
 	################################################################################
 	Global design variables (Mach number, AOA, Yaw, Noninertial rates)
 	Var Active         Value               Lower Bound            Upper Bound
-	Mach    0   0.800000000000000E+00  0.000000000000000E+00  0.900000000000000E+00
-	AOA    1   1.000000000000000E+00  0.000000000000000E+00  5.000000000000000E+00
-	Yaw    0   0.000000000000000E+00  0.000000000000000E+00  0.000000000000000E+00
+	 Mach    0   0.800000000000000E+00  0.000000000000000E+00  0.900000000000000E+00
+	  AOA    1   1.000000000000000E+00  0.000000000000000E+00  5.000000000000000E+00
+	  Yaw    0   0.000000000000000E+00  0.000000000000000E+00  0.000000000000000E+00
 	xrate    0   0.000000000000000E+00  0.000000000000000E+00  0.000000000000000E+00
 	yrate    0   0.000000000000000E+00  0.000000000000000E+00  0.000000000000000E+00
 	zrate    0   0.000000000000000E+00  0.000000000000000E+00  0.000000000000000E+00
@@ -2449,6 +2489,232 @@ cleanup:
      */
 }
 
+// Finds a line in rubber.data that matches header
+static int findHeader(const char *header, char **line, size_t *nline, int *iline, FILE *fp)
+{
+    int i;
+    while (getline(line, nline, fp) != -1) {
+        (*iline)++;
+        if (nline == 0) continue;
+        if ((*line)[0] == '#') continue;
+        i = 0;
+        while ((*line)[i] == ' ' && (*line)[i] != '\0') i++;
+        if (strncasecmp(header, &(*line)[i], strlen(header)) == 0)
+          break;
+    }
+    if (feof(fp)) return CAPS_IOERR;
+
+    return CAPS_SUCCESS;
+}
+
+
+// Read objective value and derivatives from FUN3D rubber.data file
+int fun3d_readRubber(void *aimInfo,
+                     cfdDesignStruct design,
+                     double fun3dVersion)
+{
+    int status; // Function return status
+
+    int i, j, k, ibody; // Indexing
+
+    size_t nline;
+    int iline=0;
+    char *line=NULL;
+    char file[] = "rubber.data";
+    double dfun_dvar = 0;
+    FILE *fp = NULL;
+
+    int numBody;
+    const char *intents;
+    ego *bodies;
+
+    // Get AIM bodies
+    status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
+    AIM_STATUS(aimInfo, status);
+
+    printf("Reading %s \n", file);
+
+    // Open file
+    fp = aim_fopen(aimInfo, file, "r");
+    if (fp == NULL) {
+        AIM_ERROR(aimInfo, "Unable to open file: %s\n", file);
+        status = CAPS_IOERR;
+        goto cleanup;
+    }
+
+    for (i = 0; i < design.numDesignFunctional; i++) {
+        status = findHeader("Current value of function", &line, &nline, &iline, fp);
+        AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+
+        // Get the line with the objective value
+        status = getline(&line, &nline, fp); iline++;
+        if (status == -1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+        AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+        AIM_NOTNULL(line, aimInfo, status);
+
+        status = sscanf(line, "%lf", &design.designFunctional[i].value);
+        if (status != 1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+        AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+
+        // skip: Current derivatives of function wrt rigid motion design variables of
+        status = getline(&line, &nline, fp); iline++;
+        if (status == -1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+        AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+        AIM_NOTNULL(line, aimInfo, status);
+
+        // read the dFun/dMach
+        status = getline(&line, &nline, fp); iline++;
+        if (status == -1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+        AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+        AIM_NOTNULL(line, aimInfo, status);
+
+        for (j = 0; j < design.designFunctional[i].numDesignVariable; j++) {
+
+            if (strcasecmp(design.designFunctional[i].dvar[j].name, "Mach") != 0) continue;
+
+            status = sscanf(line, "%lf", &design.designFunctional[i].dvar[j].value[0]);
+            if (status != 1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+            AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+            break;
+        }
+
+        // read the dFun/dAOA
+        status = getline(&line, &nline, fp); iline++;
+        if (status == -1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+        AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+        AIM_NOTNULL(line, aimInfo, status);
+
+        for (j = 0; j < design.numDesignVariable; j++) {
+
+            if (strcasecmp(design.designFunctional[i].dvar[j].name, "Alpha") != 0) continue;
+
+            status = sscanf(line, "%lf", &design.designFunctional[i].dvar[j].value[0]);
+            if (status != 1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+            AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+            break;
+        }
+
+        if (fun3dVersion > 12.4) {
+            // FUN3D version 13.1 - version 12.4 doesn't have these available
+
+            // read the dFun/dBeta
+            status = getline(&line, &nline, fp); iline++;
+            if (status == -1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+            AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+            AIM_NOTNULL(line, aimInfo, status);
+
+            for (j = 0; j < design.designFunctional[i].numDesignVariable; j++) {
+
+                if (strcasecmp(design.designFunctional[i].dvar[j].name, "Beta") != 0) continue;
+
+                status = sscanf(line, "%lf", &design.designFunctional[i].dvar[j].value[0]);
+                if (status != 1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+                AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+                break;
+            }
+
+            // read the dFun/dNonInertial_Rotation_Rate[0]
+            status = getline(&line, &nline, fp); iline++;
+            if (status == -1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+            AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+            AIM_NOTNULL(line, aimInfo, status);
+
+            for (j = 0; j < design.designFunctional[i].numDesignVariable; j++) {
+
+                if (strcasecmp(design.designFunctional[i].dvar[j].name, "NonInertial_Rotation_Rate") != 0) continue;
+
+                status = sscanf(line, "%lf", &design.designFunctional[i].dvar[j].value[0]);
+                if (status != 1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+                AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+                break;
+            }
+
+            // read the dFun/dNonInertial_Rotation_Rate[1]
+            status = getline(&line, &nline, fp); iline++;
+            if (status == -1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+            AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+            AIM_NOTNULL(line, aimInfo, status);
+
+            for (j = 0; j < design.designFunctional[i].numDesignVariable; j++) {
+
+                if (strcasecmp(design.designFunctional[i].dvar[j].name, "NonInertial_Rotation_Rate") != 0) continue;
+
+                status = sscanf(line, "%lf", &design.designFunctional[i].dvar[j].value[1]);
+                if (status != 1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+                AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+                break;
+            }
+
+            // read the dFun/dNonInertial_Rotation_Rate[2]
+            status = getline(&line, &nline, fp); iline++;
+            if (status == -1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+            AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+            AIM_NOTNULL(line, aimInfo, status);
+
+            for (j = 0; j < design.designFunctional[i].numDesignVariable; j++) {
+
+                if (strcasecmp(design.designFunctional[i].dvar[j].name, "NonInertial_Rotation_Rate") != 0) continue;
+
+                status = sscanf(line, "%lf", &design.designFunctional[i].dvar[j].value[2]);
+                if (status != 1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+                AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+                break;
+            }
+        }
+
+
+        // zero out previous derivatives
+        for (j = 0; j < design.designFunctional[i].numDesignVariable; j++) {
+            if (design.designFunctional[i].dvar[j].type != DesignVariableGeometry) continue;
+            for (k = 0; k < design.designVariable[j].var->length; k++ ) {
+              design.designFunctional[i].dvar[j].value[k] = 0;
+            }
+        }
+
+        for (ibody = 0; ibody < numBody; ibody++) {
+
+          // Rigid motion design variables
+          status = findHeader("Current derivatives of", &line, &nline, &iline, fp);
+          AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+
+          // Skip reading rigid motion design variables for now
+          
+          // Read shape design variables
+          status = findHeader("Current derivatives of", &line, &nline, &iline, fp);
+          AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+
+          for (j = 0; j < design.designFunctional[i].numDesignVariable; j++) {
+
+              if (design.designFunctional[i].dvar[j].type != DesignVariableGeometry) continue;
+
+              for (k = 0; k < design.designVariable[j].var->length; k++ ) {
+
+                  // read the dFun/dDesignVar[k]
+                  status = getline(&line, &nline, fp); iline++;
+                  if (status == -1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+                  AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+                  AIM_NOTNULL(line, aimInfo, status);
+
+                  status = sscanf(line, "%lf", &dfun_dvar);
+                  if (status != 1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+                  AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
+
+                  // accumulate derivatives across bodies
+                  design.designFunctional[i].dvar[j].value[k] += dfun_dvar;
+              }
+          }
+        }
+    }
+
+    status = CAPS_SUCCESS;
+
+cleanup:
+
+    if (line != NULL) free(line); // Must use free!
+    if (fp   != NULL) fclose(fp);
+
+    return status;
+}
 
 // Make FUN3D directory structure/tree
 int fun3d_makeDirectory(void *aimInfo)

@@ -67,9 +67,6 @@ aflr3.input.Proj_Name = "pyCAPS_AFLR4_AFLR3_VolMesh"
 # Set output grid format since a project name is being supplied - Tecplot tetrahedral file
 aflr3.input.Mesh_Format = "Tecplot"
 
-# Set AIM verbosity
-aflr3.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
-
 #######################################
 ## Load FUN3D aim                    ##
 #######################################
@@ -126,15 +123,9 @@ fun3d.preAnalysis()
 
 ####### Run fun3d ####################
 print ("\n\nRunning FUN3D......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(fun3d.analysisDir) # Move into test directory
-
 # Mesh is to large for a single core
 if (args.noAnalysis == False):
-    os.system("mpirun -np " + str(args.numberProc) + " nodet_mpi  --animation_freq -1 --volume_animation_freq -1 > Info.out"); # Run fun3d via system call
-
-os.chdir(currentDirectory) # Move back to top directory
+    fun3d.system("mpirun -np " + str(args.numberProc) + " nodet_mpi  --animation_freq -1 --volume_animation_freq -1 > Info.out"); # Run fun3d via system call
 #######################################
 
 # Run AIM post-analysis

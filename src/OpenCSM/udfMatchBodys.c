@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -74,6 +74,8 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     ego    *enode1, *enode2, eref, *echilds;
 
     ROUTINE(udpExecute);
+
+    /* --------------------------------------------------------------- */
     
 #ifdef DEBUG
     printf("udpExecute(emodel=%llx)\n", (long long)emodel);
@@ -123,7 +125,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     NFACES(0) = 0;
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(emodel);
     CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG

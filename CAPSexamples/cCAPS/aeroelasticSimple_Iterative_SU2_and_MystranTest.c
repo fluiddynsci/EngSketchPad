@@ -3,7 +3,7 @@
  *
  *             SU2, tetgen, mystran AIM tester
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -81,7 +81,9 @@ setValueByName_Double(capsObj probObj,              /* (in)  problem object */
 
     /* --------------------------------------------------------------- */
 
-    status = caps_childByName(probObj, VALUE, type, name, &valObj);
+    status = caps_childByName(probObj, VALUE, type, name, &valObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
         printf("caps_childByName(%s) -> status=%d\n", name, status);
         return status;
@@ -116,7 +118,9 @@ setValueByName_Integer(capsObj probObj,              /* (in)  problem object */
 
     /* --------------------------------------------------------------- */
 
-    status = caps_childByName(probObj, VALUE, type, name, &valObj);
+    status = caps_childByName(probObj, VALUE, type, name, &valObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
         printf("caps_childByName(%s) -> status=%d\n", name, status);
         return status;
@@ -151,7 +155,9 @@ setValueByName_Boolean(capsObj           probObj,              /* (in)  problem 
 
     /* --------------------------------------------------------------- */
 
-    status = caps_childByName(probObj, VALUE, type, name, &valObj);
+    status = caps_childByName(probObj, VALUE, type, name, &valObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
         printf("caps_childByName(%s) -> status=%d\n", name, status);
         return status;
@@ -186,7 +192,9 @@ setValueByName_Tuple(capsObj    probObj,              /* (in)  problem object */
 
     /* --------------------------------------------------------------- */
 
-    status = caps_childByName(probObj, VALUE, type, name, &valObj);
+    status = caps_childByName(probObj, VALUE, type, name, &valObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
         printf("caps_childByName(%s) -> status=%d\n", name, status);
         return status;
@@ -221,7 +229,9 @@ setValueByName_String(capsObj     probObj,              /* (in)  problem object 
 
     /* --------------------------------------------------------------- */
 
-    status = caps_childByName(probObj, VALUE, type, name, &valObj);
+    status = caps_childByName(probObj, VALUE, type, name, &valObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
         printf("caps_childByName(%s) -> status=%d\n", name, status);
         return status;
@@ -404,13 +414,15 @@ int main(int argc, char *argv[])
 
     // Link surface mesh from EGADS to TetGen
     status = caps_childByName(surfMeshObj, VALUE, ANALYSISOUT, "Surface_Mesh",
-                              &source);
+                              &source, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
       printf("surfMeshObj childByName for Surface_Mesh = %d\n", status);
       goto cleanup;
     }
     status = caps_childByName(meshObj, VALUE, ANALYSISIN, "Surface_Mesh",
-                              &target);
+                              &target, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
       printf("meshObj childByName for tessIn = %d\n", status);
       goto cleanup;
@@ -424,12 +436,15 @@ int main(int argc, char *argv[])
 
     /* Link the volume mesh from TetGen to SU2 */
     status = caps_childByName(meshObj, VALUE, ANALYSISOUT, "Volume_Mesh",
-                              &source);
+                              &source, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
       printf("meshObj childByName for Volume_Mesh = %d\n", status);
       goto cleanup;
     }
-    status = caps_childByName(su2Obj, VALUE, ANALYSISIN, "Mesh",  &target);
+    status = caps_childByName(su2Obj, VALUE, ANALYSISIN, "Mesh",  &target,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
       printf("fun3dObj childByName for Mesh = %d\n", status);
       goto cleanup;

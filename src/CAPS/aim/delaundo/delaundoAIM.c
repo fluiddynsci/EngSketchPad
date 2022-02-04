@@ -1264,12 +1264,7 @@ int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
    * dealundo.preAnalysis()
    *
    * print ("\n\nRunning......")
-   * currentDirectory = os.getcwd() # Get our current working directory
-   *
-   * os.chdir(dealundo.analysisDir) # Move into test directory
-   * os.system("delaundo < delaundoInput.txt > dealundoOutput.txt"); # Run via system call
-   *
-   * os.chdir(currentDirectory) # Move back to top directory
+   * dealundo.system("delaundo < delaundoInput.txt > dealundoOutput.txt"); # Run via system call
    *
    * print ("\n\postAnalysis......")
    * dealundo.postAnalysis()

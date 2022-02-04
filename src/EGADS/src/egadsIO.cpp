@@ -3,7 +3,7 @@
  *
  *             Load & Save Functions
  *
- *      Copyright 2011-2021, Massachusetts Institute of Technology
+ *      Copyright 2011-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -14,7 +14,7 @@
 #include <string.h>
 #include <math.h>
 
-//#define STEPATTRS
+//#define WRITECSYS
 
 #include "egadsTypes.h"
 #include "egadsInternals.h"
@@ -22,18 +22,27 @@
 #include <IGESControl_Controller.hxx>
 #include <IGESData_IGESModel.hxx>
 #include <IGESBasic_Name.hxx>
-#ifdef STEPATTRS
+#ifdef STEPASSATTRS
 #include <StepBasic_Product.hxx>
 #include <StepBasic_ProductDefinition.hxx>
 #include <StepBasic_ProductDefinitionFormation.hxx>
 #include <StepRepr_ProductDefinitionShape.hxx>
 #include <StepRepr_NextAssemblyUsageOccurrence.hxx>
-#include <StepRepr_RepresentationItem.hxx>
 #endif
+#include <StepRepr_RepresentationItem.hxx>
+#include <StepRepr_RepresentationContext.hxx>
+#ifdef WRITECSYS
+#include <StepRepr_ConstructiveGeometryRepresentation.hxx>
+#include <StepRepr_HArray1OfRepresentationItem.hxx>
+#include <StepGeom_Axis2Placement3d.hxx>
+#include <GeomToStep_MakeAxis2Placement3d.hxx>
+#endif
+#include <STEPConstruct.hxx>
 #include <Interface_Graph.hxx>
 #include <Interface_EntityIterator.hxx>
 #include <XSControl_WorkSession.hxx>
 #include <XSControl_TransferReader.hxx>
+#include <APIHeaderSection_MakeHeader.hxx>
 
 
 class egadsLabel
@@ -49,7 +58,7 @@ public:
 #endif
 
 
-//#define INTERIM
+#define INTERIM
 
 #define UVTOL    1.e-4
 
@@ -76,6 +85,19 @@ public:
                                    int len, /*@null@*/ const int    *ints,
                                             /*@null@*/ const double *reals,
                                             /*@null@*/ const char   *str );
+  extern "C" int  EG_attributeRet( const egObject *obj, const char *name,
+                                   int *type, int *len,
+                                   /*@null@*/ const int    **ints,
+                                   /*@null@*/ const double **reals,
+                                   /*@null@*/ const char   **str );
+#ifdef WRITECSYS
+  extern "C" int  EG_attributeGet( const egObject *obj, int index,
+                                   const char **name, int *type, int *len,
+                                   /*@null@*/ const int    **ints,
+                                   /*@null@*/ const double **reals,
+                                   /*@null@*/ const char   **str );
+  extern "C" int  EG_attributeNum( const egObject *obj, int *num );
+#endif
   extern "C" int  EG_statusTessBody( egObject *tess, egObject **body,
                                      int *state, int *npts );
   extern "C" int  EG_getBodyTopos( const egObject *body, egObject *src,
@@ -618,7 +640,6 @@ EG_readAttrs(egObject *obj, int nattr, FILE *fp)
 void
 EG_initOCC()
 {
-#if CASVER >= 690
   int  np;
   char *env;
 
@@ -626,10 +647,15 @@ EG_initOCC()
   np  = 2;
   if (env != NULL) np = atoi(env);
   if (np > 1) BOPAlgo_Options::SetParallelMode(Standard_True);
+
+#ifdef OCC_VERSION_DEVELOPMENT
+  if (strcmp("ESP", OCC_VERSION_DEVELOPMENT) == 0) return;
 #endif
   if (((OCC_VERSION_MAJOR       != 7) || (OCC_VERSION_MINOR != 3) ||
        (OCC_VERSION_MAINTENANCE == 0)) &&
       ((OCC_VERSION_MAJOR       != 7) || (OCC_VERSION_MINOR != 4) ||
+       (OCC_VERSION_MAINTENANCE == 0)) &&
+      ((OCC_VERSION_MAJOR       != 7) || (OCC_VERSION_MINOR != 6) ||
        (OCC_VERSION_MAINTENANCE == 0)))
     printf(" EGADS WARNING: OpenCASCADE %d.%d.%d NOT an Authorized Release!\n",
            OCC_VERSION_MAJOR, OCC_VERSION_MINOR, OCC_VERSION_MAINTENANCE);
@@ -860,8 +886,8 @@ EG_importScale(const char *reader, const char *units, double *scale)
 int
 EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
 {
-  int          i, j, stat, outLevel, len, nattr, nerr, hite, hitf, nbs, egads;
-  int          oclass, ibody;
+  int          i, j, stat, outLevel, len, nattr, nerr, hite, hitf, egads = 0;
+  int          oclass, ibody, *invalid = NULL, nas = 0, nbs = 0;
   double       scale = 1.0;
   const char   *units;
   egObject     *omodel, *aobj;
@@ -871,8 +897,6 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
   FILE         *fp;
   
   *model = NULL;
-  egads  = 0;
-  nbs    = 0;
   if (context == NULL)               return EGADS_NULLOBJ;
   if (context->magicnumber != MAGIC) return EGADS_NOTOBJ;
   if (context->oclass != CONTXT)     return EGADS_NOTCNTX;
@@ -956,20 +980,72 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     if (outLevel > 1)    
       printf(" EGADS Info: %s has %d Shape(s)\n", name, nbs);
 
-#ifdef STEPATTRS
     const Handle(XSControl_WorkSession)& workSession = aReader.WS();
     const Handle(XSControl_TransferReader)& TR = workSession->TransferReader();
+#ifdef STEPASSATTRS
     Handle(Standard_Type) tNAUO = STANDARD_TYPE(
                                        StepRepr_NextAssemblyUsageOccurrence);
     Handle(Standard_Type) tPD   = STANDARD_TYPE(StepBasic_ProductDefinition);
 #endif
+    // count the name attributes
+    nas = 0;
+    for (i = 1; i <= nbs; i++) {
+      TopoDS_Shape aShape = aReader.Shape(i);
+      TopTools_IndexedMapOfShape MapAll;
+      TopExp::MapShapes(aShape, MapAll);
+      for (int j = 1; j <= MapAll.Extent(); j++) {
+        TopoDS_Shape aShape = MapAll(j);
+        Handle(Standard_Transient) ent = TR->EntityFromShapeResult(aShape, 1);
+        if (ent.IsNull())          ent = TR->EntityFromShapeResult(aShape,-1);
+        if (ent.IsNull())          ent = TR->EntityFromShapeResult(aShape, 4);
+        if (ent.IsNull())          continue;
+        Handle(StepRepr_RepresentationItem) aReprItem;
+        aReprItem = Handle(StepRepr_RepresentationItem)::DownCast(ent);
+        if (aReprItem.IsNull())    continue;
+        const char *STEPname = aReprItem->Name()->ToCString();
+        if (STEPname == NULL)      continue;
+        if (strlen(STEPname) == 0) continue;
+        nas++;
+      }
+    }
+    if (nas != 0) {
+      printf("  Number of Name Attrs Found = %d\n", nas);
+      labels = new egadsLabel[nas];
+      for (i = 0; i < nas; i++) {
+        labels[i].shape.Nullify();
+        labels[i].shapeName = NULL;
+      }
+    }
 
     TopoDS_Compound compound;
     BRep_Builder    builder3D;
     builder3D.MakeCompound(compound);
+    nas = 0;
     for (i = 1; i <= nbs; i++) {
       TopoDS_Shape aShape = aReader.Shape(i);
-#ifdef STEPATTRS
+      if (labels != NULL) {
+        TopTools_IndexedMapOfShape MapAll;
+        TopExp::MapShapes(aShape, MapAll);
+        for (int j = 1; j <= MapAll.Extent(); j++) {
+          TopoDS_Shape aShape = MapAll(j);
+          Handle(Standard_Transient) ent = TR->EntityFromShapeResult(aShape, 1);
+          if (ent.IsNull())          ent = TR->EntityFromShapeResult(aShape,-1);
+          if (ent.IsNull())          ent = TR->EntityFromShapeResult(aShape, 4);
+          if (ent.IsNull())          continue;
+          Handle(StepRepr_RepresentationItem) aReprItem;
+          aReprItem = Handle(StepRepr_RepresentationItem)::DownCast(ent);
+          if (aReprItem.IsNull())    continue;
+          const char *STEPname = aReprItem->Name()->ToCString();
+          if (STEPname == NULL)      continue;
+          if (strlen(STEPname) == 0) continue;
+          labels[nas].shape     = aShape;
+          labels[nas].shapeName = EG_strdup(STEPname);
+          nas++;
+  /*      printf(" %d/%d %s -> Name found: %s\n", j, MapAll.Extent(),
+                 TopAbs::ShapeTypeToString(aShape.ShapeType()), STEPname);  */
+        }
+      }
+#ifdef STEPASSATTRS
       Handle(Standard_Transient) ent = TR->EntityFromShapeResult(aShape, 3);
       if (!ent.IsNull()) {
         if (ent->DynamicType() == tNAUO) {
@@ -1088,7 +1164,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     iReader.TransferRoots();
     if ((bflg&16) != 0) egads = -1;
 
-    nbs = iReader.NbShapes();
+    nas = nbs = iReader.NbShapes();
     if (nbs <= 0) {
       if (outLevel > 0)
         printf(" EGADS Error: %s has No Shapes (EG_loadModel)!\n", 
@@ -1101,7 +1177,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     const Handle(XSControl_WorkSession)& workSession = iReader.WS();
     const Handle(XSControl_TransferReader)& transferReader =
           workSession->TransferReader();
-    labels = new egadsLabel[nbs];
+    labels = new egadsLabel[nas];
 
     TopoDS_Compound compound;
     BRep_Builder    builder3D;
@@ -1341,6 +1417,14 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
       printf(" EGADS Warning: Nothing found in %s (EG_loadModel)!\n", name);
     return EGADS_NODATA;
   }
+  if (egads == 0) {
+    invalid = (int *) EG_alloc(nBody*sizeof(int));
+    if (invalid == NULL) {
+      printf(" EGADS Warning: Cannot check for Invalid Bodies (EG_loadModel)!\n");
+    } else {
+      for (i = 0; i < nBody; i++) invalid[i] = 0;
+    }
+  }
   
   mshape              = new egadsModel;
   mshape->shape       = source;
@@ -1359,6 +1443,13 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
       }
       delete [] mshape->bodies;
       delete mshape;
+      if (labels != NULL) {
+        for (j = 0; j < nas; j++) {
+          if (labels[j].shapeName == NULL) continue;
+          EG_free(labels[j].shapeName);
+        }
+        delete [] labels;
+      }
       return stat;
     }
     egObject  *pobj    = mshape->bodies[i];
@@ -1389,12 +1480,14 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         if (fixedShape.IsNull()) {
           if (outLevel > 0)
             printf(" EGADS Warning: Body %d is an Invalid WireBody!\n", i);
+          if (invalid != NULL) invalid[i-1] = 1;
         } else {
           BRepCheck_Analyzer wfCheck(fixedShape);
           if (!wfCheck.IsValid()) {
             if (outLevel > 0)
               printf(" EGADS Warning: Fixed Body %d is an Invalid WireBody!\n",
                      i);
+            if (invalid != NULL) invalid[i-1] = 1;
           } else {
             pbody->shape = fixedShape;
           }
@@ -1416,12 +1509,14 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         if (fixedShape.IsNull()) {
           if (outLevel > 0)
             printf(" EGADS Warning: Body %d is an Invalid FaceBody!\n", i);
+          if (invalid != NULL) invalid[i-1] = 1;
         } else {
           BRepCheck_Analyzer ffCheck(fixedShape);
           if (!ffCheck.IsValid()) {
             if (outLevel > 0)
               printf(" EGADS Warning: Fixed Body %d is an Invalid FaceBody!\n",
                      i);
+            if (invalid != NULL) invalid[i-1] = 1;
           } else {
             pbody->shape = fixedShape;
           }
@@ -1443,17 +1538,20 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         if (fixedShape.IsNull()) {
           if (outLevel > 0)
             printf(" EGADS Warning: Body %d is an Invalid SheetBody!\n", i);
+          if (invalid != NULL) invalid[i-1] = 1;
         } else {
           if (fixedShape.ShapeType() != TopAbs_SHELL) {
             if (outLevel > 0)
               printf(" EGADS Reject: Fixed Body %d is No longer a SheetBody!\n",
                      i);
+            if (invalid != NULL) invalid[i-1] = 1;
           } else {
             BRepCheck_Analyzer sfCheck(fixedShape);
             if (!sfCheck.IsValid()) {
               if (outLevel > 0)
                 printf(" EGADS Warning: Fixed Body %d is an Invalid SheetBody!\n",
                        i);
+              if (invalid != NULL) invalid[i-1] = 1;
             } else {
               pbody->shape = fixedShape;
             }
@@ -1477,17 +1575,20 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         if (fixedShape.IsNull()) {
           if (outLevel > 0)
             printf(" EGADS Warning: Body %d is an Invalid SolidBody!\n", i);
+          if (invalid != NULL) invalid[i-1] = 1;
         } else {
           if (fixedShape.ShapeType() != TopAbs_SHELL) {
             if (outLevel > 0)
               printf(" EGADS Reject: Fixed Body %d is No longer a SolidBody!\n",
                      i);
+            if (invalid != NULL) invalid[i-1] = 1;
           } else {
             BRepCheck_Analyzer sfCheck(fixedShape);
             if (!sfCheck.IsValid()) {
               if (outLevel > 0)
                 printf(" EGADS Warning: Fixed Body %d is an Invalid SolidBody!\n",
                        i);
+              if (invalid != NULL) invalid[i-1] = 1;
             } else {
               pbody->shape = fixedShape;
             }
@@ -1508,6 +1609,14 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     }
     delete [] mshape->bodies;
     delete mshape;
+    if (labels != NULL) {
+      for (j = 0; j < nas; j++) {
+        if (labels[j].shapeName == NULL) continue;
+        EG_free(labels[j].shapeName);
+      }
+      delete [] labels;
+    }
+    if (invalid != NULL) EG_free(invalid);
     return stat;
   }
   omodel->oclass = MODEL;
@@ -1525,12 +1634,23 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
       if (egads == 1) {
         mshape->nbody = i;
         EG_destroyTopology(omodel);
+        if (labels != NULL) {
+          for (j = 0; j < nas; j++) {
+            if (labels[j].shapeName == NULL) continue;
+            EG_free(labels[j].shapeName);
+          }
+          delete [] labels;
+        }
+        if (invalid != NULL) EG_free(invalid);
         return stat;
       }
       if (outLevel > 0)
         printf(" EGADS Warning: Body  %d parse = %d!\n", i+1, stat);
       continue;
     }
+    if (invalid != NULL)
+      if (invalid[i] == 1)
+        EG_attributeAdd(pobj, ".invalid", ATTRSTRING, 1, NULL, NULL, name);
     mshape->bodies[j] = mshape->bodies[i];
     j++;
   }
@@ -1540,6 +1660,14 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     mshape->nbody = j;
     if (j == 0) {
       EG_destroyTopology(omodel);
+      if (labels != NULL) {
+        for (j = 0; j < nas; j++) {
+          if (labels[j].shapeName == NULL) continue;
+          EG_free(labels[j].shapeName);
+        }
+        delete [] labels;
+      }
+      if (invalid != NULL) EG_free(invalid);
       return EGADS_TOPOERR;
     }
   }
@@ -1547,7 +1675,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
   
   /* possibly assign attributes from IGES/STEP read */
   if (labels != NULL) {
-    for (i = 0; i < nbs; i++) {
+    for (i = 0; i < nas; i++) {
       if (labels[i].shapeName == NULL) continue;
       char *value = labels[i].shapeName;
 /*    printf(" Shape %2d: %s\n", i+1, value);  */
@@ -1576,6 +1704,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     }
     delete [] labels;
   }
+  if (invalid != NULL) EG_free(invalid);
   if (egads != 1) return EGADS_SUCCESS;
 
   /* get the attributes from the EGADS files */
@@ -1931,6 +2060,153 @@ EG_writeTess(const egObject *tess, FILE *fp)
 }
 
 
+static void
+EG_setSTEPname(const Handle(XSControl_WorkSession) &WS, int nbody,
+               const egObject **bodies, Handle(Transfer_FinderProcess) FP)
+{
+  int          i, j, stat, aType, aLen, nshell, nface, nloop, nedge, nnode;
+  const int    *ints;
+  const double *reals;
+  const char   *str;
+  Handle(StepRepr_RepresentationItem) r;
+  
+#ifdef WRITECSYS
+  // Get working data & place to store Body CSYSs
+  const Handle(Interface_InterfaceModel) &aModel = WS->Model();
+  Handle(StepRepr_HArray1OfRepresentationItem) reprItems =
+    new StepRepr_HArray1OfRepresentationItem;
+#endif
+  
+  for (j = 0; j < nbody; j++) {
+    egadsBody *pbody = (egadsBody *) bodies[j]->blind;
+    nnode  = pbody->nodes.map.Extent();
+    nedge  = pbody->edges.map.Extent();
+    nloop  = pbody->loops.map.Extent();
+    nface  = pbody->faces.map.Extent();
+    nshell = pbody->shells.map.Extent();
+  
+    stat   = EG_attributeRet(bodies[j], "Name", &aType, &aLen, &ints, &reals,
+                             &str);
+    if (stat == EGADS_SUCCESS)
+      if (aType == ATTRSTRING) {
+        r = STEPConstruct::FindEntity(FP, pbody->shape);
+        if (!r.IsNull()) {
+          Handle(TCollection_HAsciiString) id = new TCollection_HAsciiString(str);
+          r->SetName(id);
+        }
+      }
+
+#ifdef WRITECSYS
+    // find unattached Body CSYSs
+    int nAttr;
+    stat = EG_attributeNum(bodies[j], &nAttr);
+    if (stat == EGADS_SUCCESS)
+      for (i = 1; i <= nAttr; i++) {
+        const char *name;
+        stat = EG_attributeGet(bodies[j], i, &name, &aType, &aLen, &ints,
+                               &reals, &str);
+        if (stat == EGADS_SUCCESS)
+          if ((aType == ATTRCSYS) && (aLen == 9)) {
+            gp_Pnt pntc(reals[ 9], reals[10], reals[11]);
+            gp_Dir dirx(reals[12], reals[13], reals[14]);
+            gp_Dir diry(reals[15], reals[16], reals[17]);
+            gp_Ax2 aDTAxis(pntc, dirx, diry);
+            GeomToStep_MakeAxis2Placement3d anAxisMaker(aDTAxis);
+            Handle(StepGeom_Axis2Placement3d) anA2P3D = anAxisMaker.Value();
+            anA2P3D->SetName(new TCollection_HAsciiString(name));
+            int len = reprItems->Length() + 1;
+            reprItems->Resize(1, len, Standard_True);
+            reprItems->SetValue(len, anA2P3D);
+          }
+      }
+#endif
+
+    for (i = 0; i < nshell; i++) {
+      egObject   *aobj   = pbody->shells.objs[i];
+      if (aobj   == NULL) continue;
+      egadsShell *pshell = (egadsShell *) aobj->blind;
+      if (pshell == NULL) continue;
+      stat = EG_attributeRet(aobj, "Name", &aType, &aLen, &ints, &reals, &str);
+      if (stat  != EGADS_SUCCESS) continue;
+      if (aType != ATTRSTRING)    continue;
+      r = STEPConstruct::FindEntity(FP, pshell->shell);
+      if (r.IsNull()) continue;
+      Handle(TCollection_HAsciiString) id = new TCollection_HAsciiString(str);
+      r->SetName(id);
+    }
+
+    for (i = 0; i < nface; i++) {
+      egObject  *aobj  = pbody->faces.objs[i];
+      if (aobj  == NULL) continue;
+      egadsFace *pface = (egadsFace *) aobj->blind;
+      if (pface == NULL) continue;
+      stat = EG_attributeRet(aobj, "Name", &aType, &aLen, &ints, &reals, &str);
+      if (stat  != EGADS_SUCCESS) continue;
+      if (aType != ATTRSTRING)    continue;
+      r = STEPConstruct::FindEntity(FP, pface->face);
+      if (r.IsNull()) continue;
+      Handle(TCollection_HAsciiString) id = new TCollection_HAsciiString(str);
+      r->SetName(id);
+    }
+    
+    for (i = 0; i < nloop; i++) {
+      egObject *aobj   = pbody->loops.objs[i];
+      if (aobj  == NULL) continue;
+      egadsLoop *ploop = (egadsLoop *) aobj->blind;
+      if (ploop == NULL) continue;
+      stat = EG_attributeRet(aobj, "Name", &aType, &aLen, &ints, &reals, &str);
+      if (stat  != EGADS_SUCCESS) continue;
+      if (aType != ATTRSTRING)    continue;
+      r = STEPConstruct::FindEntity(FP, ploop->loop);
+      if (r.IsNull()) continue;
+      Handle(TCollection_HAsciiString) id = new TCollection_HAsciiString(str);
+      r->SetName(id);
+    }
+        
+    for (i = 0; i < nedge; i++) {
+      egObject  *aobj  = pbody->edges.objs[i];
+      if (aobj  == NULL) continue;
+      egadsEdge *pedge = (egadsEdge *) aobj->blind;
+      if (pedge == NULL) continue;
+      stat = EG_attributeRet(aobj, "Name", &aType, &aLen, &ints, &reals, &str);
+      if (stat  != EGADS_SUCCESS) continue;
+      if (aType != ATTRSTRING)    continue;
+      r = STEPConstruct::FindEntity(FP, pedge->edge);
+      if (r.IsNull()) continue;
+      Handle(TCollection_HAsciiString) id = new TCollection_HAsciiString(str);
+      r->SetName(id);
+    }
+        
+    for (int i = 0; i < nnode; i++) {
+      egObject  *aobj  = pbody->nodes.objs[i];
+      if (aobj  == NULL) continue;
+      egadsNode *pnode = (egadsNode *) aobj->blind;
+      if (pnode == NULL) continue;
+      stat = EG_attributeRet(aobj, "Name", &aType, &aLen, &ints, &reals, &str);
+      if (stat  != EGADS_SUCCESS) continue;
+      if (aType != ATTRSTRING)    continue;
+      r = STEPConstruct::FindEntity(FP, pnode->node);
+      if (r.IsNull()) continue;
+      Handle(TCollection_HAsciiString) id = new TCollection_HAsciiString(str);
+      r->SetName(id);
+    }
+  }
+
+#ifdef WRITECSYS
+  // do we need to add any Body CSYSs?
+  if (reprItems->Length() > 0) {
+    Handle(StepRepr_RepresentationContext) dummyRC;
+    Handle(StepRepr_ConstructiveGeometryRepresentation) theRepr =
+      new StepRepr_ConstructiveGeometryRepresentation();
+    theRepr->Init(new TCollection_HAsciiString("supplemental geometry"),
+                  reprItems, dummyRC);
+    aModel->AddWithRefs(theRepr);
+  }
+#endif
+
+}
+
+
 int
 EG_saveModel(const egObject *model, const char *name)
 {
@@ -1990,6 +2266,15 @@ EG_saveModel(const egObject *model, const char *name)
     /* STEP files */
     
     STEPControl_Writer aWriter;
+    const Handle(XSControl_WorkSession)& theSession = aWriter.WS();
+    const Handle(XSControl_TransferWriter)& aTransferWriter =
+                                                  theSession->TransferWriter();
+    const Handle(Transfer_FinderProcess) FP = aTransferWriter->FinderProcess();
+    APIHeaderSection_MakeHeader makeHeader(aWriter.Model());
+    Handle(TCollection_HAsciiString) headerAuthor = new
+                                          TCollection_HAsciiString("ESP EGADS");
+    makeHeader.SetAuthorValue(1, headerAuthor);
+
     TopExp_Explorer Exp;
     const STEPControl_StepModelType aVal = STEPControl_AsIs;
     for (Exp.Init(wshape, TopAbs_WIRE,  TopAbs_FACE);
@@ -1999,7 +2284,10 @@ EG_saveModel(const egObject *model, const char *name)
     for (Exp.Init(wshape, TopAbs_SHELL, TopAbs_SOLID);
          Exp.More(); Exp.Next()) aWriter.Transfer(Exp.Current(), aVal);
     for (Exp.Init(wshape, TopAbs_SOLID);
-         Exp.More(); Exp.Next()) aWriter.Transfer(Exp.Current(), aVal);	
+         Exp.More(); Exp.Next()) aWriter.Transfer(Exp.Current(), aVal);
+    
+    // transfer Name attributes to StepRepr_RepresentationItem
+    EG_setSTEPname(theSession, nbody, objs, FP);
   
     if (!aWriter.Write(name)) {
       printf(" EGADS Warning: STEP Write Error (EG_saveModel)!\n");
@@ -2043,7 +2331,12 @@ EG_saveModel(const egObject *model, const char *name)
   
     /* Native OCC file or our filetype */
 
+#if CASVER < 760
     if (!BRepTools::Write(wshape, name)) {
+#else
+    if (!BRepTools::Write(wshape, name, Standard_False, Standard_False,
+                          TopTools_FormatVersion_VERSION_2)) {
+#endif
       printf(" EGADS Warning: OCC Write Error (EG_saveModel)!\n");
       return EGADS_WRITERR;
     }

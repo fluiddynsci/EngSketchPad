@@ -705,7 +705,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
         defval->vals.real = Re_l;
 
         /*! \page aimInputsAFLR4
-         * - <B>BL_thickness</B> <br>
+         * - <B>Re_l</B> <br>
          * Reynolds Number for estimating BL thickness.<br>
          * The Reynolds Number based on reference length, Re_l, (if set) along with <br>
          * reference length, ref_len, are used to estimate the BL thickness, BL_thickness, <br>

@@ -72,7 +72,7 @@ int nastran_writeDesignConstraintCard(FILE *fp, feaDesignConstraintStruct *feaDe
 int nastran_writeDesignVariableCard(FILE *fp, feaDesignVariableStruct *feaDesignVariable, feaFileFormatStruct *feaFileFormat);
 
 // Write design variable relation information from a feaDesignVariableRelation structure
-int nastran_writeDesignVariableRelationCard(FILE *fp, feaDesignVariableRelationStruct *feaDesignVariableRelation, feaProblemStruct *feaProblem, feaFileFormatStruct *feaFileFormat);
+int nastran_writeDesignVariableRelationCard(void *aimInfo, FILE *fp, feaDesignVariableRelationStruct *feaDesignVariableRelation, feaProblemStruct *feaProblem, feaFileFormatStruct *feaFileFormat);
 
 // Write equation information from a feaDesignEquation structure
 int nastran_writeDesignEquationCard(FILE *fp, feaDesignEquationStruct *feaEquation, feaFileFormatStruct *fileFormat);

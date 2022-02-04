@@ -82,3 +82,15 @@ caps_unitOffset
 caps_unitParse
 caps_unitRaise
 caps_printObjects
+caps_statFile
+caps_rmFile
+caps_rmDir
+caps_rmWild
+caps_mkDir
+caps_cpFile
+caps_cpDir
+caps_rename
+caps_freeEleType
+caps_initDiscr
+caps_freeDiscr
+caps_debug

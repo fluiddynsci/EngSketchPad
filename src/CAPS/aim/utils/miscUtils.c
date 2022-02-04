@@ -246,7 +246,7 @@ int search_jsonDictionary(const char *stringToSearch, const char *keyWord, char 
     char *patternMatch = NULL; // Mathced substring - keyWord
 
     // Build pattern
-    sprintf(pattern, "\"%s\":", keyWord);
+    snprintf(pattern, 255, "\"%s\":", keyWord);
 
     // Debug function
     //printf("Pattern - [%s]\n", pattern);
@@ -291,7 +291,7 @@ int search_jsonDictionary(const char *stringToSearch, const char *keyWord, char 
         //printf("Size of keyLength - %d\n", keyLength);
 
         // Free keyValue (if not already null) and allocate
-        if (*keyValue != NULL) AIM_FREE(*keyValue);
+        AIM_FREE(*keyValue);
 
         if (keyLength > 0) {
             *keyValue = (char *) EG_alloc((keyLength+1) * sizeof(char));
@@ -831,12 +831,8 @@ int string_toStringArray(char *stringToSearch, int arraySize, char *stringArray[
     // Debug function - print out number array
     //for (i = 0; i < *arraySize; i++) printf("Value = %s\n", (*stringArray)[i]);
 
-    // Free quote array
-    if (quoteString != NULL) EG_free(quoteString);
-
-    // Free no quote array
-    if (noQuoteString != NULL) EG_free(noQuoteString);
-
+    EG_free(quoteString); // Free quote array
+    EG_free(noQuoteString); // Free no quote array
 
     return CAPS_SUCCESS;
 }
@@ -851,10 +847,9 @@ int string_toStringDynamicArray(char *stringToSearch, int *arraySize, char **str
     int matchLength;  // String length of matching pattern
     int startIndex; // Keep track of where we are in the string array
 
-    int arrayIndex;
+    int arrayIndex, nesting=0, length;
     int haveArray = (int) false;
     char *quoteString = NULL; // Temporary string to hold the found string
-    char *noQuoteString = NULL;  // Temporary string to hold the found string with quotation marks removed
     int insideQuotes = (int) false;
 
     // Debug function
@@ -867,33 +862,39 @@ int string_toStringDynamicArray(char *stringToSearch, int *arraySize, char **str
 
         // Debug function
         //printf("[ found\n");
-
-        if(stringToSearch[strlen(stringToSearch)-1] == ']') { // Lets count how many commas we have
+        length = strlen(stringToSearch);
+        if(stringToSearch[length-1] == ']') { // Lets count how many commas we have
 
             // Debug function
             //printf("] found\n");
 
             haveArray = (int) true;
             *arraySize = 1;
-            for (i = 1; i < strlen(stringToSearch); i++) {
+            for (i = 1; i < length; i++) {
 
-                if (stringToSearch[i] == '"') {
+                // Array possibly nested
+                if (stringToSearch[i] == '[' ||
+                    stringToSearch[i] == '{') {
+                    nesting++;
+
+                } else if (stringToSearch[i] == ']' ||
+                           stringToSearch[i] == '}') {
+                    nesting--;
+
+                } else if (stringToSearch[i] == '"') {
                     insideQuotes = !insideQuotes;
                 }
-                
-                if (stringToSearch[i] == ',' && (!insideQuotes)) {
 
+                if (stringToSearch[i] == ',' && (!insideQuotes) && nesting <= 0) {
                     *arraySize = *arraySize + 1;
                 }
             }
 
         } else {
-
             *arraySize = 1;
         }
 
     } else {
-
         *arraySize = 1;
     }
 
@@ -903,35 +904,20 @@ int string_toStringDynamicArray(char *stringToSearch, int *arraySize, char **str
     // Allocate stringArray
     *stringArray = (char **) EG_alloc(*arraySize*sizeof(char **));
     if (*stringArray == NULL) return EGADS_MALLOC;
+    for (i = 0; i < *arraySize; i++) (*stringArray)[i] = NULL;
 
     if (*arraySize == 1 && haveArray == (int) false) {
 
         // Debug function
         //printf("We don't have an array\n");
 
-        noQuoteString = string_removeQuotation(stringToSearch);
-
-        (*stringArray)[0] = (char *) EG_alloc((strlen(noQuoteString)+1) * sizeof(char));
+        (*stringArray)[0] = string_removeQuotation(stringToSearch);
 
         // Check for malloc error
         if ((*stringArray)[0] == NULL) {
-
             // Free string array
-            if (*stringArray != NULL) EG_free(*stringArray);
-            *stringArray = NULL;
-
-            // Free no quote array
-            if (noQuoteString != NULL) EG_free(noQuoteString);
-
+            AIM_FREE(*stringArray);
             return EGADS_MALLOC;
-        }
-
-        strncpy((*stringArray)[0], noQuoteString, strlen(noQuoteString));
-        (*stringArray)[0][strlen(noQuoteString)] = '\0';
-
-        if (noQuoteString != NULL) {
-            EG_free(noQuoteString);
-            noQuoteString = NULL;
         }
 
     } else {
@@ -940,16 +926,28 @@ int string_toStringDynamicArray(char *stringToSearch, int *arraySize, char **str
 
         startIndex = 1;
         arrayIndex = 0;
+        nesting = 0;
+        length = strlen(stringToSearch);
         // Parse string based on defined pattern
-        for (i = 1; i < strlen(stringToSearch); i++) {
+        for (i = 1; i < length; i++) {
 
-            if (stringToSearch[i] == '"') {
+            // Array possibly nested
+            if (stringToSearch[i] == '[' ||
+                stringToSearch[i] == '{') {
+                nesting++;
+
+            } else if (stringToSearch[i] == ']' ||
+                       stringToSearch[i] == '}') {
+                nesting--;
+
+            } else if (stringToSearch[i] == '"') {
                 insideQuotes = !insideQuotes;
             }
 
-            if((stringToSearch[i] == ',' && (!insideQuotes)) ||
-                    stringToSearch[i] == ']') {
+            if ((stringToSearch[i] == ',' && (!insideQuotes) && nesting <= 0) ||
+                i == length-1) {
 
+                while (stringToSearch[startIndex] == ' ') startIndex++;
                 matchLength = i-startIndex;
 
                 // Debug function
@@ -971,35 +969,16 @@ int string_toStringDynamicArray(char *stringToSearch, int *arraySize, char **str
                     quoteString[matchLength] = '\0';
 
                     // Remove quotations
-                    noQuoteString = string_removeQuotation(quoteString);
+                    (*stringArray)[arrayIndex] = string_removeQuotation(quoteString);
 
                     // Free quote string array
-                    if (quoteString != NULL) {
-                        EG_free(quoteString);
-                        quoteString = NULL;
-                    }
-
-                    // Allocate string array element based on no quote string
-                    (*stringArray)[arrayIndex] = (char *) EG_alloc( (strlen(noQuoteString)+1) * sizeof(char));
+                    AIM_FREE(quoteString);
 
                     // Check for malloc error
                     if ((*stringArray)[arrayIndex] == NULL) {
-                        EG_free(quoteString);
-                        for (j = 0; j <  arrayIndex; j++) EG_free((*stringArray)[j]);
-                        EG_free(*stringArray);
-                        if (noQuoteString != NULL) EG_free(noQuoteString);
-
+                        for (j = 0; j <  arrayIndex; j++) AIM_FREE((*stringArray)[j]);
+                        AIM_FREE(*stringArray);
                         return EGADS_MALLOC;
-                    }
-
-                    // Copy no quote string into array
-                    strncpy((*stringArray)[arrayIndex], noQuoteString, strlen(noQuoteString));
-                    (*stringArray)[arrayIndex][strlen(noQuoteString)] = '\0';
-
-                    // Free no quote array
-                    if (noQuoteString != NULL) {
-                        EG_free(noQuoteString);
-                        noQuoteString = NULL;
                     }
 
                     // Increment start indexes
@@ -1014,10 +993,7 @@ int string_toStringDynamicArray(char *stringToSearch, int *arraySize, char **str
     //for (i = 0; i < *arraySize; i++) printf("Value = %s\n", (*stringArray)[i]);
 
     // Free quote array
-    if (quoteString != NULL) EG_free(quoteString);
-
-    // Free no quote array
-    if (noQuoteString != NULL) EG_free(noQuoteString);
+    AIM_FREE(quoteString);
 
 
     return CAPS_SUCCESS;
@@ -1433,12 +1409,6 @@ int string_isInArray(char *find, int arraySize, char **array) {
     return (int) false;
 }
 
-// Free and null a char pointer
-void string_free( char **string) {
-    if (*string != NULL) EG_free(*string);
-    *string = NULL;
-}
-
 // The max x,y,z coordinates where P(3*i + 0) = x_i, P(3*i + 1) = y_i, and P(3*i + 2) = z_i
 void maxCoords(int sizeP, double *P, double *x, double *y, double *z) {
 
@@ -1763,9 +1733,9 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
     return stringVal;
 }
 
-// Solves the square linear system A x = b using simple LU decomposition
+// Factorizes in place the square linear system A x = b using simple LU decomposition
 // Returns CAPS_BADVALUE for a singular matrix
-int solveLU(int n, double A[], double b[], double x[] )
+int factorLU(int n, double A[] )
 {
     int i,j,k;
     double y;
@@ -1782,11 +1752,20 @@ int solveLU(int n, double A[], double b[], double x[] )
         }
     }
 
+    return CAPS_SUCCESS;
+}
+
+// Solves the factorized square linear system LU x = b
+int backsolveLU(int n, double LU[], double b[], double x[] )
+{
+    int i,j;
+    double y;
+
     // Forward solve
     for(i = 0; i < n; i++) {
         y=0.0;
         for(j = 0 ;j < i;j++) {
-            y += A[i*n+j]*x[j];
+            y += LU[i*n+j]*x[j];
         }
         x[i]=(b[i]-y);
     }
@@ -1795,10 +1774,23 @@ int solveLU(int n, double A[], double b[], double x[] )
     for(i = n-1; i >=0; i--) {
         y = 0.0;
         for(j = i+1; j < n; j++) {
-            y += A[i*n+j]*x[j];
+            y += LU[i*n+j]*x[j];
         }
-        x[i] = (x[i]-y)/A[i*n+i];
+        x[i] = (x[i]-y)/LU[i*n+i];
     }
+
+    return CAPS_SUCCESS;
+}
+
+// Solves the square linear system A x = b using simple LU decomposition
+// Returns CAPS_BADVALUE for a singular matrix
+int solveLU(int n, double A[], double b[], double x[] )
+{
+    int status = CAPS_SUCCESS;
+
+    status = factorLU(n, A);
+    if (status != CAPS_SUCCESS) return status;
+    backsolveLU(n, A, b, x);
 
     return CAPS_SUCCESS;
 }

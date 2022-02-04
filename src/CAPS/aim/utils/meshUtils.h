@@ -21,7 +21,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
                           int *numBndEdge, int *bndEdgeConn[], int *bndEdgeCompID[], int *bndEdgeTopoID[],
                           int *numNodeEle, int *nodeEleConn[], int *nodeEleCompID[], int *nodeEleTopoID[],
                           int *twoDMesh,
-                          int *tessFaceQuadMap,
+               /*@null@*/ int *tessFaceQuadMap,
                           int *numQuadFace, int *quadFaceConn[], int *quadFaceCompID[], int *quadFaceTopoID[]);
 
 // Create a surface mesh in meshStruct format using the EGADS body object

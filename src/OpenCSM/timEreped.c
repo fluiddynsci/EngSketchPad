@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -35,6 +35,7 @@
 
 #include "egads.h"
 #include "OpenCSM.h"
+#include "common.h"
 #include "tim.h"
 
 
@@ -45,14 +46,83 @@
 /***********************************************************************/
 
 int
-timLoad(/*@unused@*/tim_T *TIM,                     /* (in)  pointer to TIM structure */
+timLoad(/*@unused@*/esp_T *ESP,                     /* (in)  pointer to ESP structure */
         /*@unused@*/void  *data)                    /* (in)  user-supplied data */
 {
-    int    status = EGADS_SUCCESS;      /* (out) return status */
+    int    status;                      /* (out) return status */
 
     /* does nothing, since all done in ESP-ereped.js */
 
+    /* hold the UI when executing */
+    status = 1;
+    
 //cleanup:
+    return status;
+}
+
+
+/***********************************************************************/
+/*                                                                     */
+/*   timMesg - get command, process, and return response               */
+/*                                                                     */
+/***********************************************************************/
+
+int
+timMesg(esp_T  *ESP,                    /* (in)  pointer to ESP structure */
+        char   command[])               /* (in)  command */
+{
+    int    status = EGADS_SUCCESS;      /* (out) return status */
+
+    int    ibody=0;
+    double dihedral=0;
+    char   *arg1=NULL, *arg2=NULL, *arg3=NULL;
+    char   response[MAX_EXPR_LEN];
+    char   *pEnd;
+
+    ROUTINE("timMesg(ereped)");
+
+    /* --------------------------------------------------------------- */
+
+    /* "makeEBody|ibody|dihedral|ents|" */
+    if (strncmp(command, "makeEBody|", 10) == 0) {
+
+        /* extract arguments */
+        GetToken(command, 1, '|', &arg1);
+        SPLINT_CHECK_FOR_NULL(arg1);
+        if (strlen(arg1) > 0) ibody    = strtol(arg1, &pEnd, 10);
+        FREE(arg1);
+        
+        GetToken(command, 2, '|', &arg2);
+        SPLINT_CHECK_FOR_NULL(arg2);
+        if (strlen(arg2) > 0) dihedral = strtod(arg2, &pEnd);
+        FREE(arg2);
+        
+        GetToken(command, 3, '|', &arg3);
+        SPLINT_CHECK_FOR_NULL(arg3);
+
+        /* make or delete the EBody (by modifying MODL) */
+        if (strcmp(arg3, ".") == 0) {
+            status = ocsmMakeEBody(ESP->MODL, ibody, dihedral, NULL);
+        } else {
+            status = ocsmMakeEBody(ESP->MODL, ibody, dihedral, arg3);
+        }
+
+        FREE(arg1);
+
+        /* build the response */
+        if (status == SUCCESS) {
+            snprintf(response, MAX_EXPR_LEN, "timMesg|ereped|makeEBody|");
+        } else {
+            snprintf(response, MAX_EXPR_LEN, "timMesg|ereped|makeEBody|ERROR:: unable to make EBody(s) status=%d", status);
+        }
+        tim_bcst("ereped", response);
+    }
+
+cleanup:
+    FREE(arg1);
+    FREE(arg2);
+    FREE(arg3);
+    
     return status;
 }
 
@@ -64,7 +134,7 @@ timLoad(/*@unused@*/tim_T *TIM,                     /* (in)  pointer to TIM stru
 /***********************************************************************/
 
 int
-timSave(/*@unused@*/tim_T *TIM)                     /* (in)  pointer to TIM structure */
+timSave(/*@unused@*/esp_T *ESP)                     /* (in)  pointer to ESP structure */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
@@ -82,62 +152,12 @@ timSave(/*@unused@*/tim_T *TIM)                     /* (in)  pointer to TIM stru
 /***********************************************************************/
 
 int
-timQuit(/*@unused@*/tim_T *TIM)                     /* (in)  pointer to TIM structure */
+timQuit(/*@unused@*/esp_T *ESP,                     /* (in)  pointer to ESP structure */
+        /*@unused@*/int   unload)                   /* (in)  flag to unload */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
     /* does nothing, since all done in ESP-ereped.js */
-
-//cleanup:
-    return status;
-}
-
-
-/***********************************************************************/
-/*                                                                     */
-/*   timMesg - get command, process, and return response               */
-/*                                                                     */
-/***********************************************************************/
-
-int
-timMesg(tim_T  *TIM,                    /* (in)  pointer to TIM structure */
-        char   command[],               /* (in)  command */
-        int    max_resp_len,            /* (in)  length of response */
-        char   response[])              /* (out) response */
-{
-    int    status = EGADS_SUCCESS;      /* (out) return status */
-
-    int    ibody;
-    double dihedral;
-    char   arg1[MAX_EXPR_LEN], arg2[MAX_EXPR_LEN], arg3[MAX_EXPR_LEN];
-    char   *pEnd;
-
-    /* --------------------------------------------------------------- */
-
-    /* "makeEBody|ibody|dihedral|ents|" */
-    if (strncmp(command, "makeEBody|", 10) == 0) {
-
-        /* extract arguments */
-        ibody    = 0;
-        dihedral = 0;
-        if (GetToken(command, 1, '|', arg1)) ibody    = strtol(arg1, &pEnd, 10);
-        if (GetToken(command, 2, '|', arg2)) dihedral = strtod(arg2, &pEnd);
-        GetToken(command, 3, '|', arg3);
-
-        /* make or delete the EBody (by modifying MODL) */
-        if (strcmp(arg3, ".") == 0) {
-            status = ocsmMakeEBody(TIM->MODL, ibody, dihedral, NULL);
-        } else {
-            status = ocsmMakeEBody(TIM->MODL, ibody, dihedral, arg3);
-        }
-
-        /* build the response */
-        if (status == SUCCESS) {
-            snprintf(response, max_resp_len, "makeEBody|");
-        } else {
-            snprintf(response, max_resp_len, "makeEBody|ERROR:: unable to make EBody(s) status=%d", status);
-        }
-    }
 
 //cleanup:
     return status;

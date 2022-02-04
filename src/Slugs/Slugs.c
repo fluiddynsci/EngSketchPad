@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -367,7 +367,6 @@ static void       empFit2dCloud(void *struc);
 static int        makeNodesAndEdges(int nsgmt, sgmt_T sgmt[],
                                     int ibeg, int iend, int nodnum[], int icolr, int jcolr);
 
-       void       browserMessage(void *wsi, char *text, /*@unused@*/ int lena);
 static void       processMessage(char *text);
 static int        getToken(char *text, int nskip, char *token);
 static int        closestPoint(double xloc, double yloc, double zloc);
@@ -512,7 +511,7 @@ main(int       argc,                /* (in)  number of arguments */
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "*                    Program Slugs                       *");
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2013/2021         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2013/2022         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************");
 
@@ -3782,7 +3781,9 @@ return status;
  ***********************************************************************
  */
 void
-browserMessage(void    *wsi,
+browserMessage(
+  /*@unused@*/ void    *userPtr,
+               void    *wsi,
                char    *text,
   /*@unused@*/ int     lena)
 {

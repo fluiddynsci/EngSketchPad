@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2012/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2012/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -51,24 +51,18 @@
     #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
     #include <winsock2.h>
+    #define snprintf     _snprintf
+    #define SLEEP(msec)  Sleep(msec)
+    #define SLASH '\\'
+#else
+    #include <unistd.h>
+    #define SLEEP(msec)  usleep(1000*msec)
+    #define SLASH '/'
 #endif
-
-#include "egads.h"
-#include "emp.h"
 
 #define CINT    const int
 #define CDOUBLE const double
 #define CCHAR   const char
-
-#ifdef WIN32
-    #define snprintf _snprintf
-#endif
-
-#ifdef WIN32
-    #define  SLASH '\\'
-#else
-    #define  SLASH '/'
-#endif
 
 #define STRNCPY(A, B, LEN) strncpy(A, B, LEN); A[LEN-1] = '\0';
 
@@ -77,6 +71,7 @@
 
 #include "udp.h"
 #include "egg.h"
+#include "emp.h"
 
 #include "wsserver.h"
 
@@ -345,7 +340,7 @@ static FILE       *jrnl_out = NULL;    /* output journal file */
 static void       addToResponse(char text[]);
 static void       addToSgMetaData(char format[], ...);
 static int        applyDisplacement(modl_T *MODL, int ipmtr);
-       void       browserMessage(void *wsi, char text[], /*@unused@*/ int lena);
+       void       browserMessage(void *udata, void *wsi, char text[], int lena);
 static int        buildBodys(int buildTo, int *builtTo, int *buildStatus, int *nwarn);
 static int        buildSceneGraph();
 static int        buildSceneGraphBody(int ibody);
@@ -658,7 +653,7 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program serveCSM                    *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2021         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2022         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************\n");
 
@@ -946,6 +941,8 @@ main(int       argc,                    /* (in)  number of arguments */
             status = -999;
             goto cleanup;
         }
+
+        wv_setCallBack(cntxt, browserMessage);
     }
 
     /* build the Bodys from the MODL */
@@ -1072,7 +1069,7 @@ main(int       argc,                    /* (in)  number of arguments */
                 goto cleanup;
             }
 
-            /* rebuild to propagate the velocities */
+            /* rebuild to compute the velocities */
             nbody = 0;
             status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
             if (status != SUCCESS) {
@@ -1350,7 +1347,7 @@ main(int       argc,                    /* (in)  number of arguments */
 
             /* stay alive a long as we have a client */
             while (wv_statusServer(0)) {
-                usleep(500000);
+                SLEEP(500);
 
                 /* start the browser if the first time through this loop */
                 if (status == SUCCESS) {
@@ -1500,10 +1497,6 @@ main(int       argc,                    /* (in)  number of arguments */
                 fprintf(vrfy_fp, "   assert  %8d      @itype       0  1\n", 3);
             }
 
-            fprintf(vrfy_fp, "   assert  %8d      @nnode       0  1\n", MODL->body[ibody].nnode);
-            fprintf(vrfy_fp, "   assert  %8d      @nedge       0  1\n", MODL->body[ibody].nedge);
-            fprintf(vrfy_fp, "   assert  %8d      @nface       0  1\n", MODL->body[ibody].nface);
-
             status = EG_getBoundingBox(MODL->body[ibody].ebody, bbox);
             if (status != SUCCESS) {
                 SPRINT2(0, "ERROR:: EG_getBoundingBox(%d) -> status=%d\n", ibody, status);
@@ -1563,6 +1556,11 @@ main(int       argc,                    /* (in)  number of arguments */
             } else {
                 fprintf(vrfy_fp, "   assert %15.7e  @zcg    %15.7e  1\n", data[4], 0.001*(bbox[5]-bbox[2]));
             }
+
+            fprintf(vrfy_fp, "   assert  %8d      @nnode       0  1\n", MODL->body[ibody].nnode);
+            fprintf(vrfy_fp, "   assert  %8d      @nedge       0  1\n", MODL->body[ibody].nedge);
+            fprintf(vrfy_fp, "   assert  %8d      @nface       0  1\n", MODL->body[ibody].nface);
+
             fprintf(vrfy_fp, "\n");
         }
 
@@ -2124,6 +2122,7 @@ cleanup:
 
 void
 browserMessage(
+   /*@unused@*/void    *udata,
    /*@unused@*/void    *wsi,
                char    text[],
   /*@unused@*/ int     lena)
@@ -5796,13 +5795,13 @@ processBrowserToServer(char    text[])
     int       status = SUCCESS;
 
     int       i, ibrch, itype, nlist, builtTo, buildStatus, ichar, iundo;
-    int       ipmtr, jpmtr, nrow, ncol, irow, icol, index, iattr, actv, itemp;
+    int       ipmtr, jpmtr, nrow, ncol, irow, icol, index, iattr, actv, itemp, linenum;
     int       itoken1, itoken2, itoken3, ibody, onstack, direction=1, nwarn;
     int       nclient;
     CINT      *tempIlist;
     double    scale, dihedral, value, dot;
     CDOUBLE   *tempRlist;
-    char      *pEnd, bname[MAX_NAME_LEN+1];
+    char      *pEnd, bname[MAX_NAME_LEN+1], *bodyinfo=NULL;
     CCHAR     *tempClist;
 
     char      *name=NULL,  *type=NULL, *valu=NULL;
@@ -7307,6 +7306,34 @@ processBrowserToServer(char    text[])
 
         goto cleanup;
 
+    /* "getBodyDetails|filename|linenum||" */
+    } else if (strncmp(text, "getBodyDetails|", 15) == 0) {
+
+        /* extract arguments */
+        linenum = 0;
+        getToken(text, 1, '|', arg1);
+        if (getToken(text, 2, '|', arg2)) linenum = strtol(arg2, &pEnd, 10);
+
+        status = ocsmBodyDetails(MODL, arg1, linenum, &bodyinfo);
+
+        SPLINT_CHECK_FOR_NULL(bodyinfo);
+
+        if (status == SUCCESS) {
+            itemp = 25 + STRLEN(bodyinfo);
+
+            if (itemp > max_resp_len) {
+                max_resp_len = itemp + 1;
+
+                RALLOC(response, char, max_resp_len+1);
+            }
+
+            /* build the response */
+            snprintf(response, max_resp_len, "getBodyDetails|%s|%d|%s|", arg1, linenum, bodyinfo);
+            response_len = STRLEN(response);
+        }
+
+        FREE(bodyinfo);
+
     /* "loadSketch|" */
     } else if (strncmp(text, "loadSketch|", 11) == 0) {
 
@@ -7589,6 +7616,12 @@ processBrowserToServer(char    text[])
                      scale, matrix);
             response_len = STRLEN(response);
         }
+
+    /* "editor|...|" */
+    } else if (strncmp(text, "editor|", 7) == 0) {
+        snprintf(response, max_resp_len, "%s", text);
+        response_len = STRLEN(response);
+
     }
 
     status = SUCCESS;
@@ -7627,7 +7660,7 @@ cleanup:
 /***********************************************************************/
 
 void
-sizeCallbackFromOpenCSM(void   *Modl,   /* (in)  pointer to MODL */
+sizeCallbackFromOpenCSM(void   *modl,   /* (in)  pointer to MODL */
                         int    ipmtr,   /* (in)  Parameter index (bias-1) */
                         int    nrow,    /* (in)  new number of rows */
                         int    ncol)    /* (in)  new number of columns */
@@ -7638,7 +7671,7 @@ sizeCallbackFromOpenCSM(void   *Modl,   /* (in)  pointer to MODL */
     double value, dot;
     char   *entry=NULL;
 
-    modl_T *MODL = (modl_T*)Modl;
+    modl_T *MODL = (modl_T*)modl;
 
     ROUTINE(sizeCallbackFromOpenCSM);
 

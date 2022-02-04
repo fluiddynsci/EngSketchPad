@@ -26,7 +26,8 @@ class TestFUN3D(unittest.TestCase):
 
         cls.myProblem = pyCAPS.Problem(cls.problemName, capsFile=cls.file, outLevel=0)
 
-        egadsTess = cls.myProblem.analysis.create(aim = "egadsTessAIM")
+        egadsTess = cls.myProblem.analysis.create(aim = "egadsTessAIM",
+                                                  name = "egads")
 
         # Modify local mesh sizing parameters
         egadsTess.input.Tess_Params = [0.5, 0.01, 15.0]
@@ -48,7 +49,7 @@ class TestFUN3D(unittest.TestCase):
     def tearDownClass(cls):
         del cls.myAnalysis
         del cls.myProblem
-        #cls.cleanUp()
+        cls.cleanUp()
 
     @classmethod
     def cleanUp(cls):
@@ -136,7 +137,7 @@ class TestFUN3D(unittest.TestCase):
         del self.fun3d
 
     # Create sensitvities
-    def test_sensitivity(self):
+    def test_Design_Sensitivity(self):
 
         # Create a new instance
         self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
@@ -147,9 +148,18 @@ class TestFUN3D(unittest.TestCase):
                                                "Wing2": {"bcType" : "Inviscid"},
                                                "Farfield":"farfield"}
 
-        self.fun3d.input.Design_Variable = {"Alpha": {"upperBound": 10.0}, "area":{"lowerBound":10.0}}
+        self.fun3d.input.Design_Functional = {"Composite": [{"function":"ClCd", "weight": 1.0, "target": 2.7, "power": 1.0, "capsGroup":"Wing1"},
+                                                            {"function":"Cd"  , "weight": 1.0, "target": 0.0, "power": 2.0}],
+                                              "Lift^2": {"function":"Cl", "weight": 1.0, "target": 0.0, "power": 2.0}}
 
-        self.fun3d.input.Design_Objective = {"ClCd": {"weight": 1.0, "target": 2.7}}
+        self.fun3d.input.Design_Sensitivity = False
+        self.fun3d.input.Design_Variable = {"Alpha":"",
+                                            "Beta":{},
+                                            "area":{},
+                                            "aspect":{},
+                                            "taper":"",
+                                            "twist":"",
+                                           }
 
         self.fun3d.input.Alpha = 1
         self.fun3d.input.Use_Python_NML = False
@@ -163,8 +173,10 @@ class TestFUN3D(unittest.TestCase):
         self.assertEqual(os.path.isdir(os.path.join(self.fun3d.analysisDir, "Rubberize")), True)
         self.assertEqual(os.path.isdir(os.path.join(self.fun3d.analysisDir, "Adjoint")), True)
 
-        # Turn on the python nml writer and remove the old files
+        # Turn on the python nml writer, sensitvity, and remove the old files
         self.fun3d.input.Use_Python_NML = True
+    
+        self.fun3d.input.Design_Sensitivity = True
 
         for file in os.listdir(self.fun3d.analysisDir):
             path = os.path.join(self.fun3d.analysisDir, file)
@@ -175,6 +187,35 @@ class TestFUN3D(unittest.TestCase):
 
         # Write the inputs again
         self.fun3d.preAnalysis()
+
+        rubber = os.path.join(self.fun3d.analysisDir, "rubber.data")
+        rubber_bak = os.path.join(self.fun3d.analysisDir, "rubber.data.bak")
+        shutil.copy2(rubber, rubber_bak)
+
+        writeValue = False
+        varDeriv = 0
+        varDerivMax = 0
+        with open(rubber_bak, 'r') as bak:
+            with open(rubber, 'w') as f:
+                for line in bak:
+                    if 'Current value of function' in line:
+                        writeValue = True
+                    elif writeValue:
+                        line = "10.0\n"
+                        writeValue = False
+                    elif 'Current derivatives of function wrt global design variables' in line:
+                        varDeriv = 1
+                        varDerivMax = 6
+                    elif 'Current derivatives of function wrt shape design variables' in line:
+                        varDeriv += 1
+                        varDerivMax = 8
+                    elif varDeriv > 0:
+                        line = str(float(varDeriv)) + '\n'
+                        varDeriv += 1
+                        if varDeriv > varDerivMax: varDeriv = 0
+
+                    f.write(line)
+
         self.fun3d.postAnalysis()
 
         self.assertEqual(os.path.isfile(os.path.join(self.fun3d.analysisDir, os.path.join("Flow", self.configFile))), True)
@@ -182,7 +223,101 @@ class TestFUN3D(unittest.TestCase):
         self.assertEqual(os.path.isdir(os.path.join(self.fun3d.analysisDir, "Rubberize")), True)
         self.assertEqual(os.path.isdir(os.path.join(self.fun3d.analysisDir, "Adjoint")), True)
 
+        Objective_Value  = self.fun3d.dynout["Composite"].value
+        Objective_Alpha  = self.fun3d.dynout["Composite"].deriv("Alpha")
+        Objective_Beta   = self.fun3d.dynout["Composite"].deriv("Beta")
+        Objective_area   = self.fun3d.dynout["Composite"].deriv("area")
+        Objective_aspect = self.fun3d.dynout["Composite"].deriv("aspect")
+        Objective_taper  = self.fun3d.dynout["Composite"].deriv("taper")
+        Objective_twist  = self.fun3d.dynout["Composite"].deriv("twist")
+
+        self.assertEqual(Objective_Value   , 10.0)
+        self.assertEqual(Objective_Alpha   , 2.0)
+        self.assertEqual(Objective_Beta    , 3.0)
+        self.assertEqual(Objective_area    , 1.0 *3)
+        self.assertEqual(Objective_aspect  , 2.0 *3)
+        self.assertEqual(Objective_taper[0], 3.0 *3)
+        self.assertEqual(Objective_taper[1], 4.0 *3)
+        self.assertEqual(Objective_taper[2], 5.0 *3)
+        self.assertEqual(Objective_taper[3], 6.0 *3)
+        self.assertEqual(Objective_twist[0], 7.0 *3)
+        self.assertEqual(Objective_twist[1], 8.0 *3)
+
+        # Check without shape design parameters
+        self.fun3d.input.Design_Variable = {"Alpha": {"upperBound": 10.0}}
+
+        self.fun3d.preAnalysis()
+        self.fun3d.postAnalysis()
+
+        Objective_Value = self.fun3d.dynout["Composite"].value
+        Objective_Alpha = self.fun3d.dynout["Composite"].deriv("Alpha")
+
         del self.fun3d
+
+    # Create sensitvities
+    def test_Design_SensFile(self):
+
+        # Create a new instance
+        self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
+
+        self.fun3d.input["Mesh"].link(self.myProblem.analysis["tetgen"].output["Volume_Mesh"])
+
+        self.fun3d.input.Boundary_Condition = {"Wing1": {"bcType" : "Viscous"},
+                                               "Wing2": {"bcType" : "Inviscid"},
+                                               "Farfield":"farfield"}
+
+        self.fun3d.input.Design_SensFile = True
+        self.fun3d.input.Design_Variable = {"area":{},
+                                            "aspect":{},
+                                            "taper":"",
+                                            "twist":"",
+                                           }
+
+        self.fun3d.input.Alpha = 1
+        self.fun3d.input.Use_Python_NML = False
+        self.fun3d.input.Overwrite_NML = True
+
+        self.fun3d.preAnalysis()
+        
+        NumberOfNode = self.myProblem.analysis["egads"].output.NumberOfNode
+        
+        # Create a dummy sensitivity file
+        filename = os.path.join(self.fun3d.analysisDir, self.fun3d.input.Proj_Name+".sens")
+        with open(filename, "w") as f:
+            f.write("2\n") # Two functionals
+            f.write("Func1\n") # 1st functional
+            f.write("%f\n"%(42))    # Value of Func1
+            f.write("{}\n".format(NumberOfNode)) # Number Of Nodes for this functional
+            for i in range(NumberOfNode): # node ID d(Func1)/d(xyz)
+                f.write("{} {} {} {}\n".format(i+1, 1*i, 2*i, 3*i))
+
+            f.write("Func2\n") # 2nd functiona;
+            f.write("%f\n"%(21))    # Value of Func2
+            f.write("{}\n".format(NumberOfNode)) # Number Of Nodes for this functional
+            for i in range(NumberOfNode): # node ID d(Func2)/d(xyz)
+                f.write("{} {} {} {}\n".format(i+1, 1*i, 2*i, 3*i))
+
+        print(os.path.join("Flow", self.configFile))
+        self.assertEqual(os.path.isfile(os.path.join(self.fun3d.analysisDir, os.path.join("Flow", self.configFile))), True)
+        self.assertEqual(os.path.isdir(os.path.join(self.fun3d.analysisDir, "Adjoint")), True)
+
+        self.fun3d.postAnalysis()
+
+        Func1        = self.fun3d.dynout["Func1"].value
+        Func1_area   = self.fun3d.dynout["Func1"].deriv("area")
+        Func1_aspect = self.fun3d.dynout["Func1"].deriv("aspect")
+        Func1_taper  = self.fun3d.dynout["Func1"].deriv("taper")
+        Func1_twist  = self.fun3d.dynout["Func1"].deriv("twist")
+
+        self.assertEqual(Func1, 42)
+
+        Func2        = self.fun3d.dynout["Func2"].value
+        Func2_area   = self.fun3d.dynout["Func2"].deriv("area")
+        Func2_aspect = self.fun3d.dynout["Func2"].deriv("aspect")
+        Func2_taper  = self.fun3d.dynout["Func2"].deriv("taper")
+        Func2_twist  = self.fun3d.dynout["Func2"].deriv("twist")
+
+        self.assertEqual(Func2, 21)
 
     # Test using Cython to write and modify the *.nml file
     def test_cythonNML(self):
@@ -241,7 +376,7 @@ class TestFUN3D(unittest.TestCase):
         self.assertEqual(os.path.isfile(os.path.join(self.fun3d.analysisDir, self.configFile)), True)
 
         self.fun3d.postAnalysis()
-        
+
         del self.fun3d
 
     # Test using Cython to write and modify the *.nml file - catch an error

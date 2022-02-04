@@ -4,7 +4,7 @@
  */
 
 /*
- * Copyright (C) 2010/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -38,6 +38,10 @@ udp_initialize(char   primName[],
 /* get number of Bodys expected in call to udp_executePrim */
 extern int
 udp_numBodys(char primName[]);
+
+/* get list of Bodys associated with primitive */
+extern int
+udp_bodyList(char primName[], ego body, const int *bodyList[]);
 
 /* set the argument list back to default */
 extern int

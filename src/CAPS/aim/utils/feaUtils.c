@@ -28,7 +28,7 @@
 
 
 int fea_createMesh(void *aimInfo,
-                   double paramTess[3],                 // (in)  Tessellation parameters
+       /*@null@*/  double paramTess[3],                 // (in)  Tessellation parameters
                    int    edgePointMin,                 // (in)  minimum points along any Edge
                    int    edgePointMax,                 // (in)  maximum points along any Edge
                    int    quadMesh,                     // (in)  only do tris-for faces
@@ -84,7 +84,7 @@ int fea_createMesh(void *aimInfo,
 
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
     if ((numBody <= 0) || (bodies == NULL)) {
         AIM_ERROR(aimInfo, "No Bodies!\n");
@@ -286,10 +286,6 @@ int fea_createMesh(void *aimInfo,
                 printf("\tElemental Rods  = %d\n", feaMeshes[body].meshQuickRef.numLine);
                 printf("\tElemental Tria3 = %d\n", feaMeshes[body].meshQuickRef.numTriangle);
                 printf("\tElemental Quad4 = %d\n", feaMeshes[body].meshQuickRef.numQuadrilateral);
-
-                // set the resulting tessellation
-                status = aim_newTess(aimInfo, feaMeshes[body].bodyTessMap.egadsTess);
-                AIM_STATUS(aimInfo, status);
             }
 
             if (numFEAMesh > 1) {
@@ -388,6 +384,12 @@ int fea_createMesh(void *aimInfo,
 
     // If we didn't inherit a FEA mesh we need to get one ourselves
     if (feaMeshInherited == (int) false) {
+
+        if (paramTess == NULL) {
+          AIM_ERROR(aimInfo, "Developer error paramTess == NULL");
+          status = CAPS_BADVALUE;
+          goto cleanup;
+        }
 
         if (edgePointMin < 2) {
             printf("The minimum number of allowable edge points is 2 not %d\n", edgePointMin);
@@ -3620,7 +3622,7 @@ int fea_getProperty(void *aimInfo,
         // Get to property ID number from the attribute map
         status = get_mapAttrToIndexIndex(attrMap, feaProblem->feaProperty[i].name, &pidIndex);
         if (status != CAPS_SUCCESS) {
-            AIM_ERROR(aimInfo, "Tuple name %s not found in attribute map of PIDS!!!!\n", feaProblem->feaProperty[i].name);
+            AIM_ERROR(aimInfo, "Tuple name '%s' not found in attribute map of PIDS!!!!\n", feaProblem->feaProperty[i].name);
             AIM_FREE(keyValue);
             goto cleanup;
         } else {
@@ -8299,7 +8301,9 @@ int fea_getAnalysis(int numAnalysisTuple,
 } 
 
 // Get the design variables from a capsTuple
-int fea_getDesignVariable(int numDesignVariableTuple,
+int fea_getDesignVariable(void *aimInfo,
+                          int requireGroup,
+                          int numDesignVariableTuple,
                           capsTuple designVariableTuple[],
                           int numDesignVariableRelationTuple,
                           capsTuple designVariableRelationTuple[],
@@ -8351,10 +8355,10 @@ int fea_getDesignVariable(int numDesignVariableTuple,
     if (feaProblem->feaDesignVariable != NULL) {
         for (i = 0; i < feaProblem->numDesignVariable; i++) {
             status = destroy_feaDesignVariableStruct(&feaProblem->feaDesignVariable[i]);
-            if (status != CAPS_SUCCESS) return status;
+            AIM_STATUS(aimInfo, status);
         }
     }
-    if (feaProblem->feaDesignVariable != NULL) EG_free(feaProblem->feaDesignVariable);
+    AIM_FREE(feaProblem->feaDesignVariable);
     feaProblem->feaDesignVariable = NULL;
     feaProblem->numDesignVariable = 0;
 
@@ -8362,10 +8366,10 @@ int fea_getDesignVariable(int numDesignVariableTuple,
     if (feaProblem->feaDesignVariableRelation != NULL) {
         for (i = 0; i < feaProblem->numDesignVariableRelation; i++) {
             status = destroy_feaDesignVariableRelationStruct(&feaProblem->feaDesignVariableRelation[i]);
-            if (status != CAPS_SUCCESS) return status;
+            AIM_STATUS(aimInfo, status);
         }
     }
-    if (feaProblem->feaDesignVariableRelation != NULL) EG_free(feaProblem->feaDesignVariableRelation);
+    AIM_FREE(feaProblem->feaDesignVariableRelation);
     feaProblem->feaDesignVariableRelation = NULL;
     feaProblem->numDesignVariableRelation = 0;
 
@@ -8374,37 +8378,22 @@ int fea_getDesignVariable(int numDesignVariableTuple,
 
     feaProblem->numDesignVariable = numDesignVariableTuple;
 
-    // there is potentially one design variable relation per design variable,
-    // plus additional relations specified via Design_Variable_Relation
-    feaProblem->numDesignVariableRelation = numDesignVariableTuple;
-    if (designVariableRelationTuple != NULL) {
-        feaProblem->numDesignVariableRelation += numDesignVariableRelationTuple;
-    } 
-
     printf("\tNumber of design variables          - %d\n", feaProblem->numDesignVariable);
     // printf("\tNumber of design variable relations - %d\n", numDesignVariableRelationTuple);
 
     if (feaProblem->numDesignVariable > 0) {
 
-        feaProblem->feaDesignVariable = EG_alloc(
-            feaProblem->numDesignVariable * sizeof(feaDesignVariableStruct));
-        
-        feaProblem->feaDesignVariableRelation = EG_alloc(
-            feaProblem->numDesignVariableRelation * sizeof(feaDesignVariableRelationStruct));
+        AIM_ALLOC(feaProblem->feaDesignVariable,
+                  feaProblem->numDesignVariable, feaDesignVariableStruct, aimInfo, status);
 
     } else {
-        printf("\tNumber of design variable values in input tuple is 0\n");
+        AIM_ERROR(aimInfo, "Number of design variable values in input tuple is 0\n");
         return CAPS_NOTFOUND;
     }
 
     for (i = 0; i < feaProblem->numDesignVariable; i++) {
         status = initiate_feaDesignVariableStruct(&feaProblem->feaDesignVariable[i]);
-        if (status != CAPS_SUCCESS) return status;
-    }
-
-    for (i = 0; i < feaProblem->numDesignVariableRelation; i++) {
-        status = initiate_feaDesignVariableRelationStruct(&feaProblem->feaDesignVariableRelation[i]);
-        if (status != CAPS_SUCCESS) return status;
+        AIM_STATUS(aimInfo, status);
     }
 
     for (i = 0; i < feaProblem->numDesignVariable; i++) {
@@ -8413,8 +8402,7 @@ int fea_getDesignVariable(int numDesignVariableTuple,
 
         printf("\tDesign_Variable name - %s\n", designVariableTuple[i].name);
         
-        designVariable->name = EG_strdup(designVariableTuple[i].name);
-        if (designVariable->name == NULL) return EGADS_MALLOC;
+        AIM_STRDUP(designVariable->name, designVariableTuple[i].name, aimInfo, status);
 
         designVariable->designVariableID = i + 1;
 
@@ -8454,10 +8442,10 @@ int fea_getDesignVariable(int numDesignVariableTuple,
                 designVariableTuple[i].value, keyWord, 
                 &numGroupName, &groupName);
                 
-            if (status != CAPS_SUCCESS) {
+            if (status != CAPS_SUCCESS && requireGroup == (int)true) {
                 // required
-                PRINT_ERROR("No \"%s\" specified for Design_Variable_Relation tuple %s",
-                            keyWord, designVariableTuple[i].name);
+                AIM_ERROR(aimInfo, "No \"%s\" specified for Design_Variable tuple %s",
+                          keyWord, designVariableTuple[i].name);
                 goto cleanup;
             }
 
@@ -8467,16 +8455,9 @@ int fea_getDesignVariable(int numDesignVariableTuple,
 
             if (status == CAPS_SUCCESS) {
 
+                AIM_ALLOC(designVariable->materialSetID, numMaterial, int, aimInfo, status);
+                AIM_ALLOC(designVariable->materialSetType, numMaterial, int, aimInfo, status);
                 designVariable->numMaterialID = numMaterial;
-                designVariable->materialSetID   = EG_alloc(numMaterial * sizeof(int));
-                designVariable->materialSetType = EG_alloc(numMaterial * sizeof(int));
-                
-                if (designVariable->materialSetID   == NULL ||
-                    designVariable->materialSetType == NULL   ) {
-
-                    status = EGADS_MALLOC;
-                    goto cleanup;
-                }
 
                 for (j = 0; j < numMaterial; j++) {
 
@@ -8488,21 +8469,14 @@ int fea_getDesignVariable(int numDesignVariableTuple,
             }
 
             // collect properties associated with groupName
-            status = fea_findPropertiesByNames(
-                feaProblem, numGroupName, groupName, &numProperty, &propertySet);
+            status = fea_findPropertiesByNames(feaProblem, numGroupName, groupName,
+                                               &numProperty, &propertySet);
 
             if (status == CAPS_SUCCESS) {
 
+                AIM_ALLOC(designVariable->propertySetID, numProperty, int, aimInfo, status);
+                AIM_ALLOC(designVariable->propertySetType, numProperty, int, aimInfo, status);
                 designVariable->numPropertyID = numProperty;
-                designVariable->propertySetID   = EG_alloc(numProperty * sizeof(int));
-                designVariable->propertySetType = EG_alloc(numProperty * sizeof(int));
-                
-                if (designVariable->propertySetID   == NULL ||
-                    designVariable->propertySetType == NULL   ) {
-
-                    status = EGADS_MALLOC;
-                    goto cleanup;
-                }
 
                 for (j = 0; j < numProperty; j++) {
 
@@ -8519,18 +8493,10 @@ int fea_getDesignVariable(int numDesignVariableTuple,
             
             if (status == CAPS_SUCCESS) {
 
+                AIM_ALLOC(designVariable->elementSetID, numElement, int, aimInfo, status);
+                AIM_ALLOC(designVariable->elementSetType, numElement, int, aimInfo, status);
+                AIM_ALLOC(designVariable->elementSetSubType, numElement, int, aimInfo, status);
                 designVariable->numElementID = numElement;
-                designVariable->elementSetID   = EG_alloc(numElement * sizeof(int));
-                designVariable->elementSetType = EG_alloc(numElement * sizeof(int));
-                designVariable->elementSetSubType = EG_alloc(numElement * sizeof(int));
-                
-                if (designVariable->elementSetID   == NULL ||
-                    designVariable->elementSetType == NULL ||
-                    designVariable->elementSetSubType == NULL) {
-
-                    status = EGADS_MALLOC;
-                    goto cleanup;
-                }
 
                 for (j = 0; j < numElement; j++) {
 
@@ -8547,17 +8513,9 @@ int fea_getDesignVariable(int numDesignVariableTuple,
                 string_freeArray(numGroupName, &groupName);
             groupName = NULL;
 
-            if (materialSet != NULL)
-                EG_free(materialSet);
-            materialSet = NULL;
-
-            if (propertySet != NULL)
-                EG_free(propertySet);
-            propertySet = NULL;
-
-            if (elementSet != NULL)
-                EG_free(elementSet);
-            elementSet = NULL;
+            AIM_FREE(materialSet);
+            AIM_FREE(propertySet);
+            AIM_FREE(elementSet);
 
             /*! \page feaDesignVariable
              *
@@ -8668,13 +8626,10 @@ int fea_getDesignVariable(int numDesignVariableTuple,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toStringDynamicArray(keyValue,
-                        &designVariable->numIndependVariable,
-                        &designVariable->independVariable);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
-                if (status != CAPS_SUCCESS) goto cleanup;
+                                                     &designVariable->numIndependVariable,
+                                                     &designVariable->independVariable);
+                AIM_FREE(keyValue);
+                AIM_STATUS(aimInfo, status);
 
             }
 
@@ -8696,14 +8651,10 @@ int fea_getDesignVariable(int numDesignVariableTuple,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDoubleDynamicArray(keyValue,
-                        &tempInteger,
-                        &designVariable->independVariableWeight);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
-
-                if (status != CAPS_SUCCESS) goto cleanup;
+                                                     &tempInteger,
+                                                     &designVariable->independVariableWeight);
+                AIM_FREE(keyValue);
+                AIM_STATUS(aimInfo, status);
 
                 // We have weights, but no variables
                 if (designVariable->numIndependVariable == 0) {
@@ -8716,10 +8667,8 @@ int fea_getDesignVariable(int numDesignVariableTuple,
                     printf("\tThe number of weighting constants provided does not match the number of independent design variables. "
                             "The last weight will be repeated %d times\n", designVariable->numIndependVariable - tempInteger);
 
-                    designVariable->independVariableWeight = (double *) EG_reall(designVariable->independVariableWeight,
-                            designVariable->numIndependVariable*sizeof(double));
-
-                    if (designVariable->independVariableWeight == NULL ) return EGADS_MALLOC;
+                    AIM_REALL(designVariable->independVariableWeight,
+                              designVariable->numIndependVariable, double, aimInfo, status);
 
                     for (j = 0; j < designVariable->numIndependVariable - tempInteger; j++) {
 
@@ -8732,18 +8681,14 @@ int fea_getDesignVariable(int numDesignVariableTuple,
                     printf("\tThe number of weighting constants provided does not match the number of independent design variables. "
                             "The last %d weights will be not be used\n", tempInteger -designVariable->numIndependVariable);
 
-                    designVariable->independVariableWeight = (double *) EG_reall(designVariable->independVariableWeight,
-                            designVariable->numIndependVariable*sizeof(double));
-
-                    if (designVariable->independVariableWeight == NULL ) return EGADS_MALLOC;
+                    AIM_REALL(designVariable->independVariableWeight,
+                              designVariable->numIndependVariable, double, aimInfo, status);
                 }
 
             } else { // No weights provided - set default value of 1.0
 
                 if (designVariable->numIndependVariable != 0) {
-                    designVariable->independVariableWeight = (double *) EG_alloc(designVariable->numIndependVariable*sizeof(double));
-
-                    if (designVariable->independVariableWeight == NULL) return EGADS_MALLOC;
+                    AIM_ALLOC(designVariable->independVariableWeight, designVariable->numIndependVariable, double, aimInfo, status);
 
                     for (j = 0; j < designVariable->numIndependVariable; j++) {
                         designVariable->independVariableWeight[j] = 1.0;
@@ -8765,15 +8710,12 @@ int fea_getDesignVariable(int numDesignVariableTuple,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDoubleArray(keyValue,
-                        2,
-                        designVariable->variableWeight);
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
+                                              2,
+                                              designVariable->variableWeight);
+                AIM_FREE(keyValue);
 
                 if (status != CAPS_SUCCESS) {
-                    printf("\tError during retrieving variableWeight - status %d\n", status);
+                    AIM_ERROR(aimInfo, "Retrieving variableWeight - status %d\n", status);
                     goto cleanup;
                 }
             } else {
@@ -8784,36 +8726,32 @@ int fea_getDesignVariable(int numDesignVariableTuple,
             // check if design variable relation info also included in input
             keyWord = "fieldName";
             status = search_jsonDictionary( designVariableTuple[i].value, keyWord, &keyValue);
-            
-            if (keyValue != NULL) {
-                EG_free(keyValue);
-                keyValue = NULL;
-            }
+            AIM_FREE(keyValue);
 
             if (status != CAPS_SUCCESS) {
-
                 keyWord = "fieldPosition";
                 status = search_jsonDictionary( designVariableTuple[i].value, keyWord, &keyValue);
-                
-                if (keyValue != NULL) {
-                    EG_free(keyValue);
-                    keyValue = NULL;
-                }
-
+                AIM_FREE(keyValue);
             }
 
             if (status == CAPS_SUCCESS) {
 
                 // The main relation associated with this design variable, if defined in input
+                AIM_REALL(feaProblem->feaDesignVariableRelation, relationIndex+1, feaDesignVariableRelationStruct, aimInfo, status);
+
                 designVariableRelation = &feaProblem->feaDesignVariableRelation[relationIndex++];
-                        
+                feaProblem->numDesignVariableRelation = relationIndex;
+
+                status = initiate_feaDesignVariableRelationStruct(designVariableRelation);
+                AIM_STATUS(aimInfo, status);
+
                 printf("\tWarning: the ability to provide design variable relation data "
                     "within Design_Variable input is deprecated and "
                     "will be removed in the future. Please use provide relation data "
                     "via \"Design_Variable_Relation\" instead.\n");
                 status = fea_getDesignVariableRelationEntry(
                     &designVariableTuple[i], designVariableRelation, attrMap, feaProblem, designVariable->name);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 designVariableRelation->relationID = relationIndex;
             }
@@ -8821,16 +8759,14 @@ int fea_getDesignVariable(int numDesignVariableTuple,
 
         } else {
 
-            printf("\tError: Design_Variable tuple value is expected to be a JSON string\n");
-            return CAPS_BADVALUE;
+            AIM_ERROR(aimInfo, "Design_Variable tuple value is expected to be a JSON string\n");
+            status = CAPS_BADVALUE;
+            goto cleanup;
 
         }
     }
 
-    if (keyValue != NULL) {
-        EG_free(keyValue);
-        keyValue = NULL;
-    }
+    AIM_FREE(keyValue);
 
     // Now that we are done going through all the tuples we need to populate/create the independVaraiableID array
     // if independentVariable was set for any of them.
@@ -8840,8 +8776,7 @@ int fea_getDesignVariable(int numDesignVariableTuple,
 
         if (designVariable->numIndependVariable != 0) {
 
-            designVariable->independVariableID = (int *) EG_alloc(designVariable->numIndependVariable*sizeof(int));
-            if (designVariable->independVariableID == NULL) return EGADS_MALLOC;
+            AIM_ALLOC(designVariable->independVariableID, designVariable->numIndependVariable, int, aimInfo, status);
 
             // Loop through the independent variable names
             for (j = 0; j < designVariable->numIndependVariable; j++) {
@@ -8857,10 +8792,11 @@ int fea_getDesignVariable(int numDesignVariableTuple,
 
                 // If NOT found
                 if (found != (int) true) {
-                    printf("\tDesign variable name, \"%s\", not found when searching for independent design variables for "
-                            "variable %s!!!\n", designVariable->independVariable[j],
-                                                designVariable->name);
-                    return CAPS_NOTFOUND;
+                    AIM_ERROR(aimInfo, "\tDesign variable name, \"%s\", not found when searching for independent design variables for "
+                                       "variable %s!!!\n", designVariable->independVariable[j],
+                                                           designVariable->name);
+                    status = CAPS_NOTFOUND;
+                    goto cleanup;
                 }
 
                 designVariable->independVariableID[j] = feaProblem->feaDesignVariable[k].designVariableID;
@@ -8869,6 +8805,14 @@ int fea_getDesignVariable(int numDesignVariableTuple,
     }
 
     if (designVariableRelationTuple != NULL) {
+
+        AIM_REALL(feaProblem->feaDesignVariableRelation, numDesignVariableRelationTuple+relationIndex, feaDesignVariableRelationStruct, aimInfo, status);
+        feaProblem->numDesignVariableRelation = numDesignVariableRelationTuple+relationIndex;
+
+        for (i = 0; i < numDesignVariableRelationTuple; i++) {
+          status = initiate_feaDesignVariableRelationStruct(&feaProblem->feaDesignVariableRelation[relationIndex+i]);
+          AIM_STATUS(aimInfo, status);
+        }
 
         // Go through design variable relations defined via 'Design_Variable_Relation'
         for (i = 0; i < numDesignVariableRelationTuple; i++) {
@@ -8883,46 +8827,30 @@ int fea_getDesignVariable(int numDesignVariableTuple,
 
             designVariableRelation = &feaProblem->feaDesignVariableRelation[relationIndex++];
 
-            designVariableRelation->relationID = relationIndex;
+            status = initiate_feaDesignVariableRelationStruct(designVariableRelation);
+            AIM_STATUS(aimInfo, status);
 
             status = fea_getDesignVariableRelationEntry(
                 &designVariableRelationTuple[i], designVariableRelation, attrMap, feaProblem, NULL);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
         }
 
-        feaProblem->numDesignVariableRelation = relationIndex;
-
-        feaProblem->feaDesignVariableRelation = EG_reall(
-                feaProblem->feaDesignVariableRelation,
-                feaProblem->numDesignVariableRelation * sizeof(feaDesignVariableRelationStruct));
-
-        if (feaProblem->feaDesignVariableRelation == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
     }
     printf("\tNumber of design variable relations - %d\n", feaProblem->numDesignVariableRelation);
     printf("\tDone getting FEA design variables\n");
     status = CAPS_SUCCESS;
 
-    cleanup:
+cleanup:
 
-        if (keyValue != NULL)
-            EG_free(keyValue);
+    AIM_FREE(keyValue);
+    AIM_FREE(materialSet);
+    AIM_FREE(propertySet);
+    AIM_FREE(elementSet);
 
-        if (groupName != NULL)
-            string_freeArray(numGroupName, &groupName);
+    if (groupName != NULL)
+        string_freeArray(numGroupName, &groupName);
 
-        if (materialSet != NULL)
-            EG_free(materialSet);
-
-        if (propertySet != NULL)
-            EG_free(propertySet);
-
-        if (elementSet != NULL)
-            EG_free(elementSet);
-
-        return status;
+    return status;
 }
 
 int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput, 
@@ -9177,12 +9105,11 @@ int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput,
 
     status = CAPS_SUCCESS;
 
-    cleanup:
+cleanup:
 
-        if (keyValue != NULL)
-            EG_free(keyValue);
+    AIM_FREE(keyValue);
 
-        return status;
+    return status;
 }
 
 // Get the design constraints from a capsTuple

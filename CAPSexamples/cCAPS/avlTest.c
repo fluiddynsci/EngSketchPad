@@ -3,7 +3,7 @@
  *
  *             avl AIM tester
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -126,7 +126,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set AVL_Surface
-    status = caps_childByName(avlObj, VALUE, ANALYSISIN, "AVL_Surface", &tempObj);
+    status = caps_childByName(avlObj, VALUE, ANALYSISIN, "AVL_Surface", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     surfaceTuple = (capsTuple *) EG_alloc(surfaceSize*sizeof(capsTuple));
@@ -143,7 +145,9 @@ int main(int argc, char *argv[])
 
 
     // Find & set AVL_Control
-    status = caps_childByName(avlObj, VALUE, ANALYSISIN, "AVL_Control", &tempObj);
+    status = caps_childByName(avlObj, VALUE, ANALYSISIN, "AVL_Control", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     flapTuple = (capsTuple *) EG_alloc(flapSize*sizeof(capsTuple));
@@ -162,7 +166,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set Mach number
-    status = caps_childByName(avlObj, VALUE, ANALYSISIN, "Mach", &tempObj);
+    status = caps_childByName(avlObj, VALUE, ANALYSISIN, "Mach", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     doubleVal  = 0.5;
@@ -172,7 +178,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set AoA
-    status = caps_childByName(avlObj, VALUE, ANALYSISIN, "Alpha", &tempObj);
+    status = caps_childByName(avlObj, VALUE, ANALYSISIN, "Alpha", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     doubleVal  = 1.0;
@@ -216,7 +224,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Get  total Cl
-    status = caps_childByName(avlObj, VALUE, ANALYSISOUT, "CLtot", &tempObj);
+    status = caps_childByName(avlObj, VALUE, ANALYSISOUT, "CLtot", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     status = caps_getValue(tempObj, &vtype, &nrow, &ncol, &data, &partial,
@@ -227,7 +237,9 @@ int main(int argc, char *argv[])
     printf("\nValue of Cltot = %f\n", ((double *) data)[0]);
 
     // Get strip forces
-    status = caps_childByName(avlObj, VALUE, ANALYSISOUT, "StripForces", &tempObj);
+    status = caps_childByName(avlObj, VALUE, ANALYSISOUT, "StripForces", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     status = caps_getValue(tempObj, &vtype, &nrow, &ncol, &data, &partial,

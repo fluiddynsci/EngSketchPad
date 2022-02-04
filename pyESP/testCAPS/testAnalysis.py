@@ -562,10 +562,7 @@ class TestAnalysis(unittest.TestCase):
 
         avl.preAnalysis()
         ####### Run avl ####################
-        currentDirectory = os.getcwd() # Get current working directory
-        os.chdir(avl.analysisDir)      # Move into test directory
-        os.system("avl caps < avlInput.txt > avlOutput.txt");
-        os.chdir(currentDirectory)     # Move back to top directory
+        avl.system("avl caps < avlInput.txt > avlOutput.txt");
         ######################################
         avl.postAnalysis()
 

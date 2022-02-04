@@ -1345,6 +1345,7 @@ static const char __pyx_k_data_format[] = "data_format";
 static const char __pyx_k_grid_format[] = "grid_format";
 static const char __pyx_k_mach_number[] = "mach_number";
 static const char __pyx_k_noninertial[] = "noninertial";
+static const char __pyx_k_temperature[] = "temperature";
 static const char __pyx_k_angle_of_yaw[] = "angle_of_yaw";
 static const char __pyx_k_ignore_dicts[] = "ignore_dicts";
 static const char __pyx_k_restart_read[] = "restart_read";
@@ -1376,6 +1377,7 @@ static const char __pyx_k_fun3dNamelist_pyx[] = "fun3dNamelist.pyx";
 static const char __pyx_k_rotation_center_x[] = "rotation_center_x";
 static const char __pyx_k_rotation_center_y[] = "rotation_center_y";
 static const char __pyx_k_rotation_center_z[] = "rotation_center_z";
+static const char __pyx_k_temperature_units[] = "temperature_units";
 static const char __pyx_k_Appending_namelist[] = "\tAppending namelist";
 static const char __pyx_k_cline_in_traceback[] = "cline_in_traceback";
 static const char __pyx_k_schedule_iteration[] = "schedule_iteration";
@@ -1469,6 +1471,8 @@ static PyObject *__pyx_n_s_str;
 static PyObject *__pyx_n_u_stream;
 static PyObject *__pyx_n_u_subiterations;
 static PyObject *__pyx_n_s_sys;
+static PyObject *__pyx_n_u_temperature;
+static PyObject *__pyx_n_u_temperature_units;
 static PyObject *__pyx_n_u_temporal_err_control;
 static PyObject *__pyx_n_u_temporal_err_floor;
 static PyObject *__pyx_n_s_test;
@@ -3251,7 +3255,7 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  * 
  *         nml['reference_physical_properties']['angle_of_yaw'] = aimInputs[index].vals.real             # <<<<<<<<<<<<<<
  * 
- *     # &governing_equations
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temperature",  cCAPS.ANALYSISIN)-1
  */
     __pyx_t_6 = PyFloat_FromDouble((__pyx_v_aimInputs[__pyx_v_index]).vals.real); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 173, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
@@ -3270,7 +3274,152 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
   }
 
+  /* "fun3dNamelist.pyx":175
+ *         nml['reference_physical_properties']['angle_of_yaw'] = aimInputs[index].vals.real
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temperature",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'reference_physical_properties' not in nml:
+ */
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Temperature"), ANALYSISIN) - 1);
+
   /* "fun3dNamelist.pyx":176
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temperature",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'reference_physical_properties' not in nml:
+ *             nml['reference_physical_properties'] = f90nml.Namelist()
+ */
+  __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
+  if (__pyx_t_1) {
+
+    /* "fun3dNamelist.pyx":177
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temperature",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'reference_physical_properties' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['reference_physical_properties'] = f90nml.Namelist()
+ * 
+ */
+    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_reference_physical_properties, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 177, __pyx_L1_error)
+    __pyx_t_7 = (__pyx_t_1 != 0);
+    if (__pyx_t_7) {
+
+      /* "fun3dNamelist.pyx":178
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'reference_physical_properties' not in nml:
+ *             nml['reference_physical_properties'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ * 
+ *         nml['reference_physical_properties']['temperature'] = aimInputs[index].vals.real
+ */
+      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 178, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 178, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __pyx_t_2 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
+        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_4);
+        if (likely(__pyx_t_2)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
+          __Pyx_INCREF(__pyx_t_2);
+          __Pyx_INCREF(function);
+          __Pyx_DECREF_SET(__pyx_t_4, function);
+        }
+      }
+      __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
+      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 178, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_reference_physical_properties, __pyx_t_6) < 0)) __PYX_ERR(0, 178, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":177
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temperature",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'reference_physical_properties' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['reference_physical_properties'] = f90nml.Namelist()
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":180
+ *             nml['reference_physical_properties'] = f90nml.Namelist()
+ * 
+ *         nml['reference_physical_properties']['temperature'] = aimInputs[index].vals.real             # <<<<<<<<<<<<<<
+ * 
+ *         if aimInputs[index].units:
+ */
+    __pyx_t_6 = PyFloat_FromDouble((__pyx_v_aimInputs[__pyx_v_index]).vals.real); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 180, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_reference_physical_properties); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 180, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_temperature, __pyx_t_6) < 0)) __PYX_ERR(0, 180, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":182
+ *         nml['reference_physical_properties']['temperature'] = aimInputs[index].vals.real
+ * 
+ *         if aimInputs[index].units:             # <<<<<<<<<<<<<<
+ *             nml['reference_physical_properties']['temperature_units'] = _str(aimInputs[index].units)
+ * 
+ */
+    __pyx_t_7 = ((__pyx_v_aimInputs[__pyx_v_index]).units != 0);
+    if (__pyx_t_7) {
+
+      /* "fun3dNamelist.pyx":183
+ * 
+ *         if aimInputs[index].units:
+ *             nml['reference_physical_properties']['temperature_units'] = _str(aimInputs[index].units)             # <<<<<<<<<<<<<<
+ * 
+ *     # &governing_equations
+ */
+      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_str); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 183, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_2 = __Pyx_PyBytes_FromString((__pyx_v_aimInputs[__pyx_v_index]).units); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 183, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_3 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
+        __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_4);
+        if (likely(__pyx_t_3)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
+          __Pyx_INCREF(__pyx_t_3);
+          __Pyx_INCREF(function);
+          __Pyx_DECREF_SET(__pyx_t_4, function);
+        }
+      }
+      __pyx_t_6 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_4, __pyx_t_3, __pyx_t_2) : __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2);
+      __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 183, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_reference_physical_properties); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 183, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_temperature_units, __pyx_t_6) < 0)) __PYX_ERR(0, 183, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":182
+ *         nml['reference_physical_properties']['temperature'] = aimInputs[index].vals.real
+ * 
+ *         if aimInputs[index].units:             # <<<<<<<<<<<<<<
+ *             nml['reference_physical_properties']['temperature_units'] = _str(aimInputs[index].units)
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":176
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temperature",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'reference_physical_properties' not in nml:
+ *             nml['reference_physical_properties'] = f90nml.Namelist()
+ */
+  }
+
+  /* "fun3dNamelist.pyx":186
  * 
  *     # &governing_equations
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Viscous",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
@@ -3279,58 +3428,58 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
   __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Viscous"), ANALYSISIN) - 1);
 
-  /* "fun3dNamelist.pyx":177
+  /* "fun3dNamelist.pyx":187
  *     # &governing_equations
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Viscous",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
  *         if 'governing_equations' not in nml:
  *             nml['governing_equations'] = f90nml.Namelist()
  */
-  __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
-  if (__pyx_t_1) {
+  __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
+  if (__pyx_t_7) {
 
-    /* "fun3dNamelist.pyx":178
+    /* "fun3dNamelist.pyx":188
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Viscous",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
  *         if 'governing_equations' not in nml:             # <<<<<<<<<<<<<<
  *             nml['governing_equations'] = f90nml.Namelist()
  * 
  */
-    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_governing_equations, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 178, __pyx_L1_error)
-    __pyx_t_7 = (__pyx_t_1 != 0);
-    if (__pyx_t_7) {
+    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_governing_equations, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 188, __pyx_L1_error)
+    __pyx_t_1 = (__pyx_t_7 != 0);
+    if (__pyx_t_1) {
 
-      /* "fun3dNamelist.pyx":179
+      /* "fun3dNamelist.pyx":189
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
  *         if 'governing_equations' not in nml:
  *             nml['governing_equations'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
  * 
  *         nml['governing_equations']['viscous_terms'] = _str(aimInputs[index].vals.string)
  */
-      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 179, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 179, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 189, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      __pyx_t_2 = NULL;
-      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
-        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_4);
-        if (likely(__pyx_t_2)) {
-          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
-          __Pyx_INCREF(__pyx_t_2);
+      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 189, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __pyx_t_4 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
+        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
+        if (likely(__pyx_t_4)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
+          __Pyx_INCREF(__pyx_t_4);
           __Pyx_INCREF(function);
-          __Pyx_DECREF_SET(__pyx_t_4, function);
+          __Pyx_DECREF_SET(__pyx_t_2, function);
         }
       }
-      __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
-      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 179, __pyx_L1_error)
+      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
+      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 189, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_governing_equations, __pyx_t_6) < 0)) __PYX_ERR(0, 179, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_governing_equations, __pyx_t_6) < 0)) __PYX_ERR(0, 189, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "fun3dNamelist.pyx":178
+      /* "fun3dNamelist.pyx":188
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Viscous",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
  *         if 'governing_equations' not in nml:             # <<<<<<<<<<<<<<
@@ -3339,40 +3488,40 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
     }
 
-    /* "fun3dNamelist.pyx":181
+    /* "fun3dNamelist.pyx":191
  *             nml['governing_equations'] = f90nml.Namelist()
  * 
  *         nml['governing_equations']['viscous_terms'] = _str(aimInputs[index].vals.string)             # <<<<<<<<<<<<<<
  * 
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Equation_Type",  cCAPS.ANALYSISIN)-1
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_str); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 181, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_2 = __Pyx_PyBytes_FromString((__pyx_v_aimInputs[__pyx_v_index]).vals.string); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 181, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_str); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 191, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
+    __pyx_t_4 = __Pyx_PyBytes_FromString((__pyx_v_aimInputs[__pyx_v_index]).vals.string); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 191, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
     __pyx_t_3 = NULL;
-    if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
-      __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_4);
+    if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
+      __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_2);
       if (likely(__pyx_t_3)) {
-        PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
+        PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
         __Pyx_INCREF(__pyx_t_3);
         __Pyx_INCREF(function);
-        __Pyx_DECREF_SET(__pyx_t_4, function);
+        __Pyx_DECREF_SET(__pyx_t_2, function);
       }
     }
-    __pyx_t_6 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_4, __pyx_t_3, __pyx_t_2) : __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2);
+    __pyx_t_6 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_2, __pyx_t_3, __pyx_t_4) : __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4);
     __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 181, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 191, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_governing_equations); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 181, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_viscous_terms, __pyx_t_6) < 0)) __PYX_ERR(0, 181, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_governing_equations); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 191, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_viscous_terms, __pyx_t_6) < 0)) __PYX_ERR(0, 191, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "fun3dNamelist.pyx":177
+    /* "fun3dNamelist.pyx":187
  *     # &governing_equations
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Viscous",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
@@ -3381,7 +3530,7 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
   }
 
-  /* "fun3dNamelist.pyx":183
+  /* "fun3dNamelist.pyx":193
  *         nml['governing_equations']['viscous_terms'] = _str(aimInputs[index].vals.string)
  * 
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Equation_Type",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
@@ -3390,148 +3539,37 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
   __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Equation_Type"), ANALYSISIN) - 1);
 
-  /* "fun3dNamelist.pyx":184
+  /* "fun3dNamelist.pyx":194
  * 
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Equation_Type",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
  *         if 'governing_equations' not in nml:
  *             nml['governing_equations'] = f90nml.Namelist()
  */
-  __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
-  if (__pyx_t_7) {
+  __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
+  if (__pyx_t_1) {
 
-    /* "fun3dNamelist.pyx":185
+    /* "fun3dNamelist.pyx":195
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Equation_Type",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
  *         if 'governing_equations' not in nml:             # <<<<<<<<<<<<<<
  *             nml['governing_equations'] = f90nml.Namelist()
  * 
  */
-    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_governing_equations, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 185, __pyx_L1_error)
-    __pyx_t_1 = (__pyx_t_7 != 0);
-    if (__pyx_t_1) {
+    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_governing_equations, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 195, __pyx_L1_error)
+    __pyx_t_7 = (__pyx_t_1 != 0);
+    if (__pyx_t_7) {
 
-      /* "fun3dNamelist.pyx":186
+      /* "fun3dNamelist.pyx":196
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
  *         if 'governing_equations' not in nml:
  *             nml['governing_equations'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
  * 
  *         nml['governing_equations']['eqn_type'] = _str(aimInputs[index].vals.string)
  */
-      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 186, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 186, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 196, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __pyx_t_4 = NULL;
-      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
-        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
-        if (likely(__pyx_t_4)) {
-          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
-          __Pyx_INCREF(__pyx_t_4);
-          __Pyx_INCREF(function);
-          __Pyx_DECREF_SET(__pyx_t_2, function);
-        }
-      }
-      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
-      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 186, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_governing_equations, __pyx_t_6) < 0)) __PYX_ERR(0, 186, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-      /* "fun3dNamelist.pyx":185
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Equation_Type",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'governing_equations' not in nml:             # <<<<<<<<<<<<<<
- *             nml['governing_equations'] = f90nml.Namelist()
- * 
- */
-    }
-
-    /* "fun3dNamelist.pyx":188
- *             nml['governing_equations'] = f90nml.Namelist()
- * 
- *         nml['governing_equations']['eqn_type'] = _str(aimInputs[index].vals.string)             # <<<<<<<<<<<<<<
- * 
- *     # &nonlinear_solver_parameters
- */
-    __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_str); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 188, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_4 = __Pyx_PyBytes_FromString((__pyx_v_aimInputs[__pyx_v_index]).vals.string); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 188, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_3 = NULL;
-    if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
-      __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_2);
-      if (likely(__pyx_t_3)) {
-        PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
-        __Pyx_INCREF(__pyx_t_3);
-        __Pyx_INCREF(function);
-        __Pyx_DECREF_SET(__pyx_t_2, function);
-      }
-    }
-    __pyx_t_6 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_2, __pyx_t_3, __pyx_t_4) : __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4);
-    __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 188, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_governing_equations); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 188, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_eqn_type, __pyx_t_6) < 0)) __PYX_ERR(0, 188, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-    /* "fun3dNamelist.pyx":184
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Equation_Type",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'governing_equations' not in nml:
- *             nml['governing_equations'] = f90nml.Namelist()
- */
-  }
-
-  /* "fun3dNamelist.pyx":191
- * 
- *     # &nonlinear_solver_parameters
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Accuracy",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Time_Accuracy"), ANALYSISIN) - 1);
-
-  /* "fun3dNamelist.pyx":192
- *     # &nonlinear_solver_parameters
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Accuracy",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
-  __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
-  if (__pyx_t_1) {
-
-    /* "fun3dNamelist.pyx":193
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Accuracy",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- */
-    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 193, __pyx_L1_error)
-    __pyx_t_7 = (__pyx_t_1 != 0);
-    if (__pyx_t_7) {
-
-      /* "fun3dNamelist.pyx":194
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
- * 
- *         nml['nonlinear_solver_parameters']['time_accuracy'] = _str(aimInputs[index].vals.string)
- */
-      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 194, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 194, __pyx_L1_error)
+      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 196, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __pyx_t_2 = NULL;
@@ -3546,31 +3584,31 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
       }
       __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
       __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 194, __pyx_L1_error)
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 196, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 194, __pyx_L1_error)
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_governing_equations, __pyx_t_6) < 0)) __PYX_ERR(0, 196, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "fun3dNamelist.pyx":193
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Accuracy",  cCAPS.ANALYSISIN)-1
+      /* "fun3dNamelist.pyx":195
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Equation_Type",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ *         if 'governing_equations' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['governing_equations'] = f90nml.Namelist()
  * 
  */
     }
 
-    /* "fun3dNamelist.pyx":196
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+    /* "fun3dNamelist.pyx":198
+ *             nml['governing_equations'] = f90nml.Namelist()
  * 
- *         nml['nonlinear_solver_parameters']['time_accuracy'] = _str(aimInputs[index].vals.string)             # <<<<<<<<<<<<<<
+ *         nml['governing_equations']['eqn_type'] = _str(aimInputs[index].vals.string)             # <<<<<<<<<<<<<<
  * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1
+ *     # &nonlinear_solver_parameters
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_str); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 196, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_str); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 198, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_2 = __Pyx_PyBytes_FromString((__pyx_v_aimInputs[__pyx_v_index]).vals.string); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 196, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyBytes_FromString((__pyx_v_aimInputs[__pyx_v_index]).vals.string); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 198, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __pyx_t_3 = NULL;
     if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
@@ -3585,805 +3623,103 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
     __pyx_t_6 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_4, __pyx_t_3, __pyx_t_2) : __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2);
     __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 196, __pyx_L1_error)
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 198, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 196, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_governing_equations); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 198, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_time_accuracy, __pyx_t_6) < 0)) __PYX_ERR(0, 196, __pyx_L1_error)
+    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_eqn_type, __pyx_t_6) < 0)) __PYX_ERR(0, 198, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "fun3dNamelist.pyx":192
+    /* "fun3dNamelist.pyx":194
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Equation_Type",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'governing_equations' not in nml:
+ *             nml['governing_equations'] = f90nml.Namelist()
+ */
+  }
+
+  /* "fun3dNamelist.pyx":201
+ * 
+ *     # &nonlinear_solver_parameters
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Accuracy",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'nonlinear_solver_parameters' not in nml:
+ */
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Time_Accuracy"), ANALYSISIN) - 1);
+
+  /* "fun3dNamelist.pyx":202
  *     # &nonlinear_solver_parameters
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Accuracy",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
  *         if 'nonlinear_solver_parameters' not in nml:
  *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  */
-  }
-
-  /* "fun3dNamelist.pyx":198
- *         nml['nonlinear_solver_parameters']['time_accuracy'] = _str(aimInputs[index].vals.string)
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Time_Step"), ANALYSISIN) - 1);
-
-  /* "fun3dNamelist.pyx":199
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
   __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
   if (__pyx_t_7) {
-
-    /* "fun3dNamelist.pyx":200
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- */
-    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 200, __pyx_L1_error)
-    __pyx_t_1 = (__pyx_t_7 != 0);
-    if (__pyx_t_1) {
-
-      /* "fun3dNamelist.pyx":201
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
- * 
- *         nml['nonlinear_solver_parameters']['time_step_nondim'] = aimInputs[index].vals.real
- */
-      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 201, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 201, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __pyx_t_4 = NULL;
-      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
-        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
-        if (likely(__pyx_t_4)) {
-          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
-          __Pyx_INCREF(__pyx_t_4);
-          __Pyx_INCREF(function);
-          __Pyx_DECREF_SET(__pyx_t_2, function);
-        }
-      }
-      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
-      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 201, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 201, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-      /* "fun3dNamelist.pyx":200
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- */
-    }
 
     /* "fun3dNamelist.pyx":203
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- *         nml['nonlinear_solver_parameters']['time_step_nondim'] = aimInputs[index].vals.real             # <<<<<<<<<<<<<<
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1
- */
-    __pyx_t_6 = PyFloat_FromDouble((__pyx_v_aimInputs[__pyx_v_index]).vals.real); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 203, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 203, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_time_step_nondim, __pyx_t_6) < 0)) __PYX_ERR(0, 203, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-    /* "fun3dNamelist.pyx":199
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
-  }
-
-  /* "fun3dNamelist.pyx":205
- *         nml['nonlinear_solver_parameters']['time_step_nondim'] = aimInputs[index].vals.real
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Num_Subiter"), ANALYSISIN) - 1);
-
-  /* "fun3dNamelist.pyx":206
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
-  __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
-  if (__pyx_t_1) {
-
-    /* "fun3dNamelist.pyx":207
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Accuracy",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
  *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
  *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  * 
  */
-    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 207, __pyx_L1_error)
-    __pyx_t_7 = (__pyx_t_1 != 0);
-    if (__pyx_t_7) {
+    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 203, __pyx_L1_error)
+    __pyx_t_1 = (__pyx_t_7 != 0);
+    if (__pyx_t_1) {
 
-      /* "fun3dNamelist.pyx":208
+      /* "fun3dNamelist.pyx":204
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
  *         if 'nonlinear_solver_parameters' not in nml:
  *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
  * 
- *         nml['nonlinear_solver_parameters']['subiterations'] = aimInputs[index].vals.integer
+ *         nml['nonlinear_solver_parameters']['time_accuracy'] = _str(aimInputs[index].vals.string)
  */
-      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 208, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 208, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 204, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      __pyx_t_2 = NULL;
-      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
-        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_4);
-        if (likely(__pyx_t_2)) {
-          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
-          __Pyx_INCREF(__pyx_t_2);
+      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 204, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __pyx_t_4 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
+        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
+        if (likely(__pyx_t_4)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
+          __Pyx_INCREF(__pyx_t_4);
           __Pyx_INCREF(function);
-          __Pyx_DECREF_SET(__pyx_t_4, function);
+          __Pyx_DECREF_SET(__pyx_t_2, function);
         }
       }
-      __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
-      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 208, __pyx_L1_error)
+      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
+      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 204, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 208, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 204, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "fun3dNamelist.pyx":207
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1
+      /* "fun3dNamelist.pyx":203
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Accuracy",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
  *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
  *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  * 
  */
     }
-
-    /* "fun3dNamelist.pyx":210
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- *         nml['nonlinear_solver_parameters']['subiterations'] = aimInputs[index].vals.integer             # <<<<<<<<<<<<<<
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1
- */
-    __pyx_t_6 = __Pyx_PyInt_From_int((__pyx_v_aimInputs[__pyx_v_index]).vals.integer); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 210, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 210, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_subiterations, __pyx_t_6) < 0)) __PYX_ERR(0, 210, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
     /* "fun3dNamelist.pyx":206
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
-  }
-
-  /* "fun3dNamelist.pyx":212
- *         nml['nonlinear_solver_parameters']['subiterations'] = aimInputs[index].vals.integer
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Temporal_Error"), ANALYSISIN) - 1);
-
-  /* "fun3dNamelist.pyx":213
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
-  __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
-  if (__pyx_t_7) {
-
-    /* "fun3dNamelist.pyx":214
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
  *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  * 
+ *         nml['nonlinear_solver_parameters']['time_accuracy'] = _str(aimInputs[index].vals.string)             # <<<<<<<<<<<<<<
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1
  */
-    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 214, __pyx_L1_error)
-    __pyx_t_1 = (__pyx_t_7 != 0);
-    if (__pyx_t_1) {
-
-      /* "fun3dNamelist.pyx":215
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
- * 
- *         nml['nonlinear_solver_parameters']['temporal_err_control'] = True
- */
-      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 215, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 215, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __pyx_t_4 = NULL;
-      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
-        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
-        if (likely(__pyx_t_4)) {
-          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
-          __Pyx_INCREF(__pyx_t_4);
-          __Pyx_INCREF(function);
-          __Pyx_DECREF_SET(__pyx_t_2, function);
-        }
-      }
-      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
-      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 215, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 215, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-      /* "fun3dNamelist.pyx":214
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- */
-    }
-
-    /* "fun3dNamelist.pyx":217
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- *         nml['nonlinear_solver_parameters']['temporal_err_control'] = True             # <<<<<<<<<<<<<<
- *         nml['nonlinear_solver_parameters']['temporal_err_floor'] = aimInputs[index].vals.real
- * 
- */
-    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 217, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_temporal_err_control, Py_True) < 0)) __PYX_ERR(0, 217, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-    /* "fun3dNamelist.pyx":218
- * 
- *         nml['nonlinear_solver_parameters']['temporal_err_control'] = True
- *         nml['nonlinear_solver_parameters']['temporal_err_floor'] = aimInputs[index].vals.real             # <<<<<<<<<<<<<<
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1
- */
-    __pyx_t_6 = PyFloat_FromDouble((__pyx_v_aimInputs[__pyx_v_index]).vals.real); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 218, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 218, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_str); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 206, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_temporal_err_floor, __pyx_t_6) < 0)) __PYX_ERR(0, 218, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-    /* "fun3dNamelist.pyx":213
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
-  }
-
-  /* "fun3dNamelist.pyx":220
- *         nml['nonlinear_solver_parameters']['temporal_err_floor'] = aimInputs[index].vals.real
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"CFL_Schedule"), ANALYSISIN) - 1);
-
-  /* "fun3dNamelist.pyx":221
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
-  __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
-  if (__pyx_t_1) {
-
-    /* "fun3dNamelist.pyx":222
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- */
-    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 222, __pyx_L1_error)
-    __pyx_t_7 = (__pyx_t_1 != 0);
-    if (__pyx_t_7) {
-
-      /* "fun3dNamelist.pyx":223
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
- * 
- *         if 'schedule_cfl' not in nml['nonlinear_solver_parameters']:
- */
-      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 223, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 223, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      __pyx_t_2 = NULL;
-      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
-        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_4);
-        if (likely(__pyx_t_2)) {
-          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
-          __Pyx_INCREF(__pyx_t_2);
-          __Pyx_INCREF(function);
-          __Pyx_DECREF_SET(__pyx_t_4, function);
-        }
-      }
-      __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
-      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 223, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 223, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-      /* "fun3dNamelist.pyx":222
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- */
-    }
-
-    /* "fun3dNamelist.pyx":225
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- *         if 'schedule_cfl' not in nml['nonlinear_solver_parameters']:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters']['schedule_cfl'] = [None]*2
- * 
- */
-    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 225, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_schedule_cfl, __pyx_t_6, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 225, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_1 = (__pyx_t_7 != 0);
-    if (__pyx_t_1) {
-
-      /* "fun3dNamelist.pyx":226
- * 
- *         if 'schedule_cfl' not in nml['nonlinear_solver_parameters']:
- *             nml['nonlinear_solver_parameters']['schedule_cfl'] = [None]*2             # <<<<<<<<<<<<<<
- * 
- *         nml['nonlinear_solver_parameters']['schedule_cfl'][0] = aimInputs[index].vals.reals[0]
- */
-      __pyx_t_6 = PyList_New(1 * 2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 226, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      { Py_ssize_t __pyx_temp;
-        for (__pyx_temp=0; __pyx_temp < 2; __pyx_temp++) {
-          __Pyx_INCREF(Py_None);
-          __Pyx_GIVEREF(Py_None);
-          PyList_SET_ITEM(__pyx_t_6, __pyx_temp, Py_None);
-        }
-      }
-      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 226, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_schedule_cfl, __pyx_t_6) < 0)) __PYX_ERR(0, 226, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-      /* "fun3dNamelist.pyx":225
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- *         if 'schedule_cfl' not in nml['nonlinear_solver_parameters']:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters']['schedule_cfl'] = [None]*2
- * 
- */
-    }
-
-    /* "fun3dNamelist.pyx":228
- *             nml['nonlinear_solver_parameters']['schedule_cfl'] = [None]*2
- * 
- *         nml['nonlinear_solver_parameters']['schedule_cfl'][0] = aimInputs[index].vals.reals[0]             # <<<<<<<<<<<<<<
- *         nml['nonlinear_solver_parameters']['schedule_cfl'][1] = aimInputs[index].vals.reals[1]
- * 
- */
-    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[0])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 228, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 228, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_schedule_cfl); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 228, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(__Pyx_SetItemInt(__pyx_t_2, 0, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 0, 1) < 0)) __PYX_ERR(0, 228, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-    /* "fun3dNamelist.pyx":229
- * 
- *         nml['nonlinear_solver_parameters']['schedule_cfl'][0] = aimInputs[index].vals.reals[0]
- *         nml['nonlinear_solver_parameters']['schedule_cfl'][1] = aimInputs[index].vals.reals[1]             # <<<<<<<<<<<<<<
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1
- */
-    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[1])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 229, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 229, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_schedule_cfl); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 229, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    if (unlikely(__Pyx_SetItemInt(__pyx_t_4, 1, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 0, 1) < 0)) __PYX_ERR(0, 229, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-    /* "fun3dNamelist.pyx":221
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
-  }
-
-  /* "fun3dNamelist.pyx":231
- *         nml['nonlinear_solver_parameters']['schedule_cfl'][1] = aimInputs[index].vals.reals[1]
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"CFL_Schedule_Iter"), ANALYSISIN) - 1);
-
-  /* "fun3dNamelist.pyx":232
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
-  __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
-  if (__pyx_t_1) {
-
-    /* "fun3dNamelist.pyx":233
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- */
-    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 233, __pyx_L1_error)
-    __pyx_t_7 = (__pyx_t_1 != 0);
-    if (__pyx_t_7) {
-
-      /* "fun3dNamelist.pyx":234
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
- * 
- *         if 'schedule_iteration' not in nml['nonlinear_solver_parameters']:
- */
-      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 234, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 234, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __pyx_t_4 = NULL;
-      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
-        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
-        if (likely(__pyx_t_4)) {
-          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
-          __Pyx_INCREF(__pyx_t_4);
-          __Pyx_INCREF(function);
-          __Pyx_DECREF_SET(__pyx_t_2, function);
-        }
-      }
-      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
-      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 234, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 234, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-      /* "fun3dNamelist.pyx":233
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- */
-    }
-
-    /* "fun3dNamelist.pyx":236
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- *         if 'schedule_iteration' not in nml['nonlinear_solver_parameters']:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters']['schedule_iteration'] = [None]*2
- * 
- */
-    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 236, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_schedule_iteration, __pyx_t_6, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 236, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_1 = (__pyx_t_7 != 0);
-    if (__pyx_t_1) {
-
-      /* "fun3dNamelist.pyx":237
- * 
- *         if 'schedule_iteration' not in nml['nonlinear_solver_parameters']:
- *             nml['nonlinear_solver_parameters']['schedule_iteration'] = [None]*2             # <<<<<<<<<<<<<<
- * 
- *         nml['nonlinear_solver_parameters']['schedule_iteration'][0] = aimInputs[index].vals.integers[0]
- */
-      __pyx_t_6 = PyList_New(1 * 2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 237, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      { Py_ssize_t __pyx_temp;
-        for (__pyx_temp=0; __pyx_temp < 2; __pyx_temp++) {
-          __Pyx_INCREF(Py_None);
-          __Pyx_GIVEREF(Py_None);
-          PyList_SET_ITEM(__pyx_t_6, __pyx_temp, Py_None);
-        }
-      }
-      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 237, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_schedule_iteration, __pyx_t_6) < 0)) __PYX_ERR(0, 237, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-      /* "fun3dNamelist.pyx":236
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- * 
- *         if 'schedule_iteration' not in nml['nonlinear_solver_parameters']:             # <<<<<<<<<<<<<<
- *             nml['nonlinear_solver_parameters']['schedule_iteration'] = [None]*2
- * 
- */
-    }
-
-    /* "fun3dNamelist.pyx":239
- *             nml['nonlinear_solver_parameters']['schedule_iteration'] = [None]*2
- * 
- *         nml['nonlinear_solver_parameters']['schedule_iteration'][0] = aimInputs[index].vals.integers[0]             # <<<<<<<<<<<<<<
- *         nml['nonlinear_solver_parameters']['schedule_iteration'][1] = aimInputs[index].vals.integers[1]
- * 
- */
-    __pyx_t_6 = __Pyx_PyInt_From_int(((__pyx_v_aimInputs[__pyx_v_index]).vals.integers[0])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 239, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 239, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_schedule_iteration); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 239, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    if (unlikely(__Pyx_SetItemInt(__pyx_t_4, 0, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 0, 1) < 0)) __PYX_ERR(0, 239, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-    /* "fun3dNamelist.pyx":240
- * 
- *         nml['nonlinear_solver_parameters']['schedule_iteration'][0] = aimInputs[index].vals.integers[0]
- *         nml['nonlinear_solver_parameters']['schedule_iteration'][1] = aimInputs[index].vals.integers[1]             # <<<<<<<<<<<<<<
- * 
- *     # &code_run_control
- */
-    __pyx_t_6 = __Pyx_PyInt_From_int(((__pyx_v_aimInputs[__pyx_v_index]).vals.integers[1])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 240, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 240, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_schedule_iteration); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 240, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(__Pyx_SetItemInt(__pyx_t_2, 1, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 0, 1) < 0)) __PYX_ERR(0, 240, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-    /* "fun3dNamelist.pyx":232
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'nonlinear_solver_parameters' not in nml:
- *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
- */
-  }
-
-  /* "fun3dNamelist.pyx":243
- * 
- *     # &code_run_control
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Iter",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'code_run_control' not in nml:
- */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Num_Iter"), ANALYSISIN) - 1);
-
-  /* "fun3dNamelist.pyx":244
- *     # &code_run_control
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Iter",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'code_run_control' not in nml:
- *             nml['code_run_control'] = f90nml.Namelist()
- */
-  __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
-  if (__pyx_t_1) {
-
-    /* "fun3dNamelist.pyx":245
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Iter",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'code_run_control' not in nml:             # <<<<<<<<<<<<<<
- *             nml['code_run_control'] = f90nml.Namelist()
- * 
- */
-    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_code_run_control, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 245, __pyx_L1_error)
-    __pyx_t_7 = (__pyx_t_1 != 0);
-    if (__pyx_t_7) {
-
-      /* "fun3dNamelist.pyx":246
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'code_run_control' not in nml:
- *             nml['code_run_control'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
- * 
- *         nml['code_run_control']['steps'] = aimInputs[index].vals.integer
- */
-      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 246, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 246, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      __pyx_t_2 = NULL;
-      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
-        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_4);
-        if (likely(__pyx_t_2)) {
-          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
-          __Pyx_INCREF(__pyx_t_2);
-          __Pyx_INCREF(function);
-          __Pyx_DECREF_SET(__pyx_t_4, function);
-        }
-      }
-      __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
-      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 246, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_code_run_control, __pyx_t_6) < 0)) __PYX_ERR(0, 246, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-      /* "fun3dNamelist.pyx":245
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Iter",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'code_run_control' not in nml:             # <<<<<<<<<<<<<<
- *             nml['code_run_control'] = f90nml.Namelist()
- * 
- */
-    }
-
-    /* "fun3dNamelist.pyx":248
- *             nml['code_run_control'] = f90nml.Namelist()
- * 
- *         nml['code_run_control']['steps'] = aimInputs[index].vals.integer             # <<<<<<<<<<<<<<
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1
- */
-    __pyx_t_6 = __Pyx_PyInt_From_int((__pyx_v_aimInputs[__pyx_v_index]).vals.integer); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 248, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_code_run_control); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 248, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_steps, __pyx_t_6) < 0)) __PYX_ERR(0, 248, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-    /* "fun3dNamelist.pyx":244
- *     # &code_run_control
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Iter",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'code_run_control' not in nml:
- *             nml['code_run_control'] = f90nml.Namelist()
- */
-  }
-
-  /* "fun3dNamelist.pyx":250
- *         nml['code_run_control']['steps'] = aimInputs[index].vals.integer
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'code_run_control' not in nml:
- */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Restart_Read"), ANALYSISIN) - 1);
-
-  /* "fun3dNamelist.pyx":251
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'code_run_control' not in nml:
- *             nml['code_run_control'] = f90nml.Namelist()
- */
-  __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
-  if (__pyx_t_7) {
-
-    /* "fun3dNamelist.pyx":252
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'code_run_control' not in nml:             # <<<<<<<<<<<<<<
- *             nml['code_run_control'] = f90nml.Namelist()
- * 
- */
-    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_code_run_control, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 252, __pyx_L1_error)
-    __pyx_t_1 = (__pyx_t_7 != 0);
-    if (__pyx_t_1) {
-
-      /* "fun3dNamelist.pyx":253
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'code_run_control' not in nml:
- *             nml['code_run_control'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
- * 
- *         nml['code_run_control']['restart_read'] = _str(aimInputs[index].vals.string)
- */
-      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 253, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 253, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __pyx_t_4 = NULL;
-      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
-        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
-        if (likely(__pyx_t_4)) {
-          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
-          __Pyx_INCREF(__pyx_t_4);
-          __Pyx_INCREF(function);
-          __Pyx_DECREF_SET(__pyx_t_2, function);
-        }
-      }
-      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
-      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 253, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_code_run_control, __pyx_t_6) < 0)) __PYX_ERR(0, 253, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-      /* "fun3dNamelist.pyx":252
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1
- *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'code_run_control' not in nml:             # <<<<<<<<<<<<<<
- *             nml['code_run_control'] = f90nml.Namelist()
- * 
- */
-    }
-
-    /* "fun3dNamelist.pyx":255
- *             nml['code_run_control'] = f90nml.Namelist()
- * 
- *         nml['code_run_control']['restart_read'] = _str(aimInputs[index].vals.string)             # <<<<<<<<<<<<<<
- * 
- *     # &force_moment_integ_properties
- */
-    __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_str); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 255, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_4 = __Pyx_PyBytes_FromString((__pyx_v_aimInputs[__pyx_v_index]).vals.string); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 255, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyBytes_FromString((__pyx_v_aimInputs[__pyx_v_index]).vals.string); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 206, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __pyx_t_3 = NULL;
     if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
@@ -4398,64 +3734,64 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
     __pyx_t_6 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_2, __pyx_t_3, __pyx_t_4) : __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4);
     __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 255, __pyx_L1_error)
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 206, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_code_run_control); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 255, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 206, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_restart_read, __pyx_t_6) < 0)) __PYX_ERR(0, 255, __pyx_L1_error)
+    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_time_accuracy, __pyx_t_6) < 0)) __PYX_ERR(0, 206, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "fun3dNamelist.pyx":251
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1
+    /* "fun3dNamelist.pyx":202
+ *     # &nonlinear_solver_parameters
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Accuracy",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'code_run_control' not in nml:
- *             nml['code_run_control'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  */
   }
 
-  /* "fun3dNamelist.pyx":258
+  /* "fun3dNamelist.pyx":208
+ *         nml['nonlinear_solver_parameters']['time_accuracy'] = _str(aimInputs[index].vals.string)
  * 
- *     # &force_moment_integ_properties
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Reference_Area",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:
+ *         if 'nonlinear_solver_parameters' not in nml:
  */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Reference_Area"), ANALYSISIN) - 1);
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Time_Step"), ANALYSISIN) - 1);
 
-  /* "fun3dNamelist.pyx":259
- *     # &force_moment_integ_properties
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Reference_Area",  cCAPS.ANALYSISIN)-1
+  /* "fun3dNamelist.pyx":209
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'force_moment_integ_properties' not in nml:
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  */
   __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
   if (__pyx_t_1) {
 
-    /* "fun3dNamelist.pyx":260
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Reference_Area",  cCAPS.ANALYSISIN)-1
+    /* "fun3dNamelist.pyx":210
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  * 
  */
-    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_force_moment_integ_properties, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 260, __pyx_L1_error)
+    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 210, __pyx_L1_error)
     __pyx_t_7 = (__pyx_t_1 != 0);
     if (__pyx_t_7) {
 
-      /* "fun3dNamelist.pyx":261
+      /* "fun3dNamelist.pyx":211
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
  * 
- *         nml['force_moment_integ_properties']['area_reference']  = aimInputs[index].vals.real
+ *         nml['nonlinear_solver_parameters']['time_step_nondim'] = aimInputs[index].vals.real
  */
-      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 261, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 211, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 261, __pyx_L1_error)
+      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 211, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __pyx_t_2 = NULL;
@@ -4470,85 +3806,85 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
       }
       __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
       __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 261, __pyx_L1_error)
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 211, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties, __pyx_t_6) < 0)) __PYX_ERR(0, 261, __pyx_L1_error)
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 211, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "fun3dNamelist.pyx":260
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Reference_Area",  cCAPS.ANALYSISIN)-1
+      /* "fun3dNamelist.pyx":210
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  * 
  */
     }
 
-    /* "fun3dNamelist.pyx":263
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+    /* "fun3dNamelist.pyx":213
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  * 
- *         nml['force_moment_integ_properties']['area_reference']  = aimInputs[index].vals.real             # <<<<<<<<<<<<<<
+ *         nml['nonlinear_solver_parameters']['time_step_nondim'] = aimInputs[index].vals.real             # <<<<<<<<<<<<<<
  * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1
  */
-    __pyx_t_6 = PyFloat_FromDouble((__pyx_v_aimInputs[__pyx_v_index]).vals.real); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 263, __pyx_L1_error)
+    __pyx_t_6 = PyFloat_FromDouble((__pyx_v_aimInputs[__pyx_v_index]).vals.real); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 213, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 263, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 213, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_area_reference, __pyx_t_6) < 0)) __PYX_ERR(0, 263, __pyx_L1_error)
+    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_time_step_nondim, __pyx_t_6) < 0)) __PYX_ERR(0, 213, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "fun3dNamelist.pyx":259
- *     # &force_moment_integ_properties
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Reference_Area",  cCAPS.ANALYSISIN)-1
+    /* "fun3dNamelist.pyx":209
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Time_Step",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'force_moment_integ_properties' not in nml:
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  */
   }
 
-  /* "fun3dNamelist.pyx":265
- *         nml['force_moment_integ_properties']['area_reference']  = aimInputs[index].vals.real
+  /* "fun3dNamelist.pyx":215
+ *         nml['nonlinear_solver_parameters']['time_step_nondim'] = aimInputs[index].vals.real
  * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:
+ *         if 'nonlinear_solver_parameters' not in nml:
  */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Moment_Length"), ANALYSISIN) - 1);
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Num_Subiter"), ANALYSISIN) - 1);
 
-  /* "fun3dNamelist.pyx":266
+  /* "fun3dNamelist.pyx":216
  * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'force_moment_integ_properties' not in nml:
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  */
   __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
   if (__pyx_t_7) {
 
-    /* "fun3dNamelist.pyx":267
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1
+    /* "fun3dNamelist.pyx":217
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  * 
  */
-    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_force_moment_integ_properties, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 267, __pyx_L1_error)
+    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 217, __pyx_L1_error)
     __pyx_t_1 = (__pyx_t_7 != 0);
     if (__pyx_t_1) {
 
-      /* "fun3dNamelist.pyx":268
+      /* "fun3dNamelist.pyx":218
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
  * 
- *         nml['force_moment_integ_properties']['x_moment_length'] = aimInputs[index].vals.reals[0]
+ *         nml['nonlinear_solver_parameters']['subiterations'] = aimInputs[index].vals.integer
  */
-      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 268, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 218, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 268, __pyx_L1_error)
+      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 218, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
       __pyx_t_4 = NULL;
@@ -4563,100 +3899,85 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
       }
       __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
       __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 268, __pyx_L1_error)
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 218, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties, __pyx_t_6) < 0)) __PYX_ERR(0, 268, __pyx_L1_error)
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 218, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "fun3dNamelist.pyx":267
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1
+      /* "fun3dNamelist.pyx":217
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  * 
  */
     }
 
-    /* "fun3dNamelist.pyx":270
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+    /* "fun3dNamelist.pyx":220
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  * 
- *         nml['force_moment_integ_properties']['x_moment_length'] = aimInputs[index].vals.reals[0]             # <<<<<<<<<<<<<<
- *         nml['force_moment_integ_properties']['y_moment_length'] = aimInputs[index].vals.reals[1]
+ *         nml['nonlinear_solver_parameters']['subiterations'] = aimInputs[index].vals.integer             # <<<<<<<<<<<<<<
  * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1
  */
-    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[0])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 270, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyInt_From_int((__pyx_v_aimInputs[__pyx_v_index]).vals.integer); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 220, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 270, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 220, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_x_moment_length, __pyx_t_6) < 0)) __PYX_ERR(0, 270, __pyx_L1_error)
+    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_subiterations, __pyx_t_6) < 0)) __PYX_ERR(0, 220, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "fun3dNamelist.pyx":271
+    /* "fun3dNamelist.pyx":216
  * 
- *         nml['force_moment_integ_properties']['x_moment_length'] = aimInputs[index].vals.reals[0]
- *         nml['force_moment_integ_properties']['y_moment_length'] = aimInputs[index].vals.reals[1]             # <<<<<<<<<<<<<<
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Center",  cCAPS.ANALYSISIN)-1
- */
-    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[1])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 271, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 271, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_y_moment_length, __pyx_t_6) < 0)) __PYX_ERR(0, 271, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-    /* "fun3dNamelist.pyx":266
- * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Subiter",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'force_moment_integ_properties' not in nml:
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  */
   }
 
-  /* "fun3dNamelist.pyx":273
- *         nml['force_moment_integ_properties']['y_moment_length'] = aimInputs[index].vals.reals[1]
+  /* "fun3dNamelist.pyx":222
+ *         nml['nonlinear_solver_parameters']['subiterations'] = aimInputs[index].vals.integer
  * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Center",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:
+ *         if 'nonlinear_solver_parameters' not in nml:
  */
-  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Moment_Center"), ANALYSISIN) - 1);
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Temporal_Error"), ANALYSISIN) - 1);
 
-  /* "fun3dNamelist.pyx":274
+  /* "fun3dNamelist.pyx":223
  * 
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Center",  cCAPS.ANALYSISIN)-1
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
- *         if 'force_moment_integ_properties' not in nml:
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  */
   __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
   if (__pyx_t_1) {
 
-    /* "fun3dNamelist.pyx":275
- *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Center",  cCAPS.ANALYSISIN)-1
+    /* "fun3dNamelist.pyx":224
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
  * 
  */
-    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_force_moment_integ_properties, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 275, __pyx_L1_error)
+    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 224, __pyx_L1_error)
     __pyx_t_7 = (__pyx_t_1 != 0);
     if (__pyx_t_7) {
 
-      /* "fun3dNamelist.pyx":276
+      /* "fun3dNamelist.pyx":225
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
- *         if 'force_moment_integ_properties' not in nml:
- *             nml['force_moment_integ_properties'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
  * 
- *         nml['force_moment_integ_properties']['x_moment_center'] = aimInputs[index].vals.reals[0]
+ *         nml['nonlinear_solver_parameters']['temporal_err_control'] = True
  */
-      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 276, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 225, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 276, __pyx_L1_error)
+      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 225, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __pyx_t_2 = NULL;
@@ -4671,13 +3992,841 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
       }
       __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
       __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 276, __pyx_L1_error)
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 225, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties, __pyx_t_6) < 0)) __PYX_ERR(0, 276, __pyx_L1_error)
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 225, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "fun3dNamelist.pyx":275
+      /* "fun3dNamelist.pyx":224
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":227
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ * 
+ *         nml['nonlinear_solver_parameters']['temporal_err_control'] = True             # <<<<<<<<<<<<<<
+ *         nml['nonlinear_solver_parameters']['temporal_err_floor'] = aimInputs[index].vals.real
+ * 
+ */
+    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 227, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_temporal_err_control, Py_True) < 0)) __PYX_ERR(0, 227, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":228
+ * 
+ *         nml['nonlinear_solver_parameters']['temporal_err_control'] = True
+ *         nml['nonlinear_solver_parameters']['temporal_err_floor'] = aimInputs[index].vals.real             # <<<<<<<<<<<<<<
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1
+ */
+    __pyx_t_6 = PyFloat_FromDouble((__pyx_v_aimInputs[__pyx_v_index]).vals.real); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 228, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 228, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_temporal_err_floor, __pyx_t_6) < 0)) __PYX_ERR(0, 228, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":223
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Temporal_Error",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ */
+  }
+
+  /* "fun3dNamelist.pyx":230
+ *         nml['nonlinear_solver_parameters']['temporal_err_floor'] = aimInputs[index].vals.real
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'nonlinear_solver_parameters' not in nml:
+ */
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"CFL_Schedule"), ANALYSISIN) - 1);
+
+  /* "fun3dNamelist.pyx":231
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ */
+  __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
+  if (__pyx_t_7) {
+
+    /* "fun3dNamelist.pyx":232
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ * 
+ */
+    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 232, __pyx_L1_error)
+    __pyx_t_1 = (__pyx_t_7 != 0);
+    if (__pyx_t_1) {
+
+      /* "fun3dNamelist.pyx":233
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ * 
+ *         if 'schedule_cfl' not in nml['nonlinear_solver_parameters']:
+ */
+      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 233, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 233, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __pyx_t_4 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
+        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
+        if (likely(__pyx_t_4)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
+          __Pyx_INCREF(__pyx_t_4);
+          __Pyx_INCREF(function);
+          __Pyx_DECREF_SET(__pyx_t_2, function);
+        }
+      }
+      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
+      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 233, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 233, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":232
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":235
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ * 
+ *         if 'schedule_cfl' not in nml['nonlinear_solver_parameters']:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters']['schedule_cfl'] = [None]*2
+ * 
+ */
+    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 235, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_schedule_cfl, __pyx_t_6, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 235, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+    __pyx_t_7 = (__pyx_t_1 != 0);
+    if (__pyx_t_7) {
+
+      /* "fun3dNamelist.pyx":236
+ * 
+ *         if 'schedule_cfl' not in nml['nonlinear_solver_parameters']:
+ *             nml['nonlinear_solver_parameters']['schedule_cfl'] = [None]*2             # <<<<<<<<<<<<<<
+ * 
+ *         nml['nonlinear_solver_parameters']['schedule_cfl'][0] = aimInputs[index].vals.reals[0]
+ */
+      __pyx_t_6 = PyList_New(1 * 2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 236, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      { Py_ssize_t __pyx_temp;
+        for (__pyx_temp=0; __pyx_temp < 2; __pyx_temp++) {
+          __Pyx_INCREF(Py_None);
+          __Pyx_GIVEREF(Py_None);
+          PyList_SET_ITEM(__pyx_t_6, __pyx_temp, Py_None);
+        }
+      }
+      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 236, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_schedule_cfl, __pyx_t_6) < 0)) __PYX_ERR(0, 236, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":235
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ * 
+ *         if 'schedule_cfl' not in nml['nonlinear_solver_parameters']:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters']['schedule_cfl'] = [None]*2
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":238
+ *             nml['nonlinear_solver_parameters']['schedule_cfl'] = [None]*2
+ * 
+ *         nml['nonlinear_solver_parameters']['schedule_cfl'][0] = aimInputs[index].vals.reals[0]             # <<<<<<<<<<<<<<
+ *         nml['nonlinear_solver_parameters']['schedule_cfl'][1] = aimInputs[index].vals.reals[1]
+ * 
+ */
+    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[0])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 238, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 238, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_schedule_cfl); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 238, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    if (unlikely(__Pyx_SetItemInt(__pyx_t_4, 0, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 0, 1) < 0)) __PYX_ERR(0, 238, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":239
+ * 
+ *         nml['nonlinear_solver_parameters']['schedule_cfl'][0] = aimInputs[index].vals.reals[0]
+ *         nml['nonlinear_solver_parameters']['schedule_cfl'][1] = aimInputs[index].vals.reals[1]             # <<<<<<<<<<<<<<
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1
+ */
+    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[1])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 239, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 239, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_schedule_cfl); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 239, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    if (unlikely(__Pyx_SetItemInt(__pyx_t_2, 1, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 0, 1) < 0)) __PYX_ERR(0, 239, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":231
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ */
+  }
+
+  /* "fun3dNamelist.pyx":241
+ *         nml['nonlinear_solver_parameters']['schedule_cfl'][1] = aimInputs[index].vals.reals[1]
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'nonlinear_solver_parameters' not in nml:
+ */
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"CFL_Schedule_Iter"), ANALYSISIN) - 1);
+
+  /* "fun3dNamelist.pyx":242
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ */
+  __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
+  if (__pyx_t_7) {
+
+    /* "fun3dNamelist.pyx":243
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ * 
+ */
+    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_nonlinear_solver_parameters, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 243, __pyx_L1_error)
+    __pyx_t_1 = (__pyx_t_7 != 0);
+    if (__pyx_t_1) {
+
+      /* "fun3dNamelist.pyx":244
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ * 
+ *         if 'schedule_iteration' not in nml['nonlinear_solver_parameters']:
+ */
+      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 244, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 244, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __pyx_t_2 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
+        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_4);
+        if (likely(__pyx_t_2)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
+          __Pyx_INCREF(__pyx_t_2);
+          __Pyx_INCREF(function);
+          __Pyx_DECREF_SET(__pyx_t_4, function);
+        }
+      }
+      __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
+      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 244, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters, __pyx_t_6) < 0)) __PYX_ERR(0, 244, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":243
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'nonlinear_solver_parameters' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":246
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ * 
+ *         if 'schedule_iteration' not in nml['nonlinear_solver_parameters']:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters']['schedule_iteration'] = [None]*2
+ * 
+ */
+    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 246, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_schedule_iteration, __pyx_t_6, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 246, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+    __pyx_t_7 = (__pyx_t_1 != 0);
+    if (__pyx_t_7) {
+
+      /* "fun3dNamelist.pyx":247
+ * 
+ *         if 'schedule_iteration' not in nml['nonlinear_solver_parameters']:
+ *             nml['nonlinear_solver_parameters']['schedule_iteration'] = [None]*2             # <<<<<<<<<<<<<<
+ * 
+ *         nml['nonlinear_solver_parameters']['schedule_iteration'][0] = aimInputs[index].vals.integers[0]
+ */
+      __pyx_t_6 = PyList_New(1 * 2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 247, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      { Py_ssize_t __pyx_temp;
+        for (__pyx_temp=0; __pyx_temp < 2; __pyx_temp++) {
+          __Pyx_INCREF(Py_None);
+          __Pyx_GIVEREF(Py_None);
+          PyList_SET_ITEM(__pyx_t_6, __pyx_temp, Py_None);
+        }
+      }
+      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 247, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_schedule_iteration, __pyx_t_6) < 0)) __PYX_ERR(0, 247, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":246
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ * 
+ *         if 'schedule_iteration' not in nml['nonlinear_solver_parameters']:             # <<<<<<<<<<<<<<
+ *             nml['nonlinear_solver_parameters']['schedule_iteration'] = [None]*2
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":249
+ *             nml['nonlinear_solver_parameters']['schedule_iteration'] = [None]*2
+ * 
+ *         nml['nonlinear_solver_parameters']['schedule_iteration'][0] = aimInputs[index].vals.integers[0]             # <<<<<<<<<<<<<<
+ *         nml['nonlinear_solver_parameters']['schedule_iteration'][1] = aimInputs[index].vals.integers[1]
+ * 
+ */
+    __pyx_t_6 = __Pyx_PyInt_From_int(((__pyx_v_aimInputs[__pyx_v_index]).vals.integers[0])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 249, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 249, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_schedule_iteration); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 249, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    if (unlikely(__Pyx_SetItemInt(__pyx_t_2, 0, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 0, 1) < 0)) __PYX_ERR(0, 249, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":250
+ * 
+ *         nml['nonlinear_solver_parameters']['schedule_iteration'][0] = aimInputs[index].vals.integers[0]
+ *         nml['nonlinear_solver_parameters']['schedule_iteration'][1] = aimInputs[index].vals.integers[1]             # <<<<<<<<<<<<<<
+ * 
+ *     # &code_run_control
+ */
+    __pyx_t_6 = __Pyx_PyInt_From_int(((__pyx_v_aimInputs[__pyx_v_index]).vals.integers[1])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 250, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_nonlinear_solver_parameters); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 250, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_schedule_iteration); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 250, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    if (unlikely(__Pyx_SetItemInt(__pyx_t_4, 1, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 0, 1) < 0)) __PYX_ERR(0, 250, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":242
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "CFL_Schedule_Iter",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'nonlinear_solver_parameters' not in nml:
+ *             nml['nonlinear_solver_parameters'] = f90nml.Namelist()
+ */
+  }
+
+  /* "fun3dNamelist.pyx":253
+ * 
+ *     # &code_run_control
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Iter",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'code_run_control' not in nml:
+ */
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Num_Iter"), ANALYSISIN) - 1);
+
+  /* "fun3dNamelist.pyx":254
+ *     # &code_run_control
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Iter",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'code_run_control' not in nml:
+ *             nml['code_run_control'] = f90nml.Namelist()
+ */
+  __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
+  if (__pyx_t_7) {
+
+    /* "fun3dNamelist.pyx":255
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Iter",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'code_run_control' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['code_run_control'] = f90nml.Namelist()
+ * 
+ */
+    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_code_run_control, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 255, __pyx_L1_error)
+    __pyx_t_1 = (__pyx_t_7 != 0);
+    if (__pyx_t_1) {
+
+      /* "fun3dNamelist.pyx":256
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'code_run_control' not in nml:
+ *             nml['code_run_control'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ * 
+ *         nml['code_run_control']['steps'] = aimInputs[index].vals.integer
+ */
+      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 256, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 256, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __pyx_t_4 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
+        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
+        if (likely(__pyx_t_4)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
+          __Pyx_INCREF(__pyx_t_4);
+          __Pyx_INCREF(function);
+          __Pyx_DECREF_SET(__pyx_t_2, function);
+        }
+      }
+      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
+      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 256, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_code_run_control, __pyx_t_6) < 0)) __PYX_ERR(0, 256, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":255
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Iter",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'code_run_control' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['code_run_control'] = f90nml.Namelist()
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":258
+ *             nml['code_run_control'] = f90nml.Namelist()
+ * 
+ *         nml['code_run_control']['steps'] = aimInputs[index].vals.integer             # <<<<<<<<<<<<<<
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1
+ */
+    __pyx_t_6 = __Pyx_PyInt_From_int((__pyx_v_aimInputs[__pyx_v_index]).vals.integer); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 258, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_code_run_control); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 258, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_steps, __pyx_t_6) < 0)) __PYX_ERR(0, 258, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":254
+ *     # &code_run_control
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Num_Iter",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'code_run_control' not in nml:
+ *             nml['code_run_control'] = f90nml.Namelist()
+ */
+  }
+
+  /* "fun3dNamelist.pyx":260
+ *         nml['code_run_control']['steps'] = aimInputs[index].vals.integer
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'code_run_control' not in nml:
+ */
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Restart_Read"), ANALYSISIN) - 1);
+
+  /* "fun3dNamelist.pyx":261
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'code_run_control' not in nml:
+ *             nml['code_run_control'] = f90nml.Namelist()
+ */
+  __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
+  if (__pyx_t_1) {
+
+    /* "fun3dNamelist.pyx":262
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'code_run_control' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['code_run_control'] = f90nml.Namelist()
+ * 
+ */
+    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_code_run_control, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 262, __pyx_L1_error)
+    __pyx_t_7 = (__pyx_t_1 != 0);
+    if (__pyx_t_7) {
+
+      /* "fun3dNamelist.pyx":263
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'code_run_control' not in nml:
+ *             nml['code_run_control'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ * 
+ *         nml['code_run_control']['restart_read'] = _str(aimInputs[index].vals.string)
+ */
+      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 263, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 263, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __pyx_t_2 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
+        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_4);
+        if (likely(__pyx_t_2)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
+          __Pyx_INCREF(__pyx_t_2);
+          __Pyx_INCREF(function);
+          __Pyx_DECREF_SET(__pyx_t_4, function);
+        }
+      }
+      __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
+      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 263, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_code_run_control, __pyx_t_6) < 0)) __PYX_ERR(0, 263, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":262
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'code_run_control' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['code_run_control'] = f90nml.Namelist()
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":265
+ *             nml['code_run_control'] = f90nml.Namelist()
+ * 
+ *         nml['code_run_control']['restart_read'] = _str(aimInputs[index].vals.string)             # <<<<<<<<<<<<<<
+ * 
+ *     # &force_moment_integ_properties
+ */
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_str); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 265, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_2 = __Pyx_PyBytes_FromString((__pyx_v_aimInputs[__pyx_v_index]).vals.string); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 265, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    __pyx_t_3 = NULL;
+    if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
+      __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_4);
+      if (likely(__pyx_t_3)) {
+        PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
+        __Pyx_INCREF(__pyx_t_3);
+        __Pyx_INCREF(function);
+        __Pyx_DECREF_SET(__pyx_t_4, function);
+      }
+    }
+    __pyx_t_6 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_4, __pyx_t_3, __pyx_t_2) : __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2);
+    __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 265, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_code_run_control); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 265, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_restart_read, __pyx_t_6) < 0)) __PYX_ERR(0, 265, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":261
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Restart_Read",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'code_run_control' not in nml:
+ *             nml['code_run_control'] = f90nml.Namelist()
+ */
+  }
+
+  /* "fun3dNamelist.pyx":268
+ * 
+ *     # &force_moment_integ_properties
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Reference_Area",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:
+ */
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Reference_Area"), ANALYSISIN) - 1);
+
+  /* "fun3dNamelist.pyx":269
+ *     # &force_moment_integ_properties
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Reference_Area",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'force_moment_integ_properties' not in nml:
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ */
+  __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
+  if (__pyx_t_7) {
+
+    /* "fun3dNamelist.pyx":270
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Reference_Area",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ * 
+ */
+    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_force_moment_integ_properties, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 270, __pyx_L1_error)
+    __pyx_t_1 = (__pyx_t_7 != 0);
+    if (__pyx_t_1) {
+
+      /* "fun3dNamelist.pyx":271
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ * 
+ *         nml['force_moment_integ_properties']['area_reference']  = aimInputs[index].vals.real
+ */
+      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 271, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 271, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __pyx_t_4 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
+        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
+        if (likely(__pyx_t_4)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
+          __Pyx_INCREF(__pyx_t_4);
+          __Pyx_INCREF(function);
+          __Pyx_DECREF_SET(__pyx_t_2, function);
+        }
+      }
+      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
+      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 271, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties, __pyx_t_6) < 0)) __PYX_ERR(0, 271, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":270
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Reference_Area",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":273
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ * 
+ *         nml['force_moment_integ_properties']['area_reference']  = aimInputs[index].vals.real             # <<<<<<<<<<<<<<
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1
+ */
+    __pyx_t_6 = PyFloat_FromDouble((__pyx_v_aimInputs[__pyx_v_index]).vals.real); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 273, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 273, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_area_reference, __pyx_t_6) < 0)) __PYX_ERR(0, 273, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":269
+ *     # &force_moment_integ_properties
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Reference_Area",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'force_moment_integ_properties' not in nml:
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ */
+  }
+
+  /* "fun3dNamelist.pyx":275
+ *         nml['force_moment_integ_properties']['area_reference']  = aimInputs[index].vals.real
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:
+ */
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Moment_Length"), ANALYSISIN) - 1);
+
+  /* "fun3dNamelist.pyx":276
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'force_moment_integ_properties' not in nml:
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ */
+  __pyx_t_1 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
+  if (__pyx_t_1) {
+
+    /* "fun3dNamelist.pyx":277
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ * 
+ */
+    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_force_moment_integ_properties, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 277, __pyx_L1_error)
+    __pyx_t_7 = (__pyx_t_1 != 0);
+    if (__pyx_t_7) {
+
+      /* "fun3dNamelist.pyx":278
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ * 
+ *         nml['force_moment_integ_properties']['x_moment_length'] = aimInputs[index].vals.reals[0]
+ */
+      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 278, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 278, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __pyx_t_2 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
+        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_4);
+        if (likely(__pyx_t_2)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
+          __Pyx_INCREF(__pyx_t_2);
+          __Pyx_INCREF(function);
+          __Pyx_DECREF_SET(__pyx_t_4, function);
+        }
+      }
+      __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
+      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 278, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties, __pyx_t_6) < 0)) __PYX_ERR(0, 278, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":277
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":280
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ * 
+ *         nml['force_moment_integ_properties']['x_moment_length'] = aimInputs[index].vals.reals[0]             # <<<<<<<<<<<<<<
+ *         nml['force_moment_integ_properties']['y_moment_length'] = aimInputs[index].vals.reals[1]
+ * 
+ */
+    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[0])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 280, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 280, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_x_moment_length, __pyx_t_6) < 0)) __PYX_ERR(0, 280, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":281
+ * 
+ *         nml['force_moment_integ_properties']['x_moment_length'] = aimInputs[index].vals.reals[0]
+ *         nml['force_moment_integ_properties']['y_moment_length'] = aimInputs[index].vals.reals[1]             # <<<<<<<<<<<<<<
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Center",  cCAPS.ANALYSISIN)-1
+ */
+    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[1])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 281, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 281, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_y_moment_length, __pyx_t_6) < 0)) __PYX_ERR(0, 281, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+    /* "fun3dNamelist.pyx":276
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Length",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'force_moment_integ_properties' not in nml:
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ */
+  }
+
+  /* "fun3dNamelist.pyx":283
+ *         nml['force_moment_integ_properties']['y_moment_length'] = aimInputs[index].vals.reals[1]
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Center",  cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:
+ */
+  __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"Moment_Center"), ANALYSISIN) - 1);
+
+  /* "fun3dNamelist.pyx":284
+ * 
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Center",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
+ *         if 'force_moment_integ_properties' not in nml:
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ */
+  __pyx_t_7 = (((__pyx_v_aimInputs[__pyx_v_index]).nullVal != IsNull) != 0);
+  if (__pyx_t_7) {
+
+    /* "fun3dNamelist.pyx":285
+ *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Center",  cCAPS.ANALYSISIN)-1
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()
+ * 
+ */
+    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_force_moment_integ_properties, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 285, __pyx_L1_error)
+    __pyx_t_1 = (__pyx_t_7 != 0);
+    if (__pyx_t_1) {
+
+      /* "fun3dNamelist.pyx":286
+ *     if aimInputs[index].nullVal != cCAPS.IsNull:
+ *         if 'force_moment_integ_properties' not in nml:
+ *             nml['force_moment_integ_properties'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
+ * 
+ *         nml['force_moment_integ_properties']['x_moment_center'] = aimInputs[index].vals.reals[0]
+ */
+      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 286, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 286, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __pyx_t_4 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
+        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
+        if (likely(__pyx_t_4)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
+          __Pyx_INCREF(__pyx_t_4);
+          __Pyx_INCREF(function);
+          __Pyx_DECREF_SET(__pyx_t_2, function);
+        }
+      }
+      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
+      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 286, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties, __pyx_t_6) < 0)) __PYX_ERR(0, 286, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":285
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Center",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:
  *         if 'force_moment_integ_properties' not in nml:             # <<<<<<<<<<<<<<
@@ -4686,52 +4835,52 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
     }
 
-    /* "fun3dNamelist.pyx":278
+    /* "fun3dNamelist.pyx":288
  *             nml['force_moment_integ_properties'] = f90nml.Namelist()
  * 
  *         nml['force_moment_integ_properties']['x_moment_center'] = aimInputs[index].vals.reals[0]             # <<<<<<<<<<<<<<
  *         nml['force_moment_integ_properties']['y_moment_center'] = aimInputs[index].vals.reals[1]
  *         nml['force_moment_integ_properties']['z_moment_center'] = aimInputs[index].vals.reals[2]
  */
-    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[0])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 278, __pyx_L1_error)
+    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[0])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 288, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 278, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_x_moment_center, __pyx_t_6) < 0)) __PYX_ERR(0, 278, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 288, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_x_moment_center, __pyx_t_6) < 0)) __PYX_ERR(0, 288, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "fun3dNamelist.pyx":279
+    /* "fun3dNamelist.pyx":289
  * 
  *         nml['force_moment_integ_properties']['x_moment_center'] = aimInputs[index].vals.reals[0]
  *         nml['force_moment_integ_properties']['y_moment_center'] = aimInputs[index].vals.reals[1]             # <<<<<<<<<<<<<<
  *         nml['force_moment_integ_properties']['z_moment_center'] = aimInputs[index].vals.reals[2]
  * 
  */
-    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[1])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 279, __pyx_L1_error)
+    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[1])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 289, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 279, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_y_moment_center, __pyx_t_6) < 0)) __PYX_ERR(0, 279, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 289, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_y_moment_center, __pyx_t_6) < 0)) __PYX_ERR(0, 289, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "fun3dNamelist.pyx":280
+    /* "fun3dNamelist.pyx":290
  *         nml['force_moment_integ_properties']['x_moment_center'] = aimInputs[index].vals.reals[0]
  *         nml['force_moment_integ_properties']['y_moment_center'] = aimInputs[index].vals.reals[1]
  *         nml['force_moment_integ_properties']['z_moment_center'] = aimInputs[index].vals.reals[2]             # <<<<<<<<<<<<<<
  * 
  *     # &boundary_conditions
  */
-    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[2])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 280, __pyx_L1_error)
+    __pyx_t_6 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[2])); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 290, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 280, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_z_moment_center, __pyx_t_6) < 0)) __PYX_ERR(0, 280, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_force_moment_integ_properties); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 290, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_2);
+    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_z_moment_center, __pyx_t_6) < 0)) __PYX_ERR(0, 290, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-    /* "fun3dNamelist.pyx":274
+    /* "fun3dNamelist.pyx":284
  * 
  *     index = cAIMUtil.aim_getIndex(aimInfo, "Moment_Center",  cCAPS.ANALYSISIN)-1
  *     if aimInputs[index].nullVal != cCAPS.IsNull:             # <<<<<<<<<<<<<<
@@ -4740,7 +4889,7 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
   }
 
-  /* "fun3dNamelist.pyx":283
+  /* "fun3dNamelist.pyx":293
  * 
  *     # &boundary_conditions
  *     for i in range(bcProps.numSurfaceProp):             # <<<<<<<<<<<<<<
@@ -4752,48 +4901,48 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
   for (__pyx_t_10 = 0; __pyx_t_10 < __pyx_t_9; __pyx_t_10+=1) {
     __pyx_v_i = __pyx_t_10;
 
-    /* "fun3dNamelist.pyx":284
+    /* "fun3dNamelist.pyx":294
  *     # &boundary_conditions
  *     for i in range(bcProps.numSurfaceProp):
  *         if 'boundary_conditions' not in nml:             # <<<<<<<<<<<<<<
  *             nml['boundary_conditions'] = f90nml.Namelist()
  * 
  */
-    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_boundary_conditions, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 284, __pyx_L1_error)
-    __pyx_t_1 = (__pyx_t_7 != 0);
-    if (__pyx_t_1) {
+    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_boundary_conditions, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 294, __pyx_L1_error)
+    __pyx_t_7 = (__pyx_t_1 != 0);
+    if (__pyx_t_7) {
 
-      /* "fun3dNamelist.pyx":285
+      /* "fun3dNamelist.pyx":295
  *     for i in range(bcProps.numSurfaceProp):
  *         if 'boundary_conditions' not in nml:
  *             nml['boundary_conditions'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
  * 
  *         index = bcProps.surfaceProp[i].bcID-1
  */
-      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 285, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 285, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 295, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __pyx_t_4 = NULL;
-      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_2))) {
-        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_2);
-        if (likely(__pyx_t_4)) {
-          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
-          __Pyx_INCREF(__pyx_t_4);
+      __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 295, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __pyx_t_2 = NULL;
+      if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_4))) {
+        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_4);
+        if (likely(__pyx_t_2)) {
+          PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
+          __Pyx_INCREF(__pyx_t_2);
           __Pyx_INCREF(function);
-          __Pyx_DECREF_SET(__pyx_t_2, function);
+          __Pyx_DECREF_SET(__pyx_t_4, function);
         }
       }
-      __pyx_t_6 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_2);
-      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 285, __pyx_L1_error)
+      __pyx_t_6 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_4);
+      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 295, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions, __pyx_t_6) < 0)) __PYX_ERR(0, 285, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions, __pyx_t_6) < 0)) __PYX_ERR(0, 295, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "fun3dNamelist.pyx":284
+      /* "fun3dNamelist.pyx":294
  *     # &boundary_conditions
  *     for i in range(bcProps.numSurfaceProp):
  *         if 'boundary_conditions' not in nml:             # <<<<<<<<<<<<<<
@@ -4802,7 +4951,7 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
     }
 
-    /* "fun3dNamelist.pyx":287
+    /* "fun3dNamelist.pyx":297
  *             nml['boundary_conditions'] = f90nml.Namelist()
  * 
  *         index = bcProps.surfaceProp[i].bcID-1             # <<<<<<<<<<<<<<
@@ -4811,7 +4960,7 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
     __pyx_v_index = ((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID - 1);
 
-    /* "fun3dNamelist.pyx":289
+    /* "fun3dNamelist.pyx":299
  *         index = bcProps.surfaceProp[i].bcID-1
  * 
  *         length = bcProps.surfaceProp[i].bcID             # <<<<<<<<<<<<<<
@@ -4821,38 +4970,38 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
     __pyx_t_11 = (__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID;
     __pyx_v_length = __pyx_t_11;
 
-    /* "fun3dNamelist.pyx":292
+    /* "fun3dNamelist.pyx":302
  * 
  *         # Wall Temperature
  *         if bcProps.surfaceProp[i].wallTemperatureFlag == cCAPS.true:             # <<<<<<<<<<<<<<
  * 
  *             if 'wall_temperature' not in nml['boundary_conditions']:
  */
-    __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).wallTemperatureFlag == true) != 0);
-    if (__pyx_t_1) {
+    __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).wallTemperatureFlag == true) != 0);
+    if (__pyx_t_7) {
 
-      /* "fun3dNamelist.pyx":294
+      /* "fun3dNamelist.pyx":304
  *         if bcProps.surfaceProp[i].wallTemperatureFlag == cCAPS.true:
  * 
  *             if 'wall_temperature' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
  *                 nml['boundary_conditions']['wall_temperature'] = [None]*length
  *             else:
  */
-      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 294, __pyx_L1_error)
+      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 304, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_wall_temperature, __pyx_t_6, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 294, __pyx_L1_error)
+      __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_wall_temperature, __pyx_t_6, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 304, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-      __pyx_t_7 = (__pyx_t_1 != 0);
-      if (__pyx_t_7) {
+      __pyx_t_1 = (__pyx_t_7 != 0);
+      if (__pyx_t_1) {
 
-        /* "fun3dNamelist.pyx":295
+        /* "fun3dNamelist.pyx":305
  * 
  *             if 'wall_temperature' not in nml['boundary_conditions']:
  *                 nml['boundary_conditions']['wall_temperature'] = [None]*length             # <<<<<<<<<<<<<<
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temperature']):
  */
-        __pyx_t_6 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 295, __pyx_L1_error)
+        __pyx_t_6 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 305, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_6);
         { Py_ssize_t __pyx_temp;
           for (__pyx_temp=0; __pyx_temp < __pyx_v_length; __pyx_temp++) {
@@ -4861,23 +5010,23 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
             PyList_SET_ITEM(__pyx_t_6, __pyx_temp, Py_None);
           }
         }
-        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 295, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_2);
-        if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_wall_temperature, __pyx_t_6) < 0)) __PYX_ERR(0, 295, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 305, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_4);
+        if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_wall_temperature, __pyx_t_6) < 0)) __PYX_ERR(0, 305, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
         __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-        /* "fun3dNamelist.pyx":294
+        /* "fun3dNamelist.pyx":304
  *         if bcProps.surfaceProp[i].wallTemperatureFlag == cCAPS.true:
  * 
  *             if 'wall_temperature' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
  *                 nml['boundary_conditions']['wall_temperature'] = [None]*length
  *             else:
  */
-        goto __pyx_L51;
+        goto __pyx_L54;
       }
 
-      /* "fun3dNamelist.pyx":297
+      /* "fun3dNamelist.pyx":307
  *                 nml['boundary_conditions']['wall_temperature'] = [None]*length
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temperature']):             # <<<<<<<<<<<<<<
@@ -4885,17 +5034,17 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  *                         nml['boundary_conditions']['wall_temperature'].append(None)
  */
       /*else*/ {
-        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 297, __pyx_L1_error)
+        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 307, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_6);
-        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_wall_temperature); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 297, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_2);
+        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_wall_temperature); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 307, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_4);
         __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-        __pyx_t_12 = PyObject_Length(__pyx_t_2); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 297, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-        __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
-        if (__pyx_t_7) {
+        __pyx_t_12 = PyObject_Length(__pyx_t_4); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 307, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+        __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
+        if (__pyx_t_1) {
 
-          /* "fun3dNamelist.pyx":298
+          /* "fun3dNamelist.pyx":308
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temperature']):
  *                     for _ in range(len(nml['boundary_conditions']['wall_temperature']), length):             # <<<<<<<<<<<<<<
@@ -4903,34 +5052,34 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  * 
  */
           __pyx_t_11 = __pyx_v_length;
-          __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 298, __pyx_L1_error)
-          __Pyx_GOTREF(__pyx_t_2);
-          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_wall_temperature); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 298, __pyx_L1_error)
+          __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 308, __pyx_L1_error)
+          __Pyx_GOTREF(__pyx_t_4);
+          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_wall_temperature); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 308, __pyx_L1_error)
           __Pyx_GOTREF(__pyx_t_6);
-          __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-          __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 298, __pyx_L1_error)
+          __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+          __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 308, __pyx_L1_error)
           __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
           __pyx_t_13 = __pyx_t_11;
           for (__pyx_t_14 = __pyx_t_12; __pyx_t_14 < __pyx_t_13; __pyx_t_14+=1) {
             __pyx_v__ = __pyx_t_14;
 
-            /* "fun3dNamelist.pyx":299
+            /* "fun3dNamelist.pyx":309
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temperature']):
  *                     for _ in range(len(nml['boundary_conditions']['wall_temperature']), length):
  *                         nml['boundary_conditions']['wall_temperature'].append(None)             # <<<<<<<<<<<<<<
  * 
  *             if 'wall_temp_flag' not in nml['boundary_conditions']:
  */
-            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 299, __pyx_L1_error)
+            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 309, __pyx_L1_error)
             __Pyx_GOTREF(__pyx_t_6);
-            __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_wall_temperature); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 299, __pyx_L1_error)
-            __Pyx_GOTREF(__pyx_t_2);
+            __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_wall_temperature); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 309, __pyx_L1_error)
+            __Pyx_GOTREF(__pyx_t_4);
             __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_2, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 299, __pyx_L1_error)
-            __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_4, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 309, __pyx_L1_error)
+            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
           }
 
-          /* "fun3dNamelist.pyx":297
+          /* "fun3dNamelist.pyx":307
  *                 nml['boundary_conditions']['wall_temperature'] = [None]*length
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temperature']):             # <<<<<<<<<<<<<<
@@ -4939,55 +5088,55 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
         }
       }
-      __pyx_L51:;
+      __pyx_L54:;
 
-      /* "fun3dNamelist.pyx":301
+      /* "fun3dNamelist.pyx":311
  *                         nml['boundary_conditions']['wall_temperature'].append(None)
  * 
  *             if 'wall_temp_flag' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
  *                 nml['boundary_conditions']['wall_temp_flag'] = [None]*length
  *             else:
  */
-      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 301, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_wall_temp_flag, __pyx_t_2, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 301, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      __pyx_t_1 = (__pyx_t_7 != 0);
-      if (__pyx_t_1) {
+      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 311, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_wall_temp_flag, __pyx_t_4, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 311, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __pyx_t_7 = (__pyx_t_1 != 0);
+      if (__pyx_t_7) {
 
-        /* "fun3dNamelist.pyx":302
+        /* "fun3dNamelist.pyx":312
  * 
  *             if 'wall_temp_flag' not in nml['boundary_conditions']:
  *                 nml['boundary_conditions']['wall_temp_flag'] = [None]*length             # <<<<<<<<<<<<<<
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temp_flag']):
  */
-        __pyx_t_2 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 302, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_2);
+        __pyx_t_4 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 312, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_4);
         { Py_ssize_t __pyx_temp;
           for (__pyx_temp=0; __pyx_temp < __pyx_v_length; __pyx_temp++) {
             __Pyx_INCREF(Py_None);
             __Pyx_GIVEREF(Py_None);
-            PyList_SET_ITEM(__pyx_t_2, __pyx_temp, Py_None);
+            PyList_SET_ITEM(__pyx_t_4, __pyx_temp, Py_None);
           }
         }
-        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 302, __pyx_L1_error)
+        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 312, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_6);
-        if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_wall_temp_flag, __pyx_t_2) < 0)) __PYX_ERR(0, 302, __pyx_L1_error)
+        if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_wall_temp_flag, __pyx_t_4) < 0)) __PYX_ERR(0, 312, __pyx_L1_error)
         __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-        /* "fun3dNamelist.pyx":301
+        /* "fun3dNamelist.pyx":311
  *                         nml['boundary_conditions']['wall_temperature'].append(None)
  * 
  *             if 'wall_temp_flag' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
  *                 nml['boundary_conditions']['wall_temp_flag'] = [None]*length
  *             else:
  */
-        goto __pyx_L55;
+        goto __pyx_L58;
       }
 
-      /* "fun3dNamelist.pyx":304
+      /* "fun3dNamelist.pyx":314
  *                 nml['boundary_conditions']['wall_temp_flag'] = [None]*length
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temp_flag']):             # <<<<<<<<<<<<<<
@@ -4995,17 +5144,17 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  *                         nml['boundary_conditions']['wall_temp_flag'].append(None)
  */
       /*else*/ {
-        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 304, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_2);
-        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_wall_temp_flag); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 304, __pyx_L1_error)
+        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 314, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_4);
+        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_wall_temp_flag); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 314, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_6);
-        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-        __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 304, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+        __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 314, __pyx_L1_error)
         __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-        __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
-        if (__pyx_t_1) {
+        __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
+        if (__pyx_t_7) {
 
-          /* "fun3dNamelist.pyx":305
+          /* "fun3dNamelist.pyx":315
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temp_flag']):
  *                     for _ in range(len(nml['boundary_conditions']['wall_temp_flag']), length):             # <<<<<<<<<<<<<<
@@ -5013,34 +5162,34 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  * 
  */
           __pyx_t_11 = __pyx_v_length;
-          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 305, __pyx_L1_error)
+          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 315, __pyx_L1_error)
           __Pyx_GOTREF(__pyx_t_6);
-          __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_wall_temp_flag); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 305, __pyx_L1_error)
-          __Pyx_GOTREF(__pyx_t_2);
+          __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_wall_temp_flag); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 315, __pyx_L1_error)
+          __Pyx_GOTREF(__pyx_t_4);
           __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-          __pyx_t_12 = PyObject_Length(__pyx_t_2); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 305, __pyx_L1_error)
-          __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+          __pyx_t_12 = PyObject_Length(__pyx_t_4); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 315, __pyx_L1_error)
+          __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
           __pyx_t_13 = __pyx_t_11;
           for (__pyx_t_14 = __pyx_t_12; __pyx_t_14 < __pyx_t_13; __pyx_t_14+=1) {
             __pyx_v__ = __pyx_t_14;
 
-            /* "fun3dNamelist.pyx":306
+            /* "fun3dNamelist.pyx":316
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temp_flag']):
  *                     for _ in range(len(nml['boundary_conditions']['wall_temp_flag']), length):
  *                         nml['boundary_conditions']['wall_temp_flag'].append(None)             # <<<<<<<<<<<<<<
  * 
  *             nml['boundary_conditions']['wall_temperature'][index] = bcProps.surfaceProp[i].wallTemperature
  */
-            __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 306, __pyx_L1_error)
-            __Pyx_GOTREF(__pyx_t_2);
-            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_wall_temp_flag); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 306, __pyx_L1_error)
+            __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 316, __pyx_L1_error)
+            __Pyx_GOTREF(__pyx_t_4);
+            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_wall_temp_flag); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 316, __pyx_L1_error)
             __Pyx_GOTREF(__pyx_t_6);
-            __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_6, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 306, __pyx_L1_error)
+            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_6, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 316, __pyx_L1_error)
             __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
           }
 
-          /* "fun3dNamelist.pyx":304
+          /* "fun3dNamelist.pyx":314
  *                 nml['boundary_conditions']['wall_temp_flag'] = [None]*length
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['wall_temp_flag']):             # <<<<<<<<<<<<<<
@@ -5049,42 +5198,42 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
         }
       }
-      __pyx_L55:;
+      __pyx_L58:;
 
-      /* "fun3dNamelist.pyx":308
+      /* "fun3dNamelist.pyx":318
  *                         nml['boundary_conditions']['wall_temp_flag'].append(None)
  * 
  *             nml['boundary_conditions']['wall_temperature'][index] = bcProps.surfaceProp[i].wallTemperature             # <<<<<<<<<<<<<<
  *             nml['boundary_conditions']['wall_temp_flag'][index] = True
  * 
  */
-      __pyx_t_6 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).wallTemperature); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 308, __pyx_L1_error)
+      __pyx_t_6 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).wallTemperature); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 318, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 308, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_wall_temperature); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 308, __pyx_L1_error)
+      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 318, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(__Pyx_SetItemInt(__pyx_t_4, __pyx_v_index, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 308, __pyx_L1_error)
+      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_wall_temperature); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 318, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(__Pyx_SetItemInt(__pyx_t_2, __pyx_v_index, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 318, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "fun3dNamelist.pyx":309
+      /* "fun3dNamelist.pyx":319
  * 
  *             nml['boundary_conditions']['wall_temperature'][index] = bcProps.surfaceProp[i].wallTemperature
  *             nml['boundary_conditions']['wall_temp_flag'][index] = True             # <<<<<<<<<<<<<<
  * 
  *         # Total pressure and temperature
  */
-      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 309, __pyx_L1_error)
+      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 319, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_wall_temp_flag); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 309, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_wall_temp_flag); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 319, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-      if (unlikely(__Pyx_SetItemInt(__pyx_t_4, __pyx_v_index, Py_True, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 309, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(__Pyx_SetItemInt(__pyx_t_2, __pyx_v_index, Py_True, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 319, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-      /* "fun3dNamelist.pyx":292
+      /* "fun3dNamelist.pyx":302
  * 
  *         # Wall Temperature
  *         if bcProps.surfaceProp[i].wallTemperatureFlag == cCAPS.true:             # <<<<<<<<<<<<<<
@@ -5093,337 +5242,38 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
     }
 
-    /* "fun3dNamelist.pyx":312
+    /* "fun3dNamelist.pyx":322
  * 
  *         # Total pressure and temperature
  *         if bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicInflow:             # <<<<<<<<<<<<<<
  * 
  *             if 'total_pressure_ratio' not in nml['boundary_conditions']:
  */
-    __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == SubsonicInflow) != 0);
-    if (__pyx_t_1) {
+    __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == SubsonicInflow) != 0);
+    if (__pyx_t_7) {
 
-      /* "fun3dNamelist.pyx":314
+      /* "fun3dNamelist.pyx":324
  *         if bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicInflow:
  * 
  *             if 'total_pressure_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
  *                 nml['boundary_conditions']['total_pressure_ratio'] = [None]*length
  *             else:
  */
-      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 314, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_total_pressure_ratio, __pyx_t_4, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 314, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __pyx_t_7 = (__pyx_t_1 != 0);
-      if (__pyx_t_7) {
+      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 324, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_total_pressure_ratio, __pyx_t_2, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 324, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __pyx_t_1 = (__pyx_t_7 != 0);
+      if (__pyx_t_1) {
 
-        /* "fun3dNamelist.pyx":315
+        /* "fun3dNamelist.pyx":325
  * 
  *             if 'total_pressure_ratio' not in nml['boundary_conditions']:
  *                 nml['boundary_conditions']['total_pressure_ratio'] = [None]*length             # <<<<<<<<<<<<<<
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):
  */
-        __pyx_t_4 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 315, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_4);
-        { Py_ssize_t __pyx_temp;
-          for (__pyx_temp=0; __pyx_temp < __pyx_v_length; __pyx_temp++) {
-            __Pyx_INCREF(Py_None);
-            __Pyx_GIVEREF(Py_None);
-            PyList_SET_ITEM(__pyx_t_4, __pyx_temp, Py_None);
-          }
-        }
-        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 315, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_6);
-        if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_total_pressure_ratio, __pyx_t_4) < 0)) __PYX_ERR(0, 315, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-
-        /* "fun3dNamelist.pyx":314
- *         if bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicInflow:
- * 
- *             if 'total_pressure_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
- *                 nml['boundary_conditions']['total_pressure_ratio'] = [None]*length
- *             else:
- */
-        goto __pyx_L60;
-      }
-
-      /* "fun3dNamelist.pyx":317
- *                 nml['boundary_conditions']['total_pressure_ratio'] = [None]*length
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):             # <<<<<<<<<<<<<<
- *                     for _ in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):
- *                         nml['boundary_conditions']['total_pressure_ratio'].append(None)
- */
-      /*else*/ {
-        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 317, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_4);
-        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_total_pressure_ratio); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 317, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_6);
-        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-        __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 317, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-        __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
-        if (__pyx_t_7) {
-
-          /* "fun3dNamelist.pyx":318
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):
- *                     for _ in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):             # <<<<<<<<<<<<<<
- *                         nml['boundary_conditions']['total_pressure_ratio'].append(None)
- * 
- */
-          __pyx_t_11 = __pyx_v_length;
-          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 318, __pyx_L1_error)
-          __Pyx_GOTREF(__pyx_t_6);
-          __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_total_pressure_ratio); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 318, __pyx_L1_error)
-          __Pyx_GOTREF(__pyx_t_4);
-          __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-          __pyx_t_12 = PyObject_Length(__pyx_t_4); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 318, __pyx_L1_error)
-          __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-          __pyx_t_13 = __pyx_t_11;
-          for (__pyx_t_14 = __pyx_t_12; __pyx_t_14 < __pyx_t_13; __pyx_t_14+=1) {
-            __pyx_v__ = __pyx_t_14;
-
-            /* "fun3dNamelist.pyx":319
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):
- *                     for _ in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):
- *                         nml['boundary_conditions']['total_pressure_ratio'].append(None)             # <<<<<<<<<<<<<<
- * 
- *             nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProp[i].totalPressure
- */
-            __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 319, __pyx_L1_error)
-            __Pyx_GOTREF(__pyx_t_4);
-            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_total_pressure_ratio); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 319, __pyx_L1_error)
-            __Pyx_GOTREF(__pyx_t_6);
-            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_6, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 319, __pyx_L1_error)
-            __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-          }
-
-          /* "fun3dNamelist.pyx":317
- *                 nml['boundary_conditions']['total_pressure_ratio'] = [None]*length
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):             # <<<<<<<<<<<<<<
- *                     for _ in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):
- *                         nml['boundary_conditions']['total_pressure_ratio'].append(None)
- */
-        }
-      }
-      __pyx_L60:;
-
-      /* "fun3dNamelist.pyx":321
- *                         nml['boundary_conditions']['total_pressure_ratio'].append(None)
- * 
- *             nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProp[i].totalPressure             # <<<<<<<<<<<<<<
- * 
- *             if 'total_temperature_ratio' not in nml['boundary_conditions']:
- */
-      __pyx_t_6 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).totalPressure); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 321, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 321, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_total_pressure_ratio); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 321, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(__Pyx_SetItemInt(__pyx_t_2, __pyx_v_index, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 321, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-      /* "fun3dNamelist.pyx":323
- *             nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProp[i].totalPressure
- * 
- *             if 'total_temperature_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
- *                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length
- *             else:
- */
-      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 323, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_total_temperature_ratio, __pyx_t_6, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 323, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-      __pyx_t_1 = (__pyx_t_7 != 0);
-      if (__pyx_t_1) {
-
-        /* "fun3dNamelist.pyx":324
- * 
- *             if 'total_temperature_ratio' not in nml['boundary_conditions']:
- *                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length             # <<<<<<<<<<<<<<
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):
- */
-        __pyx_t_6 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 324, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_6);
-        { Py_ssize_t __pyx_temp;
-          for (__pyx_temp=0; __pyx_temp < __pyx_v_length; __pyx_temp++) {
-            __Pyx_INCREF(Py_None);
-            __Pyx_GIVEREF(Py_None);
-            PyList_SET_ITEM(__pyx_t_6, __pyx_temp, Py_None);
-          }
-        }
-        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 324, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_2);
-        if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_total_temperature_ratio, __pyx_t_6) < 0)) __PYX_ERR(0, 324, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-
-        /* "fun3dNamelist.pyx":323
- *             nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProp[i].totalPressure
- * 
- *             if 'total_temperature_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
- *                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length
- *             else:
- */
-        goto __pyx_L64;
-      }
-
-      /* "fun3dNamelist.pyx":326
- *                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):             # <<<<<<<<<<<<<<
- *                     for _ in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):
- *                         nml['boundary_conditions']['total_temperature_ratio'].append(None)
- */
-      /*else*/ {
-        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 326, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_6);
-        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_total_temperature_ratio); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 326, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_2);
-        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-        __pyx_t_12 = PyObject_Length(__pyx_t_2); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 326, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-        __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
-        if (__pyx_t_1) {
-
-          /* "fun3dNamelist.pyx":327
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):
- *                     for _ in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):             # <<<<<<<<<<<<<<
- *                         nml['boundary_conditions']['total_temperature_ratio'].append(None)
- * 
- */
-          __pyx_t_11 = __pyx_v_length;
-          __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 327, __pyx_L1_error)
-          __Pyx_GOTREF(__pyx_t_2);
-          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_total_temperature_ratio); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 327, __pyx_L1_error)
-          __Pyx_GOTREF(__pyx_t_6);
-          __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-          __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 327, __pyx_L1_error)
-          __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-          __pyx_t_13 = __pyx_t_11;
-          for (__pyx_t_14 = __pyx_t_12; __pyx_t_14 < __pyx_t_13; __pyx_t_14+=1) {
-            __pyx_v__ = __pyx_t_14;
-
-            /* "fun3dNamelist.pyx":328
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):
- *                     for _ in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):
- *                         nml['boundary_conditions']['total_temperature_ratio'].append(None)             # <<<<<<<<<<<<<<
- * 
- *             nml['boundary_conditions']['total_temperature_ratio'][index] = bcProps.surfaceProp[i].totalTemperature
- */
-            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 328, __pyx_L1_error)
-            __Pyx_GOTREF(__pyx_t_6);
-            __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_total_temperature_ratio); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 328, __pyx_L1_error)
-            __Pyx_GOTREF(__pyx_t_2);
-            __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_2, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 328, __pyx_L1_error)
-            __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-          }
-
-          /* "fun3dNamelist.pyx":326
- *                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):             # <<<<<<<<<<<<<<
- *                     for _ in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):
- *                         nml['boundary_conditions']['total_temperature_ratio'].append(None)
- */
-        }
-      }
-      __pyx_L64:;
-
-      /* "fun3dNamelist.pyx":330
- *                         nml['boundary_conditions']['total_temperature_ratio'].append(None)
- * 
- *             nml['boundary_conditions']['total_temperature_ratio'][index] = bcProps.surfaceProp[i].totalTemperature             # <<<<<<<<<<<<<<
- * 
- * 
- */
-      __pyx_t_2 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).totalTemperature); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 330, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 330, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_total_temperature_ratio); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 330, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-      if (unlikely(__Pyx_SetItemInt(__pyx_t_4, __pyx_v_index, __pyx_t_2, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 330, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-
-      /* "fun3dNamelist.pyx":312
- * 
- *         # Total pressure and temperature
- *         if bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicInflow:             # <<<<<<<<<<<<<<
- * 
- *             if 'total_pressure_ratio' not in nml['boundary_conditions']:
- */
-    }
-
-    /* "fun3dNamelist.pyx":334
- * 
- *         # Static pressure
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.BackPressure or             # <<<<<<<<<<<<<<
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
- * 
- */
-    __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == BackPressure) != 0);
-    if (!__pyx_t_7) {
-    } else {
-      __pyx_t_1 = __pyx_t_7;
-      goto __pyx_L69_bool_binop_done;
-    }
-
-    /* "fun3dNamelist.pyx":335
- *         # Static pressure
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.BackPressure or
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):             # <<<<<<<<<<<<<<
- * 
- *             if 'static_pressure_ratio' not in nml['boundary_conditions']:
- */
-    __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == SubsonicOutflow) != 0);
-    __pyx_t_1 = __pyx_t_7;
-    __pyx_L69_bool_binop_done:;
-
-    /* "fun3dNamelist.pyx":334
- * 
- *         # Static pressure
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.BackPressure or             # <<<<<<<<<<<<<<
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
- * 
- */
-    if (__pyx_t_1) {
-
-      /* "fun3dNamelist.pyx":337
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
- * 
- *             if 'static_pressure_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
- *                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length
- *             else:
- */
-      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 337, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_static_pressure_ratio, __pyx_t_2, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 337, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      __pyx_t_7 = (__pyx_t_1 != 0);
-      if (__pyx_t_7) {
-
-        /* "fun3dNamelist.pyx":338
- * 
- *             if 'static_pressure_ratio' not in nml['boundary_conditions']:
- *                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length             # <<<<<<<<<<<<<<
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):
- */
-        __pyx_t_2 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 338, __pyx_L1_error)
+        __pyx_t_2 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 325, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_2);
         { Py_ssize_t __pyx_temp;
           for (__pyx_temp=0; __pyx_temp < __pyx_v_length; __pyx_temp++) {
@@ -5432,340 +5282,126 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
             PyList_SET_ITEM(__pyx_t_2, __pyx_temp, Py_None);
           }
         }
-        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 338, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_4);
-        if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_static_pressure_ratio, __pyx_t_2) < 0)) __PYX_ERR(0, 338, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 325, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_6);
+        if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_total_pressure_ratio, __pyx_t_2) < 0)) __PYX_ERR(0, 325, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
         __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-        /* "fun3dNamelist.pyx":337
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
+        /* "fun3dNamelist.pyx":324
+ *         if bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicInflow:
  * 
- *             if 'static_pressure_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
- *                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length
+ *             if 'total_pressure_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
+ *                 nml['boundary_conditions']['total_pressure_ratio'] = [None]*length
  *             else:
  */
-        goto __pyx_L71;
+        goto __pyx_L63;
       }
 
-      /* "fun3dNamelist.pyx":340
- *                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length
+      /* "fun3dNamelist.pyx":327
+ *                 nml['boundary_conditions']['total_pressure_ratio'] = [None]*length
  *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):             # <<<<<<<<<<<<<<
- *                     for _ in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):
- *                         nml['boundary_conditions']['static_pressure_ratio'].append(None)
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):             # <<<<<<<<<<<<<<
+ *                     for _ in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):
+ *                         nml['boundary_conditions']['total_pressure_ratio'].append(None)
  */
       /*else*/ {
-        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 340, __pyx_L1_error)
+        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 327, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_2);
-        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_static_pressure_ratio); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 340, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_4);
+        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_total_pressure_ratio); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 327, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_6);
         __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-        __pyx_t_12 = PyObject_Length(__pyx_t_4); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 340, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-        __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
-        if (__pyx_t_7) {
+        __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 327, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+        __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
+        if (__pyx_t_1) {
 
-          /* "fun3dNamelist.pyx":341
+          /* "fun3dNamelist.pyx":328
  *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):
- *                     for _ in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):             # <<<<<<<<<<<<<<
- *                         nml['boundary_conditions']['static_pressure_ratio'].append(None)
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):
+ *                     for _ in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):             # <<<<<<<<<<<<<<
+ *                         nml['boundary_conditions']['total_pressure_ratio'].append(None)
  * 
  */
           __pyx_t_11 = __pyx_v_length;
-          __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 341, __pyx_L1_error)
-          __Pyx_GOTREF(__pyx_t_4);
-          __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_static_pressure_ratio); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 341, __pyx_L1_error)
+          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 328, __pyx_L1_error)
+          __Pyx_GOTREF(__pyx_t_6);
+          __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_total_pressure_ratio); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 328, __pyx_L1_error)
           __Pyx_GOTREF(__pyx_t_2);
-          __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-          __pyx_t_12 = PyObject_Length(__pyx_t_2); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 341, __pyx_L1_error)
+          __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+          __pyx_t_12 = PyObject_Length(__pyx_t_2); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 328, __pyx_L1_error)
           __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
           __pyx_t_13 = __pyx_t_11;
           for (__pyx_t_14 = __pyx_t_12; __pyx_t_14 < __pyx_t_13; __pyx_t_14+=1) {
             __pyx_v__ = __pyx_t_14;
 
-            /* "fun3dNamelist.pyx":342
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):
- *                     for _ in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):
- *                         nml['boundary_conditions']['static_pressure_ratio'].append(None)             # <<<<<<<<<<<<<<
+            /* "fun3dNamelist.pyx":329
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):
+ *                     for _ in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):
+ *                         nml['boundary_conditions']['total_pressure_ratio'].append(None)             # <<<<<<<<<<<<<<
  * 
- *             nml['boundary_conditions']['static_pressure_ratio'][index] = bcProps.surfaceProp[i].staticPressure
+ *             nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProp[i].totalPressure
  */
-            __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 342, __pyx_L1_error)
+            __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 329, __pyx_L1_error)
             __Pyx_GOTREF(__pyx_t_2);
-            __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_static_pressure_ratio); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 342, __pyx_L1_error)
-            __Pyx_GOTREF(__pyx_t_4);
-            __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_4, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 342, __pyx_L1_error)
-            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-          }
-
-          /* "fun3dNamelist.pyx":340
- *                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):             # <<<<<<<<<<<<<<
- *                     for _ in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):
- *                         nml['boundary_conditions']['static_pressure_ratio'].append(None)
- */
-        }
-      }
-      __pyx_L71:;
-
-      /* "fun3dNamelist.pyx":344
- *                         nml['boundary_conditions']['static_pressure_ratio'].append(None)
- * 
- *             nml['boundary_conditions']['static_pressure_ratio'][index] = bcProps.surfaceProp[i].staticPressure             # <<<<<<<<<<<<<<
- * 
- *         # Mach number
- */
-      __pyx_t_4 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).staticPressure); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 344, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 344, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_static_pressure_ratio); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 344, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(__Pyx_SetItemInt(__pyx_t_6, __pyx_v_index, __pyx_t_4, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 344, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-
-      /* "fun3dNamelist.pyx":334
- * 
- *         # Static pressure
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.BackPressure or             # <<<<<<<<<<<<<<
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
- * 
- */
-    }
-
-    /* "fun3dNamelist.pyx":347
- * 
- *         # Mach number
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MachOutflow or             # <<<<<<<<<<<<<<
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
- * 
- */
-    __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == MachOutflow) != 0);
-    if (!__pyx_t_1) {
-    } else {
-      __pyx_t_7 = __pyx_t_1;
-      goto __pyx_L76_bool_binop_done;
-    }
-
-    /* "fun3dNamelist.pyx":348
- *         # Mach number
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MachOutflow or
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):             # <<<<<<<<<<<<<<
- * 
- *             if 'mach_bc' not in nml['boundary_conditions']:
- */
-    __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == MassflowOut) != 0);
-    __pyx_t_7 = __pyx_t_1;
-    __pyx_L76_bool_binop_done:;
-
-    /* "fun3dNamelist.pyx":347
- * 
- *         # Mach number
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MachOutflow or             # <<<<<<<<<<<<<<
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
- * 
- */
-    if (__pyx_t_7) {
-
-      /* "fun3dNamelist.pyx":350
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
- * 
- *             if 'mach_bc' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
- *                 nml['boundary_conditions']['mach_bc'] = [None]*length
- *             else:
- */
-      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 350, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_mach_bc, __pyx_t_4, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 350, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __pyx_t_1 = (__pyx_t_7 != 0);
-      if (__pyx_t_1) {
-
-        /* "fun3dNamelist.pyx":351
- * 
- *             if 'mach_bc' not in nml['boundary_conditions']:
- *                 nml['boundary_conditions']['mach_bc'] = [None]*length             # <<<<<<<<<<<<<<
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):
- */
-        __pyx_t_4 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 351, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_4);
-        { Py_ssize_t __pyx_temp;
-          for (__pyx_temp=0; __pyx_temp < __pyx_v_length; __pyx_temp++) {
-            __Pyx_INCREF(Py_None);
-            __Pyx_GIVEREF(Py_None);
-            PyList_SET_ITEM(__pyx_t_4, __pyx_temp, Py_None);
-          }
-        }
-        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 351, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_6);
-        if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_mach_bc, __pyx_t_4) < 0)) __PYX_ERR(0, 351, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-
-        /* "fun3dNamelist.pyx":350
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
- * 
- *             if 'mach_bc' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
- *                 nml['boundary_conditions']['mach_bc'] = [None]*length
- *             else:
- */
-        goto __pyx_L78;
-      }
-
-      /* "fun3dNamelist.pyx":353
- *                 nml['boundary_conditions']['mach_bc'] = [None]*length
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):             # <<<<<<<<<<<<<<
- *                     for _ in range(len(nml['boundary_conditions']['mach_bc']), length):
- *                         nml['boundary_conditions']['mach_bc'].append(None)
- */
-      /*else*/ {
-        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 353, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_4);
-        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_mach_bc); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 353, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_6);
-        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-        __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 353, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-        __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
-        if (__pyx_t_1) {
-
-          /* "fun3dNamelist.pyx":354
- *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):
- *                     for _ in range(len(nml['boundary_conditions']['mach_bc']), length):             # <<<<<<<<<<<<<<
- *                         nml['boundary_conditions']['mach_bc'].append(None)
- * 
- */
-          __pyx_t_11 = __pyx_v_length;
-          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 354, __pyx_L1_error)
-          __Pyx_GOTREF(__pyx_t_6);
-          __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_mach_bc); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 354, __pyx_L1_error)
-          __Pyx_GOTREF(__pyx_t_4);
-          __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-          __pyx_t_12 = PyObject_Length(__pyx_t_4); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 354, __pyx_L1_error)
-          __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-          __pyx_t_13 = __pyx_t_11;
-          for (__pyx_t_14 = __pyx_t_12; __pyx_t_14 < __pyx_t_13; __pyx_t_14+=1) {
-            __pyx_v__ = __pyx_t_14;
-
-            /* "fun3dNamelist.pyx":355
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):
- *                     for _ in range(len(nml['boundary_conditions']['mach_bc']), length):
- *                         nml['boundary_conditions']['mach_bc'].append(None)             # <<<<<<<<<<<<<<
- * 
- *             nml['boundary_conditions']['mach_bc'][index] = bcProps.surfaceProp[i].machNumber
- */
-            __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 355, __pyx_L1_error)
-            __Pyx_GOTREF(__pyx_t_4);
-            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_mach_bc); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 355, __pyx_L1_error)
+            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_total_pressure_ratio); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 329, __pyx_L1_error)
             __Pyx_GOTREF(__pyx_t_6);
-            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_6, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 355, __pyx_L1_error)
+            __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_6, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 329, __pyx_L1_error)
             __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
           }
 
-          /* "fun3dNamelist.pyx":353
- *                 nml['boundary_conditions']['mach_bc'] = [None]*length
+          /* "fun3dNamelist.pyx":327
+ *                 nml['boundary_conditions']['total_pressure_ratio'] = [None]*length
  *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):             # <<<<<<<<<<<<<<
- *                     for _ in range(len(nml['boundary_conditions']['mach_bc']), length):
- *                         nml['boundary_conditions']['mach_bc'].append(None)
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_pressure_ratio']):             # <<<<<<<<<<<<<<
+ *                     for _ in range(len(nml['boundary_conditions']['total_pressure_ratio']), length):
+ *                         nml['boundary_conditions']['total_pressure_ratio'].append(None)
  */
         }
       }
-      __pyx_L78:;
+      __pyx_L63:;
 
-      /* "fun3dNamelist.pyx":357
- *                         nml['boundary_conditions']['mach_bc'].append(None)
+      /* "fun3dNamelist.pyx":331
+ *                         nml['boundary_conditions']['total_pressure_ratio'].append(None)
  * 
- *             nml['boundary_conditions']['mach_bc'][index] = bcProps.surfaceProp[i].machNumber             # <<<<<<<<<<<<<<
+ *             nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProp[i].totalPressure             # <<<<<<<<<<<<<<
  * 
- *         # Massflow
+ *             if 'total_temperature_ratio' not in nml['boundary_conditions']:
  */
-      __pyx_t_6 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).machNumber); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 357, __pyx_L1_error)
+      __pyx_t_6 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).totalPressure); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 331, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 357, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_mach_bc); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 357, __pyx_L1_error)
+      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 331, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(__Pyx_SetItemInt(__pyx_t_2, __pyx_v_index, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 357, __pyx_L1_error)
+      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_total_pressure_ratio); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 331, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(__Pyx_SetItemInt(__pyx_t_4, __pyx_v_index, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 331, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-      /* "fun3dNamelist.pyx":347
+      /* "fun3dNamelist.pyx":333
+ *             nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProp[i].totalPressure
  * 
- *         # Mach number
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MachOutflow or             # <<<<<<<<<<<<<<
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
- * 
- */
-    }
-
-    /* "fun3dNamelist.pyx":360
- * 
- *         # Massflow
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowIn or             # <<<<<<<<<<<<<<
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
- * 
- */
-    __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == MassflowIn) != 0);
-    if (!__pyx_t_7) {
-    } else {
-      __pyx_t_1 = __pyx_t_7;
-      goto __pyx_L83_bool_binop_done;
-    }
-
-    /* "fun3dNamelist.pyx":361
- *         # Massflow
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowIn or
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):             # <<<<<<<<<<<<<<
- * 
- *             if 'massflow' not in nml['boundary_conditions']:
- */
-    __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == MassflowOut) != 0);
-    __pyx_t_1 = __pyx_t_7;
-    __pyx_L83_bool_binop_done:;
-
-    /* "fun3dNamelist.pyx":360
- * 
- *         # Massflow
- *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowIn or             # <<<<<<<<<<<<<<
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
- * 
- */
-    if (__pyx_t_1) {
-
-      /* "fun3dNamelist.pyx":363
- *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
- * 
- *             if 'massflow' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
- *                 nml['boundary_conditions']['massflow'] = [None]*length
+ *             if 'total_temperature_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
+ *                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length
  *             else:
  */
-      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 363, __pyx_L1_error)
+      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 333, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_massflow, __pyx_t_6, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 363, __pyx_L1_error)
+      __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_total_temperature_ratio, __pyx_t_6, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 333, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
       __pyx_t_7 = (__pyx_t_1 != 0);
       if (__pyx_t_7) {
 
-        /* "fun3dNamelist.pyx":364
+        /* "fun3dNamelist.pyx":334
  * 
- *             if 'massflow' not in nml['boundary_conditions']:
- *                 nml['boundary_conditions']['massflow'] = [None]*length             # <<<<<<<<<<<<<<
+ *             if 'total_temperature_ratio' not in nml['boundary_conditions']:
+ *                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length             # <<<<<<<<<<<<<<
  *             else:
- *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['massflow']):
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):
  */
-        __pyx_t_6 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 364, __pyx_L1_error)
+        __pyx_t_6 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 334, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_6);
         { Py_ssize_t __pyx_temp;
           for (__pyx_temp=0; __pyx_temp < __pyx_v_length; __pyx_temp++) {
@@ -5774,23 +5410,536 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
             PyList_SET_ITEM(__pyx_t_6, __pyx_temp, Py_None);
           }
         }
-        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 364, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_2);
-        if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_massflow, __pyx_t_6) < 0)) __PYX_ERR(0, 364, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 334, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_4);
+        if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_total_temperature_ratio, __pyx_t_6) < 0)) __PYX_ERR(0, 334, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
         __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-        /* "fun3dNamelist.pyx":363
+        /* "fun3dNamelist.pyx":333
+ *             nml['boundary_conditions']['total_pressure_ratio'][index] = bcProps.surfaceProp[i].totalPressure
+ * 
+ *             if 'total_temperature_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
+ *                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length
+ *             else:
+ */
+        goto __pyx_L67;
+      }
+
+      /* "fun3dNamelist.pyx":336
+ *                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):             # <<<<<<<<<<<<<<
+ *                     for _ in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):
+ *                         nml['boundary_conditions']['total_temperature_ratio'].append(None)
+ */
+      /*else*/ {
+        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 336, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_6);
+        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_total_temperature_ratio); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 336, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_4);
+        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+        __pyx_t_12 = PyObject_Length(__pyx_t_4); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 336, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+        __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
+        if (__pyx_t_7) {
+
+          /* "fun3dNamelist.pyx":337
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):
+ *                     for _ in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):             # <<<<<<<<<<<<<<
+ *                         nml['boundary_conditions']['total_temperature_ratio'].append(None)
+ * 
+ */
+          __pyx_t_11 = __pyx_v_length;
+          __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 337, __pyx_L1_error)
+          __Pyx_GOTREF(__pyx_t_4);
+          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_total_temperature_ratio); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 337, __pyx_L1_error)
+          __Pyx_GOTREF(__pyx_t_6);
+          __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+          __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 337, __pyx_L1_error)
+          __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+          __pyx_t_13 = __pyx_t_11;
+          for (__pyx_t_14 = __pyx_t_12; __pyx_t_14 < __pyx_t_13; __pyx_t_14+=1) {
+            __pyx_v__ = __pyx_t_14;
+
+            /* "fun3dNamelist.pyx":338
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):
+ *                     for _ in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):
+ *                         nml['boundary_conditions']['total_temperature_ratio'].append(None)             # <<<<<<<<<<<<<<
+ * 
+ *             nml['boundary_conditions']['total_temperature_ratio'][index] = bcProps.surfaceProp[i].totalTemperature
+ */
+            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 338, __pyx_L1_error)
+            __Pyx_GOTREF(__pyx_t_6);
+            __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_total_temperature_ratio); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 338, __pyx_L1_error)
+            __Pyx_GOTREF(__pyx_t_4);
+            __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_4, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 338, __pyx_L1_error)
+            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+          }
+
+          /* "fun3dNamelist.pyx":336
+ *                 nml['boundary_conditions']['total_temperature_ratio'] = [None]*length
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['total_temperature_ratio']):             # <<<<<<<<<<<<<<
+ *                     for _ in range(len(nml['boundary_conditions']['total_temperature_ratio']), length):
+ *                         nml['boundary_conditions']['total_temperature_ratio'].append(None)
+ */
+        }
+      }
+      __pyx_L67:;
+
+      /* "fun3dNamelist.pyx":340
+ *                         nml['boundary_conditions']['total_temperature_ratio'].append(None)
+ * 
+ *             nml['boundary_conditions']['total_temperature_ratio'][index] = bcProps.surfaceProp[i].totalTemperature             # <<<<<<<<<<<<<<
+ * 
+ * 
+ */
+      __pyx_t_4 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).totalTemperature); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 340, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 340, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_total_temperature_ratio); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 340, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+      if (unlikely(__Pyx_SetItemInt(__pyx_t_2, __pyx_v_index, __pyx_t_4, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 340, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+
+      /* "fun3dNamelist.pyx":322
+ * 
+ *         # Total pressure and temperature
+ *         if bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicInflow:             # <<<<<<<<<<<<<<
+ * 
+ *             if 'total_pressure_ratio' not in nml['boundary_conditions']:
+ */
+    }
+
+    /* "fun3dNamelist.pyx":344
+ * 
+ *         # Static pressure
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.BackPressure or             # <<<<<<<<<<<<<<
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
+ * 
+ */
+    __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == BackPressure) != 0);
+    if (!__pyx_t_1) {
+    } else {
+      __pyx_t_7 = __pyx_t_1;
+      goto __pyx_L72_bool_binop_done;
+    }
+
+    /* "fun3dNamelist.pyx":345
+ *         # Static pressure
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.BackPressure or
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):             # <<<<<<<<<<<<<<
+ * 
+ *             if 'static_pressure_ratio' not in nml['boundary_conditions']:
+ */
+    __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == SubsonicOutflow) != 0);
+    __pyx_t_7 = __pyx_t_1;
+    __pyx_L72_bool_binop_done:;
+
+    /* "fun3dNamelist.pyx":344
+ * 
+ *         # Static pressure
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.BackPressure or             # <<<<<<<<<<<<<<
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
+ * 
+ */
+    if (__pyx_t_7) {
+
+      /* "fun3dNamelist.pyx":347
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
+ * 
+ *             if 'static_pressure_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
+ *                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length
+ *             else:
+ */
+      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 347, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_static_pressure_ratio, __pyx_t_4, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 347, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __pyx_t_1 = (__pyx_t_7 != 0);
+      if (__pyx_t_1) {
+
+        /* "fun3dNamelist.pyx":348
+ * 
+ *             if 'static_pressure_ratio' not in nml['boundary_conditions']:
+ *                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length             # <<<<<<<<<<<<<<
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):
+ */
+        __pyx_t_4 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 348, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_4);
+        { Py_ssize_t __pyx_temp;
+          for (__pyx_temp=0; __pyx_temp < __pyx_v_length; __pyx_temp++) {
+            __Pyx_INCREF(Py_None);
+            __Pyx_GIVEREF(Py_None);
+            PyList_SET_ITEM(__pyx_t_4, __pyx_temp, Py_None);
+          }
+        }
+        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 348, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_2);
+        if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_static_pressure_ratio, __pyx_t_4) < 0)) __PYX_ERR(0, 348, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+
+        /* "fun3dNamelist.pyx":347
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
+ * 
+ *             if 'static_pressure_ratio' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
+ *                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length
+ *             else:
+ */
+        goto __pyx_L74;
+      }
+
+      /* "fun3dNamelist.pyx":350
+ *                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):             # <<<<<<<<<<<<<<
+ *                     for _ in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):
+ *                         nml['boundary_conditions']['static_pressure_ratio'].append(None)
+ */
+      /*else*/ {
+        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 350, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_4);
+        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_static_pressure_ratio); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 350, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_2);
+        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+        __pyx_t_12 = PyObject_Length(__pyx_t_2); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 350, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+        __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
+        if (__pyx_t_1) {
+
+          /* "fun3dNamelist.pyx":351
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):
+ *                     for _ in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):             # <<<<<<<<<<<<<<
+ *                         nml['boundary_conditions']['static_pressure_ratio'].append(None)
+ * 
+ */
+          __pyx_t_11 = __pyx_v_length;
+          __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 351, __pyx_L1_error)
+          __Pyx_GOTREF(__pyx_t_2);
+          __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_static_pressure_ratio); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 351, __pyx_L1_error)
+          __Pyx_GOTREF(__pyx_t_4);
+          __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+          __pyx_t_12 = PyObject_Length(__pyx_t_4); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 351, __pyx_L1_error)
+          __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+          __pyx_t_13 = __pyx_t_11;
+          for (__pyx_t_14 = __pyx_t_12; __pyx_t_14 < __pyx_t_13; __pyx_t_14+=1) {
+            __pyx_v__ = __pyx_t_14;
+
+            /* "fun3dNamelist.pyx":352
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):
+ *                     for _ in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):
+ *                         nml['boundary_conditions']['static_pressure_ratio'].append(None)             # <<<<<<<<<<<<<<
+ * 
+ *             nml['boundary_conditions']['static_pressure_ratio'][index] = bcProps.surfaceProp[i].staticPressure
+ */
+            __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 352, __pyx_L1_error)
+            __Pyx_GOTREF(__pyx_t_4);
+            __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_static_pressure_ratio); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 352, __pyx_L1_error)
+            __Pyx_GOTREF(__pyx_t_2);
+            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_2, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 352, __pyx_L1_error)
+            __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+          }
+
+          /* "fun3dNamelist.pyx":350
+ *                 nml['boundary_conditions']['static_pressure_ratio'] = [None]*length
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['static_pressure_ratio']):             # <<<<<<<<<<<<<<
+ *                     for _ in range(len(nml['boundary_conditions']['static_pressure_ratio']), length):
+ *                         nml['boundary_conditions']['static_pressure_ratio'].append(None)
+ */
+        }
+      }
+      __pyx_L74:;
+
+      /* "fun3dNamelist.pyx":354
+ *                         nml['boundary_conditions']['static_pressure_ratio'].append(None)
+ * 
+ *             nml['boundary_conditions']['static_pressure_ratio'][index] = bcProps.surfaceProp[i].staticPressure             # <<<<<<<<<<<<<<
+ * 
+ *         # Mach number
+ */
+      __pyx_t_2 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).staticPressure); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 354, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 354, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_static_pressure_ratio); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 354, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(__Pyx_SetItemInt(__pyx_t_6, __pyx_v_index, __pyx_t_2, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 354, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+      /* "fun3dNamelist.pyx":344
+ * 
+ *         # Static pressure
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.BackPressure or             # <<<<<<<<<<<<<<
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.SubsonicOutflow):
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":357
+ * 
+ *         # Mach number
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MachOutflow or             # <<<<<<<<<<<<<<
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
+ * 
+ */
+    __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == MachOutflow) != 0);
+    if (!__pyx_t_7) {
+    } else {
+      __pyx_t_1 = __pyx_t_7;
+      goto __pyx_L79_bool_binop_done;
+    }
+
+    /* "fun3dNamelist.pyx":358
+ *         # Mach number
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MachOutflow or
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):             # <<<<<<<<<<<<<<
+ * 
+ *             if 'mach_bc' not in nml['boundary_conditions']:
+ */
+    __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == MassflowOut) != 0);
+    __pyx_t_1 = __pyx_t_7;
+    __pyx_L79_bool_binop_done:;
+
+    /* "fun3dNamelist.pyx":357
+ * 
+ *         # Mach number
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MachOutflow or             # <<<<<<<<<<<<<<
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
+ * 
+ */
+    if (__pyx_t_1) {
+
+      /* "fun3dNamelist.pyx":360
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
+ * 
+ *             if 'mach_bc' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
+ *                 nml['boundary_conditions']['mach_bc'] = [None]*length
+ *             else:
+ */
+      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 360, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_mach_bc, __pyx_t_2, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 360, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __pyx_t_7 = (__pyx_t_1 != 0);
+      if (__pyx_t_7) {
+
+        /* "fun3dNamelist.pyx":361
+ * 
+ *             if 'mach_bc' not in nml['boundary_conditions']:
+ *                 nml['boundary_conditions']['mach_bc'] = [None]*length             # <<<<<<<<<<<<<<
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):
+ */
+        __pyx_t_2 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 361, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_2);
+        { Py_ssize_t __pyx_temp;
+          for (__pyx_temp=0; __pyx_temp < __pyx_v_length; __pyx_temp++) {
+            __Pyx_INCREF(Py_None);
+            __Pyx_GIVEREF(Py_None);
+            PyList_SET_ITEM(__pyx_t_2, __pyx_temp, Py_None);
+          }
+        }
+        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 361, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_6);
+        if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_mach_bc, __pyx_t_2) < 0)) __PYX_ERR(0, 361, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+
+        /* "fun3dNamelist.pyx":360
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
+ * 
+ *             if 'mach_bc' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
+ *                 nml['boundary_conditions']['mach_bc'] = [None]*length
+ *             else:
+ */
+        goto __pyx_L81;
+      }
+
+      /* "fun3dNamelist.pyx":363
+ *                 nml['boundary_conditions']['mach_bc'] = [None]*length
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):             # <<<<<<<<<<<<<<
+ *                     for _ in range(len(nml['boundary_conditions']['mach_bc']), length):
+ *                         nml['boundary_conditions']['mach_bc'].append(None)
+ */
+      /*else*/ {
+        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 363, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_2);
+        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_mach_bc); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 363, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_6);
+        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+        __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 363, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+        __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
+        if (__pyx_t_7) {
+
+          /* "fun3dNamelist.pyx":364
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):
+ *                     for _ in range(len(nml['boundary_conditions']['mach_bc']), length):             # <<<<<<<<<<<<<<
+ *                         nml['boundary_conditions']['mach_bc'].append(None)
+ * 
+ */
+          __pyx_t_11 = __pyx_v_length;
+          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 364, __pyx_L1_error)
+          __Pyx_GOTREF(__pyx_t_6);
+          __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_mach_bc); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 364, __pyx_L1_error)
+          __Pyx_GOTREF(__pyx_t_2);
+          __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+          __pyx_t_12 = PyObject_Length(__pyx_t_2); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 364, __pyx_L1_error)
+          __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+          __pyx_t_13 = __pyx_t_11;
+          for (__pyx_t_14 = __pyx_t_12; __pyx_t_14 < __pyx_t_13; __pyx_t_14+=1) {
+            __pyx_v__ = __pyx_t_14;
+
+            /* "fun3dNamelist.pyx":365
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):
+ *                     for _ in range(len(nml['boundary_conditions']['mach_bc']), length):
+ *                         nml['boundary_conditions']['mach_bc'].append(None)             # <<<<<<<<<<<<<<
+ * 
+ *             nml['boundary_conditions']['mach_bc'][index] = bcProps.surfaceProp[i].machNumber
+ */
+            __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 365, __pyx_L1_error)
+            __Pyx_GOTREF(__pyx_t_2);
+            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_mach_bc); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 365, __pyx_L1_error)
+            __Pyx_GOTREF(__pyx_t_6);
+            __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_6, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 365, __pyx_L1_error)
+            __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+          }
+
+          /* "fun3dNamelist.pyx":363
+ *                 nml['boundary_conditions']['mach_bc'] = [None]*length
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['mach_bc']):             # <<<<<<<<<<<<<<
+ *                     for _ in range(len(nml['boundary_conditions']['mach_bc']), length):
+ *                         nml['boundary_conditions']['mach_bc'].append(None)
+ */
+        }
+      }
+      __pyx_L81:;
+
+      /* "fun3dNamelist.pyx":367
+ *                         nml['boundary_conditions']['mach_bc'].append(None)
+ * 
+ *             nml['boundary_conditions']['mach_bc'][index] = bcProps.surfaceProp[i].machNumber             # <<<<<<<<<<<<<<
+ * 
+ *         # Massflow
+ */
+      __pyx_t_6 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).machNumber); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 367, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 367, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_mach_bc); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 367, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(__Pyx_SetItemInt(__pyx_t_4, __pyx_v_index, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 367, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+      /* "fun3dNamelist.pyx":357
+ * 
+ *         # Mach number
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MachOutflow or             # <<<<<<<<<<<<<<
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
+ * 
+ */
+    }
+
+    /* "fun3dNamelist.pyx":370
+ * 
+ *         # Massflow
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowIn or             # <<<<<<<<<<<<<<
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
+ * 
+ */
+    __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == MassflowIn) != 0);
+    if (!__pyx_t_1) {
+    } else {
+      __pyx_t_7 = __pyx_t_1;
+      goto __pyx_L86_bool_binop_done;
+    }
+
+    /* "fun3dNamelist.pyx":371
+ *         # Massflow
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowIn or
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):             # <<<<<<<<<<<<<<
+ * 
+ *             if 'massflow' not in nml['boundary_conditions']:
+ */
+    __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).surfaceType == MassflowOut) != 0);
+    __pyx_t_7 = __pyx_t_1;
+    __pyx_L86_bool_binop_done:;
+
+    /* "fun3dNamelist.pyx":370
+ * 
+ *         # Massflow
+ *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowIn or             # <<<<<<<<<<<<<<
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
+ * 
+ */
+    if (__pyx_t_7) {
+
+      /* "fun3dNamelist.pyx":373
  *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
  * 
  *             if 'massflow' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
  *                 nml['boundary_conditions']['massflow'] = [None]*length
  *             else:
  */
-        goto __pyx_L85;
+      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 373, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_massflow, __pyx_t_6, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 373, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+      __pyx_t_1 = (__pyx_t_7 != 0);
+      if (__pyx_t_1) {
+
+        /* "fun3dNamelist.pyx":374
+ * 
+ *             if 'massflow' not in nml['boundary_conditions']:
+ *                 nml['boundary_conditions']['massflow'] = [None]*length             # <<<<<<<<<<<<<<
+ *             else:
+ *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['massflow']):
+ */
+        __pyx_t_6 = PyList_New(1 * ((__pyx_v_length<0) ? 0:__pyx_v_length)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 374, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_6);
+        { Py_ssize_t __pyx_temp;
+          for (__pyx_temp=0; __pyx_temp < __pyx_v_length; __pyx_temp++) {
+            __Pyx_INCREF(Py_None);
+            __Pyx_GIVEREF(Py_None);
+            PyList_SET_ITEM(__pyx_t_6, __pyx_temp, Py_None);
+          }
+        }
+        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 374, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_4);
+        if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_massflow, __pyx_t_6) < 0)) __PYX_ERR(0, 374, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+        __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+
+        /* "fun3dNamelist.pyx":373
+ *             bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowOut):
+ * 
+ *             if 'massflow' not in nml['boundary_conditions']:             # <<<<<<<<<<<<<<
+ *                 nml['boundary_conditions']['massflow'] = [None]*length
+ *             else:
+ */
+        goto __pyx_L88;
       }
 
-      /* "fun3dNamelist.pyx":366
+      /* "fun3dNamelist.pyx":376
  *                 nml['boundary_conditions']['massflow'] = [None]*length
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['massflow']):             # <<<<<<<<<<<<<<
@@ -5798,17 +5947,17 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  *                         nml['boundary_conditions']['massflow'].append(None)
  */
       /*else*/ {
-        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 366, __pyx_L1_error)
+        __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 376, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_6);
-        __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_massflow); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 366, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_2);
+        __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_massflow); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 376, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_4);
         __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-        __pyx_t_12 = PyObject_Length(__pyx_t_2); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 366, __pyx_L1_error)
-        __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-        __pyx_t_7 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
-        if (__pyx_t_7) {
+        __pyx_t_12 = PyObject_Length(__pyx_t_4); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 376, __pyx_L1_error)
+        __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+        __pyx_t_1 = (((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).bcID > __pyx_t_12) != 0);
+        if (__pyx_t_1) {
 
-          /* "fun3dNamelist.pyx":367
+          /* "fun3dNamelist.pyx":377
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['massflow']):
  *                     for _ in range(len(nml['boundary_conditions']['massflow']), length):             # <<<<<<<<<<<<<<
@@ -5816,34 +5965,34 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  * 
  */
           __pyx_t_11 = __pyx_v_length;
-          __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 367, __pyx_L1_error)
-          __Pyx_GOTREF(__pyx_t_2);
-          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_2, __pyx_n_u_massflow); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 367, __pyx_L1_error)
+          __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 377, __pyx_L1_error)
+          __Pyx_GOTREF(__pyx_t_4);
+          __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_t_4, __pyx_n_u_massflow); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 377, __pyx_L1_error)
           __Pyx_GOTREF(__pyx_t_6);
-          __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-          __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 367, __pyx_L1_error)
+          __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+          __pyx_t_12 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_12 == ((Py_ssize_t)-1))) __PYX_ERR(0, 377, __pyx_L1_error)
           __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
           __pyx_t_13 = __pyx_t_11;
           for (__pyx_t_14 = __pyx_t_12; __pyx_t_14 < __pyx_t_13; __pyx_t_14+=1) {
             __pyx_v__ = __pyx_t_14;
 
-            /* "fun3dNamelist.pyx":368
+            /* "fun3dNamelist.pyx":378
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['massflow']):
  *                     for _ in range(len(nml['boundary_conditions']['massflow']), length):
  *                         nml['boundary_conditions']['massflow'].append(None)             # <<<<<<<<<<<<<<
  * 
  *             nml['boundary_conditions']['massflow'][index] = bcProps.surfaceProp[i].massflow
  */
-            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 368, __pyx_L1_error)
+            __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 378, __pyx_L1_error)
             __Pyx_GOTREF(__pyx_t_6);
-            __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_massflow); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 368, __pyx_L1_error)
-            __Pyx_GOTREF(__pyx_t_2);
+            __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_massflow); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 378, __pyx_L1_error)
+            __Pyx_GOTREF(__pyx_t_4);
             __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_2, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 368, __pyx_L1_error)
-            __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+            __pyx_t_15 = __Pyx_PyObject_Append(__pyx_t_4, Py_None); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 378, __pyx_L1_error)
+            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
           }
 
-          /* "fun3dNamelist.pyx":366
+          /* "fun3dNamelist.pyx":376
  *                 nml['boundary_conditions']['massflow'] = [None]*length
  *             else:
  *                 if bcProps.surfaceProp[i].bcID > len(nml['boundary_conditions']['massflow']):             # <<<<<<<<<<<<<<
@@ -5852,27 +6001,27 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
         }
       }
-      __pyx_L85:;
+      __pyx_L88:;
 
-      /* "fun3dNamelist.pyx":370
+      /* "fun3dNamelist.pyx":380
  *                         nml['boundary_conditions']['massflow'].append(None)
  * 
  *             nml['boundary_conditions']['massflow'][index] = bcProps.surfaceProp[i].massflow             # <<<<<<<<<<<<<<
  * 
  *     # &noninertial_reference_frame
  */
-      __pyx_t_2 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).massflow); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 370, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 370, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_massflow); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 370, __pyx_L1_error)
+      __pyx_t_4 = PyFloat_FromDouble((__pyx_v_bcProps.surfaceProp[__pyx_v_i]).massflow); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 380, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
+      __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_boundary_conditions); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 380, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
+      __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_t_6, __pyx_n_u_massflow); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 380, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-      if (unlikely(__Pyx_SetItemInt(__pyx_t_4, __pyx_v_index, __pyx_t_2, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 370, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+      if (unlikely(__Pyx_SetItemInt(__pyx_t_2, __pyx_v_index, __pyx_t_4, long, 1, __Pyx_PyInt_From_long, 0, 1, 1) < 0)) __PYX_ERR(0, 380, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-      /* "fun3dNamelist.pyx":360
+      /* "fun3dNamelist.pyx":370
  * 
  *         # Massflow
  *         if (bcProps.surfaceProp[i].surfaceType == cfun3dNamelist.MassflowIn or             # <<<<<<<<<<<<<<
@@ -5882,82 +6031,82 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
     }
   }
 
-  /* "fun3dNamelist.pyx":373
+  /* "fun3dNamelist.pyx":383
  * 
  *     # &noninertial_reference_frame
  *     if (aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Rate", cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull or             # <<<<<<<<<<<<<<
  *         aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Center",cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull):
  * 
  */
-  __pyx_t_1 = (((__pyx_v_aimInputs[(aim_getIndex(__pyx_v_aimInfo, ((char const *)"NonInertial_Rotation_Rate"), ANALYSISIN) - 1)]).nullVal != IsNull) != 0);
-  if (!__pyx_t_1) {
+  __pyx_t_7 = (((__pyx_v_aimInputs[(aim_getIndex(__pyx_v_aimInfo, ((char const *)"NonInertial_Rotation_Rate"), ANALYSISIN) - 1)]).nullVal != IsNull) != 0);
+  if (!__pyx_t_7) {
   } else {
-    __pyx_t_7 = __pyx_t_1;
-    goto __pyx_L90_bool_binop_done;
+    __pyx_t_1 = __pyx_t_7;
+    goto __pyx_L93_bool_binop_done;
   }
 
-  /* "fun3dNamelist.pyx":374
+  /* "fun3dNamelist.pyx":384
  *     # &noninertial_reference_frame
  *     if (aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Rate", cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull or
  *         aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Center",cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull):             # <<<<<<<<<<<<<<
  * 
  *         if 'noninertial_reference_frame' not in nml:
  */
-  __pyx_t_1 = (((__pyx_v_aimInputs[(aim_getIndex(__pyx_v_aimInfo, ((char const *)"NonInertial_Rotation_Center"), ANALYSISIN) - 1)]).nullVal != IsNull) != 0);
-  __pyx_t_7 = __pyx_t_1;
-  __pyx_L90_bool_binop_done:;
+  __pyx_t_7 = (((__pyx_v_aimInputs[(aim_getIndex(__pyx_v_aimInfo, ((char const *)"NonInertial_Rotation_Center"), ANALYSISIN) - 1)]).nullVal != IsNull) != 0);
+  __pyx_t_1 = __pyx_t_7;
+  __pyx_L93_bool_binop_done:;
 
-  /* "fun3dNamelist.pyx":373
+  /* "fun3dNamelist.pyx":383
  * 
  *     # &noninertial_reference_frame
  *     if (aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Rate", cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull or             # <<<<<<<<<<<<<<
  *         aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Center",cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull):
  * 
  */
-  if (__pyx_t_7) {
+  if (__pyx_t_1) {
 
-    /* "fun3dNamelist.pyx":376
+    /* "fun3dNamelist.pyx":386
  *         aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Center",cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull):
  * 
  *         if 'noninertial_reference_frame' not in nml:             # <<<<<<<<<<<<<<
  *             nml['noninertial_reference_frame'] = f90nml.Namelist()
  * 
  */
-    __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_noninertial_reference_frame, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 376, __pyx_L1_error)
-    __pyx_t_1 = (__pyx_t_7 != 0);
-    if (__pyx_t_1) {
+    __pyx_t_1 = (__Pyx_PySequence_ContainsTF(__pyx_n_u_noninertial_reference_frame, __pyx_v_nml, Py_NE)); if (unlikely(__pyx_t_1 < 0)) __PYX_ERR(0, 386, __pyx_L1_error)
+    __pyx_t_7 = (__pyx_t_1 != 0);
+    if (__pyx_t_7) {
 
-      /* "fun3dNamelist.pyx":377
+      /* "fun3dNamelist.pyx":387
  * 
  *         if 'noninertial_reference_frame' not in nml:
  *             nml['noninertial_reference_frame'] = f90nml.Namelist()             # <<<<<<<<<<<<<<
  * 
  *         nml['noninertial_reference_frame']['noninertial'] = True
  */
-      __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 377, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_4);
-      __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 377, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_f90nml); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 387, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_Namelist); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 387, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
-      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-      __pyx_t_4 = NULL;
+      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      __pyx_t_2 = NULL;
       if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_6))) {
-        __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_6);
-        if (likely(__pyx_t_4)) {
+        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_6);
+        if (likely(__pyx_t_2)) {
           PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_6);
-          __Pyx_INCREF(__pyx_t_4);
+          __Pyx_INCREF(__pyx_t_2);
           __Pyx_INCREF(function);
           __Pyx_DECREF_SET(__pyx_t_6, function);
         }
       }
-      __pyx_t_2 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_6, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_6);
-      __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 377, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_2);
+      __pyx_t_4 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_6, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_6);
+      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 387, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame, __pyx_t_2) < 0)) __PYX_ERR(0, 377, __pyx_L1_error)
-      __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+      if (unlikely(PyObject_SetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame, __pyx_t_4) < 0)) __PYX_ERR(0, 387, __pyx_L1_error)
+      __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-      /* "fun3dNamelist.pyx":376
+      /* "fun3dNamelist.pyx":386
  *         aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Center",cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull):
  * 
  *         if 'noninertial_reference_frame' not in nml:             # <<<<<<<<<<<<<<
@@ -5966,19 +6115,19 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
     }
 
-    /* "fun3dNamelist.pyx":379
+    /* "fun3dNamelist.pyx":389
  *             nml['noninertial_reference_frame'] = f90nml.Namelist()
  * 
  *         nml['noninertial_reference_frame']['noninertial'] = True             # <<<<<<<<<<<<<<
  * 
  *         index = cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Center", cCAPS.ANALYSISIN)-1
  */
-    __pyx_t_2 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 379, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    if (unlikely(PyObject_SetItem(__pyx_t_2, __pyx_n_u_noninertial, Py_True) < 0)) __PYX_ERR(0, 379, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __pyx_t_4 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 389, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    if (unlikely(PyObject_SetItem(__pyx_t_4, __pyx_n_u_noninertial, Py_True) < 0)) __PYX_ERR(0, 389, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "fun3dNamelist.pyx":381
+    /* "fun3dNamelist.pyx":391
  *         nml['noninertial_reference_frame']['noninertial'] = True
  * 
  *         index = cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Center", cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
@@ -5987,52 +6136,52 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
     __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"NonInertial_Rotation_Center"), ANALYSISIN) - 1);
 
-    /* "fun3dNamelist.pyx":383
+    /* "fun3dNamelist.pyx":393
  *         index = cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Center", cCAPS.ANALYSISIN)-1
  * 
  *         nml['noninertial_reference_frame']['rotation_center_x'] = aimInputs[index].vals.reals[0]             # <<<<<<<<<<<<<<
  *         nml['noninertial_reference_frame']['rotation_center_y'] = aimInputs[index].vals.reals[1]
  *         nml['noninertial_reference_frame']['rotation_center_z'] = aimInputs[index].vals.reals[2]
  */
-    __pyx_t_2 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[0])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 383, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 383, __pyx_L1_error)
+    __pyx_t_4 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[0])); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 393, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 393, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_center_x, __pyx_t_2) < 0)) __PYX_ERR(0, 383, __pyx_L1_error)
+    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_center_x, __pyx_t_4) < 0)) __PYX_ERR(0, 393, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "fun3dNamelist.pyx":384
+    /* "fun3dNamelist.pyx":394
  * 
  *         nml['noninertial_reference_frame']['rotation_center_x'] = aimInputs[index].vals.reals[0]
  *         nml['noninertial_reference_frame']['rotation_center_y'] = aimInputs[index].vals.reals[1]             # <<<<<<<<<<<<<<
  *         nml['noninertial_reference_frame']['rotation_center_z'] = aimInputs[index].vals.reals[2]
  * 
  */
-    __pyx_t_2 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[1])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 384, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 384, __pyx_L1_error)
+    __pyx_t_4 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[1])); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 394, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 394, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_center_y, __pyx_t_2) < 0)) __PYX_ERR(0, 384, __pyx_L1_error)
+    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_center_y, __pyx_t_4) < 0)) __PYX_ERR(0, 394, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "fun3dNamelist.pyx":385
+    /* "fun3dNamelist.pyx":395
  *         nml['noninertial_reference_frame']['rotation_center_x'] = aimInputs[index].vals.reals[0]
  *         nml['noninertial_reference_frame']['rotation_center_y'] = aimInputs[index].vals.reals[1]
  *         nml['noninertial_reference_frame']['rotation_center_z'] = aimInputs[index].vals.reals[2]             # <<<<<<<<<<<<<<
  * 
  *         index = cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Rate", cCAPS.ANALYSISIN)-1
  */
-    __pyx_t_2 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[2])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 385, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 385, __pyx_L1_error)
+    __pyx_t_4 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[2])); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 395, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 395, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_center_z, __pyx_t_2) < 0)) __PYX_ERR(0, 385, __pyx_L1_error)
+    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_center_z, __pyx_t_4) < 0)) __PYX_ERR(0, 395, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "fun3dNamelist.pyx":387
+    /* "fun3dNamelist.pyx":397
  *         nml['noninertial_reference_frame']['rotation_center_z'] = aimInputs[index].vals.reals[2]
  * 
  *         index = cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Rate", cCAPS.ANALYSISIN)-1             # <<<<<<<<<<<<<<
@@ -6041,52 +6190,52 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
     __pyx_v_index = (aim_getIndex(__pyx_v_aimInfo, ((char const *)"NonInertial_Rotation_Rate"), ANALYSISIN) - 1);
 
-    /* "fun3dNamelist.pyx":389
+    /* "fun3dNamelist.pyx":399
  *         index = cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Rate", cCAPS.ANALYSISIN)-1
  * 
  *         nml['noninertial_reference_frame']['rotation_rate_x'] = aimInputs[index].vals.reals[0]             # <<<<<<<<<<<<<<
  *         nml['noninertial_reference_frame']['rotation_rate_y'] = aimInputs[index].vals.reals[1]
  *         nml['noninertial_reference_frame']['rotation_rate_z'] = aimInputs[index].vals.reals[2]
  */
-    __pyx_t_2 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[0])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 389, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 389, __pyx_L1_error)
+    __pyx_t_4 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[0])); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 399, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 399, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_rate_x, __pyx_t_2) < 0)) __PYX_ERR(0, 389, __pyx_L1_error)
+    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_rate_x, __pyx_t_4) < 0)) __PYX_ERR(0, 399, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "fun3dNamelist.pyx":390
+    /* "fun3dNamelist.pyx":400
  * 
  *         nml['noninertial_reference_frame']['rotation_rate_x'] = aimInputs[index].vals.reals[0]
  *         nml['noninertial_reference_frame']['rotation_rate_y'] = aimInputs[index].vals.reals[1]             # <<<<<<<<<<<<<<
  *         nml['noninertial_reference_frame']['rotation_rate_z'] = aimInputs[index].vals.reals[2]
  * 
  */
-    __pyx_t_2 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[1])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 390, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 390, __pyx_L1_error)
+    __pyx_t_4 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[1])); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 400, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 400, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_rate_y, __pyx_t_2) < 0)) __PYX_ERR(0, 390, __pyx_L1_error)
+    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_rate_y, __pyx_t_4) < 0)) __PYX_ERR(0, 400, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "fun3dNamelist.pyx":391
+    /* "fun3dNamelist.pyx":401
  *         nml['noninertial_reference_frame']['rotation_rate_x'] = aimInputs[index].vals.reals[0]
  *         nml['noninertial_reference_frame']['rotation_rate_y'] = aimInputs[index].vals.reals[1]
  *         nml['noninertial_reference_frame']['rotation_rate_z'] = aimInputs[index].vals.reals[2]             # <<<<<<<<<<<<<<
  * 
  *     # Write new namelist
  */
-    __pyx_t_2 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[2])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 391, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 391, __pyx_L1_error)
+    __pyx_t_4 = PyFloat_FromDouble(((__pyx_v_aimInputs[__pyx_v_index]).vals.reals[2])); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 401, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __pyx_t_6 = __Pyx_PyObject_Dict_GetItem(__pyx_v_nml, __pyx_n_u_noninertial_reference_frame); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 401, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_rate_z, __pyx_t_2) < 0)) __PYX_ERR(0, 391, __pyx_L1_error)
+    if (unlikely(PyObject_SetItem(__pyx_t_6, __pyx_n_u_rotation_rate_z, __pyx_t_4) < 0)) __PYX_ERR(0, 401, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-    /* "fun3dNamelist.pyx":373
+    /* "fun3dNamelist.pyx":383
  * 
  *     # &noninertial_reference_frame
  *     if (aimInputs[cAIMUtil.aim_getIndex(aimInfo, "NonInertial_Rotation_Rate", cCAPS.ANALYSISIN)-1].nullVal != cCAPS.IsNull or             # <<<<<<<<<<<<<<
@@ -6095,20 +6244,20 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
  */
   }
 
-  /* "fun3dNamelist.pyx":394
+  /* "fun3dNamelist.pyx":404
  * 
  *     # Write new namelist
  *     write_fun3d_nml(nml,fname)             # <<<<<<<<<<<<<<
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_write_fun3d_nml); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 394, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_write_fun3d_nml); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 404, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_4 = NULL;
+  __pyx_t_2 = NULL;
   __pyx_t_8 = 0;
   if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_6))) {
-    __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_6);
-    if (likely(__pyx_t_4)) {
+    __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_6);
+    if (likely(__pyx_t_2)) {
       PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_6);
-      __Pyx_INCREF(__pyx_t_4);
+      __Pyx_INCREF(__pyx_t_2);
       __Pyx_INCREF(function);
       __Pyx_DECREF_SET(__pyx_t_6, function);
       __pyx_t_8 = 1;
@@ -6116,25 +6265,25 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
   }
   #if CYTHON_FAST_PYCALL
   if (PyFunction_Check(__pyx_t_6)) {
-    PyObject *__pyx_temp[3] = {__pyx_t_4, __pyx_v_nml, __pyx_v_fname};
-    __pyx_t_2 = __Pyx_PyFunction_FastCall(__pyx_t_6, __pyx_temp+1-__pyx_t_8, 2+__pyx_t_8); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 394, __pyx_L1_error)
-    __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __Pyx_GOTREF(__pyx_t_2);
+    PyObject *__pyx_temp[3] = {__pyx_t_2, __pyx_v_nml, __pyx_v_fname};
+    __pyx_t_4 = __Pyx_PyFunction_FastCall(__pyx_t_6, __pyx_temp+1-__pyx_t_8, 2+__pyx_t_8); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 404, __pyx_L1_error)
+    __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_GOTREF(__pyx_t_4);
   } else
   #endif
   #if CYTHON_FAST_PYCCALL
   if (__Pyx_PyFastCFunction_Check(__pyx_t_6)) {
-    PyObject *__pyx_temp[3] = {__pyx_t_4, __pyx_v_nml, __pyx_v_fname};
-    __pyx_t_2 = __Pyx_PyCFunction_FastCall(__pyx_t_6, __pyx_temp+1-__pyx_t_8, 2+__pyx_t_8); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 394, __pyx_L1_error)
-    __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __Pyx_GOTREF(__pyx_t_2);
+    PyObject *__pyx_temp[3] = {__pyx_t_2, __pyx_v_nml, __pyx_v_fname};
+    __pyx_t_4 = __Pyx_PyCFunction_FastCall(__pyx_t_6, __pyx_temp+1-__pyx_t_8, 2+__pyx_t_8); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 404, __pyx_L1_error)
+    __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_GOTREF(__pyx_t_4);
   } else
   #endif
   {
-    __pyx_t_3 = PyTuple_New(2+__pyx_t_8); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 394, __pyx_L1_error)
+    __pyx_t_3 = PyTuple_New(2+__pyx_t_8); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 404, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
-    if (__pyx_t_4) {
-      __Pyx_GIVEREF(__pyx_t_4); PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_4); __pyx_t_4 = NULL;
+    if (__pyx_t_2) {
+      __Pyx_GIVEREF(__pyx_t_2); PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_2); __pyx_t_2 = NULL;
     }
     __Pyx_INCREF(__pyx_v_nml);
     __Pyx_GIVEREF(__pyx_v_nml);
@@ -6142,12 +6291,12 @@ int fun3d_writeNMLPython(void *__pyx_v_aimInfo, capsValue *__pyx_v_aimInputs, cf
     __Pyx_INCREF(__pyx_v_fname);
     __Pyx_GIVEREF(__pyx_v_fname);
     PyTuple_SET_ITEM(__pyx_t_3, 1+__pyx_t_8, __pyx_v_fname);
-    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_3, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 394, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
+    __pyx_t_4 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_3, NULL); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 404, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   }
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
   /* "fun3dNamelist.pyx":78
  *     nml.write(fname, force=True)
@@ -6298,6 +6447,8 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_u_stream, __pyx_k_stream, sizeof(__pyx_k_stream), 0, 1, 0, 1},
   {&__pyx_n_u_subiterations, __pyx_k_subiterations, sizeof(__pyx_k_subiterations), 0, 1, 0, 1},
   {&__pyx_n_s_sys, __pyx_k_sys, sizeof(__pyx_k_sys), 0, 0, 1, 1},
+  {&__pyx_n_u_temperature, __pyx_k_temperature, sizeof(__pyx_k_temperature), 0, 1, 0, 1},
+  {&__pyx_n_u_temperature_units, __pyx_k_temperature_units, sizeof(__pyx_k_temperature_units), 0, 1, 0, 1},
   {&__pyx_n_u_temporal_err_control, __pyx_k_temporal_err_control, sizeof(__pyx_k_temporal_err_control), 0, 1, 0, 1},
   {&__pyx_n_u_temporal_err_floor, __pyx_k_temporal_err_floor, sizeof(__pyx_k_temporal_err_floor), 0, 1, 0, 1},
   {&__pyx_n_s_test, __pyx_k_test, sizeof(__pyx_k_test), 0, 0, 1, 1},
@@ -6322,7 +6473,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
 };
 static CYTHON_SMALL_CODE int __Pyx_InitCachedBuiltins(void) {
   __pyx_builtin_print = __Pyx_GetBuiltinName(__pyx_n_s_print); if (!__pyx_builtin_print) __PYX_ERR(0, 15, __pyx_L1_error)
-  __pyx_builtin_range = __Pyx_GetBuiltinName(__pyx_n_s_range); if (!__pyx_builtin_range) __PYX_ERR(0, 283, __pyx_L1_error)
+  __pyx_builtin_range = __Pyx_GetBuiltinName(__pyx_n_s_range); if (!__pyx_builtin_range) __PYX_ERR(0, 293, __pyx_L1_error)
   return 0;
   __pyx_L1_error:;
   return -1;

@@ -11,8 +11,7 @@ TDIR = $(ESP_ROOT)\bin
 !endif
 
 $(TDIR)\triServer.exe:	$(ODIR)\triServer.obj
-	cl /Fe$(TDIR)\triServer.exe $(ODIR)\triServer.obj \
-		$(LIBPTH) wsserver.lib z.lib ws2_32.lib
+	cl /Fe$(TDIR)\triServer.exe $(ODIR)\triServer.obj $(LIBPTH) wsserver.lib
 	$(MCOMP) /manifest $(TDIR)\triServer.exe.manifest \
 		/outputresource:$(TDIR)\triServer.exe;1
 

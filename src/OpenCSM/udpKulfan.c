@@ -14,7 +14,7 @@
  */
 
 /*
- * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -122,6 +122,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     ROUTINE(udpExecute);
 
+    /* --------------------------------------------------------------- */
+
     /* default return values */
     *ebody  = NULL;
     *nMesh  = 0;
@@ -168,7 +170,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 #endif
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(NULL);
     CHECK_STATUS(cacheUdp);
 
     /* mallocs required by Windows compiler */
@@ -420,7 +422,11 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
 //$$$    int    ipnt, nedge, r, n;
 //$$$    double xyz[18], shape, shape_dot, s, K, temp;
 //$$$    ego    *eedges=NULL;
-//$$$
+
+    ROUTINE(udpSensitivity);
+
+    /* --------------------------------------------------------------- */
+
 //$$$#ifdef DEBUG
 //$$$    printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f %f)\n",
 //$$$           (long long)ebody, npnt, entType, entIndex, uvs[0], uvs[1]);

@@ -13,9 +13,9 @@ TDIR  = $(ESP_ROOT)\bin
 !ENDIF
 
 $(TDIR)\vHOtess.exe:	$(ODIR)\vHOtess.obj $(ODIR)\egadsHOtess.obj \
-			$(LDIR)\egads.lib $(LDIR)\wsserver.lib $(LDIR)\z.lib
+			$(LDIR)\egads.lib $(LDIR)\wsserver.lib
 	cl /Fe$(TDIR)\vHOtess.exe $(ODIR)\vHOtess.obj $(ODIR)\egadsHOtess.obj \
-		/link /LIBPATH:$(LDIR) wsserver.lib z.lib egads.lib ws2_32.lib
+		/link /LIBPATH:$(LDIR) wsserver.lib egads.lib
 	$(MCOMP) /manifest $(TDIR)\vHOtess.exe.manifest \
 		/outputresource:$(TDIR)\vHOtess.exe;1
 

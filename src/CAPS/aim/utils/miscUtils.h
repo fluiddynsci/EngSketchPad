@@ -114,9 +114,6 @@ char * string_format(char *format, ...);
 // Return whether string `find` is in `array`
 int string_isInArray(char *find, int arraySize, char **array);
 
-// Free and null a char pointer
-void string_free( char **string);
-
 // The max x,y,z coordinates where P(3*i + 0) = x_i, P(3*i + 1) = y_i, and P(3*i + 2) = z_i
 void maxCoords(int sizeP, double *P, double *x, double *y, double *z);
 
@@ -153,6 +150,12 @@ char * convert_integerToString(int integerVal, int fieldWidth, int leftOrRight);
 //      - Returning char * should be free'd after use
 /*@null@*/
 char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight);
+
+// Factorizes in place the square linear system A using simple LU decomposition
+int factorLU(int n, double A[] );
+
+// Solves the factorized square linear system LU x = b
+int backsolveLU(int n, double LU[], double b[], double x[] );
 
 // Solves the square linear system A x = b using simple LU decomposition
 int solveLU(int n, double A[], double b[], double x[] );

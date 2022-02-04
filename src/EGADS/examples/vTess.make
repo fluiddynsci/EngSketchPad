@@ -14,7 +14,7 @@ default:	$(TDIR)/vTesstatic $(TDIR)/vTess
 
 $(TDIR)/vTess:	$(ODIR)/vTess.o $(ODIR)/retessFaces.o $(LDIR)/libwsserver.a
 	$(CXX) -o $(TDIR)/vTess $(ODIR)/vTess.o $(ODIR)/retessFaces.o \
-		-L$(LDIR) -lwsserver -legads -lpthread -lz $(RPATH) -lm
+		-L$(LDIR) -lwsserver -legads $(RPATH)
 
 $(TDIR)/vTesstatic:	$(ODIR)/vTess.o $(ODIR)/retessFaces.o \
 		$(LDIR)/libwsserver.a $(LDIR)/libegadstatic.a

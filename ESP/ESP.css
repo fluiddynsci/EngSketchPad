@@ -5,7 +5,7 @@ CodeMirror part taken from codemirror-5.27.0 (see below)
 */
 
 /*
-Copyright (C) 2010/2021  John F. Dannenhoffer, III (Syracuse University)
+Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
 
 This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -857,6 +857,65 @@ span.CodeMirror-selectedtext {
 }
 /* matching brackets */
 .cm-s-simple .CodeMirror-matchingbracket {
+    outline:         1px solid grey;
+    color:                    black;
+    background:              yellow;
+}
+
+/* comment */
+.cm-s-python span.cm-comment {
+    color:                     grey;
+    font-style:             oblique;
+}
+/* keyword: assert, ... */
+.cm-s-python span.cm-keyword {
+    color:                     blue;
+    font-weight:               bold;
+}
+/* string: $any */
+.cm-s-python span.cm-string {
+    color:                  magenta;
+}
+/* builtin: sin, cos, ... */
+.cm-s-python span.cm-builtin {
+    color:                   purple;
+    font-weight:               bold;
+ }
+/* special: eq, EQ, or, OR, ... */
+.cm-s-python span.cm-special {
+    color:                   purple;
+}
+/* variable: varName */
+.cm-s-python span.cm-variable {
+    color:                   orange;
+    font-style:              italic;
+    font-weight:               bold;
+ }
+/* operator: + - * / */
+.cm-s-python span.cm-operator {
+    color:                    black;
+    font-weight:               bold;
+}
+/* number: 3, 3.14, 3.14e0 */
+.cm-s-python span.cm-number {
+    color:                darkgreen;
+    font-weight:               bold;
+}
+/* atom: " */
+.cm-s-python span.cm-atom {
+    color:                     cyan;
+}
+/* meta: .size, .min, ... */
+.cm-s-python span.cm-meta {
+    color:                   purple;
+}
+/* link: not used */
+.cm-s-python span.cm-link {
+    color:                    white;
+    background:                 red;
+}
+/* matching brackets */
+.cm-s-python .CodeMirror-matchingbracket {
     outline:         1px solid grey;
     color:                    black;
     background:              yellow;

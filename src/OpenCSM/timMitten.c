@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -33,6 +33,13 @@
 #include <string.h>
 #include <math.h>
 
+#ifdef WIN32
+    #define  SLEEP(msec)  Sleep(msec)
+#else
+    #include <unistd.h>
+    #define  SLEEP(msec)  usleep(1000*msec)
+#endif
+
 #include "egads.h"
 #include "common.h"
 #include "OpenCSM.h"
@@ -54,7 +61,9 @@ typedef struct {
     char      bodyName[MAX_NAME_LEN];
 } mitten_T;
 
-static int mittenBuildBox(tim_T *TIM, double rotate);
+static int mittenBuildBox(esp_T *ESP, double rotate);
+
+static void *oldUdata=NULL;
 
 
 /***********************************************************************/
@@ -64,10 +73,10 @@ static int mittenBuildBox(tim_T *TIM, double rotate);
 /***********************************************************************/
 
 int
-timLoad(tim_T *TIM,                     /* (in)  pointer to TIM structure */
+timLoad(esp_T *ESP,                     /* (in)  pointer to ESP structure */
         void  *data)                    /* (in)  component name */
 {
-    int    status = EGADS_SUCCESS;      /* (out) return status */
+    int    status;                      /* (out) return status */
 
     mitten_T *mitn;
 
@@ -75,10 +84,18 @@ timLoad(tim_T *TIM,                     /* (in)  pointer to TIM structure */
 
     /* --------------------------------------------------------------- */
 
+    if (ESP == NULL) {
+        printf("ERROR:: cannot run timMitten without serveESP\n");
+        status = EGADS_SEQUERR;
+        goto cleanup;
+    }
+    
     /* create the mitten_T structure */
-    MALLOC(TIM->udata, mitten_T, 1);
+    oldUdata = ESP->udata;
+    ESP->udata = NULL;
+    MALLOC(ESP->udata, mitten_T, 1);
 
-    mitn = (mitten_T *) TIM->udata;
+    mitn = (mitten_T *) ESP->udata;
 
     /* initialize the structure */
     mitn->xcent = 0;
@@ -97,8 +114,158 @@ timLoad(tim_T *TIM,                     /* (in)  pointer to TIM structure */
     }
 
     /* build the initial body */
-    status = mittenBuildBox(TIM, 0);
+    status = mittenBuildBox(ESP, 0);
     CHECK_STATUS(mittenBuildBox);
+
+    /* hold the UI when executing */
+    status = 1;
+    
+cleanup:
+    return status;
+}
+
+
+/***********************************************************************/
+/*                                                                     */
+/*   timMesg - get command, process, and return response               */
+/*                                                                     */
+/***********************************************************************/
+
+int
+timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
+        char  command[])                /* (in)  command */
+{
+    int    status = EGADS_SUCCESS;      /* (out) return status */
+
+    int    i;
+    double delta=0, fact=1, angle=0, delay=0;
+    char   *arg1=NULL, *pEnd;
+    char   response[MAX_EXPR_LEN];
+    mitten_T *mitn = (mitten_T *)(ESP->udata);
+
+    ROUTINE(timMesg(mitten));
+
+    /* --------------------------------------------------------------- */
+
+    /* "xcent|delta|" */
+    if        (strncmp(command, "xcent|", 6) == 0) {
+
+        /* extract argument */
+        GetToken(command, 1, '|', &arg1);
+        SPLINT_CHECK_FOR_NULL(arg1);
+        if (strlen(arg1) > 0) delta = strtod(arg1, &pEnd);
+        FREE(arg1);
+
+        mitn->xcent += delta;
+
+        mittenBuildBox(ESP, 0);
+
+        tim_bcst("mitten", "timMesg|mitten|xcent");
+
+    /* "xsize|fact|" */
+    } else if (strncmp(command, "xsize|", 6) == 0) {
+
+        /* extract argument */
+        GetToken(command, 1, '|', &arg1);
+        SPLINT_CHECK_FOR_NULL(arg1);
+        if (strlen(arg1) > 0) fact = strtod(arg1, &pEnd);
+        FREE(arg1);
+
+        mitn->xsize *= fact;
+
+        mittenBuildBox(ESP, 0);
+
+        tim_bcst("mitten", "timMesg|mitten|xsize");
+
+    /* "ycent|delta|" */
+    } else if (strncmp(command, "ycent|", 6) == 0) {
+
+        /* extract argument */
+        GetToken(command, 1, '|', &arg1);
+        SPLINT_CHECK_FOR_NULL(arg1);
+        if (strlen(arg1) > 0) delta = strtod(arg1, &pEnd);
+        FREE(arg1);
+
+        mitn->ycent += delta;
+
+        mittenBuildBox(ESP, 0);
+
+        tim_bcst("mitten", "timMesg|mitten|ycent");
+
+    /* "ysize|fact|" */
+    } else if (strncmp(command, "ysize|", 6) == 0) {
+
+        /* extract argument */
+        GetToken(command, 1, '|', &arg1);
+        SPLINT_CHECK_FOR_NULL(arg1);
+        if (strlen(arg1) > 0) fact = strtod(arg1, &pEnd);
+        FREE(arg1);
+
+        mitn->ysize *= fact;
+
+        mittenBuildBox(ESP, 0);
+
+        tim_bcst("mitten", "timMesg|mitten|ysize");
+
+    /* "zcent|delta|" */
+    } else if (strncmp(command, "zcent|", 6) == 0) {
+
+        /* extract argument */
+        GetToken(command, 1, '|', &arg1);
+        SPLINT_CHECK_FOR_NULL(arg1);
+        if (strlen(arg1) > 0) delta = strtod(arg1, &pEnd);
+        FREE(arg1);
+
+        mitn->zcent += delta;
+
+        mittenBuildBox(ESP, 0);
+
+        tim_bcst("mitten", "timMesg|mitten|zcent");
+
+    /* "zsize|fact|" */
+    } else if (strncmp(command, "zsize|", 6) == 0) {
+
+        /* extract argument */
+        GetToken(command, 1, '|', &arg1);
+        SPLINT_CHECK_FOR_NULL(arg1);
+        if (strlen(arg1) > 0) fact = strtod(arg1, &pEnd);
+        FREE(arg1);
+
+        mitn->zsize *= fact;
+
+        mittenBuildBox(ESP, 0);
+
+        tim_bcst("mitten", "timMesg|mitten|zsize");
+
+    /* "rotate|angle|" */
+    } else if (strncmp(command, "rotate|", 7) == 0) {
+
+        /* extract argument */
+        GetToken(command, 1, '|', &arg1);
+        SPLINT_CHECK_FOR_NULL(arg1);
+        if (strlen(arg1) > 0) angle = strtod(arg1, &pEnd);
+        FREE(arg1);
+
+        mittenBuildBox(ESP, angle);
+
+        snprintf(response, MAX_EXPR_LEN, "timMesg|mitten|rotate|%10.3f", angle);
+        tim_bcst("mitten", response);
+
+    /* "countdown|seconds|" */
+    } else if (strncmp(command, "countdown|", 10) == 0) {
+
+        /* extract argument */
+        GetToken(command, 1, '|', &arg1);
+        SPLINT_CHECK_FOR_NULL(arg1);
+        if (strlen(arg1) > 0) delay = strtod(arg1, &pEnd);
+        FREE(arg1);
+
+        for (i = NINT(delay); i > 0; i--) {
+            snprintf(response, MAX_EXPR_LEN, "     %d", i);
+            tim_bcst("mitten", response);
+            SLEEP(1000);
+        }
+    }
 
 cleanup:
     return status;
@@ -112,7 +279,7 @@ cleanup:
 /***********************************************************************/
 
 int
-timSave(tim_T *TIM)                     /* (in)  pointer to TI Mstructure */
+timSave(esp_T *ESP)                     /* (in)  pointer to TI Mstructure */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
@@ -120,16 +287,16 @@ timSave(tim_T *TIM)                     /* (in)  pointer to TI Mstructure */
     char   gpname[255];
     FILE   *fp=NULL;
 
-    mitten_T *mitn = (mitten_T *)(TIM->udata);
+    mitten_T *mitn = (mitten_T *)(ESP->udata);
 
     ROUTINE(timSave(mitten));
 
     /* --------------------------------------------------------------- */
 
     /* add the mitten Body to the bottm of the .csm file */
-    fp = fopen(TIM->MODL->filename, "a");
+    fp = fopen(ESP->MODL->filename, "a");
     if (fp == NULL) {
-        printf("the .csm file does not exist or could not be opened\n");
+        printf("\"%s\" does not exist or could not be opened\n", ESP->MODL->filename);
         status = EGADS_NOTFOUND;
         goto cleanup;
     }
@@ -154,15 +321,16 @@ timSave(tim_T *TIM)                     /* (in)  pointer to TI Mstructure */
     for (iface = 1; iface <= 6; iface++) {
         snprintf(gpname, 254, "Body %s Face %d", mitn->bodyName, iface);
 
-        igprim = wv_indexGPrim(TIM->ctxt, gpname);
+        igprim = wv_indexGPrim(ESP->cntxt, gpname);
 
         if (igprim > 0) {
-            wv_removeGPrim(TIM->ctxt, igprim);
+            wv_removeGPrim(ESP->cntxt, igprim);
         }
     }
 
     /* free up the mitten_T structure */
-    FREE(TIM->udata);
+    FREE(ESP->udata);
+    ESP->udata = oldUdata;
 
 cleanup:
     return status;
@@ -176,145 +344,38 @@ cleanup:
 /***********************************************************************/
 
 int
-timQuit(tim_T *TIM)                     /* (in)  pointer to TIM structure */
+timQuit(esp_T *ESP,                     /* (in)  pointer to ESP structure */
+/*@unused@*/int   unload)               /* (in)  flag to unload */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
     int      iface, igprim;
     char     gpname[255];
-    mitten_T *mitn = (mitten_T *)(TIM->udata);
+    mitten_T *mitn = (mitten_T *)(ESP->udata);
 
     ROUTINE(timQuit(mitten));
 
     /* --------------------------------------------------------------- */
 
+    if (mitn == NULL) goto cleanup;
+    
     /* remove the Body from the scene graph */
-    for (iface = 1; iface <= 6; iface++) {
-        snprintf(gpname, 254, "Body %s Face %d", mitn->bodyName, iface);
+    if (ESP->cntxt != NULL) {
+        for (iface = 1; iface <= 6; iface++) {
+            snprintf(gpname, 254, "Body %s Face %d", mitn->bodyName, iface);
 
-        igprim = wv_indexGPrim(TIM->ctxt, gpname);
-        printf("iface=%d, igprim=%d\n", iface, igprim);
+            igprim = wv_indexGPrim(ESP->cntxt, gpname);
 
-        if (igprim > 0) {
-            wv_removeGPrim(TIM->ctxt, igprim);
+            if (igprim > 0) {
+                wv_removeGPrim(ESP->cntxt, igprim);
+            }
         }
     }
 
     /* free up the mitten_T structure */
-    FREE(TIM->udata);
+    FREE(ESP->udata);
 
-//cleanup:
-    return status;
-}
-
-
-/***********************************************************************/
-/*                                                                     */
-/*   timMesg - get command, process, and return response               */
-/*                                                                     */
-/***********************************************************************/
-
-int
-timMesg(tim_T *TIM,                     /* (in)  pointer to TIM structure */
-        char  command[],                /* (in)  command */
-        int   max_resp_len,             /* (in)  length of response */
-        char  response[])               /* (out) response */
-{
-    int    status = EGADS_SUCCESS;      /* (out) return status */
-
-    double delta=0, fact=1, angle=0;
-    char   arg1[MAX_EXPR_LEN], *pEnd;
-    mitten_T *mitn = (mitten_T *)(TIM->udata);
-
-    ROUTINE(timMesg(mitten));
-
-    /* --------------------------------------------------------------- */
-
-    /* "xcent|delta|" */
-    if        (strncmp(command, "xcent|", 6) == 0) {
-
-        /* extract argument */
-        if (GetToken(command, 1, '|', arg1)) delta = strtod(arg1, &pEnd);
-
-        mitn->xcent += delta;
-
-        mittenBuildBox(TIM, 0);
-
-        snprintf(response, max_resp_len, "xcent");
-
-    /* "xsize|fact|" */
-    } else if (strncmp(command, "xsize|", 6) == 0) {
-
-        /* extract argument */
-        if (GetToken(command, 1, '|', arg1)) fact = strtod(arg1, &pEnd);
-
-        mitn->xsize *= fact;
-
-        mittenBuildBox(TIM, 0);
-
-        snprintf(response, max_resp_len, "xsize");
-
-    /* "ycent|delta|" */
-    } else if (strncmp(command, "ycent|", 6) == 0) {
-
-        /* extract argument */
-        if (GetToken(command, 1, '|', arg1)) delta = strtod(arg1, &pEnd);
-
-        mitn->ycent += delta;
-
-        mittenBuildBox(TIM, 0);
-
-        snprintf(response, max_resp_len, "ycent");
-
-    /* "ysize|fact|" */
-    } else if (strncmp(command, "ysize|", 6) == 0) {
-
-        /* extract argument */
-        if (GetToken(command, 1, '|', arg1)) fact = strtod(arg1, &pEnd);
-
-        mitn->ysize *= fact;
-
-        mittenBuildBox(TIM, 0);
-
-        snprintf(response, max_resp_len, "ysize");
-
-    /* "zcent|delta|" */
-    } else if (strncmp(command, "zcent|", 6) == 0) {
-
-        /* extract argument */
-        if (GetToken(command, 1, '|', arg1)) delta = strtod(arg1, &pEnd);
-
-        mitn->zcent += delta;
-
-        mittenBuildBox(TIM, 0);
-
-        snprintf(response, max_resp_len, "zcent");
-
-    /* "zsize|fact|" */
-    } else if (strncmp(command, "zsize|", 6) == 0) {
-
-        /* extract argument */
-        if (GetToken(command, 1, '|', arg1)) fact = strtod(arg1, &pEnd);
-
-        mitn->zsize *= fact;
-
-        mittenBuildBox(TIM, 0);
-
-        snprintf(response, max_resp_len, "zsize");
-
-    /* "rotate|angle|" */
-    } else if (strncmp(command, "rotate|", 7) == 0) {
-
-        /* extract argument */
-        if (GetToken(command, 1, '|', arg1)) angle = strtod(arg1, &pEnd);
-
-        mittenBuildBox(TIM, angle);
-
-        snprintf(response, max_resp_len, "rotate|%10.3f", angle);
-
-    }
-
-//cleanup:
+cleanup:
     return status;
 }
 
@@ -326,7 +387,7 @@ timMesg(tim_T *TIM,                     /* (in)  pointer to TIM structure */
 /***********************************************************************/
 
 static int
-mittenBuildBox(tim_T    *TIM,           /* (in)  pointer to TIM structure */
+mittenBuildBox(esp_T    *ESP,           /* (in)  pointer to ESP structure */
                double   angle)          /* (in)  rotation angle */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
@@ -339,7 +400,7 @@ mittenBuildBox(tim_T    *TIM,           /* (in)  pointer to TIM structure */
     char    gpname[255];
     ego     etemp, exform, ebody, etess;
     wvData  items[20];
-    mitten_T *mitn = (mitten_T *)(TIM->udata);
+    mitten_T *mitn = (mitten_T *)(ESP->udata);
 
     ROUTINE(mittenBuildBox);
 
@@ -353,7 +414,7 @@ mittenBuildBox(tim_T    *TIM,           /* (in)  pointer to TIM structure */
     data[4] = mitn->ysize;
     data[5] = mitn->zsize;
 
-    status = EG_makeSolidBody(TIM->MODL->context, BOX, data, &etemp);
+    status = EG_makeSolidBody(ESP->MODL->context, BOX, data, &etemp);
     CHECK_STATUS(EG_makeSolidBody);
 
     /* rotate it */
@@ -364,7 +425,7 @@ mittenBuildBox(tim_T    *TIM,           /* (in)  pointer to TIM structure */
     matrix[ 4] = sinz;  matrix[ 5] = cosz;  matrix[ 6] = 0; matrix[ 7] = 0;
     matrix[ 8] = 0;     matrix[ 9] = 0;     matrix[10] = 1; matrix[11] = 0;
 
-    status = EG_makeTransform(TIM->MODL->context, matrix, &exform);
+    status = EG_makeTransform(ESP->MODL->context, matrix, &exform);
     CHECK_STATUS(EG_makeTransform);
 
     status = EG_copyObject(etemp, exform, &ebody);
@@ -384,6 +445,15 @@ mittenBuildBox(tim_T    *TIM,           /* (in)  pointer to TIM structure */
     status = EG_makeTessBody(ebody, params, &etess);
     CHECK_STATUS(EG_makeTessBody);
 
+    /* if the sgFocus has not been set yet (for example, if we are
+       starting with an empty MODL) set it now */
+    if (ESP->sgFocus[3] <= 0) {
+        ESP->sgFocus[0] = mitn->xcent;
+        ESP->sgFocus[1] = mitn->ycent;
+        ESP->sgFocus[2] = mitn->zcent;
+        ESP->sgFocus[3] = MAX(MAX(mitn->xsize, mitn->ysize), mitn->zsize);
+    }
+
     /* generate the scene graph info needed to visualize it */
     for (iface = 1; iface <= 6; iface++) {
         nitems = 0;
@@ -397,7 +467,7 @@ mittenBuildBox(tim_T    *TIM,           /* (in)  pointer to TIM structure */
         status = wv_setData(WV_REAL64, npnt, (void*)xyz, WV_VERTICES, &(items[nitems]));
         CHECK_STATUS(wv_setData);
 
-        wv_adjustVerts(&(items[nitems]), TIM->sgFocus);
+        wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
         nitems++;
 
         /* loop through the triangles and build up the segment table (bias-1) */
@@ -465,22 +535,22 @@ mittenBuildBox(tim_T    *TIM,           /* (in)  pointer to TIM structure */
         snprintf(gpname, 254, "Body %s Face %d", mitn->bodyName, iface);
 
         /* get index of current graphic primitive (if it exists) */
-        SPLINT_CHECK_FOR_NULL(TIM->ctxt);
+        SPLINT_CHECK_FOR_NULL(ESP->cntxt);
 
-        igprim = wv_indexGPrim(TIM->ctxt, gpname);
+        igprim = wv_indexGPrim(ESP->cntxt, gpname);
 
         /* make graphic primitive */
         if (igprim < 0) {
             attrs = WV_ON | WV_ORIENTATION;
 
-            igprim = status = wv_addGPrim(TIM->ctxt, gpname, WV_TRIANGLE, attrs, nitems, items);
+            igprim = status = wv_addGPrim(ESP->cntxt, gpname, WV_TRIANGLE, attrs, nitems, items);
             CHECK_STATUS(wv_addGPrim);
 
-            SPLINT_CHECK_FOR_NULL(TIM->ctxt->gPrims);
+            SPLINT_CHECK_FOR_NULL(ESP->cntxt->gPrims);
 
-            TIM->ctxt->gPrims[igprim].lWidth = 1.0;
+            ESP->cntxt->gPrims[igprim].lWidth = 1.0;
         } else {
-            status = wv_modGPrim(TIM->ctxt, igprim, nitems, items);
+            status = wv_modGPrim(ESP->cntxt, igprim, nitems, items);
             CHECK_STATUS(wv_modGPrim);
         }
     }

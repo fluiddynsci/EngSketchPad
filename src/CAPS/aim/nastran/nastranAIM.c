@@ -241,7 +241,7 @@ static int destroy_aimStorage(aimStorage *nastranInstance)
 {
     int status;
     int i;
-  
+
     status = destroy_feaUnitsStruct(&nastranInstance->units);
     if (status != CAPS_SUCCESS)
       printf("Error: Status %d during destroy_feaUnitsStruct!\n", status);
@@ -470,7 +470,7 @@ static int createVLMMesh(void *aimInfo, aimStorage *nastranInstance,
         if (status != CAPS_SUCCESS) goto cleanup;
 
     } else {
-        printf("An analysis type of Aeroelastic set but no VLM_Surface tuple specified\n");
+        AIM_ERROR(aimInfo, "An analysis type of Aeroelastic set but no VLM_Surface tuple specified\n");
         status = CAPS_NOTFOUND;
         goto cleanup;
     }
@@ -478,7 +478,8 @@ static int createVLMMesh(void *aimInfo, aimStorage *nastranInstance,
     // Get VLM control surface information
     if (aimInputs[VLM_Control-1].nullVal == NotNull) {
 
-        status = get_vlmControl(aimInputs[VLM_Control-1].length,
+        status = get_vlmControl(aimInfo,
+                                aimInputs[VLM_Control-1].length,
                                 aimInputs[VLM_Control-1].vals.tuple,
                                 &numVLMControl,
                                 &vlmControl);
@@ -488,7 +489,8 @@ static int createVLMMesh(void *aimInfo, aimStorage *nastranInstance,
 
     printf("\nGetting FEA vortex lattice mesh\n");
 
-    status = vlm_getSections(numBody,
+    status = vlm_getSections(aimInfo,
+                             numBody,
                              bodies,
                              "Aerodynamic",
                              nastranInstance->attrMap,
@@ -509,23 +511,24 @@ static int createVLMMesh(void *aimInfo, aimStorage *nastranInstance,
         else if (vlmSurface[i].NspanSection > 0)
             numSpanWise = (vlmSurface[i].numSection-1)*vlmSurface[i].NspanSection;
         else {
-            printf("Error: Only one of numSpanTotal and numSpanPerSection can be non-zero!\n");
-            printf("       numSpanTotal      = %d\n", vlmSurface[i].NspanTotal);
-            printf("       numSpanPerSection = %d\n", vlmSurface[i].NspanSection);
+            AIM_ERROR(aimInfo  , "Only one of numSpanTotal and numSpanPerSection can be non-zero!");
+            AIM_ADDLINE(aimInfo, "    numSpanTotal      = %d", vlmSurface[i].NspanTotal);
+            AIM_ADDLINE(aimInfo, "    numSpanPerSection = %d", vlmSurface[i].NspanSection);
             status = CAPS_BADVALUE;
             goto cleanup;
         }
 
-        status = vlm_equalSpaceSpanPanels(numSpanWise, vlmSurface[i].numSection,
+        status = vlm_equalSpaceSpanPanels(aimInfo, numSpanWise,
+                                          vlmSurface[i].numSection,
                                           vlmSurface[i].vlmSection);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
     }
 
     // Split the surfaces that have more than 2 sections into a new surface
     for (i = 0; i < numVLMSurface; i++) {
 
         if (vlmSurface->numSection < 2) {
-            printf("\tSurface '%s' has less than two-sections!\n", vlmSurface[i].name);
+            AIM_ERROR(aimInfo, "Surface '%s' has less than two-sections!", vlmSurface[i].name);
             status = CAPS_BADVALUE;
             goto cleanup;
         }
@@ -1386,7 +1389,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
         defval->nullVal     = IsNull;
         AIM_STRDUP(defval->units, "meshStruct", aimInfo, status);
 
-        /*! \page aimInputsMYSTRAN
+        /*! \page aimInputsNastran
          * - <B>Mesh = NULL</B> <br>
          * A Mesh link.
          */
@@ -1440,9 +1443,9 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     int numSetID;
     int tempID, *setID = NULL;
-  
+
     aimStorage *nastranInstance;
-  
+
     nastranInstance = (aimStorage *) instStore;
     if (aimInputs == NULL) return CAPS_NULLVALUE;
 
@@ -1578,7 +1581,9 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // Set design variables
     if (aimInputs[Design_Variable-1].nullVal == NotNull) {
-        status = fea_getDesignVariable(aimInputs[Design_Variable-1].length,
+        status = fea_getDesignVariable(aimInfo,
+                                       (int)true,
+                                       aimInputs[Design_Variable-1].length,
                                        aimInputs[Design_Variable-1].vals.tuple,
                                        aimInputs[Design_Variable_Relation-1].length,
                                        aimInputs[Design_Variable_Relation-1].vals.tuple,
@@ -2529,10 +2534,11 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
         if (i == 0) printf("\tWriting design variable relation cards\n");
 
-        status = nastran_writeDesignVariableRelationCard(fp,
-                                  &nastranInstance->feaProblem.feaDesignVariableRelation[i],
-                                  &nastranInstance->feaProblem,
-                                  &nastranInstance->feaProblem.feaFileFormat);
+        status = nastran_writeDesignVariableRelationCard(aimInfo,
+                                                         fp,
+                                                         &nastranInstance->feaProblem.feaDesignVariableRelation[i],
+                                                         &nastranInstance->feaProblem,
+                                                         &nastranInstance->feaProblem.feaFileFormat);
         if (status != CAPS_SUCCESS) goto cleanup;
     }
 
@@ -2774,7 +2780,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
     char *filename = NULL; // File to open
     char extF06[] = ".f06", extOP2[] = ".op2";
     FILE *fp = NULL; // File pointer
-  
+
     nastranInstance = (aimStorage *) instStore;
 
     if (index <= 5) {
@@ -2903,7 +2909,7 @@ int aimDiscr(char *tname, capsDiscr *discr)
     printf(" nastranAIM/aimDiscr: tname = %s!\n", tname);
 #endif
     if (tname == NULL) return CAPS_NOTFOUND;
-  
+
     nastranInstance = (aimStorage *) discr->instStore;
 
     // Check and generate/retrieve the mesh
@@ -2928,7 +2934,7 @@ cleanup:
     if (status != CAPS_SUCCESS)
         printf("\tPremature exit: function aimDiscr nastranAIM status = %d",
                status);
-  
+
     AIM_FREE(tess);
     return status;
 }
@@ -2990,7 +2996,7 @@ int aimDiscr2(char *tname, capsDiscr *discr)
     printf(" nastranAIM/aimDiscr: tname = %s!\n", tname);
 #endif
     if (tname == NULL) return CAPS_NOTFOUND;
-  
+
     nastranInstance = (aimStorage *) discr->instStore;
 
 /*  if (nastranInstance->dataTransferCheck == (int) false) {
@@ -3467,7 +3473,7 @@ cleanup:
     EG_free(capsGroupList);
     EG_free(bodyFaceMap);
 #endif
-  
+
     return status;
 }
 

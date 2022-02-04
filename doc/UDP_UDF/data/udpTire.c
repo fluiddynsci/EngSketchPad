@@ -78,8 +78,6 @@ udpErrorStr(int stat)                   /* (in)  status number */
     return string;
 }
 
-void printEgo(/*@unused@*/ /*@null@*/ego obj) {};
-
 int
 main(/*@unused@*/ int  argc,                    /* (in)  number of arguments */
      /*@unused@*/ char *argv[])                 /* (in)  array of arguments */
@@ -87,9 +85,6 @@ main(/*@unused@*/ int  argc,                    /* (in)  number of arguments */
     int  status, nMesh;
     char *string;
     ego  context, ebody, emodel;
-
-    /* dummy call to prevent compiler warnings */
-    printEgo(NULL);
 
     /* define a context */
     status = EG_open(&context);
@@ -183,6 +178,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     double  node1[3], node2[3], node3[3], node4[3], node5[3], node6[3], node7[3], node8[3];
     double  cent1[3], cent2[3], axis1[3], axis2[3], axis3[3];
     double  data[18], trange[2];
+    char    *message=NULL;
     ego     enodes[8], ecurve[16], eedges[16], eloop, efaces[8], eshell;
     ego     esurface[4], epcurve[4], ebody1, ebody2, ebody3, ebody4;
     ego     elist[20], emodel, *echilds2, source, *echilds, eref;
@@ -191,6 +187,10 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     double  myVolume;
 #endif
 
+    ROUTINE(udpExecute);
+    
+    /* --------------------------------------------------------------- */
+    
 #ifdef DEBUG
     printf("udpExecute(context=%lx)\n", (long)context);
     printf("width(0)       = %f\n", WIDTH(    0));
@@ -204,90 +204,93 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     *nMesh  = 0;
     *string = NULL;
 
+    MALLOC(message, char, 100);
+    message[0] = '\0';
+
 #ifdef UDP
     /* check arguments */
     if (udps[0].arg[0].size > 1) {
-        printf(" udpExecute: width should be a scalar\n");
+        snprintf(message, 100, "width should be a scalar\n");
         status  = EGADS_RANGERR;
         goto cleanup;
     } else if (WIDTH(0) <= 0) {
-        printf(" udpExecute: width = %f < 0\n", WIDTH(0));
+        snprintf(message, 100, "width = %f < 0\n", WIDTH(0));
         status  = EGADS_RANGERR;
         goto cleanup;
     } else if (udps[0].arg[1].size > 1) {
-        printf(" udpExecute: minrad should be a scalar\n");
+        snprintf(message, 100, "minrad should be a scalar\n");
         status  = EGADS_RANGERR;
         goto cleanup;
     } else if (MINRAD(0) <= 0) {
-        printf(" udpExecute: minrad = %f < 0\n", MINRAD(0));
+        snprintf(message, 100, "minrad = %f < 0\n", MINRAD(0));
         status  = EGADS_RANGERR;
         goto cleanup;
     } else if (udps[0].arg[2].size > 1) {
-        printf(" udpExecute: maxrad should be a scalar\n");
+        snprintf(message, 100, "maxrad should be a scalar\n");
         status  = EGADS_RANGERR;
         goto cleanup;
     } else if (MAXRAD(0) <= 0) {
-        printf(" udpExecute: maxrad = %f < 0\n", MAXRAD(0));
+        snprintf(message, 100, "maxrad = %f < 0\n", MAXRAD(0));
         status  = EGADS_RANGERR;
         goto cleanup;
     } else if (FILLETRAD(0) < 0) {
-        printf(" udpExecute: width = %f < 0\n", WIDTH(0));
+        snprintf(message, 100, "width = %f < 0\n", WIDTH(0));
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (udps[0].arg[3].size > 1) {
-        printf(" udpExecute: minrad should be a scalar\n");
+        snprintf(message, 100, "minrad should be a scalar\n");
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (PLATETHICK(0) < 0) {
-        printf(" udpExecute: width = %f < 0\n", WIDTH(0));
+        snprintf(message, 100, "width = %f < 0\n", WIDTH(0));
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (udps[0].arg[4].size > 1) {
-        printf(" udpExecute: minrad should be a scalar\n");
+        snprintf(message, 100, "minrad should be a scalar\n");
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (PATTERN(0) < 0) {
-        printf(" udpExecute: width = %f < 0\n", WIDTH(0));
+        snprintf(message, 100, "width = %f < 0\n", WIDTH(0));
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (udps[0].arg[5].size > 1) {
-        printf(" udpExecute: minrad should be a scalar\n");
+        snprintf(message, 100, "minrad should be a scalar\n");
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (BOLTS(0) < 0) {
-        printf(" udpExecute: width = %f < 0\n", WIDTH(0));
+        snprintf(message, 100, "width = %f < 0\n", WIDTH(0));
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (udps[0].arg[6].size > 1) {
-        printf(" udpExecute: minrad should be a scalar\n");
+        snprintf(message, 100, "minrad should be a scalar\n");
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (BOLTRAD(0) < 0) {
-        printf(" udpExecute: width = %f < 0\n", WIDTH(0));
+        snprintf(message, 100, "width = %f < 0\n", WIDTH(0));
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (udps[0].arg[7].size > 1) {
-        printf(" udpExecute: minrad should be a scalar\n");
+        snprintf(message, 100, "minrad should be a scalar\n");
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (PATTERN(0) > MINRAD(0)) {
-        printf(" udpExecute: patternrad must be less than minrad");
+        snprintf(message, 100, "patternrad must be less than minrad");
         status = EGADS_RANGERR;
         goto cleanup;
     } else if (WIDTH(0) <= 0 && MINRAD(0) <= 0 && MAXRAD(0) <= 0) {
-        printf(" udpExecute: width=minrad=maxrad=0\n");
+        snprintf(message, 100, "width=minrad=maxrad=0\n");
         status  = EGADS_GEOMERR;
         goto cleanup;
     } else if (MINRAD(0) > MAXRAD(0)) {
-        printf(" udpExecute: minrad cannot be bigger than maxrad\n");
+        snprintf(message, 100, "minrad cannot be bigger than maxrad\n");
         status = EGADS_RANGERR;
         goto cleanup;
     }
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(NULL);
     if (status < 0) {
-        printf(" udpExecute: problem caching arguments\n");
+        snprintf(message, 100, "problem caching arguments\n");
         goto cleanup;
     }
 #endif
@@ -921,8 +924,14 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 #endif
 
 cleanup:
-    if (status != EGADS_SUCCESS) {
+    if (strlen(message) > 0) {
+        *string = message;
+        printf("%s\n", message);
+    } else if (status != EGADS_SUCCESS) {
+        FREE(message);
         *string = udpErrorStr(status);
+    } else {
+        FREE(message);
     }
 
     return status;
@@ -945,21 +954,23 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
    /*@unused@*/double uvs[],            /* (in)  parametric coordinates for evaluation */
    /*@unused@*/double vels[])           /* (out) velocities */
 {
-        int iudp, judp;
+    int iudp, judp;
 
-        /* check that ebody matches one of the ebodys */
-        iudp = 0;
-        for (judp = 1; judp <= numUdp; judp++) {
-                if (ebody == udps[judp].ebody) {
-                        iudp = judp;
-                        break;
-                }
-        }
-        if (iudp <= 0) {
-                return EGADS_NOTMODEL;
-        }
+    /* --------------------------------------------------------------- */
 
-        /* this routine is not written yet */
-        return EGADS_NOLOAD;
+    /* check that ebody matches one of the ebodys */
+    iudp = 0;
+    for (judp = 1; judp <= numUdp; judp++) {
+        if (ebody == udps[judp].ebody) {
+            iudp = judp;
+            break;
+        }
+    }
+    if (iudp <= 0) {
+        return EGADS_NOTMODEL;
+    }
+
+    /* this routine is not written yet */
+    return EGADS_NOLOAD;
 }
 

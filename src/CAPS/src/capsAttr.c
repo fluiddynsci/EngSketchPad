@@ -3,7 +3,7 @@
  *
  *             Attribute Functions
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -23,6 +23,7 @@ extern void caps_jrnlWrite(capsProblem *problem, capsObject *obj, int status,
                            CAPSLONG sNum);
 extern int  caps_jrnlRead(capsProblem *problem, capsObject *obj, int nargs,
                           capsJrnl *args, CAPSLONG *sNum, int *status);
+
 
 int
 caps_attrByName(capsObject *cobj, char *name, capsObject **attr)
@@ -63,19 +64,21 @@ caps_attrByName(capsObject *cobj, char *name, capsObject **attr)
   
   args[0].type        = jValObj;
   args[0].members.obj = object;
-  status = caps_jrnlRead(problem, cobj, 1, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    if (ret == CAPS_SUCCESS) {
-      object->name = EG_strdup(name);
-      *attr = object;
-    } else {
-      caps_delete(object);
+  if (problem->dbFlag == 0) {
+    status = caps_jrnlRead(problem, cobj, 1, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      if (ret == CAPS_SUCCESS) {
+        object->name = EG_strdup(name);
+        *attr = object;
+      } else {
+        caps_delete(object);
+      }
+      return ret;
     }
-    return ret;
+    EG_free(object->blind);
+    object->blind = NULL;
   }
-  EG_free(object->blind);
-  object->blind = NULL;
 
   sNum  = problem->sNum;
   len   = cobj->attrs->attrs[i].length;
@@ -101,6 +104,7 @@ caps_attrByName(capsObject *cobj, char *name, capsObject **attr)
   status = caps_makeVal(type, len, data, &value);
   if (status != CAPS_SUCCESS) {
     caps_delete(object);
+    if (problem->dbFlag == 1) return status;
     goto adone;
   }
   if ((len == 1) || (type == String)) {
@@ -117,6 +121,7 @@ caps_attrByName(capsObject *cobj, char *name, capsObject **attr)
   
   *attr  = object;
   status = CAPS_SUCCESS;
+  if (problem->dbFlag == 1) return status;
 
 adone:
   args[0].members.obj = *attr;
@@ -162,20 +167,23 @@ caps_attrByIndex(capsObject *cobj, int in, capsObject **attr)
   
   args[0].type        = jValObj;
   args[0].members.obj = object;
-  status = caps_jrnlRead(problem, cobj, 1, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    if (ret == CAPS_SUCCESS) {
-      object->name = EG_strdup(cobj->attrs->attrs[in-1].name);
-      *attr = object;
-    } else {
-      caps_delete(object);
+  if (problem->dbFlag == 0) {
+    status = caps_jrnlRead(problem, cobj, 1, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      if (ret == CAPS_SUCCESS) {
+        object->name = EG_strdup(cobj->attrs->attrs[in-1].name);
+        *attr = object;
+      } else {
+        caps_delete(object);
+      }
+      return ret;
     }
-    return ret;
+    EG_free(object->blind);
+    object->blind = NULL;
   }
-  EG_free(object->blind);
-  object->blind = NULL;
 
+  sNum  = problem->sNum;
   len   = cobj->attrs->attrs[in-1].length;
   atype = cobj->attrs->attrs[in-1].type;
   if (atype == ATTRINT) {
@@ -199,6 +207,7 @@ caps_attrByIndex(capsObject *cobj, int in, capsObject **attr)
   status = caps_makeVal(type, len, data, &value);
   if (status != CAPS_SUCCESS) {
     caps_delete(object);
+    if (problem->dbFlag == 1) return status;
     goto idone;
   }
   if ((len == 1) || (type == String)) {
@@ -215,6 +224,7 @@ caps_attrByIndex(capsObject *cobj, int in, capsObject **attr)
   
   *attr  = object;
   status = CAPS_SUCCESS;
+  if (problem->dbFlag == 1) return status;
 
 idone:
   args[0].members.obj = *attr;
@@ -249,6 +259,7 @@ caps_setAttr(capsObject *cobj, /*@null@*/ const char *aname, capsObject *aval)
   if (status            != CAPS_SUCCESS) return status;
   value   = aval->blind;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag == 1) return CAPS_READONLYERR;
   
   /* ignore if restarting */
   if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;
@@ -389,6 +400,7 @@ caps_deleteAttr(capsObject *cobj, /*@null@*/ char *name)
   status = caps_findProblem(cobj, CAPS_DELETEATTR, &pobject);
   if (status            != CAPS_SUCCESS) return status;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag == 1) return CAPS_READONLYERR;
   
   /* ignore if restarting */
   if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;

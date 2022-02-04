@@ -5,7 +5,7 @@
  *
  *             General Object Header
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -33,20 +33,20 @@
 #endif
 
 #define CAPSMAJOR      1
-#define CAPSMINOR     20
-#define CAPSPROP      CAPSprop: Revision 1.20
+#define CAPSMINOR     21
+#define CAPSPROP      CAPSprop: Revision 1.21
 
 #define CAPSMAGIC     1234321
 #define MAXANAL       64
 #define MAXWRITER     16
 
 
-enum capsoFlag   {oFileName, oMODL, oEGO, oPhaseName, oContinue};
+enum capsoFlag   {oFileName, oMODL, oEGO, oPhaseName, oContinue, oPNreload};
 enum capsoType   {BODIES=-2, ATTRIBUTES, UNUSED, PROBLEM, VALUE, ANALYSIS,
                   BOUND, VERTEXSET, DATASET};
 enum capssType   {NONE, STATIC, PARAMETRIC, GEOMETRYIN, GEOMETRYOUT,
                   PARAMETER, USER, ANALYSISIN, ANALYSISOUT, CONNECTED,
-                  UNCONNECTED};
+                  UNCONNECTED, ANALYSISDYNO};
 enum capseType   {CONTINUATION=-1, CINFO, CWARN, CERROR, CSTAT};
 enum capsfType   {FieldIn, FieldOut, GeomSens, TessSens, User, BuiltIn};
 enum capsjType   {jInteger, jDouble, jString, jStrings, jTuple, jPointer,
@@ -139,6 +139,9 @@ typedef struct {
                                    when using reference points (2*nmat long) */
   int    *tris;                 /* the triangles defined by reference indices
                                    (bias 1) -- 3*ntri in length */
+  int    nseg;                  /* number of element segments */
+  int    *segs;                 /* the element segments by reference indices
+                                   (bias 1) -- 2*nsegs in length */
 } capsEleType;
 
 
@@ -200,6 +203,8 @@ typedef struct {
   int           *celem;         /* 2*nVerts (body, element) containing vert or NULL */
   int           nDtris;         /* number of triangles to plot data */
   int           *dtris;         /* NULL for NULL verts -- indices into verts */
+  int           nDsegs;         /* number of segs to plot data mesh */
+  int           *dsegs;         /* NULL for NULL verts -- indices into verts */
   int           nPoints;        /* number of entries in the geom positions */
   int           nTypes;         /* number of Element Types */
   capsEleType   *types;         /* the Element Types (nTypes in length) */
@@ -250,14 +255,12 @@ typedef struct {
 /*
  * structure for derivative data w/ CAPS Value structure
  *   only used with "real" (double) data and
- *   only with GeometryOut or AnalysisOut Value Objects
+ *   only with GeometryOut, AnalysisOut or AnalysisDynO Value Objects
  */
 typedef struct {
   char   *name;                  /* the derivative with respect to */
-                                 /* including optional [n] or [n,m]
-                                    for vectors/arrays */
-  int    rank;                   /* the number of members in the derivative */
-  double *deriv;                 /* the derivative values -- rank in length */
+  int    len_wrt;                /* the number of members in the derivative w.r.t. Value Object*/
+  double *deriv;                 /* the derivative values -- capsValue.length*len_wrt in length */
 } capsDeriv;
 
 
@@ -425,6 +428,7 @@ typedef struct {
   char       *root;              /* the path to the active phase */
   char       *phName;            /* the phase name */
   capsOwn    writer;             /* the owning info of a Problem writer */
+  int        dbFlag;             /* debug flag */
   int        stFlag;             /* Problem startup flag */
   FILE       *jrnl;              /* journal file */
   int        outLevel;           /* output level for messages
@@ -478,6 +482,7 @@ typedef struct {
 typedef struct {
   int           magicnumber;   /* the magic number */
   int           instance;      /* instance index */
+  int           inPost;        /* calling from Post Ananlysis */
   int           pIndex;        /* the OpenCSM parameter index - sensitivities */
   int           irow;          /* the parameter row index */
   int           icol;          /* the parameter column index */
@@ -514,6 +519,8 @@ typedef struct {
   capsObject **analysisIn;      /* list of Analysis Input objects */
   int        nAnalysisOut;      /* number of Analysis Output objects */
   capsObject **analysisOut;     /* list of Analysis Output objects */
+  int        nAnalysisDynO;     /* number of Dynamic Analysis Output objects */
+  capsObject **analysisDynO;    /* list of Dynamic Analysis Output objects */
   int        nBody;             /* number of Bodies for this Analysis */
   ego        *bodies;           /* the bodies */
   int        nTess;             /* number of tessellations for this Analysis */

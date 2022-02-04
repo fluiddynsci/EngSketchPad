@@ -5,7 +5,7 @@
  *
  *		WebViewer WebSocket Server Prototypes
  *
- *      Copyright 2011-2021, Massachusetts Institute of Technology
+ *      Copyright 2011-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -40,6 +40,8 @@ __ProtoExt__ /*@null@*/ wvContext *
                   wv_createContext( int bias,   float fov,  float zNear, 
                                     float zFar, float *eye, float *center, 
                                     float *up );
+
+__ProtoExt__ void wv_setUserPtr( wvContext *cntxt, /*@null@*/ void *userPtr );
 
 __ProtoExt__ void wv_setCallBack( wvContext *cntxt, /*@null@*/ wvCB callback );
 
@@ -87,6 +89,9 @@ __ProtoExt__ void wv_broadcastText( char *text );
 __ProtoExt__ void wv_adjustVerts( wvData *dstruct, float *focus );
 
 __ProtoExt__ void wv_cleanupServers( void );
+
+__ProtoExt__ void browserMessage( /*@null@*/ void *uPtr, /*@null@*/ void *wsi,
+                                  char *text, int len );
 
 #ifdef __cplusplus
 }

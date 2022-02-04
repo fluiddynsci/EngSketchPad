@@ -1136,12 +1136,7 @@ int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
    * mystran.preAnalysis()
    *
    * print ("\n\nRunning......")
-   * currentDirectory = os.getcwd() # Get our current working directory
-   *
-   * os.chdir(mystran.analysisDir) # Move into test directory
-   * os.system("mystran " + mystran.input.Proj_Name + ".dat > Info.out"); # Run via system call
-   *
-   * os.chdir(currentDirectory) # Move back to top directory
+   * mystran.system("mystran " + mystran.input.Proj_Name + ".dat > Info.out"); # Run via system call
    *
    * print ("\n\postAnalysis......")
    * mystran.postAnalysis()

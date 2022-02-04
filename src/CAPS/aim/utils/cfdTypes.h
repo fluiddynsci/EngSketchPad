@@ -9,11 +9,6 @@ typedef enum {UnknownBoundary, Inviscid, Viscous, Farfield, Extrapolate, Freestr
               BackPressure, Symmetry, SubsonicInflow, SubsonicOutflow,
               MassflowIn, MassflowOut, FixedInflow, FixedOutflow, MachOutflow} cfdSurfaceTypeEnum;
 
-typedef enum {ObjectiveUnknown, ObjectiveCl, ObjectiveCd,
-              ObjectiveCmx, ObjectiveCmy, ObjectiveCmz,
-              ObjectiveClCd,
-              ObjectiveCx, ObjectiveCy, ObjectiveCz} cfdObjectiveTypeEnum;
-
 typedef enum {DesignVariableUnknown, DesignVariableGeometry, DesignVariableAnalysis} cfdDesignVariableTypeEnum;
 
 // Structure to hold CFD surface information
@@ -97,32 +92,53 @@ typedef struct {
 
     cfdDesignVariableTypeEnum type; // variable type
 
-    int length;
+    const capsValue *var;
 
-    double *initialValue; // Initial value of design variable [length]
+    double *value;        // value of the variable [length]
     double *lowerBound;   // Lower bounds of variable [length]
     double *upperBound;   // Upper bounds of variable [length]
+    double *typicalSize;  // typical size of variable [length]
 
 } cfdDesignVariableStruct;
 
-// Structure to hold objective information as used in CFD solvers
+// Structure to hold a component of an output functional used in CFD solvers
 typedef struct {
 
     char *name;
 
-    cfdObjectiveTypeEnum objectiveType;
-
     double target;
     double weight;
     double power;
+    double bias;
 
-} cfdDesignObjectiveStruct;
+    int frame;
+    int form;
+
+    int bcID;
+    char *boundaryName;
+
+} cfdDesignFunctionalCompStruct;
+
+// Structure to hold output functional information as used in CFD solvers
+typedef struct {
+
+    char *name;
+
+    int numComponent;
+    cfdDesignFunctionalCompStruct *component;
+
+    double value;                  // computed objective function value
+
+    int numDesignVariable;
+    cfdDesignVariableStruct *dvar; // dObjective/dDesignVariable: numDesignVariable in length
+
+} cfdDesignFunctionalStruct;
 
 // Structure to hold a collection of optimization information as used in CFD solvers
 typedef struct {
 
-    int numDesignObjective;
-    cfdDesignObjectiveStruct *designObjective; // [numObjective]
+    int numDesignFunctional;
+    cfdDesignFunctionalStruct *designFunctional; // [numObjective]
 
     int numDesignVariable;
     cfdDesignVariableStruct *designVariable; // [numDesignVariable]

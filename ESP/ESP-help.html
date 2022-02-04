@@ -17,9 +17,9 @@
   </head>
 
   <body>
-    <p><h1 align=center>Engineering Sketch Pad (ESP) Version 1.20</h1>
+    <p><h1 align=center>Engineering Sketch Pad (ESP) Version 1.21</h1>
     <p><h3>Authors: John F. Dannenhoffer, III (Syracuse University) and Bob Haimes (MIT)</h3>
-    <p><h3>Date: September 2021.</h3>
+    <p><h3>Date: January 2022.</h3>
 
     <p><h3 align=center><img src="esp_logo.png" width="400"/></h3>
 
@@ -200,9 +200,6 @@
 
        <h4>Dragon.csm</h4>
        <img src="gallery/Dragon.png" width="100%"/>
-
-       <h4>FJ2.csm</h4>
-       <img src="gallery/FJ2.png" width="100%"/>
 
        <h4>Hypersonic.csm</h4>
        <img src="gallery/Hypersonic.png" width="100%"/>
@@ -9417,9 +9414,21 @@ Special User-defined Attributes for Nodes:
       </pre>
       The <code>name</code> is a character string (without white
       spaces) that will be listed in the <code>ESP</code> Display
-      list; this name must be unique.  The meaning of
-      <code>imax</code> and <code>jmax</code> depends on the type
-      of data, as described below.
+      list; this name must be unique.  The entity will be colored
+      black unless it ends in one of the following sequences:
+      <pre>
+	|r   red
+	|g   green
+	|b   blue
+	|c   cyan
+	|m   magenta
+	|y   yellow
+	|w   white
+      </pre>
+      If the name ends in one of the above sequences, the sequence
+      will be removed from the name.  The meaning of <code>imax</code>
+      and <code>jmax</code> depends on the type of data, as described
+      below.
 
     <h4>Series of points</h4>
     <p>Here <code>imax</code> is the number points
@@ -9563,7 +9572,7 @@ end
 
     <p><h2 id="sec8">8.0: Release Notes</h2>
 
-    <p><h3 id="sec8.3"> 8.1: New/extended features in v1.20</h3>
+    <p><h3 id="sec8.1"> 8.1: New/extended features in v1.20</h3>
 
     <p><h4>New/updated commands/statements and functions</h4>
 
@@ -9685,7 +9694,7 @@ end
     <p>preserve orientation of Faces during EXTRACT; add extract4
        test case
 
-    <p>do not include SSLOPE statments when determining if Sketch
+    <p>do not include SSLOPE statements when determining if Sketch
        points are co-planar
 
     <p>change number of reclassified points in Plugs to be the larger
@@ -9968,7 +9977,7 @@ end
     <p>serveCSM: allow plotting of shaded triangles (jmax=-3) and
        quadrilaterals (jmax=-4) in the plotfile in ESP
 
-    <p>pyOCSM: new capability that exactly imics OpenCSM API
+    <p>pyOCSM: new capability that exactly mimics OpenCSM API
 
     <p>Plugs: improve cloud point reclassification process; write
        plugs.despmtrs file at end
@@ -12380,7 +12389,7 @@ EGADS_READERR                         -32
 
     <p><h2 id="sec11">11.0: Copyright</h2>
 
-    <p>Copyright (C) 2010/2021 John F. Dannenhoffer, III (Syracuse
+    <p>Copyright (C) 2010/2022 John F. Dannenhoffer, III (Syracuse
        University)
 
     <p>This library is free software; you can redistribute it and/or

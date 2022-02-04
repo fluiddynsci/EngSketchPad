@@ -157,6 +157,19 @@ SPHERE    0   0   0   sphereR
 OUTPMTR sphereVol
 set sphereVol @volume
 
+# Create a box baxed on a matrix design parameter
+BOX despMat[1,1] despMat[2,1] despMat[3,1] despMat[1,2] despMat[2,2] despMat[3,2]
+    ATTRIBUTE _name $aBox
+
+OUTPMTR boxVol
+set boxVol @volume
+
+DIMENSION boxCG 3 1
+OUTPMTR boxCG
+set boxCG[1] @xcg
+set boxCG[2] @ycg
+set boxCG[3] @zcg
+
 # Dump out an egads file to test reading parameters
 DUMP unitGeom.egads 0 1
 

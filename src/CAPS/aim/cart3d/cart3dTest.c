@@ -3,7 +3,7 @@
  *
  *             Cart3D AIM tester
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -109,7 +109,8 @@ int main(int argc, char *argv[])
   }
   
   /* find & set tessellation input */
-  stat = caps_childByName(cobj, VALUE, ANALYSISIN, "Tess_Params", &tobj);
+  stat = caps_childByName(cobj, VALUE, ANALYSISIN, "Tess_Params", &tobj, &nErr, &errors);
+  if (nErr != 0) printErrors(nErr, errors);
   if (stat != CAPS_SUCCESS) {
     printf(" caps_childByName = %d\n", stat);
     caps_close(pobj, 0, NULL);
@@ -125,7 +126,8 @@ int main(int argc, char *argv[])
   }
   
   /* find & set alpha input */
-  stat = caps_childByName(cobj, VALUE, ANALYSISIN, "alpha", &tobj);
+  stat = caps_childByName(cobj, VALUE, ANALYSISIN, "alpha", &tobj, &nErr, &errors);
+  if (nErr != 0) printErrors(nErr, errors);
   if (stat != CAPS_SUCCESS) {
     printf(" caps_childByName tParams = %d\n", stat);
     caps_close(pobj, 0, NULL);
@@ -142,7 +144,8 @@ int main(int argc, char *argv[])
   }
   
   /* find & set maxR input */
-  stat = caps_childByName(cobj, VALUE, ANALYSISIN, "maxR", &tobj);
+  stat = caps_childByName(cobj, VALUE, ANALYSISIN, "maxR", &tobj, &nErr, &errors);
+  if (nErr != 0) printErrors(nErr, errors);
   if (stat != CAPS_SUCCESS) {
     printf(" caps_childByName maxR = %d\n", stat);
     caps_close(pobj, 0, NULL);

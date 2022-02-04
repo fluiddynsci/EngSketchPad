@@ -3,7 +3,7 @@
  *
  *		WV server-side functions
  *
- *      Copyright 2011-2021, Massachusetts Institute of Technology
+ *      Copyright 2011-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -177,11 +177,19 @@ wv_createContext(int bias, float fov, float zNear, float zFar, float *eye,
   context->thumbnail  = NULL;
   context->gPrims     = NULL;
   context->nameMap    = NULL;
+  context->userPtr    = NULL;
   wv_stringSetOpen(&context->nameMap);
 
 /*@-nullret@*/
   return context;
 /*@+nullret@*/
+}
+
+
+void
+wv_setUserPtr(wvContext *cntxt, /*@null@*/ void *userPtr)
+{
+  cntxt->userPtr = userPtr;
 }
 
 

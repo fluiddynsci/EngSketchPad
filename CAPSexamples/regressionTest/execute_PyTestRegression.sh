@@ -168,6 +168,8 @@ if [[ "$TYPE" == "LINEARAERO" || "$TYPE" == "ALL" ]]; then
         expectPythonSuccess "avl_EigenValue_PyTest.py"
         if ( python -c 'import openmdao' ); then
             expectPythonSuccess "avl_OpenMDAO_3_PyTest.py"
+        else
+            notRun="$notRun\avl_OpenMDAO_3_PyTest.py"
         fi
     else
         notRun="$notRun\navl"
@@ -302,7 +304,14 @@ if [[ "$TYPE" == "CFD" || "$TYPE" == "ALL" ]]; then
    
     if [[ `command -v flowCart` ]]; then
         ulimit -s unlimited || true # Cart3D requires unlimited stack size
-        expectPythonSuccess "cart_PyTest.py"
+        expectPythonSuccess "cart3d_PyTest.py"
+        if ( python -c 'import openmdao' ); then
+            expectPythonSuccess "cart3d_OpenMDAO_3_alpha_PyTest.py"
+            expectPythonSuccess "cart3d_OpenMDAO_3_twist_PyTest.py"
+        else
+            notRun="$notRun\ncart3d_OpenMDAO_3_alpha_PyTest.py"
+            notRun="$notRun\ncart3d_OpenMDAO_3_twist_PyTest.py"
+        fi
     else
         notRun="$notRun\nCart3D"
     fi

@@ -1569,8 +1569,10 @@ int aflr3_Volume_Mesh (void *aimInfo,
                           Vol_Pent_5_Connectivity, Vol_Pent_6_Connectivity,
                           Vol_Tet_Connectivity, Coordinates);*/
 
-    status = CAPS_SUCCESS;
+    // Remove the temporary grid created by AFLR
+    remove(".tmp.b8.ugrid");
 
+    status = CAPS_SUCCESS;
 cleanup:
 
     if (status != CAPS_SUCCESS)

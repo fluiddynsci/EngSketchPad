@@ -133,7 +133,7 @@ lint:
 	$(LINT) -I../include -I$(IDIR) aimUtil.c aimMesh.c aimTransferUtil.c -uniondef -exportlocal -initallelements -Dclosedir=free
 	@echo " "
 	@echo "testingAIM:"
-	$(LINT) -I../include -I$(IDIR) testingAIM.c 
+	$(LINT) -I../include -I$(IDIR) testingAIM.c -uniondef
 
 clean:
 	-(cd $(ODIR); rm -f $(OBJS) testingAIM.o testingWriter.o aimUtil.o aimTransferUtil.o aimMesh.o)

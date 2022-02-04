@@ -3,7 +3,7 @@
  *
  *             AIM Utility Functions
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -131,6 +131,39 @@ aim_file(void *aimStruc, const char *file, char *aimFile)
 
 
 int
+aim_isDir(void *aimStruc, const char *path)
+{
+  int   status;
+  char  aimDir[PATH_MAX];
+#ifdef WIN32
+  DWORD dwAttr;
+#else
+  DIR   *dr = NULL;
+#endif
+
+  status = aim_file(aimStruc, path, aimDir);
+  if (status != CAPS_SUCCESS) return status;
+
+  /* are we a directory */
+#ifdef WIN32
+  dwAttr = GetFileAttributes(aimDir);
+  if ((dwAttr != (DWORD) -1) && ((dwAttr & FILE_ATTRIBUTE_DIRECTORY) != 0))
+    return CAPS_SUCCESS;
+#else
+/*@-mustfreefresh@*/
+  dr = opendir(aimDir);
+  if (dr != NULL) {
+    closedir(dr);
+    return CAPS_SUCCESS;
+  }
+/*@+mustfreefresh@*/
+#endif
+
+  return CAPS_NOTFOUND;
+}
+
+
+int
 aim_mkDir(void *aimStruc, const char *path)
 {
   int  status;
@@ -153,6 +186,45 @@ aim_mkDir(void *aimStruc, const char *path)
       return CAPS_DIRERR;
     }
   }
+
+  return CAPS_SUCCESS;
+}
+
+
+int
+aim_rmDir(void *aimStruc, const char *path)
+{
+  int  status;
+  size_t i, len;
+  char cmd[PATH_MAX+13];
+  char aimDir[PATH_MAX];
+  int  wild = (int)false;
+
+  len = strlen(path);
+  for (i = 0; i < len; i++) {
+    if (path[i] == '*' || path[i] == '?')
+      wild = (int)true;
+    if (path[i] == ' ') {
+      AIM_ERROR(aimStruc, "path ('%s') may not contain spaces!", path);
+      return CAPS_DIRERR;
+    }
+  }
+  if (wild == (int)false) {
+    status = aim_isDir(aimStruc, path);
+    if (status != CAPS_SUCCESS) return status;
+  }
+  status = aim_file(aimStruc, path, aimDir);
+  if (status != CAPS_SUCCESS) return status;
+
+#ifdef WIN32
+  snprintf(cmd, PATH_MAX+13, "rmdir /Q /S %s", aimDir);
+  fflush(NULL);
+#else
+  if (status != CAPS_SUCCESS) return status;
+  snprintf(cmd, PATH_MAX+13, "rm -rf %s", aimDir);
+#endif
+  status = system(cmd);
+  if ((status == -1) || (status == 127)) return CAPS_DIRERR;
 
   return CAPS_SUCCESS;
 }
@@ -253,7 +325,7 @@ int aim_relPath(void *aimStruc, const char *src,
     status   = aim_file(aimStruc, ".", aimDst);
   }
   AIM_STATUS(aimStruc, status);
-  
+
   len = strlen(problem->root);
   if ((len >= strlen(src)) || (len >= strlen(aimDst))) {
     AIM_ERROR(aimStruc, "File not in rootPath!");
@@ -348,39 +420,6 @@ int aim_symLink(void *aimStruc, const char *src, /*@null@*/ const char *dst)
 cleanup:
   return status;
 #endif
-}
-
-
-int
-aim_isDir(void *aimStruc, const char *path)
-{
-  int   status;
-  char  aimDir[PATH_MAX];
-#ifdef WIN32
-  DWORD dwAttr;
-#else
-  DIR   *dr = NULL;
-#endif
-
-  status = aim_file(aimStruc, path, aimDir);
-  if (status != CAPS_SUCCESS) return status;
-
-  /* are we a directory */
-#ifdef WIN32
-  dwAttr = GetFileAttributes(aimDir);
-  if ((dwAttr != (DWORD) -1) && ((dwAttr & FILE_ATTRIBUTE_DIRECTORY) != 0))
-    return CAPS_SUCCESS;
-#else
-/*@-mustfreefresh@*/
-  dr = opendir(aimDir);
-  if (dr != NULL) {
-    closedir(dr);
-    return CAPS_SUCCESS;
-  }
-/*@+mustfreefresh@*/
-#endif
-
-  return CAPS_NOTFOUND;
 }
 
 
@@ -846,8 +885,8 @@ aim_getIndex(void *aimStruc, /*@null@*/ const char *name,
 
   aInfo = (aimInfo *) aimStruc;
   if ((subtype != GEOMETRYIN) && (subtype != GEOMETRYOUT) &&
-      (subtype != ANALYSISIN) && (subtype != ANALYSISOUT))
-                                       return CAPS_BADTYPE;
+      (subtype != ANALYSISIN) && (subtype != ANALYSISOUT) &&
+      (subtype != ANALYSISDYNO))       return CAPS_BADTYPE;
   if (aInfo == NULL)                   return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
   problem  = aInfo->problem;
@@ -858,12 +897,15 @@ aim_getIndex(void *aimStruc, /*@null@*/ const char *name,
   } else if (subtype == GEOMETRYOUT) {
     nobj = problem->nGeomOut;
     objs = problem->geomOut;
-  } else if (subtype == ANALYSISIN) {
+  } else if (subtype == ANALYSISIN)  {
     nobj = analysis->nAnalysisIn;
     objs = analysis->analysisIn;
-  } else {
+  } else if (subtype == ANALYSISOUT) {
     nobj = analysis->nAnalysisOut;
     objs = analysis->analysisOut;
+  } else {
+    nobj = analysis->nAnalysisDynO;
+    objs = analysis->analysisDynO;
   }
   if (name == NULL) return nobj;
 
@@ -892,8 +934,8 @@ aim_getValue(void *aimStruc, int index, enum capssType subtype,
 
   aInfo = (aimInfo *) aimStruc;
   if ((subtype != GEOMETRYIN) && (subtype != GEOMETRYOUT) &&
-      (subtype != ANALYSISIN) && (subtype != ANALYSISOUT))
-                                       return CAPS_BADTYPE;
+      (subtype != ANALYSISIN) && (subtype != ANALYSISOUT) &&
+      (subtype != ANALYSISDYNO))       return CAPS_BADTYPE;
   if (aInfo == NULL)                   return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
   if (index <= 0)                      return CAPS_BADINDEX;
@@ -907,14 +949,18 @@ aim_getValue(void *aimStruc, int index, enum capssType subtype,
     nobj = problem->nGeomOut;
     objs = problem->geomOut;
     objName = "GEOMETRYOUT";
-  } else if (subtype == ANALYSISIN) {
+  } else if (subtype == ANALYSISIN)  {
     nobj = analysis->nAnalysisIn;
     objs = analysis->analysisIn;
     objName = "ANALYSISIN";
-  } else {
+  } else if (subtype == ANALYSISOUT) {
     nobj = analysis->nAnalysisOut;
     objs = analysis->analysisOut;
     objName = "ANALYSISOUT";
+  } else {
+    nobj = analysis->nAnalysisDynO;
+    objs = analysis->analysisDynO;
+    objName = "ANALYSISDYNO";
   }
   if (index > nobj) {
     AIM_ERROR(aimStruc, "%s Index (%d > %d) out-of-range!", objName, index, nobj);
@@ -922,6 +968,261 @@ aim_getValue(void *aimStruc, int index, enum capssType subtype,
   }
 
   *value = (capsValue *) objs[index-1]->blind;
+  return CAPS_SUCCESS;
+}
+
+
+int
+aim_initValue(capsValue *value)
+{
+  if (value == NULL) return CAPS_NULLVALUE;
+
+  value->length          = value->nrow = value->ncol = 1;
+  value->type            = Integer;
+  value->dim             = value->pIndex = value->index = 0;
+  value->lfixed          = value->sfixed = Fixed;
+  value->nullVal         = NotAllowed;
+  value->units           = NULL;
+  value->meshWriter      = NULL;
+  value->link            = NULL;
+  value->vals.reals      = NULL;
+  value->limits.dlims[0] = value->limits.dlims[1] = 0.0;
+  value->linkMethod      = Copy;
+  value->gInType         = 0;
+  value->partial         = NULL;
+  value->nderiv          = 0;
+  value->derivs          = NULL;
+
+  return CAPS_SUCCESS;
+}
+
+
+int
+aim_copyValue(capsValue *value, capsValue *copy)
+{
+  int i, j, len;
+
+  if (value == NULL) return CAPS_NULLVALUE;
+  if (copy  == NULL) return CAPS_NULLVALUE;
+
+  aim_initValue(copy);
+
+  copy->length          = value->length;
+  copy->nrow            = value->nrow;
+  copy->ncol            = value->ncol;
+  copy->type            = value->type;
+  copy->dim             = value->dim;
+  copy->pIndex          = value->pIndex;
+  copy->index           = value->index;
+  copy->lfixed          = value->lfixed;
+  copy->sfixed          = value->sfixed;
+  copy->nullVal         = value->nullVal;
+  copy->units           = EG_strdup(value->units);
+  copy->meshWriter      = value->meshWriter;
+  copy->link            = value->link;
+
+  if (copy->type == Double || copy->type == DoubleDeriv) {
+    if (value->length > 1) {
+      copy->vals.reals = (double*)EG_alloc(value->length*sizeof(double));
+      if (copy->vals.reals == NULL) return EGADS_MALLOC;
+      for (i = 0; i < value->length; i++)
+        copy->vals.reals[i] = value->vals.reals[i];
+    } else {
+      copy->vals.real = value->vals.real;
+    }
+  } else if (copy->type == Integer) {
+    if (value->length > 1) {
+      copy->vals.integers = (int*)EG_alloc(value->length*sizeof(int));
+      if (copy->vals.integers == NULL) return EGADS_MALLOC;
+      for (i = 0; i < value->length; i++)
+        copy->vals.integers[i] = value->vals.integers[i];
+    } else {
+      copy->vals.integer = value->vals.integer;
+    }
+  } else if (copy->type == String) {
+    if (value->length > 1) {
+      len = 0;
+      for (i = 0; i < value->length; i++)
+        len += strlen(&value->vals.string[len])+1;
+
+      copy->vals.string = (char*)EG_alloc(len*sizeof(char));
+      if (copy->vals.string == NULL) return EGADS_MALLOC;
+      for (i = 0; i < len; i++)
+        copy->vals.string[i] = value->vals.string[i];
+    } else {
+      copy->vals.string = EG_strdup(value->vals.string);
+    }
+  } else if (copy->type == Tuple) {
+
+    copy->vals.tuple = (capsTuple*)EG_alloc(value->length*sizeof(capsTuple));
+    if (copy->vals.tuple == NULL) return EGADS_MALLOC;
+    for (i = 0; i < value->length; i++) {
+      copy->vals.tuple[i].name = EG_strdup(value->vals.tuple[i].name);
+      copy->vals.tuple[i].value = EG_strdup(value->vals.tuple[i].value);
+    }
+  } else {
+    return CAPS_NOTIMPLEMENT;
+  }
+
+  copy->limits.dlims[0] = value->limits.dlims[0];
+  copy->limits.dlims[1] = value->limits.dlims[1];
+  copy->linkMethod      = value->linkMethod;
+  copy->gInType         = value->gInType;
+  if (value->partial != NULL) {
+    copy->partial = (int*)EG_alloc(value->length*sizeof(int));
+    if (copy->partial == NULL) return EGADS_MALLOC;
+
+    for (i = 0; i < value->length; i++)
+      copy->partial[i] = value->partial[i];
+  }
+  copy->nderiv = value->nderiv;
+  if (value->derivs != NULL) {
+
+    copy->derivs = (capsDeriv*)EG_alloc(value->nderiv*sizeof(capsDeriv));
+    if (copy->derivs == NULL) return EGADS_MALLOC;
+
+    for (i = 0; i < value->length; i++) {
+      copy->derivs[i].len_wrt = value->derivs[i].len_wrt;
+      copy->derivs[i].name = EG_strdup(copy->derivs[i].name);
+
+      len = value->length*value->derivs[i].len_wrt;
+      copy->derivs[i].deriv = (double*)EG_alloc(len*sizeof(double));
+      for (j = 0; j < len; j++) {
+        copy->derivs[i].deriv[j] = value->derivs[i].deriv[j];
+      }
+    }
+  }
+
+  return CAPS_SUCCESS;
+}
+
+
+void
+aim_freeValue(capsValue *value)
+{
+  int i;
+
+  if (value == NULL) return;
+
+  EG_free(value->units);
+
+  if (value->length > 1) {
+    if (value->type == Double || value->type == DoubleDeriv) {
+      EG_free(value->vals.reals);
+    } else if (value->type == Integer) {
+      EG_free(value->vals.integers);
+    } else if (value->type == String) {
+      EG_free(value->vals.string);
+    } else if (value->type == Tuple) {
+      for (i = 0; i < value->length; i++) {
+        EG_free(value->vals.tuple[i].name);
+        EG_free(value->vals.tuple[i].value);
+      }
+      EG_free(value->vals.tuple);
+    }
+  }
+  EG_free(value->partial);
+  if (value->derivs != NULL) {
+    for (i = 0; i < value->nderiv; i++) {
+      EG_free(value->derivs[i].name);
+      EG_free(value->derivs[i].deriv);
+    }
+    EG_free(value->derivs);
+  }
+
+  aim_initValue(value);
+}
+
+
+int
+aim_makeDynamicOutput(void *aimStruc, const char *dynObjName, capsValue *value)
+{
+  int          i;
+  aimInfo      *aInfo;
+  capsAnalysis *analysis;
+  capsProblem  *problem;
+  capsValue    *val;
+  capsObject   *obj, **tmp, *pobject;
+
+  aInfo = (aimInfo *) aimStruc;
+  if (aInfo == NULL)                   return CAPS_NULLOBJ;
+  if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
+  if (dynObjName == NULL)              return CAPS_NULLNAME;
+  if (value      == NULL)              return CAPS_NULLVALUE;
+  if (aInfo->inPost != 1)              return CAPS_STATEERR;
+  problem  = aInfo->problem;
+  pobject  = problem->mySelf;
+  analysis = (capsAnalysis *) aInfo->analysis;
+
+  for (i = 0; i < analysis->nAnalysisDynO; i++) {
+    obj = analysis->analysisDynO[i];
+    if (obj       == NULL) continue;
+    if (obj->name == NULL) continue;
+    if (strcmp(obj->name, dynObjName) == 0) return CAPS_BADNAME;
+  }
+  for (i = 0; i < problem->nAnalysis; i++) {
+    if (problem->analysis[i] == NULL) continue;
+    if (problem->analysis[i]->blind == analysis) break;
+  }
+  if (i == problem->nAnalysis) return CAPS_NOTFOUND;
+
+  /* make the object and fill it in */
+
+  val = (capsValue  *) EG_alloc(sizeof(capsValue));
+  obj = (capsObject *) EG_alloc(sizeof(capsObject));
+  if ((obj == NULL) || (val == NULL)) {
+    if (obj != NULL) EG_free(obj);
+    if (val != NULL) EG_free(val);
+    return EGADS_MALLOC;
+  }
+
+  if (analysis->analysisDynO == NULL) {
+    analysis->analysisDynO = (capsObject  **) EG_alloc(sizeof(capsObject *));
+    if (analysis->analysisDynO == NULL) {
+      EG_free(obj);
+      EG_free(val);
+      return EGADS_MALLOC;
+    }
+    analysis->nAnalysisDynO = 0;
+  } else {
+    tmp = (capsObject  **) EG_reall( analysis->analysisDynO,
+                                    (analysis->nAnalysisDynO+1)*
+                                    sizeof(capsObject *));
+    if (tmp == NULL) {
+      EG_free(obj);
+      EG_free(val);
+      return EGADS_MALLOC;
+    }
+    analysis->analysisDynO = tmp;
+  }
+  /* copy contents */
+  (*val) = (*value);
+  val->index = analysis->nAnalysisDynO;
+
+  obj->magicnumber = CAPSMAGIC;
+  obj->type        = VALUE;
+  obj->subtype     = ANALYSISDYNO;
+  obj->name        = EG_strdup(dynObjName);
+  obj->attrs       = NULL;
+  obj->blind       = val;
+  obj->flist       = NULL;
+  obj->parent      = problem->analysis[i];
+  obj->nHistory    = 0;
+  obj->history     = NULL;
+  obj->last.nLines = 0;
+  obj->last.lines  = NULL;
+  obj->last.pname  = EG_strdup(pobject->last.pname);
+  obj->last.pID    = EG_strdup(pobject->last.pID);
+  obj->last.user   = EG_strdup(pobject->last.user);
+  obj->last.sNum   = pobject->last.sNum;
+  for (i = 0; i < 6; i++)
+    obj->last.datetime[i] = pobject->last.datetime[i];
+
+  analysis->analysisDynO[analysis->nAnalysisDynO] = obj;
+  analysis->nAnalysisDynO++;
+
+  /* clear out the input value structure */
+  (void) aim_initValue(value);
   return CAPS_SUCCESS;
 }
 
@@ -938,8 +1239,8 @@ aim_getName(void *aimStruc, int index, enum capssType subtype,
 
   aInfo = (aimInfo *) aimStruc;
   if ((subtype != GEOMETRYIN) && (subtype != GEOMETRYOUT) &&
-      (subtype != ANALYSISIN) && (subtype != ANALYSISOUT))
-                                       return CAPS_BADTYPE;
+      (subtype != ANALYSISIN) && (subtype != ANALYSISOUT) &&
+      (subtype != ANALYSISDYNO))       return CAPS_BADTYPE;
   if (aInfo == NULL)                   return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
   if (index <= 0)                      return CAPS_BADINDEX;
@@ -951,12 +1252,15 @@ aim_getName(void *aimStruc, int index, enum capssType subtype,
   } else if (subtype == GEOMETRYOUT) {
     nobj = problem->nGeomOut;
     objs = problem->geomOut;
-  } else if (subtype == ANALYSISIN) {
+  } else if (subtype == ANALYSISIN)  {
     nobj = analysis->nAnalysisIn;
     objs = analysis->analysisIn;
-  } else {
+  } else if (subtype == ANALYSISOUT) {
     nobj = analysis->nAnalysisOut;
     objs = analysis->analysisOut;
+  } else {
+    nobj = analysis->nAnalysisDynO;
+    objs = analysis->analysisDynO;
   }
   if (index > nobj)                    return CAPS_BADINDEX;
 
@@ -1371,17 +1675,20 @@ aim_valueAttrs(void *aimStruc, int index, enum capssType stype, int *nValue,
   analysis = (capsAnalysis *) aInfo->analysis;
 
   if (stype == GEOMETRYIN) {
-    if (index > problem->nGeomIn)       return CAPS_BADINDEX;
+    if (index > problem->nGeomIn)        return CAPS_BADINDEX;
     object = problem->geomIn[index-1];
   } else if (stype == GEOMETRYOUT) {
-    if (index > problem->nGeomOut)      return CAPS_BADINDEX;
+    if (index > problem->nGeomOut)       return CAPS_BADINDEX;
     object = problem->geomOut[index-1];
   } else if (stype == ANALYSISIN) {
-    if (index > analysis->nAnalysisIn)  return CAPS_BADINDEX;
+    if (index > analysis->nAnalysisIn)   return CAPS_BADINDEX;
     object = analysis->analysisIn[index-1];
   } else if (stype == ANALYSISOUT) {
-    if (index > analysis->nAnalysisOut) return CAPS_BADINDEX;
+    if (index > analysis->nAnalysisOut)  return CAPS_BADINDEX;
     object = analysis->analysisOut[index-1];
+  } else if (stype == ANALYSISDYNO) {
+    if (index > analysis->nAnalysisDynO) return CAPS_BADINDEX;
+    object = analysis->analysisDynO[index-1];
   } else {
     return CAPS_BADTYPE;
   }
@@ -1446,7 +1753,7 @@ int
 aim_setSensitivity(void *aimStruc, const char *GIname, int irow, int icol)
 {
   int         stat, i, j, k, m, n, ipmtr, nbrch, npmtr, nrow, ncol, type;
-  int         buildTo, builtTo, nbody;
+  int         buildTo, builtTo, nbody, i_wrt, len_wrt, outLevel;
   char        name[MAX_NAME_LEN];
   double      *reals;
   modl_T      *MODL;
@@ -1483,14 +1790,20 @@ aim_setSensitivity(void *aimStruc, const char *GIname, int irow, int icol)
   aInfo->icol   = 0;
 
   /* clear all then set */
-  stat = ocsmSetDtime(problem->modl, 0);                     if (stat != SUCCESS) return stat;
-  stat = ocsmSetVelD(problem->modl, 0,     0,    0,    0.0); if (stat != SUCCESS) return stat;
-  stat = ocsmSetVelD(problem->modl, ipmtr, irow, icol, 1.0); if (stat != SUCCESS) return stat;
+  stat = ocsmSetDtime(problem->modl, 0);
+  if (stat != SUCCESS) return stat;
+  stat = ocsmSetVelD(problem->modl, 0,     0,    0,    0.0);
+  if (stat != SUCCESS) return stat;
+  stat = ocsmSetVelD(problem->modl, ipmtr, irow, icol, 1.0);
+  if (stat != SUCCESS) return stat;
   buildTo = 0;
   nbody   = 0;
+  outLevel = ocsmSetOutLevel(0);
+  printf(" CAPS Info: Building sensitivity information for: %s[%d,%d]\n", name, irow, icol);
   stat    = ocsmBuild(problem->modl, buildTo, &builtTo, &nbody, NULL);
   fflush(stdout);
   if (stat != SUCCESS) return stat;
+  ocsmSetOutLevel(outLevel);
 
   /* fill in GeometryOut Dot values -- same as caps_geomOutSensit */
   for (i = 0; i < problem->nRegGIN; i++) {
@@ -1498,24 +1811,33 @@ aim_setSensitivity(void *aimStruc, const char *GIname, int irow, int icol)
     value = (capsValue *) problem->geomIn[problem->regGIN[i].index-1]->blind;
     if (value                   == NULL)  continue;
     if (value->pIndex           != ipmtr) continue;
-    if (problem->regGIN[i].irow != irow)  continue;
-    if (problem->regGIN[i].icol != icol)  continue;
+    if (problem->regGIN[i].irow != irow && problem->regGIN[i].irow > 0)  continue;
+    if (problem->regGIN[i].icol != icol && problem->regGIN[i].icol > 0)  continue;
+
+    if ((problem->regGIN[i].irow == 0) &&
+        (problem->regGIN[i].icol == 0))
+      i_wrt = value->ncol*(irow-1) + (icol-1);
+    else
+      i_wrt = 0;
+
     for (j = 0; j < problem->nGeomOut; j++) {
       if (problem->geomOut[j] == NULL) continue;
       value = (capsValue *) problem->geomOut[j]->blind;
-      if (value               == NULL) continue;
-      if (value->derivs         == NULL) continue;
-      if (value->derivs[i].deriv  != NULL) continue;
-      value->derivs[i].deriv = (double *) EG_alloc(value->length*sizeof(double));
-      if (value->derivs[i].deriv  == NULL) continue;
+      if (value                  == NULL) continue;
+      if (value->derivs          == NULL) continue;
+
+      len_wrt = value->derivs[i].len_wrt;
+      if (value->derivs[i].deriv == NULL)
+        value->derivs[i].deriv = (double *) EG_alloc(value->length*len_wrt*sizeof(double));
+      if (value->derivs[i].deriv == NULL) { return EGADS_MALLOC; }
+
       reals = value->vals.reals;
       if (value->length == 1) reals = &value->vals.real;
       for (n = k = 0; k < value->nrow; k++)
         for (m = 0; m < value->ncol; m++, n++)
           ocsmGetValu(problem->modl, value->pIndex, k+1, m+1,
-                      &reals[n], &value->derivs[i].deriv[n]);
+                      &reals[n], &value->derivs[i].deriv[len_wrt*n + i_wrt]);
     }
-    break;
   }
 
   aInfo->pIndex = ipmtr;
@@ -1529,7 +1851,7 @@ int
 aim_getSensitivity(void *aimStruc, ego tess, int ttype, int index, int *npts,
                    double **dxyz)
 {
-  int          i, stat, ibody, npt, ntri, type;
+  int          i, stat, ibody, npt, ntri, type, outLevel;
   double       *dsen;
   const int    *ptype, *pindex, *tris, *tric;
   const double *xyzs, *parms;
@@ -1603,14 +1925,18 @@ aim_getSensitivity(void *aimStruc, ego tess, int ttype, int index, int *npts,
 
   /* get and return the requested sensitivity */
   if (ttype <= 0) {
+    outLevel = ocsmSetOutLevel(0);
     stat = ocsmGetVel(problem->modl, ibody, type, index, npt, NULL, dsen);
+    ocsmSetOutLevel(outLevel);
     if (stat != SUCCESS) {
       EG_free(dsen);
       MODL->body[ibody].etess = oldtess;
       return stat;
     }
   } else {
+    outLevel = ocsmSetOutLevel(0);
     stat = ocsmGetTessVel(problem->modl, ibody, type, index, &xyzs);
+    ocsmSetOutLevel(outLevel);
     if (stat != SUCCESS) {
       EG_free(dsen);
       MODL->body[ibody].etess = oldtess;
@@ -1620,6 +1946,8 @@ aim_getSensitivity(void *aimStruc, ego tess, int ttype, int index, int *npts,
   }
   /* reset OCSMs tessellation */
   MODL->body[ibody].etess = oldtess;
+  if (MODL->dtime != 0)
+    printf(" CAPS Info: Sensitivity finite differenced\n");
 
   *npts = npt;
   *dxyz = dsen;
@@ -1632,12 +1960,13 @@ aim_tessSensitivity(void *aimStruc, const char *GIname, int irow, int icol,
                     ego tess, int *npts, double **dxyz)
 {
   int          i, j, ipmtr, ibody, stat, nbrch, npmtr, nbody, nrow, ncol, type;
-  int          npt, nface, np, ntris, global;
+  int          npt, nface, np, ntris, global, outLevel;
   const int    *ptype, *pindex, *tris, *tric;
   char         name[MAX_NAME_LEN];
   double       *dsen;
   const double *xyzs, *xyz, *uv;
-  ego          body, oldtess, *faces;
+  ego          body, oldtess;
+  egTessel     *btess;
   modl_T       *MODL;
   aimInfo      *aInfo;
   capsProblem  *problem;
@@ -1660,9 +1989,8 @@ aim_tessSensitivity(void *aimStruc, const char *GIname, int irow, int icol,
   if (body == NULL)                    return EGADS_NULLOBJ;
   if (body->magicnumber != MAGIC)      return EGADS_NOTOBJ;
   if (body->oclass != BODY)            return EGADS_NOTBODY;
-  stat = EG_getBodyTopos(body, NULL, FACE, &nface, &faces);
+  stat = EG_getBodyTopos(body, NULL, FACE, &nface, NULL);
   if (stat != EGADS_SUCCESS)           return stat;
-  EG_free(faces);
 
   for (ibody = 1; ibody <= MODL->nbody; ibody++) {
     if (MODL->body[ibody].onstack != 1) continue;
@@ -1700,30 +2028,63 @@ aim_tessSensitivity(void *aimStruc, const char *GIname, int irow, int icol,
   /* return the requested sensitivity */
   oldtess = MODL->body[ibody].etess;
   MODL->body[ibody].etess = tess;
-  for (i = 1; i <= nface; i++) {
-    stat = EG_getTessFace(tess, i, &np, &xyz, &uv, &ptype, &pindex, &ntris,
-                          &tris, &tric);
-    if (stat != EGADS_SUCCESS) {
-      EG_free(dsen);
-      return stat;
-    }
-    stat = ocsmGetTessVel(problem->modl, ibody, OCSM_FACE, i, &xyzs);
-    if (stat != SUCCESS) {
-      EG_free(dsen);
-      return stat;
-    }
-    for (j = 1; j <= np; j++) {
-      stat = EG_localToGlobal(tess, i, j, &global);
+
+  btess = (egTessel *) tess->blind;
+  if (btess->nFace == 0) {
+    for (i = 1; i <= btess->nEdge; i++) {
+      stat = EG_getTessEdge(tess, i, &np, &xyz, &uv);
       if (stat != EGADS_SUCCESS) {
         EG_free(dsen);
         return stat;
       }
-      dsen[3*global-3] = xyzs[3*j-3];
-      dsen[3*global-2] = xyzs[3*j-2];
-      dsen[3*global-1] = xyzs[3*j-1];
+      outLevel = ocsmSetOutLevel(0);
+      stat = ocsmGetTessVel(problem->modl, ibody, OCSM_EDGE, i, &xyzs);
+      ocsmSetOutLevel(outLevel);
+      if (stat != SUCCESS) {
+        EG_free(dsen);
+        return stat;
+      }
+      for (j = 1; j <= np; j++) {
+        stat = EG_localToGlobal(tess, -i, j, &global);
+        if (stat != EGADS_SUCCESS) {
+          EG_free(dsen);
+          return stat;
+        }
+        dsen[3*global-3] = xyzs[3*j-3];
+        dsen[3*global-2] = xyzs[3*j-2];
+        dsen[3*global-1] = xyzs[3*j-1];
+      }
+    }
+  } else {
+    for (i = 1; i <= nface; i++) {
+      stat = EG_getTessFace(tess, i, &np, &xyz, &uv, &ptype, &pindex, &ntris,
+                            &tris, &tric);
+      if (stat != EGADS_SUCCESS) {
+        EG_free(dsen);
+        return stat;
+      }
+      outLevel = ocsmSetOutLevel(0);
+      stat = ocsmGetTessVel(problem->modl, ibody, OCSM_FACE, i, &xyzs);
+      ocsmSetOutLevel(outLevel);
+      if (stat != SUCCESS) {
+        EG_free(dsen);
+        return stat;
+      }
+      for (j = 1; j <= np; j++) {
+        stat = EG_localToGlobal(tess, i, j, &global);
+        if (stat != EGADS_SUCCESS) {
+          EG_free(dsen);
+          return stat;
+        }
+        dsen[3*global-3] = xyzs[3*j-3];
+        dsen[3*global-2] = xyzs[3*j-2];
+        dsen[3*global-1] = xyzs[3*j-1];
+      }
     }
   }
   MODL->body[ibody].etess = oldtess;
+  if (MODL->dtime != 0)
+    printf(" CAPS Info: Sensitivity finite difference used for: %s[%d,%d]\n", name, irow, icol);
 
   *npts = npt;
   *dxyz = dsen;

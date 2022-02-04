@@ -1165,9 +1165,9 @@ int nastran_writeMaterialCard(FILE *fp, feaMaterialStruct *feaMaterial, feaFileF
             &feaMaterial->thermalExpCoeff, // a
             &feaMaterial->temperatureRef, // tref
             &feaMaterial->dampingCoeff, // ge
-            NULL, // &feaMaterial->tensionAllow, // st
-            NULL, // &feaMaterial->compressAllow, // sc
-            NULL, // &feaMaterial->sheerAllow, // ss
+            &feaMaterial->tensionAllow, // st
+            &feaMaterial->compressAllow, // sc
+            &feaMaterial->shearAllow, // ss
             NULL, // mcsid
             feaFileFormat->fileType
         );
@@ -2179,8 +2179,12 @@ int nastran_writeDesignVariableCard(FILE *fp, feaDesignVariableStruct *feaDesign
 }
 
 // Write design variable relation information from a feaDesignVariableRelation structure
-int nastran_writeDesignVariableRelationCard(FILE *fp, feaDesignVariableRelationStruct *feaDesignVariableRelation, feaProblemStruct *feaProblem, feaFileFormatStruct *feaFileFormat) {
-    
+int nastran_writeDesignVariableRelationCard(void *aimInfo,
+                                            FILE *fp,
+                                            feaDesignVariableRelationStruct *feaDesignVariableRelation,
+                                            feaProblemStruct *feaProblem,
+                                            feaFileFormatStruct *feaFileFormat)
+{
     int i, j, status, uniqueID;
 
     int numDesignVariable, *designVariableSetID = NULL;
@@ -2345,7 +2349,7 @@ int nastran_writeDesignVariableRelationCard(FILE *fp, feaDesignVariableRelationS
                 feaFileFormat->fileType
             );
 
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
         }
     }
 
@@ -2388,7 +2392,7 @@ int nastran_writeDesignVariableRelationCard(FILE *fp, feaDesignVariableRelationS
                 feaFileFormat->fileType
             );
 
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
         }
     }
 
@@ -2402,9 +2406,11 @@ int nastran_writeDesignVariableRelationCard(FILE *fp, feaDesignVariableRelationS
             // Element subtypes: UnknownMeshSubElement, ConcentratedMassElement, BarElement, BeamElement, ShellElement, ShearElement
             type = _getElementTypeIdentifier(relationSetType[i], relationSetSubType[i]);
             if (type == NULL) {
-                PRINT_WARNING("Unknown element type and/or subtype: %d %d", 
-                              relationSetType[i],
-                              relationSetSubType[i]);
+                AIM_ERROR(aimInfo, "Unknown element type and/or subtype: %d %d",
+                                   relationSetType[i],
+                                   relationSetSubType[i]);
+                status = CAPS_BADVALUE;
+                goto cleanup;
             }
 
             status = nastranCard_dvcrel1(
@@ -2422,46 +2428,29 @@ int nastran_writeDesignVariableRelationCard(FILE *fp, feaDesignVariableRelationS
                 feaFileFormat->fileType
             );
 
-            if (type != NULL) EG_free(type);
+            AIM_FREE(type);
 
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
         }
     }
 
     else {
-        PRINT_ERROR("Unknown design variable relation type: %d", 
+        AIM_ERROR(aimInfo, "Unknown design variable relation type: %d",
                     feaDesignVariableRelation->relationType);
         status = CAPS_BADVALUE;
     }
 
 
-    cleanup:
+cleanup:
 
-        if (fieldName != NULL) {
-            EG_free(fieldName);
-        }
+    AIM_FREE(fieldName);
+    AIM_FREE(designVariableSet);
+    AIM_FREE(designVariableSetID);
+    AIM_FREE(relationSetID);
+    AIM_FREE(relationSetType);
+    AIM_FREE(relationSetSubType);
 
-        if (designVariableSet != NULL) {
-            EG_free(designVariableSet);
-        }
-
-        if (designVariableSetID != NULL) {
-            EG_free(designVariableSetID);
-        }
-
-        if (relationSetID != NULL) {
-            EG_free(relationSetID);
-        }
-
-        if (relationSetType != NULL) {
-            EG_free(relationSetType);
-        }
-
-        if (relationSetSubType != NULL) {
-            EG_free(relationSetSubType);
-        }
-
-        return status;
+    return status;
 }
 
 static int _getNextEquationLine(char **equationLines, const int lineIndex, 

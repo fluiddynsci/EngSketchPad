@@ -1,7 +1,7 @@
 // ESP.js implements functions for the Engineering Sketch Pad (ESP)
 // written by John Dannenhoffer and Bob Haimes
 
-// Copyright (C) 2010/2021  John F. Dannenhoffer, III (Syracuse University)
+// Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
 //
 // This library is free software; you can redistribute it and/or
 //    modify it under the terms of the GNU Lesser General Public
@@ -63,8 +63,8 @@
 //    cmdFileOpen()
 //    cmdFileExport()
 //    cmdFileEdit(e,indx)
-//       editCsmOk()
-//       editCsmCancel()
+//       editorOk()
+//       editorCancel()
 //    cmdTool()
 //       cmdDone()
 //    cmdStepThru(direction)
@@ -76,8 +76,14 @@
 //       cmdCollabSync()
 //       cmdCollabUnsync()
 //       cmdCollabMessage()
+//    cmdOverlayBeg(timName,overlayName)
+//       cmdOverlayEnd()
 
 // functions associated with menu selections (and associated button presses)
+//    addCval()
+//    editCval(e)
+//       editCvalOk()
+//       editCvalCancel()
 //    addPmtr()
 //    editPmtr(e)
 //       addRow()
@@ -194,6 +200,7 @@
 //    cmdEditIndent()
 //    cmdEditHint(line)
 //    cmdEditUndo(cm)
+//    cmdEditDebug()
 //    printObject(obj)
 //    sprintf()
 //    CodeMirror.defineSimpleMode(mode, options)
@@ -205,7 +212,9 @@
 // callback when "undoButton" is pressed (called by ESP.html)
 //
 var cmdUndo = function() {
-    if (wv.curTool.cmdUndo !== undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.cmdUndo !== undefined) {
+        wv.overlay.cmdUndo();
+    } else if (wv.curTool.cmdUndo !== undefined) {
         wv.curTool.cmdUndo();
     }
 };
@@ -225,7 +234,9 @@ var cmdSolve = function() {
     document.getElementById("myToolMenu"  ).classList.remove("showToolMenu"  );
     document.getElementById("myCollabMenu").classList.remove("showCollabMenu");
 
-    if (wv.curTool.cmdSolve !== undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.cmdSolve !== undefined) {
+        wv.overlay.cmdSolve();
+    } else if (wv.curTool.cmdSolve !== undefined) {
         wv.curTool.cmdSolve();
     }
 };
@@ -235,7 +246,9 @@ var cmdSolve = function() {
 // callback when "saveButton" is pressed (called by ESP.html)
 //
 var cmdSave = function() {
-    if (wv.curTool.cmdSave !== undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.cmdSave !== undefined) {
+        wv.overlay.cmdSolve();
+    } else if (wv.curTool.cmdSave !== undefined) {
         wv.curTool.cmdSave();
     }
 };
@@ -245,7 +258,9 @@ var cmdSave = function() {
 // callback when "quitButton" is pressed (called by ESP.html)
 //
 var cmdQuit = function() {
-    if (wv.curTool.cmdQuit !== undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.cmdQuit !== undefined) {
+        wv.overlay.cmdQuit();
+    } else if (wv.curTool.cmdQuit !== undefined) {
         wv.curTool.cmdQuit();
     }
 };
@@ -256,7 +271,9 @@ var cmdQuit = function() {
 //
 var cmdHome = function() {
     if (checkIfFree()) {
-        if (wv.curTool.cmdHome !== undefined) {
+        if        (wv.overlay !== undefined && wv.overlay.cmdHome !== undefined) {
+            wv.overlay.cmdHome();
+        } else if (wv.curTool.cmdHome !== undefined) {
             wv.curTool.cmdHome();
         } else if (wv.usingMain == 1) {
             main.cmdHome();
@@ -270,7 +287,9 @@ var cmdHome = function() {
 //
 var cmdLeft = function() {
     if (checkIfFree()) {
-        if (wv.curTool.cmdLeft !== undefined) {
+        if        (wv.overlay !== undefined && wv.overlay.cmdLeft !== undefined) {
+            wv.overlay.cmdLeft();
+        } else if (wv.curTool.cmdLeft !== undefined) {
             wv.curTool.cmdLeft();
         } else if (wv.usingMain == 1) {
             main.cmdLeft();
@@ -284,7 +303,9 @@ var cmdLeft = function() {
 //
 var cmdRite = function() {
     if (checkIfFree()) {
-        if (wv.curTool.cmdRite !== undefined) {
+        if        (wv.overlay !== undefined && wv.overlay.cmdRite !== undefined) {
+            wv.overlay.cmdRite();
+        } else if (wv.curTool.cmdRite !== undefined) {
             wv.curTool.cmdRite();
         } else if (wv.usingMain == 1) {
             main.cmdRite();
@@ -298,7 +319,9 @@ var cmdRite = function() {
 //
 var cmdBotm = function() {
     if (checkIfFree()) {
-        if (wv.curTool.cmdBotm !== undefined) {
+        if        (wv.overlay !== undefined && wv.overlay.cmdBotm !== undefined) {
+            wv.overlay.cmdBotm();
+        } else if (wv.curTool.cmdBotm !== undefined) {
             wv.curTool.cmdBotm();
         } else if (wv.usingMain == 1) {
             main.cmdBotm();
@@ -312,7 +335,9 @@ var cmdBotm = function() {
 //
 var cmdTop = function() {
     if (checkIfFree()) {
-        if (wv.curTool.cmdTop !== undefined) {
+        if        (wv.overlay !== undefined && wv.overlay.cmdTop !== undefined) {
+            wv.overlay.cmdTop();
+        } else if (wv.curTool.cmdTop !== undefined) {
             wv.curTool.cmdTop();
         } else if (wv.usingMain == 1) {
             main.cmdTop();
@@ -326,7 +351,9 @@ var cmdTop = function() {
 //
 var cmdIn = function() {
     if (checkIfFree()) {
-        if (wv.curTool.cmdIn !== undefined) {
+        if        (wv.overlay !== undefined && wv.overlay.cmdIn !== undefined) {
+            wv.overlay.cmdIn();
+        } else if (wv.curTool.cmdIn !== undefined) {
             wv.curTool.cmdIn();
         } else if (wv.usingMain == 1) {
             main.cmdIn();
@@ -340,7 +367,9 @@ var cmdIn = function() {
 //
 var cmdOut = function() {
     if (checkIfFree()) {
-        if (wv.curTool.cmdOut !== undefined) {
+        if        (wv.overlay !== undefined && wv.overlay.cmdOut !== undefined) {
+            wv.overlay.cmdOut();
+        } else if (wv.curTool.cmdOut !== undefined) {
             wv.curTool.cmdOut();
         } else if (wv.usingMain == 1) {
             main.cmdOut();
@@ -353,7 +382,9 @@ var cmdOut = function() {
 // callback when any mouse is pressed in canvas (when wv.usingMain==1)
 //
 var mouseDown = function(e) {
-    if (wv.curTool.mouseDown !== undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.mouseDown !== undefined) {
+        wv.overlay.mouseDown(e);
+    } else if (wv.curTool.mouseDown !== undefined) {
         wv.curTool.mouseDown(e);
     } else if (wv.usingMain == 1 && wv.myRole != 1) {
         main.mouseDown(e);
@@ -365,7 +396,9 @@ var mouseDown = function(e) {
 // callback when the mouse moves in canvas (when wv.usingMain==1)
 //
 var mouseMove = function (e) {
-    if (wv.curTool.mouseMove !== undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.mouseMove !== undefined) {
+        wv.overlay.mouseMove(e);
+    } else if (wv.curTool.mouseMove !== undefined) {
         wv.curTool.mouseMove(e);
     } else if (wv.usingMain == 1 && wv.myRole != 1) {
         main.mouseMove(e);
@@ -377,7 +410,9 @@ var mouseMove = function (e) {
 // callback when the mouse is released in canvas (when wv.usingMain==1)
 //
 var mouseUp = function (e) {
-    if (wv.curTool.mouseUp !== undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.mouseUp !== undefined) {
+        wv.overlay.mouseUp(e);
+    } else if (wv.curTool.mouseUp !== undefined) {
         wv.curTool.mouseUp(e);
     } else if (wv.usingMain == 1 && wv.myRole != 1) {
         main.mouseUp(e);
@@ -389,7 +424,9 @@ var mouseUp = function (e) {
 // callback when the mouse wheel is rolled in canvas (when wv.usingMain==1)
 //
 var mouseWheel = function (e) {
-    if (wv.curTool.mouseWheel !== undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.mouseWheel !== undefined) {
+        wv.overlay.mouseWheel(e);
+    } else if (wv.curTool.mouseWheel !== undefined) {
         wv.curTool.mouseWheel(e);
     } else if (wv.usingMain == 1 && wv.myRole != 1) {
         main.mouseWheel(e);
@@ -401,7 +438,9 @@ var mouseWheel = function (e) {
 // callback when the mouse leaves the canvas (when wv.usingMain==1)
 //
 var mouseLeftCanvas = function (e) {
-    if (wv.curTool.mouseLeftCanvas !== undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.mouseLeftCanvas !== undefined) {
+        wv.overlay.mouseLeftCanvas(e);
+    } else if (wv.curTool.mouseLeftCanvas !== undefined) {
         wv.curTool.mouseLeftCanvas(e);
     } else if (wv.usingMain == 1 && wv.myRole != 1) {
         main.mouseLeftCanvas(e);
@@ -413,8 +452,14 @@ var mouseLeftCanvas = function (e) {
 // callback when a key is pressed (when wv.usingMain==1)
 //
 var keyPress = function (e) {
-    if (wv.curTool == main) {
+    if (wv.curTool == main && wv.overlay === undefined) {
         main.keyPress(e);
+    } else if (wv.overlay !== undefined && wv.overlay.keyPress !== undefined) {
+        var handled = wv.overlay.keyPress(e);
+
+        if (handled == 0) {
+            main.keyPress(e);
+        }
     } else if (wv.curTool.keyPress !== undefined) {
         var handled = wv.curTool.keyPress(e);
 
@@ -431,7 +476,9 @@ var keyPress = function (e) {
 // callback when an arrow... or shift is pressed (needed for Chrome)
 //
 var keyDown = function (e) {
-    if (wv.curTool.keyDown != undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.keyDown !== undefined) {
+        wv.overlay.keyDown(e);
+    } else if (wv.curTool.keyDown != undefined) {
         wv.curTool.keyDown(e);
     } else if (wv.usingMain == 1) {
         main.keyDown(e);
@@ -443,7 +490,9 @@ var keyDown = function (e) {
 // callback when a shift is released (needed for Chrome)
 //
 var keyUp = function (e) {
-    if (wv.curTool.keyUp !== undefined) {
+    if        (wv.overlay !== undefined && wv.overlay.keyUp !== undefined) {
+        wv.overlay.keyUp(e);
+    } else if (wv.curTool.keyUp !== undefined) {
         wv.curTool.keyUp(e);
     } else if (wv.usingMain == 1) {
         main.keyUp(e);
@@ -486,6 +535,10 @@ var wvInitUI = function () {
     wv.idntStat  =  0;             // -1 server is identified
                                    //  0 need to identify server
                                    // >0 waiting for server to identify
+    wv.cvalStat  =  0;             // -2 latest Caps Values are in Tree
+                                   // -1 latest Caps Values not in Tree (yet)
+                                   //  0 need to request CapsValues
+                                   // >0 waiting for Caps Values (request already made)
     wv.pmtrStat  =  0;             // -2 latest Parameters are in Tree
                                    // -1 latest Parameters not in Tree (yet)
                                    //  0 need to request Parameters
@@ -502,11 +555,13 @@ var wvInitUI = function () {
     wv.userNames = "";             // bar-separatede list of userNames
     wv.myName    = "*host*";       // my username
     wv.lastXform = null;           // last xfrom received while not sync'd
-    wv.plotType  =  0;             // =0 mono, =1 ubar, =2 vbar, =3 cmin, =4 cmax, =5 gc, =10 erep, =11 mitten, =12 plugs
+    wv.plotType  =  0;             // =0 mono, =1 ubar, =2 vbar, =3 cmin, =4 cmax, =5 gc, =6 normals, =10 erep, =11 plugs, =12 python, =13 mitten
     wv.loLimit   = -1;             // lower limit in key
     wv.upLimit   = +1;             // upper limit in key
     wv.nchanges  = 0;              // number of Branch or Parameter changes by browser
+    wv.pyname    = "";             // name of the .py file that started ESP
     wv.filenames = "|";            // name of the .csm file (and .udc files)
+    wv.fileintro = false;          // =true if intro has been posted
     wv.fileindx  = undefined;      // index of file being editted: -1 <new file>, 0 *.csm, >0 *.udc
     wv.linenum   = 0;              // line number to start editing
     wv.lastfile  = "";             // last file that was editted
@@ -522,13 +577,20 @@ var wvInitUI = function () {
                                    // 4 show editPmtrForm with addPmtrHeader
                                    // 5 show editPmtrForm with editPmtrHeader
                                    // 6 show showOutpmtrsForm
-                                   // 7 show editCsmForm
-                                   // 8 show sketcherForm
+                                   // 7 show editorForm
+                                   // 8 show sketcherForm and run sketch
                                    // 9 show glovesForm
-                                   // 10 show WebViewer in canvas and enable new keys
+                                   // 10 show WebViewer in canvas and run ereped
+                                   // 11 show WebViewer in canvas and run plugs
+                                   // 12 show WebViewer in canvas and run python
+                                   // 13 show WebViewer in canvas and run mitten
+                                   // 14 show sketcherForm and run plotter
     wv.curTool   = main;           // current tool
+    wv.timName   = "";             // name of TIM being held
+    wv.overlay   = undefined;      // name of process that overlays the current mode
     wv.usingMain =  1;             // =1 if using 3D graphics window
     wv.curStep   =  0;             // >0 if in StepThru mode
+    wv.curCval   = -1;             // Caps Value being editted (or -1)
     wv.curPmtr   = -1;             // Parameter being editted (or -1)
     wv.curBrch   = -1;             // Branch being editted (or -1)
     wv.afterBrch = -1;             // Branch to add after (or -1)
@@ -580,6 +642,8 @@ var wvInitUI = function () {
 
     var msgwin = document.getElementById("brframe");
     msgwin.addEventListener(  'dblclick',   gotoCsmError,         false);
+
+    document.getElementById("exitOlayBtn").hidden = true;
 };
 
 
@@ -588,6 +652,16 @@ var wvInitUI = function () {
 //
 var wvUpdateUI = function () {
     // alert("in wvUpdateUI()");
+
+    // special code if ESP was started with a .py file
+    if (wv.pyname != "") {
+        var temp = wv.pyname;
+        wv.pyname = "";
+
+        python.launch(temp);
+
+        return;
+    }
 
     // special code for delayed-picking mode
     if (wv.picking > 0) {
@@ -901,6 +975,21 @@ var wvUpdateUI = function () {
        }
     }
 
+    // if the Caps Values are scheduled to be updated, send a message to
+    //    get the Caps Values now
+    if (wv.cvalStat > 0) {
+        wv.cvalStat--;
+    } else if (wv.server === undefined && wv.server != "serveCAPS") {
+    } else if (wv.cvalStat == 0) {
+        try {
+            browserToServer("getCvals|1|");
+            wv.cvalStat = -1;
+        } catch (e) {
+            // could not send command, so try again after 10 cycles
+            wv.cvalStat = 10;
+        }
+    }
+
     // if the Parameters are scheduled to be updated, send a message to
     //    get the Parameters now
     if (wv.pmtrStat > 0) {
@@ -919,9 +1008,10 @@ var wvUpdateUI = function () {
     //    get the Branches now
     if (wv.brchStat > 0) {
         wv.brchStat--;
+    } else if (wv.server === undefined || wv.server == "serveCAPS") {
     } else if (wv.brchStat == 0) {
         try {
-            browserToServer("getBrchs|");
+            browserToServer("getBrchs|1|");
             wv.brchStat = -1;
         } catch (e) {
             // could not send command, so try again after 10 cycles
@@ -948,7 +1038,10 @@ var wvUpdateUI = function () {
 
         // check to see if wv.curTool can process this
         var done = 0;
-        if (wv.curTool.keyPressPart1 !== undefined) {
+
+        if (wv.overlay !== undefined && wv.overlay.keyPress !== undefined) {
+            done = wv.overlay.keyPress(myKeyPress);
+        } else if (wv.curTool.keyPressPart1 !== undefined) {
             done = wv.curTool.keyPressPart1(myKeyPress);
         }
 
@@ -1042,6 +1135,11 @@ var wvUpdateUI = function () {
             if (wv.wireframe === undefined || wv.wireMatrix === undefined) {
                 postMessage("\""+myKeyPress+"\" is only valid with wireframes");
             } else {
+//                postMessage("wv.cursorX    "+wv.cursorX);
+//                postMessage("wv.cursorY    "+wv.cursorY);
+//                postMessage("wv.width      "+wv.width);
+//                postMessage("wv.height     "+wv.height);
+//                postMessage("wv.focus      "+wv.focus[0]+" "+wv.focus[1]+" "+wv.focus[2]+" "+wv.focus[3])
 
                 // get location of key press (between -1 and +1)
                 var scrX = 2.0 * wv.cursorX / (wv.width  - 1.0) - 1.0;
@@ -1051,6 +1149,11 @@ var wvUpdateUI = function () {
                 var dxybest = 9999999;
                 var ibest   = -1;
                 var myMatrix = wv.wireMatrix.getAsArray();
+
+//                postMessage("mvpMatrix  "+myMatrix[ 0]+" "+myMatrix[ 4]+" "+myMatrix[ 8]+" "+myMatrix[12]);
+//                postMessage("           "+myMatrix[ 1]+" "+myMatrix[ 5]+" "+myMatrix[ 9]+" "+myMatrix[13]);
+//                postMessage("           "+myMatrix[ 2]+" "+myMatrix[ 6]+" "+myMatrix[10]+" "+myMatrix[14]);
+//                postMessage("           "+myMatrix[ 3]+" "+myMatrix[ 7]+" "+myMatrix[11]+" "+myMatrix[15]);
 
                 for (var i = 0; i < wv.wireframe.length/3; i++) {
                     var Xtemp = (wv.wireframe[3*i  ] - wv.focus[0]) / wv.focus[3];
@@ -1063,6 +1166,8 @@ var wvUpdateUI = function () {
 
                     var dx = scrX - Xscr / Wscr;
                     var dy = scrY - Yscr / Wscr;
+
+//                    postMessage(wv.wireframe[3*i]+" "+wv.wireframe[3*i+1]+" "+wv.wireframe[3*i+2]+"->"+(Xscr/Wscr+1)*(wv.width-1)/2+" "+(Yscr/Wscr+1)*(wv.height-1)/2);
 
                     var dxytest = dx * dx + dy * dy;
                     if (dxytest < dxybest) {
@@ -1441,8 +1546,22 @@ var wvServerMessage = function (text) {
             wv.server = textList[1];
             postMessage("ESP has been initialized and is attached to '"+wv.server+"'");
 
-            if (wv.server != "serveCSM" && wv.server != "serveESP") {
-                alert("You must be attached to \"serveCSM\" or \"serveESP\"");
+            /* get the Cvals, Pmtrs, and Brchs */
+            if (wv.Server == "serveCAPS") {
+                browserToServer("getCvals|0|");
+                wv.cvalStat = -1;
+            }
+
+            browserToServer("getPmtrs|");
+            wv.pmtrStat = -1;
+
+            if (wv.server != "serveCAPS") {
+                browserToServer("getBrchs|");
+                wv.brchStat = -1;
+            }
+
+            if (wv.server != "serveCSM" && wv.server != "serveESP" && wv.server != "serveCAPS") {
+                alert("You must be attached to \"serveCSM\" or \"serveESP\" or \"serveCAPS\"");
             }
 
             if (Number(textList[2]) > 1) {
@@ -1453,17 +1572,51 @@ var wvServerMessage = function (text) {
                 }
             }
             browserToServer("userName|"+wv.myName+"|");
+
+            if (textList[3].length > 0) {
+                wv.pyname = textList[3];
+            }
         }
 
     // if it starts with "userName|" store the list of current users
     } else if (text.substring(0,9) == "userName|") {
-        var textList = text.split("|");
+        var textList    = text.split("|");
+        var oldTextList = wv.userNames.split("|");
 
+        // set up the userNames
         wv.userNames = "|";
         wv.numUsers  = 0;
         for (var i = 2; i < textList.length-1; i++) {
             wv.userNames += textList[i]+"|";
             wv.numUsers++;
+        }
+
+        // inform remaining users if someone has left the collaboration
+        for (var iold = 1; iold < oldTextList.length-1; iold++) {
+            var okay = 0;
+            for (var inew = 2; inew < textList.length-1; inew++) {
+                if (oldTextList[iold] == textList[inew]) {
+                    okay = 1;
+                }
+            }
+            if (okay == 0) {
+                postMessage(oldTextList[iold]+" has left the collaboration");
+            }
+        }
+
+        // inform if someone has joined the collaboration
+        if (oldTextList.length > 1) {
+            for (var inew = 2; inew < textList.length-1; inew++) {
+                okay = 0;
+                for (var iold = 1; iold < oldTextList.length-1; iold++) {
+                    if (oldTextList[iold] == textList[inew]) {
+                        okay = 1;
+                    }
+                }
+                if (okay == 0) {
+                    postMessage(textList[inew]+" has joined the collaboration");
+                }
+            }
         }
 
         // I am the only user
@@ -1473,6 +1626,11 @@ var wvServerMessage = function (text) {
             var button = document.getElementById("collabMenuBtn");
             button.hidden = true;
 
+            try {
+                wv.codeMirror.setOption("readOnly", false);
+            } catch (x) {
+            }
+
         // there are multiple users, but I have the ball
         } else if (wv.myName == textList[Number(textList[1])+2]) {
             wv.myRole = 0;
@@ -1480,6 +1638,11 @@ var wvServerMessage = function (text) {
             var button = document.getElementById("collabMenuBtn");
             button.hidden = false;
             button.style.backgroundColor = "#AFFFAF";    // greenish
+
+            try {
+                wv.codeMirror.setOption("readOnly", false);
+            } catch (x) {
+            }
 
         // there are multiple users and I do not have the ball
         } else {
@@ -1498,7 +1661,14 @@ var wvServerMessage = function (text) {
             } else {
                 button.style.backgroundColor = null;         // white
             }
+
+            try {
+                wv.codeMirror.setOption("readOnly",  true);
+            } catch (x) {
+            }
         }
+
+        browserToServer("getFilenames|");
 
     // if it starts with "sgData|" store the auxiliary scene graph data
     } else if (text.substring(0,7) == "sgData|") {
@@ -1526,6 +1696,31 @@ var wvServerMessage = function (text) {
 
         wv.sceneUpd = 1;
 
+    // if it starts with "getCvals|" build the (global) cval array
+    } else if (text.substring(0,9) == "getCvals|") {
+        if (wv.server == "serveCAPS") {
+            if (text.length > 10) {
+                cval = JSON.parse(text.substring(9));
+            } else {
+                cval = new Array;
+            }
+            wv.cvalStat = -1;
+
+            rebuildTreeWindow();
+        }
+
+    // if it starts with "newCval|" do nothing
+    } else if (text.substring(0,8) == "newCval|") {
+
+    // if it starts with "setCval|", post message if error detected
+    } else if (text.substring(0,8) == "setCval|") {
+        if (text.substring(0,15) == "setCval|ERROR::") {
+            alert("value(s) not changed because error was detected");
+
+            browserToServer("getCvals|2|");
+            wv.cvalStat = 6000;
+        }
+
     // if it starts with "getPmtrs|" build the (global) pmtr array
     } else if (text.substring(0,9) == "getPmtrs|") {
         if (text.length > 10) {
@@ -1552,7 +1747,6 @@ var wvServerMessage = function (text) {
             wv.pmtrStat = 6000;
         }
 
-
     // if it starts with "delPmtr|" do nothing
     } else if (text.substring(0,8) == "delPmtr|") {
 
@@ -1561,14 +1755,16 @@ var wvServerMessage = function (text) {
 
     // if it starts with "getBrchs|" build the (global) brch array
     } else if (text.substring(0,9) == "getBrchs|") {
-        if (text.length > 10) {
-            brch = JSON.parse(text.substring(9));
-        } else {
-            brch = new Array;
-        }
-        wv.brchStat = -1;
+        if (wv.server != "serveCAPS") {
+            if (text.length > 10) {
+                brch = JSON.parse(text.substring(9));
+            } else {
+                brch = new Array;
+            }
+            wv.brchStat = -1;
 
-        rebuildTreeWindow();
+            rebuildTreeWindow();
+        }
 
     // if it starts with "newBrch|" do nothing (except possibly post warning)
     } else if (text.substring(0,8) == "newBrch|") {
@@ -1599,6 +1795,7 @@ var wvServerMessage = function (text) {
         wv.sgUpdate = 1;
         wv.brchStat = 0;
         wv.pmtrStat = 0;
+        wv.capsStat = 0;
 
         postMessage("Undoing '"+cmd+"' ====> Re-build is needed <====");
 
@@ -1613,6 +1810,7 @@ var wvServerMessage = function (text) {
                     "    Press \"File->Open\" to open an existing file\n" +
                     "    Press \"File->Edit<new file>\" to edit a new file");
 
+        caps = new Array();
         pmtr = new Array();
         brch = new Array();
 
@@ -1636,11 +1834,18 @@ var wvServerMessage = function (text) {
 
             browserToServer("build|0|");
 
+            if (wv.server == "serveCAPS") {
+                browserToServer("getCvals|3|");
+                wv.cvalStat = 6000;
+            }
+
             browserToServer("getPmtrs|");
             wv.pmtrStat = 6000;
 
-            browserToServer("getBrchs|");
-            wv.brchStat = 6000;
+            if (wv.server != "serveCAPS") {
+                browserToServer("getBrchs|2|");
+                wv.brchStat = 6000;
+            }
 
             // inactivate buttons until build is done
             changeMode( 0);
@@ -1694,13 +1899,13 @@ var wvServerMessage = function (text) {
             if (ibrch == 0 && brch.length == 0) {
                 // post nothing because we started without a file
             } else if (ibrch == brch.length || brch.length == 0) {
-                postMessage("Entire build complete, which generated "+nbody+
+                postMessage("\nEntire build complete, which generated "+nbody+
                             " Body(s)");
             } else if (ibrch >= brch.length) {
-                postMessage("Build complete through ibrch="+ibrch+
+                postMessage("\nBuild complete through ibrch="+ibrch+
                             ", which generated "+nbody+" Body(s)");
             } else if (ibrch > 0) {
-                postMessage("Partial build (through "+brch[ibrch-1].name+
+                postMessage("\nPartial build (through "+brch[ibrch-1].name+
                             ") complete, which generated "+nbody+" Body(s)");
             } else {
 //                postMessage("ibrch="+ibrch+"   brch.length="+brch.length);
@@ -1758,6 +1963,13 @@ var wvServerMessage = function (text) {
             button["innerHTML"] = "ShowEBodys";
         }
 
+    // if it starts with "getBodyDetails|", post the reposnse
+    } else if (text.substring(0,15) == "getBodyDetails|") {
+        var textList = text.split("|");
+
+        postMessage(textList[3]);
+        postMessage(" ");
+
     // if it starts with "timLoad|" pass to curTool or postMessage
     } else if (text.substring(0,8) == "timLoad|") {
         if (wv.curTool.timLoadCB !== undefined) {
@@ -1793,32 +2005,54 @@ var wvServerMessage = function (text) {
     // if it starts with "timDraw|" do nothing
     } else if (text.substring(0,8) == "timDraw|") {
 
+    // if it starts with "overlayBeg|" start overlay mode
+    } else if (text.substring(0,11) == "overlayBeg|") {
+
+        cmdOverlayBeg(text.substring(11));
+
+    // if it starts with "postMessage|", post the message
+    } else if (text.substring(0,12) == "postMessage|") {
+        postMessage(text.substring(12));
+
     // if it starts with "setLims|" do nothing
     } else if (text.substring(0,8) == "setLims|") {
 
     // if it matches "getFilenames||", tell user how to begin
     } else if (text == "getFilenames||") {
-        postMessage("ESP has started without a .csm file\n" +
-                    "    Press \"Design Parameters\" (in left window) to add a Design Parameter\n" +
-                    "    Press \"Branches\" (in left window) to begin a 3D Object\n" +
-                    "    Press \"Branches\" and then \"skbeg\" to begin a 2D Sketch\n" +
-                    "    Press \"File->Open\" to open an existing file\n" +
-                    "    Press \"File->Edit<new file>\" to edit a new file");
+        if (wv.fileintro === false) {
+            wv.fileintro = true;
+
+            postMessage("ESP has started without a .csm file\n" +
+                        "    Press \"Design Parameters\" (in left window) to add a Design Parameter\n" +
+                        "    Press \"Branches\" (in left window) to begin a 3D Object\n" +
+                        "    Press \"Branches\" and then \"skbeg\" to begin a 2D Sketch\n" +
+                        "    Press \"File->Open\" to open an existing file\n" +
+                        "    Press \"File->Edit<new file>\" to edit a new file");
+        }
 
     // if it starts with "getFilenames|" store the results in wv.filenames
     } else if (text.substring(0,13) == "getFilenames|") {
+        var oldName = "";
+        if (wv.filenames.length != 1) {
+            var foo = wv.filenames.split("|");
+            oldName = foo[1];
+        }
+
         wv.filenames = text.substring(12);
         var textList = text.split("|");
 
-        if (textList[1].length > 0) {
+        if (textList[1].length > 0 && textList[1] == oldName) {
+            var mesg = "";
+        } else if (textList[1].length > 0) {
             var mesg = "\"" + textList[1] + "\" has been loaded";
+
+            for (var i = 2; i < textList.length-1; i++) {
+                if (textList[i].length > 0) {
+                    mesg += "\n    uses: \"" + textList[i] + "\"";
+                }
+            }
         } else {
             var mesg = "no .csm file has been loaded";
-        }
-        for (var i = 2; i < textList.length-1; i++) {
-            if (textList[i].length > 0) {
-                mesg += "\n    uses: \"" + textList[i] + "\"";
-            }
         }
         postMessage(mesg);
 
@@ -1850,27 +2084,38 @@ var wvServerMessage = function (text) {
             return;
         }
 
+        // remove former editor
+        if (wv.codeMirror !== undefined && wv.myRole != 0) {
+            wv.codeMirror.toTextArea();
+            wv.codeMirror = undefined;
+            wv.fileindx   = undefined;
+        }
+
         // fill in the name of the .csm file
-        var csmFilename = document.getElementById("editCsmFilename");
-        if (wv.fileindx >= 0) {
+        var editorFilename = document.getElementById("editorFilename");
+        if (wv.myRole != 0) {
             var filelist = wv.filenames.split("|");
-            csmFilename["innerHTML"] = "Contents of: "+filelist[wv.fileindx];
-        } else if (wv.myRole != 0) {
-            csmFilename["innerHTML"] = "";
+            if (wv.fileindx === undefined && filelist.length == 3) {
+                wv.fileindx = 1;
+            }
+            editorFilename["innerHTML"] = "Contents of: "+filelist[wv.fileindx]+" (read-only)";
+        } else if (wv.fileindx >= 0) {
+            var filelist = wv.filenames.split("|");
+            editorFilename["innerHTML"] = "Contents of: "+filelist[wv.fileindx];
         } else {
-            csmFilename["innerHTML"] = "Contents of: &lt new file &gt";
+            editorFilename["innerHTML"] = "Contents of: &lt new file &gt";
         }
 
         // fill the textarea with the current .csm file
-        var csmTextArea = document.getElementById("editCsmTextArea");
+        var editorTextArea = document.getElementById("editorTextArea");
 
-        csmTextArea.cols  = 84;
-        csmTextArea.rows  = 25;
-        csmTextArea.value = wv.curFile;
+        editorTextArea.cols  = 84;
+        editorTextArea.rows  = 25;
+        editorTextArea.value = wv.curFile;
 
         // unhide so that CodeMirror initialization will work
-        var editCsmForm    = document.getElementById("editCsmForm");
-        editCsmForm.hidden = false;
+        var editorForm    = document.getElementById("editorForm");
+        editorForm.hidden = false;
 
         // initialize CodeMirror
         if (wv.codeMirror === undefined) {
@@ -1886,7 +2131,30 @@ var wvServerMessage = function (text) {
                 theme:                       "simple"
             };
 
-            wv.codeMirror = CodeMirror.fromTextArea(csmTextArea, options);
+            wv.codeMirror = CodeMirror.fromTextArea(editorTextArea, options);
+
+            // choose between editable and readonly
+            if (wv.myRole == 0) {
+                wv.codeMirror.setOption("readOnly", false);
+            } else {
+                wv.codeMirror.setOption("readOnly",  true);
+            }
+
+            // send changes made in the editor to other collaborative users
+            CodeMirror.on(wv.codeMirror, "change",
+                          function (instance, obj) {
+                              if (wv.myRole == 0 && wv.numUsers > 1) {
+                                  if (obj.removed == "") {
+                                      if (obj.text.length == 2) {
+                                          browserToServer("editor|add|"+obj.from.line+"|"+obj.from.ch+"|<cr>|");
+                                      } else {
+                                          browserToServer("editor|add|"+obj.from.line+"|"+obj.from.ch+"|"+obj.text+"|");
+                                      }
+                                  } else {
+                                      browserToServer("editor|del|"+obj.from.line+"|"+obj.from.ch+"|"+obj.to.line+"|"+obj.to.ch+"|");
+                                  }
+                              }
+                          });
 
             var topRite = document.getElementById("trframe");
             var height  = Number(topRite.style.height.replace("px",""));
@@ -1916,7 +2184,7 @@ var wvServerMessage = function (text) {
         wv.lastfile = "";
         wv.lastline = -1;
 
-        // post the editCsmForm
+        // post the editorForm
         changeMode(7);
 
     // if it starts with "setCsmFileBeg|" do nothing
@@ -1958,6 +2226,24 @@ var wvServerMessage = function (text) {
             wv.sceneUpd = 1;
         } else {
             postMessage("File has wrong number of entries");
+        }
+
+    // if it starts with "editor|" and you do not have the ball, modify the text area
+    } else if (text.substring(0,7) == "editor|") {
+        if (wv.myRole != 0) {
+            var textList = text.split("|");
+
+            if        (textList[1] == "add" && textList[4] == "<cr>") {
+                wv.codeMirror.getDoc().replaceRange("\n",
+                                                    {line: Number(textList[2]), ch: Number(textList[3])});
+            } else if (textList[1] == "add") {
+                wv.codeMirror.getDoc().replaceRange(textList[4],
+                                                    {line: Number(textList[2]), ch: Number(textList[3])});
+            } else if (textList[1] == "del") {
+                wv.codeMirror.getDoc().replaceRange("",
+                                                    {line: Number(textList[2]), ch: Number(textList[3])},
+                                                    {line: Number(textList[4]), ch: Number(textList[5])});
+            }
         }
 
     // if it starts with "xform|" and we are sync'd, load matrix and update display
@@ -2455,6 +2741,7 @@ var cmdFileNew = function () {
             wv.codeMirror = undefined;
         }
 
+        cval   = new Array();
         pmtr   = new Array();
         brch   = new Array();
         sgData = {};
@@ -2518,11 +2805,18 @@ var cmdFileOpen = function () {
                 wv.codeMirror = undefined;
             }
 
+            if (wv.server == "serveCAPS") {
+                browserToServer("getCvals|4|");
+                wv.capsStat = 6000;
+            }
+
             browserToServer("getPmtrs|");
             wv.pmtrStat = 6000;
 
-            browserToServer("getBrchs|");
-            wv.brchStat = 6000;
+            if (wv.server != "serveCAPS") {
+                browserToServer("getBrchs|3|");
+                wv.brchStat = 6000;
+            }
 
             var button = document.getElementById("solveButton");
             button["innerHTML"] = "Re-building...";
@@ -2617,9 +2911,18 @@ var cmdFileEdit = function (e, indx) {
         }
     }
 
-    if (wv.curMode != 0) {
+    if (wv.curMode != 0 && e !== null) {
         alert("Command disabled.  Press 'Cancel' or 'OK' first");
         return;
+    } else if (wv.curMode != 0 && indx != wv.fileIndx) {
+        var newFile = wv.codeMirror.getDoc().getValue();
+
+        if (wv.curFile == newFile && wv.nchanges == 0) {
+            editorCancel();
+        } else {
+            alert("Current file has been changed, so Cancel current edit first.");
+            return;
+        }
     }
 
     // if all you have is a .udc, do not allow editing
@@ -2656,10 +2959,10 @@ var cmdFileEdit = function (e, indx) {
 
 
 //
-// callback when "OK" button is pressed in editCsmForm (called by ESP.html)
+// callback when "OK" button is pressed in editorForm (called by ESP.html)
 //
-var editCsmOk = function () {
-    // alert("in editCsmOk()");
+var editorOk = function () {
+    // alert("in editorOk()");
 
     if (checkIfWithBall() === false) {
         return;
@@ -2751,6 +3054,7 @@ var editCsmOk = function () {
     wv.fileindx = -1;
 
     // get an updated version of the Parameters and Branches
+    wv.capsStat = 0;
     wv.pmtrStat = 0;
     wv.brchStat = 0;
 
@@ -2788,8 +3092,8 @@ var editCsmOk = function () {
     }
 }
 
-var editCsmOk_old = function () {
-    // alert("in editCsmOk()");
+var editorOk_old = function () {
+    // alert("in editorOk()");
 
     // tell user if no changes were made
     var newFile = wv.codeMirror.getDoc().getValue();
@@ -2853,6 +3157,7 @@ var editCsmOk_old = function () {
     wv.fileindx = -1;
 
     // get an updated version of the Parameters and Branches
+    wv.capsStat = 0;
     wv.pmtrStat = 0;
     wv.brchStat = 0;
 
@@ -2880,10 +3185,15 @@ var editCsmOk_old = function () {
 
 
 //
-// callback when "Cancel" is pressed in editCsmForm (called by ESP.html)
+// callback when "Cancel" is pressed in editorForm (called by ESP.html)
 //
-var editCsmCancel = function () {
-    // alert("in editCsmCancel()");
+var editorCancel = function () {
+    // alert("in editorCancel()");
+
+    if (checkIfFree() === false) {
+        alert("Note: to see the file again, the user with the ball will need to relaunch the editor");
+        return;
+    }
 
     // remember what file we are editting and which line we were on
     if (wv.fileindx >= 0) {
@@ -2948,7 +3258,14 @@ var cmdTool = function () {
     button.onclick = sketch.launch;
     menu.appendChild(button);
 
-    if (wv.server == "serveESP") {
+    if (wv.server == "serveESP" || wv.server == "serveCAPS") {
+        button = document.createElement("input");
+        button.type    = "button";
+        button.title   = "Launch ErepEd";
+        button.value   = "ErepEd";
+        button.onclick = ereped.launch;
+        menu.appendChild(button);
+
         button = document.createElement("input");
         button.type    = "button";
         button.title   = "Launch Gloves";
@@ -2958,23 +3275,23 @@ var cmdTool = function () {
 
         button = document.createElement("input");
         button.type    = "button";
-        button.title   = "Launch ErepEd";
-        button.value   = "ErepEd";
-        button.onclick = ereped.launch;
-        menu.appendChild(button);
-
-//        button = document.createElement("input");
-//        button.type    = "button";
-//        button.title   = "Launch Mitten";
-//        button.value   = "Mitten";
-//        button.onclick = mitten.launch;
-//        menu.appendChild(button);
-
-        button = document.createElement("input");
-        button.type    = "button";
         button.title   = "Launch Plugs";
         button.value   = "Plugs";
         button.onclick = plugs.launch;
+        menu.appendChild(button);
+
+        button = document.createElement("input");
+        button.type    = "button";
+        button.title   = "Launch Python";
+        button.value   = "Python";
+        button.onclick = python.launch;
+        menu.appendChild(button);
+
+        button = document.createElement("input");
+        button.type    = "button";
+        button.title   = "Launch Mitten";
+        button.value   = "Mitten";
+        button.onclick = mitten.launch;
         menu.appendChild(button);
     }
 };
@@ -3297,14 +3614,173 @@ var cmdCollabMessage = function () {
     if (message !== null && message.length > 0) {
         browserToServer("message|"+wv.myName+" says: "+message+"|");
     }
+};
 
-    wv.myRole = 2;
+
+//
+// callback when "overlayBeg|timName|olayName|" message is received
+//
+var cmdOverlayBeg = function (text) {
+    // alert("in cmdOverlayBeg(text="+text+")");
 
-    var button = document.getElementById("collabMenuBtn");
-    button.style.backgroundColor = null;       // white
+    if (wv.overlay !== undefined) {
+        alert("cannot have recursive overlays");
+    } else {
+        var textList = text.split('|');
+
+        wv.timName = textList[0];
+
+        if (textList[1] == "viewer") {
+            wv.overlay = viewer;
+        }
+
+        // hide done menu button
+        document.getElementById("doneMenuBtn").hidden = true;
+
+        // hide the solver button
+        document.getElementById("solveButton").hidden = true;
+
+        // show the button that will be used to exit the overlay
+        var button = document.getElementById("exitOlayBtn");
+        button.hidden = false;
+        button["innerHTML"] = "Exit " + textList[1];
+        button.style.backgroundColor = "#3FFF3F";
+    }
+};
+
+
+//
+// callback when "ExitOverlay" is pressed
+//
+var cmdOverlayEnd = function () {
+    // alert("in cmdOverlayEnd()");
+
+    if (wv.overlay === undefined) {
+        alert("there is no active overlay");
+    } else if (checkIfWithBall() === false) {
+
+    } else {
+
+        // send the unlock message
+        browserToServer("overlayEnd|"+wv.timName+"|");
+
+        // unhide done menu button and hide overlay button
+        document.getElementById("doneMenuBtn").hidden = false;
+        document.getElementById("exitOlayBtn").hidden = true;
+
+        // unhide the solver button
+        document.getElementById("solveButton").hidden = false;
+
+        // we no longer have an overlay
+        wv.overlay = undefined;
+        wv.timName = "";
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+
+
+//
+// callback when "Caps Value" is pressed in Tree
+//
+var addCval = function () {
+    // alert("in addCval()");
+
+    if (wv.curMode != 0) {
+        alert("Command disabled.  Press 'Cancel' or 'OK' first");
+        return;
+    }
+
+    // get the new name
+    var name = prompt("Enter new Caps Value name:");
+    if (name === null) {
+        return;
+    } else if (name.length <= 0) {
+        return;
+    }
+
+    // check that name is valid
+    if (name.match(/^[a-zA-Z][\w:]*$/) === null) {
+        alert("'"+name+"' is not a valid name");
+        return;
+    }
+
+    var nrow = 1;
+    var ncol = 1;
+
+    var units = prompt("Enter units for "+name+" (or \".\" for none):");
+    var value = prompt("Enter value for "+name+":");
+
+    browserToServer("newCval|"+name+"|1|1|"+units+"|"+value+"|");
+
+    // store the values locally
+    var newCval = cval.length;
+
+    cval[newCval] = new Array();
+
+    cval[newCval].name =  name;
+    cval[newCval].nrow  = nrow;
+    cval[newCval].ncol  = ncol;
+    cval[newCval].value = new Array(1);
+
+    cval[newCval].value[0] = value;
+
+    browserToServer("getCvals|5|");
+};
+
+
+//
+// callback when Caps Value name is pressed in Tree
+//
+var editCval = function (e) {
+    // alert("in editCval(e="+e+")");
+
+    wv.menuEvent = e;
+
+    // get the Tree Node
+    var id    = wv.menuEvent["target"].id;
+    var inode = Number(id.substring(4,id.length-4));
+
+    // get the Caps value name
+    var name = myTree.name[inode].replace(/\u00a0/g, "");
+    name = name.replace(/\^/g, "");
+
+    var jnode   = inode;
+    var newName = name;
+    while (myTree.parent[jnode] > 2) {
+        jnode   = myTree.parent[jnode];
+        newName = myTree.name[jnode] + newName;
+    }
+    name = newName.replace(/\u00a0/g, "");
+
+    // get the Caps value index
+    var icval = -1;      // 0-bias
+    var jcval;           // 1-bias (and temp)
+    for (jcval = 0; jcval < cval.length; jcval++) {
+        if (cval[jcval].name.replace(/\^/g, "") == name) {
+            icval = jcval;
+            break;
+        }
+    }
+
+    if (icval < 0) {
+        alert("|"+name+"| not found");
+        return;
+    } else {
+        jcval = icval + 1;
+    }
+
+    // get the new value
+    var newval = prompt("Enter new value for "+cval[icval].name+"[1]:");
+    if (newval === null) {
+        return;
+    } else {
+        cval[icval].value[0] = newval;
+
+        browserToServer("setCval|"+cval[icval].name+"|1|1|"+newval+"|");
+        browserToServer("getCvals|6|");
+    }
+};
 
 
 //
@@ -3397,7 +3873,7 @@ var editPmtr = function (e) {
 
     var jnode   = inode;
     var newName = name;
-    while (myTree.parent[jnode] != 1) {
+    while (myTree.parent[jnode] > 2) {
         jnode   = myTree.parent[jnode];
         newName = myTree.name[jnode] + newName;
     }
@@ -3632,11 +4108,18 @@ var compGeomSens = function () {
     // rebuild
     browserToServer("build|0|");
 
+    if (wv.server == "serveCAPS") {
+        browserToServer("getCvals|7|");
+        wv.cvalStat = 6000;
+    }
+
     browserToServer("getPmtrs|");
     wv.pmtrStat = 6000;
 
-    browserToServer("getBrchs|");
-    wv.brchStat = 6000;
+    if (wv.server != "serveCAPS") {
+        browserToServer("getBrchs|4|");
+        wv.brchStat = 6000;
+    }
 
     var button = document.getElementById("solveButton");
     button["innerHTML"] = "Re-building...";
@@ -3774,11 +4257,18 @@ var compTessSens = function () {
     // rebuild
     browserToServer("build|0|");
 
+    if (wv.server == "serveCAPS") {
+        browserToServer("getCvals|");
+        wv.cvalStat = 6000;
+    }
+    
     browserToServer("getPmtrs|");
     wv.pmtrStat = 6000;
 
-    browserToServer("getBrchs|");
-    wv.brchStat = 6000;
+    if (wv.server != "serveCAPS") {
+        browserToServer("getBrchs|5|");
+        wv.brchStat = 6000;
+    }
 
     var button = document.getElementById("solveButton");
     button["innerHTML"] = "Re-building...";
@@ -4588,11 +5078,18 @@ var buildTo = function () {
     // send the message to the server
     browserToServer("build|"+ibrch+"|");
 
+    if (wv.server == "serveCAPS") {
+        browserToServer("getCvals|8|");
+        wv.cvalStat = 6000;
+    }
+
     browserToServer("getPmtrs|");
     wv.pmtrStat = 6000;
 
-    browserToServer("getBrchs|");
-    wv.brchStat = 6000;
+    if (wv.server != "serveCAPS") {
+        browserToServer("getBrchs|6|");
+        wv.brchStat = 6000;
+    }
 
     // update the UI
     postMessage("Re-building only to "+name+"...");
@@ -4911,7 +5408,7 @@ var editBrchOk = function () {
         wv.nchanges += nchange;
 
         // get an updated Branch list (so that added Branch is listed)
-        browserToServer("getBrchs|");
+        browserToServer("getBrchs|7|");
 
         // update the UI
         if (wv.curMode == 3) {
@@ -4965,34 +5462,77 @@ var editBrchCancel = function () {
 
 
 //
+// callback when "ExpandAll" or "CollapseAll" is pressed for CapsValues in Tree
+//
+var allCvals = function () {
+    // alert("in allCvals()");
+
+    for (var jnode = 1; jnode < myTree.name.length; jnode++) {
+        if (myTree.name[jnode] == "Caps Values") {
+            if (myTree.prop1[jnode] == "ExpandAll") {
+                for (var inode = 0; inode < myTree.parent.length-1; inode++) {
+                    var parent = myTree.parent[inode];
+                    while (parent > 0) {
+                        if (parent == jnode) {
+                            myTree.opened[inode] = 1;
+                            break;
+                        }
+                        parent = myTree.parent[parent];
+                    }
+                }
+
+                myTree.opened[jnode] = 1;
+                myTree.prop1[ jnode] = "CollapseAll";
+
+                var thisNode = document.getElementById("node"+jnode+"col3")
+                thisNode["innerHTML"] = myTree.prop1[jnode];
+
+                myTree.update();
+            } else {
+                //      myTree.prop1[jnode] = "ExpandAll";   // automagically done by rebuildTreeWindow();
+                myTree.opened[jnode] = 0;
+                rebuildTreeWindow();
+            }
+            break;
+        }
+    }
+};
+
+
+//
 // callback when "ExpandAll" or "CollapseAll" is pressed for DesignParameters in Tree
 //
 var allPmtrs = function () {
     // alert("in allPmtrs()");
 
-    if (myTree.prop1[1] == "ExpandAll") {
-        for (var inode = 0; inode < myTree.parent.length-1; inode++) {
-            var parent = myTree.parent[inode];
-            while (parent > 0) {
-                if (parent == 1) {
-                    myTree.opened[inode] = 1;
-                    break;
+    for (var jnode = 1; jnode < myTree.name.length; jnode++) {
+        if (myTree.name[jnode] == "Design Parameters") {
+            if (myTree.prop1[jnode] == "ExpandAll") {
+                for (var inode = 0; inode < myTree.parent.length-1; inode++) {
+                    var parent = myTree.parent[inode];
+                    while (parent > 0) {
+                        if (parent == jnode) {
+                            myTree.opened[inode] = 1;
+                            break;
+                        }
+                        parent = myTree.parent[parent];
+                    }
                 }
-                parent = myTree.parent[parent];
+
+                myTree.opened[jnode] = 1;
+                myTree.prop1[ jnode] = "CollapseAll";
+
+                var thisNode = document.getElementById("node"+jnode+"col3")
+                thisNode["innerHTML"] = myTree.prop1[jnode];
+
+                myTree.update();
+            } else {
+                //      myTree.prop1[jnode] = "ExpandAll";   // automagically done by rebuildTreeWindow();
+                myTree.opened[jnode] = 0;
+                rebuildTreeWindow();
             }
+            break;
         }
-
-        myTree.opened[1] = 1;
-        myTree.prop1[1] = "CollapseAll";
-
-        var thisNode = document.getElementById("node1col3")
-        thisNode["innerHTML"] = myTree.prop1[1];
-
-        myTree.update();
-    } else {
-//      myTree.prop1[1] = "ExpandAll";   // automagically done by rebuildTreeWindow();
-        myTree.opened[1] = 0;
-        rebuildTreeWindow();
     }
 };
 
@@ -5003,29 +5543,34 @@ var allPmtrs = function () {
 var allLocals = function () {
     // alert("in allLocals()");
 
-    if (myTree.prop1[2] == "ExpandAll") {
-        for (var inode = 0; inode < myTree.parent.length-1; inode++) {
-            var parent = myTree.parent[inode];
-            while (parent > 0) {
-                if (parent == 2) {
-                    myTree.opened[inode] = 1;
-                    break;
+    for (var jnode = 1; jnode < myTree.name.length; jnode++) {
+        if (myTree.name[jnode] == "Local Variables") {
+            if (myTree.prop1[jnode] == "ExpandAll") {
+                for (var inode = 0; inode < myTree.parent.length-1; inode++) {
+                    var parent = myTree.parent[inode];
+                    while (parent > 0) {
+                        if (parent == jnode) {
+                            myTree.opened[inode] = 1;
+                            break;
+                        }
+                        parent = myTree.parent[parent];
+                    }
                 }
-                parent = myTree.parent[parent];
+
+                myTree.opened[jnode] = 1;
+                myTree.prop1[ jnode] = "CollapseAll";
+
+                var thisNode = document.getElementById("node"+jnode+"col3")
+                thisNode["innerHTML"] = myTree.prop1[jnode];
+
+                myTree.update();
+            } else {
+                //      myTree.prop1[jnode] = "ExpandAll";   // automagically done by rebuildTreeWindow();
+                myTree.opened[jnode] = 0;
+                rebuildTreeWindow();
             }
+            break;
         }
-
-        myTree.opened[2] = 1;
-        myTree.prop1[2] = "CollapseAll";
-
-        var thisNode = document.getElementById("node2col3")
-        thisNode["innerHTML"] = myTree.prop1[2];
-
-        myTree.update();
-    } else {
-//      myTree.prop1[2] = "ExpandAll";   // automagically done by rebuildTreeWindow();
-        myTree.opened[2] = 0;
-        rebuildTreeWindow();
     }
 };
 
@@ -5036,29 +5581,34 @@ var allLocals = function () {
 var allBrchs = function () {
     // alert("in allBrchs()");
 
-    if (myTree.prop1[3] == "ExpandAll") {
-        for (var inode = 0; inode < myTree.parent.length-1; inode++) {
-            var parent = myTree.parent[inode];
-            while (parent > 0) {
-                if (parent == 3) {
-                    myTree.opened[inode] = 1;
-                    break;
+    for (var jnode = 1; jnode < myTree.name.length; jnode++) {
+        if (myTree.name[jnode] == "Branches") {
+            if (myTree.prop1[jnode] == "ExpandAll") {
+                for (var inode = 0; inode < myTree.parent.length-1; inode++) {
+                    var parent = myTree.parent[inode];
+                    while (parent > 0) {
+                        if (parent == jnode) {
+                            myTree.opened[inode] = 1;
+                            break;
+                        }
+                        parent = myTree.parent[parent];
+                    }
                 }
-                parent = myTree.parent[parent];
+
+                myTree.opened[jnode] = 1;
+                myTree.prop1[ jnode] = "CollapseAll";
+
+                var thisNode = document.getElementById("node"+jnode+"col3")
+                thisNode["innerHTML"] = myTree.prop1[jnode];
+
+                myTree.update();
+            } else {
+                //      myTree.prop1[jnode] = "ExpandAll";   // automagically done by rebuildTreeWindow();
+                myTree.opened[jnode] = 0;
+                rebuildTreeWindow();
             }
+            break;
         }
-
-        myTree.opened[3] = 1;
-        myTree.prop1[3] = "CollapseAll";
-
-        var thisNode = document.getElementById("node3col3")
-        thisNode["innerHTML"] = myTree.prop1[3];
-
-        myTree.update();
-    } else {
-        //      myTree.prop1[3] = "ExpandAll";   // automagically done by rebuildTreeWindow();
-        myTree.opened[3] = 0;
-        rebuildTreeWindow();
     }
 };
 
@@ -5537,11 +6087,18 @@ main.cmdSolve = function () {
             // build first so that parameters are updated
             browserToServer("build|-1|");
 
+            if (wv.server == "serveCAPS") {
+                browserToServer("getCvals|9|");
+                wv.cvalStat = 6000;
+            }
+
             browserToServer("getPmtrs|");
             wv.pmtrStat = 6000;
 
-            browserToServer("getBrchs|");
-            wv.brchStat = 6000;
+            if (wv.server != "serveCAPS") {
+                browserToServer("getBrchs|8|");
+                wv.brchStat = 6000;
+            }
 
             button["innerHTML"] = "Re-building...";
             button.style.backgroundColor = "#FFFF3F";
@@ -5563,11 +6120,18 @@ main.cmdSolve = function () {
         // build first so that parameters are updated
         browserToServer("build|0|");
 
+        if (wv.server == "serveCAPS") {
+            browserToServer("getCvals|10|");
+            wv.cvalStat = 6000;
+        }
+
         browserToServer("getPmtrs|");
         wv.pmtrStat = 6000;
 
-        browserToServer("getBrchs|");
-        wv.brchStat = 6000;
+        if (wv.server != "serveCAPS") {
+            browserToServer("getBrchs|9|");
+            wv.brchStat = 6000;
+        }
 
         button["innerHTML"] = "Re-building...";
         button.style.backgroundColor = "#FFFF3F";
@@ -5659,29 +6223,48 @@ var setKeyLimits = function (e) {
 //
 var gotoCsmError = function (e) {
 
-    // get text from message window
-    var botm    = document.getElementById("brframe");
-    var msgText = botm.innerText;
+    var botm = document.getElementById("brframe");
 
-    // look for last error message
-    var beg = msgText.lastIndexOf("[[");
-    var end = msgText.lastIndexOf("]]");
-    if (beg >= 0 && end >= 0) {
-        var foo = msgText.slice(beg+2, end).split(":");
+    // look for [[filename:linenum]] at the cursor
+    var thisLine = e.rangeParent.data;
+    var beg = thisLine.substring(0,e.rangeOffset).lastIndexOf("[[");
+    var end = thisLine.indexOf("]]", e.rangeOffset);
+
+    if (beg >= 0 && end > beg) {
+        var foo = thisLine.slice(beg+2, end).split(":");
         if (foo.length == 2) {
             var filelist = wv.filenames.split("|");
             for (var ielem = 0; ielem < filelist.length; ielem++) {
                 if (filelist[ielem] == foo[0]) {
                     wv.linenum = Number(foo[1]);
                     cmdFileEdit(null, ielem);
+                    return;
                 }
             }
+        }
+    }
 
+    // if not found, look for last [[filename:lnenum]]
+    var msgText = botm.innerText;
+    beg = msgText.lastIndexOf("[[");
+    end = msgText.lastIndexOf("]]");
+
+    if (beg >= 0 && end > beg) {
+        foo = msgText.slice(beg+2, end).split(":");
+        if (foo.length == 2) {
+            filelist = wv.filenames.split("|");
+            for (var ielem = 0; ielem < filelist.length; ielem++) {
+                if (filelist[ielem] == foo[0]) {
+                    wv.linenum = Number(foo[1]);
+                    cmdFileEdit(null, ielem);
+                    return;
+                }
+            }
         } else {
-            postMessage("foo=\""+foo+"\" could nt be parsed");
+            postMessage("\""+foo+"\" could not be parsed");
         }
     } else {
-        postMessage("no error found");
+        postMessage("no [[filename:linenum]] found");
     }
 };
 
@@ -7093,7 +7676,7 @@ var changeMode = function (newMode) {
     var showOutpmtrsForm = document.getElementById("showOutpmtrsForm");
     var addPmtrHeader    = document.getElementById("addPmtrHeader");
     var editPmtrHeader   = document.getElementById("editPmtrHeader");
-    var editCsmForm      = document.getElementById("editCsmForm");
+    var editorForm       = document.getElementById("editorForm");
     var sketcherForm     = document.getElementById("sketcherForm");
     var glovesForm       = document.getElementById("glovesForm");
 
@@ -7120,7 +7703,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7145,7 +7728,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7169,7 +7752,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = false;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7196,7 +7779,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = false;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7225,7 +7808,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = false;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7252,7 +7835,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = false;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7279,7 +7862,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = false;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7296,7 +7879,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = false;
+        editorForm.hidden       = false;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7314,7 +7897,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = false;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7332,7 +7915,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = false;
         wvKey.hidden            = true;
@@ -7350,7 +7933,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7368,7 +7951,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7376,7 +7959,7 @@ var changeMode = function (newMode) {
         timStatus.hidden        = false;
         ESPlogo.hidden          = true;
 
-        wv.curTool = mitten;
+        wv.curTool = plugs;
         wv.curMode = 11;
     } else if (newMode == 12) {
         wv.usingMain = 1;
@@ -7386,7 +7969,7 @@ var changeMode = function (newMode) {
         editBrchForm.hidden     = true;
         editPmtrForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
-        editCsmForm.hidden      = true;
+        editorForm.hidden       = true;
         sketcherForm.hidden     = true;
         glovesForm.hidden       = true;
         wvKey.hidden            = true;
@@ -7394,8 +7977,44 @@ var changeMode = function (newMode) {
         timStatus.hidden        = false;
         ESPlogo.hidden          = true;
 
-        wv.curTool = plugs;
+        wv.curTool = python;
         wv.curMode = 12;
+    } else if (newMode == 13) {
+        wv.usingMain = 1;
+
+        webViewer.hidden        = false;
+        addBrchForm.hidden      = true;
+        editBrchForm.hidden     = true;
+        editPmtrForm.hidden     = true;
+        showOutpmtrsForm.hidden = true;
+        editorForm.hidden       = true;
+        sketcherForm.hidden     = true;
+        glovesForm.hidden       = true;
+        wvKey.hidden            = true;
+        sketcherStatus.hidden   = true;
+        timStatus.hidden        = false;
+        ESPlogo.hidden          = true;
+
+        wv.curTool = mitten;
+        wv.curMode = 13;
+    } else if (newMode == 14) {
+        wv.usingMain = 0;
+
+        webViewer.hidden        = true;
+        addBrchForm.hidden      = true;
+        editBrchForm.hidden     = true;
+        editPmtrForm.hidden     = true;
+        showOutpmtrsForm.hidden = true;
+        editorForm.hidden       = true;
+        sketcherForm.hidden     = false;
+        glovesForm.hidden       = true;
+        wvKey.hidden            = true;
+        sketcherStatus.hidden   = false;
+        timStatus.hidden        = true;
+        ESPlogo.hidden          = true;
+
+        wv.curTool = plotter;
+        wv.curMode = 14;
     } else {
         alert("Bad new mode = "+newMode);
     }
@@ -7418,14 +8037,23 @@ var rebuildTreeWindow = function () {
 
     // if there was a previous Tree, keep track of whether or not
     //    the Parameters, Branches, and Display was open
+    var cvalsOpen = 0;
     var pmtr1Open = 0;
     var pmtr2Open = 0;
     var brchsOpen = 0;
 
-    if (myTree.opened.length > 4) {
-        pmtr1Open = myTree.opened[1];
-        pmtr2Open = myTree.opened[2];
-        brchsOpen = myTree.opened[3];
+    for (var inode = 0; inode < myTree.opened.length; inode++) {
+        if (myTree.name[inode] == "Caps Value") {
+            cvalsOpen = myTree.opened[inode];
+        } else if (myTree.name[inode] == "Design Parameters") {
+            pmtr1Open = myTree.opened[inode];
+        } else if (myTree.name[inode] == "Local Variables") {
+            pmtr2Open = myTree.opened[inode];
+        } else if (myTree.name[inode] == "Branches") {
+            brchsOpen = myTree.opened[inode];
+        } else if (myTree.name[inode] == "Display") {
+            break;
+        }
     }
 
     // clear previous Nodes from the Tree
@@ -7434,22 +8062,97 @@ var rebuildTreeWindow = function () {
     wv.bodynames = "|";
 
     // put the group headers into the Tree
-    myTree.addNode(0, "Design Parameters", "Add a Parameter",   "", addPmtr,      // 1
+    if (wv.server == "serveCAPS") {
+        myTree.addNode(0, "Caps Values",   "Add a Caps Value",  "", addCval,
+                       "ExpandAll", allCvals);
+        var capsValues = myTree.name.length - 1;
+    }
+
+    myTree.addNode(0, "Design Parameters", "Add a Parameter",   "", addPmtr,
                    "ExpandAll", allPmtrs);
-    myTree.addNode(0, "Local Variables",   "Show Outpmtrs",     "", showOutpmtrs,  // 2
+    var designParameters = myTree.name.length - 1;
+
+    myTree.addNode(0, "Local Variables",   "Show Outpmtrs",     "", showOutpmtrs,
                    "ExpandAll", allLocals);
-    myTree.addNode(0, "Branches",          "Add Branch at end", "", addBrch,       // 3
-                   "ExpandAll", allBrchs);
+    var localVariables = myTree.name.length - 1;
+
+    if (wv.server != "serveCAPS") {
+        myTree.addNode(0, "Branches",          "Add Branch at end", "", addBrch,
+                       "ExpandAll", allBrchs);
+        var branches = myTree.name.length - 1;
+    }
+
     if (wv.curStep == 0) {
-        myTree.addNode(0, "Display",       "Change display",    "", chgDisplay,    // 4
+        myTree.addNode(0, "Display",       "Change display",    "", chgDisplay,
                        "Viz", toggleViz,
                        "Grd", toggleGrd);
     } else {
-        myTree.addNode(0, "Display");                                              // 4
+        myTree.addNode(0, "Display");
+    }
+    var display = myTree.name.length - 1;
+
+    myTree.addNode(localVariables, "@-parameters",      "",     "", null   );
+    var atParameters = myTree.name.length - 1;
+
+    myTree.addNode(localVariables, "@@-parameters",     "",     "", null   );
+    var atAtParameters = myTree.name.length - 1;
+
+    // put the Caps Variables into the Tree
+    for (var icval = 0; icval < cval.length; icval++) {
+        var name   = "\u00a0\u00a0"+cval[icval].name;
+        var nrow   =                cval[icval].nrow;
+        var ncol   =                cval[icval].ncol;
+        var value  =                cval[icval].value[0];
+        var parent = capsValues;
+
+        if (cval[icval].name.search(/^:.*/)   >= 0 ||
+            cval[icval].name.search(/.*:$/)   >= 0 ||
+            cval[icval].name.search(/.*::.*/) >= 0 ||
+            cval[icval].name.indexOf(":")     <= 0   ) {
+            parent = capsValues;
+        } else {
+            var parts = cval[icval].name.split(":");
+
+            // make sure all prefixes are in Tree
+            for (var iii = 0; iii < parts.length-1; iii++) {
+                var found = 0;
+                for (var jjj = 0; jjj < myTree.name.length; jjj++) {
+                    if (myTree.name[jjj].replace(/\u00a0/g, "") == parts[iii]+":" &&
+                        myTree.parent[jjj]                      == parent            ) {
+                        parent = jjj;
+                        found = 1;
+                        break;
+                    }
+                }
+                if (found == 0) {
+                    var temp = parts[iii] + ":";
+                    for (jjj = 0; jjj <= iii; jjj++) {
+                        temp = "\u00a0\u00a0" + temp;
+                    }
+                    myTree.addNode(parent, temp, "", null);
+                    parent = myTree.name.length - 1;
+                }
+            }
+            name = parts[parts.length-1];
+            for (iii = 0; iii < parts.length; iii++) {
+                name = "\u00a0\u00a0" + name;
+            }
+        }
+
+        if (nrow > 1 || ncol > 1) {
+            value = "["+nrow+"x"+ncol+"]";
+        }
+
+        myTree.addNode(parent, name, "Edit Caps Value", "", editCval,
+                       ""+value, "");
     }
 
-    myTree.addNode(2, "@-parameters",      "",                  "", null   );      // 5
-    myTree.addNode(2, "@@-parameters",     "",                  "", null   );      // 6
+    wv.cvalStat = -2;
+
+    // open the Caps Values (if they were open before the Tree was rebuilt)
+    if (cvalsOpen == 1) {
+        myTree.opened[capsValues] = 1;
+    }
 
     // put the Design Parameters into the Tree
     for (var ipmtr = 0; ipmtr < pmtr.length; ipmtr++) {
@@ -7459,13 +8162,13 @@ var rebuildTreeWindow = function () {
             var nrow   =                pmtr[ipmtr].nrow;
             var ncol   =                pmtr[ipmtr].ncol;
             var value  =                pmtr[ipmtr].value[0];
-            var parent = 1;
+            var parent = designParameters;
 
             if (pmtr[ipmtr].name.search(/^:.*/)   >= 0 ||
                 pmtr[ipmtr].name.search(/.*:$/)   >= 0 ||
                 pmtr[ipmtr].name.search(/.*::.*/) >= 0 ||
                 pmtr[ipmtr].name.indexOf(":")     <= 0   ) {
-                parent = 1;
+                parent = designParameters;
             } else {
                 var parts = pmtr[ipmtr].name.split(":");
 
@@ -7512,7 +8215,7 @@ var rebuildTreeWindow = function () {
 
     // open the Design Parameters (if they were open before the Tree was rebuilt)
     if (pmtr1Open == 1) {
-        myTree.opened[1] = 1;
+        myTree.opened[designParameters] = 1;
     }
 
     // put the Local Variables into the Tree
@@ -7529,11 +8232,11 @@ var rebuildTreeWindow = function () {
             }
 
             if (pmtr[ipmtr].name[0] == "@" && pmtr[ipmtr].name[1] == "@") {
-                myTree.addNode(6, name, "", "", null, ""+value, "");
+                myTree.addNode(atAtParameters, name, "", "", null, ""+value, "");
             } else if (pmtr[ipmtr].name[0] == "@") {
-                myTree.addNode(5, name, "", "", null, ""+value, "");
+                myTree.addNode(atParameters, name, "", "", null, ""+value, "");
             } else {
-                myTree.addNode(2, name, "", "", null, ""+value, "");
+                myTree.addNode(localVariables, name, "", "", null, ""+value, "");
             }
             var inode = myTree.name.length - 1;
 
@@ -7556,59 +8259,61 @@ var rebuildTreeWindow = function () {
 
     // open the Local Variables (if they were open before the Tree was rebuilt)
     if (pmtr2Open == 1) {
-        myTree.opened[2] = 1;
+        myTree.opened[localVariables] = 1;
     }
 
     // put the Branches into the Tree
-    var parents = [3];
-    for (var ibrch = 0; ibrch < brch.length; ibrch++) {
-        var name  = "\u00a0\u00a0";
-        for (var indent = 0; indent < brch[ibrch].indent; indent++) {
-            name = name+">";
+    if (wv.server != "serveCAPS") {
+        var parents = [branches];
+        for (var ibrch = 0; ibrch < brch.length; ibrch++) {
+            var name  = "\u00a0\u00a0";
+            for (var indent = 0; indent < brch[ibrch].indent; indent++) {
+                name = name+">";
+            }
+            name = name+brch[ibrch].name;
+
+            if (ibrch == 0) {
+            } else if (brch[ibrch].indent > brch[ibrch-1].indent) {
+                parents.push(myTree.name.length-1);
+            } else if (brch[ibrch].indent < brch[ibrch-1].indent) {
+                parents.pop();
+            }
+
+            var type = brch[ibrch].type;
+            var actv;
+            if (ibrch == wv.curStep-1) {
+                actv = "<<step<<";
+            } else if (ibrch >= wv.builtTo) {
+                actv = "skipped";
+            } else if (brch[ibrch].actv == OCSM_SUPPRESSED) {
+                actv = "suppressed";
+            } else if (brch[ibrch].actv == OCSM_INACTIVE) {
+                actv = "inactive";
+            } else if (brch[ibrch].actv == OCSM_DEFERRED) {
+                actv = "deferred";
+            } else {
+                actv = "";
+            }
+
+            myTree.addNode(parents[parents.length-1], name, "Edit/del/add-after Branch", "", editBrch,
+                           type, "",
+                           actv, "");
         }
-        name = name+brch[ibrch].name;
+        parents = undefined;
 
-        if (ibrch == 0) {
-        } else if (brch[ibrch].indent > brch[ibrch-1].indent) {
-            parents.push(myTree.name.length-1);
-        } else if (brch[ibrch].indent < brch[ibrch-1].indent) {
-            parents.pop();
+        wv.brchStat = -2;
+
+        // open the Branches (if they were open before the Tree was rebuilt)
+        if (brchsOpen == 1) {
+            myTree.opened[branches] = 1;
         }
-
-        var type = brch[ibrch].type;
-        var actv;
-        if (ibrch == wv.curStep-1) {
-            actv = "<<step<<";
-        } else if (ibrch >= wv.builtTo) {
-            actv = "skipped";
-        } else if (brch[ibrch].actv == OCSM_SUPPRESSED) {
-            actv = "suppressed";
-        } else if (brch[ibrch].actv == OCSM_INACTIVE) {
-            actv = "inactive";
-        } else if (brch[ibrch].actv == OCSM_DEFERRED) {
-            actv = "deferred";
-        } else {
-            actv = "";
-        }
-
-        myTree.addNode(parents[parents.length-1], name, "Edit/del/add-after Branch", "", editBrch,
-                       type, "",
-                       actv, "");
-    }
-    parents = undefined;
-
-    wv.brchStat = -2;
-
-    // open the Branches (if they were open before the Tree was rebuilt)
-    if (brchsOpen == 1) {
-        myTree.opened[3] = 1;
     }
 
     // put the Display attributes into the Tree
     var patchesNode = -1;    // tree Node that will contain the Patches
     for (var gprim in wv.sceneGraph) {
         if (wv.curStep > 0) {
-            myTree.addNode(4, "\u00a0\u00a0CancelStepThru", "Cancel StepThru mode", null, cancelStepThru);
+            myTree.addNode(display, "\u00a0\u00a0CancelStepThru", "Cancel StepThru mode", null, cancelStepThru);
             break;
         }
 
@@ -7621,10 +8326,10 @@ var rebuildTreeWindow = function () {
         var csys  = undefined;
 
         if        (matches[0] == "Axes") {
-            myTree.addNode(4, "\u00a0\u00a0Axes", "", gprim, null,
+            myTree.addNode(display, "\u00a0\u00a0Axes", "", gprim, null,
                            "Viz", toggleViz);
-            myTree.addNode(4, "\u00a0\u00a0DisplayType", "Modify display type",     null, modifyDisplayType);
-            myTree.addNode(4, "\u00a0\u00a0DisplayFilter", "Modify display filter", null, modifyDisplayFilter);
+            myTree.addNode(display, "\u00a0\u00a0DisplayType", "Modify display type",     null, modifyDisplayType);
+            myTree.addNode(display, "\u00a0\u00a0DisplayFilter", "Modify display filter", null, modifyDisplayFilter);
             continue;
 
         // processing for a Patch: "Patch m @I=n"
@@ -7633,7 +8338,7 @@ var rebuildTreeWindow = function () {
                     matches[2].includes("@J=") ||
                     matches[2].includes("@K=")   )                 ) {
             if (patchesNode == -1) {
-                myTree.addNode(4, "\u00a0\u00a0Patches", "", gprim, null,
+                myTree.addNode(display, "\u00a0\u00a0Patches", "", gprim, null,
                               "Viz", toggleViz);
                 patchesNode = myTree.name.length - 1;
             }
@@ -7643,31 +8348,31 @@ var rebuildTreeWindow = function () {
 
         // processing for plotdata: "PlotCP: body:face"
         } else if (matches[0] == "PlotCP:") {
-            myTree.addNode(4, "\u00a0\u00a0PlotCP: "+matches[1], "", gprim, null,
+            myTree.addNode(display, "\u00a0\u00a0PlotCP: "+matches[1], "", gprim, null,
                           "Viz", toggleViz);
             continue;  // no further processing for this gprim
 
         // processing for plotdata: "PlotPoints: name"
         } else if (matches[0] == "PlotPoints:") {
-            myTree.addNode(4, "\u00a0\u00a0"+matches[1], "", gprim, null,
+            myTree.addNode(display, "\u00a0\u00a0"+matches[1], "", gprim, null,
                           "Viz", toggleViz);
             continue;  // no further processing for this gprim
 
         // processing for plotdata: "PlotLine: name"
         } else if (matches[0] == "PlotLine:") {
-            myTree.addNode(4, "\u00a0\u00a0"+matches[1], "", gprim, null,
+            myTree.addNode(display, "\u00a0\u00a0"+matches[1], "", gprim, null,
                           "Viz", toggleViz);
             continue;  // no further processing for this gprim
 
         // processing for plotdata: "PlotTris: name"
         } else if (matches[0] == "PlotTris:") {
-            myTree.addNode(4, "\u00a0\u00a0"+matches[1], "", gprim, null,
+            myTree.addNode(display, "\u00a0\u00a0"+matches[1], "", gprim, null,
                           "Viz", toggleViz, "Grd", toggleGrd);
             continue;  // no further processing for this gprim
 
         // processing for plotdata: "PlotGrid: name"
         } else if (matches[0] == "PlotGrid:") {
-            myTree.addNode(4, "\u00a0\u00a0"+matches[1], "", gprim, null,
+            myTree.addNode(display, "\u00a0\u00a0"+matches[1], "", gprim, null,
                           "Viz", toggleViz);
             continue;  // no further processing for this gprim
 
@@ -7722,7 +8427,7 @@ var rebuildTreeWindow = function () {
             if (myTree.name[jnode] == "\u00a0\u00a0"+bodyName) {
                 var knode = jnode;
                 while (knode != 0) {
-                    if (knode == 4) {             // "Display"
+                    if (knode == display) {             // "Display"
                         kbody = jnode;
                         break;
                     }
@@ -7735,7 +8440,7 @@ var rebuildTreeWindow = function () {
         //    subnodes now
         var kface, kedge, knode, kcsys;
         if (kbody < 0) {
-            myTree.addNode(4, "\u00a0\u00a0"+bodyName, "Show Body Attributes", "", showBodyAttrs,
+            myTree.addNode(display, "\u00a0\u00a0"+bodyName, "Show Body Attributes", "", showBodyAttrs,
                            "Viz", toggleViz,
                            "Grd", toggleGrd);
             kbody = myTree.name.length - 1;
@@ -7794,7 +8499,7 @@ var rebuildTreeWindow = function () {
     createWireframes();
 
     // open the Display (by default)
-    myTree.opened[4] = 1;
+    myTree.opened[display] = 1;
 
     // mark that we have (re-)built the Tree
     wv.sgUpdate = 0;
@@ -7860,6 +8565,9 @@ var postMessage = function (mesg) {
     botm.insertBefore(pre, botm.lastChild);
 
     pre.scrollIntoView();
+
+    var text2 = botm["innerHTML"].replace(/\n<\/pre><pre>/g, "");
+    botm["innerHTML"] = text2;
 };
 
 
@@ -8082,15 +8790,15 @@ var setupEditBrchForm = function () {
         suppress = 1;
     } else if (type == "rotatex") {
         argList  = ["angDeg", "yaxis", "zaxis"];
-        defValue = ["",       "",      ""     ];
+        defValue = ["",       "0",     "0"    ];
         suppress = 1;
     } else if (type == "rotatey") {
         argList  = ["angDeg", "zaxis", "xaxis"];
-        defValue = ["",       "",      ""     ];
+        defValue = ["",       "0",     "0"    ];
         suppress = 1;
     } else if (type == "rotatez") {
         argList  = ["angDeg", "xaxis", "yaxis"];
-        defValue = ["",       "",      ""     ];
+        defValue = ["",       "0",     "0"     ];
         suppress = 1;
     } else if (type == "rule") {
         argList  = ["reorder", "periodic"];
@@ -8771,6 +9479,10 @@ var cmdEditCopy = function (cm) {
 var cmdEditCut = function (cm) {
     // alert("in cmdEditCut(cm="+cm+")");
 
+    if (checkIfWithBall() === false) {
+        return;
+    }
+
     // copy to private clipboard
     wv.clipboard = cm.getRange(cm.getCursor("start"), cm.getCursor("end"));
 
@@ -8787,6 +9499,10 @@ var cmdEditCut = function (cm) {
 //
 var cmdEditPaste = function (cm) {
     // alert("in cmdEditPaste(cm="+cm+")");
+
+    if (checkIfWithBall() === false) {
+        return;
+    }
 
     // copy from private clipboard to textarea
     cm.replaceSelection(wv.clipboard, null, "paste")
@@ -8831,6 +9547,10 @@ var cmdEditFindPrev = function (cm) {
 var cmdEditReplace = function (cm) {
     // alert("in cmdEditReplace(cm="+cm+")");
 
+    if (checkIfWithBall() === false) {
+        return;
+    }
+
     CodeMirror.commands.replace(cm);
 };
 
@@ -8839,7 +9559,11 @@ var cmdEditReplace = function (cm) {
 // callback from "Comment" button in .csm editor
 //
 var cmdEditComment = function () {
-    // alert("in cmdComment()");
+    // alert("in cmdEditComment()");
+
+    if (checkIfWithBall() === false) {
+        return;
+    }
 
     // find lines in region (or line with current cursor)
     var begLine = wv.codeMirror.getCursor("start").line;
@@ -8874,6 +9598,10 @@ var cmdEditComment = function () {
 //
 var cmdEditIndent = function () {
     // alert("in cmdIndent()");
+
+    if (checkIfWithBall() === false) {
+        return;
+    }
 
     // find lines in region (or line with current cursor)
     var begLine = wv.codeMirror.getCursor("start").line;
@@ -8955,7 +9683,7 @@ var cmdEditHint = function () {
     } else if (curLine.match(/^\s*dimension/i) !== null) {
         hintText =        "hint:: DIMENSION $pmtrName nrow ncol despmtr=0";
     } else if (curLine.match(/^\s*dump/i) !== null) {
-        hintText =        "hint:: DUMP      $filename remove=0 toMark=0";
+        hintText =        "hint:: DUMP      $filename remove=0 toMark=0 withTess=0";
     } else if (curLine.match(/^\s*elseif/i) !== null) {
         hintText =        "hint:: ELSEIF    val1 $op1 val2 $op2=and val3=0 $op3=eq val4=0";
     } else if (curLine.match(/^\s*else/i) !== null) {
@@ -9027,15 +9755,15 @@ var cmdEditHint = function () {
     } else if (curLine.match(/^\s*revolve/i) !== null) {
         hintText =        "hint:: REVOLVE   xorig yorig zorig dxaxis dyaxis dzaxis angDeg";
     } else if (curLine.match(/^\s*rotatex/i) !== null) {
-        hintText =        "hint:: ROTATEX   angDeg yaxis zaxis";
+        hintText =        "hint:: ROTATEX   angDeg yaxis=0 zaxis=0";
     } else if (curLine.match(/^\s*rotatey/i) !== null) {
-        hintText =        "hint:: ROTATEY   angDeg zaxis xaxis";
+        hintText =        "hint:: ROTATEY   angDeg zaxis=0 xaxis=0";
     } else if (curLine.match(/^\s*rotatez/i) !== null) {
-        hintText =        "hint:: ROTATEZ   angDeg xaxis yaxis";
+        hintText =        "hint:: ROTATEZ   angDeg xaxis=0 yaxis=0";
     } else if (curLine.match(/^\s*rule/i) !== null) {
         hintText =        "hint:: RULE      reorder=0 periodic=0";
     } else if (curLine.match(/^\s*scale/i) !== null) {
-        hintText =        "hint:: SCALE     fact";
+        hintText =        "hint:: SCALE     fact xcent=0 ycent=0 zcent=0";
     } else if (curLine.match(/^\s*select/i) !== null) {
         hintText =        "hint:: SELECT    $type arg1 ...";
     } else if (curLine.match(/^\s*set/i) !== null) {
@@ -9082,8 +9810,8 @@ var cmdEditHint = function () {
         hintText =        "hint:: UNION     toMark=0 trimList=0 maxtol=0";
     }
 
-    // post the hint (for at leat 30 seconds)
-    wv.codeMirror.openNotification(hintText, {duration: 30000});
+    // post the hint (for at least 15 seconds)
+    wv.codeMirror.openNotification(hintText, {duration: 15000});
 
     // focus back to textarea
     wv.codeMirror.focus();
@@ -9096,7 +9824,35 @@ var cmdEditHint = function () {
 var cmdEditUndo = function (cm) {
     // alert("in cmdEditUndo()");
 
+    if (checkIfWithBall() === false) {
+        return;
+    }
+
     CodeMirror.commands.undo(cm);
+};
+
+
+//
+// callback from "Debug" button in .csm editor
+//
+var cmdEditDebug = function (cm) {
+    // alert("in cmdEditDebug()");
+
+    if (checkIfWithBall() === false) {
+        return;
+    }
+
+    // get the current line
+    var curLine = wv.codeMirror.getCursor("start").line + 1;
+
+    // get filename
+    var filelist = wv.filenames.split("|");
+    if (wv.fileindx === undefined && filelist.length == 3) {
+        wv.fileindx = 1;
+    }
+
+    // get the info from the server
+    browserToServer("getBodyDetails|"+filelist[wv.fileindx]+"|"+curLine+"|");
 };
 
 
@@ -9316,4 +10072,396 @@ CodeMirror.defineSimpleMode("csm_mode", {
     {token: "variable", regex: /[a-zA-Z@:][\w@:$]*/},
 
   ]
+});
+
+
+//
+// definition of the ".py" mode to be used by CodeMirror
+//
+CodeMirror.defineMode("python", function(conf, parserConf) {
+    var ERRORCLASS = "error";
+
+    function wordRegexp(words) {
+        return new RegExp("^((" + words.join(")|(") + "))\\b");
+    }
+
+    var wordOperators = wordRegexp(["and", "or", "not", "is"]);
+    var commonKeywords = ["as", "assert", "break", "class", "continue",
+                          "def", "del", "elif", "else", "except", "finally",
+                          "for", "from", "global", "if", "import",
+                          "lambda", "pass", "raise", "return",
+                          "try", "while", "with", "yield", "in"];
+    var commonBuiltins = ["abs", "all", "any", "bin", "bool", "bytearray", "callable", "chr",
+                          "classmethod", "compile", "complex", "delattr", "dict", "dir", "divmod",
+                          "enumerate", "eval", "filter", "float", "format", "frozenset",
+                          "getattr", "globals", "hasattr", "hash", "help", "hex", "id",
+                          "input", "int", "isinstance", "issubclass", "iter", "len",
+                          "list", "locals", "map", "max", "memoryview", "min", "next",
+                          "object", "oct", "open", "ord", "pow", "property", "range",
+                          "repr", "reversed", "round", "set", "setattr", "slice",
+                          "sorted", "staticmethod", "str", "sum", "super", "tuple",
+                          "type", "vars", "zip", "__import__", "NotImplemented",
+                          "Ellipsis", "__debug__"];
+    CodeMirror.registerHelper("hintWords", "python", commonKeywords.concat(commonBuiltins));
+
+    function top(state) {
+        return state.scopes[state.scopes.length - 1];
+    }
+
+    var delimiters = parserConf.delimiters || parserConf.singleDelimiters || /^[\(\)\[\]\{\}@,:`=;\.\\]/;
+    //               (Backwards-compatiblity with old, cumbersome config system)
+    var operators = [parserConf.singleOperators, parserConf.doubleOperators, parserConf.doubleDelimiters, parserConf.tripleDelimiters,
+                     parserConf.operators || /^([-+*/%\/&|^]=?|[<>=]+|\/\/=?|\*\*=?|!=|[~!@])/]
+    for (var i = 0; i < operators.length; i++) if (!operators[i]) operators.splice(i--, 1)
+
+    var hangingIndent = parserConf.hangingIndent || conf.indentUnit;
+
+    var myKeywords = commonKeywords, myBuiltins = commonBuiltins;
+    if (parserConf.extra_keywords != undefined)
+        myKeywords = myKeywords.concat(parserConf.extra_keywords);
+
+    if (parserConf.extra_builtins != undefined)
+        myBuiltins = myBuiltins.concat(parserConf.extra_builtins);
+
+    var py3 = !(parserConf.version && Number(parserConf.version) < 3)
+    if (py3) {
+        // since http://legacy.python.org/dev/peps/pep-0465/ @ is also an operator
+        var identifiers = parserConf.identifiers|| /^[_A-Za-z\u00A1-\uFFFF][_A-Za-z0-9\u00A1-\uFFFF]*/;
+        myKeywords = myKeywords.concat(["nonlocal", "False", "True", "None", "async", "await"]);
+        myBuiltins = myBuiltins.concat(["ascii", "bytes", "exec", "print"]);
+        var stringPrefixes = new RegExp("^(([rbuf]|(br)|(fr))?('{3}|\"{3}|['\"]))", "i");
+    } else {
+        var identifiers = parserConf.identifiers|| /^[_A-Za-z][_A-Za-z0-9]*/;
+        myKeywords = myKeywords.concat(["exec", "print"]);
+        myBuiltins = myBuiltins.concat(["apply", "basestring", "buffer", "cmp", "coerce", "execfile",
+                                        "file", "intern", "long", "raw_input", "reduce", "reload",
+                                        "unichr", "unicode", "xrange", "False", "True", "None"]);
+        var stringPrefixes = new RegExp("^(([rubf]|(ur)|(br))?('{3}|\"{3}|['\"]))", "i");
+    }
+    var keywords = wordRegexp(myKeywords);
+    var builtins = wordRegexp(myBuiltins);
+
+    // tokenizers
+    function tokenBase(stream, state) {
+        var sol = stream.sol() && state.lastToken != "\\"
+        if (sol) state.indent = stream.indentation()
+        // Handle scope changes
+        if (sol && top(state).type == "py") {
+            var scopeOffset = top(state).offset;
+            if (stream.eatSpace()) {
+                var lineOffset = stream.indentation();
+                if (lineOffset > scopeOffset)
+                    pushPyScope(state);
+                else if (lineOffset < scopeOffset && dedent(stream, state) && stream.peek() != "#")
+                    state.errorToken = true;
+                return null;
+            } else {
+                var style = tokenBaseInner(stream, state);
+                if (scopeOffset > 0 && dedent(stream, state))
+                    style += " " + ERRORCLASS;
+                return style;
+            }
+        }
+        return tokenBaseInner(stream, state);
+    }
+
+    function tokenBaseInner(stream, state) {
+        if (stream.eatSpace()) return null;
+
+        // Handle Comments
+        if (stream.match(/^#.*/)) return "comment";
+
+        // Handle Number Literals
+        if (stream.match(/^[0-9\.]/, false)) {
+            var floatLiteral = false;
+            // Floats
+            if (stream.match(/^[\d_]*\.\d+(e[\+\-]?\d+)?/i)) { floatLiteral = true; }
+            if (stream.match(/^[\d_]+\.\d*/)) { floatLiteral = true; }
+            if (stream.match(/^\.\d+/)) { floatLiteral = true; }
+            if (floatLiteral) {
+                // Float literals may be "imaginary"
+                stream.eat(/J/i);
+                return "number";
+            }
+            // Integers
+            var intLiteral = false;
+            // Hex
+            if (stream.match(/^0x[0-9a-f_]+/i)) intLiteral = true;
+            // Binary
+            if (stream.match(/^0b[01_]+/i)) intLiteral = true;
+            // Octal
+            if (stream.match(/^0o[0-7_]+/i)) intLiteral = true;
+            // Decimal
+            if (stream.match(/^[1-9][\d_]*(e[\+\-]?[\d_]+)?/)) {
+                // Decimal literals may be "imaginary"
+                stream.eat(/J/i);
+                // TODO - Can you have imaginary longs?
+                intLiteral = true;
+            }
+            // Zero by itself with no other piece of number.
+            if (stream.match(/^0(?![\dx])/i)) intLiteral = true;
+            if (intLiteral) {
+                // Integer literals may be "long"
+                stream.eat(/L/i);
+                return "number";
+            }
+        }
+
+        // Handle Strings
+        if (stream.match(stringPrefixes)) {
+            var isFmtString = stream.current().toLowerCase().indexOf('f') !== -1;
+            if (!isFmtString) {
+                // if this is a nested format string (e.g. f' {   f"{10*10}" + "a" }' )
+                // we do not format the nested expression and treat the nested format
+                // string as regular string
+                state.tokenize = tokenStringFactory(stream.current());
+                return state.tokenize(stream, state);
+            } else {
+                // need to do something more sophisticated
+                state.tokenize = formatStringFactory(stream.current(), state.tokenize);
+                return state.tokenize(stream, state);
+            }
+        }
+
+        for (var i = 0; i < operators.length; i++)
+            if (stream.match(operators[i])) return "operator"
+
+        if (stream.match(delimiters)) return "punctuation";
+
+        if (state.lastToken == "." && stream.match(identifiers))
+            return "property";
+
+        if (stream.match(keywords) || stream.match(wordOperators))
+            return "keyword";
+
+        if (stream.match(builtins))
+            return "builtin";
+
+        if (stream.match(/^(self|cls)\b/))
+            return "variable-2";
+
+        if (stream.match(identifiers)) {
+            if (state.lastToken == "def" || state.lastToken == "class")
+                return "def";
+            return "variable";
+        }
+
+        // Handle non-detected items
+        stream.next();
+        return ERRORCLASS;
+    }
+
+    function formatStringFactory(delimiter, tokenOuter) {
+        while ("rubf".indexOf(delimiter.charAt(0).toLowerCase()) >= 0)
+            delimiter = delimiter.substr(1);
+
+        var singleline = delimiter.length == 1;
+        var OUTCLASS = "string";
+
+        function tokenFString(stream, state) {
+            // inside f-str Expression
+            if (stream.match(delimiter)) {
+                // expression ends pre-maturally, but very common in editing
+                // Could show error to remind users to close brace here
+                state.tokenize = tokenString
+                return OUTCLASS;
+            } else if (stream.match('{')) {
+                // starting brace, if not eaten below
+                return "punctuation";
+            } else if (stream.match('}')) {
+                // return to regular inside string state
+                state.tokenize = tokenString
+                return "punctuation";
+            } else {
+                // use tokenBaseInner to parse the expression
+                return tokenBaseInner(stream, state);
+            }
+        }
+
+        function tokenString(stream, state) {
+            while (!stream.eol()) {
+                stream.eatWhile(/[^'"\{\}\\]/);
+                if (stream.eat("\\")) {
+                    stream.next();
+                    if (singleline && stream.eol())
+                        return OUTCLASS;
+                } else if (stream.match(delimiter)) {
+                    state.tokenize = tokenOuter;
+                    return OUTCLASS;
+                } else if (stream.match('{{')) {
+                    // ignore {{ in f-str
+                    return OUTCLASS;
+                } else if (stream.match('{', false)) {
+                    // switch to nested mode
+                    state.tokenize = tokenFString
+                    if (stream.current()) {
+                        return OUTCLASS;
+                    } else {
+                        // need to return something, so eat the starting {
+                        stream.next();
+                        return "punctuation";
+                    }
+                } else if (stream.match('}}')) {
+                    return OUTCLASS;
+                } else if (stream.match('}')) {
+                    // single } in f-string is an error
+                    return ERRORCLASS;
+                } else {
+                    stream.eat(/['"]/);
+                }
+            }
+            if (singleline) {
+                if (parserConf.singleLineStringErrors)
+                    return ERRORCLASS;
+                else
+                    state.tokenize = tokenOuter;
+            }
+            return OUTCLASS;
+        }
+        tokenString.isString = true;
+        return tokenString;
+    }
+
+    function tokenStringFactory(delimiter) {
+        while ("rubf".indexOf(delimiter.charAt(0).toLowerCase()) >= 0)
+            delimiter = delimiter.substr(1);
+
+        var singleline = delimiter.length == 1;
+        var OUTCLASS = "string";
+
+        function tokenString(stream, state) {
+            while (!stream.eol()) {
+                stream.eatWhile(/[^'"\\]/);
+                if (stream.eat("\\")) {
+                    stream.next();
+                    if (singleline && stream.eol())
+                        return OUTCLASS;
+                } else if (stream.match(delimiter)) {
+                    state.tokenize = tokenBase;
+                    return OUTCLASS;
+                } else {
+                    stream.eat(/['"]/);
+                }
+            }
+            if (singleline) {
+                if (parserConf.singleLineStringErrors)
+                    return ERRORCLASS;
+                else
+                    state.tokenize = tokenBase;
+            }
+            return OUTCLASS;
+        }
+        tokenString.isString = true;
+        return tokenString;
+    }
+
+    function pushPyScope(state) {
+        while (top(state).type != "py") state.scopes.pop()
+        state.scopes.push({offset: top(state).offset + conf.indentUnit,
+                           type: "py",
+                           align: null})
+    }
+
+    function pushBracketScope(stream, state, type) {
+        var align = stream.match(/^([\s\[\{\(]|#.*)*$/, false) ? null : stream.column() + 1
+        state.scopes.push({offset: state.indent + hangingIndent,
+                           type: type,
+                           align: align})
+    }
+
+    function dedent(stream, state) {
+        var indented = stream.indentation();
+        while (state.scopes.length > 1 && top(state).offset > indented) {
+            if (top(state).type != "py") return true;
+            state.scopes.pop();
+        }
+        return top(state).offset != indented;
+    }
+
+    function tokenLexer(stream, state) {
+        if (stream.sol()) state.beginningOfLine = true;
+
+        var style = state.tokenize(stream, state);
+        var current = stream.current();
+
+        // Handle decorators
+        if (state.beginningOfLine && current == "@")
+            return stream.match(identifiers, false) ? "meta" : py3 ? "operator" : ERRORCLASS;
+
+        if (/\S/.test(current)) state.beginningOfLine = false;
+
+        if ((style == "variable" || style == "builtin")
+            && state.lastToken == "meta")
+            style = "meta";
+
+        // Handle scope changes.
+        if (current == "pass" || current == "return")
+            state.dedent += 1;
+
+        if (current == "lambda") state.lambda = true;
+        if (current == ":" && !state.lambda && top(state).type == "py")
+            pushPyScope(state);
+
+        if (current.length == 1 && !/string|comment/.test(style)) {
+            var delimiter_index = "[({".indexOf(current);
+            if (delimiter_index != -1)
+                pushBracketScope(stream, state, "])}".slice(delimiter_index, delimiter_index+1));
+
+            delimiter_index = "])}".indexOf(current);
+            if (delimiter_index != -1) {
+                if (top(state).type == current) state.indent = state.scopes.pop().offset - hangingIndent
+                else return ERRORCLASS;
+            }
+        }
+        if (state.dedent > 0 && stream.eol() && top(state).type == "py") {
+            if (state.scopes.length > 1) state.scopes.pop();
+            state.dedent -= 1;
+        }
+
+        return style;
+    }
+
+    var external = {
+        startState: function(basecolumn) {
+            return {
+                tokenize: tokenBase,
+                scopes: [{offset: basecolumn || 0, type: "py", align: null}],
+                indent: basecolumn || 0,
+                lastToken: null,
+                lambda: false,
+                dedent: 0
+            };
+        },
+
+        token: function(stream, state) {
+            var addErr = state.errorToken;
+            if (addErr) state.errorToken = false;
+            var style = tokenLexer(stream, state);
+
+            if (style && style != "comment")
+                state.lastToken = (style == "keyword" || style == "punctuation") ? stream.current() : style;
+            if (style == "punctuation") style = null;
+
+            if (stream.eol() && state.lambda)
+                state.lambda = false;
+            return addErr ? style + " " + ERRORCLASS : style;
+        },
+
+        indent: function(state, textAfter) {
+            if (state.tokenize != tokenBase)
+                return state.tokenize.isString ? CodeMirror.Pass : 0;
+
+            var scope = top(state), closing = scope.type == textAfter.charAt(0)
+            if (scope.align != null)
+                return scope.align - (closing ? 1 : 0)
+            else
+                return scope.offset - (closing ? hangingIndent : 0)
+        },
+
+        electricInput: /^\s*[\}\]\)]$/,
+        closeBrackets: {triples: "'\""},
+        lineComment: "#",
+        fold: "indent"
+    };
+    return external;
 });

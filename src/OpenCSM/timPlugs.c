@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -52,7 +52,7 @@ static int       matsol(double A[], double b[], int n, double x[]);
 static int       solsvd(double A[], double b[], int mrow, int ncol, double W[], double x[]);
 static int       tridiag(int n, double a[], double b[], double c[], double d[], double x[]);
 
-static int       plotPointCloud(tim_T *TIM);
+static int       plotPointCloud(esp_T *ESP);
 
 typedef struct {
     int    ncloud;            /* number of points in cloud */
@@ -75,10 +75,10 @@ typedef struct {
 /***********************************************************************/
 
 int
-timLoad(tim_T *TIM,                     /* (in)  pointer to TIM structure */
+timLoad(esp_T *ESP,                     /* (in)  pointer to ESP structure */
         void  *cloudfile)               /* (in)  name of file containing cloud */
 {
-    int    status = EGADS_SUCCESS;      /* (out) return status */
+    int    status=0;                    /* (out) return status */
 
     int     icloud, jmax, ipmtr;
     char    templine[128];
@@ -90,13 +90,12 @@ timLoad(tim_T *TIM,                     /* (in)  pointer to TIM structure */
 
     /* --------------------------------------------------------------- */
 
-    outLevel = ocsmSetOutLevel(0);
-    (void)     ocsmSetOutLevel(outLevel);
+    outLevel = ocsmSetOutLevel(-1);
 
     /* create the plugs_T structure and initialize it */
-    MALLOC(TIM->udata, plugs_T, 1);
+    MALLOC(ESP->udata, plugs_T, 1);
 
-    plugs = (plugs_T *) TIM->udata;
+    plugs = (plugs_T *) ESP->udata;
 
     /* initialize it */
     plugs->ncloud   = 0;
@@ -138,104 +137,38 @@ timLoad(tim_T *TIM,                     /* (in)  pointer to TIM structure */
     fclose(plot_fp);
 
     /* add the cloud points to te display */
-    plotPointCloud(TIM);
+    plotPointCloud(ESP);
 
     /* set up the table of DESPMTRs */
-    MALLOC(plugs->pmtrindx, int,    TIM->MODL->npmtr);
-    MALLOC(plugs->pmtrorig, double, TIM->MODL->npmtr);
+    MALLOC(plugs->pmtrindx, int,    ESP->MODL->npmtr);
+    MALLOC(plugs->pmtrorig, double, ESP->MODL->npmtr);
 
-    for (ipmtr = 1; ipmtr <= TIM->MODL->npmtr; ipmtr++) {
-        if (TIM->MODL->pmtr[ipmtr].type == OCSM_DESPMTR) {
-            if (TIM->MODL->pmtr[ipmtr].nrow != 1 ||
-                TIM->MODL->pmtr[ipmtr].ncol != 1   ) {
+    for (ipmtr = 1; ipmtr <= ESP->MODL->npmtr; ipmtr++) {
+        if (ESP->MODL->pmtr[ipmtr].type == OCSM_DESPMTR) {
+            if (ESP->MODL->pmtr[ipmtr].nrow != 1 ||
+                ESP->MODL->pmtr[ipmtr].ncol != 1   ) {
                 SPRINT3(0, "ERROR:: DESPMTR %s is (%d*%d) and must be a scalar",
-                        TIM->MODL->pmtr[ipmtr].name, TIM->MODL->pmtr[ipmtr].nrow, TIM->MODL->pmtr[ipmtr].ncol);
+                        ESP->MODL->pmtr[ipmtr].name, ESP->MODL->pmtr[ipmtr].nrow, ESP->MODL->pmtr[ipmtr].ncol);
                 status = -999;
                 goto cleanup;
             }
             plugs->pmtrindx[plugs->npmtr] = ipmtr;
-            plugs->pmtrorig[plugs->npmtr] = TIM->MODL->pmtr[ipmtr].value[0];
+            plugs->pmtrorig[plugs->npmtr] = ESP->MODL->pmtr[ipmtr].value[0];
 
             SPRINT3(1, "initial DESPMTR %3d: %20s = %10.5f",
-                    plugs->npmtr, TIM->MODL->pmtr[plugs->pmtrindx[plugs->npmtr]].name, plugs->pmtrorig[plugs->npmtr]);
+                    plugs->npmtr, ESP->MODL->pmtr[plugs->pmtrindx[plugs->npmtr]].name, plugs->pmtrorig[plugs->npmtr]);
 
             plugs->npmtr++;
         }
     }
 
     /* unset the verification flag */
-    TIM->MODL->verify = 0;
+    ESP->MODL->verify = 0;
+
+    /* hold the UI when executing */
+    status = 1;
 
 cleanup:
-    return status;
-}
-
-
-/***********************************************************************/
-/*                                                                     */
-/*   timSave - save tim data and close tim instance                    */
-/*                                                                     */
-/***********************************************************************/
-
-int
-timSave(/*@unused@*/tim_T *TIM)                     /* (in)  pointer to TIM structure */
-{
-    int    status = EGADS_SUCCESS;      /* (out) return status */
-
-    plugs_T *plugs = (plugs_T *)(TIM->udata);
-
-    ROUTINE(timSave(plugs));
-
-    /* --------------------------------------------------------------- */
-
-    /* set the verification flag */
-    TIM->MODL->verify = 1;
-
-    /* remove the allocated data from the PLUGS structure */
-    FREE(plugs->cloud   );
-    FREE(plugs->face    );
-    FREE(plugs->pmtrindx);
-    FREE(plugs->pmtrorig);
-
-//cleanup:
-    return status;
-}
-
-
-/***********************************************************************/
-/*                                                                     */
-/*   timQuit - close tim instance without saving                       */
-/*                                                                     */
-/***********************************************************************/
-
-int
-timQuit(tim_T *TIM)                     /* (in)  pointer to TIM structure */
-{
-    int    status = EGADS_SUCCESS;      /* (out) return status */
-
-    int     ipmtr;
-    plugs_T *plugs = (plugs_T *)(TIM->udata);
-
-    ROUTINE(timQuit(plugs));
-
-    /* --------------------------------------------------------------- */
-
-    /* return all DESPMTRs to their original values */
-    for (ipmtr = 0; ipmtr < plugs->npmtr; ipmtr++) {
-        if (TIM->MODL                                     != NULL &&
-            TIM->MODL->pmtr                               != NULL &&
-            TIM->MODL->pmtr[plugs->pmtrindx[ipmtr]].value != NULL   ) {
-            TIM->MODL->pmtr[plugs->pmtrindx[ipmtr]].value[0] = plugs->pmtrorig[ipmtr];
-        }
-    }
-
-    /* remove the allocated data from the PLUGS structure */
-    FREE(plugs->cloud   );
-    FREE(plugs->face    );
-    FREE(plugs->pmtrindx);
-    FREE(plugs->pmtrorig);
-
-//cleanup:
     return status;
 }
 
@@ -247,16 +180,16 @@ timQuit(tim_T *TIM)                     /* (in)  pointer to TIM structure */
 /***********************************************************************/
 
 int
-timMesg(tim_T *TIM,                     /* (in)  pointer to TIM structure */
-        char  command[],                /* (in)  command */
-        int   max_resp_len,             /* (in)  length of response */
-        char  response[])               /* (out) response */
+timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
+        char  command[])                /* (in)  command */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
     int     ibody, unclass, reclass, ipmtr;
+    char    response[MAX_EXPR_LEN];
 
-    plugs_T *plugs = (plugs_T *)(TIM->udata);
+    modl_T  *MODL  =             ESP->MODL;
+    plugs_T *plugs = (plugs_T *)(ESP->udata);
 
     ROUTINE(timMesg(plugs));
 
@@ -264,9 +197,9 @@ timMesg(tim_T *TIM,                     /* (in)  pointer to TIM structure */
 
     /* "phase1" */
     if (strncmp(command, "phase1|", 7) == 0) {
-        ibody = TIM->MODL->nbody;
+        ibody = MODL->nbody;
 
-        status = plugsPhase1(TIM->MODL, ibody,
+        status = plugsPhase1(MODL, ibody,
                              plugs->npmtr, plugs->pmtrindx,
                              plugs->ncloud, plugs->cloud,
                              &(plugs->RMS));
@@ -274,22 +207,24 @@ timMesg(tim_T *TIM,                     /* (in)  pointer to TIM structure */
         SPRINT1(1, "\nAt end of phase1: RMS = %12.4e", plugs->RMS);
         for (ipmtr = 0; ipmtr < plugs->npmtr; ipmtr++) {
             SPRINT5(1, "%2d %3d %20s %12.6f (%12.6f)", ipmtr, plugs->pmtrindx[ipmtr],
-                    TIM->MODL->pmtr[plugs->pmtrindx[ipmtr]].name,
-                    TIM->MODL->pmtr[plugs->pmtrindx[ipmtr]].value[0],
+                    MODL->pmtr[plugs->pmtrindx[ipmtr]].name,
+                    MODL->pmtr[plugs->pmtrindx[ipmtr]].value[0],
                     plugs->pmtrorig[ipmtr]);
         }
 
         if (status < EGADS_SUCCESS) {
-            snprintf(response, max_resp_len-1, "phase1|%10.4e|ERROR:: %d detected", plugs->RMS, status);
+            snprintf(response, MAX_EXPR_LEN, "timMesg|plugs|phase1|%10.4e|ERROR:: %d detected", plugs->RMS, status);
         } else {
-            snprintf(response, max_resp_len-1, "phase1|%10.4e|%d", plugs->RMS, status);
+            snprintf(response, MAX_EXPR_LEN, "timMesg|plugs|phase1|%10.4e|%d", plugs->RMS, status);
         }
+
+        tim_bcst("plugs", response);
 
     /* "phase2" */
     } else if (strncmp(command, "phase2|", 7) == 0) {
-        ibody = TIM->MODL->nbody;
+        ibody = MODL->nbody;
 
-        status = plugsPhase2(TIM->MODL, ibody,
+        status = plugsPhase2(MODL, ibody,
                              plugs->npmtr, plugs->pmtrindx,
                              plugs->ncloud, plugs->cloud, plugs->face,
                              &unclass, &reclass,
@@ -298,25 +233,115 @@ timMesg(tim_T *TIM,                     /* (in)  pointer to TIM structure */
         SPRINT1(1, "\nAt end of phase2: RMS = %12.4e", plugs->RMS);
         for (ipmtr = 0; ipmtr < plugs->npmtr; ipmtr++) {
             SPRINT5(1, "%2d %3d %20s %12.6f (%12.6f)", ipmtr, plugs->pmtrindx[ipmtr],
-                    TIM->MODL->pmtr[plugs->pmtrindx[ipmtr]].name,
-                    TIM->MODL->pmtr[plugs->pmtrindx[ipmtr]].value[0],
+                    MODL->pmtr[plugs->pmtrindx[ipmtr]].name,
+                    MODL->pmtr[plugs->pmtrindx[ipmtr]].value[0],
                     plugs->pmtrorig[ipmtr]);
         }
 
         if (status < EGADS_SUCCESS) {
-            snprintf(response, max_resp_len-1, "phase2|%10.4e|%d|%dERROR:: %d detected", plugs->RMS, unclass, reclass, status);
+            snprintf(response, MAX_EXPR_LEN, "timMesg|plugs|phase2|%10.4e|%d|%dERROR:: %d detected", plugs->RMS, unclass, reclass, status);
         } else {
-            snprintf(response, max_resp_len-1, "phase2|%10.4e|%d|%d|%d", plugs->RMS, unclass, reclass, status);
+            snprintf(response, MAX_EXPR_LEN, "timMesg|plugs|phase2|%10.4e|%d|%d|%d", plugs->RMS, unclass, reclass, status);
         }
+
+        tim_bcst("plugs", response);
 
     /* "draw|" */
     } else if (strncmp(command, "draw|", 5) == 0) {
-        plotPointCloud(TIM);
+        plotPointCloud(ESP);
 
-        snprintf(response, max_resp_len-1, "draw");
+        tim_bcst("plugs", "timMesg|plugs|draw");
     }
 
 //cleanup:
+    return status;
+}
+
+
+/***********************************************************************/
+/*                                                                     */
+/*   timSave - save tim data and close tim instance                    */
+/*                                                                     */
+/***********************************************************************/
+
+int
+timSave(esp_T *ESP)                     /* (in)  pointer to ESP structure */
+{
+    int    status = EGADS_SUCCESS;      /* (out) return status */
+
+    plugs_T *plugs = (plugs_T *)(ESP->udata);
+
+    ROUTINE(timSave(plugs));
+
+    /* --------------------------------------------------------------- */
+
+    if (plugs == NULL) {
+        goto cleanup;
+    }
+
+    /* set the verification flag */
+    ESP->MODL->verify = 1;
+
+    /* remove the allocated data from the PLUGS structure */
+    FREE(plugs->cloud   );
+    FREE(plugs->face    );
+    FREE(plugs->pmtrindx);
+    FREE(plugs->pmtrorig);
+
+    FREE(ESP->udata);
+
+    tim_bcst("plugs", "timSave|plugs|");
+
+cleanup:
+    return status;
+}
+
+
+/***********************************************************************/
+/*                                                                     */
+/*   timQuit - close tim instance without saving                       */
+/*                                                                     */
+/***********************************************************************/
+
+int
+timQuit(esp_T *ESP,                     /* (in)  pointer to ESP structure */
+/*@unused@*/int   unload)               /* (in)  flag to unload */
+{
+    int    status = EGADS_SUCCESS;      /* (out) return status */
+
+    int     ipmtr;
+    plugs_T *plugs = (plugs_T *)(ESP->udata);
+
+    ROUTINE(timQuit(plugs));
+
+    /* --------------------------------------------------------------- */
+
+    if (plugs == NULL) {
+        goto cleanup;
+    }
+
+    /* return all DESPMTRs to their original values */
+    if (plugs->pmtrindx != NULL && plugs->pmtrorig != NULL) {
+        for (ipmtr = 0; ipmtr < plugs->npmtr; ipmtr++) {
+            if (ESP->MODL                                     != NULL &&
+                ESP->MODL->pmtr                               != NULL &&
+                ESP->MODL->pmtr[plugs->pmtrindx[ipmtr]].value != NULL   ) {
+                ESP->MODL->pmtr[plugs->pmtrindx[ipmtr]].value[0] = plugs->pmtrorig[ipmtr];
+            }
+        }
+    }
+
+    /* remove the allocated data from the PLUGS structure */
+    FREE(plugs->cloud   );
+    FREE(plugs->face    );
+    FREE(plugs->pmtrindx);
+    FREE(plugs->pmtrorig);
+
+    FREE(ESP->udata);
+
+    tim_bcst("plugs", "timQuit|plugs|");
+
+cleanup:
     return status;
 }
 
@@ -2034,7 +2059,7 @@ cleanup:
  */
 
 static int
-plotPointCloud(tim_T *TIM)              /* (in)  pointer to TIM structure */
+plotPointCloud(esp_T *ESP)              /* (in)  pointer to ESP structure */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
@@ -2043,14 +2068,14 @@ plotPointCloud(tim_T *TIM)              /* (in)  pointer to TIM structure */
     char   gpname[255];
     wvData items[20];
 
-
-    plugs_T *plugs = (plugs_T *)(TIM->udata);
+    wvContext *cntxt =             ESP->cntxt;
+    plugs_T   *plugs = (plugs_T *)(ESP->udata);
 
     ROUTINE(plotPointCloud);
 
     /* --------------------------------------------------------------- */
 
-    if (TIM->ctxt == NULL) {
+    if (cntxt == NULL) {
         goto cleanup;
     }
 
@@ -2075,7 +2100,7 @@ plotPointCloud(tim_T *TIM)              /* (in)  pointer to TIM structure */
         status = wv_setData(WV_REAL32, npnt, (void*)verts, WV_VERTICES, &(items[nitems]));
         CHECK_STATUS(wv_setData);
 
-        wv_adjustVerts(&(items[nitems]), TIM->sgFocus);
+        wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
         nitems++;
 
         /* point color */
@@ -2090,21 +2115,21 @@ plotPointCloud(tim_T *TIM)              /* (in)  pointer to TIM structure */
 
     /* get index of current graphic primitive (if it exists) */
     strcpy(gpname, "PlotPoints: unclassified");
-    igprim = wv_indexGPrim(TIM->ctxt, gpname);
+    igprim = wv_indexGPrim(cntxt, gpname);
 
     /* make graphic primitive */
     if (igprim < 0 && npnt > 0) {
-        igprim = status = wv_addGPrim(TIM->ctxt, gpname, WV_POINT, attrs, nitems, items);
+        igprim = status = wv_addGPrim(cntxt, gpname, WV_POINT, attrs, nitems, items);
         CHECK_STATUS(wv_addGPrim);
 
-        SPLINT_CHECK_FOR_NULL(TIM->ctxt->gPrims);
+        SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
 
-        TIM->ctxt->gPrims[igprim].pSize = 3.0;
+        cntxt->gPrims[igprim].pSize = 3.0;
     } else if (npnt > 0) {
-        status = wv_modGPrim(TIM->ctxt, igprim, nitems, items);
+        status = wv_modGPrim(cntxt, igprim, nitems, items);
         CHECK_STATUS(wv_modGPrim);
     } else {
-        wv_removeGPrim(TIM->ctxt, igprim);
+        wv_removeGPrim(cntxt, igprim);
     }
 
     /* classified points */
@@ -2126,7 +2151,7 @@ plotPointCloud(tim_T *TIM)              /* (in)  pointer to TIM structure */
         status = wv_setData(WV_REAL32, npnt, (void*)verts, WV_VERTICES, &(items[nitems]));
         CHECK_STATUS(wv_setData);
 
-        wv_adjustVerts(&(items[nitems]), TIM->sgFocus);
+        wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
         nitems++;
 
         /* point color */
@@ -2140,24 +2165,24 @@ plotPointCloud(tim_T *TIM)              /* (in)  pointer to TIM structure */
     }
 
     /* get index of current graphic primitive (if it exists) */
-    SPLINT_CHECK_FOR_NULL(TIM->ctxt);
+    SPLINT_CHECK_FOR_NULL(cntxt);
 
     strcpy(gpname, "PlotPoints: classified");
-    igprim = wv_indexGPrim(TIM->ctxt, gpname);
+    igprim = wv_indexGPrim(cntxt, gpname);
 
     /* make graphic primitive */
     if (igprim < 0 && npnt > 0) {
-        igprim = status = wv_addGPrim(TIM->ctxt, gpname, WV_POINT, attrs, nitems, items);
+        igprim = status = wv_addGPrim(cntxt, gpname, WV_POINT, attrs, nitems, items);
         CHECK_STATUS(wv_addGPrim);
 
-        SPLINT_CHECK_FOR_NULL(TIM->ctxt->gPrims);
+        SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
 
-        TIM->ctxt->gPrims[igprim].pSize = 3.0;
+        cntxt->gPrims[igprim].pSize = 3.0;
     } else if (npnt > 0) {
-        status = wv_modGPrim(TIM->ctxt, igprim, nitems, items);
+        status = wv_modGPrim(cntxt, igprim, nitems, items);
         CHECK_STATUS(wv_modGPrim);
     } else {
-        wv_removeGPrim(TIM->ctxt, igprim);
+        wv_removeGPrim(cntxt, igprim);
     }
 
 cleanup:

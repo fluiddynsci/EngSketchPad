@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2012/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2012/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -36,45 +36,46 @@
 #include <unistd.h>
 #include <assert.h>
 
-//#define MIXED_TESS               1      // display mixed tri/quads tessellations
-
 #define TESS_PARAM_0             0.0250
 #define TESS_PARAM_1             0.0075
 #define TESS_PARAM_2             20.0
+
+#define USING_CAPS               1
 
 #ifdef WIN32
     #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
     #include <winsock2.h>
+    #define snprintf     _snprintf
+    #define SLEEP(msec)  Sleep(msec)
+    #define SLASH '\\'
+#else
+    #include <unistd.h>
+    #define SLEEP(msec)  usleep(1000*msec)
+    #define SLASH '/'
 #endif
-
-#include "egads.h"
-#include "emp.h"
 
 #define CINT    const int
 #define CDOUBLE const double
 #define CCHAR   const char
-
-#ifdef WIN32
-    #define snprintf _snprintf
-#endif
-
-#ifdef WIN32
-    #define  SLASH '\\'
-#else
-    #define  SLASH '/'
-#endif
 
 #define STRNCPY(A, B, LEN) strncpy(A, B, LEN); A[LEN-1] = '\0';
 
 #include "common.h"
 #include "OpenCSM.h"
 
+#include "emp.h"
 #include "udp.h"
-#include "tim.h"
+#include "esp.h"
 #include "egg.h"
 
-#include "wsserver.h"
+#include "tim.h"
+
+#ifdef USING_CAPS
+   #include "caps.h"
+   extern int caps_cpFile(const char *src, const char *dst);
+   extern int caps_rmFile(const char *path);
+#endif
 
 /***********************************************************************/
 /*                                                                     */
@@ -239,8 +240,7 @@ static float color_map[256*3] =
 /*                                                                     */
 /***********************************************************************/
 
-/* global variable holding a MODL */
-static void       *modl      = NULL;   /* pointer to current MODL */
+/* global variable holding program settings, etc. */
 static int        addVerify  = 0;      /* =1 to create .csm_verify file */
 static int        allVels    = 0;      /* =1 to compute Node/Edge/Faces vels */
 static int        batch      = 0;      /* =0 to enable visualization */
@@ -255,6 +255,7 @@ static int        skipBuild  = 0;      /* =1 to skip initial build */
 static int        skipTess   = 0;      /* -1 to skip tessellation at end of build */
 static int        tessel     = 0;      /* =1 for tessellation sensitivities */
 static int        verify     = 0;      /* =1 to enable verification */
+static char       *capsname  = NULL;   /* name of CAPS directory */
 static char       *filename  = NULL;   /* name of .csm file */
 static char       *vrfyname  = NULL;   /* name of .vfy file */
 static char       *despname  = NULL;   /* name of DESPMTRs file */
@@ -262,13 +263,18 @@ static char       *dictname  = NULL;   /* name of dictionary file */
 static char       *dxddname  = NULL;   /* name of despmtr for -dxdd */
 static char       *ptrbname  = NULL;   /* name of perturbation file */
 static char       *eggname   = NULL;   /* name of external grid generator */
+static char       *pyname    = NULL;   /* name of python file (if given) */
 static char       *plotfile  = NULL;   /* name of plotdata file */
 static char       *tessfile  = NULL;   /* name of tessellation file */
 static char       *BDFname   = NULL;   /* name of BDF file to plot */
 
+#ifdef USING_CAPS
+/* global variables associated with Caps */
+static int         capsPhase = -1;
+#endif
+
 /* global variables associated with graphical user interface (gui) */
 #define MAX_CLIENTS  100
-static wvContext  *cntxt     = NULL;   /* context for the WebViewer */
 static int         port      = 7681;   /* port number */
 static int         serverNum = -1;     /* server number */
 
@@ -310,7 +316,6 @@ static char       *skbuff = NULL;
 
 /* global variables associated with StepThru mode */
 static int        curStep = 0;
-static float      sgFocus[4];
 
 /* global variables associated with the response buffer */
 static int        max_resp_len = 0;
@@ -334,25 +339,28 @@ static FILE       *jrnl_out = NULL;    /* output journal file */
 /* declarations for routines defined below */
 static void       addToResponse(char text[]);
 static void       addToSgMetaData(char format[], ...);
-static int        applyDisplacement(modl_T *MODL, int ipmtr);
-       void       browserMessage(void *wsi, char text[], /*@unused@*/ int lena);
-static int        buildBodys(int buildTo, int *builtTo, int *buildStatus, int *nwarn);
-static int        buildSceneGraph();
-static int        buildSceneGraphBody(int ibody);
-static void       cleanupMemory(int quiet);
+static int        applyDisplacement(esp_T *ESP, int ipmtr);
+       void       browserMessage(void *udata, void *wsi, char text[],int lena);
+static int        buildBodys(esp_T *ESP, int buildTo, int *builtTo, int *buildStatus, int *nwarn);
+static int        buildSceneGraph(esp_T *ESP);
+static int        buildSceneGraphBody(esp_T *ESP, int ibody);
+static void       cleanupMemory(modl_T *MODL, int quiet);
 static int        getToken(char text[], int nskip, char sep, char token[]);
 static int        maxDistance(modl_T *MODL1, modl_T *MODL2, int ibody, double *dist);
        void       mesgCallbackFromOpenCSM(char mesg[]);
-static int        processBrowserToServer(char text[]);
+static int        processBrowserToServer(esp_T *ESP, char text[]);
+#ifdef USING_CAPS
+static void       showCapsErrors(int nerror, capsErrs errors[]);
+#endif
        void       sizeCallbackFromOpenCSM(void *modl, int ipmtr, int nrow, int ncel);
 static void       spec_col(float scalar, float out[]);
-static int        storeUndo(char cmd[], char arg[]);
+static int        storeUndo(modl_T *MODL, char cmd[], char arg[]);
 static int        updateModl(modl_T *src_MODL, modl_T *tgt_MODL);
 
 static int        addToHistogram(double entry, int nhist, double dhist[], int hist[]);
 static int        printHistogram(int nhist, double dhist[], int hist[]);
 
-static int        writeSensFile(modl_T *modl, int ibody, char filename[]);
+static int        writeSensFile(modl_T *MODL, int ibody, char filename[]);
 
 
 /***********************************************************************/
@@ -368,7 +376,7 @@ main(int       argc,                    /* (in)  number of arguments */
     int       imajor, iminor, status, i, bias, showUsage=0;
     int       builtTo, buildStatus, nwarn=0;
     int       npmtrs, type, nrow, irow, ncol, icol, ii, *ipmtrs=NULL, *irows=NULL, *icols=NULL;
-    int       ipmtr, jpmtr, iundo; //, inode, iedge, iface;
+    int       ipmtr, jpmtr, iundo, nbody;
     float     fov, zNear, zFar;
     float     eye[3]    = {0.0, 0.0, 7.0};
     float     center[3] = {0.0, 0.0, 0.0};
@@ -380,8 +388,19 @@ main(int       argc,                    /* (in)  number of arguments */
     char      pname[MAX_NAME_LEN], strval[MAX_STRVAL_LEN];
     char      *text=NULL, *esp_start;
     CCHAR     *OCC_ver;
-    FILE      *jrnl_in=NULL, *ptrb_fp, *vrfy_fp, *auto_fp;
+    FILE      *jrnl_in=NULL, *ptrb_fp, *vrfy_fp, *auto_fp, *test_fp;
+    esp_T     *ESP=NULL;
     modl_T    *MODL=NULL;
+#ifdef USING_CAPS
+    int       nbrch, npmtr, nerror;
+    char      phase_old[11], phase_new[11], capsCsm[MAX_FILENAME_LEN];
+    FILE      *temp_fp;
+    capsObj   cProject;
+    capsErrs  *errors;
+#endif
+
+    char      egadsName[128];
+    ego       context, emodel;
 
     int       ibody;
 
@@ -402,6 +421,7 @@ main(int       argc,                    /* (in)  number of arguments */
     MALLOC(casename,    char, MAX_FILENAME_LEN);
     MALLOC(jrnlname,    char, MAX_FILENAME_LEN);
     MALLOC(tempname,    char, MAX_FILENAME_LEN);
+    MALLOC(capsname,    char, MAX_FILENAME_LEN);
     MALLOC(filename,    char, MAX_FILENAME_LEN);
     MALLOC(vrfyname,    char, MAX_FILENAME_LEN);
     MALLOC(despname,    char, MAX_FILENAME_LEN);
@@ -412,6 +432,7 @@ main(int       argc,                    /* (in)  number of arguments */
     MALLOC(dirname,     char, MAX_FILENAME_LEN);
     MALLOC(basename,    char, MAX_FILENAME_LEN);
     MALLOC(eggname,     char, MAX_FILENAME_LEN);
+    MALLOC(pyname,      char, MAX_FILENAME_LEN);
     MALLOC(plotfile,    char, MAX_FILENAME_LEN);
     MALLOC(tessfile,    char, MAX_FILENAME_LEN);
     MALLOC(BDFname,     char, MAX_FILENAME_LEN);
@@ -431,6 +452,7 @@ main(int       argc,                    /* (in)  number of arguments */
     /* get the flags and casename(s) from the command line */
     casename[ 0] = '\0';
     jrnlname[ 0] = '\0';
+    capsname[ 0] = '\0';
     filename[ 0] = '\0';
     vrfyname[ 0] = '\0';
     despname[ 0] = '\0';
@@ -439,9 +461,12 @@ main(int       argc,                    /* (in)  number of arguments */
     ptrbname[ 0] = '\0';
     pmtrname[ 0] = '\0';
     eggname[  0] = '\0';
+    pyname[   0] = '\0';
     plotfile[ 0] = '\0';
     tessfile[ 0] = '\0';
     BDFname[  0] = '\0';
+
+    egadsName[0] = '\0';
 
     for (i = 1; i < argc; i++) {
         if        (strcmp(argv[i], "--") == 0) {
@@ -452,6 +477,19 @@ main(int       argc,                    /* (in)  number of arguments */
             allVels = 1;
         } else if (strcmp(argv[i], "-batch") == 0) {
             batch = 1;
+        } else if (strcmp(argv[i], "-caps") == 0) {
+#ifdef USING_CAPS
+            if (i < argc-1) {
+                STRNCPY(capsname, argv[++i], MAX_FILENAME_LEN);
+            } else {
+                showUsage = 1;
+                break;
+            }
+#else
+            SPRINT0(0, "ERROR:: serveESP compiled without USING_CAPS");
+            status = EXIT_FAILURE;
+            goto cleanup;
+#endif
         } else if (strcmp(argv[i], "-despmtrs") == 0) {
             if (i < argc-1) {
                 STRNCPY(despname, argv[++i], MAX_FILENAME_LEN);
@@ -471,6 +509,13 @@ main(int       argc,                    /* (in)  number of arguments */
         } else if (strcmp(argv[i], "-dxdd") == 0) {
             if (i < argc-1) {
                 STRNCPY(dxddname, argv[++i], MAX_FILENAME_LEN);
+            } else {
+                showUsage = 1;
+                break;
+            }
+        } else if (strcmp(argv[i], "-egads") == 0) {
+            if (i < argc-1) {
+                STRNCPY(egadsName, argv[++i], 127);
             } else {
                 showUsage = 1;
                 break;
@@ -585,6 +630,9 @@ main(int       argc,                    /* (in)  number of arguments */
         SPRINT0(0, "   where [options...] = -addVerify");
         SPRINT0(0, "                        -allVels");
         SPRINT0(0, "                        -batch");
+#ifdef USING_CAPS
+        SPRINT0(0, "                        -caps capsname");
+#endif
         SPRINT0(0, "                        -despmtrs despname");
         SPRINT0(0, "                        -dict dictname");
         SPRINT0(0, "                        -dumpEgads");
@@ -623,7 +671,7 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program serveESP                    *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2021         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2022         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************\n");
 
@@ -631,6 +679,9 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT1(1, "    addVerify   = %d", addVerify  );
     SPRINT1(1, "    allVels     = %d", allVels    );
     SPRINT1(1, "    batch       = %d", batch      );
+#ifdef USING_CAPS
+    SPRINT1(1, "    capsname    = %s", capsname   );
+#endif
     SPRINT1(1, "    despmtrs    = %s", despname   );
     SPRINT1(1, "    dictname    = %s", dictname   );
     SPRINT1(1, "    dxddname    = %s", dxddname   );
@@ -652,6 +703,29 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT1(1, "    ESP_ROOT    = %s", /*@ignore@*/getenv("ESP_ROOT")/*@end@*/);
     SPRINT0(1, " ");
 
+    /* get the structure that will hole the high-level pointers */
+    MALLOC(ESP, esp_T, 1);
+
+    ESP->EGADS      = NULL;
+    ESP->MODL       = NULL;
+    ESP->CAPS       = NULL;
+    ESP->cntxt      = NULL;
+    ESP->sgFocus[0] = 0;
+    ESP->sgFocus[1] = 0;
+    ESP->sgFocus[2] = 0;
+    ESP->sgFocus[3] = 1;
+    ESP->udata      = NULL;
+    ESP->udata2     = NULL;
+    ESP->sgMutex    = NULL;
+
+    /* create a mutex to make sure only one thread can modify the scene graph at a time */
+    ESP->sgMutex = EMP_LockCreate();
+    if (ESP->sgMutex == NULL) {
+        SPRINT0(0, "ERROR:: a mutex for the SceneGraph could not be created");
+        status = -997;
+        goto cleanup;
+    }
+
     /* set OCSMs output level */
     (void) ocsmSetOutLevel(outLevel);
 
@@ -666,6 +740,23 @@ main(int       argc,                    /* (in)  number of arguments */
 
     /* allocate sketch buffer */
     MALLOC(skbuff, char, MAX_STR_LEN);
+
+    if (strlen(egadsName) > 0) {
+        status = EG_open(&context);
+        if (status < EGADS_SUCCESS) goto cleanup;
+
+        status = EG_loadModel(context, 0, egadsName, &emodel);
+        if (status < EGADS_SUCCESS) goto cleanup;
+
+        status = ocsmLoadFromModel(emodel, (void **)&(ESP->MODL));
+        if (status < EGADS_SUCCESS) goto cleanup;
+
+        MODL = ESP->MODL;
+
+        pendingError = -2;
+
+        goto somewhere;
+    }
 
     /* add .csm extension if a valid extension is not given */
     if (STRLEN(casename) > 0) {
@@ -725,6 +816,23 @@ main(int       argc,                    /* (in)  number of arguments */
                 strcpy(filename, "autoEgads.csm");
                 SPRINT1(0, "Generated \"%s\" input file", filename);
             }
+        } else if (strstr(casename, ".py") != NULL) {
+            /* check if file exists */
+            test_fp = fopen(casename, "r");
+            if (test_fp == NULL) {
+                SPRINT1(0, "ERROR:: \"%s\" does not exist", casename);
+                status = -999;
+                goto cleanup;
+            } else {
+                fclose(test_fp);
+            }
+
+            /* python file given */
+            strcpy(pyname, filename);
+            filename[0] = '\0';
+            jrnlname[0] = '\0';
+            verify    = 0;
+            addVerify = 0;
         } else {
             /* append .csm extension */
             strcat(filename, ".csm");
@@ -732,6 +840,155 @@ main(int       argc,                    /* (in)  number of arguments */
     } else {
         casename[0] = '\0';
         filename[0] = '\0';
+    }
+
+#ifdef USING_CAPS
+    /* if a capsname is given, we are in CAPS mode */
+    if (strlen(capsname) > 0) {
+
+        /* check if the CAPSproject already exists */
+        snprintf(tempname, MAX_FILENAME_LEN, "%s%cCapsLastPhase", capsname, SLASH);
+        temp_fp = fopen(tempname, "r");
+
+        /* caps Project does not exist, so casename must be non-null */
+        if (temp_fp == NULL) {
+            if (strlen(casename) == 0) {
+                SPRINT1(0, "ERROR:: capsProject \"%s\" does not exist, so casename must be given", capsname);
+                status = EXIT_FAILURE;
+                goto cleanup;
+            }
+
+            capsPhase = 0;
+
+            /* make a copy of the .csm file */
+            snprintf(capsCsm, MAX_FILENAME_LEN, "%s.csm", capsname);
+
+            status = caps_cpFile(filename, capsCsm);
+            CHECK_STATUS(caps_cpFile);
+
+            /* open a new capsProject with the copies .csm file */
+            SPRINT3(1, "--> enter caps_open(%s:%s) new from %s", capsname, "P0001", capsCsm);
+            old_time = clock();
+            status = caps_open(capsname, "P0001", 0, capsCsm,  outLevel, &cProject, &nerror, &errors);
+            new_time = clock();
+            printf("caps_open -> status=%d, nerror=%d\n", status, nerror);
+
+        /* capsProject does exist, so figure out the last phase associated with capsname */
+        } else {
+            fscanf(temp_fp, "%d", &capsPhase);
+            fclose(temp_fp);
+
+            snprintf(phase_old, 10, "P%04d", capsPhase  );
+            snprintf(phase_new, 10, "P%04d", capsPhase+1);
+
+            /* if casename is not given, open a new phase in the capsProject */
+            if (strlen(casename) == 0) {
+                SPRINT2(1, "--> enter caps_open(%s:%s) new phase", capsname, phase_new);
+                old_time = clock();
+                status = caps_open(capsname, phase_new, 3, phase_old,  outLevel, &cProject, &nerror, &errors);
+                new_time = clock();
+                printf("caps_open -> status=%d, nerror=%d\n", status, nerror);
+
+            /* a new casename is given too, so copy the .csm file into the capsProject's .csm */
+            } else {
+                snprintf(capsCsm, MAX_FILENAME_LEN, "%s.csm", capsname);
+
+                (void) caps_rmFile(capsCsm);
+
+                status = caps_cpFile(filename, capsCsm);
+                CHECK_STATUS(caps_cpFile);
+
+                SPRINT3(1, "--> enter caps_open(%s:%s) new phase from %s", capsname, phase_new, capsCsm);
+                old_time = clock();
+                status = caps_open(capsname, phase_new, 5, phase_old, outLevel, &cProject, &nerror, &errors);
+                new_time = clock();
+                printf("caps_open -> status=%d, nerror=%d\n", status, nerror);
+            }
+        }
+        if (status < EGADS_SUCCESS || nerror > 0) {
+            SPRINT1(0, "ERROR:: could not open capsname=\"%s\"", capsname);
+            showCapsErrors(nerror, errors);
+            status = EXIT_FAILURE;
+            goto cleanup;
+        }
+
+        ESP->CAPS = (capsObj)cProject;
+
+        /* if we created a new capsProblem, create a 0-length file to mark it as Caps*/
+        snprintf(tempname, MAX_FILENAME_LEN, "%s%cCapsLastPhase", capsname, SLASH);
+        temp_fp = fopen(tempname, "w");
+        if (temp_fp != NULL) {
+            fclose(temp_fp);
+        }
+
+        /* get the MODL out of ESP->CAPS */
+        SPLINT_CHECK_FOR_NULL(ESP->CAPS);
+
+        MODL = ESP->MODL = ((capsProblem*) (cProject->blind))->modl;
+
+        /* output statistics about the MODL */
+        status = ocsmInfo(MODL, &nbrch, &npmtr, &nbody);
+        if (status < EGADS_SUCCESS) {
+            SPRINT0(0, "ERROR:: could not get info out of MODL");
+            status = EXIT_FAILURE;
+            goto cleanup;
+        }
+
+        SPRINT4(1, "--> caps_open(%s) -> nbrch=%d, npmtr=%d, nbody=%d", capsname, nbrch, npmtr, nbody);
+        SPRINT1(1, "==> caps_open CPUtime=%9.3f sec",
+                (double)(new_time-old_time) / (double)(CLOCKS_PER_SEC));
+
+    /* read the .csm file and create the MODL */
+    } else {
+#else
+    if (1) {
+#endif
+        old_time = clock();
+        status   = ocsmLoad(filename, (void **)&(ESP->MODL));
+        MODL = ESP->MODL;
+
+        new_time = clock();
+        SPRINT3(1, "--> ocsmLoad(%s) -> status=%d (%s)", filename, status, ocsmGetText(status));
+        SPRINT1(1, "==> ocsmLoad CPUtime=%9.3f sec",
+                (double)(new_time-old_time) / (double)(CLOCKS_PER_SEC));
+
+        if (status < SUCCESS && batch == 1) {
+            SPRINT0(0, "ERROR:: problem in ocsmLoad");
+            status = -999;
+            goto cleanup;
+        } else if (status < SUCCESS) {
+            SPRINT0(0, "ERROR:: problem in ocsmLoad\a");
+            pendingError = 1;
+        }
+    }
+
+    SPLINT_CHECK_FOR_NULL(MODL);
+
+    if (pendingError == 0) {
+        status = ocsmLoadDict(MODL, dictname);
+        if (status < EGADS_SUCCESS) goto cleanup;
+    }
+
+    if (pendingError == 0) {
+        status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
+        if (status < EGADS_SUCCESS) goto cleanup;
+
+        status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
+        if (status < EGADS_SUCCESS) goto cleanup;
+    }
+
+    if (strlen(despname) > 0) {
+        status = ocsmUpdateDespmtrs(MODL, despname);
+        if (status < EGADS_SUCCESS) goto cleanup;
+    }
+
+    if (pendingError == 0) {
+        if (filelist != NULL) EG_free(filelist);
+        status = ocsmGetFilelist(MODL, &filelist);
+        if (status != SUCCESS) {
+            SPRINT1(0, "ERROR:: ocsmGetFilelist -> status=%d", status);
+        }
+        updatedFilelist = 1;
     }
 
     /* create the verify filename */
@@ -766,60 +1023,12 @@ main(int       argc,                    /* (in)  number of arguments */
         vrfyname[0] = '\0';
     }
 
-    /* read the .csm file and create the MODL */
-    old_time = clock();
-    status   = ocsmLoad(filename, &modl);
-    new_time = clock();
-    SPRINT3(1, "--> ocsmLoad(%s) -> status=%d (%s)", filename, status, ocsmGetText(status));
-    SPRINT1(1, "==> ocsmLoad CPUtime=%9.3f sec",
-            (double)(new_time-old_time) / (double)(CLOCKS_PER_SEC));
-
-    if (status < SUCCESS && batch == 1) {
-        SPRINT0(0, "ERROR:: problem in ocsmLoad");
-        status = -999;
-        goto cleanup;
-    } else if (status < SUCCESS) {
-        SPRINT0(0, "ERROR:: problem in ocsmLoad\a");
-        pendingError = 1;
-    } else {
-        MODL = (modl_T*)modl;
-    }
-
-    SPLINT_CHECK_FOR_NULL(modl);
-
-    if (pendingError == 0) {
-        status = ocsmLoadDict(modl, dictname);
-        if (status < EGADS_SUCCESS) goto cleanup;
-    }
-
-    if (pendingError == 0) {
-        status = ocsmRegMesgCB(modl, mesgCallbackFromOpenCSM);
-        if (status < EGADS_SUCCESS) goto cleanup;
-
-        status = ocsmRegSizeCB(modl, sizeCallbackFromOpenCSM);
-        if (status < EGADS_SUCCESS) goto cleanup;
-    }
-
-    if (strlen(despname) > 0) {
-        status = ocsmUpdateDespmtrs(modl, despname);
-        if (status < EGADS_SUCCESS) goto cleanup;
-    }
-
-    if (pendingError == 0) {
-        MODL = (modl_T *)modl;
-        if (filelist != NULL) EG_free(filelist);
-        status = ocsmGetFilelist(MODL, &filelist);
-        if (status != SUCCESS) {
-            SPRINT1(0, "ERROR:: ocsmGetFilelist -> status=%d", status);
-        }
-        updatedFilelist = 1;
-    }
-
     /* if verify is on, add verification data from .vfy file to Branches */
     if (verify == 1 && pendingError == 0) {
         old_time = clock();
-        status   = ocsmLoad(vrfyname, &modl);
-        MODL = (modl_T*)modl;
+        status   = ocsmLoad(vrfyname, (void **)&(ESP->MODL));
+        MODL = ESP->MODL;
+
         new_time = clock();
         SPRINT3(1, "--> ocsmLoad(%s) -> status=%d (%s)", vrfyname, status, ocsmGetText(status));
         SPRINT1(1, "==> ocsmLoad CPUtime=%9.3f sec",
@@ -875,6 +1084,7 @@ main(int       argc,                    /* (in)  number of arguments */
         }
     }
 
+somewhere:
     /* open the output journal file */
     snprintf(tempname, MAX_FILENAME_LEN, "port%d.jrnl", port);
     jrnl_out = fopen(tempname, "w");
@@ -899,17 +1109,26 @@ main(int       argc,                    /* (in)  number of arguments */
             zNear  = 195;
             zFar   = 205;
         }
-        cntxt = wv_createContext(bias, fov, zNear, zFar, eye, center, up);
-        if (cntxt == NULL) {
+        ESP->cntxt = wv_createContext(bias, fov, zNear, zFar, eye, center, up);
+        if (ESP->cntxt == NULL) {
             SPRINT0(0, "ERROR:: failed to create wvContext");
             status = -999;
             goto cleanup;
         }
+
+        wv_setCallBack(ESP->cntxt, browserMessage);
+
+        wv_setUserPtr(ESP->cntxt, (void *)ESP);
+    }
+
+    if (strlen(egadsName) > 0) {
+        status = buildSceneGraph(ESP);
+        if (status < EGADS_SUCCESS) goto cleanup;
     }
 
     /* build the Bodys from the MODL */
     if (pendingError == 0) {
-        status = buildBodys(0, &builtTo, &buildStatus, &nwarn);
+        status = buildBodys(ESP, 0, &builtTo, &buildStatus, &nwarn);
 
         if (status != SUCCESS || buildStatus != SUCCESS || builtTo < 0) {
             successBuild = -1;
@@ -941,7 +1160,6 @@ main(int       argc,                    /* (in)  number of arguments */
 
         /* batch mode */
         } else {
-            printf("builtTo=%d, jrnlname=%s\n", builtTo, jrnlname);
 
             /* uncaught signal */
             if (builtTo < 0 && STRLEN(jrnlname) == 0) {
@@ -966,7 +1184,6 @@ main(int       argc,                    /* (in)  number of arguments */
 
         /* if the -dxdd option is set, process it now */
         if (strlen(dxddname) > 0) {
-            int  nbody;
             char sensfilename[MAX_FILENAME_LEN+1], *beg, *mid, *end;
 
             strcpy(sensfilename, dxddname);
@@ -1034,7 +1251,7 @@ main(int       argc,                    /* (in)  number of arguments */
                 goto cleanup;
             }
 
-            /* rebuild to propagate the velocities */
+            /* rebuild to compute the velocities */
             nbody = 0;
             status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
             if (status != SUCCESS) {
@@ -1143,7 +1360,7 @@ main(int       argc,                    /* (in)  number of arguments */
         }
 
         if (batch == 0) {
-            buildSceneGraph();
+            buildSceneGraph(ESP);
         }
     }
 
@@ -1171,8 +1388,7 @@ main(int       argc,                    /* (in)  number of arguments */
                     }
                 }
 
-                status = processBrowserToServer(text);
-                MODL = (modl_T*)modl;
+                status = processBrowserToServer(ESP, text);
 
                 if (status < SUCCESS) {
                     fclose(jrnl_in);
@@ -1185,6 +1401,9 @@ main(int       argc,                    /* (in)  number of arguments */
             SPRINT0(0, "\n==> Closing input journal file\n");
         }
     }
+
+    /* make sure we have the latest MODL */
+    MODL = ESP->MODL;
 
     if (pendingError == 0 && MODL->sigCode < SUCCESS) {
         SPRINT2(0, "ERROR:: build not completed because error %d (%s) was detected",
@@ -1204,7 +1423,7 @@ main(int       argc,                    /* (in)  number of arguments */
         }
         if (ipmtr > 0) {
             old_time = clock();
-            status = applyDisplacement(MODL, ipmtr);
+            status = applyDisplacement(ESP, ipmtr);
             new_time = clock();
             SPRINT3(0, "--> applyDisplacement(ipmtr=%d) -> status=%d (%s)",
                     ipmtr, status, ocsmGetText(status));
@@ -1226,13 +1445,15 @@ main(int       argc,                    /* (in)  number of arguments */
             SPRINT0(0, "WARNING:: lock could not be created");
         }
 
+        SPLINT_CHECK_FOR_NULL(ESP->cntxt);
+
         status = SUCCESS;
-        serverNum = wv_startServer(port, NULL, NULL, NULL, 0, cntxt);
+        serverNum = wv_startServer(port, NULL, NULL, NULL, 0, ESP->cntxt);
         if (serverNum == 0) {
 
             /* stay alive a long as we have a client */
             while (wv_statusServer(0)) {
-                usleep(500000);
+                SLEEP(150);
 
                 /* start the browser if the first time through this loop */
                 if (status == SUCCESS) {
@@ -1242,6 +1463,9 @@ main(int       argc,                    /* (in)  number of arguments */
 
                     status++;
                 }
+
+                /* set a lock on all current TIMs */
+                tim_lock();
             }
         }
 
@@ -1251,8 +1475,8 @@ main(int       argc,                    /* (in)  number of arguments */
         }
     }
 
-    /* cleanup and exit */
-    MODL = (modl_T*)modl;
+    /* make sure we have the latest MODL */
+    MODL = ESP->MODL;
 
     /* update the thread using the context */
     if (MODL->context != NULL) {
@@ -1340,10 +1564,6 @@ main(int       argc,                    /* (in)  number of arguments */
                 fprintf(vrfy_fp, "   assert  %8d      @itype       0  1\n", 3);
             }
 
-            fprintf(vrfy_fp, "   assert  %8d      @nnode       0  1\n", MODL->body[ibody].nnode);
-            fprintf(vrfy_fp, "   assert  %8d      @nedge       0  1\n", MODL->body[ibody].nedge);
-            fprintf(vrfy_fp, "   assert  %8d      @nface       0  1\n", MODL->body[ibody].nface);
-
             status = EG_getBoundingBox(MODL->body[ibody].ebody, bbox);
             if (status != SUCCESS) {
                 SPRINT2(0, "ERROR:: EG_getBoundingBox(%d) -> status=%d\n", ibody, status);
@@ -1403,6 +1623,11 @@ main(int       argc,                    /* (in)  number of arguments */
             } else {
                 fprintf(vrfy_fp, "   assert %15.7e  @zcg    %15.7e  1\n", data[4], 0.001*(bbox[5]-bbox[2]));
             }
+
+            fprintf(vrfy_fp, "   assert  %8d      @nnode       0  1\n", MODL->body[ibody].nnode);
+            fprintf(vrfy_fp, "   assert  %8d      @nedge       0  1\n", MODL->body[ibody].nedge);
+            fprintf(vrfy_fp, "   assert  %8d      @nface       0  1\n", MODL->body[ibody].nface);
+
             fprintf(vrfy_fp, "\n");
         }
 
@@ -1593,11 +1818,35 @@ main(int       argc,                    /* (in)  number of arguments */
         CHECK_STATUS(printHistogram);
     }
 
+#ifdef USING_CAPS
+    /* close the CAPS problem */
+    if (strlen(capsname) > 0) {
+        snprintf(tempname, MAX_FILENAME_LEN, "%s%cCapsLastPhase", capsname, SLASH);
+        temp_fp = fopen(tempname, "w");
+        if (temp_fp == NULL) {
+            SPRINT0(0, "ERROR:: could not record new Caps phase");
+            status = EXIT_FAILURE;
+            goto cleanup;
+        }
+        fprintf(temp_fp, "%d\n", capsPhase+1);
+        fclose(temp_fp);
+
+        SPLINT_CHECK_FOR_NULL(ESP->CAPS);
+
+        status = caps_close(ESP->CAPS, 1, NULL);
+        printf("caps_close -> status=%d\n", status);
+
     /* free up storage associated with OpenCSM and EGADS */
-    cleanupMemory(0);
+    } else {
+#else
+    if (1) {
+#endif
+        cleanupMemory(MODL, 0);
+    }
 
     /* free up stoage associated with GUI */
     wv_cleanupServers();
+    ESP->cntxt = NULL;
 
     /* free up undo storage */
     for (iundo = nundo-1; iundo >= 0; iundo--) {
@@ -1649,12 +1898,19 @@ main(int       argc,                    /* (in)  number of arguments */
     status = SUCCESS;
 
 cleanup:
+    /* destroy the mutex associated with the scene graph */
+    if (ESP == NULL) return EXIT_FAILURE;
+
+    EMP_LockDestroy(ESP->sgMutex);
+
+    tim_free();
+
+    FREE(ESP);
+
     FREE(filelist);
 
     if (jrnl_out != NULL) fclose(jrnl_out);
     jrnl_out = NULL;
-
-    tim_free();
 
     if (undo_modl != NULL) {
         for (iundo = nundo-1; iundo >= 0; iundo--) {
@@ -1674,6 +1930,7 @@ cleanup:
     FREE(BDFname    );
     FREE(tessfile   );
     FREE(plotfile   );
+    FREE(pyname     );
     FREE(eggname    );
     FREE(basename   );
     FREE(dirname    );
@@ -1684,6 +1941,7 @@ cleanup:
     FREE(vrfyname   );
     FREE(despname   );
     FREE(filename   );
+    FREE(capsname   );
     FREE(tempname   );
     FREE(jrnlname   );
     FREE(casename   );
@@ -1705,7 +1963,7 @@ cleanup:
     if (status == -998) {
         return(EXIT_FAILURE);
     } else if (status < 0) {
-        cleanupMemory(1);
+        cleanupMemory(MODL, 1);
         return(EXIT_FAILURE);
     } else {
         return(EXIT_SUCCESS);
@@ -1799,7 +2057,7 @@ cleanup:
 /***********************************************************************/
 
 static int
-applyDisplacement(modl_T *MODL,
+applyDisplacement(esp_T  *ESP,
                   int    ipmtr)
 {
     int       status = SUCCESS;         /* return status */
@@ -1813,6 +2071,7 @@ applyDisplacement(modl_T *MODL,
     CINT      *ptype, *pindx, *tris, *tric;
     char      name[MAX_NAME_LEN];
     ego       esrc, etgt, etess, ebody;
+    modl_T    *MODL = ESP->MODL;
 
     ROUTINE(applyDisplacement);
 
@@ -1946,7 +2205,7 @@ applyDisplacement(modl_T *MODL,
 
     /* update the scene graph */
     if (batch == 0) {
-        buildSceneGraph();
+        buildSceneGraph(ESP);
     }
 
 cleanup:
@@ -1965,21 +2224,32 @@ cleanup:
 /***********************************************************************/
 
 void
-browserMessage(
+browserMessage(void    *udata,
    /*@unused@*/void    *wsi,
                char    text[],
-  /*@unused@*/ int     lena)
+   /*@unused@*/int     lena)
 {
     int       status;
 
     int       sendKeyData, ibody, onstack;
     char      message2[MAX_LINE_LEN];
 
-    modl_T    *MODL = (modl_T*)modl;
+    esp_T     *ESP   = (esp_T *)udata;
+    modl_T    *MODL;
+    wvContext *cntxt;
 
     ROUTINE(browserMessage);
 
     /* --------------------------------------------------------------- */
+
+    SPLINT_CHECK_FOR_NULL(ESP);
+
+    MODL  = ESP->MODL;
+    cntxt = ESP->cntxt;
+
+    if (MODL == NULL) {
+        goto cleanup;
+    }
 
     /* update the thread using the context */
     if (MODL->context != NULL) {
@@ -1995,18 +2265,21 @@ browserMessage(
     }
 
     /* process the Message */
-    (void) processBrowserToServer(text);
+    (void) processBrowserToServer(ESP, text);
+
+    /* make sure we have the latest MODL */
+    MODL = ESP->MODL;
 
     /* send the response */
-    SPRINT1(2, "\n<<< server2browser: %s", response);
-//    wv_sendText(wsi, response);
-    wv_broadcastText(response);
+    if (strlen(response) > 0) {
+        SPRINT1(2, "\n<<< server2browser: %s", response);
+        wv_broadcastText(response);
+    }
 
     /* if the sensitivities were just computed, send a message to
        inform the user about the lowest and highest sensitivity values */
     if (sensPost > 0) {
         snprintf(message2, MAX_LINE_LEN-1, "Sensitivities are in the range between %f and %f", sensLo, sensHi);
-//        wv_sendText(wsi, message2);
         wv_broadcastText(message2);
 
         sensPost = 0;
@@ -2016,7 +2289,6 @@ browserMessage(
 
     /* send filenames if they have been updated */
     if (updatedFilelist == 1) {
-        MODL = (modl_T *) modl;
         if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
@@ -2148,7 +2420,8 @@ cleanup:
 /***********************************************************************/
 
 static int
-buildBodys(int     buildTo,             /* (in)  last Branch to execute */
+buildBodys(esp_T   *ESP,
+           int     buildTo,             /* (in)  last Branch to execute */
            int     *builtTo,            /* (out) last Branch successfully executed */
            int     *buildStatus,        /* (out) status returned from build */
            int     *nwarn)              /* (out) number of warnings */
@@ -2157,7 +2430,8 @@ buildBodys(int     buildTo,             /* (in)  last Branch to execute */
 
     int       nbody;
     int       showUVXYZ=0;              /* set to 1 to see UVXYZ at all corners */
-    modl_T    *MODL = (modl_T*)modl;
+
+    modl_T    *MODL = ESP->MODL;
 
     int       status2, ipmtr;
     clock_t   old_time, new_time;
@@ -2330,7 +2604,7 @@ buildBodys(int     buildTo,             /* (in)  last Branch to execute */
 
     // this is different from gmgwCSM
     if (batch == 0) {
-        buildSceneGraph();
+        buildSceneGraph(ESP);
     }
 
 cleanup:
@@ -2345,17 +2619,17 @@ cleanup:
 /***********************************************************************/
 
 static int
-buildSceneGraph()
+buildSceneGraph(esp_T  *ESP)
 {
     int       status = SUCCESS;         /* return status */
 
-    int       ibody, jbody, iface, iedge, inode, iattr, nattr, ipmtr, irc, newStyleQuads, atype, alen;
+    int       ibody, jbody, iface, iedge, inode, iattr, nattr, ipmtr, irc, atype, alen;
     int       npnt, ipnt, ntri, itri, igprim, nseg, i, j, k, ij, ij1, ij2, ngrid, ncrod, nctri3, ncquad4;
     int       imax, jmax, ibeg, iend, isw, ise, ine, inw;
     int       attrs, head[3], nitems, nnode, nedge, nface;
     int       oclass, mtype, nchild, *senses, *header;
     int       *segs=NULL, *ivrts=NULL;
-    int        npatch2, ipatch, n1, n2, i1, i2, *Tris=NULL;
+    int       npatch, ipatch, n1, n2, i1, i2, *Tris=NULL;
     CINT      *ptype, *pindx, *tris, *tric, *pvindex, *pbounds;
     float     color[18], *pcolors=NULL, *plotdata=NULL, *segments=NULL, *tuft=NULL;
     double    bigbox[6], box[6], size, size2=0, xyz_dum[6], *vel=NULL, velmag;
@@ -2369,20 +2643,21 @@ buildSceneGraph()
     ego       *enodes=NULL, *eedges=NULL, *efaces=NULL;
 
     int       nlist, itype;
-    CINT      *tempIlist;
-#if MIXED_TESS
-    CINT      *nquad=NULL;
-#endif
+    CINT      *tempIlist, *nquad=NULL;
     CDOUBLE   *tempRlist;
     CCHAR     *attrName, *tempClist;
 
+    modl_T    *MODL  = ESP->MODL;
+    wvContext *cntxt = ESP->cntxt;
     wvData    items[6];
-
-    modl_T    *MODL = (modl_T*)modl;
 
     ROUTINE(buildSceneGraph);
 
     /* --------------------------------------------------------------- */
+
+    /* set the mutex.  if the mutex wss already set, wait until released */
+    SPLINT_CHECK_FOR_NULL(ESP);
+    EMP_LockSet(ESP->sgMutex);
 
     /* remove any graphic primitives that already exist */
     wv_removeAll(cntxt);
@@ -2466,14 +2741,14 @@ buildSceneGraph()
     if (size < bigbox[4]-bigbox[1]) size = bigbox[4] - bigbox[1];
     if (size < bigbox[5]-bigbox[2]) size = bigbox[5] - bigbox[2];
 
-    sgFocus[0] = (bigbox[0] + bigbox[3]) / 2;
-    sgFocus[1] = (bigbox[1] + bigbox[4]) / 2;
-    sgFocus[2] = (bigbox[2] + bigbox[5]) / 2;
-    sgFocus[3] = size;
+    ESP->sgFocus[0] = (bigbox[0] + bigbox[3]) / 2;
+    ESP->sgFocus[1] = (bigbox[1] + bigbox[4]) / 2;
+    ESP->sgFocus[2] = (bigbox[2] + bigbox[5]) / 2;
+    ESP->sgFocus[3] = size;
 
     /* generate the scene graph focus data */
     snprintf(sgFocusData, MAX_STRVAL_LEN-1, "sgFocus|[%20.12e,%20.12e,%20.12e,%20.12e]",
-             sgFocus[0], sgFocus[1], sgFocus[2], sgFocus[3]);
+             ESP->sgFocus[0], ESP->sgFocus[1], ESP->sgFocus[2], ESP->sgFocus[3]);
 
     /* keep track of minimum and maximum velocities */
     sensLo = +HUGEQ;
@@ -2624,33 +2899,9 @@ buildSceneGraph()
                   + (box[5] - box[2]) * (box[5] - box[2]);
         }
 
-        /* determine if new-style quadding */
-        newStyleQuads = 0;
-        status = EG_attributeRet(etess, ".tessType",
-                                 &atype, &alen, &tempIlist, &tempRlist, &tempClist);
-        if (status == SUCCESS) {
-#if MIXED_TESS
-            newStyleQuads = 1;
-            status = EG_attributeRet(etess, ".mixed",
-                                     &atype, &alen, &nquad, &tempRlist, &tempClist);
-            if (status != SUCCESS) newStyleQuads = 0;
-#else
-            if (strcmp(tempClist, "Quad") == 0) {
-                newStyleQuads = 1;
-            }
-#endif
-        }
-
         /* loop through the Faces within the current Body */
         for (iface = 1; iface <= nface; iface++) {
             nitems = 0;
-
-            status = EG_getQuads(etess, iface,
-                                 &npnt, &xyz, &uv, &ptype, &pindx,
-                                 &npatch2);
-            if (status != SUCCESS) {
-                SPRINT3(0, "ERROR:: EG_getQuads(%d,%d) -> status=%d", ibody, iface, status);
-            }
 
             /* name and attributes */
             snprintf(gpname, MAX_STRVAL_LEN-1, "%s Face %d", bname, iface);
@@ -2660,86 +2911,25 @@ buildSceneGraph()
                 attrs = WV_ON | WV_ORIENTATION;
             }
 
-            /* render the Quadrilaterals (if they exist) */
-            if (npatch2 > 0) {
-                /* vertices */
-                status = wv_setData(WV_REAL64, npnt, (void*)xyz, WV_VERTICES, &(items[nitems]));
+            status = EG_getQuads(etess, iface,
+                                 &npnt, &xyz, &uv, &ptype, &pindx, &npatch);
+            if (status != SUCCESS) {
+                SPRINT3(0, "ERROR:: EG_getQuads(%d,%d) -> status=%d", ibody, iface, status);
+            }
+
+            status = EG_attributeRet(etess, ".tessType",
+                                     &atype, &alen, &tempIlist, &tempRlist, &tempClist);
+
+            /* new-style Quads */
+            if (status == SUCCESS && atype == ATTRSTRING &&
+                (strcmp(tempClist, "Quad") == 0 || strcmp(tempClist, "Mixed") == 0))
+            {
+                status = EG_attributeRet(etess, ".mixed",
+                                         &atype, &alen, &nquad, &tempRlist, &tempClist);
                 if (status != SUCCESS) {
-                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
+                    SPRINT3(0, "ERROR:: EG_attributeRet(%d,%d) -> status=%d", ibody, iface, status);
                 }
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
-                nitems++;
-
-                /* loop through the patches and build up the triangle and
-                   segment tables (bias-1) */
-                ntri = 0;
-                nseg = 0;
-
-                for (ipatch = 1; ipatch <= npatch2; ipatch++) {
-                    status = EG_getPatch(etess, iface, ipatch, &n1, &n2, &pvindex, &pbounds);
-                    if (status != SUCCESS) {
-                        SPRINT3(0, "ERROR:: EG_getPatch(%d,%d) -> status=%d\n", ibody, iface, status);
-                    }
-
-                    ntri += 2 * (n1-1) * (n2-1);
-                    nseg += n1 * (n2-1) + n2 * (n1-1);
-                }
-
-                MALLOC(Tris, int, 3*ntri);
-                MALLOC(segs, int, 2*nseg);
-
-                ntri = 0;
-                nseg = 0;
-
-                for (ipatch = 1; ipatch <= npatch2; ipatch++) {
-                    status = EG_getPatch(etess, iface, ipatch, &n1, &n2, &pvindex, &pbounds);
-                    if (status != SUCCESS) {
-                        SPRINT3(0, "ERROR:: EG_getPatch(%d,%d) -> status=%d\n", ibody, iface, status);
-                    }
-
-                    for (i2 = 1; i2 < n2; i2++) {
-                        for (i1 = 1; i1 < n1; i1++) {
-                            Tris[3*ntri  ] = pvindex[(i1-1)+n1*(i2-1)];
-                            Tris[3*ntri+1] = pvindex[(i1  )+n1*(i2-1)];
-                            Tris[3*ntri+2] = pvindex[(i1  )+n1*(i2  )];
-                            ntri++;
-
-                            Tris[3*ntri  ] = pvindex[(i1  )+n1*(i2  )];
-                            Tris[3*ntri+1] = pvindex[(i1-1)+n1*(i2  )];
-                            Tris[3*ntri+2] = pvindex[(i1-1)+n1*(i2-1)];
-                            ntri++;
-                        }
-                    }
-
-                    for (i2 = 0; i2 < n2; i2++) {
-                        for (i1 = 1; i1 < n1; i1++) {
-                            segs[2*nseg  ] = pvindex[(i1-1)+n1*(i2)];
-                            segs[2*nseg+1] = pvindex[(i1  )+n1*(i2)];
-                            nseg++;
-                        }
-                    }
-
-                    for (i1 = 0; i1 < n1; i1++) {
-                        for (i2 = 1; i2 < n2; i2++) {
-                            segs[2*nseg  ] = pvindex[(i1)+n1*(i2-1)];
-                            segs[2*nseg+1] = pvindex[(i1)+n1*(i2  )];
-                            nseg++;
-                        }
-                    }
-                }
-
-                /* two triangles for rendering each quadrilateral */
-                status = wv_setData(WV_INT32, 3*ntri, (void*)Tris, WV_INDICES, &(items[nitems]));
-                if (status != SUCCESS) {
-                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
-                }
-                nitems++;
-
-                FREE(Tris);
-
-            /* render the Quadrilaterals if new-style quadding */
-            } else if (newStyleQuads == 1) {
                 status = EG_getTessFace(etess, iface,
                                         &npnt, &xyz, &uv, &ptype, &pindx,
                                         &ntri, &tris, &tric);
@@ -2756,7 +2946,7 @@ buildSceneGraph()
                     SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
                 }
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* loop through the triangles and build up the segment table */
@@ -2771,8 +2961,9 @@ buildSceneGraph()
 
                 MALLOC(segs, int, 2*nseg);
 
-#if MIXED_TESS
                 /* create segments between Triangles (bias-1) */
+                SPLINT_CHECK_FOR_NULL(nquad);
+
                 nseg = 0;
                 for (itri = 0; itri < ntri-2*nquad[iface-1]; itri++) {
                     for (k = 0; k < 3; k++) {
@@ -2819,44 +3010,6 @@ buildSceneGraph()
                         nseg++;
                     }
                 }
-#else
-                /* create segments between Triangles (but not within the pair) (bias-1) */
-                nseg = 0;
-                for (itri = 0; itri < ntri; itri++) {
-                    if (tric[3*itri  ] < itri+2) {
-                        segs[2*nseg  ] = tris[3*itri+1];
-                        segs[2*nseg+1] = tris[3*itri+2];
-                        nseg++;
-                    }
-                    if (tric[3*itri+1] < itri+2) {
-                        segs[2*nseg  ] = tris[3*itri+2];
-                        segs[2*nseg+1] = tris[3*itri  ];
-                        nseg++;
-                    }
-                    if (tric[3*itri+2] < itri+2) {
-                        segs[2*nseg  ] = tris[3*itri  ];
-                        segs[2*nseg+1] = tris[3*itri+1];
-                        nseg++;
-                    }
-                    itri++;
-
-                    if (tric[3*itri  ] < itri) {
-                        segs[2*nseg  ] = tris[3*itri+1];
-                        segs[2*nseg+1] = tris[3*itri+2];
-                        nseg++;
-                    }
-                    if (tric[3*itri+1] < itri) {
-                        segs[2*nseg  ] = tris[3*itri+2];
-                        segs[2*nseg+1] = tris[3*itri  ];
-                        nseg++;
-                    }
-                    if (tric[3*itri+2] < itri) {
-                        segs[2*nseg  ] = tris[3*itri  ];
-                        segs[2*nseg+1] = tris[3*itri+1];
-                        nseg++;
-                    }
-                }
-#endif
 
                 /* triangles */
                 status = wv_setData(WV_INT32, 3*ntri, (void*)tris, WV_INDICES, &(items[nitems]));
@@ -2865,7 +3018,85 @@ buildSceneGraph()
                 }
                 nitems++;
 
-            /* render the Triangles (if quads do not exist) */
+            /* patches in old-style Quads */
+            } else if (npatch > 0) {
+                /* vertices */
+                status = wv_setData(WV_REAL64, npnt, (void*)xyz, WV_VERTICES, &(items[nitems]));
+                if (status != SUCCESS) {
+                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
+                }
+
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
+                nitems++;
+
+                /* loop through the patches and build up the triangle and
+                   segment tables (bias-1) */
+                ntri = 0;
+                nseg = 0;
+
+                for (ipatch = 1; ipatch <= npatch; ipatch++) {
+                    status = EG_getPatch(etess, iface, ipatch, &n1, &n2, &pvindex, &pbounds);
+                    if (status != SUCCESS) {
+                        SPRINT3(0, "ERROR:: EG_getPatch(%d,%d) -> status=%d\n", ibody, iface, status);
+                    }
+
+                    ntri += 2 * (n1-1) * (n2-1);
+                    nseg += n1 * (n2-1) + n2 * (n1-1);
+                }
+
+                MALLOC(Tris, int, 3*ntri);
+                MALLOC(segs, int, 2*nseg);
+
+                ntri = 0;
+                nseg = 0;
+
+                for (ipatch = 1; ipatch <= npatch; ipatch++) {
+                    status = EG_getPatch(etess, iface, ipatch, &n1, &n2, &pvindex, &pbounds);
+                    if (status != SUCCESS) {
+                        SPRINT3(0, "ERROR:: EG_getPatch(%d,%d) -> status=%d\n", ibody, iface, status);
+                    }
+
+                    for (i2 = 1; i2 < n2; i2++) {
+                        for (i1 = 1; i1 < n1; i1++) {
+                            Tris[3*ntri  ] = pvindex[(i1-1)+n1*(i2-1)];
+                            Tris[3*ntri+1] = pvindex[(i1  )+n1*(i2-1)];
+                            Tris[3*ntri+2] = pvindex[(i1  )+n1*(i2  )];
+                            ntri++;
+
+                            Tris[3*ntri  ] = pvindex[(i1  )+n1*(i2  )];
+                            Tris[3*ntri+1] = pvindex[(i1-1)+n1*(i2  )];
+                            Tris[3*ntri+2] = pvindex[(i1-1)+n1*(i2-1)];
+                            ntri++;
+                        }
+                    }
+
+                    for (i2 = 0; i2 < n2; i2++) {
+                        for (i1 = 1; i1 < n1; i1++) {
+                            segs[2*nseg  ] = pvindex[(i1-1)+n1*(i2)];
+                            segs[2*nseg+1] = pvindex[(i1  )+n1*(i2)];
+                            nseg++;
+                        }
+                    }
+
+                    for (i1 = 0; i1 < n1; i1++) {
+                        for (i2 = 1; i2 < n2; i2++) {
+                            segs[2*nseg  ] = pvindex[(i1)+n1*(i2-1)];
+                            segs[2*nseg+1] = pvindex[(i1)+n1*(i2  )];
+                            nseg++;
+                        }
+                    }
+                }
+
+                /* two triangles for rendering each quadrilateral */
+                status = wv_setData(WV_INT32, 3*ntri, (void*)Tris, WV_INDICES, &(items[nitems]));
+                if (status != SUCCESS) {
+                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
+                }
+                nitems++;
+
+                FREE(Tris);
+
+            /* Triangles */
             } else {
                 status = EG_getTessFace(etess, iface,
                                         &npnt, &xyz, &uv, &ptype, &pindx,
@@ -2883,7 +3114,7 @@ buildSceneGraph()
                     SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
                 }
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* loop through the triangles and build up the segment table (bias-1) */
@@ -3277,7 +3508,7 @@ buildSceneGraph()
                             SPRINT3(0, "ERROR:: wv_setdata(%d,%d) -> status=%d", ibody, iface, status);
                         }
 
-                        wv_adjustVerts(&(items[nitems]), sgFocus);
+                        wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                         nitems++;
 
                         MALLOC(segs, int, 4*header[2]*header[5]);
@@ -3374,7 +3605,7 @@ buildSceneGraph()
                     SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
                 }
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* tuft color */
@@ -3489,7 +3720,7 @@ buildSceneGraph()
                     SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iface, status);
                 }
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* tuft color */
@@ -3547,7 +3778,7 @@ buildSceneGraph()
                 SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
             }
 
-            wv_adjustVerts(&(items[nitems]), sgFocus);
+            wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
             nitems++;
 
             /* segments (bias-1) */
@@ -3628,7 +3859,7 @@ buildSceneGraph()
 
                 /* add arrow heads (requires that WV_ORIENTATION be set above) */
                 head[0] = npnt - 1;
-                status = wv_addArrowHeads(cntxt, igprim, 0.10/sgFocus[3], 1, head);
+                status = wv_addArrowHeads(cntxt, igprim, 0.10/ESP->sgFocus[3], 1, head);
                 if (status != SUCCESS) {
                     SPRINT3(0, "ERROR:: wv_addArrowHeads(%d,%d) -> status=%d", ibody, iedge, status);
                 }
@@ -3685,7 +3916,7 @@ buildSceneGraph()
                     SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
                 }
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* tuft color */
@@ -3786,7 +4017,7 @@ buildSceneGraph()
                 SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
             }
 
-            wv_adjustVerts(&(items[nitems]), sgFocus);
+            wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
             nitems++;
 
             /* node color (black) */
@@ -3820,6 +4051,60 @@ buildSceneGraph()
             status = EG_attributeNum(enode, &nattr);
             if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: EG_attributeNum(%d,%d) -> status=%d", ibody, iedge, status);
+            }
+
+            /* if tessel is set and we are asking for smooth colors
+               (sensitivities) is set, draw tuft, whose length can be changed
+               by recomputing sensitivity with a different value for the velocity
+               of the Design Parameter.  (note that the tufts cannot be toggled in ESP) */
+            if (tessel == 1 && haveDots >= 1) {
+                nitems = 0;
+
+                /* name and attributes */
+                snprintf(gpname, MAX_STRVAL_LEN-1, "PlotLine: Node_%d:%d_tufts", ibody, inode);
+                attrs = WV_ON;
+
+//$$$
+                status = ocsmGetTessVel(MODL, ibody, OCSM_NODE, inode, (const double**)(&vel));
+                CHECK_STATUS(ocsmGetTessVel);
+
+                SPLINT_CHECK_FOR_NULL(vel);
+
+                /* create tuft */
+                MALLOC(tuft, float, 6);
+
+                tuft[0] = MODL->body[ibody].node[inode].x;
+                tuft[1] = MODL->body[ibody].node[inode].y;
+                tuft[2] = MODL->body[ibody].node[inode].z;
+                tuft[3] = MODL->body[ibody].node[inode].x + vel[0];
+                tuft[4] = MODL->body[ibody].node[inode].y + vel[1];
+                tuft[5] = MODL->body[ibody].node[inode].z + vel[2];
+
+                status = wv_setData(WV_REAL32, 2, (void*)tuft, WV_VERTICES, &(items[nitems]));
+
+                FREE(tuft);
+
+                if (status != SUCCESS) {
+                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
+                }
+
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
+                nitems++;
+
+                /* tuft color */
+                color[0] = 1;   color[1] = 0;   color[2] = 1;
+                status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
+                if (status != SUCCESS) {
+                    SPRINT3(0, "ERROR:: wv_setData(%d,%d) -> status=%d", ibody, iedge, status);
+                }
+                nitems++;
+
+                /* make graphic primitive for tufts */
+                igprim = wv_addGPrim(cntxt, gpname, WV_LINE, attrs, nitems, items);
+                if (igprim < 0) {
+                    SPRINT2(0, "ERROR:: wv_addGPrim(%s) -> igprim=%d", gpname, igprim);
+                }
+
             }
 
             /* add Node to meta data (if there is room) */
@@ -3904,7 +4189,7 @@ buildSceneGraph()
                 SPRINT1(0, "ERROR:: wv_setData(axis) -> status=%d", status);
             }
 
-            wv_adjustVerts(&(items[nitems]), sgFocus);
+            wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
             nitems++;
 
             /* line colors (multiple colors requires that WV_SHADING be set above) */
@@ -3932,7 +4217,7 @@ buildSceneGraph()
 
                 /* add arrow heads (requires that WV_ORIENTATION be set above) */
                 head[0] = 1;
-                status = wv_addArrowHeads(cntxt, igprim, 0.10/sgFocus[3], 1, head);
+                status = wv_addArrowHeads(cntxt, igprim, 0.10/ESP->sgFocus[3], 1, head);
                 if (status != SUCCESS) {
                     SPRINT1(0, "ERROR:: wv_addArrowHeads -> status=%d", status);
                 }
@@ -3964,7 +4249,7 @@ buildSceneGraph()
         SPRINT1(0, "ERROR:: wv_setData(axis) -> status=%d", status);
     }
 
-    wv_adjustVerts(&(items[nitems]), sgFocus);
+    wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
     nitems++;
 
     /* line color */
@@ -4001,6 +4286,27 @@ buildSceneGraph()
         while (1) {
             if (fscanf(fp, "%d %d %s", &imax, &jmax, temp) != 3) break;
 
+            /* set up the color */
+            color[0] = 0;   color[1] = 0;   color[2] = 0;
+            if (temp[strlen(temp)-2] == '|') {
+                if        (temp[strlen(temp)-1] == 'r') {
+                    color[0] = 1;
+                } else if (temp[strlen(temp)-1] == 'g') {
+                    color[1] = 1;
+                } else if (temp[strlen(temp)-1] == 'b') {
+                    color[2] = 1;
+                } else if (temp[strlen(temp)-1] == 'c') {
+                    color[1] = 1;   color[2] = 1;
+                } else if (temp[strlen(temp)-1] == 'm') {
+                    color[0] = 1;   color[2] = 1;
+                } else if (temp[strlen(temp)-1] == 'y') {
+                    color[0] = 1;   color[1] = 1;
+                } else if (temp[strlen(temp)-1] == 'w') {
+                    color[0] = 1;   color[1] = 1;   color[2] = 1;
+                }
+                temp[strlen(temp)-2] = '\0';
+            }
+
             /* points (imax=npts, jmax=0) */
             if (imax > 0 && jmax == 0) {
                 SPRINT2(1, "    plotting %d points (%s)", imax, temp);
@@ -4026,11 +4332,10 @@ buildSceneGraph()
 
                 FREE(plotdata);
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* point color */
-                color[0] = 0;   color[1] = 0;   color[2] = 0;
                 status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
                 if (status != SUCCESS) {
                     SPRINT1(0, "ERROR:: wv_setData(color) -> status=%d", status);
@@ -4045,7 +4350,7 @@ buildSceneGraph()
                 } else {
                     SPLINT_CHECK_FOR_NULL(cntxt->gPrims);
 
-                    cntxt->gPrims[igprim].pSize = 3.0;
+                    cntxt->gPrims[igprim].pSize = 5.0;
                 }
 
                 /* add plotdata to meta data (if there is room) */
@@ -4093,11 +4398,10 @@ buildSceneGraph()
 
                 FREE(segments);
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* line color */
-                color[0] = 0;   color[1] = 0;   color[2] = 0;
                 status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
                 if (status != SUCCESS) {
                     SPRINT1(0, "ERROR:: wv_setData(color) -> status=%d", status);
@@ -4145,11 +4449,10 @@ buildSceneGraph()
 
                 FREE(plotdata);
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* line color */
-                color[0] = 0;   color[1] = 0;   color[2] = 0;
                 status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
                 if (status != SUCCESS) {
                     SPRINT1(0, "ERROR:: wv_setData(color) -> status=%d", status);
@@ -4200,18 +4503,10 @@ buildSceneGraph()
 
                 FREE(plotdata);
 
-                wv_adjustVerts(&(items[nitems-1]), sgFocus);
+                wv_adjustVerts(&(items[nitems-1]), ESP->sgFocus);
 
                 /* triangle colors */
-                color[0] = 0;   color[1] = 1;   color[2] = 1;
                 status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems++]));
-                if (status != SUCCESS) {
-                    SPRINT1(0, "ERROR:: wv_setData(color) -> status=%d", status);
-                }
-
-                /* triangle back colors */
-                color[0] = 0;   color[1] = 0.5;   color[2] = 0.5;
-                status = wv_setData(WV_REAL32, 1, (void*)color, WV_BCOLOR, &(items[nitems++]));
                 if (status != SUCCESS) {
                     SPRINT1(0, "ERROR:: wv_setData(color) -> status=%d", status);
                 }
@@ -4237,7 +4532,6 @@ buildSceneGraph()
                 FREE(segs);
 
                 /* triangle side color */
-                color[0] = 1;   color[1] = 0;   color[2] = 0;
                 status = wv_setData(WV_REAL32, 1, (void*)color, WV_LCOLOR, &(items[nitems++]));
                 if (status != SUCCESS) {
                     SPRINT1(0, "ERROR:: wv_setData(color) -> status=%d", status);
@@ -4276,7 +4570,7 @@ buildSceneGraph()
                     SPRINT1(0, "ERROR:: wv_setData(plotdata) -> status=%d", status);
                 }
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* function values */
@@ -4342,7 +4636,7 @@ buildSceneGraph()
                     SPRINT1(0, "ERROR:: wv_setData(plotdata) -> status=%d", status);
                 }
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* function values */
@@ -4445,11 +4739,10 @@ buildSceneGraph()
 
                 FREE(segments);
 
-                wv_adjustVerts(&(items[nitems]), sgFocus);
+                wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
                 nitems++;
 
                 /* grid color */
-                color[0] = 0;   color[1] = 0;   color[2] = 0;
                 status = wv_setData(WV_REAL32, 1, (void*)color, WV_COLORS, &(items[nitems]));
                 if (status != SUCCESS) {
                     SPRINT1(0, "ERROR:: wv_setData(color) -> status=%d", status);
@@ -4537,7 +4830,7 @@ buildSceneGraph()
             SPRINT1(0, "ERROR:: wv_setData(plotdata) -> status=%d", status);
         }
 
-        wv_adjustVerts(&(items[nitems]), sgFocus);
+        wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
         nitems++;
 
         /* point color */
@@ -4612,7 +4905,7 @@ buildSceneGraph()
 
             FREE(segments);
 
-            wv_adjustVerts(&(items[nitems]), sgFocus);
+            wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
             nitems++;
 
             /* line color */
@@ -4704,7 +4997,7 @@ buildSceneGraph()
 
             FREE(segments);
 
-            wv_adjustVerts(&(items[nitems]), sgFocus);
+            wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
             nitems++;
 
             /* line color */
@@ -4804,7 +5097,7 @@ buildSceneGraph()
 
             FREE(segments);
 
-            wv_adjustVerts(&(items[nitems]), sgFocus);
+            wv_adjustVerts(&(items[nitems]), ESP->sgFocus);
             nitems++;
 
             /* line color */
@@ -4840,6 +5133,10 @@ buildSceneGraph()
     addToSgMetaData("}");
 
 cleanup:
+
+    /* release the mutex so that another thread can access the scene graph */
+    EMP_LockRelease(ESP->sgMutex);
+
     if (enodes != NULL) EG_free(enodes);
     if (eedges != NULL) EG_free(eedges);
     if (efaces != NULL) EG_free(efaces);
@@ -4863,7 +5160,8 @@ cleanup:
 /***********************************************************************/
 
 static int
-buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
+buildSceneGraphBody(esp_T  *ESP,
+                    int    ibody)       /* Body index (bias-1) */
 {
     int       status = SUCCESS;         /* return status */
 
@@ -4881,13 +5179,18 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
     CDOUBLE   *tempRlist;
     CCHAR     *tempClist;
 
-    wvData    items[5];
+    wvContext *cntxt = ESP->cntxt;
+    modl_T    *MODL  = ESP->MODL;
 
-    modl_T    *MODL = (modl_T*)modl;
+    wvData    items[5];
 
     ROUTINE(buildSceneGraphBody);
 
     /* --------------------------------------------------------------- */
+
+    /* set the mutex.  if the mutex wss already set, wait until released */
+    SPLINT_CHECK_FOR_NULL(ESP);
+    EMP_LockSet(ESP->sgMutex);
 
     /* remove any graphic primitives that already exist */
     wv_removeAll(cntxt);
@@ -4960,7 +5263,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
             SPRINT1(0, "ERROR:: wv_setData(xyz) -> status=%d", status);
         }
 
-        wv_adjustVerts(&(items[0]), sgFocus);
+        wv_adjustVerts(&(items[0]), ESP->sgFocus);
 
         /* loop through the triangles and build up the segment table (bias-1) */
         nseg = 0;
@@ -5041,7 +5344,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
             SPRINT1(0, "ERROR:: wv_setData(xyz) -> status=%d", status);
         }
 
-        wv_adjustVerts(&(items[0]), sgFocus);
+        wv_adjustVerts(&(items[0]), ESP->sgFocus);
 
         /* segments (bias-1) */
         MALLOC(ivrts, int, 2*(npnt-1));
@@ -5101,7 +5404,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
 
             /* add arrow heads (requires that WV_ORIENTATION be set above) */
             head[0] = npnt - 1;
-            status = wv_addArrowHeads(cntxt, igprim, 0.10/sgFocus[3], 1, head);
+            status = wv_addArrowHeads(cntxt, igprim, 0.10/ESP->sgFocus[3], 1, head);
             if (status != SUCCESS) {
                 SPRINT1(0, "ERROR:: wv_addArrowHeads -> status=%d", status);
             }
@@ -5129,7 +5432,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
             SPRINT1(0, "ERROR:: wv_setData(xyz) -> status=%d", status);
         }
 
-        wv_adjustVerts(&(items[0]), sgFocus);
+        wv_adjustVerts(&(items[0]), ESP->sgFocus);
 
         /* point colors */
         color[0] = 0;   color[1] = 0;   color[2] = 0;
@@ -5181,7 +5484,7 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
                 SPRINT1(0, "ERROR:: wv_setData(xyz) -> status=%d", status);
             }
 
-            wv_adjustVerts(&(items[0]), sgFocus);
+            wv_adjustVerts(&(items[0]), ESP->sgFocus);
 
             /* segments (bias-1) */
             MALLOC(ivrts, int, 2*(npnt-1));
@@ -5235,6 +5538,10 @@ buildSceneGraphBody(int    ibody)       /* Body index (bias-1) */
     }
 
 cleanup:
+
+    /* release the mutex so that another thread can access the scene graph */
+    EMP_LockRelease(ESP->sgMutex);
+
     return status;
 }
 
@@ -5246,12 +5553,11 @@ cleanup:
 /***********************************************************************/
 
 static void
-cleanupMemory(int    quiet)             /* (in)  =1 for no messages */
+cleanupMemory(modl_T *MODL,
+              int    quiet)             /* (in)  =1 for no messages */
 {
     int    status;
     ego    context;
-
-    modl_T    *MODL = (modl_T*)modl;
 
     /* --------------------------------------------------------------- */
 
@@ -5631,26 +5937,28 @@ cleanup:
 /***********************************************************************/
 
 static int
-processBrowserToServer(char    text[])
+processBrowserToServer(esp_T   *ESP,
+                       char    text[])
 {
     int       status = SUCCESS;
 
     int       i, ibrch, itype, nlist, builtTo, buildStatus, ichar, iundo;
-    int       ipmtr, jpmtr, nrow, ncol, irow, icol, index, iattr, actv, itemp;
+    int       ipmtr, jpmtr, nrow, ncol, irow, icol, index, iattr, actv, itemp, linenum;
     int       itoken1, itoken2, itoken3, ibody, onstack, direction=1, nwarn;
+    int       my_length = 4096;
     int       nclient;
     CINT      *tempIlist;
     double    scale, value, dot;
     CDOUBLE   *tempRlist;
-    char      *pEnd, bname[MAX_NAME_LEN+1];
+    char      *pEnd, bname[MAX_NAME_LEN+1], *bodyinfo=NULL;
     CCHAR     *tempClist;
 
-    char      *name=NULL,  *type=NULL, *valu=NULL;
-    char      *arg1=NULL,  *arg2=NULL, *arg3=NULL;
-    char      *arg4=NULL,  *arg5=NULL, *arg6=NULL;
-    char      *arg7=NULL,  *arg8=NULL, *arg9=NULL;
-    char      *entry=NULL, *temp=NULL, *temp2=NULL;
-    char      *matrix=NULL;
+    char      *name=NULL,   *type=NULL, *valu=NULL;
+    char      *arg1=NULL,   *arg2=NULL, *arg3=NULL;
+    char      *arg4=NULL,   *arg5=NULL, *arg6=NULL;
+    char      *arg7=NULL,   *arg8=NULL, *arg9=NULL;
+    char      *entry=NULL,  *temp=NULL, *temp2=NULL;
+    char      *matrix=NULL, *my_response=NULL;
 
 #define  MAX_TOKN_LEN  16384
 
@@ -5658,10 +5966,8 @@ processBrowserToServer(char    text[])
 
     static FILE  *fp=NULL;
 
-    modl_T    *MODL = (modl_T*)modl;
+    modl_T    *MODL = ESP->MODL;
     modl_T    *saved_MODL=NULL;
-
-    tim_T     *TIM=NULL, *myTIM;
 
     ROUTINE(processBrowserToServer);
 
@@ -5712,7 +6018,11 @@ processBrowserToServer(char    text[])
         SPRINT0(1, "********************************************");
 
         /* build the response */
-        snprintf(response, max_resp_len, "identify|serveESP|%d|", nclient);
+        if (strlen(capsname) == 0) {
+            snprintf(response, max_resp_len, "identify|serveESP|%d|%s|", nclient, pyname);
+        } else {
+            snprintf(response, max_resp_len, "identify|serveCAPS|%d|%s|", nclient, pyname);
+        }
         response_len = STRLEN(response);
 
     /* "userName|name|passTo|" */
@@ -5818,7 +6128,7 @@ processBrowserToServer(char    text[])
     /* "nextStep|0|" */
     } else if (strncmp(text, "nextStep|0|", 11) == 0) {
         curStep = 0;
-        buildSceneGraph();
+        buildSceneGraph(ESP);
 
         snprintf(response, max_resp_len, "nextStep|||");
         response_len = STRLEN(response);
@@ -5846,7 +6156,7 @@ processBrowserToServer(char    text[])
                 MODL->body[curStep].botype == OCSM_WIRE_BODY  ||
                 MODL->body[curStep].botype == OCSM_SHEET_BODY ||
                 MODL->body[curStep].botype == OCSM_SOLID_BODY   ) {
-                buildSceneGraphBody(curStep);
+                buildSceneGraphBody(ESP, curStep);
 
                 ibrch = MODL->body[curStep].ibrch;
 
@@ -5871,7 +6181,7 @@ processBrowserToServer(char    text[])
            done with StepThru mode */
         if (curStep < 1 || curStep > MODL->nbody) {
             curStep = 0;
-            buildSceneGraph();
+            buildSceneGraph(ESP);
 
             snprintf(response, max_resp_len, "nextStep|||");
             response_len = STRLEN(response);
@@ -6028,7 +6338,7 @@ processBrowserToServer(char    text[])
             addToResponse("]");
         }
 
-    /* "newPmtr|name|nrow|ncol|value1| ..." */
+    /* "newPmtr|name|nrow|ncol|value1|..." */
     } else if (strncmp(text, "newPmtr|", 8) == 0) {
 
         /* write journal entry */
@@ -6046,7 +6356,7 @@ processBrowserToServer(char    text[])
         if (getToken(text,  3, '|', arg2)     ) ncol = strtol(arg2, &pEnd, 10);
 
         /* store an undo snapshot */
-        status = storeUndo("newPmtr", name);
+        status = storeUndo(MODL, "newPmtr", name);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: storeUndo(newPmtr) detected: %s", ocsmGetText(status));
         }
@@ -6079,7 +6389,7 @@ processBrowserToServer(char    text[])
         status = ocsmSave(MODL, "autosave.csm");
         SPRINT1(2, "ocsmSave(autosave.csm) -> status=%d", status);
 
-    /* "setPmtr|pmtrname|irow|icol|value1| " */
+    /* "setPmtr|name|irow|icol|value| " */
     } else if (strncmp(text, "setPmtr|", 8) == 0) {
 
         /* write journal entry */
@@ -6107,7 +6417,7 @@ processBrowserToServer(char    text[])
             if (getToken(text, 3, '|', arg3)) icol  = strtol(arg3, &pEnd, 10);
 
             /* store an undo snapshot */
-            status = storeUndo("setPmtr", MODL->pmtr[ipmtr].name);
+            status = storeUndo(MODL, "setPmtr", MODL->pmtr[ipmtr].name);
             if (status != SUCCESS) {
                 SPRINT1(0, "ERROR:: storeUndo(setPmtr) detected: %s", ocsmGetText(status));
             }
@@ -6152,7 +6462,7 @@ processBrowserToServer(char    text[])
         getToken(text, 1, '|', arg1);
 
         /* store an undo snapshot */
-        status = storeUndo("delPmtr", arg1);
+        status = storeUndo(MODL, "delPmtr", arg1);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: storeUndo -> status=%d", status);
         }
@@ -6212,7 +6522,7 @@ processBrowserToServer(char    text[])
         }
 
         /* store an undo snapshot */
-        status = storeUndo("clrVels", "");
+        status = storeUndo(MODL, "clrVels", "");
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: storeUndo -> status=%d", status);
         }
@@ -6261,7 +6571,7 @@ processBrowserToServer(char    text[])
             }
 
             /* store an undo snapshot */
-            status = storeUndo("setVel", MODL->pmtr[ipmtr].name);
+            status = storeUndo(MODL, "setVel", MODL->pmtr[ipmtr].name);
             if (status != SUCCESS) {
                 SPRINT1(0, "ERROR:: storeUndo -> status=%d", status);
             }
@@ -6416,6 +6726,11 @@ processBrowserToServer(char    text[])
                 }
                 addToResponse(entry);
             }
+
+            if (MODL->nbrch == 0) {
+                snprintf(entry, MAX_STR_LEN, "]");
+                addToResponse(entry);
+            }
         }
 
     /* "newBrch|ibrch|type|arg1|arg2|arg3|arg4|arg5|arg6|arg7|arg8|arg9|" */
@@ -6497,7 +6812,7 @@ processBrowserToServer(char    text[])
         }
 
         /* store an undo snapshot */
-        status = storeUndo("newBrch", type);
+        status = storeUndo(MODL, "newBrch", type);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: storeUndo -> status=%d", status);
         }
@@ -6553,7 +6868,7 @@ processBrowserToServer(char    text[])
         if (getToken(text, 1, '|', arg1)) ibrch = strtol(arg1, &pEnd, 10);
 
         /* store an undo snapshot */
-        status = storeUndo("setBrch", MODL->brch[ibrch].name);
+        status = storeUndo(MODL, "setBrch", MODL->brch[ibrch].name);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: storeUndo -> status=%d", status);
         }
@@ -6630,7 +6945,7 @@ processBrowserToServer(char    text[])
         if (getToken(text, 1, '|', arg1)) ibrch = strtol(arg1, &pEnd, 10);
 
         /* store an undo snapshot */
-        status = storeUndo("delBrch", MODL->brch[ibrch].name);
+        status = storeUndo(MODL, "delBrch", MODL->brch[ibrch].name);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: storeUndo -> status=%d", status);
         }
@@ -6677,7 +6992,7 @@ processBrowserToServer(char    text[])
         getToken(text, 4, '|', arg4);
 
         /* store an undo snapshot */
-        status = storeUndo("setAttr", MODL->brch[ibrch].name);
+        status = storeUndo(MODL, "setAttr", MODL->brch[ibrch].name);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: storeUndo -> status=%d", status);
         }
@@ -6707,6 +7022,190 @@ processBrowserToServer(char    text[])
         status = ocsmSave(MODL, "autosave.csm");
         SPRINT1(2, "ocsmSave(autosave.csm) -> status=%d", status);
 
+#ifdef USING_CAPS
+    /* "getCvals|" */
+    } else if (strncmp(text, "getCvals|", 9) == 0) {
+        int            icval, ncval, nerror;
+        const int      *partial;
+        const double   *reals;
+        char           *name2;
+        const char     *units;
+        const void     *data;
+        capsObj        cValue, link, parent;
+        capsErrs       *errors;
+        enum capsoType otype;
+        enum capssType stype;
+        enum capsvType vtype;
+        capsOwn        last;
+
+        /* build the response in JSON format */
+        status = caps_size(ESP->CAPS, VALUE, PARAMETER, &ncval, &nerror, &errors);
+        printf("caps_size -> status=%d, ncval=%d, nerror=%d\n", status, ncval, nerror);
+
+        if (ncval > 0) {
+            snprintf(response, max_resp_len, "getCvals|[");
+        } else {
+            snprintf(response, max_resp_len, "getCvals|");
+        }
+        response_len = STRLEN(response);
+
+        for (icval = 1; icval <= ncval; icval++) {
+            status = caps_childByIndex(ESP->CAPS, VALUE, PARAMETER, icval, &cValue);
+            printf("caps_childByIndex(%d) -> status=%d\n", icval, status);
+
+            status = caps_info(cValue, &name2, &otype, &stype, &link, &parent, &last);
+            printf("caps_info -> status=%d\n", status);
+
+            status = caps_getValue(cValue, &vtype, &nrow, &ncol, &data, &partial, &units, &nerror, &errors);
+            printf("caps_getValue -> status=%d, nerror=%d\n", status, nerror);
+            reals = data;
+
+            snprintf(entry, MAX_STR_LEN, "{\"name\":\"%s\",\"nrow\":%d,\"ncol\":%d,\"value\":[",
+                     name2, nrow, ncol);
+            addToResponse(entry);
+
+            for (i = 0; i < nrow*ncol-1; i++) {
+                snprintf(entry, MAX_STR_LEN, "%lg,", reals[i]);
+                addToResponse(entry);
+            }
+            if (icval < ncval) {
+                snprintf(entry, MAX_STR_LEN, "%lg]},", reals[nrow*ncol-1]);
+            } else {
+                snprintf(entry, MAX_STR_LEN, "%lg]}]", reals[nrow*ncol-1]);
+            }
+            addToResponse(entry);
+        }
+        printf("serverToBrowser(%s)\n", response);
+
+    /* "newCval|name|nrow|ncol|units|value1|..." */
+    } else if (strncmp(text, "newCval|", 8) == 0) {
+        double  *cvals=NULL;
+        char    units[MAX_EXPR_LEN];
+        capsObj cValue;
+
+        /* write journal entry */
+        if (jrnl_out != NULL) {
+            fprintf(jrnl_out, "%s\n", text);
+            fflush( jrnl_out);
+        }
+
+        /* extract arguments */
+        nrow = 0;
+        ncol = 0;
+
+        if (getToken(text,  1, '|', name) == 0) name[0] = '\0';
+        if (getToken(text,  2, '|', arg1)     ) nrow = strtol(arg1, &pEnd, 10);
+        if (getToken(text,  3, '|', arg2)     ) ncol = strtol(arg2, &pEnd, 10);
+        if (getToken(text,  4, '|', arg3) == 0) units[0] = '\0';
+
+        MALLOC(cvals, double, nrow*ncol);
+
+        i = 5;
+        for (irow = 1; irow <= nrow; irow++) {
+            for (icol = 1; icol <= ncol; icol++) {
+                if (getToken(text, i, '|', arg4)) {
+                    cvals[i-5] = atof(arg4);
+                }
+
+                i++;
+            }
+        }
+
+        /* build the response */
+        if (strcmp(units, ".") == 0) {
+            status = caps_makeValue(ESP->CAPS, name, PARAMETER, Double, nrow, ncol, cvals, NULL, "",    &cValue);
+        } else {
+            status = caps_makeValue(ESP->CAPS, name, PARAMETER, Double, nrow, ncol, cvals, NULL, units, &cValue);
+        }
+        printf("caps_makeValue -> status=%d\n", status);
+        if (status == SUCCESS) {
+            snprintf(response, max_resp_len, "newCval|");
+        } else {
+            snprintf(response, max_resp_len, "ERROR:: newCval(%s,%s,%s,%s) detected: %d",
+                     name, arg1, arg2, arg3, status);
+        }
+        response_len = STRLEN(response);
+
+        FREE(cvals);
+        printf("serverToBrowser(%s)\n", response);
+
+    /* "setCval|name|irow|icol|value| " */
+    } else if (strncmp(text, "setCval|", 8) == 0) {
+        int            icval, nerror;
+        const int      *partial;
+        enum capsvType vtype;
+        double         *cvals_new=NULL;
+        const double   *cvals_old;
+        const void     *data;
+        const char     *units;
+        capsObj        cValue;
+        capsErrs       *errors;
+
+        /* write journal entry */
+        if (jrnl_out != NULL) {
+            fprintf(jrnl_out, "%s\n", text);
+            fflush( jrnl_out);
+        }
+
+        /* extract arguments */
+        irow  = 0;
+        icol  = 0;
+
+        getToken(text, 1, '|', arg1);
+        if (getToken(text, 2, '|', arg2)) irow  = strtol(arg2, &pEnd, 10);
+        if (getToken(text, 3, '|', arg3)) icol  = strtol(arg3, &pEnd, 10);
+        getToken(text, 4, '|', arg4);
+
+        status = caps_childByName(ESP->CAPS, VALUE, PARAMETER, arg1, &cValue, &nerror, &errors);
+        printf("caps_childByName -> status=%d, nerror=%d\n", status, nerror);
+        if (status < SUCCESS) {
+            showCapsErrors(nerror, errors);
+            snprintf(response, max_resp_len, "setCval|ERROR:: caps_childByName -> status=%d", status);
+        }
+
+        if (nerror == 0) {
+            /*@-nullpass@*/
+            status = caps_getValue(cValue, &vtype, &nrow, &ncol, &data, &partial, &units, &nerror, &errors);
+            /*@+nullpass@*/
+            printf("caps_getValue -> status=%d, nerror=%d\n", status, nerror);
+            cvals_old = data;
+            if (status < SUCCESS) {
+                showCapsErrors(nerror, errors);
+                snprintf(response, max_resp_len, "setCval|ERROR:: caps_getValue -> status=%d", status);
+            }
+        }
+
+        if (nerror == 0) {
+            MALLOC(cvals_new, double, nrow*ncol);
+
+            for (icval = 0; icval < nrow*ncol; icval++) {
+                cvals_new[icval] = cvals_old[icval];
+            }
+
+            if        (irow < 1 || irow > nrow) {
+                snprintf(response, max_resp_len, "setCval|ERROR:: illegal irow (%d) value", irow);
+            } else if (icol < 1 || icol > ncol) {
+                snprintf(response, max_resp_len, "setCval|ERROR:: illegal icol (%d) value", icol);
+            } else {
+                icval = (irow-1) * ncol + (icol-1);
+                cvals_new[icval] = atof(arg4);
+
+                status = caps_setValue(cValue, vtype, nrow, ncol, cvals_new, NULL, units, &nerror, &errors);
+                printf("caps_setValue -> status=%d, nerror=%d\n", status, nerror);
+                if (status < SUCCESS) {
+                    showCapsErrors(nerror, errors);
+                    snprintf(response, max_resp_len, "setCval|ERROR:: caps_setValue -> status=%d", status);
+                } else {
+                    snprintf(response, max_resp_len, "setCval|");
+                }
+            }
+        }
+        response_len = STRLEN(response);
+
+        FREE(cvals_new);
+        printf("serverToBrowser(%s)\n", response);
+#endif
+
     /* "undo|" */
     } else if (strncmp(text, "undo|", 5) == 0) {
 
@@ -6722,7 +7221,7 @@ processBrowserToServer(char    text[])
 
         } else {
             /* remove the current MODL */
-            status = ocsmFree(modl);
+            status = ocsmFree(MODL);
 
             if (status < SUCCESS) {
                 snprintf(response, max_resp_len, "ERROR:: undo() detected: %s",
@@ -6730,7 +7229,7 @@ processBrowserToServer(char    text[])
             } else {
 
                 /* repoint MODL to the saved modl */
-                modl = undo_modl[--nundo];
+                ESP->MODL = (modl_T *)(undo_modl[--nundo]);
                 snprintf(response, max_resp_len, "undo|%s|",
                          undo_text[nundo]);
             }
@@ -6761,12 +7260,13 @@ processBrowserToServer(char    text[])
 
         /* load an empty MODL */
         filename[0] = '\0';
-        status = ocsmLoad(filename, &modl);
+        status = ocsmLoad(filename, (void **)&(ESP->MODL));
+        MODL = ESP->MODL;
+
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: osmLoad(NULL) -> status=%d", status);
         }
 
-        MODL = (modl_T *)modl;
         if(filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
@@ -6774,15 +7274,15 @@ processBrowserToServer(char    text[])
         }
         updatedFilelist = 1;
 
-        status = ocsmLoadDict(modl, dictname);
+        status = ocsmLoadDict(MODL, dictname);
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: ocsmLoadDict -> status=%d", status);
         }
 
-        status = ocsmRegMesgCB(modl, mesgCallbackFromOpenCSM);
+        status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
         if (status < EGADS_SUCCESS) goto cleanup;
 
-        status = ocsmRegSizeCB(modl, sizeCallbackFromOpenCSM);
+        status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
         if (status < EGADS_SUCCESS) goto cleanup;
 
         if (strlen(despname) > 0) {
@@ -6790,7 +7290,7 @@ processBrowserToServer(char    text[])
             if (status < EGADS_SUCCESS) goto cleanup;
         }
 
-        status = buildBodys(0, &builtTo, &buildStatus, &nwarn);
+        status = buildBodys(ESP, 0, &builtTo, &buildStatus, &nwarn);
 
         /* build the response */
         if (status == SUCCESS && buildStatus == SUCCESS) {
@@ -6823,20 +7323,18 @@ processBrowserToServer(char    text[])
         getToken(text, 1, '|', filename);
 
         /* save the current MODL (to be deleted below) */
-        saved_MODL = (modl_T *)modl;
+        saved_MODL = MODL;
 
         /* load the new MODL */
-        status = ocsmLoad(filename, &modl);
-        if (status != SUCCESS) {
-            MODL = (modl_T *) modl;
+        status = ocsmLoad(filename, (void **)&(ESP->MODL));
+        MODL = ESP->MODL;
 
+        if (status != SUCCESS) {
             snprintf(response, max_resp_len, "%s||",
                      MODL->sigMesg);
 
-            buildSceneGraph();
+            buildSceneGraph(ESP);
         } else {
-            MODL = (modl_T *) modl;
-
             status = ocsmLoadDict(MODL, dictname);
             if (status != SUCCESS) {
                 SPRINT2(0, "ERROR:: ocsmLoadDict(%s) detected %s",
@@ -6863,7 +7361,7 @@ processBrowserToServer(char    text[])
                 if (status < EGADS_SUCCESS) goto cleanup;
             }
 
-            status = buildBodys(0, &builtTo, &buildStatus, &nwarn);
+            status = buildBodys(ESP, 0, &builtTo, &buildStatus, &nwarn);
 
             if (status != SUCCESS || buildStatus != SUCCESS) {
                 snprintf(response, max_resp_len, "%s|%s|",
@@ -6924,7 +7422,6 @@ processBrowserToServer(char    text[])
             fflush( jrnl_out);
         }
 
-        MODL = (modl_T *)modl;
         if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
@@ -7021,31 +7518,28 @@ processBrowserToServer(char    text[])
         fp = NULL;
 
         /* save the current MODL (to be deleted below) */
-        saved_MODL = (modl_T *) modl;
+        saved_MODL = MODL;
 
         /* load the new MODL */
-        status = ocsmLoad(filename, &modl);
+        status = ocsmLoad(filename, (void **)&(ESP->MODL));
+        MODL = ESP->MODL;
 
         if (status != SUCCESS) {
-            MODL = (modl_T *) modl;
-
             snprintf(response, max_resp_len, "%s||",
                      MODL->sigMesg);
 
             /* clear any previous builds from the scene graph */
-            buildSceneGraph();
+            buildSceneGraph(ESP);
         } else {
-            MODL = (modl_T *) modl;
-
-            status = ocsmLoadDict(modl, dictname);
+            status = ocsmLoadDict(MODL, dictname);
             if (status != SUCCESS) {
                 SPRINT1(0, "ERROR:: ocsmLoadDict -> status=%d", status);
             }
 
-            status = ocsmRegMesgCB(modl, mesgCallbackFromOpenCSM);
+            status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
             if (status < EGADS_SUCCESS) goto cleanup;
 
-            status = ocsmRegSizeCB(modl, sizeCallbackFromOpenCSM);
+            status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
             if (status < EGADS_SUCCESS) goto cleanup;
 
             if (strlen(despname) > 0) {
@@ -7059,7 +7553,6 @@ processBrowserToServer(char    text[])
             snprintf(response, max_resp_len, "load|");
         }
 
-        MODL = (modl_T *)modl;
         if (filelist != NULL) EG_free(filelist);
         status = ocsmGetFilelist(MODL, &filelist);
         if (status != SUCCESS) {
@@ -7100,7 +7593,7 @@ processBrowserToServer(char    text[])
         }
 
         /* build the response */
-        status = buildBodys(ibrch, &builtTo, &buildStatus, &nwarn);
+        status = buildBodys(ESP, ibrch, &builtTo, &buildStatus, &nwarn);
 
         if (status != SUCCESS || buildStatus != SUCCESS) {
             snprintf(response, max_resp_len, "%s|%s|",
@@ -7145,9 +7638,37 @@ processBrowserToServer(char    text[])
         }
 
         /* build the response */
-        status = buildBodys(ibrch, &builtTo, &buildStatus, &nwarn);
+        status = buildBodys(ESP, ibrch, &builtTo, &buildStatus, &nwarn);
 
         goto cleanup;
+
+    /* "getBodyDetails|filename|linenum||" */
+    } else if (strncmp(text, "getBodyDetails|", 15) == 0) {
+
+        /* extract arguments */
+        linenum = 0;
+        getToken(text, 1, '|', arg1);
+        if (getToken(text, 2, '|', arg2)) linenum = strtol(arg2, &pEnd, 10);
+
+        status = ocsmBodyDetails(MODL, arg1, linenum, &bodyinfo);
+
+        SPLINT_CHECK_FOR_NULL(bodyinfo);
+
+        if (status == SUCCESS) {
+            itemp = 25 + STRLEN(bodyinfo);
+
+            if (itemp > max_resp_len) {
+                max_resp_len = itemp + 1;
+
+                RALLOC(response, char, max_resp_len+1);
+            }
+
+            /* build the response */
+            snprintf(response, max_resp_len, "getBodyDetails|%s|%d|%s|", arg1, linenum, bodyinfo);
+            response_len = STRLEN(response);
+        }
+
+        FREE(bodyinfo);
 
     /* "loadSketch|" */
     } else if (strncmp(text, "loadSketch|", 11) == 0) {
@@ -7340,12 +7861,12 @@ processBrowserToServer(char    text[])
         /* handle special case of Ereps */
         if (plotType < 7) {
             if (MODL->erepAtEnd == 1) {
-                status = buildBodys(0, &builtTo, &buildStatus, &nwarn);
+                status = buildBodys(ESP, 0, &builtTo, &buildStatus, &nwarn);
                 if (status != SUCCESS) goto cleanup;
             }
         } else {
             if (MODL->erepAtEnd == 0) {
-                status = buildBodys(0, &builtTo, &buildStatus, &nwarn);
+                status = buildBodys(ESP, 0, &builtTo, &buildStatus, &nwarn);
                 if (status != SUCCESS) goto cleanup;
             }
         }
@@ -7356,7 +7877,7 @@ processBrowserToServer(char    text[])
 
         /* update the scene graph (after clearing the meta data) */
         if (batch == 0) {
-            buildSceneGraph();
+            buildSceneGraph(ESP);
         }
 
     /* "saveView|viewfile|scale|array|" */
@@ -7402,6 +7923,11 @@ processBrowserToServer(char    text[])
             response_len = STRLEN(response);
         }
 
+    /* "editor|...|" */
+    } else if (strncmp(text, "editor|", 7) == 0) {
+        snprintf(response, max_resp_len, "%s", text);
+        response_len = STRLEN(response);
+
     /* "timLoad|timname|arg|" */
     } else if (strncmp(text, "timLoad|", 8) == 0) {
 
@@ -7411,31 +7937,23 @@ processBrowserToServer(char    text[])
             fflush( jrnl_out);
         }
 
+        response[0]  = '\0';
+        response_len = 0;
+
         /* extract arguments */
         getToken(text, 1, '|', arg1);
         getToken(text, 2, '|', arg2);
 
-        /* set up TIM structure */
-        MALLOC(TIM, tim_T, 1);
-
-        TIM->MODL       = MODL;
-        TIM->ctxt       = cntxt;
-        TIM->sgFocus[0] = sgFocus[0];
-        TIM->sgFocus[1] = sgFocus[1];
-        TIM->sgFocus[2] = sgFocus[2];
-        TIM->sgFocus[3] = sgFocus[3];
-        TIM->udata      = NULL;
-
         /* load the tim */
-        status = tim_load(arg1, TIM, arg2);
+        status = tim_load(arg1, ESP, arg2);
+        if (status < EGADS_SUCCESS) goto cleanup;
 
-        if (status < EGADS_SUCCESS) {
-            snprintf(response, max_resp_len, "%sERROR:: %s", text, ocsmGetText(status));
-        } else {
-            snprintf(response, max_resp_len, "%s", text);
-        }
+        /* reset the callbacks in case in was changed */
+        status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
+        if (status < EGADS_SUCCESS) goto cleanup;
 
-        response_len = STRLEN(response);
+        status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
+        if (status < EGADS_SUCCESS) goto cleanup;
 
     /* "timMesg|timname|...|" */
     } else if (strncmp(text, "timMesg|", 8) == 0) {
@@ -7446,6 +7964,9 @@ processBrowserToServer(char    text[])
             fflush( jrnl_out);
         }
 
+        response[0]  = '\0';
+        response_len = 0;
+
         /* extract argument */
         getToken(text, 1, '|', arg1);
 
@@ -7454,15 +7975,17 @@ processBrowserToServer(char    text[])
             if (text[i] == '|') break;
         }
 
-        status = tim_mesg(arg1, &text[i+1], MAX_EXPR_LEN, arg2);
+        MALLOC(my_response, char, my_length);
 
-        if (status < EGADS_SUCCESS) {
-            snprintf(response, max_resp_len, "timMesg|%sERROR:: %s", text, ocsmGetText(status));
-        } else {
-            snprintf(response, max_resp_len, "timMesg|%s|%s|", arg1, arg2);
-        }
+        status = tim_mesg(arg1, &text[i+1]);
+        if (status < EGADS_SUCCESS) goto cleanup;
 
-        response_len = STRLEN(response);
+        /* reset the callbacks in case they were changed */
+        status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
+        if (status < EGADS_SUCCESS) goto cleanup;
+
+        status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
+        if (status < EGADS_SUCCESS) goto cleanup;
 
     /* "timSave|timname|" */
     } else if (strncmp(text, "timSave|", 8) == 0) {
@@ -7473,17 +7996,14 @@ processBrowserToServer(char    text[])
             fflush( jrnl_out);
         }
 
+        response[0]  = '\0';
+        response_len = 0;
+
+        /* extract argument */
         getToken(text, 1, '|', arg1);
 
         status = tim_save(arg1);
-
-        if (status < EGADS_SUCCESS) {
-            snprintf(response, max_resp_len, "%sERROR:: %s", text, ocsmGetText(status));
-        } else {
-            snprintf(response, max_resp_len, "%s", text);
-        }
-
-        response_len = STRLEN(response);
+        if (status < EGADS_SUCCESS) goto cleanup;
 
     /* "timQuit|timname|" */
     } else if (strncmp(text, "timQuit|", 8) == 0) {
@@ -7494,47 +8014,35 @@ processBrowserToServer(char    text[])
             fflush( jrnl_out);
         }
 
+        response[0]  = '\0';
+        response_len = 0;
+
+        /* extract argument */
         getToken(text, 1, '|', arg1);
 
         status = tim_quit(arg1);
-        printf("tim_quit() -> status=%d\n", status);
-
-        if (status < EGADS_SUCCESS) {
-            snprintf(response, max_resp_len, "%sERROR:: %s", text, ocsmGetText(status));
-        } else {
-            snprintf(response, max_resp_len, "%s", text);
-        }
-        printf("response=%s\n", response);
-
-        response_len = STRLEN(response);
+        if (status < EGADS_SUCCESS) goto cleanup;
 
     /* "timDraw|" */
     } else if (strncmp(text, "timDraw|timName|", 8) == 0) {
 
         getToken(text, 1, '|', arg1);
 
-        buildSceneGraph();
+        buildSceneGraph(ESP);
 
-        status = tim_data(arg1, &myTIM);
+    /* "overlayEnd|timName|" */
+    } else if (strncmp(text, "overlayEnd|", 11) == 0) {
 
-        if (status < EGADS_SUCCESS) {
-            snprintf(response, max_resp_len, "%sERROR:: %s", text, ocsmGetText(status));
-        } else {
-            snprintf(response, max_resp_len, "%s", text);
+        getToken(text, 1, '|', arg1);
 
-            myTIM->sgFocus[0] = sgFocus[0];
-            myTIM->sgFocus[1] = sgFocus[1];
-            myTIM->sgFocus[2] = sgFocus[2];
-            myTIM->sgFocus[3] = sgFocus[3];
-        }
-
-        response_len = STRLEN(response);
-
+        tim_lift(arg1);
     }
 
     status = SUCCESS;
 
 cleanup:
+    fflush(0);
+
     FREE(vars_out);
     FREE(segs);
     FREE(cons);
@@ -7563,12 +8071,62 @@ cleanup:
 
 /***********************************************************************/
 /*                                                                     */
+/*   showCapsErrors - show errors in caps error structure              */
+/*                                                                     */
+/***********************************************************************/
+
+#ifdef USING_CAPS
+static void
+showCapsErrors(int      nerror,         /* (in)  number of errors */
+               capsErrs errors[])       /* (in)  stuctures holding error info */
+{
+    int         i, j, stat, eType, nLines;
+    char        **lines;
+    capsObj     obj;
+    static char *type[5] = {"Cont:   ",
+                            "Info:   ",
+                            "Warning:",
+                            "Error:  ",
+                            "Status: "};
+
+    ROUTINE(showCapsErrors);
+
+    /* --------------------------------------------------------------- */
+
+    if (errors == NULL) goto cleanup;
+
+    for (i = 1; i <= nerror; i++) {
+        stat = caps_errorInfo(errors, i, &obj, &eType, &nLines, &lines);
+        if (stat != CAPS_SUCCESS) {
+            printf("%d/%d caps_errorInfo = %d\n", i, nerror, stat);
+            continue;
+        }
+        for (j = 0; j < nLines; j++) {
+            if (j == 0) {
+                printf("CAPS %s ", type[eType+1]);
+            } else {
+                printf("              ");
+            }
+            printf("%s\n", lines[j]);
+        }
+    }
+
+    caps_freeError(errors);
+
+cleanup:
+    return;
+}
+#endif
+
+
+/***********************************************************************/
+/*                                                                     */
 /*   sizeCallbackFromOpenCSM - change size of a DESPMTR                */
 /*                                                                     */
 /***********************************************************************/
 
 void
-sizeCallbackFromOpenCSM(void   *Modl,   /* (in)  pointer to MODL */
+sizeCallbackFromOpenCSM(void   *modl,   /* (in)  pointer to MODL */
                         int    ipmtr,   /* (in)  Parameter index (bias-1) */
                         int    nrow,    /* (in)  new number of rows */
                         int    ncol)    /* (in)  new number of columns */
@@ -7579,7 +8137,7 @@ sizeCallbackFromOpenCSM(void   *Modl,   /* (in)  pointer to MODL */
     double value, dot;
     char   *entry=NULL;
 
-    modl_T *MODL = (modl_T*)Modl;
+    modl_T *MODL = (modl_T*)modl;
 
     ROUTINE(sizeCallbackFromOpenCSM);
 
@@ -7592,12 +8150,6 @@ sizeCallbackFromOpenCSM(void   *Modl,   /* (in)  pointer to MODL */
 
     if (ipmtr >= 1 && ipmtr <= MODL->npmtr) {
         SPRINT3(2, "Size of %s changed to (%d,%d)", MODL->pmtr[ipmtr].name, nrow, ncol);
-    }
-
-    /* no further processor if webViewer is no up yet */
-    if (cntxt == NULL) {
-        SPRINT0(2, "WebViewer not up yet");
-        goto cleanup;
     }
 
     MALLOC(entry, char, MAX_STR_LEN);
@@ -7817,15 +8369,14 @@ spec_col(float  scalar,
 /***********************************************************************/
 
 static int
-storeUndo(char   cmd[],                 /* (in)  current command */
+storeUndo(modl_T *MODL,
+          char   cmd[],                 /* (in)  current command */
           char   arg[])                 /* (in)  current argument */
 {
     int       status = SUCCESS;         /* return status */
 
     int       iundo;
     char      *text=NULL;
-
-    modl_T    *MODL = (modl_T*)modl;
 
     ROUTINE(storeUndo);
 

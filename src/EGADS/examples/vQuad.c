@@ -3,7 +3,7 @@
  *
  *             Display the EGADS Tessellation using wv (the WebViewer)
  *
- *      Copyright 2011-2021, Massachusetts Institute of Technology
+ *      Copyright 2011-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -41,8 +41,18 @@ typedef struct {
 } bodyData;
 
 
-/* globals used in these functions */
 
+/* call-back invoked when a message arrives from the browser */
+
+void browserMessage(/*@unused@*/ void *uPtr, /*@unused@*/ void *wsi,
+                    char *text, /*@unused@*/ int lena)
+{
+
+  printf(" RX: %s\n", text);
+  /* ping it back
+  wv_sendText(wsi, text); */
+
+}
 
 
 int main(int argc, char *argv[])
@@ -474,6 +484,7 @@ int main(int argc, char *argv[])
   /* start the server code */
 
   stat = 0;
+  wv_setCallBack(cntxt, browserMessage);
   if (wv_startServer(7681, NULL, NULL, NULL, 0, cntxt) == 0) {
 
     /* we have a single valid server -- stay alive a long as we have a client */
@@ -499,16 +510,4 @@ int main(int argc, char *argv[])
   printf(" EG_deleteObject   = %d\n", EG_deleteObject(model));
   printf(" EG_close          = %d\n", EG_close(context));
   return 0;
-}
-
-
-/* call-back invoked when a message arrives from the browser */
-
-void browserMessage(/*@unused@*/ void *wsi, char *text, /*@unused@*/ int lena)
-{
-
-  printf(" RX: %s\n", text);
-  /* ping it back
-  wv_sendText(wsi, text); */
-
 }

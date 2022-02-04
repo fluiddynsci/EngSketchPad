@@ -3,7 +3,7 @@
  *
  *             Object Output Utility
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -140,7 +140,7 @@ caps_printObjects(capsObj object, int indent)
 {
   int            i, j, k, status, nBody, nParam, nGeomIn, nGeomOut;
   int            nAnalysis, nBound, nAnalIn, nAnalOut, nConnect, nUnConnect;
-  int            nAttr, nDataSet, npts, rank, nErr, nLines;
+  int            nAttr, nDataSet, npts, rank, nErr, nLines, nAnalDynO;
   char           *name, *units, *pname, *pID, *userID, *oname, **lines;
   double         *data;
   short          datetime[6];
@@ -153,10 +153,10 @@ caps_printObjects(capsObj object, int indent)
   static char    *oType[9]  = { "BODIES", "ATTRIBUTES", "UNUSED", "PROBLEM",
                                 "VALUE", "ANALYSIS", "BOUND", "VERTEXSET",
                                 "DATASET" };
-  static char    *sType[11] = { "NONE", "STATIC", "PARAMETRIC", "GEOMETRYIN",
+  static char    *sType[12] = { "NONE", "STATIC", "PARAMETRIC", "GEOMETRYIN",
                                 "GEOMETRYOUT", "PARAMETER", "USER",
                                 "ANALYSISIN", "ANALYSISOUT", "CONNECTED",
-                                "UNCONNECTED" };
+                                "UNCONNECTED", "ANALYSISDYNO" };
 
 #ifdef TESTHIERACHY
   {
@@ -397,8 +397,16 @@ caps_printObjects(capsObj object, int indent)
              name, status);
       return;
     }
+    status = caps_size(object, VALUE, ANALYSISDYNO, &nAnalDynO, &nErr, &errors);
+    if (errors != NULL) caps_freeError(errors);
+    if (status != CAPS_SUCCESS) {
+      printf(" CAPS Error: Object %s returns %d from caps_size(AnalysisIn)!\n",
+             name, status);
+      return;
+    }
     for (i = 0; i < indent; i++) printf(" ");
-    printf("   %d AnalysisIns, %d AnalysisOuts\n", nAnalIn, nAnalOut);
+    printf("   %d AnalysisIns, %d AnalysisOuts, %d AnalysisDynOs\n",
+           nAnalIn, nAnalOut, nAnalDynO);
 
     if (nAnalIn > 0) {
       printf("\n");
@@ -453,6 +461,19 @@ caps_printObjects(capsObj object, int indent)
               }
             }
         }
+      }
+    }
+    
+    if (nAnalDynO > 0) {
+      printf("\n");
+      for (i = 0; i < nAnalDynO; i++) {
+        status = caps_childByIndex(object, VALUE, ANALYSISDYNO, i+1, &obj);
+        if (status != CAPS_SUCCESS) {
+          printf(" CAPS Error: Object %s ret=%d from caps_child(AnalDynO,%d)!\n",
+                 name, status, i+1);
+          return;
+        }
+        caps_printObjects(obj, indent+2);
       }
     }
     

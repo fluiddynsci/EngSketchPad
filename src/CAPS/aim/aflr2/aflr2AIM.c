@@ -19,7 +19,7 @@
  * An outline of the AIM's inputs, outputs and attributes are provided in \ref aimInputsAFLR2 and
  * \ref aimOutputsAFLR2 and \ref attributeAFLR2, respectively.
  *
- * The complete AFLR documentation is available at the <a href="http://www.simcenter.msstate.edu/software/downloads/doc/system/index.html">SimCenter</a>.
+ * The complete AFLR documentation is available at the <a href="https://www.simcenter.msstate.edu/software/documentation/system/index.html">SimCenter</a>.
  *
  */
 

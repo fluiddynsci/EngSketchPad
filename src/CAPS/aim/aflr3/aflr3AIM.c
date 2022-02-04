@@ -262,8 +262,6 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     /*! \page aimInputsAFLR3 AIM Inputs
      * The following list outlines the AFLR3 meshing options along with their default value available
      * through the AIM interface.
-     *
-     * Please consult the <a href="https://www.simcenter.msstate.edu/software/documentation/aflr4/index.html">AFLR4 documentation</a> for default values not present here.
      */
 
     int status = CAPS_SUCCESS;

@@ -6,7 +6,7 @@
 #                                                                 #
 ###################################################################
 
-# Copyright (C) 2021  John F. Dannenhoffer, III (Syracuse University)
+# Copyright (C) 2022  John F. Dannenhoffer, III (Syracuse University)
 #
 # This library is free software; you can redistribute it and/or
 #    modify it under the terms of the GNU Lesser General Public
@@ -171,12 +171,12 @@ class Ocsm(object):
     written by John Dannenhoffer (author of OpenCSM)
     """
 
-    def __init__(self, filename):
+    def __init__(self, init):
         """
         ocsm.Load - create a MODL by reading a .csm file
 
         inputs:
-            filename    file to be read (with .csm)
+            init        file to be read (with .csm) or pointer to MODL
         output:
             (None)
         """
@@ -184,18 +184,49 @@ class Ocsm(object):
                                    ctypes.POINTER(ctypes.c_void_p)]
         _ocsm.ocsmLoad.restype  =  ctypes.c_int
 
-        if (isinstance(filename, str)):
-            filename = filename.encode()
+        _ocsm.ocsmLoadFromModel.argtypes = [ctypes.c_void_p,
+                                            ctypes.POINTER(ctypes.c_void_p)]
+        _ocsm.ocsmLoadFromModel.restype  =  ctypes.c_int
 
-        self._modl    = ctypes.c_void_p()
-        self._mesgCB  = None
-        self._sizeCB  = None
-        self._context = None
-        status        = _ocsm.ocsmLoad(filename, self._modl)
-        _processStatus(status, "Load")
+        if (isinstance(init, str)):
+            filename = init.encode()
 
-        # create finalizaer to ensure _ocsmFree is called during garbage collection
-        self._finalize = egads.finalize(self, _ocsmFree, self._modl)
+            self._modl    = ctypes.c_void_p()
+            self._mesgCB  = None
+            self._sizeCB  = None
+            self._context = None
+            status        = _ocsm.ocsmLoad(filename, self._modl)
+            _processStatus(status, "Load")
+
+            # create finalizer to ensure _ocsmFree is called during garbage collection
+            self._pyowned  = True
+            self._finalize = egads.finalize(self, _ocsmFree, self._modl)
+
+        elif (isinstance(init, egads.ego)):
+            emodel = init.py_to_c()
+
+            self._modl    = ctypes.cast(emodel, ctypes.c_void_p)
+            self._mesgCB  = None
+            self._sizeCB  = None
+            self._context = None
+            status        = _ocsm.ocsmLoadFromModel(emodel, self._modl)
+            _processStatus(status, "LoadFromModel")
+
+            # create finalizer to ensure _ocsmFree is called during garbage collection
+            self._pyowned  = True
+            self._finalize = egads.finalize(self, _ocsmFree, self._modl)
+
+        else:
+            self._modl    = ctypes.c_void_p()
+            self._mesgCB  = None
+            self._sizeCB  = None
+            self._context = None
+
+            self._modl = init
+
+            # we do not want to call _ocsmFree since we do not own the MODL
+            self._pyowned  = False
+            self._finalize = None
 
         return
 
@@ -384,9 +415,11 @@ class Ocsm(object):
         newModl._mesgCB  = self._mesgCB
         newModl._sizeCB  = self._sizeCB
         newModl._context = self._context
+        newModl._pyowned = True
 
         # create a new finalizer for the new Ocsm instance
-        newModl._finalize = egads.finalize(newModl, _ocsmFree, newModl._modl)
+        if (self._finalize is not None):
+            newModl._finalize = egads.finalize(newModl, _ocsmFree, newModl._modl)
 
         return newModl
 
@@ -409,6 +442,7 @@ class Ocsm(object):
         self._finalize = None
         self._modl     = None
         self._context  = None
+        self._pyowned  = False
 
         return
 
@@ -536,7 +570,7 @@ class Ocsm(object):
         status = _ocsm.ocsmBuild(self._modl, buildTo, builtTo, nbody_, body)
         _processStatus(status, "Build")
 
-        if (self._context is None):
+        if (self._context is None and self._pyowned == True):
 
             # create an egads.Context that owns the ego and which will be properly
             #    closed when the self._context is garbage collected
@@ -546,7 +580,7 @@ class Ocsm(object):
             if (self._finalize is not None):
                 self._finalize.detach()
 
-            self._finalize = egads.finalize(self, _ocsmFree, self._modl)
+                self._finalize = egads.finalize(self, _ocsmFree, self._modl)
 
         # if Bodys are returned, convert into a list
         if (body is not None):
@@ -2221,7 +2255,7 @@ class OcsmError(Exception):
 # ======================================================================
 
 # print version number
-(imajor, iminor) = Version()
-print("\nocsm version {0:d}.{1:d} has been loaded\n".format(imajor,iminor))
-del imajor
-del iminor
+#(imajor, iminor) = Version()
+#print("\nocsm version {0:d}.{1:d} has been loaded\n".format(imajor,iminor))
+#del imajor
+#del iminor

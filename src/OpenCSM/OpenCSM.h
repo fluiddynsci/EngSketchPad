@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,7 @@
 #define _OPENCSM_H_
 
 #define OCSM_MAJOR_VERSION  1
-#define OCSM_MINOR_VERSION 20
+#define OCSM_MINOR_VERSION 21
 
 #define MAX_NAME_LEN       64           /* maximum chars in name */
 #define MAX_EXPR_LEN      512           /* maximum chars in expression */
@@ -47,6 +47,7 @@
 #define MAX_NUM_MACROS    100           /* maximum number of storage locations */
 
 #include <time.h>
+#include "egads.h"
 
 /*
  ************************************************************************
@@ -227,12 +228,12 @@ Zero or more INTERFACE statements must preceed any other non-comment
     CSM statement.
 
 Any CSM statement can be used except the CFGPMTR, CONPMTR, DESPMTR,
-    OUTPMTR, LBOUND, and UBOUND statements.  Note that CFGPMTR,
-    DESPMTR, LBOUND and UBOUND statements may be used in include-type
-    UDC at global scope.
+    OUTPMTR, LBOUND, and UBOUND statements.  Note that these statements
+    (except CONPMTR) may be used in include-type UDCs at global scope.
 
 SET statements define parameters that are visible only within the .udc
-   file (that is, parameters have local scope).
+   file (that is, parameters have local scope), except that they have
+   their parent's scope if in an include-type UDC.
 
 Parameters defined outside the .udc file are not available, except those
    passed in via INTERFACE statements.
@@ -520,8 +521,12 @@ COMBINE   toler=0
                   if all Bodys since Mark are SheetBodys
                      create either a SolidBody from closed Shell or an
                      (open) SheetBody
-                  elseif all Bodys since Mark are WireBodys and are co-planar
-                     create SheetBody from closed Loop or close Loop first
+                  elseif there is 1 planar WireBody that is closed
+                     create SheetBody from Loop
+                  elseif there is 1 planar WireBody that is open
+                     create SheetBody from Loop after closing Loop first
+                  elseif there are multiple planar WireBodys
+                     create SheetBody from closed Loop
                   endif
                   if maxtol>0, then tolerance can be relaxed until successful
                   sets up @-parameters
@@ -689,7 +694,7 @@ DIMENSION $pmtrName nrow ncol
                   old values are not overwritten
                   cannot be followed by ATTRIBUTE or CSYSTEM
 
-DUMP      $filename remove=0 toMark=0
+DUMP      $filename remove=0 toMark=0 withTess=0
           use:    write a file that contains the Body
           pops:   Body1 (if remove=1)
           pushes: -
@@ -702,6 +707,7 @@ DUMP      $filename remove=0 toMark=0
                   if toMark=1, all Bodys back to the Mark (or all if no Mark)
                      are combined into a single model
                   if toMark=1, the remove flag is ignored
+                  if withTess!=0, add tessellations to .egads file
                   for .ugrid files, toMark must be 0
                   valid filetypes are:
                      .brep   .BREP   --> OpenCASCADE output
@@ -710,6 +716,7 @@ DUMP      $filename remove=0 toMark=0
                      .egg    .EGG    --> EGG restart output
                      .iges   .IGES   --> IGES        output
                      .igs    .IGS    --> IGES        output
+                     .plot   .PLOT   --> ASCII plot  output
                      .sens   .SENS   --> ASCII sens  output
                      .step   .STEP   --> STEP        output
                      .stl    .STL    --> ASCII stl   output
@@ -1055,8 +1062,7 @@ INTERFACE $argName $argType default=0
           notes:  only allowed in a .udc file
                   must be placed before any executable statement
                   argType must be "in", "out", "dim", or "all"
-                  if argType=="dim", then default contains number of elements
-                  if argType=="dim", the default values are zero
+                  argType="dim" is obsolete, use DIMENSION instead
                   if argType=="all", a new scope is not created (and
                                      $argName is ignored)
                   a string variable can be passed into UDC if default
@@ -1382,6 +1388,7 @@ RESTORE   $name index=0
                   Solver may not be open
                   $name is used directly (without evaluation)
                   if $name is . (dot), then duplicate Body on stack
+                  if index<0, get all Bodys that match $name
                   sets up @-parameters
                   error results if nothing has been stored in name
                   the Faces all receive the Branch's Attributes
@@ -1409,7 +1416,7 @@ REVOLVE   xorig yorig zorig dxaxis dyaxis dzaxis angDeg
                      $insufficient_bodys_on_stack
                      $wrong_types_on_stack
 
-ROTATEX   angDeg yaxis zaxis
+ROTATEX   angDeg yaxis=0 zaxis=0
           use:    rotates Group on top of Stack around an axis that
                   passes through (0, yaxis, zaxis) and is parallel
                   to the x-axis
@@ -1422,7 +1429,7 @@ ROTATEX   angDeg yaxis zaxis
                   signals that may be thrown/caught:
                      $insufficient_bodys_on_stack
 
-ROTATEY   angDeg zaxis xaxis
+ROTATEY   angDeg zaxis=0 xaxis=0
           use:    rotates Group on top of Stack around an axis that
                   passes through (xaxis, 0, zaxis) and is parallel
                   to the y-axis
@@ -1435,7 +1442,7 @@ ROTATEY   angDeg zaxis xaxis
                   signals that may be thrown/caught:
                      $insufficient_bodys_on_stack
 
-ROTATEZ   angDeg xaxis yaxis
+ROTATEZ   angDeg xaxis=0 yaxis=0
           use:    rotates Group on top of Stack around an axis that
                   passes tgrough (xaxis, yaxis, 0) and is parallel
                   to the z-axis
@@ -1613,18 +1620,23 @@ SELECT    $type arg1 ...
                   elseif arguments are: "add ibody1 iford1 iseq=1" and @seltype is 2
                      uses @selbody
                      appends to @sellist the Face in @selbody that matches ibody1/iford1
+                     (a 0 matches ibody1=0 amd/or iford1=0)
                   elseif arguments are: "add ibody1 iford1 ibody2 iford2 iseq=1" and @seltype is 1
                      uses @selbody
                      appends to @sellist the Edge in @selbody that adjoins Faces
+                     (a 0 matches ibody1=0, iford1=0, ibody2=0, and/or iford2=0)
                   elseif arguments are: "add iface" and @seltype is 2
                      uses @selbody
                      appends to @sellist Face iface in @selbody
+                     (wildcarding is not allowed)
                   elseif arguments are: "add iedge" and @seltype is 1
                      uses @selbody
                      appends to @sellist Edge iedge in @selbody
+                     (wildcarding is not allowed)
                   elseif arguments are: "add inode" and @seltype is 0
                      uses @selbody
                      appends to @sellist Node inode in @selbody
+                     (wildcarding is not allowed)
                   elseif arguments are: "sub attrName1    attrValue1
                                              attrName2=$* attrValue2=$*
                                              attrName3=$* attrValue3=$*"
@@ -1634,11 +1646,14 @@ SELECT    $type arg1 ...
                   elseif arguments are: "sub ibody1 iford1 iseq=1" and @seltype is 2
                      uses @selbody
                      removes from @sellist the Face in @selbody that matches ibody1/iford1
+                     (a 0 matches ibody1=0 amd/or iford1=0)
                   elseif arguments are: "sub ibody1 iford1 ibody2 iford2 iseq=1" and @seltype is 1
                      uses @selbody
                      removes from @sellist the Edge in @selbody that adjoins Faces
+                     (a 0 matches ibody1=0, iford1=0, ibody2=0, and/or iford2=0)
                   elseif arguments are: "sub ient" and ient is in @sellist
                      removes from @sellist ient
+                     (wildcarding is not allowed)
                   elseif arguments are: "sort $key"
                      sorts @sellist based upon $key which can be: $xmin, $ymin, $zmin,
                         $xmax, $ymax, $zmax, $xcg, $ycg, $zcg, $area, or $length
@@ -1648,7 +1663,7 @@ SELECT    $type arg1 ...
 //                Node specifications are stored in _nodeID Attribute
                   iseq selects from amongst multiple Faces/Edges/Nodes that
                      match the ibody/iford specifications
-                  attrNames and attrValues can be wild-carded
+                  attrNames and attrValues can be wild-carded with $*
                   avoid using forms "SELECT face iface" and "SELECT edge iedge"
                      since iface and iedge are not guaranteed to be the same during
                      rebuilds or on different OpenCASCADE versions or computers
@@ -2210,7 +2225,7 @@ Valid names:
     contains letters, digits, at-signs(@), underscores(_), and colons(:)
     contains fewer than 64 characters
     names that start with an at-sign cannot be set by a CONPMTR, DESPMTR,
-       or SET statement
+       SET, PATBEG, or GETATTR statement
     if a name has a dot-suffix, a property of the name (and not its
         value) is returned
        x.nrow   number of rows     in x or 0 if a string
@@ -2232,46 +2247,55 @@ Array names:
 
 Types:
     DESPMTR
+        declared by a DESPMTR statement only at the top level
         if a scalar, declared and defined by a DESPMTR statement
         if an array, declared by a DIMENSION statement
-                     values defined by one or more DESPMTR statements
+            values defined by one or more DESPMTR statements
         each value can only be defined in one DESPMTR statement
+        values are not over-written by subsequent DESPMTR statements
         can have an optional lower bound
         can have an optional upper bound
-        is only available at the .csm file level
+        is only available at the top level
         can be set  outside ocsmBuild by a call to ocsmSetValu
         can be read outside ocsmBuild by a call to ocsmGetValu
         can be used to find sensitivities
     CFGPMTR
+        declared by a CFGPMTR statement only at the top level
         if a scalar, declared and defined by a CFGPMTR statement
         if an array, declared by a DIMENSION statement
-                     values defined by one or more CFGPMTR statements
+            values defined by one or more CFGPMTR statements
         each value can only be defined in one CFGPMTR statement
+        values are not over-written by subsequent CFGPMTR statements
         can have an optional lower bound
         can have an optional upper bound
-        is only available at the .csm file level
+        is only available at the top level
         can be set  outside ocsmBuild by a call to ocsmSetValu
         can be read outside ocsmBuild by a call to ocsmGetValu
     CONPMTR
-        declared and defined by a CONPMTR statement
-        has as many values as there are in the CONPMTR statement
+        declared by a CONPMTR statement at the top level or
+            via ocsmLoadDict
         cannot be declared in a DIMENSION statment
-        is available at both .csm and .udc file level
+        is available everywhere
         can be set  outside ocsmBuild by a call to ocsmSetValu
         can be read outside ocsmBuild by a call to ocsmGetValu
     OUTPMTR
-        if a scalar, declared and defined by a OUTPMTR statement
-        values can be overwritten by subsequent SET statements
-        see scope rules (below)
+        declared by a OUTPMTR statement only at the top level
+        can only be set at the top level
+        can be read outside ocsmBuild by a call to ocsmGetValu
     LOCALVAR
-        if a scalar, declared and defined by a SET statement
-        if an array, declared by a DIMENSION statement (with despmtr=0)
-                     values defined by one or more SET statements
-        values can be overwritten by subsequent SET statements
-        are created by an INTERFACE statement in a .udc file
-        see scope rules (below)
+        if a scalar, declared and defined by a SET, PATBEG, or
+            GETATTR statement or via an INTERFACE IN statement
+        if an array, declared by a DIMENSION statement
+            values defined by one or more SET statements
+        can have a string value
+        values can be overwritten by subsequent statements
+        are only available in the .csm or .udc file in which
+            it is defined or in an include-type UDC that is
+            called by the program unit in which iit was defined
     SOLVER
-        not implemented yet
+        is a scalar defined by a SOLBEG statement
+        only available between SOLBEG and SOLEND
+
                                                             L
                                                 D  C  C  O  O
                                                 E  F  O  U  C
@@ -2284,15 +2308,12 @@ Types:
       Can be vector or array of numbers         Y  Y  Y  Y  Y
       Can have a string value                   N  N  N  Y  Y
       Can be restricted by LBOUND or UBOUND     Y  Y  N  N  N
-      Scope                                     T  T  G  L  L
+      Scope (T=top-level, G=global, L=local)    T  T  G  L  L
       Defined during ocsmLoad or ocsmLoadDict   Y  Y  Y  N  N
       Can be set via ocsmSetValu(D)             Y  Y  N  N  N
       Defined and set during ocsmBuild          N  N  N  Y  Y
-      Can be read via ocsmGetValu(S)            Y  Y  Y  Y  Y*
+      Can be read via ocsmGetValu(S)            Y  Y  Y  Y  N
       Can find associated sensitivity           Y  N  N  N  N
-
-      Y*=Parameter index may be different for different builds
-      scopes: T=top-level, G=global, L=local
 
     @-parameters depend on the last SELECT statement(s).
         each time a new Body is added to the Stack, 'SELECT body' is
@@ -2348,12 +2369,13 @@ Types:
         @Izy      x    x    x    0
         @Izz      x    x    x    0
 
-        @toler    x    x    x    0   maximum tolerance
+        @toler    x    x    x    0   maximum tolerance (at last SELECT)
         @signal   x    x    x    x   current signal code
-        @nwarn    x    x    x    x   number of warnings
+        @nwarn    x    x    x    x   number of warnings (at last SELECT)
 
         @edata                       only set up by EVALUATE statement
         @stack                       Bodys on stack; 0=Mark; -1=none
+        @scope                       scoping level (at last SELECT)
         @version                     version number
 
         in above table:
@@ -2363,20 +2385,6 @@ Types:
            0 -> value is set to  0
           -1 -> value is set to -1
 
-Scope:
-    CONPMTR  parameters are available everywhere
-    DESPMTR  parameters are only usable within the .csm file
-    LOCALVAR within a .csm file
-                created by a DIMENSION or SET statement
-                values are usable only within the .csm file
-             within a .udc file
-                created by an INTERFACE of SET statament
-                values are usable only with the current .udc file
-    OUTPMTR  within a .csm file
-                created by a OUTPMTR statement
-                values are available anywhere
-    SOLVER   parameters are only accessible between SOLBEG and
-                SOLEND statements
 */
 
 /*
@@ -2698,6 +2706,12 @@ typedef struct {
     double        *dot;                 /* array of velocities if nval>0 */
 } varg_T;
 
+/* "Mprp" are the mass properties used by a Branch */
+typedef struct {
+    char          name[10];             /* name     of the mass property */
+    double        val;                  /* value    of the mass property */
+} mprp_T;
+
 /* "Node" is a 0-D topological entity in a Body */
 typedef struct {
     int           nedge;                /* number of indicent Edges */
@@ -2789,6 +2803,8 @@ typedef struct {
     int           ileft;                /* left parent Branch (or 0)*/
     int           irite;                /* rite parent Branch (or 0)*/
     int           ichld;                /* child Branch (or 0 for root) */
+    int           nmprp;                /* number of mass properties */
+    mprp_T        *mprp;                /* array  of mass properties */
     int           narg;                 /* number of arguments */
     char          *arg1;                /* definition for args[1] */
     char          *arg2;                /* definition for args[2] */
@@ -2861,7 +2877,7 @@ typedef struct modl_T {
     int           tessAtEnd;            /* =1 to tessellate Bodys on stack at end of ocsmBuild */
     int           erepAtEnd;            /* =1 to generate Erep based upon _erepAttr and _erepAngle */
     int           bodyLoaded;           /* Body index of last Body loaded */
-    int           hasC0blend;           /* =1 if there is a BLEND with a C0 */
+
     int           seltype;              /* selection type: 0=Node, 1=Edge, 2=Face, or -1 */
     int           selbody;              /* Body selected (or -1)  (1:nbody) */
     int           selsize;              /* number of selected entities */
@@ -2894,9 +2910,8 @@ typedef struct modl_T {
     int           mbody;                /* maximum   Bodys */
     body_T        *body;                /* array  of Bodys */
 
-    int           numchgs;              /* number of DESPMTR/CFGPMTR/CONPMTR changes since last build */
+    int           needFDs;              /* =1 if finite differences are needed */
     int           numdots;              /* number of non-zero dots associated with DESPMTRS */
-    int           needMPdot;            /* >0 if mass prop velocities need to be computed */
     struct modl_T *perturb;             /* model of perturbed body for sensitivty */
     struct modl_T *basemodl;            /* base MODL while creating perturbation */
     double        dtime;                /* time step in sensitivity */
@@ -2936,13 +2951,19 @@ int ocsmVersion(int   *imajor,          /* (out) major version number */
 
 /* set output level */
 int ocsmSetOutLevel(int    ilevel);     /* (in)  output level: */
+                                        /*       <0 do not change */
                                         /*       =0 errors only */
                                         /*       =1 nominal (default) */
                                         /*       =2 debug */
+                                        /* (out) previous outLevel */
 
 /* create a MODL by reading a .csm file */
 int ocsmLoad(char   filename[],         /* (in)  file to be read (with .csm) */
              void   **modl);            /* (out) pointer to MODL */
+
+/* create a MODL from an ego */
+int ocsmLoadFromModel(ego    emodel,    /* (in)  egads MODEL */
+                      void   **modl);   /* (out) pointer to MODL */
 
 /* load dictionary from dictname */
 int ocsmLoadDict(void   *modl,          /* (in)  pointer to MODL */
@@ -3002,6 +3023,12 @@ int ocsmBuild(void   *modl,             /* (in)  pointer to MODL */
                                         /* (out) number of Bodys on the stack */
     /*@null@*/int    body[]);           /* (out) array  of Bodys on the stack (LIFO)
                                                  (at least nbody long) */
+
+/* get information about one Body */
+int ocsmBodyDetails(void   *modl,       /* (in)  pointer to MODL */
+                    char   fiename[],   /* (in)  name of file from which Bdy was created */
+                    int    linenum,     /* (in)  line in filename from which Body was created */
+                    char   *info[]);    /* (out) info about the Body (freeable) */
 
 /* create a perturbed MODL */
 int ocsmPerturb(void   *modl,           /* (in)  pointer to MODL */

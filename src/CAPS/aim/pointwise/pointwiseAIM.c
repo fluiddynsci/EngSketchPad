@@ -2663,6 +2663,9 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     double capsMeshLength = 0;
 
+    const char ugrid[] = "caps.GeomToMesh.ugrid";
+    const char ugrid_lb8[] = "caps.GeomToMesh.lb8.ugrid";
+
     const char *intents;
     int numBody = 0; // Number of bodies
     ego *bodies = NULL; // EGADS body objects
@@ -2674,6 +2677,13 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     char aimFile[PATH_MAX];
 
     int quilting = (int)false;
+
+    status = aim_file(aimInfo, ugrid, aimFile);
+    AIM_STATUS(aimInfo, status);
+    remove(aimFile);
+    status = aim_file(aimInfo, ugrid_lb8, aimFile);
+    AIM_STATUS(aimInfo, status);
+    remove(aimFile);
 
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
@@ -2878,7 +2888,8 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
     int        GMA_MAJOR = 0, GMA_MINOR = 0, numConnector = 0, iCon, numDomain = 0, iDom;
     int        egadsID, edgeID, faceID, bodyID, *bodyIndex=NULL, *faceVertID=NULL;
     const char gmafilename[]   = "caps.GeomToMesh.gma";
-    const char ugridfilename[] = "caps.GeomToMesh.ugrid";
+    const char ugrid[] = "caps.GeomToMesh.ugrid";
+    const char ugrid_lb8[] = "caps.GeomToMesh.lb8.ugrid";
     const char *intents = NULL, *groupName = NULL;
     char       aimFile[PATH_MAX];
     char       *line = NULL, aimEgadsFile[PATH_MAX];
@@ -2906,17 +2917,28 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
 //    initiate_hashTable(&table);
 
-    fp = aim_fopen(aimInfo, ugridfilename, "rb");
-    if (fp == NULL) {
-      AIM_ERROR(aimInfo, "Pointwise did not generate %s!\n\n", ugridfilename);
+    if (aim_isFile(aimInfo, ugrid) == CAPS_SUCCESS) {
+      status = aim_file(aimInfo, ugrid, aimFile);
+      AIM_STATUS(aimInfo, status);
+      status = aim_symLink(aimInfo, aimFile, ugrid_lb8);
+      AIM_STATUS(aimInfo, status);
+    } else if (aim_isFile(aimInfo, ugrid_lb8) == CAPS_SUCCESS) {
+      status = aim_file(aimInfo, ugrid_lb8, aimFile);
+      AIM_STATUS(aimInfo, status);
+      status = aim_symLink(aimInfo, aimFile, ugrid);
+      AIM_STATUS(aimInfo, status);
+    } else {
+      AIM_ERROR(aimInfo, "Pointwise did not generate %s or %s!\n\n", ugrid, ugrid_lb8);
       status = CAPS_IOERR;
       goto cleanup;
     }
 
-    status = aim_file(aimInfo, ugridfilename, aimFile);
-    AIM_STATUS(aimInfo, status);
-    status = aim_symLink(aimInfo, aimFile, "caps.GeomToMesh.lb8.ugrid");
-    AIM_STATUS(aimInfo, status);
+    fp = aim_fopen(aimInfo, ugrid_lb8, "rb");
+    if (fp == NULL) {
+      AIM_ERROR(aimInfo, "Failed to open %s!\n\n", ugrid_lb8);
+      status = CAPS_IOERR;
+      goto cleanup;
+    }
 
     pointwiseInstance = (aimStorage *) instStore;
 

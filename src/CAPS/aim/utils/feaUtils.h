@@ -11,7 +11,7 @@ extern "C" {
 
 // Retrieves a mesh via linkage or generates a mesh with fea_bodyToBEM
 int fea_createMesh(void *aimInfo,
-                   double paramTess[3],                 // (in)  Tessellation parameters
+        /*@null@*/ double paramTess[3],                 // (in)  Tessellation parameters
                    int    edgePointMin,                 // (in)  minimum points along any Edge
                    int    edgePointMax,                 // (in)  maximum points along any Edge
                    int    quadMesh,                     // (in)  only do tris-for faces
@@ -112,7 +112,9 @@ int fea_getLoad(int numLoadTuple,
                 feaProblemStruct *feaProblem);
 
 // Get the design variables from a capsTuple
-int fea_getDesignVariable(int numDesignVariableTuple,
+int fea_getDesignVariable(void *aimInfo,
+                          int requireGroup,
+                          int numDesignVariableTuple,
                           capsTuple designVariableTuple[],
                           int numDesignVariableRelationTuple,
                           capsTuple designVariableRelationTuple[],

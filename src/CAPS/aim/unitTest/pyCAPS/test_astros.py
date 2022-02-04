@@ -78,21 +78,16 @@ class TestAstros(unittest.TestCase):
 
         ####### Run astros####################
         print ("\n\nRunning Astros......")
-        currentDirectory = os.getcwd() # Get our current working directory
-
-        os.chdir(astros.analysisDir) # Move into test directory
 
         # Copy files needed to run astros
         astros_files = ["ASTRO.D01",  # *.DO1 file
                         "ASTRO.IDX"]  # *.IDX file
         for file in astros_files:
             if not os.path.isfile(file):
-                shutil.copy2(ASTROS_ROOT + os.sep + file, file)
+                shutil.copy2(ASTROS_ROOT + os.sep + file, os.path.join(astros.analysisDir, file))
 
         # Run Astros via system call
-        os.system(self.astros_exe + " < " + Proj_Name +  ".dat > " + Proj_Name + ".out");
-
-        os.chdir(currentDirectory) # Move back to working directory
+        astros.system(self.astros_exe + " < " + Proj_Name +  ".dat > " + Proj_Name + ".out");
 
         print ("Done running Astros!")
         ########################################
@@ -185,7 +180,8 @@ class TestAstros(unittest.TestCase):
         mesh =  myProblem.analysis.create(aim="egadsTessAIM")
         
         astros =  myProblem.analysis.create(aim = "astrosAIM",
-                                            name = "astrosAero")
+                                            name = "astrosAero",
+                                            autoExec = False)
 
         astros.input.Proj_Name = "astrosAero"
 
@@ -269,7 +265,7 @@ class TestAstros(unittest.TestCase):
         astros.input.VLM_Surface = {"Skin_Top": wing}
 
         # Run
-        astros.runAnalysis()
+        self.run_astros(astros)
 
 
 if __name__ == '__main__':

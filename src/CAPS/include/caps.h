@@ -5,7 +5,7 @@
  *
  *             Function Prototypes
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -46,7 +46,8 @@ __ProtoExt__ int
 
 __ProtoExt__ int
   caps_childByName( capsObj object, enum capsoType typ,
-                    enum capssType styp, const char *name, capsObj *child );
+                    enum capssType styp, const char *name, capsObj *child,
+                    int *nErr, capsErrs **errors );
 
 __ProtoExt__ int
   caps_bodyByIndex( capsObj pobject, int index, ego *body, char **units );
@@ -125,6 +126,11 @@ __ProtoExt__ int
              capsErrs **errors );
 
 __ProtoExt__ int
+  caps_brokenLink( /*@null@*/ void (*callBack)(capsObj problem, capsObj obj,
+                                               int src, enum capstMethod tmeth,
+                                               char *name, enum capssType st) );
+
+__ProtoExt__ int
   caps_close( capsObj pobject, int complete, /*@null@*/ const char *phName );
 
 __ProtoExt__ int
@@ -132,6 +138,9 @@ __ProtoExt__ int
 
 __ProtoExt__ int
   caps_getRootPath( capsObj pobject, const char** fullPath );
+
+__ProtoExt__ int
+  caps_debug( capsObj pobject );
 
 
 /* analysis functions */
@@ -255,8 +264,10 @@ __ProtoExt__ int
                     capsObj **dobjs );
 
 __ProtoExt__ int
-  caps_triangulate( capsObj vobject, int *nGtris, int **gtris,
-                                     int *nDtris, int **dtris );
+  caps_triangulate( capsObj vobject, int *nGtris,            int **gtris,
+                                     int *nGsegs, /*@null@*/ int **gsegs,
+                                     int *nDtris,            int **dtris,
+                                     int *nDsegs, /*@null@*/ int **dsegs );
 
 
 /* value functions */
@@ -313,8 +324,8 @@ __ProtoExt__ int
                 int *nErr, capsErrs **errors);
 
 __ProtoExt__ int
-  caps_getDeriv( capsObj value, const char *name, int *len, int *rank,
-                 double **dot, int *nErr, capsErrs **errors );
+  caps_getDeriv( capsObj value, const char *name, int *len, int *len_wrt,
+                 double **deriv, int *nErr, capsErrs **errors );
 
 /* units */
 

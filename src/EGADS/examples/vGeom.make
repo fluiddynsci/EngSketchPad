@@ -12,7 +12,7 @@ endif
 
 $(TDIR)/vGeom:	$(ODIR)/vGeom.o $(LDIR)/libwsserver.a
 	$(CXX) -o $(TDIR)/vGeom $(ODIR)/vGeom.o -L$(LDIR) -lwsserver -legads \
-		-lpthread -lz $(RPATH) -lm
+		$(RPATH)
 
 $(ODIR)/vGeom.o:	vGeom.c $(IDIR)/egads.h $(IDIR)/egadsTypes.h \
 			$(IDIR)/egadsErrors.h $(IDIR)/wsserver.h

@@ -509,12 +509,7 @@ int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
    * tsfoil.preAnalysis()
    *
    * print ("\n\nRunning......")
-   * currentDirectory = os.getcwd() # Get our current working directory
-   *
-   * os.chdir(tsfoil.analysisDir) # Move into test directory
-   * os.system("tsfoil2 < tsfoilInput.txt > Info.out"); # Run via system call
-   *
-   * os.chdir(currentDirectory) # Move back to top directory
+   * tsfoil.system("tsfoil2 < tsfoilInput.txt > Info.out"); # Run via system call
    *
    * print ("\n\postAnalysis......")
    * tsfoil.postAnalysis()

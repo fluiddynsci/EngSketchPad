@@ -171,6 +171,16 @@ cdef public int fun3d_writeNMLPython(void *aimInfo,
             nml['reference_physical_properties'] = f90nml.Namelist()
              
         nml['reference_physical_properties']['angle_of_yaw'] = aimInputs[index].vals.real
+        
+    index = cAIMUtil.aim_getIndex(aimInfo, "Temperature",  cCAPS.ANALYSISIN)-1
+    if aimInputs[index].nullVal != cCAPS.IsNull:
+        if 'reference_physical_properties' not in nml:
+            nml['reference_physical_properties'] = f90nml.Namelist()
+             
+        nml['reference_physical_properties']['temperature'] = aimInputs[index].vals.real
+        
+        if aimInputs[index].units: 
+            nml['reference_physical_properties']['temperature_units'] = _str(aimInputs[index].units)
     
     # &governing_equations
     index = cAIMUtil.aim_getIndex(aimInfo, "Viscous",  cCAPS.ANALYSISIN)-1

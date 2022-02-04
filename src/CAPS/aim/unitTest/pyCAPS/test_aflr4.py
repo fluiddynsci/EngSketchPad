@@ -192,6 +192,7 @@ class TestAFLR4(unittest.TestCase):
         aflr4.input.min_scale = 0.1
         aflr4.input.ff_cdfr   = 1.4
 
+        #self.myProblem.geometry.save("torus.egads")
         # Just make sure it runs without errors...
         aflr4.runAnalysis()
 
@@ -215,7 +216,7 @@ class TestAFLR4(unittest.TestCase):
 
         #aflr4.geometry.view()
 
-    def off_test_boxhole(self):
+    def test_boxhole(self):
 
         # Load aflr4 aim
         aflr4 = self.myProblem.analysis.create(aim = "aflr4AIM",
@@ -246,6 +247,7 @@ class TestAFLR4(unittest.TestCase):
         aflr4.input.min_scale = 0.1
         aflr4.input.ff_cdfr   = 1.4
 
+        #self.myProblem.geometry.save("bullet.egads")
         # Just make sure it runs without errors...
         aflr4.runAnalysis()
 
@@ -256,7 +258,7 @@ class TestAFLR4(unittest.TestCase):
         # Load aflr4 aim
         aflr4 = self.myProblem.analysis.create(aim = "aflr4AIM",
                                                name = "All",
-                                               capsIntent = ["box", "cylinder", "cone", "torus", "sphere", "farfield"]) #, "boxhole"])
+                                               capsIntent = ["box", "cylinder", "cone", "torus", "sphere", "farfield", "bullet", "boxhole"])
 
         aflr4.input.Mesh_Quiet_Flag = True
 

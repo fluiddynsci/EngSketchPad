@@ -14,12 +14,12 @@ endif
 VPATH = $(ODIR)
 
 $(TDIR)/ftest:	$(LDIR)/libwsserver.a $(ODIR)/test.o
-	$(FCOMP) -o $(TDIR)/ftest $(ODIR)/test.o -L$(LDIR) -lwsserver\
-		-lpthread -lz
+	$(FCOMP) -o $(TDIR)/ftest $(ODIR)/test.o $(LDIR)/libwsserver.a \
+		-lpthread -lz $(CPPSLB)
 
 $(ODIR)/test.o:	test.f 
-	$(FCOMP) -c $(FOPTS) -fno-range-check test.f -I../include \
-		-o $(ODIR)/test.o
+	$(FCOMP) -c $(FOPTS) -fno-range-check -fallow-argument-mismatch test.f \
+		-I../include -o $(ODIR)/test.o
 
 clean:
 	-rm $(ODIR)/test.o

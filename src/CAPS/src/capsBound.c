@@ -3,7 +3,7 @@
  *
  *             Bound, VertexSet & DataSet Object Functions
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -66,6 +66,7 @@ typedef struct {
 
 extern /*@null@*/ /*@only@*/ char *EG_strdup(/*@null@*/ const char *str);
 
+extern void caps_initDiscr(capsDiscr *discr);
 extern int  caps_mkDir(const char *path);
 extern int  caps_rename(const char *src, const char *dst);
 extern int  caps_isNameOK(const char *name);
@@ -213,23 +214,25 @@ caps_boundInfo(capsObject *object, enum capsState *state, int *dim,
   args[0].type = jInteger;
   args[1].type = jInteger;
   args[2].type = jPointer;
-  status       = caps_jrnlRead(problem, object, 3, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    if (ret == CAPS_SUCCESS) {
-      *state   = args[0].members.integer;
-      *dim     = args[1].members.integer;
-      reals    = args[2].members.pointer;
-      if (*dim >= 1) {
-        plims[0] = reals[0];
-        plims[1] = reals[1];
+  if (problem->dbFlag == 0) {
+    status       = caps_jrnlRead(problem, object, 3, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      if (ret == CAPS_SUCCESS) {
+        *state   = args[0].members.integer;
+        *dim     = args[1].members.integer;
+        reals    = args[2].members.pointer;
+        if (*dim >= 1) {
+          plims[0] = reals[0];
+          plims[1] = reals[1];
+        }
+        if (*dim == 2) {
+          plims[0] = reals[2];
+          plims[1] = reals[3];
+        }
       }
-      if (*dim == 2) {
-        plims[0] = reals[2];
-        plims[1] = reals[3];
-      }
+      return ret;
     }
-    return ret;
   }
 
   bound  = (capsBound *) object->blind;
@@ -245,6 +248,7 @@ caps_boundInfo(capsObject *object, enum capsState *state, int *dim,
     plims[3] = bound->plimits[3];
     args[2].length = 4*sizeof(double);
   }
+  if (problem->dbFlag == 1) return CAPS_SUCCESS;
 
   args[0].members.integer = *state;
   args[1].members.integer = *dim;
@@ -277,6 +281,7 @@ caps_makeBound(capsObject *pobject, int dim, const char *bname,
   if (bname == NULL)                     return CAPS_NULLNAME;
   if ((dim < 1) || (dim > 3))            return CAPS_RANGEERR;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag == 1)              return CAPS_READONLYERR;
   problem->funID = CAPS_MAKEBOUND;
 
   args[0].type = jObject;
@@ -420,6 +425,7 @@ caps_closeBound(capsObject *bobject)
   status = caps_findProblem(bobject, CAPS_CLOSEBOUND, &pobject);
   if (status               != CAPS_SUCCESS) return status;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag      == 1)            return CAPS_READONLYERR;
   
   /* ignore if restarting */
   if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;
@@ -766,6 +772,7 @@ caps_makeDataSet(capsObject *vobject, const char *dname, enum capsfType ftype,
   if (pobject->type        != PROBLEM)   return CAPS_BADTYPE;
   if (pobject->blind       == NULL)      return CAPS_NULLBLIND;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag == 1)              return CAPS_READONLYERR;
   problem->funID = CAPS_MAKEDATASET;
 
   args[0].type = jObject;
@@ -814,21 +821,24 @@ caps_dataSetInfo(capsObject *dobject, enum capsfType *ftype, capsObject **link,
   args[0].type = jInteger;
   args[1].type = jObject;
   args[2].type = jInteger;
-  status       = caps_jrnlRead(problem, dobject, 3, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    if (ret == CAPS_SUCCESS) {
-      *ftype = args[0].members.integer;
-      *link  = args[1].members.obj;
-      *dmeth = args[2].members.integer;
+  if (problem->dbFlag == 0) {
+    status       = caps_jrnlRead(problem, dobject, 3, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      if (ret == CAPS_SUCCESS) {
+        *ftype = args[0].members.integer;
+        *link  = args[1].members.obj;
+        *dmeth = args[2].members.integer;
+      }
+      return ret;
     }
-    return ret;
   }
   
   dataset = (capsDataSet *) dobject->blind;
   *ftype  = args[0].members.integer = dataset->ftype;
   *link   = args[1].members.obj     = dataset->link;
   *dmeth  = args[2].members.integer = dataset->linkMethod;
+  if (problem->dbFlag == 1) return CAPS_SUCCESS;
   
   caps_jrnlWrite(problem, dobject, CAPS_SUCCESS, 3, args, problem->sNum,
                  problem->sNum);
@@ -856,6 +866,7 @@ caps_linkDataSet(capsObject *link, enum capsdMethod method,
   status  = caps_findProblem(target, CAPS_LINKDATASET, &pobject);
   if (status != CAPS_SUCCESS)                   return status;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag == 1)                     return CAPS_READONLYERR;
 
   /* ignore if restarting */
   if (problem->stFlag == CAPS_JOURNALERR)       return CAPS_JOURNALERR;
@@ -992,21 +1003,8 @@ caps_makeVertexSeX(capsObject *bobject, /*@null@*/ capsObject *aobject,
     EG_free(vertexset);
     return EGADS_MALLOC;
   }
+  caps_initDiscr(vertexset->discr);
   vertexset->discr->dim       = bound->dim;
-  vertexset->discr->instStore = NULL;
-  vertexset->discr->nPoints   = 0;
-  vertexset->discr->aInfo     = NULL;
-  vertexset->discr->nVerts    = 0;
-  vertexset->discr->verts     = NULL;
-  vertexset->discr->celem     = NULL;
-  vertexset->discr->nDtris    = 0;
-  vertexset->discr->dtris     = NULL;
-  vertexset->discr->nTypes    = 0;
-  vertexset->discr->types     = NULL;
-  vertexset->discr->nBodys    = 0;
-  vertexset->discr->bodys     = NULL;
-  vertexset->discr->tessGlobal= NULL;
-  vertexset->discr->ptrm      = NULL;
 
 /*@-kepttrans@*/
   object->parent  = bobject;
@@ -1111,6 +1109,7 @@ caps_makeVertexSet(capsObject *bobject, /*@null@*/ capsObject *aobject,
   status = caps_findProblem(bobject, CAPS_MAKEVERTEXSET, &pobject);
   if (status               != CAPS_SUCCESS) return status;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag      == 1)            return CAPS_READONLYERR;
 
   name = vname;
   if (aobject != NULL) {
@@ -1171,20 +1170,24 @@ caps_vertexSetInfo(capsObject *vobject, int *nGpts, int *nDpts,
   *aobj = vertexset->analysis;
   args[0].type   = jInteger;
   args[1].type   = jInteger;
-  status         = caps_jrnlRead(problem, vobject, 2, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    if (ret == CAPS_SUCCESS) {
-      *nGpts = args[0].members.integer;
-      *nDpts = args[1].members.integer;
+  if (problem->dbFlag == 0) {
+    status       = caps_jrnlRead(problem, vobject, 2, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      if (ret == CAPS_SUCCESS) {
+        *nGpts = args[0].members.integer;
+        *nDpts = args[1].members.integer;
+      }
+      return ret;
     }
-    return ret;
   }
 
   if (vertexset->discr != NULL) {
     *nGpts = vertexset->discr->nPoints;
     *nDpts = vertexset->discr->nVerts;
   }
+  if (problem->dbFlag == 1) return CAPS_SUCCESS;
+  
   args[0].members.integer = *nGpts;
   args[1].members.integer = *nDpts;
   caps_jrnlWrite(problem, vobject, CAPS_SUCCESS, 2, args, problem->sNum,
@@ -1223,6 +1226,7 @@ caps_fillUnVertexSet(capsObject *vobject, int npts, const double *xyzs)
   if (pobject->type        != PROBLEM)    return CAPS_BADTYPE;
   if (pobject->blind       == NULL)       return CAPS_NULLBLIND;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag      == 1)          return CAPS_READONLYERR;
   problem->funID = CAPS_FILLUNVERTEXSET;
 
   /* ignore if restarting */
@@ -1307,6 +1311,7 @@ caps_initDataSet(capsObject *dobject, int rank, const double *startup,
   status = caps_findProblem(dobject, CAPS_INITDATASET, &pobject);
   if (status               != CAPS_SUCCESS) return status;
   problem  = (capsProblem *) pobject->blind;
+  if (problem->dbFlag      == 1)            return CAPS_READONLYERR;
 
   /* ignore if restarting */
   if (problem->stFlag == CAPS_JOURNALERR)   return CAPS_JOURNALERR;
@@ -1367,6 +1372,7 @@ caps_setData(capsObject *dobject, int nverts, int rank, const double *data,
   if (pobject->type        != PROBLEM)    return CAPS_BADTYPE;
   if (pobject->blind       == NULL)       return CAPS_NULLBLIND;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag      == 1)          return CAPS_READONLYERR;
   problem->funID = CAPS_SETDATA;
 
   /* ignore if restarting */
@@ -1742,21 +1748,27 @@ caps_Conserve(capsConFit *fit, const char *bname, int dim)
 
 
 int
-caps_triangulate(capsObject *vobject, int *nGtris, int **gtris,
-                                      int *nDtris, int **dtris)
+caps_triangulate(capsObject *vobject, int *nGtris,            int **gtris,
+                                      int *nGsegs, /*@null@*/ int **gsegs,
+                                      int *nDtris,            int **dtris,
+                                      int *nDsegs, /*@null@*/ int **dsegs)
 {
-  int           i, j, ib, n, status, ret, ntris, eType, *tris;
+  int           i, j, ib, n, status, ret, ntris, nsegs, eType, *tris, *segs;
   CAPSLONG      sNum;
   capsObject    *pobject;
   capsProblem   *problem;
   capsVertexSet *vertexset;
   capsDiscr     *discr;
-  capsJrnl      args[4];
+  capsJrnl      args[8];
 
   *nGtris = 0;
+  *nGsegs = 0;
   *nDtris = 0;
+  *nDsegs = 0;
   *gtris  = NULL;
   *dtris  = NULL;
+  if (gsegs != NULL) *gsegs = NULL;
+  if (dsegs != NULL) *dsegs = NULL;
   if (vobject              == NULL)         return CAPS_NULLOBJ;
   if (vobject->magicnumber != CAPSMAGIC)    return CAPS_BADOBJECT;
   if (vobject->type        != VERTEXSET)    return CAPS_BADTYPE;
@@ -1771,16 +1783,28 @@ caps_triangulate(capsObject *vobject, int *nGtris, int **gtris,
   args[2].type   = jInteger;
   args[3].type   = jPtrFree;
   args[3].length = 0;
-  status         = caps_jrnlRead(problem, vobject, 4, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    if (ret == CAPS_SUCCESS) {
-      *nGtris = args[0].members.integer;
-      *gtris  = args[1].members.pointer;
-      *nDtris = args[2].members.integer;
-      *dtris  = args[3].members.pointer;
+  args[4].type   = jInteger;
+  args[5].type   = jPtrFree;
+  args[5].length = 0;
+  args[6].type   = jInteger;
+  args[7].type   = jPtrFree;
+  args[7].length = 0;
+  if (problem->dbFlag == 0) {
+    status       = caps_jrnlRead(problem, vobject, 8, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      if (ret == CAPS_SUCCESS) {
+        *nGtris = args[0].members.integer;
+        *gtris  = args[1].members.pointer;
+        *nGsegs = args[2].members.integer;
+        if (gsegs != NULL) *gsegs = args[3].members.pointer;
+        *nDtris = args[4].members.integer;
+        *dtris  = args[5].members.pointer;
+        *nDsegs = args[6].members.integer;
+        if (dsegs != NULL) *dsegs = args[7].members.pointer;
+      }
+      return ret;
     }
-    return ret;
   }
 
   status    = CAPS_SUCCESS;
@@ -1789,14 +1813,16 @@ caps_triangulate(capsObject *vobject, int *nGtris, int **gtris,
   discr = vertexset->discr;
   if ((discr->nPoints == 0) && (discr->nVerts == 0)) goto vout;
 
-  ntris = 0;
+  ntris = nsegs = 0;
   for (ib = 0; ib < discr->nBodys; ib++) {
     for (j = 0; j < discr->bodys[ib].nElems; j++) {
       eType = discr->bodys[ib].elems[j].tIndex;
       if (discr->types[eType-1].tris == NULL) {
         ntris++;
+        nsegs += 3;
       } else {
         ntris += discr->types[eType-1].ntri;
+        nsegs += discr->types[eType-1].nseg;
       }
     }
   }
@@ -1826,6 +1852,41 @@ caps_triangulate(capsObject *vobject, int *nGtris, int **gtris,
         }
       }
     }
+    segs = NULL;
+    if ((gsegs != NULL) && (nsegs != 0)) {
+      segs = (int *) EG_alloc(2*nsegs*sizeof(int));
+      if (segs == NULL) {
+        EG_free(tris);
+        status = EGADS_MALLOC;
+        goto vout;
+      }
+      for (ib = 0; ib < discr->nBodys; ib++) {
+        for (nsegs = j = 0; j < discr->bodys[ib].nElems; j++) {
+          eType = discr->bodys[ib].elems[j].tIndex;
+          if (discr->types[eType-1].tris == NULL) {
+            tris[2*nsegs  ] = discr->bodys[ib].elems[j].gIndices[0];
+            tris[2*nsegs+1] = discr->bodys[ib].elems[j].gIndices[2];
+            nsegs++;
+            tris[2*nsegs  ] = discr->bodys[ib].elems[j].gIndices[2];
+            tris[2*nsegs+1] = discr->bodys[ib].elems[j].gIndices[4];
+            nsegs++;
+            tris[2*nsegs  ] = discr->bodys[ib].elems[j].gIndices[4];
+            tris[2*nsegs+1] = discr->bodys[ib].elems[j].gIndices[0];
+            nsegs++;
+          } else {
+            for (i = 0; i < discr->types[eType-1].nseg; i++, nsegs++) {
+              n = discr->types[eType-1].segs[2*i  ] - 1;
+              tris[3*nsegs  ] = discr->bodys[ib].elems[j].gIndices[2*n];
+              n = discr->types[eType-1].segs[2*i+1] - 1;
+              tris[3*nsegs+1] = discr->bodys[ib].elems[j].gIndices[2*n];
+            }
+          }
+        }
+      }
+      *nGsegs = nsegs;
+      *gsegs  = segs;
+      args[3].length = 2*nsegs*sizeof(int);
+    }
     *nGtris = ntris;
     *gtris  = tris;
     args[1].length = 3*ntris*sizeof(int);
@@ -1835,24 +1896,59 @@ caps_triangulate(capsObject *vobject, int *nGtris, int **gtris,
 
   tris = (int *) EG_alloc(3*discr->nDtris*sizeof(int));
   if (tris == NULL) {
+    if (gsegs != NULL) EG_free(*gsegs);
     EG_free(*gtris);
     *nGtris        = 0;
     *gtris         = NULL;
     args[1].length = 0;
+    *nGsegs        = 0;
+    if (gsegs != NULL) *gsegs = NULL;
+    args[3].length = 0;
     status         = EGADS_MALLOC;
     goto vout;
   }
   for (j = 0; j < 3*discr->nDtris; j++) tris[j] = discr->dtris[j];
   *nDtris = discr->nDtris;
   *dtris  = tris;
-  args[3].length = 3*discr->nDtris*sizeof(int);
+  args[5].length = 3*discr->nDtris*sizeof(int);
+  
+  if (dsegs != NULL) {
+    segs = (int *) EG_alloc(2*discr->nDsegs*sizeof(int));
+    if (segs == NULL) {
+      if (gsegs != NULL) EG_free(*gsegs);
+      EG_free(*gtris);
+      *nGtris        = 0;
+      *gtris         = NULL;
+      args[1].length = 0;
+      *nGsegs        = 0;
+      if (gsegs != NULL) *gsegs = NULL;
+      args[3].length = 0;
+      EG_free(*dtris);
+      *nDtris        = 0;
+      *dtris         = NULL;
+      args[5].length = 0;
+      status         = EGADS_MALLOC;
+      goto vout;
+    }
+    for (j = 0; j < 2*discr->nDsegs; j++) segs[j] = discr->dsegs[j];
+    *nDsegs = discr->nDsegs;
+    *dsegs  = segs;
+    args[7].length = 2*discr->nDsegs*sizeof(int);
+  }
 
 vout:
+  if (problem->dbFlag == 1) return status;
   args[0].members.integer = *nGtris;
   args[1].members.pointer = *gtris;
-  args[2].members.integer = *nDtris;
-  args[3].members.pointer = *dtris;
-  caps_jrnlWrite(problem, vobject, status, 4, args, problem->sNum,
+  args[2].members.integer = *nGsegs;
+  args[3].members.pointer = NULL;
+  if (gsegs != NULL) args[3].members.pointer = *gsegs;
+  args[4].members.integer = *nDtris;
+  args[5].members.pointer = *dtris;
+  args[6].members.integer = *nDsegs;
+  args[7].members.pointer = NULL;
+  if (dsegs != NULL) args[7].members.pointer = *dsegs;
+  caps_jrnlWrite(problem, vobject, status, 8, args, problem->sNum,
                  problem->sNum);
 
   return status;
@@ -1862,7 +1958,7 @@ vout:
 int
 caps_outputVertexSet(capsObject *vobject, const char *filename)
 {
-  int           i, j, k, stat, nGtris, *gtris, nDtris, *dtris;
+  int           i, j, k, stat, nGtris, *gtris, nGsegs, nDtris, *dtris, nDsegs;
   FILE          *fp;
   capsObject    *pobject;
   capsProblem   *problem;
@@ -1885,7 +1981,8 @@ caps_outputVertexSet(capsObject *vobject, const char *filename)
   vertexset = (capsVertexSet *) vobject->blind;
   fp = fopen(filename, "w");
   if (fp                   == NULL)      return CAPS_IOERR;
-  stat = caps_triangulate(vobject, &nGtris, &gtris, &nDtris, &dtris);
+  stat = caps_triangulate(vobject, &nGtris, &gtris, &nGsegs, NULL,
+                                   &nDtris, &dtris, &nDsegs, NULL);
   if (stat != CAPS_SUCCESS) {
     printf(" caps_outputVertexSet Error: caps_triangulate = %d!\n", stat);
     fclose(fp);
@@ -2340,6 +2437,17 @@ caps_fillFieldIn(capsObject *dobject, int *nErr, capsErrs **errors)
 }
 
 
+static void
+caps_getDataDB(capsDataSet *dataset, int *npts, int *rank, double **data,
+               char **units)
+{
+  *rank  = dataset->rank;
+  *npts  = dataset->npts;
+  *data  = dataset->data;
+  *units = dataset->units;
+}
+
+
 int
 caps_getDataX(capsObject *dobject, int *npts, int *rank, double **data,
               char **units, int *nErr, capsErrs **errors)
@@ -2405,9 +2513,9 @@ caps_getDataX(capsObject *dobject, int *npts, int *rank, double **data,
     }
 
     foundset = dataset->link;
-    if (foundset->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
-    if (foundset->type        != DATASET)   return CAPS_BADTYPE;
-    if (foundset->blind       == NULL)      return CAPS_NULLBLIND;
+    if (foundset->magicnumber         != CAPSMAGIC) return CAPS_BADOBJECT;
+    if (foundset->type                != DATASET)   return CAPS_BADTYPE;
+    if (foundset->blind               == NULL)      return CAPS_NULLBLIND;
     if (foundset->parent              == NULL)      return CAPS_NULLOBJ;
     if (foundset->parent->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
     if (foundset->parent->type        != VERTEXSET) return CAPS_BADTYPE;
@@ -2490,6 +2598,12 @@ caps_getData(capsObject *dobject, int *npts, int *rank, double **data,
   if (pobject->type        != PROBLEM)   return CAPS_BADTYPE;
   if (pobject->blind       == NULL)      return CAPS_NULLBLIND;
   problem = (capsProblem *) pobject->blind;
+  
+  if (problem->dbFlag == 1) {
+    caps_getDataDB(dataset, npts, rank, data, units);
+    return CAPS_SUCCESS;
+  }
+    
   problem->funID = CAPS_GETDATA;
   if (aobject != NULL) {
     if (aobject->magicnumber  != CAPSMAGIC)          return CAPS_BADOBJECT;
@@ -2628,19 +2742,21 @@ caps_getDataSets(capsObject *bobject, const char *dname, int *nobj,
   bound   = (capsBound *)   bobject->blind;
 
   args[0].type = jObjs;
-  status       = caps_jrnlRead(problem, bobject, 1, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    if (ret == CAPS_SUCCESS) {
-      *nobj = args[0].num;
-      if (*nobj != 0) {
-        objs = (capsObject **) EG_alloc(*nobj*sizeof(capsObject *));
-        if (objs == NULL) return EGADS_MALLOC;
-        for (i = 0; i < *nobj; i++) objs[i] = args[0].members.objs[i];
-        *dobjs = objs;
+  if (problem->dbFlag == 0) {
+    status     = caps_jrnlRead(problem, bobject, 1, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      if (ret == CAPS_SUCCESS) {
+        *nobj = args[0].num;
+        if (*nobj != 0) {
+          objs = (capsObject **) EG_alloc(*nobj*sizeof(capsObject *));
+          if (objs == NULL) return EGADS_MALLOC;
+          for (i = 0; i < *nobj; i++) objs[i] = args[0].members.objs[i];
+          *dobjs = objs;
+        }
       }
+      return ret;
     }
-    return ret;
   }
 
   status = CAPS_SUCCESS;
@@ -2686,6 +2802,7 @@ caps_getDataSets(capsObject *bobject, const char *dname, int *nobj,
   *dobjs = objs;
 
 gdone:
+  if (problem->dbFlag == 1) return status;
   args[0].num          = *nobj;
   args[0].members.objs = *dobjs;
   caps_jrnlWrite(problem, bobject, status, 1, args, problem->sNum,

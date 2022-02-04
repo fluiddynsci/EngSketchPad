@@ -3,7 +3,7 @@
  *
  *      	WV server-side structures header
  *
- *      Copyright 2011-2021, Massachusetts Institute of Technology
+ *      Copyright 2011-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -62,7 +62,7 @@
 #define WV_REAL64        5
 
 
-typedef void (*wvCB) (/*@null@*/ void *, char *t, int);
+typedef void (*wvCB) (/*@null@*/ void *, /*@null@*/ void *, char *t, int);
 
 typedef struct {
   int    dataType;              /* VBO type */
@@ -146,6 +146,8 @@ typedef struct {
 /*@null@*/
   wvGPrim *gPrims;              /* the graphics primitives */
   void    *nameMap;             /* gPrim name handling */
+/*@null@*/
+  void    *userPtr;             /* user pointer to pass to browserMessage */
 } wvContext;
 
 #endif  /*_WSSS_H_*/

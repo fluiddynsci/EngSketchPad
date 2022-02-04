@@ -3,7 +3,7 @@
 #   pyCAPS --- Python version of CAPS API                                 #
 #                                                                         #
 #                                                                         #
-#      Copyright 2011-2021, Massachusetts Institute of Technology         #
+#      Copyright 2011-2022, Massachusetts Institute of Technology         #
 #      Licensed under The GNU Lesser General Public License, version 2.1  #
 #      See http://www.opensource.org/licenses/lgpl-2.1.php                #
 #                                                                         #
@@ -167,19 +167,19 @@ c_capsErrs._fields_ = [
 ]
 
 # =============================================================================
-# define c_capsDot structure
-class c_capsDot(ctypes.Structure):
+# define c_capsDeriv structure
+class c_capsDeriv(ctypes.Structure):
     pass
 
-c_capsDot.__slots__ = [
+c_capsDeriv.__slots__ = [
     'name',
     'rank',
-    'dot',
+    'deriv',
 ]
-c_capsDot._fields_ = [
+c_capsDeriv._fields_ = [
     ('name', c_char_p),
     ('rank', c_int),
-    ('dot', POINTER(c_double)),
+    ('deriv', POINTER(c_double)),
 ]
 
 # =============================================================================
@@ -239,8 +239,8 @@ c_capsValue.__slots__ = [
     'link',
     'linkMethod',
     'partial',
-    'ndot',
-    'dots',
+    'nderiv',
+    'derivs',
 ]
 c_capsValue._fields_ = [
     ('type', c_int),
@@ -260,8 +260,8 @@ c_capsValue._fields_ = [
     ('link', POINTER(c_capsObject)),
     ('linkMethod', c_int),
     ('partial', POINTER(c_int)),
-    ('ndot', c_int),
-    ('dots', POINTER(c_capsDot)),
+    ('nderiv', c_int),
+    ('derivs', POINTER(c_capsDeriv)),
 ]
 
 
@@ -270,6 +270,8 @@ c_capsValue._fields_ = [
 # caps.h functions
 #
 # =============================================================================
+
+# base-level object functions
 
 _caps.caps_revision.argtypes = [POINTER(c_int), POINTER(c_int)]
 _caps.caps_revision.restype = None
@@ -283,7 +285,7 @@ _caps.caps_size.restype = c_int
 _caps.caps_childByIndex.argtypes = [c_capsObj, enum_capsoType, enum_capssType, c_int, POINTER(c_capsObj)]
 _caps.caps_childByIndex.restype = c_int
 
-_caps.caps_childByName.argtypes = [c_capsObj, enum_capsoType, enum_capssType, c_char_p, POINTER(c_capsObj)]
+_caps.caps_childByName.argtypes = [c_capsObj, enum_capsoType, enum_capssType, c_char_p, POINTER(c_capsObj), POINTER(c_int), POINTER(POINTER(c_capsErrs))]
 _caps.caps_childByName.restype = c_int
 
 _caps.caps_bodyByIndex.argtypes = [c_capsObj, c_int, POINTER(egads.c_ego), POINTER(c_char_p)]
@@ -316,6 +318,8 @@ _caps.caps_freeError.restype = c_int
 _caps.caps_freeValue.argtypes = [POINTER(c_capsValue)]
 _caps.caps_freeValue.restype = None
 
+# I/O functions 
+
 _caps.caps_writeParameters.argtypes = [c_capsObj, c_char_p]
 _caps.caps_writeParameters.restype = c_int
 
@@ -324,6 +328,8 @@ _caps.caps_readParameters.restype = c_int
 
 _caps.caps_writeGeometry.argtypes = [c_capsObj, c_int, c_char_p, POINTER(c_int), POINTER(POINTER(c_capsErrs))]
 _caps.caps_writeGeometry.restype = c_int
+
+# attribute functions 
 
 _caps.caps_attrByName.argtypes = [c_capsObj, c_char_p, POINTER(c_capsObj)]
 _caps.caps_attrByName.restype = c_int
@@ -336,6 +342,8 @@ _caps.caps_setAttr.restype = c_int
 
 _caps.caps_deleteAttr.argtypes = [c_capsObj, c_char_p]
 _caps.caps_deleteAttr.restype = c_int
+
+# problem functions 
 
 _caps.caps_phaseState.argtypes = [c_char_p, c_char_p, POINTER(c_int)]
 _caps.caps_phaseState.restype = c_int
@@ -351,6 +359,11 @@ _caps.caps_close.restype = c_int
 
 _caps.caps_outLevel.argtypes = [c_capsObj, c_int]
 _caps.caps_outLevel.restype = c_int
+
+_caps.caps_getRootPath.argtypes = [c_capsObj, POINTER(c_char_p)]
+_caps.caps_getRootPath.restype = c_int
+
+# analysis functions 
 
 _caps.caps_queryAnalysis.argtypes = [c_capsObj, c_char_p, POINTER(c_int), POINTER(c_int), POINTER(c_int)]
 _caps.caps_queryAnalysis.restype = c_int
@@ -394,6 +407,8 @@ _caps.caps_execute.restype = c_int
 _caps.caps_postAnalysis.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_capsErrs))]
 _caps.caps_postAnalysis.restype = c_int
 
+# bound, vertexset and dataset functions
+
 _caps.caps_makeBound.argtypes = [c_capsObj, c_int, c_char_p, POINTER(c_capsObj)]
 _caps.caps_makeBound.restype = c_int
 
@@ -436,8 +451,13 @@ _caps.caps_getData.restype = c_int
 _caps.caps_getDataSets.argtypes = [c_capsObj, c_char_p, POINTER(c_int), POINTER(POINTER(c_capsObj))]
 _caps.caps_getDataSets.restype = c_int
 
-_caps.caps_triangulate.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_int)), POINTER(c_int), POINTER(POINTER(c_int))]
+_caps.caps_triangulate.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_int)), 
+                                              POINTER(c_int), POINTER(POINTER(c_int)),
+                                              POINTER(c_int), POINTER(POINTER(c_int)),
+                                              POINTER(c_int), POINTER(POINTER(c_int))]
 _caps.caps_triangulate.restype = c_int
+
+# value functions 
 
 _caps.caps_getValue.argtypes = [c_capsObj, POINTER(enum_capsvType), POINTER(c_int), POINTER(c_int), POINTER(POINTER(None)), POINTER(POINTER(c_int)), POINTER(c_char_p), POINTER(c_int), POINTER(POINTER(c_capsErrs))]
 _caps.caps_getValue.restype = c_int
@@ -537,6 +557,7 @@ class oFlag:
     oEGO       = 2
     oPhaseName = 3
     oContinue  = 4
+    oReload    = 5
 
 __all__.append("oType")
 class oType:
@@ -552,17 +573,18 @@ class oType:
 
 __all__.append("sType")
 class sType:
-    NONE        = 0
-    STATIC      = 1
-    PARAMETRIC  = 2
-    GEOMETRYIN  = 3
-    GEOMETRYOUT = 4
-    PARAMETER   = 5
-    USER        = 6
-    ANALYSISIN  = 7
-    ANALYSISOUT = 8
-    CONNECTED   = 9
-    UNCONNECTED = 10
+    NONE         = 0
+    STATIC       = 1
+    PARAMETRIC   = 2
+    GEOMETRYIN   = 3
+    GEOMETRYOUT  = 4
+    PARAMETER    = 5
+    USER         = 6
+    ANALYSISIN   = 7
+    ANALYSISOUT  = 8
+    CONNECTED    = 9
+    UNCONNECTED  = 10
+    ANALYSISDYNO = 11
 
 __all__.append("eType")
 class eType:
@@ -853,7 +875,7 @@ class capsOwn:
                                     pdatetime, ctypes.byref(sNum))
         if stat: _raiseStatus(stat)
  
-        name   = _decode(pname.value)
+        pname  = _decode(pname.value)
         pID    = _decode(pID.value)
         userID = _decode(userID.value)
         lines  = []
@@ -862,7 +884,7 @@ class capsOwn:
         datetime = list(pdatetime[:])
         sNum     = sNum.value
  
-        return name, pID, userID, lines, datetime, sNum
+        return pname, pID, userID, lines, datetime, sNum
 
 # =============================================================================
 
@@ -944,8 +966,36 @@ def _caps_delete(obj):
     if stat: _raiseStatus(stat, msg = "while deleting CAPS Object")
 
 #==============================================================================
+__all__.append("phaseState")
+def phaseState(prName, phName):
+    """
+    Check State of CAPS Problem Phase
+
+    Parameters
+    ----------
+    prName:
+        path ending with the CAPS problem name
+
+    phName:
+        the current phase name (None is equivalent to 'Scratch')
+
+    Returns
+    -------
+    bitFlag:
+       the returned state (additive): 1 – locked, 2 – closed
+    """
+    prName = prName.encode() if isinstance(prName, str) else prName
+    phName = phName.encode() if isinstance(phName, str) else phName
+
+    bitFlag = c_int()
+    stat = _caps.caps_phaseState(prName, phName, ctypes.byref(bitFlag))
+    if stat: _raiseStatus(stat)
+
+    return bitFlag.value
+
+#==============================================================================
 __all__.append("open")
-def open(prName, phName, ptr, outLevel=1, useJournal=False):
+def open(prName, phName, flag, ptr, outLevel=1):
     """
     Open a CAPS Problem Object
 
@@ -966,28 +1016,34 @@ def open(prName, phName, ptr, outLevel=1, useJournal=False):
         - or - 
         pointer to an OpenCSM Model Structure - left open after caps_close
 
+    flag:
+        oFlag.oFileName  – ptr is a filename, 
+        oFlag.oMODL      – ptr is an OpenCSM Model Structure, 
+        oFlag.oEGO       – ptr is a Model ego, 
+        oFlag.oPhaseName – ptr is the starting phase name, 
+        oFlag.oContinue  – continuation (ptr can be NULL)
+        oFlag.oReload    – ptr is the starting phase name with reloading of OpenCSM file
+
     outLevel:
         0 - minimal, 1 - standard (default), 2 - debug
-
-    useJournal:
-        0 - minimal, 1 - standard (default), 2 - debug
+        
+    Returns
+    -------
+        a capsObj CAPS Problem Object
     """
     prName = prName.encode() if isinstance(prName, str) else prName
     phName = phName.encode() if isinstance(phName, str) else phName
     if isinstance(ptr, (str, bytes)) or \
        (version_info.major <= 2 and isinstance(ptr, unicode)):
         pptr = c_char_p(ptr if isinstance(ptr, bytes) else ptr.encode())
-        flag = oFlag.oFileName
         pptr = ctypes.cast(pptr, c_void_p)
     elif hasattr(ptr, "_modl"):
         flag=oFlag.oMODL
         if not isinstance(ptr._modl, c_void_p):
             raise CAPSError(CAPS_BADVALUE, "ptr has _modl that is not a ctypes.c_void_p. Is it an intance of pyOCSM.Ocsm? ptr = {!r}".format(ptr))
-        pptr = ptr._modl
+        pptr = ctypes.cast(ptr._modl, c_void_p)
     else:
         raise CAPSError(CAPS_BADVALUE, "ptr type should be str, bytes, or pyOCSM.Ocsm: ptr = {!r}".format(ptr))
-
-    if useJournal: flag=oFlag.oContinue
 
     nErr = c_int()
     errs = POINTER(c_capsErrs)()
@@ -995,8 +1051,8 @@ def open(prName, phName, ptr, outLevel=1, useJournal=False):
     stat = _caps.caps_open(prName, phName, c_int(flag), pptr, c_int(outLevel), ctypes.byref(problemObj), 
                            ctypes.byref(nErr), ctypes.byref(errs))
     if stat:
-        msg = "Failed to open Problem with prName={!r}, phName={!r}".format(_decode(prName),_decode(phName))
-        if flag == 0:
+        msg = "Failed to open Problem with prName={!r}, phName={!r}, flag={!r}".format(_decode(prName),_decode(phName),flag)
+        if flag != oFlag.oMODL:
             msg += ", and ptr={!r}".format(ptr)
         _raiseStatus(stat, msg=msg, errors=capsErrs(nErr, errs))
 
@@ -1033,16 +1089,38 @@ class capsObj:
 
 #==============================================================================
     def __del__(self):
-        self.close()
-
-#==============================================================================
-    def close(self):
-        """
-        Closes (or deletes) the object and invalidates all pointers
-        """
         # free the object
         if self._finalize is not None:
             self._finalize()
+        self._obj = None
+        self._finalize = None
+        self._problemObj = None
+
+#==============================================================================
+    def close(self, complete = 0, phName = None):
+        """
+        Closes a Problem object
+        
+        Parameters
+        ----------
+        self:
+           a CAPS Problem Object
+
+        complete:
+            0 – the phase is not complete, 1 – the phase is completed and should not be modified
+
+        phName:
+            Phase Name of the Scratch phase is closed as complete
+        """
+        # detach the finalizer
+        if self._finalize is not None:
+            self._finalize.detach()
+        
+        phName   = phName.encode() if isinstance(phName, str) else phName
+
+        stat = _caps.caps_close(self._obj, c_int(complete), phName)
+        if stat: _raiseStatus(stat, msg = "while closing CAPS Problem")
+
         self._obj = None
         self._finalize = None
         self._problemObj = None
@@ -1110,27 +1188,6 @@ class capsObj:
         return name, otype, stype, link, parent, last
 
 #==============================================================================
-    def journalState(self):
-        """
-        Get the journal state for a problem object
-        
-        Note: Needed to determine if restarting when explicitly executing analyses.
-
-        Parameters
-        ----------
-        self:
-           a CAPS Problem Object
-
-        Returns
-        -------
-        True if Journaling False otherwise
-        """
-        stat = _caps.caps_journalState(self._obj)
-        if stat == 0: return False
-        if stat == 4: return True
-        _raiseStatus(stat)
-
-#==============================================================================
     def size(self, type, stype):
         """
         Children sizing information from a Patent Object
@@ -1179,9 +1236,12 @@ class capsObj:
         name   = name.encode() if isinstance(name,str) else name
         child  = c_capsObj()
         units  = c_char_p()
+        nErr = c_int()
+        errs = POINTER(c_capsErrs)()
         stat = _caps.caps_childByName(self._obj, c_int(otype), c_int(stype), 
-                                      c_char_p(name), ctypes.byref(child))
-        if stat: _raiseStatus(stat)
+                                      c_char_p(name), ctypes.byref(child),
+                                      ctypes.byref(nErr), ctypes.byref(errs))
+        if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
         return capsObj(child, self.problemObj(), None)
 
 #==============================================================================
@@ -1344,6 +1404,27 @@ class capsObj:
         if stat: _raiseStatus(stat)
 
 #==============================================================================
+    def journalState(self):
+        """
+        Get the journal state for a problem object
+        
+        Note: Needed to determine if restarting when explicitly executing analyses.
+
+        Parameters
+        ----------
+        self:
+           a CAPS Problem Object
+
+        Returns
+        -------
+        True if Journaling False otherwise
+        """
+        stat = _caps.caps_journalState(self._obj)
+        if stat == 0: return False
+        if stat == 4: return True
+        _raiseStatus(stat)
+
+#==============================================================================
     def setOutLevel(self, outlevel=1):
         """
         Sets the CAPS verbosity level
@@ -1360,6 +1441,26 @@ class capsObj:
         stat = _caps.caps_outLevel(self._obj, c_int(outlevel))
         if stat < 0: _raiseStatus(stat)
         return stat
+
+#==============================================================================
+    def getRootPath(self):
+        """
+        Get Problem root
+
+        Parameters
+        ----------
+        self: 
+            a CAPS Problem Object
+
+        Returns
+        -------
+            the file path to find the root of the Problem/Phase directory structure 
+            if on Windows it will contain the drive
+        """
+        root  = c_char_p()
+        stat = _caps.caps_getRootPath(self._obj, ctypes.byref(root))
+        if stat < 0: _raiseStatus(stat)
+        return _decode(root.value)
 
 #==============================================================================
     def bodyByIndex(self, index):
@@ -2301,21 +2402,21 @@ class capsObj:
             derivatives derived from vectors/arrays will have "[n]" or "[n,m]" appended
         """
         
-        ndot = c_int()
+        nderiv = c_int()
         pnames = POINTER(c_char_p)()
         nErr = c_int()
         errs = POINTER(c_capsErrs)()
 
-        stat = _caps.caps_hasDeriv(self._obj, ctypes.byref(ndot), ctypes.byref(pnames),
+        stat = _caps.caps_hasDeriv(self._obj, ctypes.byref(nderiv), ctypes.byref(pnames),
                                    ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
         
         if not pnames:
             return None
         
-        ndot = ndot.value
-        names = [None]*ndot
-        for i in range(ndot):
+        nderiv = nderiv.value
+        names = [None]*nderiv
+        for i in range(nderiv):
             names[i] = _decode(pnames[i])
         
         egads.free(pnames)
@@ -2339,34 +2440,33 @@ class capsObj:
             list of values (tuples if rank > 1) of sensitvities
         """
         
-        name = name.encode() if isinstance(name,str) else name
-        len = c_int()
-        rank = c_int()
-        pdot = POINTER(c_double)()
-        nErr = c_int()
-        errs = POINTER(c_capsErrs)()
+        name    = name.encode() if isinstance(name,str) else name
+        len     = c_int()
+        len_wrt = c_int()
+        pderiv  = POINTER(c_double)()
+        nErr    = c_int()
+        errs    = POINTER(c_capsErrs)()
 
-        stat = _caps.caps_getDeriv(self._obj, name, ctypes.byref(len), ctypes.byref(rank), ctypes.byref(pdot),
+        stat = _caps.caps_getDeriv(self._obj, name, ctypes.byref(len), ctypes.byref(len_wrt), ctypes.byref(pderiv),
                                    ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
         
-        len = len.value
-        rank = rank.value
+        len     = len.value
+        len_wrt = len_wrt.value
         
         if len == 0:
             return None
         
-        if rank == 1:
-            if len == 1:
-                dot = pdot[0]
-            else:
-                dot = pdot[0:len]
+        if len == 1 and len_wrt == 1:
+            deriv = pderiv[0]
+        elif len == 1 or len_wrt == 1:
+            deriv = list(pderiv[0:len*len_wrt])
         else:
-            dot = [None]*ndot
+            deriv = [None]*len
             for i in range(len):
-                dot[i] = tuple(dot[i*rank:(i+1)*rank])
+                deriv[i] = list(pderiv[i*len_wrt:(i+1)*len_wrt])
         
-        return dot
+        return deriv
 
 #==============================================================================
     def dupAnalysis(self, name):
@@ -2650,31 +2750,53 @@ class capsObj:
         Returns
         -------
         Gtris: 
-            a list of indices (bias 1) referencing Geometry-based points
+            element mesh triangles: a list of 3-tuple indices (bias 1) referencing Geometry-based points
+
+        Gsegs: 
+            element mesh segments: a list of 2-tuple indices (bias 1) referencing Geometry-based points
     
-        Dtris:
-            a list of indices (bias 1) referencing Data-based points
+        Dtris: 
+            element data triangles: a list of 3-tuple indices (bias 1) referencing Data-based points
+
+        Dsegs: 
+            element data segments: a list of 2-tuple indices (bias 1) referencing Data-based points
         """
         nGtris  = c_int()
         pGtris  = POINTER(c_int)()
+        nGsegs  = c_int()
+        pGsegs  = POINTER(c_int)()
         nDtris  = c_int()
         pDtris  = POINTER(c_int)()
+        nDsegs  = c_int()
+        pDsegs  = POINTER(c_int)()
         stat = _caps.caps_triangulate(self._obj, ctypes.byref(nGtris), ctypes.byref(pGtris), 
-                                                 ctypes.byref(nDtris), ctypes.byref(pDtris))
+                                                 ctypes.byref(nGsegs), ctypes.byref(pGsegs), 
+                                                 ctypes.byref(nDtris), ctypes.byref(pDtris),
+                                                 ctypes.byref(nDsegs), ctypes.byref(pDsegs))
         if stat: _raiseStatus(stat)
         
         Gtris = None
         if pGtris:
             Gtris = [tuple(pGtris[3*i:3*(i+1)]) for i in range(nGtris.value)]
-        
+
+        Gsegs = None
+        if pGsegs:
+            Gsegs = [tuple(pGsegs[2*i:2*(i+1)]) for i in range(nGsegs.value)]
+
         Dtris = None
         if pDtris:
             Dtris = [tuple(pGtris[3*i:3*(i+1)]) for i in range(nDtris.value)]
 
+        Dsegs = None
+        if pDsegs:
+            Dsegs = [tuple(pDsegs[2*i:2*(i+1)]) for i in range(nDsegs.value)]
+
         egads.free(pGtris)
+        egads.free(pGsegs)
         egads.free(pDtris)
+        egads.free(pDsegs)
         
-        return Gtris, Dtris
+        return Gtris, Gsegs, Dtris, Dsegs
 
 #==============================================================================
     def vertexSetInfo(self):

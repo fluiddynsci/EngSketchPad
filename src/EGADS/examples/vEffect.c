@@ -3,7 +3,7 @@
  *
  *             EGADS Effective Topo Tessellation using wv
  *
- *      Copyright 2011-2021, Massachusetts Institute of Technology
+ *      Copyright 2011-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -525,6 +525,128 @@ parseOut(int level, ego object, int sense)
 }
 
 
+/* call-back invoked when a message arrives from the browser */
+
+void browserMessage(/*@unused@*/ void *uPtr, /*@unused@*/ void *wsi, char *text,
+                    /*@unused@*/ int lena)
+{
+  int          i, index, stat, ient, nnode;
+  char         tag[5];
+  double       d, dist, coord[3], data[3];
+  ego          eface, *nodes;
+#ifdef COLORING
+  char         gpname[43];
+  int          j, len, ntri, nface;
+  float        val, *colrs;
+  double       result[18];
+  ego          *faces;
+  const int    *tris, *tric, *ptype, *pindex;
+  const double *xyzs, *uvs;
+  wvData       items[1];
+#endif
+  
+  if (strncmp(text,"Located: ", 9) == 0) {
+    sscanf(&text[8], "%lf %lf %lf", &coord[0], &coord[1], &coord[2]);
+    dist     = 1.e200;
+    coord[0] = coord[0]*focus[3] + focus[0];
+    coord[1] = coord[1]*focus[3] + focus[1];
+    coord[2] = coord[2]*focus[3] + focus[2];
+    printf(" Closest Node to %lf %lf %lf:\n", coord[0], coord[1], coord[2]);
+    stat = EG_getBodyTopos(body, NULL, NODE, &nnode, &nodes);
+    if (stat != EGADS_SUCCESS) {
+      printf(" EG_getBodyTopos = %d\n", stat);
+      return;
+    }
+    for (index = i = 0; i < nnode; i++) {
+      stat = EG_evaluate(nodes[i], NULL, data);
+      if (stat != EGADS_SUCCESS) continue;
+      d    = sqrt((data[0]-coord[0])*(data[0]-coord[0]) +
+                  (data[1]-coord[1])*(data[1]-coord[1]) +
+                  (data[2]-coord[2])*(data[2]-coord[2]));
+      if (d < dist) {
+        index = i+1;
+        dist  = d;
+      }
+    }
+    EG_free(nodes);
+    printf(" Nearest Node = %d  dist = %le\n", index, dist);
+    return;
+  }
+  if (strncmp(text,"Picked: ", 8) == 0) {
+    sscanf(&text[12], "%d %s %d", &i, tag, &ient);
+    
+    printf(" Picked: %s %d\n", tag, ient);
+    if (strcmp(tag, "Face") == 0) {
+      stat = EG_objectBodyTopo(ebody, EFACE, ient, &eface);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EG_objectBodyTopo = %d\n", stat);
+        return;
+      }
+      parseOut(0, eface, 0);
+      printf("\n");
+    }
+    return;
+  }
+  
+#ifdef COLORING
+  /* just change the color mapping */
+  if ((strcmp(text,"next") == 0) || (strcmp(text,"limits") == 0)) {
+    if (strcmp(text,"next") == 0) {
+      key++;
+      if (key > 7) key = 0;
+    } else {
+      printf(" Enter new limits [old = %e, %e]:", lims[0], lims[1]);
+      scanf("%f %f", &lims[0], &lims[1]);
+      printf(" new limits = %e %e\n", lims[0], lims[1]);
+    }
+    stat = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], keys[key]);
+    if (stat < 0) printf(" wv_setKey = %d!\n", stat);
+    EG_getBodyTopos(ebody, NULL, EFACE, &nface, &faces);
+
+    for (i = 0; i < nface; i++) {
+      stat = EG_getTessFace(tess, i+1, &len,
+                            &xyzs, &uvs, &ptype, &pindex, &ntri,
+                            &tris, &tric);
+      if (stat != EGADS_SUCCESS) {
+        printf(" EG_getTessFace %d/%d = %d\n", i+1, nface, stat);
+        continue;
+      }
+      sprintf(gpname, "Body %d Face %d", 1, i+1);
+      index = wv_indexGPrim(cntxt, gpname);
+      if (index < 0) {
+        printf(" wv_indexGPrim = %d for %s (%d)!\n", i, gpname, index);
+        continue;
+      }
+      if (len == 0) continue;
+      colrs = (float *) malloc(3*len*sizeof(float));
+      if (colrs == NULL) continue;
+      for (j = 0; j < len; j++) {
+        EG_evaluate(faces[i], &uvs[2*j], result);
+        if (key == 0) {
+          val = uvs[2*j  ];
+        } else if (key == 1) {
+          val = uvs[2*j+1];
+        } else {
+          val = result[key+1];
+        }
+        spec_col(val, &colrs[3*j]);
+      }
+      stat = wv_setData(WV_REAL32, len, (void *) colrs, WV_COLORS, &items[0]);
+      if (stat < 0) printf(" wv_setData = %d for %s/item color!\n", i, gpname);
+      free(colrs);
+      stat = wv_modGPrim(cntxt, index, 1, items);
+      if (stat < 0)
+        printf(" wv_modGPrim = %d for %s (%d)!\n", stat, gpname, index);
+    }
+    EG_free(faces);
+    return;
+  }
+#endif
+
+  printf(" browserMessage = %s\n", text);
+}
+
+
 int main(int argc, char *argv[])
 {
   int          i, j, k, ibody, stat, oclass, mtype, len, ntri, ndum, sum;
@@ -1038,6 +1160,7 @@ int main(int argc, char *argv[])
   /* start the server code */
 
   stat = 0;
+  wv_setCallBack(cntxt, browserMessage);
   if (wv_startServer(7681, NULL, NULL, NULL, 0, cntxt) == 0) {
 
     /* we have a single valid server -- stay alive a long as we have a client */
@@ -1083,125 +1206,4 @@ int main(int argc, char *argv[])
 
   printf(" EG_close          = %d\n", EG_close(context));
   return 0;
-}
-
-
-/* call-back invoked when a message arrives from the browser */
-
-void browserMessage(/*@unused@*/ void *wsi, char *text, /*@unused@*/ int lena)
-{
-  int          i, index, stat, ient, nnode;
-  char         tag[5];
-  double       d, dist, coord[3], data[3];
-  ego          eface, *nodes;
-#ifdef COLORING
-  char         gpname[43];
-  int          j, len, ntri, nface;
-  float        val, *colrs;
-  double       result[18];
-  ego          *faces;
-  const int    *tris, *tric, *ptype, *pindex;
-  const double *xyzs, *uvs;
-  wvData       items[1];
-#endif
-  
-  if (strncmp(text,"Located: ", 9) == 0) {
-    sscanf(&text[8], "%lf %lf %lf", &coord[0], &coord[1], &coord[2]);
-    dist     = 1.e200;
-    coord[0] = coord[0]*focus[3] + focus[0];
-    coord[1] = coord[1]*focus[3] + focus[1];
-    coord[2] = coord[2]*focus[3] + focus[2];
-    printf(" Closest Node to %lf %lf %lf:\n", coord[0], coord[1], coord[2]);
-    stat = EG_getBodyTopos(body, NULL, NODE, &nnode, &nodes);
-    if (stat != EGADS_SUCCESS) {
-      printf(" EG_getBodyTopos = %d\n", stat);
-      return;
-    }
-    for (index = i = 0; i < nnode; i++) {
-      stat = EG_evaluate(nodes[i], NULL, data);
-      if (stat != EGADS_SUCCESS) continue;
-      d    = sqrt((data[0]-coord[0])*(data[0]-coord[0]) +
-                  (data[1]-coord[1])*(data[1]-coord[1]) +
-                  (data[2]-coord[2])*(data[2]-coord[2]));
-      if (d < dist) {
-        index = i+1;
-        dist  = d;
-      }
-    }
-    EG_free(nodes);
-    printf(" Nearest Node = %d  dist = %le\n", index, dist);
-    return;
-  }
-  if (strncmp(text,"Picked: ", 8) == 0) {
-    sscanf(&text[12], "%d %s %d", &i, tag, &ient);
-    
-    printf(" Picked: %s %d\n", tag, ient);
-    if (strcmp(tag, "Face") == 0) {
-      stat = EG_objectBodyTopo(ebody, EFACE, ient, &eface);
-      if (stat != EGADS_SUCCESS) {
-        printf(" EG_objectBodyTopo = %d\n", stat);
-        return;
-      }
-      parseOut(0, eface, 0);
-      printf("\n");
-    }
-    return;
-  }
-  
-#ifdef COLORING
-  /* just change the color mapping */
-  if ((strcmp(text,"next") == 0) || (strcmp(text,"limits") == 0)) {
-    if (strcmp(text,"next") == 0) {
-      key++;
-      if (key > 7) key = 0;
-    } else {
-      printf(" Enter new limits [old = %e, %e]:", lims[0], lims[1]);
-      scanf("%f %f", &lims[0], &lims[1]);
-      printf(" new limits = %e %e\n", lims[0], lims[1]);
-    }
-    stat = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], keys[key]);
-    if (stat < 0) printf(" wv_setKey = %d!\n", stat);
-    EG_getBodyTopos(ebody, NULL, EFACE, &nface, &faces);
-
-    for (i = 0; i < nface; i++) {
-      stat = EG_getTessFace(tess, i+1, &len,
-                            &xyzs, &uvs, &ptype, &pindex, &ntri,
-                            &tris, &tric);
-      if (stat != EGADS_SUCCESS) {
-        printf(" EG_getTessFace %d/%d = %d\n", i+1, nface, stat);
-        continue;
-      }
-      sprintf(gpname, "Body %d Face %d", 1, i+1);
-      index = wv_indexGPrim(cntxt, gpname);
-      if (index < 0) {
-        printf(" wv_indexGPrim = %d for %s (%d)!\n", i, gpname, index);
-        continue;
-      }
-      if (len == 0) continue;
-      colrs = (float *) malloc(3*len*sizeof(float));
-      if (colrs == NULL) continue;
-      for (j = 0; j < len; j++) {
-        EG_evaluate(faces[i], &uvs[2*j], result);
-        if (key == 0) {
-          val = uvs[2*j  ];
-        } else if (key == 1) {
-          val = uvs[2*j+1];
-        } else {
-          val = result[key+1];
-        }
-        spec_col(val, &colrs[3*j]);
-      }
-      stat = wv_setData(WV_REAL32, len, (void *) colrs, WV_COLORS, &items[0]);
-      if (stat < 0) printf(" wv_setData = %d for %s/item color!\n", i, gpname);
-      free(colrs);
-      stat = wv_modGPrim(cntxt, index, 1, items);
-      if (stat < 0)
-        printf(" wv_modGPrim = %d for %s (%d)!\n", stat, gpname, index);
-    }
-    EG_free(faces);
-    return;
-  }
-#endif
-
-  printf(" browserMessage = %s\n", text);
 }

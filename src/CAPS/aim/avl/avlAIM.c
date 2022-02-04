@@ -3,7 +3,7 @@
  *
  *             AVL AIM
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -26,7 +26,7 @@
 #define strtok_r    strtok_s
 #endif
 
-#define MAXPOINT  200
+#define NUMPOINT  200
 #define PI        3.1415926535897931159979635
 #define NINT(A)         (((A) < 0)   ? (int)(A-0.5) : (int)(A+0.5))
 
@@ -425,7 +425,17 @@ to be delimited by a colon (`:'). This is associated with the AVL Surface.
 
 typedef struct {
 
-    mapAttrToIndexStruct controlMap;
+    mapAttrToIndexStruct controlMap; // vlmControl* attribute to index map
+
+    mapAttrToIndexStruct groupMap; // capsGroup attribute to index map
+
+    // AVL surface information
+    int numAVLSurface;
+    vlmSurfaceStruct *avlSurface;
+
+    // AVL control surface information
+    int numAVLControl;
+    vlmControlStruct *avlControl;
 
     // Units structure
     cfdUnitsStruct units;
@@ -433,8 +443,76 @@ typedef struct {
 } aimStorage;
 
 
+static int initiate_aimStorage(void *aimInfo, aimStorage *avlInstance)
+{
+
+    int status;
+
+    // Set initial values for avlInstance
+    status = initiate_mapAttrToIndexStruct(&avlInstance->controlMap);
+    AIM_STATUS(aimInfo, status);
+
+    status = initiate_mapAttrToIndexStruct(&avlInstance->groupMap);
+    AIM_STATUS(aimInfo, status);
+
+    // AVL surface information
+    avlInstance->numAVLSurface = 0;
+    avlInstance->avlSurface = NULL;
+
+    avlInstance->numAVLControl = 0;
+    avlInstance->avlControl = NULL;
+
+    status = initiate_cfdUnitsStruct(&avlInstance->units);
+    AIM_STATUS(aimInfo, status);
+
+cleanup:
+    return status;
+}
+
+
+static int destroy_aimStorage(aimStorage *avlInstance)
+{
+    int status;
+    int i;
+
+    status = destroy_mapAttrToIndexStruct(&avlInstance->controlMap);
+    if (status != CAPS_SUCCESS)
+      printf("Error: Status %d during destroy_mapAttrToIndexStruct!\n", status);
+
+    status = destroy_mapAttrToIndexStruct(&avlInstance->groupMap);
+    if (status != CAPS_SUCCESS)
+      printf("Error: Status %d during destroy_mapAttrToIndexStruct!\n", status);
+
+    if (avlInstance->avlSurface != NULL) {
+        for (i = 0; i < avlInstance->numAVLSurface; i++) {
+            status = destroy_vlmSurfaceStruct(&avlInstance->avlSurface[i]);
+            if (status != CAPS_SUCCESS)
+              printf("Error: Status %d during destroy_vlmSurfaceStruct!\n", status);
+        }
+        AIM_FREE(avlInstance->avlSurface);
+        avlInstance->numAVLSurface = 0;
+    }
+
+    if (avlInstance->avlControl != NULL) {
+        for (i = 0; i < avlInstance->numAVLControl; i++) {
+            status = destroy_vlmControlStruct(&avlInstance->avlControl[i]);
+            if (status != CAPS_SUCCESS)
+              printf("Error: Status %d during destroy_vlmControlStruct!\n", status);
+        }
+        AIM_FREE(avlInstance->avlControl);
+        avlInstance->numAVLControl = 0;
+    }
+
+    status = destroy_cfdUnitsStruct(&avlInstance->units);
+    if (status != CAPS_SUCCESS)
+      printf("Error: Status %d during destroy_cfdUnitsStruct!\n", status);
+
+    return CAPS_SUCCESS;
+}
+
+
 /* ********************** AVL AIM Helper Functions ************************** */
-static int writeSection(FILE *fp, vlmSectionStruct *vlmSection)
+static int writeSection(void *aimInfo, FILE *fp, vlmSectionStruct *vlmSection)
 {
     int status; // Function return status
 
@@ -484,10 +562,11 @@ static int writeSection(FILE *fp, vlmSectionStruct *vlmSection)
             xyzLE[0], xyzLE[1], xyzLE[2], chord, ainc, Nspan, Sspace);
     fprintf(fp, "AIRFOIL\n");
 
-    status = vlm_writeSection(fp,
+    status = vlm_writeSection(aimInfo,
+                              fp,
                               vlmSection,
                               (int) true, // Normalize by chord (true/false)
-                              (int) MAXPOINT);
+                              (int) NUMPOINT);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     status = CAPS_SUCCESS;
@@ -782,7 +861,8 @@ static int read_Data(void *aimInfo, const char *file, const char *key, double *d
 }
 
 
-static int read_StripForces(void *aimInfo, int *length, capsTuple **surfaces_out)
+static int
+read_StripForces(void *aimInfo, int *length, capsTuple **surfaces_out)
 {
 
     int status = CAPS_SUCCESS;
@@ -797,7 +877,8 @@ static int read_StripForces(void *aimInfo, int *length, capsTuple **surfaces_out
     // Open the AVL output file
     fp = aim_fopen(aimInfo, "capsStripForce.txt", "r");
     if (fp == NULL) {
-        return CAPS_DIRERR;
+        AIM_ERROR(aimInfo, "Failed to open 'capsStripForce.txt'");
+        return CAPS_IOERR;
     }
 
     while (true) {
@@ -879,13 +960,11 @@ static int read_StripForces(void *aimInfo, int *length, capsTuple **surfaces_out
         numDataEntry = 0;
         while ((token = strtok_r(rest, " ", &rest))) {
             // resize the number of tuples
-            tuples = (capsTuple *) EG_reall(tuples, sizeof(capsTuple)*(numDataEntry+1));
-            if (tuples == NULL) { status = EGADS_MALLOC; goto cleanup; }
+            AIM_REALL(tuples, numDataEntry+1, capsTuple, aimInfo, status);
+            tuples[numDataEntry].name = tuples[numDataEntry].value = NULL;
 
-            tuples[numDataEntry].name  = (char*)EG_alloc((strlen(token)+1)*sizeof(char));
-            tuples[numDataEntry].value = (char*)EG_alloc((strlen("["  )+1)*sizeof(char));
-            if (tuples[numDataEntry].name  == NULL) { status = EGADS_MALLOC; goto cleanup; }
-            if (tuples[numDataEntry].value == NULL) { status = EGADS_MALLOC; goto cleanup; }
+            AIM_ALLOC(tuples[numDataEntry].name , strlen(token)+1, char, aimInfo, status);
+            AIM_ALLOC(tuples[numDataEntry].value, strlen("["  )+1, char, aimInfo, status);
 
             // restore the name with a space in it
             str = strstr(token, "c_cl");
@@ -899,7 +978,7 @@ static int read_StripForces(void *aimInfo, int *length, capsTuple **surfaces_out
             numDataEntry++;
         }
         if ((numDataEntry == 0) || (tuples == NULL) || (surfaces == NULL)) {
-           printf(" CAPS Warning: *** No Tuples/Surfaces! ***\n");
+            AIM_ERROR(aimInfo, "No Tuples/Surfaces!");
             status = CAPS_IOERR;
             goto cleanup;
         }
@@ -923,9 +1002,7 @@ static int read_StripForces(void *aimInfo, int *length, capsTuple **surfaces_out
           i = 0;
           while ((token = strtok_r(rest, " ", &rest))) {
               vallen = strlen(tuples[i].value);
-              tuples[i].value = (char *) EG_reall(tuples[i].value,
-                                          (vallen+strlen(token)+2)*sizeof(char));
-              if (tuples[i].value  == NULL) { status = EGADS_MALLOC; goto cleanup; }
+              AIM_REALL(tuples[i].value, vallen+strlen(token)+2, char, aimInfo, status);
 
               // append the values to the list
               sprintf(tuples[i].value + vallen,"%s,", token);
@@ -944,11 +1021,9 @@ static int read_StripForces(void *aimInfo, int *length, capsTuple **surfaces_out
 
             // collapse down the tuples for the surface
             vallen = strlen(surfaces[numSurfaces-1].value);
-            // \" + name                 + \": + value                 + ,\0
+            // \" + name                     + \": + value                 + ,\0
             alen = 1 + strlen(tuples[i].name) + 2 + strlen(tuples[i].value) + 2;
-            surfaces[numSurfaces-1].value = (char *) EG_reall(surfaces[numSurfaces-1].value,
-                                                              sizeof(char)*(vallen+alen));
-            if (surfaces[numSurfaces-1].value == NULL) { status = EGADS_MALLOC; goto cleanup; }
+            AIM_REALL(surfaces[numSurfaces-1].value, vallen+alen, char, aimInfo, status);
 
             value = surfaces[numSurfaces-1].value + vallen;
             sprintf(value,"\"%s\":%s,", tuples[i].name, tuples[i].value);
@@ -965,12 +1040,12 @@ static int read_StripForces(void *aimInfo, int *length, capsTuple **surfaces_out
     }
 
     *surfaces_out = surfaces;
-    *length = numSurfaces;
-    status = CAPS_SUCCESS;
+    surfaces      = NULL;
+    *length       = numSurfaces;
+    status        = CAPS_SUCCESS;
 
 cleanup:
 
-    // Restore the path we came in with
     if (fp != NULL) fclose(fp);
 
     if ((status != CAPS_SUCCESS) && (surfaces != NULL)) {
@@ -995,7 +1070,8 @@ cleanup:
 }
 
 
-static int read_EigenValues(void *aimInfo, int *length, capsTuple **eigen_out)
+static int
+read_EigenValues(void *aimInfo, int *length, capsTuple **eigen_out)
 {
 
     int status = CAPS_SUCCESS;
@@ -1017,7 +1093,8 @@ static int read_EigenValues(void *aimInfo, int *length, capsTuple **eigen_out)
     // Open the eigen value output file
     fp = aim_fopen(aimInfo, eigenValueFile, "r");
     if (fp == NULL) {
-        return CAPS_DIRERR;
+        AIM_ERROR(aimInfo, "Failed to open '%s'", eigenValueFile);
+        return CAPS_IOERR;
     }
 
     // Scan for header
@@ -1044,15 +1121,14 @@ static int read_EigenValues(void *aimInfo, int *length, capsTuple **eigen_out)
         icase = atoi(token);
         if (icase > numCase) {
             // create a new case to save off the eigen informaiton
-            numCase = icase;
-            eigen = (capsTuple *) EG_reall(eigen, sizeof(capsTuple)*(numCase));
-            if (eigen == NULL) { status = EGADS_MALLOC; goto cleanup; }
+            AIM_REALL(eigen, icase, capsTuple, aimInfo, status);
+            for (i = numCase; i < icase; i++)
+              eigen[icase-1].name = eigen[icase-1].value = NULL;
 
             sprintf(caseName,"case %d", icase );
-            eigen[icase-1].name  = EG_strdup(caseName);
-            eigen[icase-1].value = EG_strdup("[");
-            if (eigen[icase-1].name  == NULL) { status = EGADS_MALLOC; goto cleanup; }
-            if (eigen[icase-1].value == NULL) { status = EGADS_MALLOC; goto cleanup; }
+            AIM_STRDUP(eigen[icase-1].name , caseName, aimInfo, status);
+            AIM_STRDUP(eigen[icase-1].value, "["     , aimInfo, status);
+            numCase = icase;
         }
 
         if (eigen != NULL)
@@ -1060,10 +1136,7 @@ static int read_EigenValues(void *aimInfo, int *length, capsTuple **eigen_out)
                 token = strtok_r(rest, " ", &rest); // get the real/imaginary part of the eigen value
 
                 vallen = strlen(eigen[icase-1].value);
-                eigen[icase-1].value = (char *) EG_reall(eigen[icase-1].value,
-                                                         (vallen+strlen(token)+3)*
-                                                         sizeof(char));
-                if (eigen[icase-1].value  == NULL) { status = EGADS_MALLOC; goto cleanup; }
+                AIM_REALL(eigen[icase-1].value, vallen+strlen(token)+3, char, aimInfo, status);
 
                 // append the values to the list
                 if (i == 0)
@@ -1079,6 +1152,7 @@ static int read_EigenValues(void *aimInfo, int *length, capsTuple **eigen_out)
             eigen[icase].value[strlen(eigen[icase].value)-1] = ']';
 
     *eigen_out = eigen;
+    eigen      = NULL;
     *length    = numCase;
     status     = CAPS_SUCCESS;
 
@@ -1229,9 +1303,9 @@ stabilityAngleDerivatives(void *aimInfo, capsValue *val)
 
   AIM_REALL(val->derivs, val->nderiv+nderiv, capsDeriv, aimInfo, status);
   for (i = val->nderiv; i < val->nderiv+nderiv; i++) {
-    val->derivs[i].name  = NULL;
-    val->derivs[i].deriv = NULL;
-    val->derivs[i].rank  = 1;
+    val->derivs[i].name    = NULL;
+    val->derivs[i].deriv   = NULL;
+    val->derivs[i].len_wrt = 1;
     AIM_ALLOC(val->derivs[i].deriv, 1, double, aimInfo, status);
   }
 
@@ -1254,9 +1328,9 @@ bodyRateDerivatives(void *aimInfo, capsValue *val)
 
   AIM_REALL(val->derivs, val->nderiv+nderiv, capsDeriv, aimInfo, status);
   for (i = val->nderiv; i < val->nderiv+nderiv; i++) {
-    val->derivs[i].name  = NULL;
-    val->derivs[i].deriv = NULL;
-    val->derivs[i].rank  = 1;
+    val->derivs[i].name    = NULL;
+    val->derivs[i].deriv   = NULL;
+    val->derivs[i].len_wrt = 1;
     AIM_ALLOC(val->derivs[i].deriv, 1, double, aimInfo, status);
   }
 
@@ -1282,9 +1356,9 @@ controlDerivatives(void *aimInfo, int outIndex, aimStorage *avlInstance, capsVal
 
   AIM_REALL(val->derivs, val->nderiv+nderiv, capsDeriv, aimInfo, status);
   for (i = val->nderiv; i < val->nderiv+nderiv; i++) {
-    val->derivs[i].name  = NULL;
-    val->derivs[i].deriv = NULL;
-    val->derivs[i].rank  = 1;
+    val->derivs[i].name    = NULL;
+    val->derivs[i].deriv   = NULL;
+    val->derivs[i].len_wrt = 1;
     AIM_ALLOC(val->derivs[i].deriv, 1, double, aimInfo, status);
   }
 
@@ -1337,10 +1411,9 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     AIM_ALLOC(avlInstance, 1, aimStorage, aimInfo, status);
     *instStore = avlInstance;
 
-    // Initiate control map
-    (void) initiate_mapAttrToIndexStruct(&avlInstance->controlMap);
-
-    initiate_cfdUnitsStruct(&avlInstance->units);
+    // Initiate storage
+    status = initiate_aimStorage(aimInfo, avlInstance);
+    AIM_STATUS(aimInfo, status);
 
     /*! \page aimUnitsAVL AIM Units
      *  A unit system may be optionally specified during AIM instance initiation. If
@@ -1718,14 +1791,13 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     aimStorage *avlInstance;
 
     double      Sref, Cref, Bref, Xref, Yref, Zref;
+    int         foundSref=(int)false, foundCref=(int)false, foundBref=(int)false, foundXref=(int)false;
     const int    *ints;
     const char   *string, *intents;
     const double *reals;
     ego          *bodies;
 
     const char *bodyLunits = NULL;
-
-    int stringLength = 0; // String manipulation
 
     // File I/O
     FILE *fp = NULL;
@@ -1740,19 +1812,10 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     char hingeMomentFile[] = "capsHingeMoment.txt";
     char eigenValueFile[] = "capsEigenValues.txt";
 
-    // AVL surface information
-    int numAVLSurface = 0;
-    vlmSurfaceStruct *avlSurface = NULL;
-    int numSpanWise = 0;
-
-    // AVL control surface information
-    int numAVLControl = 0;
-    vlmControlStruct *avlControl = NULL;
-
     int numControlName = 0; // Unique control names
     char **controlName = NULL;
 
-    mapAttrToIndexStruct attrMap; // Attribute to index map
+    int numSpanWise = 0;
 
     // Control related variables
     //double xyzHingeMag, xyzHingeVec[3];
@@ -1761,7 +1824,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 #ifdef DEBUG
     printf(" avlAIM/aimPreAnalysis\n");
 #endif
-  
+
     avlInstance = (aimStorage *) instStore;
 
     // Initialize reference values
@@ -1780,10 +1843,6 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         return CAPS_NULLVALUE;
     }
 
-    // Container for attribute to index map
-    status = initiate_mapAttrToIndexStruct(&attrMap);
-    AIM_STATUS(aimInfo, status);
-
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
     AIM_STATUS(aimInfo, status);
 
@@ -1793,78 +1852,105 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         goto cleanup;
     }
 
-    // Destroy previous controlMap (in case it already exists)
-    status = destroy_mapAttrToIndexStruct(&avlInstance->controlMap);
-    AIM_STATUS(aimInfo, status);
+    if (aim_newGeometry(aimInfo) == CAPS_SUCCESS) {
+      // Destroy previous groupMap (in case it already exists)
+      status = destroy_mapAttrToIndexStruct(&avlInstance->groupMap);
+      AIM_STATUS(aimInfo, status);
 
-    // Get capsGroup name and index mapping to make sure all bodies have a capsGroup value
-    status = create_CAPSGroupAttrToIndexMap(numBody,
-                                            bodies,
-                                            0, // Only search down to the body level of the EGADS body
-                                            &attrMap);
-    AIM_STATUS(aimInfo, status);
-
-    // Get AVL surface information
-    if (aimInputs[inAVL_Surface-1].nullVal == NotNull) {
-
-        status = get_vlmSurface(aimInputs[inAVL_Surface-1].length,
-                                aimInputs[inAVL_Surface-1].vals.tuple,
-                                &attrMap,
-                                1.0, // default Cspace
-                                &numAVLSurface,
-                                &avlSurface);
-        AIM_STATUS(aimInfo, status);
-
-    } else {
-        AIM_ERROR(aimInfo, "No AVL_Surface specified!");
-        status = CAPS_NOTFOUND;
-        goto cleanup;
+      // Get capsGroup name and index mapping to make sure all bodies have a capsGroup value
+      status = create_CAPSGroupAttrToIndexMap(numBody,
+                                              bodies,
+                                              0, // Only search down to the body level of the EGADS body
+                                              &avlInstance->groupMap);
+      AIM_STATUS(aimInfo, status);
     }
 
-    // Accumulate section data
-    status = vlm_getSections(numBody, bodies, NULL, attrMap, vlmGENERIC,
-                             numAVLSurface, &avlSurface);
-    AIM_STATUS(aimInfo, status);
-    AIM_NOTNULL(avlSurface, aimInfo, status);
 
-    // Get AVL control surface information
-    if (aimInputs[inAVL_Control-1].nullVal == NotNull) {
+    if (aim_newGeometry(aimInfo) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inAVL_Surface) == CAPS_SUCCESS) {
+        // Get AVL surface information
+        if (aimInputs[inAVL_Surface-1].nullVal == NotNull) {
 
-        status = get_vlmControl(aimInputs[inAVL_Control-1].length,
-                                aimInputs[inAVL_Control-1].vals.tuple,
-                                &numAVLControl,
-                                &avlControl);
-        AIM_STATUS(aimInfo, status);
-    }
+            if (avlInstance->avlSurface != NULL) {
+                for (i = 0; i < avlInstance->numAVLSurface; i++) {
+                    status = destroy_vlmSurfaceStruct(&avlInstance->avlSurface[i]);
+                    AIM_STATUS(aimInfo, status);
+                }
+                AIM_FREE(avlInstance->avlSurface);
+                avlInstance->numAVLSurface = 0;
+            }
 
-    // Loop through surfaces and transfer control surface data to sections
-    for (surf = 0; surf < numAVLSurface; surf++) {
-/*@-nullpass@*/
-        status = get_ControlSurface(aimInfo,
-                                    numAVLControl,
-                                    avlControl,
-                                    &avlSurface[surf]);
-/*@+nullpass@*/
-        AIM_STATUS (aimInfo, status);
-    }
+            status = get_vlmSurface(aimInputs[inAVL_Surface-1].length,
+                                    aimInputs[inAVL_Surface-1].vals.tuple,
+                                    &avlInstance->groupMap,
+                                    1.0, // default Cspace
+                                    &avlInstance->numAVLSurface,
+                                    &avlInstance->avlSurface);
+            AIM_STATUS(aimInfo, status);
 
-    // Compute auto spacing
-    for (surf = 0; surf < numAVLSurface; surf++) {
-
-        if      (avlSurface[surf].NspanTotal > 0  && avlSurface[surf].NspanSection == 0)
-            numSpanWise = avlSurface[surf].NspanTotal;
-        else if (avlSurface[surf].NspanTotal == 0 && avlSurface[surf].NspanSection > 0 )
-            numSpanWise = (avlSurface[surf].numSection-1)*avlSurface[surf].NspanSection;
-        else {
-            AIM_ERROR  (aimInfo,"Only one of numSpanTotal and numSpanPerSection must be non-zero!");
-            AIM_ADDLINE(aimInfo,"       numSpanTotal      = %d", avlSurface[surf].NspanTotal);
-            AIM_ADDLINE(aimInfo,"       numSpanPerSection = %d", avlSurface[surf].NspanSection);
-            status = CAPS_BADVALUE;
+        } else {
+            AIM_ERROR(aimInfo, "No AVL_Surface specified!");
+            status = CAPS_NOTFOUND;
             goto cleanup;
         }
 
-        status = vlm_autoSpaceSpanPanels(numSpanWise, avlSurface[surf].numSection, avlSurface[surf].vlmSection);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        // Accumulate section data
+        status = vlm_getSections(aimInfo, numBody, bodies, NULL, avlInstance->groupMap, vlmGENERIC,
+                                 avlInstance->numAVLSurface, &avlInstance->avlSurface);
+        AIM_STATUS(aimInfo, status);
+        AIM_NOTNULL(avlInstance->avlSurface, aimInfo, status);
+    }
+
+    if (aim_newGeometry(aimInfo) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inAVL_Control) == CAPS_SUCCESS) {
+
+        // Get AVL control surface information
+        if (aimInputs[inAVL_Control-1].nullVal == NotNull) {
+
+            status = get_vlmControl(aimInfo,
+                                    aimInputs[inAVL_Control-1].length,
+                                    aimInputs[inAVL_Control-1].vals.tuple,
+                                    &avlInstance->numAVLControl,
+                                    &avlInstance->avlControl);
+            AIM_STATUS(aimInfo, status);
+        }
+
+        // Loop through surfaces and transfer control surface data to sections
+        for (surf = 0; surf < avlInstance->numAVLSurface; surf++) {
+    /*@-nullpass@*/
+            status = get_ControlSurface(aimInfo,
+                                        avlInstance->numAVLControl,
+                                        avlInstance->avlControl,
+                                        &avlInstance->avlSurface[surf]);
+    /*@+nullpass@*/
+            AIM_STATUS (aimInfo, status);
+        }
+    }
+
+    if (aim_newGeometry(aimInfo) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inAVL_Surface) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inAVL_Control) == CAPS_SUCCESS) {
+
+        // Compute auto spacing
+        for (surf = 0; surf < avlInstance->numAVLSurface; surf++) {
+
+            if      (avlInstance->avlSurface[surf].NspanTotal > 0  && avlInstance->avlSurface[surf].NspanSection == 0)
+                numSpanWise = avlInstance->avlSurface[surf].NspanTotal;
+            else if (avlInstance->avlSurface[surf].NspanTotal == 0 && avlInstance->avlSurface[surf].NspanSection > 0 )
+                numSpanWise = (avlInstance->avlSurface[surf].numSection-1)*avlInstance->avlSurface[surf].NspanSection;
+            else {
+                AIM_ERROR  (aimInfo,"Only one of numSpanTotal and numSpanPerSection must be non-zero!");
+                AIM_ADDLINE(aimInfo,"       numSpanTotal      = %d", avlInstance->avlSurface[surf].NspanTotal);
+                AIM_ADDLINE(aimInfo,"       numSpanPerSection = %d", avlInstance->avlSurface[surf].NspanSection);
+                status = CAPS_BADVALUE;
+                goto cleanup;
+            }
+
+            status = vlm_autoSpaceSpanPanels(aimInfo,
+                                             numSpanWise, avlInstance->avlSurface[surf].numSection,
+                                                          avlInstance->avlSurface[surf].vlmSection);
+            AIM_STATUS (aimInfo, status);
+        }
     }
 
     /*
@@ -1986,67 +2072,48 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     fprintf(fp, "Y Y ");//Yaw Rate rb/2v
     fprintf(fp, "%lf\n", aimInputs[inYawRate-1].vals.real);
 
+    // Destroy previous controlMap (in case it already exists)
+    status = destroy_mapAttrToIndexStruct(&avlInstance->controlMap);
+    AIM_STATUS(aimInfo, status);
+
     // Check for control surface information
     j = 1;
     numControlName = 0;
-    for (surf = 0; surf < numAVLSurface; surf++) {
+    for (surf = 0; surf < avlInstance->numAVLSurface; surf++) {
 
-        for (i = 0; i < avlSurface[surf].numSection; i++) {
+        for (i = 0; i < avlInstance->avlSurface[surf].numSection; i++) {
 
-            section = avlSurface[surf].vlmSection[i].sectionIndex;
+            section = avlInstance->avlSurface[surf].vlmSection[i].sectionIndex;
 
-            for (control = 0; control < avlSurface[surf].vlmSection[section].numControl; control++) {
+            for (control = 0; control < avlInstance->avlSurface[surf].vlmSection[section].numControl; control++) {
 
                 // Check to see if control surface hasn't already been written
                 found = (int) false;
 
-                if (controlName == NULL) {
-
-                    numControlName = 1;
-
-                    controlName = (char **) EG_alloc(numControlName * sizeof(char *));
-                    if (controlName == NULL) {
-                        numControlName -= 1;
-                        status = EGADS_MALLOC;
-                        goto cleanup;
+                for (k = 0; k < numControlName; k++) {
+                    /*@-nullderef@*/
+                    if (strcmp(controlName[k],
+                               avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].name) == 0) {
+                        found = (int) true;
+                        break;
                     }
-
-                } else {
-
-                    for (k = 0; k < numControlName; k++) {
-                        if (strcmp(controlName[k],
-                                avlSurface[surf].vlmSection[section].vlmControl[control].name) == 0) {
-
-                            found = (int) true;
-                            break;
-                        }
-                    }
-
-                    if (found == (int) true) continue;
-
-                    numControlName += 1;
-
-                    controlName = (char **) EG_reall(controlName, numControlName * sizeof(char *));
+                    /*@+nullderef@*/
                 }
+                if (found == (int) true) continue;
 
-                stringLength = strlen(avlSurface[surf].vlmSection[section].vlmControl[control].name);
+                AIM_REALL(controlName, numControlName+1, char*, aimInfo, status);
+                controlName[numControlName] = NULL;
+                numControlName += 1;
 
-                controlName[numControlName -1] = (char *) EG_alloc((stringLength+1) * sizeof(char));
-
-                if (controlName[numControlName -1] == NULL) {
-                    status = EGADS_MALLOC;
-                    goto cleanup;
-                }
-
-                strcpy(controlName[numControlName -1],
-                        avlSurface[surf].vlmSection[section].vlmControl[control].name);
+                AIM_STRDUP(controlName[numControlName-1],
+                           avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].name, aimInfo, status);
 
                 // Store control map for later use
                 status = increment_mapAttrToIndexStruct(&avlInstance->controlMap,
-                        (const char *) controlName[numControlName-1]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                                                        controlName[numControlName-1]);
+                AIM_STATUS(aimInfo, status);
 
-                fprintf(fp, "D%d D%d %f\n",j, j, avlSurface[surf].vlmSection[section].vlmControl[control].deflectionAngle);
+                fprintf(fp, "D%d D%d %f\n",j, j, avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].deflectionAngle);
                 j += 1;
             }
         }
@@ -2134,180 +2201,213 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     fclose(fp);
     fp = NULL;
 
-    /* open the file and write the avl data */
-    fp = aim_fopen(aimInfo, avlFilename, "w");
-    if (fp == NULL) {
-        AIM_ERROR(aimInfo, "Unable to open file %s\n!", avlFilename);
-        status =  CAPS_IOERR;
-        goto cleanup;
-    }
+    if (aim_newGeometry(aimInfo) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inAVL_Surface) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inAVL_Control) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inMoment_Center) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inCDp) == CAPS_SUCCESS) {
 
-    // Loop over bodies and look for reference quantity attributes
-    for (i=0; i < numBody; i++) {
-        status = EG_attributeRet(bodies[i], "capsReferenceArea",
-                                 &atype, &alen, &ints, &reals, &string);
-        if (status == EGADS_SUCCESS) {
-
-            if (atype == ATTRREAL && alen == 1) {
-                Sref = (double) reals[0];
-            } else {
-                AIM_ERROR(aimInfo, "capsReferenceArea should be followed by a single real value!\n");
-                status = CAPS_BADVALUE;
-                goto cleanup;
-            }
+        /* open the file and write the avl data */
+        fp = aim_fopen(aimInfo, avlFilename, "w");
+        if (fp == NULL) {
+            AIM_ERROR(aimInfo, "Unable to open file %s\n!", avlFilename);
+            status =  CAPS_IOERR;
+            goto cleanup;
         }
 
-        status = EG_attributeRet(bodies[i], "capsReferenceChord",
-                                 &atype, &alen, &ints, &reals, &string);
-        if (status == EGADS_SUCCESS) {
+        // Loop over bodies and look for reference quantity attributes
+        for (i=0; i < numBody; i++) {
+            status = EG_attributeRet(bodies[i], "capsReferenceArea",
+                                     &atype, &alen, &ints, &reals, &string);
+            if (status == EGADS_SUCCESS) {
 
-            if (atype == ATTRREAL && alen == 1) {
-                Cref = (double) reals[0];
-            } else {
-                AIM_ERROR(aimInfo, "capsReferenceChord should be followed by a single real value!\n");
-                status = CAPS_BADVALUE;
-                goto cleanup;
-            }
-        }
-
-        status = EG_attributeRet(bodies[i], "capsReferenceSpan",
-                                 &atype, &alen, &ints, &reals, &string);
-        if (status == EGADS_SUCCESS) {
-
-            if (atype == ATTRREAL && alen == 1) {
-                Bref = (double) reals[0];
-            } else {
-                AIM_ERROR(aimInfo, "capsReferenceSpan should be followed by a single real value!\n");
-                status = CAPS_BADVALUE;
-                goto cleanup;
-            }
-        }
-
-        status = EG_attributeRet(bodies[i], "capsReferenceX",
-                                 &atype, &alen, &ints, &reals, &string);
-        if (status == EGADS_SUCCESS) {
-
-            if (atype == ATTRREAL && alen == 1) {
-                Xref = (double) reals[0];
-            } else {
-                AIM_ERROR(aimInfo, "capsReferenceX should be followed by a single real value!\n");
-                status = CAPS_BADVALUE;
-                goto cleanup;
-            }
-        }
-
-        status = EG_attributeRet(bodies[i], "capsReferenceY",
-                                 &atype, &alen, &ints, &reals, &string);
-        if (status == EGADS_SUCCESS) {
-
-            if (atype == ATTRREAL && alen == 1) {
-                Yref = (double) reals[0];
-            } else {
-                AIM_ERROR(aimInfo, "capsReferenceY should be followed by a single real value!\n");
-                status = CAPS_BADVALUE;
-                goto cleanup;
-            }
-        }
-
-        status = EG_attributeRet(bodies[i], "capsReferenceZ",
-                                 &atype, &alen, &ints, &reals, &string);
-        if (status == EGADS_SUCCESS){
-
-            if (atype == ATTRREAL && alen == 1) {
-                Zref = (double) reals[0];
-            } else {
-                AIM_ERROR(aimInfo, "capsReferenceZ should be followed by a single real value!\n");
-                status = CAPS_BADVALUE;
-                goto cleanup;
-            }
-        }
-    }
-
-    // Check for moment reference overwrites
-    if (aimInputs[inMoment_Center-1].nullVal ==  NotNull) {
-
-        Xref = aimInputs[inMoment_Center-1].vals.reals[0];
-        Yref = aimInputs[inMoment_Center-1].vals.reals[1];
-        Zref = aimInputs[inMoment_Center-1].vals.reals[2];
-    }
-
-    fprintf(fp, "CAPS generated Configuration\n");
-    fprintf(fp, "0.0         # Mach\n");                                   /* Mach */
-    fprintf(fp, "0 0 0       # IYsym   IZsym   Zsym\n");                   /* IYsym   IZsym   Zsym */
-    fprintf(fp, "%lf %lf %lf # Sref    Cref    Bref\n", Sref, Cref, Bref); /* Sref    Cref    Bref */
-    fprintf(fp, "%lf %lf %lf # Xref    Yref    Zref\n", Xref, Yref, Zref); /* Xref    Yref    Zref */
-    fprintf(fp, "%lf         # CDp\n", aimInputs[inCDp-1].vals.real);      /* CDp */
-
-    // Write out the Surfaces, one at a time
-    for (surf = 0; surf < numAVLSurface; surf++) {
-
-        printf("Writing surface - %s (ID = %d)\n", avlSurface[surf].name, surf);
-
-        if (avlSurface[surf].numSection < 2) {
-            printf("Surface %s only has %d Sections - it will be skipped!\n",
-                   avlSurface[surf].name, avlSurface[surf].numSection);
-            continue;
-        }
-
-        fprintf(fp, "#\nSURFACE\n%s\n%d %lf\n\n", avlSurface[surf].name,
-                                                  avlSurface[surf].Nchord,
-                                                  avlSurface[surf].Cspace);
-
-        if  (avlSurface[surf].compon != 0)
-            fprintf(fp, "COMPONENT\n%d\n\n", avlSurface[surf].compon);
-
-        if  (avlSurface[surf].iYdup  != 0)
-            fprintf(fp, "YDUPLICATE\n0.0\n\n");
-
-        if  (avlSurface[surf].nowake == (int) true) fprintf(fp, "NOWAKE\n");
-        if  (avlSurface[surf].noalbe == (int) true) fprintf(fp, "NOALBE\n");
-        if  (avlSurface[surf].noload == (int) true) fprintf(fp, "NOLOAD\n");
-
-        if ( (avlSurface[surf].nowake == (int) true) ||
-             (avlSurface[surf].noalbe == (int) true) ||
-             (avlSurface[surf].noload == (int) true)) {
-
-            fprintf(fp,"\n");
-        }
-
-        // Write the sections for each surface
-        for (i = 0; i < avlSurface[surf].numSection; i++) {
-
-            section = avlSurface[surf].vlmSection[i].sectionIndex;
-
-            printf("\tSection %d of %d (ID = %d)\n",
-                   i+1, avlSurface[surf].numSection, section);
-
-            // Write section data
-            status = writeSection(fp, &avlSurface[surf].vlmSection[section]);
-            if (status != CAPS_SUCCESS) goto cleanup;
-
-            // Write control information for each section
-            for (control = 0; control < avlSurface[surf].vlmSection[section].numControl; control++) {
-
-                printf("\t  Control surface %d of %d \n", control + 1, avlSurface[surf].vlmSection[section].numControl);
-
-                fprintf(fp, "CONTROL\n");
-                fprintf(fp, "%s ", avlSurface[surf].vlmSection[section].vlmControl[control].name);
-
-                fprintf(fp, "%f ", avlSurface[surf].vlmSection[section].vlmControl[control].controlGain);
-
-                if (avlSurface[surf].vlmSection[section].vlmControl[control].leOrTe == 0) { // Leading edge (-)
-
-                    fprintf(fp, "%f ", -avlSurface[surf].vlmSection[section].vlmControl[control].percentChord);
-
-                } else { // Trailing edge (+)
-
-                    fprintf(fp, "%f ", avlSurface[surf].vlmSection[section].vlmControl[control].percentChord);
+                if (atype == ATTRREAL && alen == 1) {
+                    Sref = (double) reals[0];
+                    foundSref = (int)true;
+                } else {
+                    AIM_ERROR(aimInfo, "capsReferenceArea should be followed by a single real value!\n");
+                    status = CAPS_BADVALUE;
+                    goto cleanup;
                 }
-
-                fprintf(fp, "%f %f %f ", avlSurface[surf].vlmSection[section].vlmControl[control].xyzHingeVec[0],
-                        avlSurface[surf].vlmSection[section].vlmControl[control].xyzHingeVec[1],
-                        avlSurface[surf].vlmSection[section].vlmControl[control].xyzHingeVec[2]);
-
-                fprintf(fp, "%f\n", (double) avlSurface[surf].vlmSection[section].vlmControl[control].deflectionDup);
             }
-            fprintf(fp, "\n");
+
+            status = EG_attributeRet(bodies[i], "capsReferenceChord",
+                                     &atype, &alen, &ints, &reals, &string);
+            if (status == EGADS_SUCCESS) {
+
+                if (atype == ATTRREAL && alen == 1) {
+                    Cref = (double) reals[0];
+                    foundCref = (int)true;
+                } else {
+                    AIM_ERROR(aimInfo, "capsReferenceChord should be followed by a single real value!\n");
+                    status = CAPS_BADVALUE;
+                    goto cleanup;
+                }
+            }
+
+            status = EG_attributeRet(bodies[i], "capsReferenceSpan",
+                                     &atype, &alen, &ints, &reals, &string);
+            if (status == EGADS_SUCCESS) {
+
+                if (atype == ATTRREAL && alen == 1) {
+                    Bref = (double) reals[0];
+                    foundBref = (int)true;
+                } else {
+                    AIM_ERROR(aimInfo, "capsReferenceSpan should be followed by a single real value!\n");
+                    status = CAPS_BADVALUE;
+                    goto cleanup;
+                }
+            }
+
+            status = EG_attributeRet(bodies[i], "capsReferenceX",
+                                     &atype, &alen, &ints, &reals, &string);
+            if (status == EGADS_SUCCESS) {
+
+                if (atype == ATTRREAL && alen == 1) {
+                    Xref = (double) reals[0];
+                    foundXref = (int)true;
+                } else {
+                    AIM_ERROR(aimInfo, "capsReferenceX should be followed by a single real value!\n");
+                    status = CAPS_BADVALUE;
+                    goto cleanup;
+                }
+            }
+
+            status = EG_attributeRet(bodies[i], "capsReferenceY",
+                                     &atype, &alen, &ints, &reals, &string);
+            if (status == EGADS_SUCCESS) {
+
+                if (atype == ATTRREAL && alen == 1) {
+                    Yref = (double) reals[0];
+                } else {
+                    AIM_ERROR(aimInfo, "capsReferenceY should be followed by a single real value!\n");
+                    status = CAPS_BADVALUE;
+                    goto cleanup;
+                }
+            }
+
+            status = EG_attributeRet(bodies[i], "capsReferenceZ",
+                                     &atype, &alen, &ints, &reals, &string);
+            if (status == EGADS_SUCCESS){
+
+                if (atype == ATTRREAL && alen == 1) {
+                    Zref = (double) reals[0];
+                } else {
+                    AIM_ERROR(aimInfo, "capsReferenceZ should be followed by a single real value!\n");
+                    status = CAPS_BADVALUE;
+                    goto cleanup;
+                }
+            }
+        }
+
+        if (foundSref == (int)false) {
+            AIM_ERROR(aimInfo, "capsReferenceArea is not set on any body!");
+            status = CAPS_BADVALUE;
+            goto cleanup;
+        }
+        if (foundCref == (int)false) {
+            AIM_ERROR(aimInfo, "capsReferenceChord is not set on any body!");
+            status = CAPS_BADVALUE;
+            goto cleanup;
+        }
+        if (foundBref == (int)false) {
+            AIM_ERROR(aimInfo, "capsReferenceSpan is not set on any body!");
+            status = CAPS_BADVALUE;
+            goto cleanup;
+        }
+        if (foundXref == (int)false) {
+            AIM_ERROR(aimInfo, "capsReferenceX is not set on any body!");
+            status = CAPS_BADVALUE;
+            goto cleanup;
+        }
+
+        // Check for moment reference overwrites
+        if (aimInputs[inMoment_Center-1].nullVal ==  NotNull) {
+
+            Xref = aimInputs[inMoment_Center-1].vals.reals[0];
+            Yref = aimInputs[inMoment_Center-1].vals.reals[1];
+            Zref = aimInputs[inMoment_Center-1].vals.reals[2];
+        }
+
+        fprintf(fp, "CAPS generated Configuration\n");
+        fprintf(fp, "0.0         # Mach\n");                                   /* Mach */
+        fprintf(fp, "0 0 0       # IYsym   IZsym   Zsym\n");                   /* IYsym   IZsym   Zsym */
+        fprintf(fp, "%lf %lf %lf # Sref    Cref    Bref\n", Sref, Cref, Bref); /* Sref    Cref    Bref */
+        fprintf(fp, "%lf %lf %lf # Xref    Yref    Zref\n", Xref, Yref, Zref); /* Xref    Yref    Zref */
+        fprintf(fp, "%lf         # CDp\n", aimInputs[inCDp-1].vals.real);      /* CDp */
+
+        // Write out the Surfaces, one at a time
+        for (surf = 0; surf < avlInstance->numAVLSurface; surf++) {
+
+            printf("Writing surface - %s (ID = %d)\n", avlInstance->avlSurface[surf].name, surf);
+
+            if (avlInstance->avlSurface[surf].numSection < 2) {
+                printf("Surface %s only has %d Sections - it will be skipped!\n",
+                       avlInstance->avlSurface[surf].name, avlInstance->avlSurface[surf].numSection);
+                continue;
+            }
+
+            fprintf(fp, "#\nSURFACE\n%s\n%d %lf\n\n", avlInstance->avlSurface[surf].name,
+                                                      avlInstance->avlSurface[surf].Nchord,
+                                                      avlInstance->avlSurface[surf].Cspace);
+
+            if  (avlInstance->avlSurface[surf].compon != 0)
+                fprintf(fp, "COMPONENT\n%d\n\n", avlInstance->avlSurface[surf].compon);
+
+            if  (avlInstance->avlSurface[surf].iYdup  != 0)
+                fprintf(fp, "YDUPLICATE\n0.0\n\n");
+
+            if  (avlInstance->avlSurface[surf].nowake == (int) true) fprintf(fp, "NOWAKE\n");
+            if  (avlInstance->avlSurface[surf].noalbe == (int) true) fprintf(fp, "NOALBE\n");
+            if  (avlInstance->avlSurface[surf].noload == (int) true) fprintf(fp, "NOLOAD\n");
+
+            if ( (avlInstance->avlSurface[surf].nowake == (int) true) ||
+                 (avlInstance->avlSurface[surf].noalbe == (int) true) ||
+                 (avlInstance->avlSurface[surf].noload == (int) true)) {
+
+                fprintf(fp,"\n");
+            }
+
+            // Write the sections for each surface
+            for (i = 0; i < avlInstance->avlSurface[surf].numSection; i++) {
+
+                section = avlInstance->avlSurface[surf].vlmSection[i].sectionIndex;
+
+                printf("\tSection %d of %d (ID = %d)\n",
+                       i+1, avlInstance->avlSurface[surf].numSection, section);
+
+                // Write section data
+                status = writeSection(aimInfo, fp, &avlInstance->avlSurface[surf].vlmSection[section]);
+                AIM_STATUS(aimInfo, status);
+
+                // Write control information for each section
+                for (control = 0; control < avlInstance->avlSurface[surf].vlmSection[section].numControl; control++) {
+
+                    printf("\t  Control surface %d of %d \n", control + 1, avlInstance->avlSurface[surf].vlmSection[section].numControl);
+
+                    fprintf(fp, "CONTROL\n");
+                    fprintf(fp, "%s ", avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].name);
+
+                    fprintf(fp, "%f ", avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].controlGain);
+
+                    if (avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].leOrTe == 0) { // Leading edge (-)
+
+                        fprintf(fp, "%f ", -avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].percentChord);
+
+                    } else { // Trailing edge (+)
+
+                        fprintf(fp, "%f ", avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].percentChord);
+                    }
+
+                    fprintf(fp, "%f %f %f ",
+                            avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].xyzHingeVec[0],
+                            avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].xyzHingeVec[1],
+                            avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].xyzHingeVec[2]);
+
+                    fprintf(fp, "%f\n", (double) avlInstance->avlSurface[surf].vlmSection[section].vlmControl[control].deflectionDup);
+                }
+                fprintf(fp, "\n");
+            }
         }
     }
 
@@ -2316,15 +2416,12 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 /*@-nullpass@*/
       status = writeMassFile(aimInfo, aimInputs, &avlInstance->units, bodyLunits, massFilename);
 /*@+nullpass@*/
-      if (status != CAPS_SUCCESS) goto cleanup;
+      AIM_STATUS(aimInfo, status);
     }
 
     status = CAPS_SUCCESS;
 
 cleanup:
-    if (status != CAPS_SUCCESS)
-        printf("Error: Premature exit in AVL preAnalysis() status = %d\n",
-               status);
 
     if (fp != NULL) fclose(fp);
 
@@ -2335,29 +2432,6 @@ cleanup:
         AIM_FREE(controlName);
 #endif
     }
-
-    // Attribute to index map
-    (void) destroy_mapAttrToIndexStruct(&attrMap);
-
-    // Destroy avlSurfaces
-    if (avlSurface != NULL) {
-        for (i = 0; i < numAVLSurface; i++) {
-            (void) destroy_vlmSurfaceStruct(&avlSurface[i]);
-        }
-    }
-
-    AIM_FREE(avlSurface);
-    numAVLSurface = 0;
-
-    // Destroy avlControl
-    if (avlControl != NULL) {
-        for (i = 0; i < numAVLControl; i++) {
-            (void) destroy_vlmControlStruct(&avlControl[i]);
-        }
-    }
-
-    AIM_FREE(avlControl);
-    numAVLControl = 0;
 
     return status;
 }
@@ -2394,12 +2468,7 @@ int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
    * avl.preAnalysis()
    *
    * print ("\n\nRunning......")
-   * currentDirectory = os.getcwd() # Get our current working directory
-   *
-   * os.chdir(avl.analysisDir) # Move into test directory
-   * os.system("avl caps < avlInput.txt > avlOutput.txt"); # Run via system call
-   *
-   * os.chdir(currentDirectory) # Move back to top directory
+   * avl.system("avl caps < avlInput.txt > avlOutput.txt"); # Run via system call
    *
    * print ("\n\postAnalysis......")
    * avl.postAnalysis()
@@ -3595,7 +3664,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
 
       status = read_Data(aimInfo, fileToOpen, key, &val->vals.real);
       AIM_STATUS(aimInfo, status);
-      
+
       /* read derivatives */
       for (i = 0; i < nderiv; i++) {
         /*@-nullpass@*/
@@ -3615,43 +3684,39 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
             return CAPS_SUCCESS;
         }
 
-        val->vals.tuple = (capsTuple *) EG_alloc(val->nrow*sizeof(capsTuple));
-        if (val->vals.tuple == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        AIM_ALLOC(val->vals.tuple, val->nrow, capsTuple, aimInfo, status);
 
         for (i = 0; i < val->nrow; i++) val->vals.tuple[i].name = val->vals.tuple[i].value = NULL;
 
         // Loop through control surfaces
         for (i = 0; i < avlInstance->controlMap.numAttribute; i++) {
 
-            val->vals.tuple[i].name = EG_strdup(avlInstance->controlMap.attributeName[i]);
+            AIM_STRDUP(val->vals.tuple[i].name, avlInstance->controlMap.attributeName[i], aimInfo, status);
 
             // Stability axis
             if (index == ControlStability) {
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           CLtot, &tempVal[0]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           CYtot, &tempVal[1]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
 
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           ClPtot, &tempVal[2]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
 
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           Cmtot, &tempVal[3]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
 
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           CnPtot, &tempVal[4]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 sprintf(jsonOut,"{\"%s\":%7.6f,\"%s\":%7.6f,\"%s\":%7.6f,\"%s\":%7.6f,\"%s\":%7.6f}",
                         "CLtot",  tempVal[0],
@@ -3659,37 +3724,37 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                         "Cl'tot", tempVal[2],
                         "Cmtot",  tempVal[3],
                         "Cn'tot", tempVal[4]);
-                val->vals.tuple[i].value = EG_strdup(jsonOut);
+                AIM_STRDUP(val->vals.tuple[i].value, jsonOut, aimInfo, status);
 
             } else if (index == ControlBody) {
 
                 // Body axis
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           CXtot, &tempVal[0]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           CYtot, &tempVal[1]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           CZtot, &tempVal[2]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
 
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           Cltot, &tempVal[3]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
 
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           Cmtot, &tempVal[4]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
 
                 status = get_controlDeriv(aimInfo, avlInstance->controlMap.attributeIndex[i],
                                           Cntot, &tempVal[5]);
-                if (status != CAPS_SUCCESS) goto cleanup;;
+                AIM_STATUS(aimInfo, status);;
 
                 sprintf(jsonOut,"{\"%s\":%7.6f,\"%s\":%7.6f,\"%s\":%7.6f,\"%s\":%7.6f,\"%s\":%7.6f,\"%s\":%7.6f}",
                         "CXtot", tempVal[0], "CYtot", tempVal[1], "CZtot", tempVal[2],
@@ -3699,11 +3764,11 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
             } else if (index == HingeMoment) {
 
                 status = read_Data(aimInfo, fileToOpen, val->vals.tuple[i].name, &tempVal[0]);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 sprintf(jsonOut, "%5.4e", tempVal[0]);
 
-                val->vals.tuple[i].value = EG_strdup(jsonOut);
+                AIM_STRDUP(val->vals.tuple[i].value, jsonOut, aimInfo, status);
 
             } else {
                 status = CAPS_NOTFOUND;
@@ -3716,13 +3781,13 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
 
       // Read in the strip forces
       status = read_StripForces(aimInfo, &val->nrow, &val->vals.tuple);
-      if (status != CAPS_SUCCESS) goto cleanup;
+      AIM_STATUS(aimInfo, status);
 
     } else if (index == EigenValues) {
 
       // Read in the strip forces
       status = read_EigenValues(aimInfo, &val->nrow, &val->vals.tuple);
-      if (status != CAPS_SUCCESS) goto cleanup;
+      AIM_STATUS(aimInfo, status);
 
     } else {
 
@@ -3749,13 +3814,9 @@ void aimCleanup(void *instStore)
 #endif
     avlInstance = (aimStorage *) instStore;
 
-    (void) destroy_mapAttrToIndexStruct(&avlInstance->controlMap);
-
-    // Cleanup units
-    destroy_cfdUnitsStruct(&avlInstance->units);
-
+    // cleanup storage
+    destroy_aimStorage(avlInstance);
     AIM_FREE(avlInstance);
-
 }
 
 // ********************** AIM Function Break *****************************
@@ -3828,7 +3889,7 @@ int aimBackdoor(void *instStore, void *aimInfo, const char *JSONin,
         status = CAPS_NOTFOUND;
         goto cleanup;
     }
-  
+
     avlInstance = (aimStorage *) instStore;
 
     // We are using this to get sensitivities

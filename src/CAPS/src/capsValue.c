@@ -3,7 +3,7 @@
  *
  *             Value Object Functions
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -256,7 +256,7 @@ caps_updateAnalysisOut(capsObject *vobject, const int funID,
   analysis = (capsAnalysis *) aobject->blind;
   if (aobject->parent      == NULL)      return CAPS_NULLOBJ;
 
-  /* check to see if analysis is CLEAN */
+  /* check to see if analysis is CLEAN, and auto-execute if possible */
   status = caps_analysisInfX(aobject, &apath, &unitSys, &major, &minor,
                              &intents, &nField, &fnames, &ranks, &fInOut,
                              &exec, &dirty);
@@ -335,11 +335,13 @@ caps_getValuX(capsObject *object, enum capsvType *type, int *nrow, int *ncol,
   int         status;
   capsValue   *value;
   capsObject  *pobject, *source, *last;
+  capsProblem *problem;
 
   *nErr   = 0;
   *errors = NULL;
   status  = caps_findProblem(object, 9999, &pobject);
   if (status != CAPS_SUCCESS) return status;
+  problem = (capsProblem *) pobject->blind;
 
   source = object;
   do {
@@ -353,14 +355,15 @@ caps_getValuX(capsObject *object, enum capsvType *type, int *nrow, int *ncol,
   } while (value->link != NULL);
 
   /* do we need to update our value? */
-  if (last->subtype == ANALYSISOUT) {
-    status = caps_updateAnalysisOut(last, CAPS_GETVALUE, nErr, errors);
-    if (status != CAPS_SUCCESS) return status;
-  } else if (last->subtype == GEOMETRYOUT) {
-    /* make sure geometry is up-to-date */
-    status = caps_build(pobject, nErr, errors);
-    if ((status != CAPS_SUCCESS) && (status != CAPS_CLEAN)) return status;
-  }
+  if (problem->dbFlag == 0)
+    if (last->subtype == ANALYSISOUT) {
+      status = caps_updateAnalysisOut(last, CAPS_GETVALUE, nErr, errors);
+      if (status != CAPS_SUCCESS) return status;
+    } else if (last->subtype == GEOMETRYOUT) {
+      /* make sure geometry is up-to-date */
+      status = caps_build(pobject, nErr, errors);
+      if ((status != CAPS_SUCCESS) && (status != CAPS_CLEAN)) return status;
+    }
 
   *type    = value->type;
   *nrow    = value->nrow;
@@ -437,6 +440,15 @@ caps_getValue(capsObject *object, enum capsvType *type, int *nrow, int *ncol,
   stat  = caps_findProblem(object, CAPS_GETVALUE, &pobject);
   if (stat != CAPS_SUCCESS)             return stat;
   problem = (capsProblem *) pobject->blind;
+  
+  /* just return the values if in debug mode */
+  if (problem->dbFlag == 1) {
+    ret   = caps_getValuX(object, type, nrow, ncol, data, partial, units,
+                          nErr, errors);
+    *nErr = 0;
+    if (*errors != NULL) *nErr = (*errors)->nError;
+    return ret;
+  }
 
   args[0].type = jInteger;
   args[1].type = jInteger;
@@ -706,7 +718,8 @@ caps_makeValueX(capsObject *pobject, const char *vname, enum capssType stype,
   }
 
   /* finish the object off */
-  if (units != NULL) value->units = EG_strdup(units);
+  if ((units != NULL) &&
+      (strlen(units) > 0)) value->units = EG_strdup(units);
   object->name    = EG_strdup(vname);
   object->type    = VALUE;
   object->subtype = stype;
@@ -774,6 +787,7 @@ caps_makeValue(capsObject *pobject, const char *vname, enum capssType stype,
   vlen = ncol*nrow;
   if (vlen <= 0)                               return CAPS_BADINDEX;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag == 1)                    return CAPS_READONLYERR;
 
   /* check the units */
   if (units != NULL) {
@@ -837,17 +851,31 @@ caps_setValuX(capsObject *object, enum capsvType vtype, int nrow, int ncol,
 
   /* are we in range? */
   if (value->type == Integer) {
-    ints = (int *) data;
     if (value->limits.ilims[0] != value->limits.ilims[1])
-      for (i = 0; i < vlen; i++)
-        if ((ints[i] < value->limits.ilims[0]) ||
-            (ints[i] > value->limits.ilims[1])) return CAPS_RANGEERR;
+      if (vtype == Integer) {
+        ints = (int *) data;
+        for (i = 0; i < vlen; i++)
+          if ((ints[i] < value->limits.ilims[0]) ||
+              (ints[i] > value->limits.ilims[1])) return CAPS_RANGEERR;
+      } else {
+        reals = (double *) data;
+        for (i = 0; i < vlen; i++)
+          if ((reals[i] < value->limits.ilims[0]) ||
+              (reals[i] > value->limits.ilims[1])) return CAPS_RANGEERR;
+      }
   } else if ((value->type == Double) || (value->type == DoubleDeriv)) {
-    reals = (double *) data;
     if (value->limits.dlims[0] != value->limits.dlims[1])
-      for (i = 0; i < vlen; i++)
-        if ((reals[i] < value->limits.dlims[0]) ||
-            (reals[i] > value->limits.dlims[1])) return CAPS_RANGEERR;
+      if (vtype == Integer) {
+        ints = (int *) data;
+        for (i = 0; i < vlen; i++)
+          if ((ints[i] < value->limits.dlims[0]) ||
+              (ints[i] > value->limits.dlims[1])) return CAPS_RANGEERR;
+      } else {
+        reals = (double *) data;
+        for (i = 0; i < vlen; i++)
+          if ((reals[i] < value->limits.dlims[0]) ||
+              (reals[i] > value->limits.dlims[1])) return CAPS_RANGEERR;
+      }
   }
 
   /* check for uniqueness in tuple names */
@@ -1146,6 +1174,7 @@ caps_setValue(capsObject *object, enum capsvType vtype, int nrow, int ncol,
   if (( object->subtype == GEOMETRYIN) &&
       (pobject->subtype == STATIC    ))   return CAPS_READONLYERR;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag == 1)               return CAPS_READONLYERR;
 
   args[0].type = jInteger;
   args[1].type = jErr;
@@ -1201,13 +1230,15 @@ caps_getLimits(const capsObj object, enum capsvType *vtype, const void **limits,
   args[0].type = jInteger;
   args[1].type = jPointer;
   args[2].type = jString;
-  status       = caps_jrnlRead(problem, object, 3, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    *vtype  = args[0].members.integer;
-    *limits = args[1].members.pointer;
-    *units  = args[2].members.string;
-    return ret;
+  if (problem->dbFlag == 0) {
+    status       = caps_jrnlRead(problem, object, 3, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      *vtype  = args[0].members.integer;
+      *limits = args[1].members.pointer;
+      *units  = args[2].members.string;
+      return ret;
+    }
   }
 
   *vtype         = value->type;
@@ -1224,6 +1255,7 @@ caps_getLimits(const capsObj object, enum capsvType *vtype, const void **limits,
   }
 
 complete:
+  if (problem->dbFlag == 1) return CAPS_SUCCESS;
   args[0].members.integer =          *vtype;
   args[1].members.pointer = (void *) *limits;
   args[2].members.string  = (char *) *units;
@@ -1258,6 +1290,7 @@ caps_setLimits(capsObject *object, enum capsvType vtype, void *limits,
   status  = caps_findProblem(object, CAPS_SETLIMITS, &pobject);
   if (status != CAPS_SUCCESS) return status;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag == 1)               return CAPS_READONLYERR;
 
   /* ignore if restarting */
   if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;
@@ -1357,15 +1390,17 @@ caps_getValueProps(capsObject *object, int *dim, int *pmtr,
   args[2].type = jInteger;
   args[3].type = jInteger;
   args[4].type = jInteger;
-  status       = caps_jrnlRead(problem, object, 5, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    *dim    = args[0].members.integer;
-    *pmtr   = args[1].members.integer;
-    *lfixed = args[2].members.integer;
-    *sfixed = args[3].members.integer;
-    *nval   = args[4].members.integer;
-    return ret;
+  if (problem->dbFlag == 0) {
+    status       = caps_jrnlRead(problem, object, 5, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      *dim    = args[0].members.integer;
+      *pmtr   = args[1].members.integer;
+      *lfixed = args[2].members.integer;
+      *sfixed = args[3].members.integer;
+      *nval   = args[4].members.integer;
+      return ret;
+    }
   }
 
   args[0].members.integer = *dim    = value->dim;
@@ -1373,6 +1408,8 @@ caps_getValueProps(capsObject *object, int *dim, int *pmtr,
   args[2].members.integer = *lfixed = value->lfixed;
   args[3].members.integer = *sfixed = value->sfixed;
   args[4].members.integer = *nval   = value->nullVal;
+  if (problem->dbFlag == 1) return CAPS_SUCCESS;
+  
   caps_jrnlWrite(problem, object, CAPS_SUCCESS, 5, args, problem->sNum,
                  problem->sNum);
 
@@ -1406,6 +1443,7 @@ caps_setValueProps(capsObject *object, int dim, enum capsFixed lfixed,
   status  = caps_findProblem(object, CAPS_SETVALUEPROPS, &pobject);
   if (status != CAPS_SUCCESS) return status;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag == 1)               return CAPS_READONLYERR;
 
   /* ignore if restarting */
   if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;
@@ -1452,6 +1490,7 @@ caps_convertValue(capsObject *object, double inp, const char *units,
   status = caps_findProblem(object, CAPS_CONVERTVALUE, &pobject);
   if (status != CAPS_SUCCESS) return status;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag == 1)               return CAPS_READONLYERR;
 
   args[0].type = jDouble;
   status       = caps_jrnlRead(problem, object, 1, args, &sNum, &ret);
@@ -1499,15 +1538,15 @@ caps_dupValues(capsValue *val1, capsValue *val2)
     if (val2->derivs == NULL) return EGADS_MALLOC;
     for (i = 0; i < val1->nderiv; i++) {
       val2->derivs[i].name  = EG_strdup(val1->derivs[i].name);
-      val2->derivs[i].rank  = val1->derivs[i].rank;
+      val2->derivs[i].len_wrt  = val1->derivs[i].len_wrt;
       val2->derivs[i].deriv = NULL;
     }
     for (i = 0; i < val1->nderiv; i++) {
       if (val2->derivs[i].name == NULL) return EGADS_MALLOC;
       val2->derivs[i].deriv = (double *) EG_alloc(
-                           val1->length*val1->derivs[i].rank*sizeof(double));
+                           val1->length*val1->derivs[i].len_wrt*sizeof(double));
       if (val2->derivs[i].deriv == NULL) return EGADS_MALLOC;
-      for (j = 0; j < val1->length*val1->derivs[i].rank; j++)
+      for (j = 0; j < val1->length*val1->derivs[i].len_wrt; j++)
         val2->derivs[i].deriv[j] = val1->derivs[i].deriv[j];
     }
     val2->nderiv = val1->nderiv;
@@ -1825,6 +1864,7 @@ caps_transferValues(capsObject *source, enum capstMethod method,
   stat    = caps_findProblem(target, CAPS_TRANSFERVALUES, &pobject);
   if (stat                 != CAPS_SUCCESS) return stat;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag      == 1)            return CAPS_READONLYERR;
 
   args[0].type = jInteger;
   args[1].type = jErr;
@@ -1874,6 +1914,7 @@ caps_linkValue(/*@null@*/ capsObject *link, enum capstMethod method,
   status = caps_findProblem(target, CAPS_LINKVALUE, &pobject);
   if (status              != CAPS_SUCCESS) return status;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag     == 1)            return CAPS_READONLYERR;
 
   if (target->type == VALUE) {
     if (target->subtype == GEOMETRYIN) {
@@ -2009,50 +2050,75 @@ caps_hasDeriv(capsObject *vobj, int *nderiv, char ***names,
   if (vobj->magicnumber != CAPSMAGIC)   return CAPS_BADOBJECT;
   if (vobj->type        != VALUE)       return CAPS_BADTYPE;
   if (vobj->blind       == NULL)        return CAPS_NULLBLIND;
-  value  = (capsValue *) vobj->blind;
-  if (value->type       != DoubleDeriv) return CAPS_BADTYPE;
-  if (value->nderiv       == 0)           return CAPS_SUCCESS;
   status = caps_findProblem(vobj, CAPS_HASDERIV, &pobject);
   if (status            != CAPS_SUCCESS) return status;
   problem = (capsProblem *) pobject->blind;
 
   args[0].type = jStrings;
-  status       = caps_jrnlRead(problem, vobj, 1, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    if (ret == CAPS_SUCCESS) {
-      *nderiv = args[0].num;
-      namey   = args[0].members.strings;
-      namex   = (char **) EG_alloc(args[0].num*sizeof(char *));
-      if (namex == NULL) {
-        ret = EGADS_MALLOC;
-      } else {
-        for (i = 0; i < args[0].num; i++) namex[i] = namey[i];
+  if (problem->dbFlag == 0) {
+    status     = caps_jrnlRead(problem, vobj, 1, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      if (ret == CAPS_SUCCESS) {
+        *nderiv = args[0].num;
+        namey   = args[0].members.strings;
+        namex   = (char **) EG_alloc(args[0].num*sizeof(char *));
+        if (namex == NULL) {
+          ret = EGADS_MALLOC;
+        } else {
+          for (i = 0; i < args[0].num; i++) namex[i] = namey[i];
+        }
+        *names = namex;
       }
-      *names = namex;
+      return ret;
     }
-    return ret;
   }
 
+  args[0].num             = 0;
+  args[0].members.strings = NULL;
   source = vobj;
   do {
-    if (source->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
-    if (source->type        != VALUE)     return CAPS_BADTYPE;
-    if (source->blind       == NULL)      return CAPS_NULLBLIND;
+    if (source->magicnumber != CAPSMAGIC) {
+      status = CAPS_BADOBJECT;
+      goto herr;
+    }
+    if (source->type        != VALUE)     {
+      status = CAPS_BADTYPE;
+      goto herr;
+    }
+    if (source->blind       == NULL)      {
+      status = CAPS_NULLBLIND;
+      goto herr;
+    }
     value = (capsValue *) source->blind;
-    if (value->link == vobj)              return CAPS_CIRCULARLINK;
+    if (value->link == vobj)              {
+      status = CAPS_CIRCULARLINK;
+      goto herr;
+    }
     last   = source;
     source = value->link;
   } while (value->link != NULL);
 
   /* do we need to update our value? */
-  if (last->subtype == ANALYSISOUT) {
-    status = caps_updateAnalysisOut(last, CAPS_HASDERIV, nErr, errors);
-    if (status != CAPS_SUCCESS) return status;
-  } else if (vobj->subtype == GEOMETRYOUT) {
-    /* make sure geometry is up-to-date */
-    status = caps_build(pobject, nErr, errors);
-    if ((status != CAPS_SUCCESS) && (status != CAPS_CLEAN)) return status;
+  if (problem->dbFlag == 0)
+    if (last->subtype == ANALYSISOUT) {
+      status = caps_updateAnalysisOut(last, CAPS_HASDERIV, nErr, errors);
+      if (status != CAPS_SUCCESS) goto herr;
+    } else if (vobj->subtype == GEOMETRYOUT) {
+      /* make sure geometry is up-to-date */
+      status = caps_build(pobject, nErr, errors);
+      if ((status != CAPS_SUCCESS) && (status != CAPS_CLEAN)) goto herr;
+    }
+  
+  /* check the value object after it has been updated */
+  value = (capsValue *) vobj->blind;
+  if (value->type != DoubleDeriv) {
+    status = CAPS_BADTYPE;
+    goto herr;
+  }
+  if (value->nderiv == 0) {
+    status = CAPS_SUCCESS;
+    goto herr;
   }
 
   status = EGADS_MALLOC;
@@ -2063,7 +2129,10 @@ caps_hasDeriv(capsObject *vobj, int *nderiv, char ***names,
     args[0].num             = *nderiv = value->nderiv;
     args[0].members.strings = *names  = namex;
   }
-  caps_jrnlWrite(problem, vobj, status, 1, args, problem->sNum, problem->sNum);
+
+herr:
+  if (problem->dbFlag == 0)
+    caps_jrnlWrite(problem, vobj, status, 1, args, problem->sNum, problem->sNum);
 
   return status;
 }
@@ -2072,19 +2141,19 @@ caps_hasDeriv(capsObject *vobj, int *nderiv, char ***names,
 static int
 caps_registerGIN(capsProblem *problem, const char *fullname)
 {
-  int        i, j, i1, i2, len, index, irow, icol;
+  int        i, j, i1, i2, len, len_wrt, index, irow, icol;
   char       name[MAX_NAME_LEN];
   capsValue  *value, *vout;
   capsRegGIN *regGIN;
-  capsDeriv    *dots;
+  capsDeriv  *derivs;
 
   len  = strlen(fullname);
-  irow = icol = 1;
+  irow = icol = 0;
   for (i = 0; i < len; i++) {
     name[i] = fullname[i];
     if (fullname[i] == '[') break;
   }
-  name[i] = 0;
+  name[i] = '\0';
   i1 = i2 = 0;
   if (i != len) {
     for (j = i+1; j < len; j++)
@@ -2107,34 +2176,40 @@ caps_registerGIN(capsProblem *problem, const char *fullname)
     printf(" CAPS Error: Object: %s has NULL pointer (caps_getDeriv)!\n", name);
     return CAPS_NULLOBJ;
   }
-  if (i2 != 0) {
-    irow = i1;
-    icol = i2;
-  } else if (i1 != 0) {
+
+  if (i1 > 0) {
     if ((value->nrow == 1) && (value->ncol == 1)) {
-      printf(" CAPS Error: Object: %s has index (caps_getDeriv)!\n", name);
+      printf(" CAPS Error: Object: %s has no index (caps_getDeriv)!\n", name);
       return CAPS_BADINDEX;
     }
-    if (value->nrow == 1) {
-      icol = i1;
-    } else {
+    if (((i1  > 0) && (i2 <= 0)) ||
+        ((i1 <= 0) && (i2  > 0))) {
+      printf(" CAPS Error: Object: both indices in %s must be positive (caps_getDeriv)!\n",
+             fullname);
+      return CAPS_BADINDEX;
+    }
+    if (i2 != 0) {
       irow = i1;
+      icol = i2;
+    } else {
+      if (value->nrow == 1) {
+        irow = 1;
+        icol = i1;
+      } else {
+        irow = i1;
+        icol = 1;
+      }
     }
-  } else {
-    if ((value->nrow != 1) || (value->ncol != 1)) {
-      printf(" CAPS Error: Object: %s Not a scalar (caps_getDeriv)!\n", name);
+    if ((irow < 1) || (irow > value->nrow)) {
+      printf(" CAPS Error: Object: %s irow = %d [1-%d] (caps_getDeriv)!\n",
+             name, irow, value->nrow);
       return CAPS_BADINDEX;
     }
-  }
-  if ((irow < 1) || (irow > value->nrow)) {
-    printf(" CAPS Error: Object: %s irow = %d [1-%d] (caps_getDeriv)!\n",
-           name, irow, value->nrow);
-    return CAPS_BADINDEX;
-  }
-  if ((icol < 1) || (icol > value->ncol)) {
-    printf(" CAPS Error: Object: %s icol = %d [1-%d] (caps_getDeriv)!\n",
-           name, icol, value->ncol);
-    return CAPS_BADINDEX;
+    if ((icol < 1) || (icol > value->ncol)) {
+      printf(" CAPS Error: Object: %s icol = %d [1-%d] (caps_getDeriv)!\n",
+             name, icol, value->ncol);
+      return CAPS_BADINDEX;
+    }
   }
 
   /* are we already in the list? */
@@ -2145,49 +2220,35 @@ caps_registerGIN(capsProblem *problem, const char *fullname)
 
   /* make room */
   len = problem->nRegGIN + 1;
-  if (problem->regGIN == NULL) {
-    problem->regGIN = (capsRegGIN *) EG_alloc(sizeof(capsRegGIN));
-    if (problem->regGIN == NULL) {
-      printf(" CAPS Error: Cant Malloc registry for %s (caps_getDeriv)!\n",
-             fullname);
-      return EGADS_MALLOC;
-    }
-    len = 1;
-  } else {
-    regGIN = (capsRegGIN *) EG_reall(problem->regGIN, len*sizeof(capsRegGIN));
-    if (regGIN == NULL) {
-      printf(" CAPS Error: Cant ReAlloc registry for %s (caps_getDeriv)!\n",
-             fullname);
-      return EGADS_MALLOC;
-    }
-    problem->regGIN = regGIN;
+  regGIN = (capsRegGIN *) EG_reall(problem->regGIN, len*sizeof(capsRegGIN));
+  if (regGIN == NULL) {
+    printf(" CAPS Error: Cant ReAlloc registry for %s (caps_getDeriv)!\n",
+           fullname);
+    return EGADS_MALLOC;
   }
+  problem->regGIN = regGIN;
+
+  len_wrt = 1;
+  if (irow == 0 && icol == 0) len_wrt = value->length;
 
   for (i = 0; i < problem->nGeomOut; i++) {
     if (problem->geomOut[i]              == NULL)      continue;
     if (problem->geomOut[i]->magicnumber != CAPSMAGIC) continue;
     if (problem->geomOut[i]->blind       == NULL)      continue;
     vout = (capsValue *) problem->geomOut[i]->blind;
-    if (vout->derivs == NULL) {
-      vout->derivs = (capsDeriv *) EG_alloc(len*sizeof(capsDeriv));
-      if (vout->derivs == NULL) {
-        printf(" CAPS Error: Cant Malloc dots for %s (caps_getDeriv)!\n",
-               problem->geomOut[i]->name);
-        return EGADS_MALLOC;
-      }
-    } else {
-      dots = (capsDeriv *) EG_reall(vout->derivs, len*sizeof(capsDeriv));
-      if (dots == NULL) {
-        printf(" CAPS Error: Cant Malloc dots for %s (caps_getDeriv)!\n",
-               problem->geomOut[i]->name);
-        return EGADS_MALLOC;
-      }
-      vout->derivs = dots;
+
+    derivs = (capsDeriv *) EG_reall(vout->derivs, len*sizeof(capsDeriv));
+    if (derivs == NULL) {
+      printf(" CAPS Error: Cant Malloc dots for %s (caps_getDeriv)!\n",
+             problem->geomOut[i]->name);
+      return EGADS_MALLOC;
     }
-    vout->derivs[len-1].name  = NULL;
-    vout->derivs[len-1].rank  = 1;
-    vout->derivs[len-1].deriv = NULL;
-    vout->nderiv              = len;
+    vout->derivs = derivs;
+
+    vout->derivs[len-1].name    = NULL;
+    vout->derivs[len-1].len_wrt = len_wrt;
+    vout->derivs[len-1].deriv   = NULL;
+    vout->nderiv                = len;
   }
   for (i = 0; i < problem->nGeomOut; i++) {
     if (problem->geomOut[i]              == NULL)      continue;
@@ -2208,32 +2269,32 @@ caps_registerGIN(capsProblem *problem, const char *fullname)
 
 
 int
-caps_getDeriv(capsObject *vobj, const char *name, int *len, int *rank,
+caps_getDeriv(capsObject *vobj, const char *name, int *len, int *len_wrt,
               double **deriv, int *nErr, capsErrs **errors)
 {
-  int         i, ret, ipmtr, irow, icol, status, nbody, buildTo, builtTo;
+  int         i, ret, ipmtr, irow, icol, status, nbody, buildTo, builtTo, outLevel;
+  int         irs, ire, ics, ice, index;
   CAPSLONG    sNum;
-  capsValue   *value;
+  capsValue   *valueOut, *value_wrt;
   capsProblem *problem;
-  capsObject  *pobject, *source, *last;
+  capsObject  *pobject;
   capsJrnl    args[5];
   size_t      length;
+  modl_T      *MODL;
 
   if (nErr              == NULL)         return CAPS_NULLVALUE;
   if (errors            == NULL)         return CAPS_NULLVALUE;
   if (len               == NULL)         return CAPS_NULLVALUE;
-  if (rank              == NULL)         return CAPS_NULLVALUE;
-  if (deriv               == NULL)         return CAPS_NULLVALUE;
+  if (len_wrt           == NULL)         return CAPS_NULLVALUE;
+  if (deriv             == NULL)         return CAPS_NULLVALUE;
   *nErr   = 0;
   *errors = NULL;
-  *len    = *rank = 0;
+  *len    = *len_wrt = 0;
   *deriv    = NULL;
   if (vobj              == NULL)         return CAPS_NULLOBJ;
   if (vobj->magicnumber != CAPSMAGIC)    return CAPS_BADOBJECT;
   if (vobj->type        != VALUE)        return CAPS_BADTYPE;
   if (vobj->blind       == NULL)         return CAPS_NULLBLIND;
-  value  = (capsValue *) vobj->blind;
-  if (value->type       != DoubleDeriv)  return CAPS_BADTYPE;
   if (name == NULL)                      return CAPS_NULLNAME;
   status = caps_findProblem(vobj, CAPS_GETDERIV, &pobject);
   if (status            != CAPS_SUCCESS) return status;
@@ -2244,75 +2305,104 @@ caps_getDeriv(capsObject *vobj, const char *name, int *len, int *rank,
   args[2].type = jPointer;
   args[3].type = jInteger;
   args[4].type = jErr;
-  status       = caps_jrnlRead(problem, vobj, 5, args, &sNum, &ret);
-  if (status == CAPS_JOURNALERR) return status;
-  if (status == CAPS_JOURNAL) {
-    *len    =            args[0].members.integer;
-    *rank   =            args[1].members.integer;
-    *deriv  = (double *) args[2].members.pointer;
-    *nErr   =            args[3].members.integer;
-    *errors =            args[4].members.errs;
-    return ret;
+  if (problem->dbFlag == 0) {
+    status     = caps_jrnlRead(problem, vobj, 5, args, &sNum, &ret);
+    if (status == CAPS_JOURNALERR) return status;
+    if (status == CAPS_JOURNAL) {
+      *len     =            args[0].members.integer;
+      *len_wrt =            args[1].members.integer;
+      *deriv   = (double *) args[2].members.pointer;
+      *nErr    =            args[3].members.integer;
+      *errors  =            args[4].members.errs;
+      return ret;
+    }
   }
 
   sNum   = problem->sNum;
 
-  source = vobj;
-  do {
-    if (source->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
-    if (source->type        != VALUE)     return CAPS_BADTYPE;
-    if (source->blind       == NULL)      return CAPS_NULLBLIND;
-    value = (capsValue *) source->blind;
-    if (value->link == vobj)              return CAPS_CIRCULARLINK;
-    last   = source;
-    source = value->link;
-  } while (value->link != NULL);
-
   /* do we need to update our value? */
-  if (last->subtype == ANALYSISOUT) {
-    status = caps_updateAnalysisOut(last, CAPS_GETDERIV, nErr, errors);
-    if (status != CAPS_SUCCESS) return status;
-  } else if (vobj->subtype == GEOMETRYOUT) {
-    /* make sure geometry is up-to-date */
-    status = caps_build(pobject, nErr, errors);
-    if ((status != CAPS_SUCCESS) && (status != CAPS_CLEAN)) goto finis;
+  if (problem->dbFlag == 0)
+    if (vobj->subtype == ANALYSISOUT) {
+      status = caps_updateAnalysisOut(vobj, CAPS_GETDERIV, nErr, errors);
+      if (status != CAPS_SUCCESS) return status;
+    } else if (vobj->subtype == GEOMETRYOUT) {
+      /* make sure geometry is up-to-date */
+      status = caps_build(pobject, nErr, errors);
+      if ((status != CAPS_SUCCESS) && (status != CAPS_CLEAN)) goto finis;
 
-    status = caps_registerGIN(problem, name);
-    if (status != CAPS_SUCCESS) goto finis;
+      status = caps_registerGIN(problem, name);
+      if (status != CAPS_SUCCESS) goto finis;
+    }
+
+  /* check the type after updating */
+  valueOut = (capsValue *) vobj->blind;
+  if (valueOut->type != DoubleDeriv) {
+    status = CAPS_BADTYPE;
+    goto finis;
   }
 
-  for (i = 0; i < value->nderiv; i++) {
-    if (strcmp(name, value->derivs[i].name) != 0) continue;
-    if ((value->derivs[i].deriv == NULL) && (vobj->subtype == GEOMETRYOUT)) {
-      ipmtr = problem->regGIN[i].index;
+  for (i = 0; i < valueOut->nderiv; i++) {
+    if (strcmp(name, valueOut->derivs[i].name) != 0) continue;
+    if ((valueOut->derivs[i].deriv == NULL) && (vobj->subtype == GEOMETRYOUT)) {
+      index = problem->regGIN[i].index;
       irow  = problem->regGIN[i].irow;
       icol  = problem->regGIN[i].icol;
-      /* clear all then set */
-      status = ocsmSetDtime(problem->modl, 0);                     if (status != SUCCESS) goto finis;
-      status = ocsmSetVelD(problem->modl, 0,     0,    0,    0.0); if (status != SUCCESS) goto finis;
-      status = ocsmSetVelD(problem->modl, ipmtr, irow, icol, 1.0); if (status != SUCCESS) goto finis;
-      buildTo = 0;
-      nbody   = 0;
-      status  = ocsmBuild(problem->modl, buildTo, &builtTo, &nbody, NULL);
-/*    printf(" CAPS Info: parameter %d %d %d sensitivity status = %d\n",
-             open, irow, icol, status);  */
-      fflush(stdout);
-      if (status != SUCCESS) goto finis;
-      caps_geomOutSensit(problem, ipmtr, irow, icol);
+
+      if (problem->geomIn[index-1] == NULL) return CAPS_NULLOBJ;
+      value_wrt = (capsValue *) problem->geomIn[index-1]->blind;
+      ipmtr = value_wrt->pIndex;
+
+      if (irow == 0 && icol == 0) {
+        irs = ics = 1;
+        ire = value_wrt->nrow; ice = value_wrt->ncol;
+      } else {
+        irs = irow; ics = icol;
+        ire = irow; ice = icol;
+      }
+
+      for (irow = irs; irow <= ire; irow++) {
+        for (icol = ics; icol <= ice; icol++) {
+          /* clear all then set */
+          status = ocsmSetDtime(problem->modl, 0);
+          if (status != SUCCESS) goto finis;
+          status = ocsmSetVelD(problem->modl, 0,     0,    0,    0.0);
+          if (status != SUCCESS) goto finis;
+          status = ocsmSetVelD(problem->modl, ipmtr, irow, icol, 1.0);
+          if (status != SUCCESS) goto finis;
+          buildTo = 0;
+          nbody   = 0;
+          outLevel = ocsmSetOutLevel(0);
+          if (problem->outLevel > 0)
+            printf(" CAPS Info: Building sensitivity information for: %s[%d,%d]\n",
+                   problem->geomIn[index-1]->name, irow, icol);
+          status  = ocsmBuild(problem->modl, buildTo, &builtTo, &nbody, NULL);
+          ocsmSetOutLevel(outLevel);
+    /*    printf(" CAPS Info: parameter %d %d %d sensitivity status = %d\n",
+                 open, irow, icol, status);  */
+          fflush(stdout);
+          if (status != SUCCESS) goto finis;
+          caps_geomOutSensit(problem, ipmtr, irow, icol);
+          MODL = (modl_T*)problem->modl;
+          if (MODL->dtime != 0 && problem->outLevel > 0)
+            printf(" CAPS Info: Sensitivity finite difference used for: %s[%d,%d]\n",
+                   problem->geomIn[index-1]->name, irow, icol);
+        }
+      }
     }
-    *len   = value->length;
-    *rank  = value->derivs[i].rank;
-    *deriv = value->derivs[i].deriv;
+    *len     = valueOut->length;
+    *len_wrt = valueOut->derivs[i].len_wrt;
+    *deriv   = valueOut->derivs[i].deriv;
     status = CAPS_SUCCESS;
     goto finis;
   }
   status = CAPS_NOTFOUND;
 
 finis:
+  if (problem->dbFlag == 1) return status;
   length  = *len;
-  length *= *rank*sizeof(double);
+  length *= *len_wrt*sizeof(double);
   args[0].members.integer = *len;
-  args[1].members.integer = *rank;
+  args[1].members.integer = *len_wrt;
   args[2].members.pointer = *deriv;
   args[2].length          = length;
   args[3].members.integer = *nErr;

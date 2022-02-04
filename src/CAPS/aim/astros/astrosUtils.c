@@ -526,7 +526,8 @@ int astros_writeAeroData(void *aimInfo,
 
           status = vlm_getSectionCoordX(&feaAero->vlmSurface.vlmSection[i],
                                         1.0, // Cosine distribution
-                                        (int) true, numPoint,
+                                        (int) true, (int) true,
+                                        numPoint,
                                         &xCoord, &yUpper, &yLower);
           if (status != CAPS_SUCCESS) return status;
           if ((xCoord == NULL) || (yUpper == NULL) || (yLower == NULL)) {
@@ -2005,7 +2006,7 @@ int astros_writeDesignVariableCard(FILE *fp,
                 }
     }
      */
-  
+
     status = CAPS_SUCCESS;
 
 cleanup:
@@ -2337,7 +2338,7 @@ int astros_readOUTEigenVector(FILE *fp, int *numEigenVector, int *numGridPoint,
     // Loop through the file again and pull out data
     while (getline(&line, &linecap, fp) >= 0) {
         if (line == NULL) break;
-  
+
         // Look for start of Eigen-Vector
         if (strncmp(beginEigenLine, line, strlen(beginEigenLine)) == 0) {
 
@@ -3134,7 +3135,7 @@ static int astros_getConfigurationSens(FILE *fp,
         // If name is found in Geometry inputs skip design variables
         if (j >= numGeomIn) continue;
 
-        if(aim_getGeomInType(aimInfo, j+1) == EGADS_OUTSIDE) {
+        if(aim_getGeomInType(aimInfo, j+1) != 0) {
             printf("Error: Geometric sensitivity not available for CFGPMTR = %s\n",
                    geomInName);
             status = CAPS_NOSENSITVTY;
@@ -3598,7 +3599,7 @@ int astros_writeGeomParametrization(FILE *fp,
             // If name isn't found in Geometry inputs skip design variables
             if (k >= numGeomIn) continue;
 
-            if(aim_getGeomInType(aimInfo, k+1) == EGADS_OUTSIDE) {
+            if(aim_getGeomInType(aimInfo, k+1) != 0) {
                 printf("Error: Geometric sensitivity not available for CFGPMTR = %s\n",
                        geomInName);
                 status = CAPS_NOSENSITVTY;
@@ -3984,6 +3985,6 @@ cleanup:
     if (filename != NULL) EG_free(filename);
 
     if (fp != NULL) fclose(fp);
-  
+
     return status;
 }

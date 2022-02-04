@@ -119,6 +119,13 @@ if [[ "$TYPE" == "LINEARAERO" || "$TYPE" == "ALL" ]]; then
         notRun="$notRun\navl"
     fi
 
+    ###### MSES ###### 
+    if [[ "`which mses`" != "" ]]; then
+        expectCSuccess "./msesTest" 0
+    else
+        notRun="$notRun\nmses"
+    fi
+
     ###### AWAVE ###### 
     if [[ "`which awave`" != "" ]]; then
         expectCSuccess "./awaveTest" 0
@@ -195,6 +202,9 @@ if [[ "$TYPE" == "STRUCTURE" || "$TYPE" == "ALL" ]]; then
         notRun="$notRun\nMystran"
     fi 
 
+    ######  Interference ###### 
+    expectCSuccess "./interferenceTest"
+    
     ######  HSM ###### 
     if [[ -f $ESP_ROOT/lib/hsmAIM.$EXT  ]]; then
         expectCSuccess "./hsmCantileverPlateTest" 0

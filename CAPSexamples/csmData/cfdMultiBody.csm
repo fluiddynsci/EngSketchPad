@@ -10,6 +10,14 @@ DESPMTR   lesweep      30.00000
 DESPMTR   dihedral     1.00000
 ## [despmtrs]
 
+## [bounds]
+LBOUND    area      10.00
+UBOUND    area    1000.00
+
+LBOUND    aspect     2.00
+UBOUND    aspect    10.00
+## [bounds]
+
 # Configuration parameters
 ## [cfgpmtrs]
 CFGPMTR   series            8412

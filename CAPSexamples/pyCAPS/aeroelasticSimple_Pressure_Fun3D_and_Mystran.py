@@ -141,18 +141,12 @@ mystran.input.Constraint = {"edgeConstraint": constraint}
 fun3d.input.Pressure_Scale_Factor = 0.5*refDensity*refVelocity**2
 
 print ("\n\nRunning FUN3D......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(fun3d.analysisDir) # Move into test directory
-
 cmdLineOpt = "--write_aero_loads_to_file --animation_freq -1"
 
-os.system("nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
+fun3d.system("nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
 
-if os.path.getsize("Info.out") == 0: #
+if os.path.getsize(os.path.join(fun3d.analysisDir,"Info.out")) == 0: #
     raise SystemError("FUN3D excution failed\n")
-
-os.chdir(currentDirectory) # Move back to top directory
 #######################################
 
 load = {"loadType" : "PressureExternal"} # Add pressure load card

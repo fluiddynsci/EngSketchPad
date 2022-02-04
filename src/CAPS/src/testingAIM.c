@@ -3,7 +3,7 @@
  *
  *             Testing AIM Example Code
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -246,8 +246,10 @@ aimDiscr(char *tname, capsDiscr *discr)
   discr->types[0].ndata = 0;         /* data at geom reference positions
                                         (i.e. vertex centered/iso-parametric) */
   discr->types[0].ntri  = 1;
+  discr->types[0].nseg  = 0;
   discr->types[0].nmat  = 0;         /* match points at geom ref positions */
   discr->types[0].tris  = NULL;
+  discr->types[0].segs  = NULL;
   discr->types[0].gst   = NULL;
   discr->types[0].dst   = NULL;
   discr->types[0].matst = NULL;
@@ -744,6 +746,7 @@ aimPostAnalysis(void *instStore, void *aimStruc, int restart,
                 /*@null@*/ capsValue *inputs)
 {
   int        i, n, stat;
+  capsValue  dynOut;
   aimStorage *aimStore;
 
   aimStore = (aimStorage *) instStore;
@@ -758,6 +761,18 @@ aimPostAnalysis(void *instStore, void *aimStruc, int restart,
     stat = aimPreAnalysis(instStore, aimStruc, inputs);
     if (stat != CAPS_SUCCESS) {
       printf(" testingAIM/aimPostAnalysis: aimPreAnalysis = %d\n", stat);
+      return stat;
+    }
+  } else {
+    stat = aim_initValue(&dynOut);
+    if (stat != CAPS_SUCCESS) {
+      printf(" testingAIM/aimPostAnalysis: aim_initValue = %d\n", stat);
+      return stat;
+    }
+    dynOut.vals.integer = 42;
+    stat = aim_makeDynamicOutput(aimStruc, "Everything", &dynOut);
+    if (stat != CAPS_SUCCESS) {
+      printf(" testingAIM/aimPostAnalysis: aim_makeDynamicOutput = %d\n", stat);
       return stat;
     }
   }

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -171,6 +171,8 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     ROUTINE(udpExecute);
 
+    /* --------------------------------------------------------------- */
+
 #ifdef DEBUG
     printf("udpExecute(emodel=%llx)\n", (long long)emodel);
     printf("nsubdiv  = %d\n", NSUBDIV( 0));
@@ -220,7 +222,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     /* check arguments */
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(emodel);
     CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
@@ -441,6 +443,10 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
    /*@unused@*/double vels[])           /* (out) velocities */
 {
     int    iudp, judp;
+
+    ROUTINE(udpSensitivity);
+
+    /* --------------------------------------------------------------- */
 
     /* check that ebody matches one of the ebodys */
     iudp = 0;
