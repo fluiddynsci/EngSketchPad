@@ -401,6 +401,11 @@ EG_getUVmap(void *uvmap, int index, double *uv)
   uvmap_struct *uvstruct;
   
   uvstruct = (uvmap_struct *) uvmap;
+  if ((index < 1) || (index > uvstruct->nnode)) {
+    printf(" EGADS Internal: index = %d [1-%d] (EG_getUVmap)!\n",
+           index, uvstruct->nnode);
+    return;
+  }
   uv[0]    = uvstruct->u[index][0];
   uv[1]    = uvstruct->u[index][1];
 }

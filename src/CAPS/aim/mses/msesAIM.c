@@ -12,7 +12,7 @@
  *
  * A module in the Computational Aircraft Prototype Syntheses (CAPS) has been developed to interact (through input
  * files) with the airfoil analysis tool MSES. MSES is not open-source and not freelay available. However,
- * a 'lite' version of MSES is provided with EngSketchPad that supports analysis of a single airfoil.
+ * a 'lite' version of MSES is provided with EngSketchPad that supports analysis of a single airfoil element.
  *
  * An outline of the AIM's inputs and outputs are provided in \ref aimInputsMSES and \ref aimOutputsMSES, respectively.
  *
@@ -80,10 +80,20 @@ enum aimInputs
   inAlpha,
   inCL,
   inAcrit,
+  inxTransition_Upper,
+  inxTransition_Lower,
+  inMcrit,
+  inMuCon,
   inISMOM,
-  inGridAlpha,
+  inIFFBC,
   inCoarse_Iteration,
   inFine_Iteration,
+  inGridAlpha,
+  inAirfoil_Points,
+  inInlet_Points,
+  inOutlet_Points,
+  inUpper_Stremlines,
+  inLower_Stremlines,
   inxGridRange,
   inyGridRange,
   inDesign_Variable,
@@ -100,11 +110,26 @@ enum aimOutputs
   outCD_v,
   outCD_w,
   outCM,
-  NUMOUTPUT = outCM                 /* Total number of outputs */
+  outCheby_Modes,
+  NUMOUTPUT = outCheby_Modes        /* Total number of outputs */
 };
 
 #define GCON_ALPHA 5
 #define GCON_CL    6
+
+typedef struct {
+
+  int ngeom_dot;
+  ego *geom_dot; // Spline geometry approximations consistent with MSES splines
+
+} geom_dotStruct;
+
+typedef struct {
+
+  int ndesvar;
+  geom_dotStruct *desvar;
+
+} desvarStruct;
 
 typedef struct {
 
@@ -115,20 +140,25 @@ typedef struct {
   capsValue CDv;
   capsValue CDw;
   capsValue CM;
+  capsValue Cheby_Modes;
 
   // Design information
   cfdDesignStruct design;
 
+
   int numBody;
   double **xCoord;
   double **yCoord;
+  vlmSectionStruct *vlmSections;
+  ego *tess;
+  desvarStruct *blades;
 
 } aimStorage;
 
 
-static int destroy_aimStorage(aimStorage *msesInstance)
+static int destroy_aimStorage(aimStorage *msesInstance, int inUpdate)
 {
-  int i;
+  int i, j, k;
   aim_freeValue(&msesInstance->Alpha);
   aim_freeValue(&msesInstance->CL);
   aim_freeValue(&msesInstance->CD);
@@ -136,6 +166,9 @@ static int destroy_aimStorage(aimStorage *msesInstance)
   aim_freeValue(&msesInstance->CDv);
   aim_freeValue(&msesInstance->CDw);
   aim_freeValue(&msesInstance->CM);
+  aim_freeValue(&msesInstance->Cheby_Modes);
+
+  if (inUpdate == (int)true) return CAPS_SUCCESS;
 
   // Design information
   (void) destroy_cfdDesignStruct(&msesInstance->design);
@@ -143,10 +176,28 @@ static int destroy_aimStorage(aimStorage *msesInstance)
   for (i = 0; i < msesInstance->numBody; i++) {
     AIM_FREE(msesInstance->xCoord[i]);
     AIM_FREE(msesInstance->yCoord[i]);
+    msesInstance->vlmSections[i].ebody = NULL;
+    destroy_vlmSectionStruct(&msesInstance->vlmSections[i]);
+
+    EG_deleteObject(msesInstance->tess[i]);
+
+    if (msesInstance->blades != NULL) {
+      for (j = 0; j < msesInstance->blades[i].ndesvar; j++) {
+        for (k = 0; k < msesInstance->blades[i].desvar[j].ngeom_dot; k++) {
+          EG_deleteObject(msesInstance->blades[i].desvar[j].geom_dot[k]);
+        }
+        AIM_FREE(msesInstance->blades[i].desvar[j].geom_dot);
+      }
+      AIM_FREE(msesInstance->blades[i].desvar);
+    }
+
   }
   msesInstance->numBody = 0;
   AIM_FREE(msesInstance->xCoord);
   AIM_FREE(msesInstance->yCoord);
+  AIM_FREE(msesInstance->tess);
+  AIM_FREE(msesInstance->blades);
+  AIM_FREE(msesInstance->vlmSections);
 
   return CAPS_SUCCESS;
 }
@@ -188,6 +239,7 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, /*@unused@*/ void 
   aim_initValue(&msesInstance->CDv);
   aim_initValue(&msesInstance->CDw);
   aim_initValue(&msesInstance->CM);
+  aim_initValue(&msesInstance->Cheby_Modes);
 /*@+uniondef@*/
 
   // Design information
@@ -197,12 +249,16 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, /*@unused@*/ void 
   msesInstance->numBody = 0;
   msesInstance->xCoord = NULL;
   msesInstance->yCoord = NULL;
+  msesInstance->vlmSections = NULL;
+  msesInstance->tess = NULL;
+  msesInstance->blades = NULL;
 
 cleanup:
   return status;
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
               int index, char **ainame, capsValue *defval)
 {
@@ -271,16 +327,93 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
      *  Critical amplification factor "n" for the e^n envelope transition model. 9.0 is the standard model.
      */
 
+  } else if (index == inxTransition_Upper) {
+    *ainame           = EG_strdup("xTransition_Upper");
+    defval->type      = Double;
+    defval->dim       = Vector;
+    defval->nullVal   = IsNull;
+
+    /*! \page aimInputsMSES
+     * - <B> xTransition_Upper = NULL</B> <br>
+     *  List of forced transition location on the upper surface of each blade element.
+     *  Must be equal in length to the number of blade elements.
+     */
+
+  } else if (index == inxTransition_Lower) {
+    *ainame           = EG_strdup("xTransition_Lower");
+    defval->type      = Double;
+    defval->dim       = Vector;
+    defval->nullVal   = IsNull;
+
+    /*! \page aimInputsMSES
+     * - <B> xTransition_Lower = NULL</B> <br>
+     *  List of forced transition location on the lower surface of each blade element.
+     *  Must be equal in length to the number of blade elements.
+     */
+
+  } else if (index == inMcrit) {
+    *ainame           = EG_strdup("Mcrit");
+    defval->type      = Double;
+    defval->vals.real = 0.98;
+
+    /*! \page aimInputsMSES
+     * - <B> Mcrit = 0.98</B> <br>
+     *  "critical" Mach number above which artifical dissipation is added. <br>
+     *  0.99 usually for weak shocks <br>
+     *  0.90 for exceptionally strong shocks <br>
+     */
+
+  } else if (index == inMuCon) {
+    *ainame           = EG_strdup("MuCon");
+    defval->type      = Double;
+    defval->vals.real = 1.0;
+
+    /*! \page aimInputsMSES
+     * - <B> MuCon = 1.0</B> <br>
+     *  artificial dissipation coefficient (1.0 works well),<br>
+     *  (A negative value disables the 2nd-order dissipation. <br>
+     *  This is a “last-resort” option for difficult cases.)
+     */
+
   } else if (index == inISMOM) {
     *ainame              = EG_strdup("ISMOM");
     defval->type         = Integer;
     defval->dim          = Scalar;
     defval->vals.integer = 4;
-    defval->nullVal      = NotAllowed;
 
     /*! \page aimInputsMSES
      * - <B> ISMOM = 4</B> <br>
-     *  MSES ISMOM input to select the momentum equation. Valid inputs: 1, 2, 3, 4
+     *  MSES ISMOM input to select the momentum equation. Valid inputs: [1-4]
+     */
+
+  } else if (index == inIFFBC) {
+    *ainame              = EG_strdup("IFFBC");
+    defval->type         = Integer;
+    defval->dim          = Scalar;
+    defval->vals.integer = 2;
+
+    /*! \page aimInputsMSES
+     * - <B> IFFBC = 2</B> <br>
+     *  MSES IFFBC input to select the Farfield BC. Valid inputs: [1-5]
+     */
+
+  } else if (index == inCoarse_Iteration) {
+    *ainame              = EG_strdup("Coarse_Iteration");
+    defval->type         = Integer;
+    defval->vals.integer = 200;
+
+    /*! \page aimInputsMSES
+     * - <B> Coarse_Iteration = 200</B> <br>
+     *  Maximum number of coarse mesh iterations (can help convergence).
+     */
+  } else if (index == inFine_Iteration) {
+    *ainame              = EG_strdup("Fine_Iteration");
+    defval->type         = Integer;
+    defval->vals.integer = 200;
+
+    /*! \page aimInputsMSES
+     * - <B> Fine_Iteration = 200</B> <br>
+     *  Maximum number of fine mesh iterations.
      */
 
   } else if (index == inGridAlpha) {
@@ -294,23 +427,69 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
      * - <B> GridAlpha =  0.0</B> <br>
      *  Angle of attack used to generate the grid.
      */
-  } else if (index == inCoarse_Iteration) {
-    *ainame              = EG_strdup("Coarse_Iteration");
+
+  } else if (index == inAirfoil_Points) {
+    *ainame              = EG_strdup("Airfoil_Points");
     defval->type         = Integer;
-    defval->vals.integer = 20;
+    defval->dim          = Scalar;
+    defval->vals.integer = 201;
+    defval->nullVal      = NotAllowed;
 
     /*! \page aimInputsMSES
-     * - <B> Coarse_Iteration = 20</B> <br>
-     *  Maximum number of coarse mesh iterations (can help convergence).
+     * - <B> Airfoil_Points = 201</B> <br>
+     *  Number of airfoil grid points created with mset
      */
-  } else if (index == inFine_Iteration) {
-    *ainame              = EG_strdup("Fine_Iteration");
+
+  } else if (index == inInlet_Points) {
+    *ainame              = EG_strdup("Inlet_Points");
     defval->type         = Integer;
-    defval->vals.integer = 200;
+    defval->dim          = Scalar;
+    defval->vals.integer = 0;
+    defval->nullVal      = IsNull;
 
     /*! \page aimInputsMSES
-     * - <B> Fine_Iteration = 200</B> <br>
-     *  Maximum number of fine mesh iterations.
+     * - <B> Inlet_Points = NULL</B> <br>
+     * Inlet points on leftmost airfoil streamline created with mset<br>
+     * If NULL, set to ~Airfoil_Points/4
+     */
+
+  } else if (index == inOutlet_Points) {
+    *ainame              = EG_strdup("Outlet_Points");
+    defval->type         = Integer;
+    defval->dim          = Scalar;
+    defval->vals.integer = 0;
+    defval->nullVal      = IsNull;
+
+    /*! \page aimInputsMSES
+     * - <B> Outlet_Points = NULL</B> <br>
+     * Outlet points on rightmost airfoil streamline created with mset<br>
+     * If NULL, set to ~Airfoil_Points/4
+     */
+
+  } else if (index == inUpper_Stremlines) {
+    *ainame              = EG_strdup("Upper_Stremlines");
+    defval->type         = Integer;
+    defval->dim          = Scalar;
+    defval->vals.integer = 0;
+    defval->nullVal      = IsNull;
+
+    /*! \page aimInputsMSES
+     * - <B> Upper_Stremlines = NULL</B> <br>
+     * Number of streamlines in top of domain created with mset<br>
+     * If NULL, set to ~Airfoil_Points/8
+     */
+
+  } else if (index == inLower_Stremlines) {
+    *ainame              = EG_strdup("Lower_Stremlines");
+    defval->type         = Integer;
+    defval->dim          = Scalar;
+    defval->vals.integer = 0;
+    defval->nullVal      = IsNull;
+
+    /*! \page aimInputsMSES
+     * - <B> Upper_Stremlines = NULL</B> <br>
+     * Number of streamlines in bottom of domain created with mset<br>
+     * If NULL, set to ~Airfoil_Points/8
      */
 
   } else if (index == inxGridRange) {
@@ -337,11 +516,11 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     defval->lfixed       = Fixed;
     defval->sfixed       = Fixed;
     AIM_ALLOC(defval->vals.reals, defval->nrow, double, aimInfo, status);
-    defval->vals.reals[0] = -2.0;
+    defval->vals.reals[0] = -2.5;
     defval->vals.reals[1] =  2.5;
 
     /*! \page aimInputsMSES
-     * - <B> xGridRange = [-2.0, 2.5]</B> <br>
+     * - <B> xGridRange = [-2.5, 2.5]</B> <br>
      *  x-min and x-max values for the grid domain size.
      */
 
@@ -363,16 +542,13 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
   } else if (index == inCheby_Modes) {
     *ainame              = EG_strdup("Cheby_Modes");
     defval->type         = Double;
-    defval->lfixed       = Fixed;
+    defval->lfixed       = Change;
     defval->dim          = Vector;
-    defval->nrow         = NMODE;
-    AIM_ALLOC(defval->vals.reals, defval->nrow, double, aimInfo, status);
-    memset(defval->vals.reals, 0, defval->nrow*sizeof(double));
     defval->nullVal      = IsNull;
 
     /*! \page aimInputsMSES
      * - <B> Cheby_Modes = NULL</B> <br>
-     * Chebyshev shape mode values for shape optimization (fixed length 40).
+     * List of Chebyshev shape mode values for shape optimization (must be even length with max length 40).
      * Must be NULL if Design_Variable is not NULL
      */
 
@@ -384,44 +560,47 @@ cleanup:
 }
 
 
-int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
+// ********************** AIM Function Break *****************************
+int aimUpdateState(void *instStore, void *aimInfo,
                    capsValue *aimInputs)
 {
   int status; // Function return status
 
-  int i, ibody; // Indexing
-  int gcon=0;
+  int i, j, k, ibody; // Indexing
+  int idv, irow, icol, igv, index;
+  int sizes[2] = {NUMPOINT, 0};
 
   // Bodies
   const char *intents;
   int numBody;
   ego *bodies = NULL;
 
-  vlmSectionStruct vlmSection;
-  char command[PATH_MAX];
-  char aimFile[PATH_MAX];
+  int nmode = NMODE;
+
+  const char *name=NULL;
+  int    senses[1] = {SFORWARD};
+  int *sense;
+  int oclass, mtype, nloop, nedge, nnode;
+  double data[4];
+  double tdata[2]={0,1}, tdata_dot[2] = {0,0};
+  double *xyz=NULL, *dxyz=NULL, *dx_dvar=NULL, *dy_dvar=NULL;
+  ego context=NULL, curve=NULL, nodes[2], edge=NULL, loop=NULL, *blades=NULL;
+  ego eref, *eloops, *eedges, *enodes;
+  capsValue *geomInVal=NULL;
 
   aimStorage *msesInstance=NULL;
 
-  // File I/O
-  FILE *fp = NULL;
-  char inputMSES[]     = "msesInput.txt";
-  char inputMSET[]     = "msetInput.txt";
-  char msesFilename[]  = "mses.airfoil";
-  char bladeFilename[] = "blade.airfoil";
-  char modesFilename[] = "modes.airfoil";
-  char paramsFilename[] = "params.airfoil";
-
-  if (aimInputs == NULL) {
-#ifdef DEBUG
-      printf("\tmsesAIM/aimPreAnalysis aimInputs == NULL!\n");
-#endif
-      return CAPS_NULLVALUE;
-  }
-
   msesInstance = (aimStorage*)instStore;
-  destroy_aimStorage(msesInstance);
+  destroy_aimStorage(msesInstance, (int)true);
+  AIM_NOTNULL(aimInputs, aimInfo, status);
 
+  status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
+  AIM_STATUS(aimInfo, status);
+
+  if (numBody == 0 || bodies == NULL) {
+    AIM_ERROR(aimInfo, "No Bodies!");
+    return CAPS_SOURCEERR;
+  }
 
   if (aimInputs[inAlpha-1].nullVal == aimInputs[inCL-1].nullVal)
   {
@@ -437,10 +616,73 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
     goto cleanup;
   }
 
+  if (aimInputs[inxTransition_Upper-1].nullVal == NotNull &&
+      numBody != aimInputs[inxTransition_Upper-1].length)
+  {
+    AIM_ERROR(aimInfo, "'xTransition_Upper' input must length %d be equal to the number of bodies %d.", aimInputs[inxTransition_Upper-1].length, numBody);
+    status = CAPS_BADVALUE;
+    goto cleanup;
+  }
+
+  if (aimInputs[inxTransition_Lower-1].nullVal == NotNull &&
+      numBody != aimInputs[inxTransition_Lower-1].length)
+  {
+    AIM_ERROR(aimInfo, "'xTransition_Lower' input must length %d be equal to the number of bodies %d.", aimInputs[inxTransition_Upper-1].length, numBody);
+    status = CAPS_BADVALUE;
+    goto cleanup;
+  }
+
   if (aimInputs[inISMOM-1].vals.integer < 1 ||
       aimInputs[inISMOM-1].vals.integer > 4)
   {
     AIM_ERROR(aimInfo, "'ISMOM' must be in [1-4]: ISMOM = %d", aimInputs[inISMOM-1].vals.integer);
+    status = CAPS_BADVALUE;
+    goto cleanup;
+  }
+
+  if (aimInputs[inIFFBC-1].vals.integer < 1 ||
+      aimInputs[inIFFBC-1].vals.integer > 4)
+  {
+    AIM_ERROR(aimInfo, "'IFFBC' must be in [1-5]: IFFBC = %d", aimInputs[inIFFBC-1].vals.integer);
+    status = CAPS_BADVALUE;
+    goto cleanup;
+  }
+
+  if (aimInputs[inAirfoil_Points-1].vals.integer <= 0)
+  {
+    AIM_ERROR(aimInfo, "'Airfoil_Points' must be positive: Airfoil_Points = %d", aimInputs[inAirfoil_Points-1].vals.integer);
+    status = CAPS_BADVALUE;
+    goto cleanup;
+  }
+
+  if (aimInputs[inInlet_Points-1].vals.integer <= 0 &&
+      aimInputs[inInlet_Points-1].nullVal == NotNull)
+  {
+    AIM_ERROR(aimInfo, "'Inlet_Points' must be positive: Inlet_Points = %d", aimInputs[inInlet_Points-1].vals.integer);
+    status = CAPS_BADVALUE;
+    goto cleanup;
+  }
+
+  if (aimInputs[inOutlet_Points-1].vals.integer <= 0 &&
+      aimInputs[inOutlet_Points-1].nullVal == NotNull)
+  {
+    AIM_ERROR(aimInfo, "'Outlet_Points' must be positive: Outlet_Points = %d", aimInputs[inOutlet_Points-1].vals.integer);
+    status = CAPS_BADVALUE;
+    goto cleanup;
+  }
+
+  if (aimInputs[inUpper_Stremlines-1].vals.integer <= 0 &&
+      aimInputs[inUpper_Stremlines-1].nullVal == NotNull)
+  {
+    AIM_ERROR(aimInfo, "'Upper_Stremlines' must be positive: Upper_Stremlines = %d", aimInputs[inUpper_Stremlines-1].vals.integer);
+    status = CAPS_BADVALUE;
+    goto cleanup;
+  }
+
+  if (aimInputs[inLower_Stremlines-1].vals.integer <= 0 &&
+      aimInputs[inLower_Stremlines-1].nullVal == NotNull)
+  {
+    AIM_ERROR(aimInfo, "'Lower_Stremlines' must be positive: Lower_Stremlines = %d", aimInputs[inLower_Stremlines-1].vals.integer);
     status = CAPS_BADVALUE;
     goto cleanup;
   }
@@ -453,18 +695,339 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
     goto cleanup;
   }
 
+  if (aimInputs[inCheby_Modes-1].nullVal == NotNull) {
+    nmode = aimInputs[inCheby_Modes-1].length;
+    if (nmode > 40 || nmode % 2 == 1) {
+      AIM_ERROR(aimInfo, "'Cheby_Modes' length %d must be even length between [0-40]", nmode);
+      status = CAPS_BADVALUE;
+      goto cleanup;
+    }
+  }
+
+  // Get geometric coordinates if needed
+  if (msesInstance->numBody == 0 ||
+      aim_newGeometry(aimInfo) == CAPS_SUCCESS ) {
+
+    // Remove any previous geometric coordinates
+    for (i = 0; i < msesInstance->numBody; i++) {
+      AIM_FREE(msesInstance->xCoord[i]);
+      AIM_FREE(msesInstance->yCoord[i]);
+      EG_deleteObject(msesInstance->tess[i]);
+      if (msesInstance->blades != NULL) {
+        for (j = 0; j < msesInstance->blades[i].ndesvar; j++) {
+          for (k = 0; k < msesInstance->blades[i].desvar[j].ngeom_dot; k++) {
+            EG_deleteObject(msesInstance->blades[i].desvar[j].geom_dot[k]);
+          }
+          AIM_FREE(msesInstance->blades[i].desvar[j].geom_dot);
+        }
+        AIM_FREE(msesInstance->blades[i].desvar);
+      }
+    }
+    AIM_FREE(msesInstance->blades);
+
+    AIM_REALL(msesInstance->xCoord, numBody, double*, aimInfo, status);
+    AIM_REALL(msesInstance->yCoord, numBody, double*, aimInfo, status);
+    AIM_REALL(msesInstance->tess, numBody, ego, aimInfo, status);
+    AIM_REALL(msesInstance->vlmSections, numBody, vlmSectionStruct, aimInfo, status);
+    msesInstance->numBody = numBody;
+
+    for (ibody = 0; ibody < numBody; ibody++) {
+      msesInstance->xCoord[ibody] = NULL;
+      msesInstance->yCoord[ibody] = NULL;
+      msesInstance->tess[ibody] = NULL;
+    }
+
+    for (ibody = 0; ibody < numBody; ibody++) {
+      status = initiate_vlmSectionStruct(&msesInstance->vlmSections[ibody]);
+      AIM_STATUS(aimInfo, status);
+    }
+
+    // Get coordinates for each airfoil blade
+    for (ibody = 0; ibody < numBody; ibody++) {
+
+      msesInstance->vlmSections[ibody].ebody = bodies[ibody];
+
+      status = finalize_vlmSectionStruct(aimInfo, &msesInstance->vlmSections[ibody]);
+      AIM_STATUS(aimInfo, status);
+
+      status = vlm_getSectionCoord(aimInfo,
+                                   &msesInstance->vlmSections[ibody],
+                                   (int) true, // Normalize by chord (true/false)
+                                   NUMPOINT,
+                                   &msesInstance->xCoord[ibody],
+                                   &msesInstance->yCoord[ibody],
+                                   &msesInstance->tess[ibody]);
+      AIM_STATUS(aimInfo, status);
+
+    } // End body loop
+  }
+
+
   // Get design variables
   if (aimInputs[inDesign_Variable-1].nullVal == NotNull &&
-      aim_newAnalysisIn(aimInfo, inDesign_Variable) == CAPS_SUCCESS) {
-/*@-nullpass@*/
+      (msesInstance->design.numDesignVariable == 0 ||
+       msesInstance->blades == NULL ||
+       aim_newAnalysisIn(aimInfo, inDesign_Variable) == CAPS_SUCCESS)) {
+
+    if (msesInstance->design.numDesignVariable == 0 ||
+       aim_newAnalysisIn(aimInfo, inDesign_Variable) == CAPS_SUCCESS) {
+      /*@-nullpass@*/
       status = cfd_getDesignVariable(aimInfo,
                                      aimInputs[inDesign_Variable-1].length,
                                      aimInputs[inDesign_Variable-1].vals.tuple,
                                      &msesInstance->design.numDesignVariable,
                                      &msesInstance->design.designVariable);
-/*@+nullpass@*/
+      /*@+nullpass@*/
       AIM_STATUS(aimInfo, status);
+    }
+
+    // Compute geometric sensitivities
+    status = EG_getContext(bodies[0], &context);
+    AIM_STATUS(aimInfo, status);
+    AIM_NOTNULL(context, aimInfo, status);
+
+    AIM_ALLOC(blades, numBody, ego, aimInfo, status);
+    for (ibody = 0; ibody < numBody; ibody++) blades[ibody] = NULL;
+
+    // Remove any previous sensitivities
+    for (i = 0; i < msesInstance->numBody; i++) {
+      if (msesInstance->blades != NULL) {
+        for (j = 0; j < msesInstance->blades[i].ndesvar; j++) {
+          for (k = 0; k < msesInstance->blades[i].desvar[j].ngeom_dot; k++) {
+            EG_deleteObject(msesInstance->blades[i].desvar[j].geom_dot[k]);
+          }
+          AIM_FREE(msesInstance->blades[i].desvar[j].geom_dot);
+        }
+        AIM_FREE(msesInstance->blades[i].desvar);
+      }
+    }
+    AIM_FREE(msesInstance->blades);
+
+    AIM_ALLOC(msesInstance->blades, numBody, desvarStruct, aimInfo, status);
+    for (ibody = 0; ibody < numBody; ibody++) {
+      msesInstance->blades[ibody].ndesvar = 0;
+      msesInstance->blades[ibody].desvar = NULL;
+    }
+
+    for (ibody = 0; ibody < numBody; ibody++) {
+      AIM_ALLOC(msesInstance->blades[ibody].desvar, msesInstance->design.numDesignVariable, geom_dotStruct, aimInfo, status);
+      msesInstance->blades[ibody].ndesvar = msesInstance->design.numDesignVariable;
+      for (idv = 0; idv < msesInstance->design.numDesignVariable; idv++) {
+        msesInstance->blades[ibody].desvar[idv].ngeom_dot = 0;
+        msesInstance->blades[ibody].desvar[idv].geom_dot = NULL;
+      }
+    }
+
+    AIM_ALLOC(xyz , 3*NUMPOINT, double, aimInfo, status);
+    AIM_ALLOC(dxyz, 3*NUMPOINT, double, aimInfo, status);
+
+    /* Create a reference bodies */
+    for (ibody = 0; ibody < numBody; ibody++) {
+
+      // Create a spline representation of the airfoil coordinates
+      // this must be don after calling aim_tessSensitivity as OpenCSM
+      // calls EG_deleteObject(context) which removes the curve
+      for( i = 0; i < NUMPOINT; i++) {
+        xyz[3*i+0] = msesInstance->xCoord[ibody][i];
+        xyz[3*i+1] = msesInstance->yCoord[ibody][i];
+        xyz[3*i+2] = 0.0;
+        //printf("%lf %lf\n", xyz[3*i+0], dxyz[ibody][3*i+1]);
+      }
+      status = EG_approximate(context, 0, 1e-8, sizes, xyz, &curve);
+      AIM_STATUS(aimInfo, status);
+
+      // Make nodes
+      status = EG_makeTopology(context, NULL, NODE, 0,
+                               xyz, 0, NULL, NULL, &nodes[0]);
+      AIM_STATUS(aimInfo, status);
+
+      // Check if the trailing edge is closed
+      if (xyz[0] == xyz[3*(NUMPOINT-1)+0] &&
+          xyz[1] == xyz[3*(NUMPOINT-1)+1]) {
+        nodes[1] = NULL;
+        // Make ONENODE Edge
+        status = EG_makeTopology(context, curve, EDGE, ONENODE,
+                                 tdata, 1, nodes, NULL, &edge);
+        AIM_STATUS(aimInfo, status);
+
+        // Make CLOSED Loop
+        status = EG_makeTopology(context, NULL, LOOP, CLOSED,
+                                 NULL, 1, &edge, senses, &loop);
+        AIM_STATUS(aimInfo, status);
+      } else {
+        status = EG_makeTopology(context, NULL, NODE, 0,
+                                 xyz+3*(NUMPOINT-1), 0, NULL, NULL, &nodes[1]);
+        AIM_STATUS(aimInfo, status);
+
+        // Make TWONODE Edge
+        status = EG_makeTopology(context, curve, EDGE, TWONODE,
+                                 tdata, 2, nodes, NULL, &edge);
+        AIM_STATUS(aimInfo, status);
+
+        // Make OPEN Loop
+        status = EG_makeTopology(context, NULL, LOOP, OPEN,
+                                 NULL, 1, &edge, senses, &loop);
+        AIM_STATUS(aimInfo, status);
+      }
+
+      // The curve must be put in a WIREBODY so OpenCSM does not
+      // delete it when calling EG_deleteObject(context)
+
+      // Make the blade WIREBODY
+      status = EG_makeTopology(context, NULL, BODY, WIREBODY,
+                               NULL, 1, &loop, NULL, &blades[ibody]);
+      AIM_STATUS(aimInfo, status);
+
+      // Cleanup temporary objects
+/*@-nullpass@*/
+      EG_deleteObject(loop);
+      EG_deleteObject(edge);
+      EG_deleteObject(nodes[0]);
+      EG_deleteObject(nodes[1]);
+      EG_deleteObject(curve);
+/*@+nullpass@*/
+    }
+
+    /* set derivatives */
+    for (idv = 0; idv < msesInstance->design.numDesignVariable; idv++) {
+
+      name = msesInstance->design.designVariable[idv].name;
+
+      // Loop over the geometry in values and compute sensitivities for all bodies
+      index = aim_getIndex(aimInfo, name, GEOMETRYIN);
+      status = aim_getValue(aimInfo, index, GEOMETRYIN, &geomInVal);
+      if (status != CAPS_SUCCESS || geomInVal == NULL) {
+        AIM_ERROR(aimInfo, "'%s' is not a DESPMTR", name);
+        status = CAPS_BADVALUE;
+        goto cleanup;
+      }
+
+      for (ibody = 0; ibody < numBody; ibody++) {
+        AIM_ALLOC(msesInstance->blades[ibody].desvar[idv].geom_dot, geomInVal->nrow*geomInVal->ncol, ego, aimInfo, status);
+        msesInstance->blades[ibody].desvar[idv].ngeom_dot = geomInVal->nrow*geomInVal->ncol;
+
+        for (igv = 0; igv < msesInstance->blades[ibody].desvar[idv].ngeom_dot; igv++)
+          msesInstance->blades[ibody].desvar[idv].geom_dot[igv] = NULL;
+      }
+
+      for (irow = 0; irow < geomInVal->nrow; irow++) {
+        for (icol = 0; icol < geomInVal->ncol; icol++) {
+
+          igv = geomInVal->ncol*irow + icol;
+
+          // set the sensitivities of the spline fit for each blade
+          for (ibody = 0; ibody < numBody; ibody++) {
+            status = vlm_getSectionTessSens(aimInfo,
+                                            &msesInstance->vlmSections[ibody],
+                                            (int)true,
+                                            name,
+                                            irow+1, icol+1, // row, col
+                                            msesInstance->tess[ibody],
+                                            &dx_dvar, &dy_dvar);
+            AIM_STATUS(aimInfo, status, "Sensitivity for: %s\n", name);
+            AIM_NOTNULL(dx_dvar, aimInfo, status);
+            AIM_NOTNULL(dy_dvar, aimInfo, status);
+
+            for( i = 0; i < NUMPOINT; i++) {
+              dxyz[3*i+0] = dx_dvar[i];
+              dxyz[3*i+1] = dy_dvar[i];
+              dxyz[3*i+2] = 0.0;
+              //printf("%lf %lf\n", dxyz[ibody][3*i+0], dxyz[ibody][3*i+1]);
+            }
+            AIM_FREE(dx_dvar);
+            AIM_FREE(dy_dvar);
+
+
+            status = EG_copyObject(blades[ibody], NULL, &msesInstance->blades[ibody].desvar[idv].geom_dot[igv]);
+            AIM_STATUS(aimInfo, status);
+
+            /* get the Loop from the Body */
+            status = EG_getTopology(msesInstance->blades[ibody].desvar[idv].geom_dot[igv],
+                                    &eref, &oclass, &mtype,
+                                    data, &nloop, &eloops, &sense);
+            AIM_STATUS(aimInfo, status);
+
+            /* get the Edge from the Loop */
+            status = EG_getTopology(eloops[0], &eref, &oclass, &mtype,
+                                    data, &nedge, &eedges, &sense);
+            AIM_STATUS(aimInfo, status);
+
+            /* get the Nodes and the Curve from the Edge */
+            status = EG_getTopology(eedges[0], &curve, &oclass, &mtype,
+                                    data, &nnode, &enodes, &sense);
+            AIM_STATUS(aimInfo, status);
+            AIM_NOTNULL(curve, aimInfo, status);
+
+
+            // set all the sensitivities
+            status = EG_approximate_dot(curve, 0, 1e-8, sizes, xyz, dxyz);
+            AIM_STATUS(aimInfo, status);
+
+            status = EG_setGeometry_dot(enodes[0], NODE, 0, NULL, xyz, dxyz);
+            AIM_STATUS(aimInfo, status);
+
+            status = EG_setGeometry_dot(enodes[1], NODE, 0, NULL, xyz+3*(NUMPOINT-1), dxyz+3*(NUMPOINT-1));
+            AIM_STATUS(aimInfo, status);
+
+            status = EG_setRange_dot(eedges[0], EDGE, tdata, tdata_dot);
+            AIM_STATUS(aimInfo, status);
+          }
+        }
+      }
+    }
+
+    AIM_FREE(xyz );
+    AIM_FREE(dxyz);
+    for (ibody = 0; ibody < numBody; ibody++)
+      EG_deleteObject(blades[ibody]);
+    AIM_FREE(blades);
   }
+
+cleanup:
+  return status;
+}
+
+
+// ********************** AIM Function Break *****************************
+int aimPreAnalysis(const void *instStore, void *aimInfo,
+                   capsValue *aimInputs)
+{
+  int status; // Function return status
+
+  int i, ibody; // Indexing
+  int gcon=0;
+
+  // Bodies
+  const char *intents;
+  int numBody;
+  ego *bodies = NULL;
+
+  int nmode = NMODE;
+  double xtrs, xtrp;
+  int Airfoil_Points;
+
+  char command[PATH_MAX];
+
+  const aimStorage *msesInstance=NULL;
+
+  // File I/O
+  FILE *fp = NULL;
+  const char inputMSES[]      = "msesInput.txt";
+  const char inputMSET[]      = "msetInput.txt";
+  const char msesFilename[]   = "mses.airfoil";
+  const char bladeFilename[]  = "blade.airfoil";
+  const char modesFilename[]  = "modes.airfoil";
+  const char paramsFilename[] = "params.airfoil";
+  const char mdatFilename[]   = "mdat.airfoil"; // mset output and mses restart file
+  const char sensxfile[]      = "sensx.airfoil";
+
+  AIM_NOTNULL(aimInputs, aimInfo, status);
+
+  msesInstance = (const aimStorage *)instStore;
+
+  // remove any previous solutions
+  status = aim_rmFile(aimInfo, sensxfile);
+  AIM_STATUS(aimInfo, status);
 
   status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
   AIM_STATUS(aimInfo, status);
@@ -474,15 +1037,10 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
     return CAPS_SOURCEERR;
   }
 
-  status = initiate_vlmSectionStruct(&vlmSection);
-  AIM_STATUS(aimInfo, status);
-
-  AIM_ALLOC(msesInstance->xCoord, numBody, double*, aimInfo, status);
-  AIM_ALLOC(msesInstance->yCoord, numBody, double*, aimInfo, status);
-  msesInstance->numBody = numBody;
-
-  // Accumulate cross coordinates of airfoil and write out data file
-  for (ibody = 0; ibody < numBody; ibody++) {
+  if (aim_isFile(aimInfo, bladeFilename) == CAPS_NOTFOUND ||
+      aim_newGeometry(aimInfo) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inxGridRange) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inyGridRange) == CAPS_SUCCESS ) {
 
     // Open and write the input to control the MSES session
     fp = aim_fopen(aimInfo, bladeFilename, "w");
@@ -492,152 +1050,250 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
       goto cleanup;
     }
 
-    vlmSection.ebody = bodies[ibody];
+    // Write out airfoil files
+    for (ibody = 0; ibody < numBody; ibody++) {
 
-    status = finalize_vlmSectionStruct(aimInfo, &vlmSection);
-    AIM_STATUS(aimInfo, status);
+      fprintf(fp,"capsBody_%d\n",ibody+1);
+      fprintf(fp, "%16.12e %16.12e %16.12e %16.12e\n", aimInputs[inxGridRange-1].vals.reals[0],
+                                                       aimInputs[inxGridRange-1].vals.reals[1],
+                                                       aimInputs[inyGridRange-1].vals.reals[0],
+                                                       aimInputs[inyGridRange-1].vals.reals[1]);
+      for( i = 0; i < NUMPOINT; i++) {
+        fprintf(fp, "%16.12e %16.12e\n", msesInstance->xCoord[ibody][i],
+                                         msesInstance->yCoord[ibody][i]);
+      }
+      fprintf(fp, "999. 999.\n");
 
-    status = vlm_getSectionCoord(aimInfo,
-                                 &vlmSection,
-                                 (int) true, // Normalize by chord (true/false)
-                                 NUMPOINT,
-                                 &msesInstance->xCoord[ibody],  //[numPoint]
-                                 &msesInstance->yCoord[ibody]); //[numPoint] for upper and lower surface
-    AIM_STATUS(aimInfo, status);
-
-    fprintf(fp,"capsBody_%d\n",ibody+1);
-    fprintf(fp, "%lf %lf %lf %lf\n", aimInputs[inxGridRange-1].vals.reals[0],
-                                     aimInputs[inxGridRange-1].vals.reals[1],
-                                     aimInputs[inyGridRange-1].vals.reals[0],
-                                     aimInputs[inyGridRange-1].vals.reals[1]);
-    for( i = 0; i < NUMPOINT; i++) {
-      fprintf(fp, "%lf %lf\n", msesInstance->xCoord[ibody][i],
-                               msesInstance->yCoord[ibody][i]);
-    }
-    fprintf(fp, "\n");
+    } // End body loop
 
     // Close file
     fclose(fp);
     fp = NULL;
-
-  } // End body loop
-
-  // This writes the mses.xxx file
-  // Described in MSES/pdf/mses.pdf
-  fp = aim_fopen(aimInfo, msesFilename, "w");
-  if (fp == NULL) {
-    AIM_ERROR(aimInfo, "Unable to open file %s\n!", msesFilename);
-    status = CAPS_IOERR;
-    goto cleanup;
   }
 
-  if (aimInputs[inAlpha-1].nullVal == NotNull)
-    gcon = GCON_ALPHA; // specify Alpha
-  else
-    gcon = GCON_CL; // specify CL
+  // get the number of modes
+  if (aimInputs[inCheby_Modes-1].nullVal == NotNull)
+    nmode = aimInputs[inCheby_Modes-1].length;
 
-  fprintf(fp, "3 4 5 7 10 15 20 \n"); // First row are the variables, are unlikely to change
-                                // These come from Drela's examples, see Pages 5,17,18,19
-                                // The 20 enables the sensitivities
-  fprintf(fp, "3 4 %d 7 15 17 20\n", gcon);  // Second row are constraints, also unlikely to change
-                                       // In general they match the variables, see Pages 6,7,8,17,18,19
-  fprintf(fp, "%lf %lf %lf     | MACHIN  CLIFIN ALFAIN\n", aimInputs[inMach-1].vals.real,
-                                                           aimInputs[inCL-1].vals.real,
-                                                           aimInputs[inAlpha-1].vals.real );
-  fprintf(fp, "%d 2            | ISMOM   IFFBC\n", aimInputs[inISMOM-1].vals.integer); // These have to do with flow properties (Page 7) and should probably be exposed to the user
-  fprintf(fp, "%lf %lf         | REYNIN  ACRIT\n", aimInputs[inRe-1].vals.real,
-                                                   aimInputs[inAcrit-1].vals.real);
-  fprintf(fp, "1.0 1.0 1.0 1.0 | XTRS    XTRP\n");    // Forced transition location on top and bottom, x/c
-  fprintf(fp, "0.98 1.0        | MCRIT   MUCON\n");   //these have to do with shocks and should also be exposed as settings
-  fprintf(fp, "1 1             | ISMOVE  ISPRES\n"); // These are ignored, but must be here
-  fprintf(fp, "%d 0            | NMOD    NPOS\n", NMODE);   // Number of mode variables and position variables, could be a user setting
+  if (aim_isFile(aimInfo, msesFilename) != CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inCheby_Modes      ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inMach             ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inCL               ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inAlpha            ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inISMOM            ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inIFFBC            ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inRe               ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inAcrit            ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inxTransition_Upper) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inxTransition_Lower) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inMcrit            ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inMuCon            ) == CAPS_SUCCESS ) {
 
-  if (fp != NULL) fclose(fp);
-  fp = NULL;
-
-  // This writes the modes file that determines the geometry
-  // See pages 41-12 MSES/pdf/mses.pdf
-  // Format is: Variable   Mode-Shape   (a multi element thing that is ignored)  Mode-lower-bound  Mode-upper-bound  (always 1)
-  fp = aim_fopen(aimInfo, modesFilename, "w");
-  if (fp == NULL) {
-    AIM_ERROR(aimInfo, "Unable to open file %s\n!", modesFilename);
-    status = CAPS_IOERR;
-    goto cleanup;
-  }
-
-  for (i = 0; i < NMODE/2; i++)
-    fprintf(fp, "%d   %d   1.0   0.0    1.0   1\n", i+1, NMODE/2+1+i); // Upper Surface Modes
-  for (i = 0; i < NMODE/2; i++)
-    fprintf(fp, "%d   %d  -1.0   0.0   -1.0   1\n", NMODE/2+1+i, NMODE/2+1+i); // Lower surface modes
-
-  if (fp != NULL) fclose(fp);
-  fp = NULL;
-
-  if (aimInputs[inCheby_Modes-1].nullVal == NotNull) {
-    fp = aim_fopen(aimInfo, paramsFilename, "w");
+    // This writes the mses.xxx file
+    // Described in MSES/pdf/mses.pdf
+    fp = aim_fopen(aimInfo, msesFilename, "w");
     if (fp == NULL) {
-      AIM_ERROR(aimInfo, "Unable to open file %s\n!", paramsFilename);
+      AIM_ERROR(aimInfo, "Unable to open file %s\n!", msesFilename);
       status = CAPS_IOERR;
       goto cleanup;
     }
-    fprintf(fp, "%d   0\n", NMODE);
-    for (i = 0; i < NMODE; i++)
-      fprintf(fp, "%16.12e\n", aimInputs[inCheby_Modes-1].vals.reals[i]); // Surface Modes
 
-    fprintf(fp, "%lf %lf %lf \n", aimInputs[inAlpha-1].vals.real,
-                                  aimInputs[inCL-1].vals.real,
-                                  aimInputs[inMach-1].vals.real );
-    fprintf(fp, "%lf\n", aimInputs[inRe-1].vals.real);
+    if (aimInputs[inAlpha-1].nullVal == NotNull)
+      gcon = GCON_ALPHA; // specify Alpha
+    else
+      gcon = GCON_CL; // specify CL
+
+    fprintf(fp, "3 4 5 7 10 15 20 \n"); // First row are the variables, are unlikely to change
+                                        // These come from Drela's examples, see Pages 5,17,18,19
+                                        // The 20 enables the sensitivities
+    fprintf(fp, "3 4 %d 7 15 17 20\n", gcon);  // Second row are constraints, also unlikely to change
+                                         // In general they match the variables, see Pages 6,7,8,17,18,19
+    fprintf(fp, "%lf %lf %lf     | MACHIN  CLIFIN ALFAIN\n", aimInputs[inMach-1].vals.real,
+                                                             aimInputs[inCL-1].vals.real,
+                                                             aimInputs[inAlpha-1].vals.real );
+    fprintf(fp, "%d %d           | ISMOM   IFFBC\n", aimInputs[inISMOM-1].vals.integer,
+                                                     aimInputs[inIFFBC-1].vals.integer); // These have to do with flow properties (Page 7) and should probably be exposed to the user
+    fprintf(fp, "%lf %lf         | REYNIN  ACRIT\n", aimInputs[inRe-1].vals.real,
+                                                     aimInputs[inAcrit-1].vals.real);
+    for (i = 0; i < numBody; i++) {  // Forced transition location on top and bottom, x/c
+      xtrs = xtrp = 1.0;
+
+      // Upper (suction) side
+      if (aimInputs[inxTransition_Upper-1].nullVal == NotNull) {
+        if (aimInputs[inxTransition_Upper-1].length == 1)
+          xtrs = aimInputs[inxTransition_Upper-1].vals.real;
+        else
+          xtrs = aimInputs[inxTransition_Upper-1].vals.reals[i];
+      }
+
+      // Lower (pressure) side
+      if (aimInputs[inxTransition_Lower-1].nullVal == NotNull) {
+        if (aimInputs[inxTransition_Lower-1].length == 1)
+          xtrp = aimInputs[inxTransition_Lower-1].vals.real;
+        else
+          xtrp = aimInputs[inxTransition_Lower-1].vals.reals[i];
+      }
+
+      fprintf(fp, "%16.12e %16.12e ", xtrs, xtrp);
+    }
+    fprintf(fp, "| XTRS    XTRP\n");
+    fprintf(fp, "%lf %lf        | MCRIT   MUCON\n", aimInputs[inMcrit-1].vals.real,
+                                                    aimInputs[inMuCon-1].vals.real);
+    fprintf(fp, "1 1             | ISMOVE  ISPRES\n"); // These are ignored, but must be here
+    fprintf(fp, "%d 0            | NMOD    NPOS\n", nmode);   // Number of mode variables and position variables, could be a user setting
 
     if (fp != NULL) fclose(fp);
     fp = NULL;
+  }
+
+  if (aim_isFile(aimInfo, modesFilename) != CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inCheby_Modes) == CAPS_SUCCESS) {
+
+    // This writes the modes file that determines the geometry
+    // See pages 41-12 MSES/pdf/mses.pdf
+    // Format is: Variable   Mode-Shape   (a multi element thing that is ignored)  Mode-lower-bound  Mode-upper-bound  (always 1)
+    fp = aim_fopen(aimInfo, modesFilename, "w");
+    if (fp == NULL) {
+      AIM_ERROR(aimInfo, "Unable to open file %s\n!", modesFilename);
+      status = CAPS_IOERR;
+      goto cleanup;
+    }
+
+    for (i = 0; i < nmode/2; i++)
+      fprintf(fp, "%d   %d   1.0   0.0    1.0   1\n", i+1, 21+i); // Upper Surface Modes
+    for (i = 0; i < nmode/2; i++)
+      fprintf(fp, "%d   %d   1.0   0.0   -1.0   1\n", nmode/2+1+i, 21+i); // Lower surface modes
+
+    if (fp != NULL) fclose(fp);
+    fp = NULL;
+  }
+
+  // Write out paramsFile if Cheby_Modes are specified
+  if (aimInputs[inCheby_Modes-1].nullVal == NotNull) {
+    if (aim_isFile(aimInfo, paramsFilename) != CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inCheby_Modes) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inAlpha      ) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inCL         ) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inMach       ) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, inRe         ) == CAPS_SUCCESS ) {
+
+      fp = aim_fopen(aimInfo, paramsFilename, "w");
+      if (fp == NULL) {
+        AIM_ERROR(aimInfo, "Unable to open file %s\n!", paramsFilename);
+        status = CAPS_IOERR;
+        goto cleanup;
+      }
+      fprintf(fp, "%d   0\n", nmode);
+      for (i = 0; i < nmode; i++)
+        fprintf(fp, "%16.12e\n", aimInputs[inCheby_Modes-1].vals.reals[i]); // Surface Modes
+
+      fprintf(fp, "%lf %lf %lf \n", aimInputs[inAlpha-1].vals.real,
+                                    aimInputs[inCL-1].vals.real,
+                                    aimInputs[inMach-1].vals.real );
+      fprintf(fp, "%lf\n", aimInputs[inRe-1].vals.real);
+
+      if (fp != NULL) fclose(fp);
+      fp = NULL;
+    }
   } else {
-    status = aim_file(aimInfo, paramsFilename, aimFile);
+    status = aim_rmFile(aimInfo, paramsFilename);
     AIM_STATUS(aimInfo, status);
-    remove(aimFile);
   }
 
-  // Run MSET to set up the grid
-  // This is where the interactive window comes up, we really need to figure out how to turn it off to make this practical
-  fp = aim_fopen(aimInfo, inputMSET, "w");
-  if (fp == NULL) {
-    AIM_ERROR(aimInfo, "Unable to open file %s\n!", inputMSET);
-    status = CAPS_IOERR;
-    goto cleanup;
+  if (aim_isFile(aimInfo, inputMSET) != CAPS_SUCCESS ||
+      aim_newGeometry(aimInfo) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inAirfoil_Points  ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inInlet_Points    ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inOutlet_Points   ) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inUpper_Stremlines) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inLower_Stremlines) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inGridAlpha       ) == CAPS_SUCCESS) {
+
+    // Remove the old grid file in case grid generation fails
+    // otherwise MSES will restart from the old grid file and give a false success
+    status = aim_rmFile(aimInfo, mdatFilename);
+    AIM_STATUS(aimInfo, status);
+
+    // Run MSET to set up the grid
+    fp = aim_fopen(aimInfo, inputMSET, "w");
+    if (fp == NULL) {
+      AIM_ERROR(aimInfo, "Unable to open file %s\n!", inputMSET);
+      status = CAPS_IOERR;
+      goto cleanup;
+    }
+
+    Airfoil_Points = aimInputs[inAirfoil_Points-1].vals.integer;
+
+    fprintf(fp, "7\n"); // Modify grid parameters
+    fprintf(fp, "N\n%d\n", Airfoil_Points); // set airfoil points
+
+    // set inlet points
+    if (aimInputs[inInlet_Points-1].nullVal == IsNull)
+      fprintf(fp, "I\n%d\n", (Airfoil_Points/8)*2+1);
+    else
+      fprintf(fp, "I\n%d\n", aimInputs[inInlet_Points-1].vals.integer);
+
+    // set outlet points
+    if (aimInputs[inOutlet_Points-1].nullVal == IsNull)
+      fprintf(fp, "O\n%d\n", (Airfoil_Points/8)*2+1);
+    else
+      fprintf(fp, "O\n%d\n", aimInputs[inOutlet_Points-1].vals.integer);
+
+    // set upper streamlines
+    if (aimInputs[inUpper_Stremlines-1].nullVal == IsNull)
+      fprintf(fp, "T\n%d\n", (Airfoil_Points/16)*2+1);
+    else
+      fprintf(fp, "T\n%d\n", aimInputs[inUpper_Stremlines-1].vals.integer);
+
+    // set bottom streamlines
+    if (aimInputs[inLower_Stremlines-1].nullVal == IsNull)
+      fprintf(fp, "B\n%d\n", (Airfoil_Points/16)*2+1);
+    else
+      fprintf(fp, "B\n%d\n", aimInputs[inLower_Stremlines-1].vals.integer);
+
+    fprintf(fp, "\n"); // return to top menu
+
+    // The normal sequence is 1-2-3-4-0
+    fprintf(fp, "1\n"); // Generates streamlines
+    fprintf(fp, "%lf\n", aimInputs[inGridAlpha-1].vals.real); // Sets the alpha of the grid (this is not the flow alpha)
+    fprintf(fp, "2\n"); // Grid spacing
+    fprintf(fp, "\n"); // No changes desired, honestly not sure what these settings do
+    fprintf(fp, "3\n"); // Do smoothing
+    fprintf(fp, "4\n"); // write the mdat file that MSES uses
+    fprintf(fp, "0\n"); // quits mset
+    fprintf(fp, "\n");
+    fflush(fp);
+    if (fp != NULL) fclose(fp);
+    fp = NULL;
+
+    snprintf(command, PATH_MAX, "mset airfoil noplot < %s > msetOutput.txt", inputMSET);
+    status = aim_system(aimInfo, "", command);
+    AIM_STATUS(aimInfo, status, "Failed to execute: %s", command);
   }
 
-  // The normal sequence is 1-2-3-4-0
-  fprintf(fp, "1\n"); // Generates streamlines
-  fprintf(fp, "%lf\n", aimInputs[inGridAlpha-1].vals.real); // Sets the alpha of the grid (this is not the flow alpha)
-  fprintf(fp, "2\n"); // Grid spacing
-  fprintf(fp, "\n"); // No changes desired, honestly not sure what these settings do
-  fprintf(fp, "3\n"); // Does a smoothing
-  fprintf(fp, "4\n"); // write the mdat file that MSES uses
-  fprintf(fp, "0\n"); // quits mset
-  fprintf(fp, "\n");
-  fflush(fp);
-  if (fp != NULL) fclose(fp);
-  fp = NULL;
-  snprintf(command, PATH_MAX, "mset airfoil noplot < %s > msetOutput.txt", inputMSET);
-  status = aim_system(aimInfo, "", command);
-  AIM_STATUS(aimInfo, status, "Failed to execute: %s", command);
+  if (aim_isFile(aimInfo, inputMSES) != CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inCoarse_Iteration) == CAPS_SUCCESS ||
+      aim_newAnalysisIn(aimInfo, inFine_Iteration  ) == CAPS_SUCCESS) {
 
+    // Open and write the input to control the MSES session
+    fp = aim_fopen(aimInfo, inputMSES, "w");
+    if (fp == NULL) {
+      AIM_ERROR(aimInfo, "Unable to open file %s\n!", inputMSES);
+      status = CAPS_IOERR;
+      goto cleanup;
+    }
 
-  // Open and write the input to control the MSES session
-  fp = aim_fopen(aimInfo, inputMSES, "w");
-  if (fp == NULL) {
-    AIM_ERROR(aimInfo, "Unable to open file %s\n!", inputMSES);
-    status = CAPS_IOERR;
-    goto cleanup;
+    if (aimInputs[inCoarse_Iteration-1].vals.integer != 0) {
+      fprintf(fp, "-%d\n", abs(aimInputs[inCoarse_Iteration-1].vals.integer));
+      fprintf(fp, "+%d\n", abs(aimInputs[inFine_Iteration-1].vals.integer));
+    } else {
+      fprintf(fp, "%d\n", abs(aimInputs[inFine_Iteration-1].vals.integer));
+    }
+    fprintf(fp, "0\n"); // Terminates mses
+
+    if (fp != NULL) fclose(fp);
+    fp = NULL;
   }
-
-  if (aimInputs[inCoarse_Iteration-1].vals.integer != 0)
-    fprintf(fp, "-%d\n", abs(aimInputs[inCoarse_Iteration-1].vals.integer));
-  fprintf(fp, "+%d\n", abs(aimInputs[inFine_Iteration-1].vals.integer));
-  fprintf(fp, "0\n"); // Terminates mses
-
-  if (fp != NULL) fclose(fp);
-  fp = NULL;
 
   status = CAPS_SUCCESS;
 
@@ -648,7 +1304,8 @@ cleanup:
 }
 
 
-int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+// ********************** AIM Function Break *****************************
+int aimExecute(/*@unused@*/ const void *instStore, /*@unused@*/ void *aimInfo,
                int *state)
 {
   /*! \page aimExecuteMSES AIM Execution
@@ -689,30 +1346,39 @@ int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimPostAnalysis(void *instStore, void *aimInfo,
                     /*@unused@*/ int restart, capsValue *aimInputs)
 {
   int status = CAPS_SUCCESS;
-  int i, j, k, idv, is, nis, ib, im, jm, index, nderiv;
-  int numFunctional, irow, icol, gcon;
-  vlmSectionStruct *vlmSections=NULL;
+  int i, j, k, idv, igv, ngv, is, nis, ib, im, jm, index, nderiv;
+  int numFunctional, irow, icol;
   aimStorage *msesInstance=NULL;
 
-  msesSensx *sensx;
-  double *xyz=NULL, coord[3], data[18], tm, tp, ism_dot[9], isp_dot[9];
-  int sizes[2] = {NUMPOINT,0};
+  size_t linecap=0;
+  char *line=NULL;
+  FILE *fp=NULL;
 
-  double *M=NULL, *rhs=NULL, *dmod_dvar=NULL, ds, cl_alfa=1;
+  msesSensx *sensx;
+  double coord[3], data[18], tm, tp, ism_dot[9], isp_dot[9];
+
+  double *M=NULL, *rhs=NULL, *dmod_dvar=NULL, ds;
 
   int ibody;
-  double **dxyz=NULL, *dx_dvar=NULL, *dy_dvar=NULL, functional_dvar;
-  ego context=NULL, *curves=NULL;
+  int *sense;
+  int oclass, mtype, nloop, nedge;
+  double functional_dvar;
+  ego eref, *eloops, *eedges;
   capsValue **values=NULL, *geomInVal;
 
   // Bodies
   const char *intents, *name;
   int numBody=0;
   ego *bodies = NULL;
+
+  const char *sensxfile = "sensx.airfoil";
+  const char *outfile = "msesOutput.txt";
+  const char *converged = " Converged on tolerance";
 
   AIM_NOTNULL(instStore, aimInfo, status);
   AIM_NOTNULL(aimInputs, aimInfo, status);
@@ -727,19 +1393,45 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
 //
 //  status = msesMdatRead(aimInfo, "mdat.airfoil", &mdat);
 //  AIM_STATUS(aimInfo, status);
-//
-  if (aimInputs[inAlpha-1].nullVal == NotNull)
-    gcon = GCON_ALPHA; // specify Alpha
-  else
-    gcon = GCON_CL; // specify CL
 
-  if (aim_isFile(aimInfo, "sensx.airfoil") != CAPS_SUCCESS) {
-    AIM_ERROR(aimInfo, "mses execution did not produce sensx.airfoil!");
+  if (aim_isFile(aimInfo, sensxfile) != CAPS_SUCCESS) {
+    AIM_ERROR(aimInfo, "mses execution did not produce %s!", sensxfile);
     return CAPS_EXECERR;
   }
 
+  if (aim_isFile(aimInfo, outfile) != CAPS_SUCCESS) {
+    AIM_ERROR(aimInfo, "mses execution did not produce %s!", outfile);
+    return CAPS_EXECERR;
+  }
+
+  fp = aim_fopen(aimInfo, outfile, "r");
+  if (fp == NULL) {
+    AIM_ERROR(aimInfo, "Failed to open %s!", outfile);
+    status = CAPS_IOERR;
+    goto cleanup;
+  }
+
+  i = strlen(converged);
+  j = 0;
+  status = CAPS_EXECERR;
+  while (getline(&line, &linecap, fp) >= 0) {
+    if (line == NULL) continue;
+    if (strncmp(line, converged, i) == 0) {
+      status = CAPS_SUCCESS;
+      j = 0;
+    }
+    j++;
+  }
+  fclose(fp); fp = NULL;
+
+  if (status == CAPS_EXECERR || j > 32) {
+    AIM_ERROR(aimInfo, "mses failed to converge!");
+    status = CAPS_EXECERR;
+    goto cleanup;
+  }
+
   // read in the sensx.airfoil file
-  status = msesSensxRead(aimInfo, "sensx.airfoil", &sensx);
+  status = msesSensxRead(aimInfo, sensxfile, &sensx);
   AIM_STATUS(aimInfo, status);
 
   numFunctional = 7;
@@ -773,10 +1465,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
     for (j = 0; j < 3; j++)
       AIM_ALLOC(values[i]->derivs[j].deriv, 1, double, aimInfo, status);
 
-    if (gcon == GCON_ALPHA)
-    { AIM_STRDUP(values[i]->derivs[0].name, "Alpha", aimInfo, status); }
-    else
-    { AIM_STRDUP(values[i]->derivs[0].name, "CL", aimInfo, status); }
+    AIM_STRDUP(values[i]->derivs[0].name, "Alpha", aimInfo, status);
     AIM_STRDUP(values[i]->derivs[1].name, "Mach", aimInfo, status);
     AIM_STRDUP(values[i]->derivs[2].name, "Re", aimInfo, status);
   }
@@ -832,25 +1521,27 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
   msesInstance->CM.derivs[2].deriv[0] = sensx->cm_reyn;
   // --------------------------------------
 
-  // Change alpha derivatives to CL derivatives when CL is specified
-  if (gcon == GCON_CL)
-  {
-    cl_alfa = sensx->cl_alfa / 180. * PI;
+  // Cheby_Modes --------------------------------------
+  if (aimInputs[inDesign_Variable-1].nullVal == NotNull) {
+    msesInstance->Cheby_Modes.type   = DoubleDeriv;
+    msesInstance->Cheby_Modes.nderiv = aimInputs[inDesign_Variable-1].length;
 
-    // Negative sign from Implicit Derivative (https://en.wikipedia.org/wiki/Implicit_function)
-    msesInstance->Alpha.derivs[0].deriv[0] =              1./cl_alfa; // dalpha/dCL
-    msesInstance->Alpha.derivs[1].deriv[0] = -sensx->cl_mach/cl_alfa; // dalpha/dMach
-    msesInstance->Alpha.derivs[2].deriv[0] = -sensx->cl_reyn/cl_alfa; // dalpha/dRe
-
-    msesInstance->CL.derivs[0].deriv[0]   = 1.0;     // dCL/dCL
-    msesInstance->CD.derivs[0].deriv[0]  /= cl_alfa; // dCD/dCL
-    msesInstance->CDp.derivs[0].deriv[0] /= cl_alfa; // dCDp/dCL
-    msesInstance->CDv.derivs[0].deriv[0] /= cl_alfa; // dCDv/dCL
-    msesInstance->CDw.derivs[0].deriv[0] /= cl_alfa; // dCDw/dCL
-    msesInstance->CM.derivs[0].deriv[0]  /= cl_alfa; // dCM/dCL
+    AIM_ALLOC(msesInstance->Cheby_Modes.derivs, msesInstance->Cheby_Modes.nderiv, capsDeriv, aimInfo, status);
+    for (j = 0; j < msesInstance->Cheby_Modes.nderiv; j++) {
+      msesInstance->Cheby_Modes.derivs[j].name    = NULL;
+      msesInstance->Cheby_Modes.derivs[j].deriv   = NULL;
+      msesInstance->Cheby_Modes.derivs[j].len_wrt = 0;
+    }
+  } else {
+    msesInstance->Cheby_Modes.type = Double;
   }
-
-
+  msesInstance->Cheby_Modes.dim    = Vector;
+  AIM_ALLOC(msesInstance->Cheby_Modes.vals.reals, sensx->nmod, double, aimInfo, status);
+  msesInstance->Cheby_Modes.nrow   = sensx->nmod;
+  msesInstance->Cheby_Modes.length = sensx->nmod;
+  for (i = 0; i < sensx->nmod; i++)
+    msesInstance->Cheby_Modes.vals.reals[i] = sensx->modn[i];
+  // --------------------------------------
 /*@+nullderef@*/
 
   // Only compute geometric sensitivities if requested
@@ -861,33 +1552,8 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
 
     if (numBody == 0 || bodies == NULL) {
       AIM_ERROR(aimInfo, "No Bodies!");
-      return CAPS_SOURCEERR;
-    }
-
-    AIM_ALLOC(vlmSections, numBody, vlmSectionStruct, aimInfo, status);
-    for (ibody = 0; ibody < numBody; ibody++) {
-      status = initiate_vlmSectionStruct(&vlmSections[ibody]);
-      AIM_STATUS(aimInfo, status);
-    }
-
-    status = EG_getContext(bodies[0], &context);
-    AIM_STATUS(aimInfo, status);
-    AIM_NOTNULL(context, aimInfo, status);
-
-    AIM_ALLOC(dxyz, numBody, double*, aimInfo, status);
-    for (ibody = 0; ibody < numBody; ibody++) dxyz[ibody] = NULL;
-
-    AIM_ALLOC(curves, numBody, ego, aimInfo, status);
-    for (ibody = 0; ibody < numBody; ibody++) curves[ibody] = NULL;
-
-    AIM_ALLOC(xyz, 3*NUMPOINT, double, aimInfo, status);
-
-    for (ibody = 0; ibody < numBody; ibody++) {
-      // get the tessellation of the body for sensitvities
-      vlmSections[ibody].ebody = bodies[ibody];
-
-      status = finalize_vlmSectionStruct(aimInfo, &vlmSections[ibody]);
-      AIM_STATUS(aimInfo, status);
+      status = CAPS_SOURCEERR;
+      goto cleanup;
     }
 
     // allocate matrix data
@@ -923,21 +1589,25 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
       }
     }
 
-    //#define PRINT_MATRIX
+//#define PRINT_MATRIX
 #ifdef PRINT_MATRIX
+    printf("{\n");
     for (im = 0; im < sensx->nmod; im++) {
+      printf("{");
       for (jm = 0; jm < sensx->nmod; jm++) {
-        printf("%lf ",  M[im*sensx->nmod + jm]);
+        printf("%lf",  M[im*sensx->nmod + jm]);
+        if (jm < sensx->nmod-1) printf(", ");
       }
-      printf("\n");
+      if (im < sensx->nmod-1) printf("},\n");
     }
+    printf("}}\n");
 #endif
 
     // factorize the matrix in-place
     status = factorLU(sensx->nmod, M);
     AIM_STATUS(aimInfo, status);
 
-    //#define PRINT_COORDINATES
+//#define PRINT_COORDINATES
 #ifdef PRINT_COORDINATES
     printf("airfoil %d\n", sensx->nbl);
     for (ibody = 0; ibody < numBody; ibody++) {
@@ -971,6 +1641,12 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
         for (j = 0; j < geomInVal->length; j++)
           values[i]->derivs[3+idv].deriv[j] = 0;
       }
+
+      AIM_STRDUP(msesInstance->Cheby_Modes.derivs[idv].name, name, aimInfo, status);
+      AIM_ALLOC(msesInstance->Cheby_Modes.derivs[idv].deriv, sensx->nmod*geomInVal->length, double, aimInfo, status);
+      msesInstance->Cheby_Modes.derivs[idv].len_wrt  = geomInVal->length;
+      for (j = 0; j < sensx->nmod*geomInVal->length; j++)
+        msesInstance->Cheby_Modes.derivs[idv].deriv[j] = 0;
     }
 
     /* set derivatives */
@@ -986,50 +1662,23 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
       for (irow = 0; irow < geomInVal->nrow; irow++) {
         for (icol = 0; icol < geomInVal->ncol; icol++) {
 
-          // set the sensitivities of the spline fit for each blade
-          for (ibody = 0; ibody < numBody; ibody++) {
-            status = vlm_getSectionTessSens(aimInfo,
-                                            &vlmSections[ibody],
-                                            (int)true,
-                                            name,
-                                            irow+1, icol+1, // row, col
-                                            NUMPOINT,
-                                            &dx_dvar, &dy_dvar);
-            AIM_STATUS(aimInfo, status, "Sensitivity for: %s\n", name);
-            AIM_NOTNULL(dx_dvar, aimInfo, status);
-            AIM_NOTNULL(dy_dvar, aimInfo, status);
-
-            AIM_ALLOC(dxyz[ibody], 3*NUMPOINT, double, aimInfo, status);
-            for( i = 0; i < NUMPOINT; i++) {
-              dxyz[ibody][3*i+0] = dx_dvar[i];
-              dxyz[ibody][3*i+1] = dy_dvar[i];
-              dxyz[ibody][3*i+2] = 0.0;
-              //printf("%lf %lf\n", dxyz[ibody][3*i+0], dxyz[ibody][3*i+1]);
-            }
-            AIM_FREE(dx_dvar);
-            AIM_FREE(dy_dvar);
-          }
-
-          for (ibody = 0; ibody < numBody; ibody++) {
-            // Create a spline representation of the airfoil coordinates
-            // this mus be don after calling aim_tessSensitivity as OpenCSM
-            // calls EG_deleteObject(context) which removes the curve
-            for( i = 0; i < NUMPOINT; i++) {
-              xyz[3*i+0] = msesInstance->xCoord[ibody][i];
-              xyz[3*i+1] = msesInstance->yCoord[ibody][i];
-              xyz[3*i+2] = 0.0;
-            }
-            status = EG_approximate(context, 0, 1e-8, sizes, xyz, &curves[ibody]);
-            AIM_STATUS(aimInfo, status);
-
-            status = EG_approximate_dot(curves[ibody], 0, 1e-8, sizes, xyz, dxyz[ibody]);
-            AIM_STATUS(aimInfo, status);
-            AIM_FREE(dxyz[ibody]);
-          }
+          ngv = geomInVal->nrow*geomInVal->ncol;
+          igv = geomInVal->ncol*irow + icol;
 
           for (i = 0; i < sensx->nmod; i++) rhs[i] = 0;
 
           for (ibody = 0; ibody < numBody; ibody++) {
+
+            /* get the Loop from the Body */
+            status = EG_getTopology(msesInstance->blades[ibody].desvar[idv].geom_dot[igv],
+                                    &eref, &oclass, &mtype,
+                                    data, &nloop, &eloops, &sense);
+            AIM_STATUS(aimInfo, status);
+
+            /* get the Edge from the Loop */
+            status = EG_getTopology(eloops[0], &eref, &oclass, &mtype,
+                                    data, &nedge, &eedges, &sense);
+            AIM_STATUS(aimInfo, status);
 
             nis = sensx->iteb[ibody] - sensx->ileb[ibody]+1;
             for (k = 0; k < 2; k++) {
@@ -1041,11 +1690,15 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
               coord[1] = sensx->ybi[ib][0];
               coord[2] = 0;
 
-              status = EG_invEvaluate(curves[ibody], coord, &tm, data);
+              tp = tm = 0.5;
+              status = EG_invEvaluateGuess(eedges[0], coord, &tm, data);
               AIM_STATUS(aimInfo, status);
 
-              status = EG_evaluate_dot(curves[ibody], &tm, NULL, data, ism_dot);
+              status = EG_evaluate_dot(eedges[0], &tm, NULL, data, ism_dot);
               AIM_STATUS(aimInfo, status);
+
+              //if (idv == 0)
+              //  printf("%lf %lf %lf\n", tp, coord[0], ism_dot[1]);
 
               for (is = 0; is < nis-1; is++) {
 
@@ -1054,15 +1707,18 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
                 coord[1] = sensx->ybi[ib][is+1];
                 coord[2] = 0;
 
-                status = EG_invEvaluate(curves[ibody], coord, &tp, data);
+                status = EG_invEvaluateGuess(eedges[0], coord, &tp, data);
                 AIM_STATUS(aimInfo, status);
 
                 // get the spline sensitivity at is+1
-                status = EG_evaluate_dot(curves[ibody], &tp, NULL, data, isp_dot);
+                status = EG_evaluate_dot(eedges[0], &tp, NULL, data, isp_dot);
                 AIM_STATUS(aimInfo, status);
 
                 //printf("%lf %lf %lf %lf\n", tp, isp_dot[0], isp_dot[1], isp_dot[2]);
                 //printf("%lf %lf %lf %lf\n", tp, coord[0], coord[1], coord[2]);
+
+                //if (idv == 0)
+                //  printf("%lf %lf %lf\n", tp, coord[0], isp_dot[1]);
 
                 ds = sqrt(pow(sensx->xbi[ib][is+1]-sensx->xbi[ib][is],2.) +
                           pow(sensx->ybi[ib][is+1]-sensx->ybi[ib][is],2.));
@@ -1082,24 +1738,37 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
               }
             }
 
-            // free the curve
-            EG_deleteObject(curves[ibody]);
           }
 
+//#define PRINT_RHS
+#ifdef PRINT_RHS
+          printf("rhs = {\n");
+          for (j = 0; j < sensx->nmod; j++) {
+            printf("{%lf}", rhs[j]);
+            if (j < sensx->nmod-1) printf(",\n");
+          }
+          printf("}\n");
+#endif
           // get the mode sensitivities w.r.t. design variables
           status = backsolveLU(sensx->nmod, M, rhs, dmod_dvar);
           AIM_STATUS(aimInfo, status);
 
-          //#define DMOD_DVAR
-#ifdef DMOD_DVAR
-          for (j = 0; j < sensx->nmod; j++) {
-            printf("%lf ", dmod_dvar[j]);
+
+          /* save of the mode sensitivities */
+          for (j = 0; j < sensx->nmod; j++)
+            msesInstance->Cheby_Modes.derivs[idv].deriv[ngv*j + igv] = dmod_dvar[j];
+
+
+//#define PRINT_DMOD_DVAR
+#ifdef PRINT_DMOD_DVAR
+          printf("dmod_dvar = \n");
+          for (j = 0; j < sensx->nmod/2; j++) {
+            printf("%lf %lf\n", dmod_dvar[j], dmod_dvar[j+sensx->nmod/2]);
           }
-          printf("\n");
 #endif
 
           for (i = 0; i < numFunctional; i++) {
-            functional_dvar = values[i]->derivs[3+idv].deriv[geomInVal->ncol*irow + icol];
+            functional_dvar = values[i]->derivs[3+idv].deriv[igv];
 
             switch (i+1) {
             case outAlpha:
@@ -1119,7 +1788,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
               break;
             case outCD_p:
               for (j = 0; j < sensx->nmod; j++) {
-                functional_dvar += (sensx->cdv_mod[j] + sensx->cdw_mod[j] - sensx->cdf_mod[i])*dmod_dvar[j];
+                functional_dvar += (sensx->cdv_mod[j] + sensx->cdw_mod[j] - sensx->cdf_mod[j])*dmod_dvar[j];
               }
               break;
             case outCD_v:
@@ -1143,28 +1812,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
               goto cleanup;
             }
 
-            values[i]->derivs[3+idv].deriv[geomInVal->ncol*irow + icol] = functional_dvar;
-          }
-        }
-      }
-    }
-
-    // correct for specifying CL
-    if (gcon == GCON_CL) {
-      for (idv = 0; idv < msesInstance->design.numDesignVariable; idv++) {
-
-        name = msesInstance->design.designVariable[idv].name;
-
-        // Loop over the geometry in values and compute sensitivities for all bodies
-        index = aim_getIndex(aimInfo, name, GEOMETRYIN);
-        status = aim_getValue(aimInfo, index, GEOMETRYIN, &geomInVal);
-        AIM_STATUS(aimInfo, status);
-
-        for (irow = 0; irow < geomInVal->nrow; irow++) {
-          for (icol = 0; icol < geomInVal->ncol; icol++) {
-            /*@-nullderef@*/
-            msesInstance->Alpha.derivs[3+idv].deriv[geomInVal->ncol*irow + icol] = -msesInstance->CL.derivs[3+idv].deriv[geomInVal->ncol*irow + icol]/cl_alfa;
-            /*@+nullderef@*/
+            values[i]->derivs[3+idv].deriv[igv] = functional_dvar;
           }
         }
       }
@@ -1197,7 +1845,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
         break;
       case outCD_p:
         for (j = 0; j < sensx->nmod; j++) {
-          values[i]->derivs[3].deriv[j] = (sensx->cdv_mod[j] + sensx->cdw_mod[j] - sensx->cdf_mod[i]);
+          values[i]->derivs[3].deriv[j] = (sensx->cdv_mod[j] + sensx->cdw_mod[j] - sensx->cdf_mod[j]);
         }
         break;
       case outCD_v:
@@ -1221,15 +1869,6 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
         goto cleanup;
       }
     }
-
-    // correct for specifying CL
-    if (gcon == GCON_CL) {
-      for (j = 0; j < sensx->nmod; j++) {
-        /*@-nullderef@*/
-        msesInstance->Alpha.derivs[3].deriv[j] = -msesInstance->CL.derivs[3].deriv[j]/cl_alfa;
-        /*@+nullderef@*/
-      }
-    }
   }
 
   status = CAPS_SUCCESS;
@@ -1237,33 +1876,16 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
 cleanup:
   msesSensxFree(&sensx);
   AIM_FREE(values);
-  AIM_FREE(xyz);
-  AIM_FREE(dx_dvar);
-  AIM_FREE(dy_dvar);
   AIM_FREE(M);
   AIM_FREE(rhs);
   AIM_FREE(dmod_dvar);
-
-  if (dxyz != NULL) {
-    for (ibody = 0; ibody < numBody; ibody++) {
-      AIM_FREE(dxyz[ibody]);
-    }
-    AIM_FREE(dxyz);
-  }
-
-  if (curves != NULL) {
-    for (ibody = 0; ibody < numBody; ibody++) {
-      EG_deleteObject(curves[ibody]);
-    }
-    AIM_FREE(curves);
-  }
-
-  AIM_FREE(vlmSections);
+  if (line != NULL) free(line); // must use free
 
   return status;
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                int index, char **aoname, capsValue *form)
 {
@@ -1271,10 +1893,15 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
      * The following list outlines the xFoil outputs available through the AIM interface.
      */
 
+    int status = CAPS_SUCCESS;
 #ifdef DEBUG
     printf(" msesAIM/aimOutputs index = %d!\n", index);
 #endif
 
+    form->type    = Double;
+    form->dim     = Scalar;
+    form->nullVal = IsNull;
+    form->vals.real = 0;
 
     if (index == outAlpha) {
         *aoname = EG_strdup("Alpha");
@@ -1324,18 +1951,28 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
         /*! \page aimOutputsMSES
          * - <B> CM = </B> Moment coefficient value(s).
          */
+
+    } else if (index == outCheby_Modes) {
+        *aoname              = EG_strdup("Cheby_Modes");
+        form->type           = Double;
+        form->lfixed         = Change;
+        form->dim            = Vector;
+
+        /*! \page aimOutputsMSES
+         * - <B> Cheby_Modes = </B> <br>
+         * Chebyshev shape mode values for shape optimization.
+         */
+
     }
 
-    form->type    = Double;
-    form->dim     = Scalar;
-    form->nullVal = IsNull;
+    status = CAPS_SUCCESS;
+//cleanup:
 
-    form->vals.real = 0;
-
-    return CAPS_SUCCESS;
+    return status;
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/void *aimInfo,
                   int index, capsValue *val)
 {
@@ -1366,6 +2003,9 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/void *aimInfo,
     } else if (index == outCM) {
       *val = msesInstance->CM;
       aim_initValue(&msesInstance->CM);
+    } else if (index == outCheby_Modes) {
+      *val = msesInstance->Cheby_Modes;
+      aim_initValue(&msesInstance->Cheby_Modes);
     }
 
     status = CAPS_SUCCESS;
@@ -1376,6 +2016,7 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/void *aimInfo,
 }
 
 
+// ********************** AIM Function Break *****************************
 void aimCleanup(/*@unused@*/ void *instStore)
 {
 #ifdef DEBUG
@@ -1384,6 +2025,6 @@ void aimCleanup(/*@unused@*/ void *instStore)
   aimStorage *msesInstance;
 
   msesInstance = (aimStorage*)instStore;
-  destroy_aimStorage(msesInstance);
+  destroy_aimStorage(msesInstance, (int)false);
   AIM_FREE(instStore);
 }

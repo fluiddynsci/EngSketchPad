@@ -55,5 +55,6 @@
 #define CAPS_NOBODIES     -341
 #define CAPS_JOURNAL      -342
 #define CAPS_JOURNALERR   -343
+#define CAPS_FILELINKERR  -344
 
 #endif

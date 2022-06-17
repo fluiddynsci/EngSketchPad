@@ -337,6 +337,7 @@ BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0
                      a SheetBody is created
                   else
                      a SolidBody is created
+                  Xsects cannot be non-manifold WireBody
                   if the first Xsect is a point
                       if begList is 0
                           pointed end is created
@@ -525,8 +526,10 @@ COMBINE   toler=0
                      create SheetBody from Loop
                   elseif there is 1 planar WireBody that is open
                      create SheetBody from Loop after closing Loop first
-                  elseif there are multiple planar WireBodys
+                  elseif there are multiple planar WireBodys that are closed
                      create SheetBody from closed Loop
+                  elseif there are multiple WireBodys that habe common Nodes
+                     create non-manifold WireBody
                   endif
                   if maxtol>0, then tolerance can be relaxed until successful
                   sets up @-parameters
@@ -793,7 +796,7 @@ EVALUATE  $type arg1 ...
                   elseif arguments are: "edge ibody iedge $beg"
                      ibody is Body number (1:nbody)
                      iedge is Edge number (1:nedge)
-                     evaluate Edge at given t
+                     evaluate Edge at beginning
                      return in @edata:
                         t (clipped),
                         x,      y,      z,
@@ -802,7 +805,7 @@ EVALUATE  $type arg1 ...
                   elseif arguments are: "edge ibody iedge $end"
                      ibody is Body number (1:nbody)
                      iedge is Edge number (1:nedge)
-                     evaluate Edge at given t
+                     evaluate Edge at end
                      return in @edata:
                         t (clipped),
                         x,      y,      z,
@@ -891,7 +894,10 @@ EXTRUDE   dx dy dz
                   computes Face sensitivities analytically
                   sets up @-parameters
                   the Faces all receive the Branch's Attributes
-                  Attributes on Xsect are maintained
+                  Attributes on Xsect Face are placed on both beg and end Faces
+                  Attributes on Xsect Edges that do not start with
+                     . or _ are placed on the associated Faces
+                  Attributes on Xsect Edges are not placed on Edges
                   face-order is: (base), (end), feat1, ...
                   signals that may be thrown/caught:
                      $illegal_value
@@ -975,40 +981,41 @@ HOLLOW    thick=0 entList=0 listStyle=0
           use:    hollow out a SolidBody or SheetBody
           pops:   Body
           pushes: Body
-          notes:  Sketch may not be open
+          notes:  results can be unpredictable due to OpenCASCADE issues
+                  Sketch may not be open
                   Solver may not be open
                   if SolidBody (radius is ignored)
-                     if thick=0 and entList==0
+                     if thick=0 and entList==0         (case A)
                          convert to SheetBody
-                     if thick=0 and entList!=0
+                     if thick=0 and entList!=0         (case B)
                         convert to SheetBody without Faces in entList (if connected)
-                     if thick>0 and entList==0
-                        smaller offset Body is created
-                     if thick<0 and entList==0
+                     if thick>0 and entList==0         (case C)
                         larger offset Body is created
-                     if thick>0 and entList!=0
+                     if thick<0 and entList==0         (case D)
+                        smaller offset Body is created
+                     if thick>0 and entList!=0         (case E)
                         hollow (removing entList) with new Faces inside  original Body
-                     if thick<0 and entList!=0
+                     if thick<0 and entList!=0         (case F)
                         hollow (removing entList) with new Faces outside original Body
                   if a SheetBody with only one Face
-                     if thick=0 and entList==0
+                     if thick=0 and entList==0         (case G)
                         convert to WireBody (if connected)
-                     if thick=0 and entList!=0
+                     if thick=0 and entList!=0         (case H)
                         convert to WireBody without Edges in entList (if connected)
-                     if thick>0 and entList==0
-                        smaller offset Body is created
-                     if thick<0 and entList==0
-                        larger offset Body is created
-                     if thick>0 and entList!=0
+                     if thick>0 and entList==0         (case I)
+                        hollow with new Edges inside  original Body
+                     if thick<0 and entList==0         (case J)
+                        hollow with new Edges outside original Body
+                     if thick>0 and entList!=0         (case K)
                         hollow (removing entList) with new Edges inside  original Body
-                     if thick<0 and entList!=0
+                     if thick<0 and entList!=0         (case L)
                         hollow (removing entList) with new Edges outside original Body
                   if a SheetBody with multiple Faces
-                     if thick=0 and entList!=0
+                     if thick=0 and entList!=0         (case M)
                         remove Faces in entList (if connected)
-                     if thick>0 and entList==0
+                     if thick>0 and entList==0         (case N)
                         hollow all Faces with new Edges inside original Faces
-                     if thick>0 and entList!=0
+                     if thick>0 and entList!=0         (case P)
                         hollow Faces in entList with new Edges inside original Faces
                   entList is multi-valued Parameter, or a semicolon-separated list
                   if listStyle==0 and a SolidBody
@@ -1025,6 +1032,7 @@ HOLLOW    thick=0 entList=0 listStyle=0
                   face-order is based upon order that is returned from EGADS
                   signals that may be thrown/caught:
                      $illegal_argument
+                     $did_not_create_body
                      $insufficient_bodys_on_stack
 
 IFTHEN    val1 $op1 val2 $op2=and val3=0 $op3=eq val4=0
@@ -1055,7 +1063,7 @@ IMPORT    $filename bodynumber=1
                      $did_not_create_body
                      udp-specific code
 
-INTERFACE $argName $argType default=0
+INTERFACE $argName $argTypet default=0
           use:    defines an argument for a .udc file
           pops:   -
           pushes: -
@@ -1216,6 +1224,7 @@ LOFT      smooth
                   all Xsects must have the same number of Segments
                   if Xsect is a SheetBody, then a SolidBody is created
                   if Xsect is a WireBody, then a SheetBody is created
+                  Xsects cannot be non-manifold WireBody
                   the Faces all receive the Branch's Attributes
                   Attributes on Xsects are not maintained
                   face-order is: (base), (end), feat1, ...
@@ -1228,6 +1237,7 @@ LOFT      smooth
                   MAY BE DEPRECATED (use RULE or BLEND)
                   signals that may be thrown/caught:
                      $insufficient_bodys_on_stack
+                     $wrong_types_on_stack
 
 MACBEG    imacro
           use:    marks the start of a macro
@@ -1409,7 +1419,10 @@ REVOLVE   xorig yorig zorig dxaxis dyaxis dzaxis angDeg
                      dyaxis, dzaxis, andDeg
                   sets up @-parameters
                   the Faces all receive the Branch's Attributes
-                  Attributes on Xsect are maintained
+                  Attributes on Xsect Face are placed on both beg and end Faces
+                  Attributes on Xsect Edges that do not start with
+                     . or _ are placed on the associated Faces
+                  Attributes on Xsect Edges are not placed on Edges
                   face-order is: (base), (end), feat1, ...
                   signals that may be thrown/caught:
                      $illegal_value
@@ -1467,6 +1480,7 @@ RULE      reorder=0 periodic=0
                   first Xsect is unaltered if reorder>0
                   last  Xsect is unaltered if reorder<0
                   all Xsects must have the same number of Edges
+                  Xsects cannot be non-manifold WireBody
                   if all Xsects are NodeBodys
                      a WireBody is created
                   elseif all Xsects are WireBodys (or a NodeBody at one end)
@@ -1589,6 +1603,10 @@ SELECT    $type arg1 ...
                      sets @seltype to 1
                      uses @selbody
                      sets @sellist to Edge whose center is closest to (x,y,z)
+                  elseif arguments are: "loop iface iloop"
+                     sets @seltype to 1
+                     uses @selbody
+                     sets @sellist to Edges in order in the Loop
                   elseif arguments are: "node"
                      sets @seltype to 0
                      uses @selbody
@@ -1886,6 +1904,7 @@ STORE     $name index=0 keep=0
           notes:  Sketch may not be open
                   Solver may not be open
                   $name is used directly (without evaluation)
+                  if index<0, use first available index
                   previous Group in name/index is overwritten
                   if $name=.   then Body is popped off stack
                                     but not actually stored
@@ -1955,9 +1974,10 @@ SWEEP
           use:    create a Body by sweeping an Xsect along an Xsect
           pops:   Xsect1 Xsect2
           pushes: Body
-          notes:  Sketch may not be open
+          notes:  results can be unpredictable due to OpenCASCADE issues
+                  Sketch may not be open
                   Solver may not be open
-                  Xsect1 must be either a SheetBody or WireBody
+                  Xsect1 must be either a SheetBody or non-manifold WireBody
                   Xsect2 must be a WireBody
                   if Xsect2 is not slope-continuous, result may not be
                      as expected
@@ -2403,6 +2423,9 @@ Valid operators (in order of precedence):
     * /            multiply and divide        (evaluated left to right)
     + -            add/concat and subtract    (evaluated left to right)
 
+    An expression that consists of only the name of a Parameter my be
+    prepended by a unary + or -
+
 Valid function calls:
     pi(x)                        3.14159...*x
     min(x,y)                     minimum of x and y
@@ -2776,6 +2799,7 @@ typedef struct {
     int           hasdots;              /* =1 if an argument has a dot; =2 if UDPARG is changed; =0 otherwise */
     int           hasdxyz;              /* =1 if Body has associated velocities */
     int           botype;               /* Body type (see below) */
+    int           nonmani;              /* =1 if a non-manifold WireBody */
     double        CPU;                  /* CPU time (sec) */
     int           nnode;                /* number of Nodes */
     node_T        *node;                /* array  of Nodes */
@@ -2934,7 +2958,7 @@ typedef struct modl_T {
     int           sigCode;              /* current signal code */
     char          *sigMesg;             /* current signal message */
 
-    prof_T        profile[100];         /* profile data */
+    prof_T        profile[101];         /* profile data */
 } modl_T;
 
 /*
@@ -2957,6 +2981,12 @@ int ocsmSetOutLevel(int    ilevel);     /* (in)  output level: */
                                         /*       =2 debug */
                                         /* (out) previous outLevel */
 
+/* set (global) auxiliary pointer */
+int ocsmSetAuxPtr(void  *newAuxPtr);    /* (in)  auxiliary pointer */
+
+/* get (global auxiliary pointer */
+int ocsmGetAuxPtr(void  **oldAuxPtr);   /* (out) auxiliary pointer */
+
 /* create a MODL by reading a .csm file */
 int ocsmLoad(char   filename[],         /* (in)  file to be read (with .csm) */
              void   **modl);            /* (out) pointer to MODL */
@@ -2968,6 +2998,9 @@ int ocsmLoadFromModel(ego    emodel,    /* (in)  egads MODEL */
 /* load dictionary from dictname */
 int ocsmLoadDict(void   *modl,          /* (in)  pointer to MODL */
                  char   dictname[]);    /* (in)  file that contains dictionary */
+
+/* adjust UDCs to be colocated with the .csm file */
+int ocsmAdjustUDCs(void   *modl);       /* (in)  pointer to MODL */
 
 /* update CFGPMTRs and DESPMTRs from filename */
 int ocsmUpdateDespmtrs(void   *modl,    /* (in)  pointer to MODL */
@@ -3003,7 +3036,6 @@ int ocsmInfo(void   *modl,              /* (in)  pointer to MODL */
              int    *npmtr,             /* (out) number of Parameters */
              int    *nbody);            /* (out) number of Bodys */
 
-
 /* check that Branches are properly ordered */
 int ocsmCheck(void   *modl);            /* (in)  pointer to MODL */
 
@@ -3023,6 +3055,14 @@ int ocsmBuild(void   *modl,             /* (in)  pointer to MODL */
                                         /* (out) number of Bodys on the stack */
     /*@null@*/int    body[]);           /* (out) array  of Bodys on the stack (LIFO)
                                                  (at least nbody long) */
+
+/* print profile from last ocsmBuild() */
+int ocsmPrintProfile(void   *modl,      /* (in)  pointer to MODL */
+                     char   filename[]);/* (in)  file to which output is appended (or "" for stdout) */
+
+/* tessellate one or more Bodys */
+int ocsmTessellate(void   *modl,        /* (in)  pointer to MODL */
+                   int    ibody);       /* (in)  Body index (1:nbody) or 0 for all on stack */
 
 /* get information about one Body */
 int ocsmBodyDetails(void   *modl,       /* (in)  pointer to MODL */
@@ -3495,7 +3535,7 @@ int ocsmGetCode(char   *text);          /* (in)  text to look up */
 #define           OCSM_DUMP       198
 #define           OCSM_ASSERT     199
 #define           OCSM_MESSAGE    200
-#define           OCSM_SPECIAL    299
+#define           OCSM_SPECIAL    299   /* note that this will not be profiled */
 
 #define           OCSM_PRIMITIVE  201   /* Branch classes */
 #define           OCSM_GROWN      202

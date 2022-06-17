@@ -19,7 +19,7 @@
   <body>
     <p><h1 align=center>Engineering Sketch Pad (ESP) Version 1.21</h1>
     <p><h3>Authors: John F. Dannenhoffer, III (Syracuse University) and Bob Haimes (MIT)</h3>
-    <p><h3>Date: January 2022.</h3>
+    <p><h3>Date: June 2022.</h3>
 
     <p><h3 align=center><img src="esp_logo.png" width="400"/></h3>
 
@@ -32,9 +32,10 @@
     <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec2.3">2.3 Third tutorial: Using the sketcher and adding spokes</a>
     <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec2.4">2.4 Fourth tutorial: RULEs, BLENDs, and error checking</a>
     <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec2.5">2.5 Fifth tutorial: Multi-models </a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec2.6">2.6 First legacy tutorial: Basic usage</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec2.7">2.7 Second legacy tutorial: Sketcher</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec2.8">2.8 Third legacy tutorial: Aircraft example</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec2.6">2.6 Sixth tutorial: Integrated Design Environment </a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec2.7">2.7 First legacy tutorial: Basic usage</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec2.8">2.8 Second legacy tutorial: Sketcher</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec2.9">2.9 Third legacy tutorial: Aircraft example</a>
     <p><a href="#sec3">3.0 Command Line</a>
     <p><a href="#sec4">4.0 Interactive Options</a>
     <p><a href="#sec5">5.0 Format of the <code>.csm</code> and <code>.udc</code> Files</a>
@@ -53,37 +54,39 @@
     <p><a href="#sec6">6.0 Example <code>.csm</code> file</a>
     <p><a href="#sec7">7.0 Frequently Asked Questions</a>
     <p><a href="#sec8">8.0 Release notes</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.1">8.1 New/extended features in v1.20</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.2">8.2 Bug fixes since v1.19</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.3">8.3 New/extended features in v1.19</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.4">8.4 Bug fixes since v1.18</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.5">8.5 New/extended features in v1.18</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.6">8.6 Bug fixes since v1.17</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.7">8.7 New/extended features in v1.17</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.8">8.8 Bug fixes since v1.16</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.9">8.9 New/extended features in v1.16</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.10">8.10 Bug fixes since v1.15</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.11">8.11 New/extended features in v1.15</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.12">8.12 Bug fixes since v1.14</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.13">8.13 New/extended features in v1.14</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.14">8.14 Bug fixes since v1.13</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.15">8.15 New/extended features in v1.13</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.16">8.16 Bug fixes since v1.12</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.17">8.17 New/extended features in v1.12</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.18">8.18 Bug fixes since v1.11</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.19">8.19 New/extended features in v1.11</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.20">8.20 Bug fixes since v1.10</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.21">8.21 New/extended features in v1.10</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.22">8.22 Bug fixes since v1.09</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.23">8.23 New/extended features in v1.09</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.24">8.24 Bug fixes since v1.08</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.25">8.25 New/extended features in v1.08</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.26">8.26 Bug fixes since v1.07</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.27">8.27 New/extended features in v1.07</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.28">8.28 Bug fixes since v1.06</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.29">8.29 New/extended features in v1.06</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.30">8.30 Bug fixes since v1.05</a>
-    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.31">8.31 Known problems in v1.09</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.1">8.1 New/extended features in v1.21</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.2">8.2 Bug fixes since v1.20</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.3">8.3 New/extended features in v1.20</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.4">8.4 Bug fixes since v1.19</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.5">8.5 New/extended features in v1.19</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.6">8.6 Bug fixes since v1.18</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.7">8.7 New/extended features in v1.18</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.8">8.8 Bug fixes since v1.17</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.9">8.9 New/extended features in v1.17</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.10">8.10 Bug fixes since v1.16</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.11">8.11 New/extended features in v1.16</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.12">8.12 Bug fixes since v1.15</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.13">8.13 New/extended features in v1.15</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.14">8.14 Bug fixes since v1.14</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.15">8.15 New/extended features in v1.14</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.16">8.16 Bug fixes since v1.13</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.17">8.17 New/extended features in v1.13</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.18">8.18 Bug fixes since v1.12</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.19">8.19 New/extended features in v1.12</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.20">8.20 Bug fixes since v1.11</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.21">8.21 New/extended features in v1.11</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.22">8.22 Bug fixes since v1.10</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.23">8.23 New/extended features in v1.10</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.24">8.24 Bug fixes since v1.09</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.25">8.25 New/extended features in v1.09</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.26">8.26 Bug fixes since v1.08</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.27">8.27 New/extended features in v1.08</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.28">8.28 Bug fixes since v1.07</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.29">8.29 New/extended features in v1.07</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.30">8.30 Bug fixes since v1.06</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.31">8.31 New/extended features in v1.06</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.32">8.32 Bug fixes since v1.05</a>
+    <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec8.33">8.33 Known problems in v1.09</a>
     <p><a href="#sec9">9.0 Error Codes</a>
     <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec9.1">9.1 OpenCSM error codes</a>
     <p>&nbsp;&nbsp;&nbsp;&nbsp;<a href="#sec9.2">9.2 EGADS error codes</a>
@@ -102,7 +105,7 @@
        using a client-server architecture.
 
     <p>The server consists of a back-end program
-       (<code>serveCSM</code>) that performs the majority of the
+       (<code>serveESP</code>) that performs the majority of the
        computational work; the server has been designed to work on a
        variety of compute platforms, including UNIX, LINUX, OSX, and
        Windows.  As will be described below, the user
@@ -193,57 +196,63 @@
        in your favorite text editor to see how they were constructed.
 
        <h4>CanardFighter.csm</h4>
-       <img src="gallery/CanardFighter.png" width="100%"/>
+       <img src="pictures/gallery/CanardFighter.png" width="100%"/>
 
        <h4>Cobra.csm</h4>
-       <img src="gallery/Cobra.png" width="100%"/>
+       <img src="pictures/gallery/Cobra.png" width="100%"/>
 
        <h4>Dragon.csm</h4>
-       <img src="gallery/Dragon.png" width="100%"/>
+       <img src="pictures/gallery/Dragon.png" width="100%"/>
 
        <h4>Hypersonic.csm</h4>
-       <img src="gallery/Hypersonic.png" width="100%"/>
+       <img src="pictures/gallery/Hypersonic.png" width="100%"/>
 
        <h4>JMR3.csm</h4>
-       <img src="gallery/JMR3.png" width="100%"/>
+       <img src="pictures/gallery/JMR3.png" width="100%"/>
 
        <h4>Lander.csm</h4>
-       <img src="gallery/Lander.png" width="100%"/>
+       <img src="pictures/gallery/Lander.png" width="100%"/>
 
        <h4>OrionLEV.csm</h4>
-       <img src="gallery/OrionLEV.png" width="100%"/>
+       <img src="pictures/gallery/OrionLEV.png" width="100%"/>
 
        <h4>RM-10.csm</h4>
-       <img src="gallery/RM-10.png" width="100%"/>
+       <img src="pictures/gallery/RM-10.png" width="100%"/>
 
        <h4>Xwing.csm</h4>
-       <img src="gallery/Xwing.png" width="100%"/>
+       <img src="pictures/gallery/Xwing.png" width="100%"/>
 
     <p>In addition, several students have created models of a variety
        of configurations.  The <code>.csm</code> files for these cases
        are not included in the distribution since they have not been
        cleaned up; nevertheless, the models are very impressive.
 
+      <h4>A12</h4>
+      <img src="pictures/studentGallery/A12.png" width="100%"/>
+
       <h4>BulletTrain</h4>
-      <img src="studentGallery/BulletTrain.png" width="100%"/>
+      <img src="pictures/studentGallery/BulletTrain.png" width="100%"/>
 
       <h4>Cessna162</h4>
-      <img src="studentGallery/Cessna162.png" width="100%"/>
+      <img src="pictures/studentGallery/Cessna162.png" width="100%"/>
+
+      <h4>F104</h4>
+      <img src="pictures/studentGallery/f104.png" width="100%"/>
 
       <h4>F117</h4>
-      <img src="studentGallery/F117.png" width="100%"/>
+      <img src="pictures/studentGallery/F117.png" width="100%"/>
 
       <h4>GenericFighter</h4>
-      <img src="studentGallery/GenericFighter.png" width="100%"/>
+      <img src="pictures/studentGallery/GenericFighter.png" width="100%"/>
 
       <h4>LunarLander_11</h4>
-      <img src="studentGallery/LunarLander_11.png" width="100%"/>
+      <img src="pictures/studentGallery/LunarLander_11.png" width="100%"/>
 
       <h4>PittsSpecial</h4>
-      <img src="studentGallery/PittsSpecial.png" width="100%"/>
+      <img src="pictures/studentGallery/PittsSpecial.png" width="100%"/>
 
-      <h4>A12</h4>
-      <img src="studentGallery/A12.png" width="100%"/>
+      <h4>Sub03</h4>
+      <img src="pictures/studentGallery/sub03.png" width="100%"/>
 
     <p>Back to <a href="#sec0">Table of Contents</a>
 
@@ -266,7 +275,7 @@
        <code>ESP</code> to be more flexible and faster than the
        GUI-based mode used by traditional CAD systems.  But, if you
        favor the traditional CAD system look-and-feel, check out the
-       legacy Tutorials (starting with <a href="#sec2.6">First legacy
+       legacy Tutorials (starting with <a href="#sec2.7">First legacy
        tutorial: Basic usage</a>)
 
     <p>For a more extensive introduction to <code>ESP</code>, see
@@ -307,7 +316,7 @@
        defined.  After the window opens, you can issue a command such
        as:
        <pre>
-         serveCSM [options] [filename[.csm]]
+         serveESP [options] [filename[.csm]]
        </pre>
        where <code>[options]</code> is a list of one or more
        command-line options, and <code>filename</code> (with or
@@ -321,18 +330,18 @@
 
     <p>To start the first Tutorial, simply enter:
       <pre>
-        serveCSM ../data/tutorial1    (on MAC or LINUX)
+        serveESP ../data/tutorial1    (on MAC or LINUX)
       </pre>
       or
       <pre>
-        serveCSM ..\data\tutorial1     (on Windows)
+        serveESP ..\data\tutorial1     (on Windows)
       </pre>
 
-    <p>After serveCSM builds the configuration, it will automatically
+    <p>After serveESP builds the configuration, it will automatically
        open up a browser containing the <code>ESP</code> user
        interface.  When <code>ESP</code> starts, it will first ask you
        for the hostname and port associated with the server (which was
-       started when you typed serveCSM).
+       started when you typed serveESP).
 
     <p><img src="pictures/tutorial1-01.png" width="100%"/>
 
@@ -1118,7 +1127,7 @@
 
       <p>Begin by starting <code>ESP</code> by either pressing
          the <b>runESP119</b> icon on you desktop, or by pressing
-         the <b>ESP119</b> icon and then typing <code>serveCSM</code>
+         the <b>ESP119</b> icon and then typing <code>serveESP</code>
          in the window that pops up.
 
       <p>In either case, when </code>ESP</code> asks for you hostname
@@ -3479,7 +3488,7 @@
        by step.  That is how this Tutorial script was developed: step
       by step.
 
-    <p>Most of the scripts that  you write initially will be
+    <p>Most of the scripts that you write initially will be
        much simpler than the script that we used here.   Feel free to
        use the <b>Hint</b> button in the script editor, look up the
        commands in this Help document (below), use
@@ -3500,10 +3509,103 @@
        different from the pictures, but the basic functionality should
        be the same.
 
-    <p><h3 id="sec2.6">2.6 First legacy tutorial: Basic usage</h3>
+    <p><h3 id="sec2.6">2.6 Sixth tutorial: Integrated Design Environment</h3>
+
+    <p>This tutorial uses <code>ESP</code>'s Integrated Design
+       Environment (IDE), which allows a user to incrementally build
+       geometric models and perform analyses via the Computational
+       Aerospace Prototype Syntheses <code>CAPS</code> system.  The
+       goals if this new IDE are to:
+      <ul>
+        <li>be a tool that can be used by all individuals involved
+            in a design and its processes</li>
+        <li>be a central repository of all design data, including
+            mission and functional requirements</li>
+        <li>provide a mechanism for the user to document the "how" and
+            "why" design decisions were made</li>
+        <li>allow geometric models to evolve over time</li>
+        <li>maintain history of the evolving design and design
+            decisions</li>
+        <li>support user-written workflows via Python scripts</li>
+        <li>support various optimization schemes and provide
+            sensitivities when available</li>
+        <li>allow a user to suspend a session and be able to restart
+            (including after an abort)</li>
+        <li>give user methods to interactively visualize the geometry and
+            analysis results at any stage of the design</li>
+        <li>allow the user to generate simple graphs</li>
+        <li>support branching, merging, and pruning of the design decision
+            tree</li>
+        <li>allow collaboration by geographically-dispersed users</li>
+     </ul>
+
+    <p>The design exercise that we will be looking at is a
+       rubber-powered, hand-launched aircraft that carries golf balls.
+       The design will be scored as the product of the square of the
+       time aloft beyond 3 seconds and the number of golf balls
+       carried.
+
+    <p>To begin, it is convenient to set an envirinment varaible that
+       tells <code>ESP</code> where to find the various files that
+       will be used are stored.  Issue the command:
+<pre>
+        setenv ESP_PREFIX "../data/tutorial6/"
+</pre>
+       or its equivalent.
+
+    <p>We will start by building a very simple wing model in order to
+       perform the initial sizing.  The simple wing model is given in
+       the following .csm script:
+<pre>
+        # tutorial6/model1 - simple rectangular wing
+        # written by John Dannenhoffer
+
+        # design parameters
+        DESPMTR   wing:area    20.0
+        DESPMTR   wing:aspect   4.0
+        DESPMTR   wing:thick   0.01
+        DESPMTR   wing:camber  0.06
+
+        # local variables
+        SET       wing:span    sqrt(wing:area*wing:aspect)
+        SET       wing:chord   wing:area/wing:span
+
+        OUTPMTR   wing:span
+
+        # construct wing (left-to-right)
+        UDPARG    naca         thickness wing:thick
+        UDPARG    naca         camber    wing:camber
+        UDPRIM    naca         sharpte   1
+        ROTATEX   90
+        SCALE     wing:chord
+        TRANSLATE 0   -wing:span/2   0
+
+        EXTRUDE   0    wing:span     0
+
+        END
+</pre>
+
+    <p>Notice that we have four Design Parameters
+       (<code>wing:area</code>, <code>wing:aspect</code>,
+       <code>wing:thick</code>, and <code>wing:camber</code>), each
+       with its own default values.  Note that the
+       prefix <code>wing:</code> is not essential, but helps to
+       organize the Design Parameters in the <code>ESP</code> viewer.
+
+    <p>This model of the wing (one section EXTRUDEd across the whole
+       span) is not a typicaly way of defining a wing, but is used
+       here for illustriative pupposes.
+
+    <p>
+
+
+
+
+
+    <p><h3 id="sec2.7">2.7 First legacy tutorial: Basic usage</h3>
 
     <p>This tutorial will help you understand the use of
-       <code>serveCSM</code> and <code>ESP</code> for a variety of
+       <code>serveESP</code> and <code>ESP</code> for a variety of
        tasks.  Details about the <a href="#sec3">Command
        Line</a>, <a href="#sec4">cursor and keyboard options</a>, and
        the <a href="#sec6">Example <code>.csm</code> file</a> are
@@ -3521,36 +3623,36 @@
     <p><b>Technique 1:</b> issue the two commands:
       <pre>
         setenv ESP_START "open -a /Applications/Firefox.app ../ESP/ESP.html"
-        serveCSM ../data/tutorial1
+        serveESP ../data/tutorial1
       </pre>
       if using a c-shell; make appropriate changes for your shell
       and/or operating system.
 
-    <p>The first of these tells <code>serveCSM</code> to open FireFox
+    <p>The first of these tells <code>serveESP</code> to open FireFox
        on the file <code>../ESP/ESP.html</code>
-       when <code>serveCSM</code> has generated a graphical
+       when <code>serveESP</code> has generated a graphical
        representation of the configuration.  The second of these
-       actually starts the <code>serveCSM</code> server.  As long as
+       actually starts the <code>serveESP</code> server.  As long as
        the browser stays connected
-       to <code>serveCSM</code>, <code>serveCSM</code> will stay alive
+       to <code>serveESP</code>, <code>serveESP</code> will stay alive
        and handle requests sent to it from the browser.  Once the last
-       browser that is connected to <code>serveCSM</code>
-       exits, <code>serveCSM</code> will shut down.
+       browser that is connected to <code>serveESP</code>
+       exits, <code>serveESP</code> will shut down.
 
     <p><b>Technique 2:</b> issue the command:
        <pre>
-         serveCSM ../data/tutorial1
+         serveESP ../data/tutorial1
        </pre>
        Once the server starts, start a browser (for example, FireFox)
        and open the page <code>ESP/ESP.html</code>.  As
-       above, <code>serveCSM</code> will stay alive as long as there
+       above, <code>serveESP</code> will stay alive as long as there
        is a browser attached to it.
 
-    <p>Note that the default "port" used by <code>serveCSM</code> is
+    <p>Note that the default "port" used by <code>serveESP</code> is
        7681.  One can change the port in the call
-       to <code>serveCSM</code> with a command such as:
+       to <code>serveESP</code> with a command such as:
        <pre>
-         serveCSM ../data/tutorial1 -port 7788
+         serveESP ../data/tutorial1 -port 7788
        </pre>
 
     <p>Once the browser starts, you will be prompted for a
@@ -3558,13 +3660,13 @@
     <p><img src="pictures/legacy1-01.png" width="100%"/>
 
     <p>Most of the time, the "hostname" will be "Localhost" (meaning
-       that <code>serveCSM</code> and the browser are on the same
-       computer).  It is possible to attach to <code>serveCSM</code>
+       that <code>serveESP</code> and the browser are on the same
+       computer).  It is possible to attach to <code>serveESP</code>
        that is running on another computer by giving an appropriate
        "hostname".
 
     <p>As mentioned above, it is possible to change the "port" with a
-       command line argument when starting <code>serveCSM</code>; if
+       command line argument when starting <code>serveESP</code>; if
        that is done, then the alternative "port" must be included in
       <code>ESP</code>'s prompt.
 
@@ -3969,7 +4071,7 @@
        defaults and rebuild, producing:
     <p><img src="pictures/legacy1-13.png" width="100%"/>
 
-    <p>You can now proceed to the <a href="#sec2.6c">common part of
+    <p>You can now proceed to the <a href="#sec2.7c">common part of
        the tutorial</a> or take a detour to explore the new
        integrated <code>.csm</code> editor (which is next).
 
@@ -4278,7 +4380,7 @@
        command at the top of the editor window.
 
     <p>Finally exit the browser and you should see
-       that <code>serveCSM</code> also shuts down.
+       that <code>serveESP</code> also shuts down.
 
     <p>If we now rename the file journal file (which was automatically
        generated while you were running ESP) with:
@@ -4287,7 +4389,7 @@
       </pre>
       we can replay our session by the command:
       <pre>
-        serveCSM ../data/tutorial1 -jrnl tutorial1.jrnl
+        serveESP ../data/tutorial1 -jrnl tutorial1.jrnl
       </pre>
       This replays all your operations, so it may take a while to
       execute.
@@ -4296,7 +4398,7 @@
       <code>tutorial1_new.csm</code> file (which we just created
       above) with the command:
       <pre>
-        serveCSM tutorial1_new
+        serveESP tutorial1_new
       </pre>
       This will run more quickly since it simply executes the final
       Feature Tree (of Branches).
@@ -4308,15 +4410,15 @@
     <p>Now we will learn how to develop a configuration using the
        integrated editor.  Make a copy of the
        original <code>.csm</code> file and
-       restart <code>serveCSM</code>.
+       restart <code>serveESP</code>.
       <pre>
        cp       ../data/tutorial1.csm ../data/tutorial1_temp.csm
-       serveCSM ../data/tutorial1_temp
+       serveESP ../data/tutorial1_temp
       </pre>
       or
       <pre>
        copy     ..\data\tutorial1.csm ..\data\tutorial1_temp.csm
-       serveCSM ..\data\tutorial1_temp
+       serveESP ..\data\tutorial1_temp
       </pre>
 
     <p>Start by pressing the "<b>File</b>" button and then
@@ -4376,15 +4478,15 @@
        the <code>ESP</code> Tree Window, but experienced users find it
        much faster using the integrated editor.
 
-    <p><h3 id="sec2.7">2.7 Second legacy tutorial: Sketcher</h3>
+    <p><h3 id="sec2.8">2.8 Second legacy tutorial: Sketcher</h3>
 
-    <p>For the second tutorial, we will start <code>serveCSM</code>
+    <p>For the second tutorial, we will start <code>serveESP</code>
        without a <code>.csm</code> file and investigate the use of the
        Sketcher.
 
     <p>Start <code>ESP</code> by issuing the command:
       <pre>
-        serveCSM
+        serveESP
       </pre>
 
     <p>If you have not set the <code>ESP_START</code> environment
@@ -4845,27 +4947,27 @@
     <p>We can now save our <code>.csm</code> file by choosing
        "<b>File->Export FeatureTree</b>" with the filename
        "<code>../data/tutorial2</code>".  Close the browser and
-       serveCSM should close automatically.
+       serveESP should close automatically.
 
-    <p><h3 id="sec2.8">2.8 Third legacy tutorial: Aircraft example</h3>
+    <p><h3 id="sec2.9">2.9 Third legacy tutorial: Aircraft example</h3>
 
-    <p>For the third tutorial, we will start <code>serveCSM</code>
+    <p>For the third tutorial, we will start <code>serveESP</code>
        with the file <code>data/tutorial3.csm</code>, which represents
        a fighter-like aircraft using blends and ruled surfaces.
 
-    <p>Start <code>serveCSM</code> with commands such as
+    <p>Start <code>serveESP</code> with commands such as
       <pre>
-        serveCSM ../data/tutorial3 -dumpEgads
+        serveESP ../data/tutorial3 -dumpEgads
       </pre>
       After a few minutes, the following will appear:
     <p><img src="pictures/legacy3-01.png" width="100%"/>
 
-    <p>The <code>-dumpEgade</code> tells <code>serveCSM</code> to dump
+    <p>The <code>-dumpEgade</code> tells <code>serveESP</code> to dump
        a file with the name <code>Body_xxxxxx.egads</code> whenever a
        new Body is created; here, <code>xxxxxx</code> is replaced with
        the current Body number.  This is a very useful option to use
        if you have a long build and want to "see" the current process
-       (in another invocation of <code>serveCSM</code> (which uses a
+       (in another invocation of <code>serveESP</code> (which uses a
        different port number).  It is also useful in conjunction with
        the <code>-loadEgads</code> option described below.
 
@@ -5183,10 +5285,10 @@ end
 
     <p>Feel free to experiment by modifying this file.
 
-    <p>Finally we are going to run <code>serveCSM</code> with
+    <p>Finally we are going to run <code>serveESP</code> with
        the <code>-loadEgads</code> option, as in:
       <pre>
-serveCSM ../data/tutorial3 -loadEgads
+serveESP ../data/tutorial3 -loadEgads
       </pre>
 
     <p>This will rerun the <code>tutorial3</code> case, but will read
@@ -5201,10 +5303,10 @@ serveCSM ../data/tutorial3 -loadEgads
 
     <p><h2 id="sec3">3.0: Command Line</h2>
 
-    <p>To start <code>serveCSM</code>, one uses the command:
-      <!-- extract from serveCSM.c -->
+    <p>To start <code>serveESP</code>, one uses the command:
+      <!-- extract from serveESP.c -->
       <pre>
-        serveCSM [casename[.csm]] [options...]
+        serveESP [casename[.csm]] [options...]
            where [options...] = -addVerify
                                 -allVels
                                 -batch
@@ -5235,7 +5337,7 @@ serveCSM ../data/tutorial3 -loadEgads
                                 -version  -or-  -v  -or-  --version
       </pre>
 
-    <p>The <code>-addVerify</code> option tells <code?serveCSM</code>
+    <p>The <code>-addVerify</code> option tells <code?serveESP</code>
        to write a <code>.csm_verify</code> file that contains
        information about the Bodys on the stack.  This information can
        be used in a subsequent call (using the <code>-verify</code>
@@ -5246,7 +5348,7 @@ serveCSM ../data/tutorial3 -loadEgads
        velocities (in addition to Face velocities).
 
     <p>If the <code>-batch</code> option is given,
-       <code>serveCSM</code> is started without any graphical user
+       <code>serveESP</code> is started without any graphical user
        interface.  This option is useful for regenerating
        configurations as part of a bigger process, such as for testing
        or within an MDAO environment.
@@ -5255,7 +5357,7 @@ serveCSM ../data/tutorial3 -loadEgads
        be read to override any DESPMTR and CFGPMTR values in
        the <code>.csm</code> file.
 
-    <p>The <code>-dict</code> option tells <code>serveCSM</code> to
+    <p>The <code>-dict</code> option tells <code>serveESP</code> to
        read the <code>dictname</code> file to define constant
        Parameters that should be defined before the configuration is
        built.  The format of the <code>dictname</code> file is a
@@ -5263,14 +5365,14 @@ serveCSM ../data/tutorial3 -loadEgads
        value, separated by white space; these Parameters are defined
        after the <code>.csm</code> is read but before it is executed.
 
-    <p>The <code>-dumpEgads</code> option tells <code>serveCSM</code>
+    <p>The <code>-dumpEgads</code> option tells <code>serveESP</code>
        to write an EGADS file named "Body_xxxxxx.egads" to the current
        working directory every time a new Body is built.  This option
        is useful if one wants to see the progress so far during a long
        build or in conjunction with the <code>-loadEgads</code>
        option.
 
-    <p>The <code>-egg</code> option tells <code>serveCSM</code> to use
+    <p>The <code>-egg</code> option tells <code>serveESP</code> to use
        the <code>eggname</code> external grid generator instead of the
        built-in <code>EGADS</code> tessellator.
 
@@ -5285,18 +5387,18 @@ serveCSM ../data/tutorial3 -loadEgads
        previous session.  This journal file is an ASCII file that can
        be created with any text-editor.  But more typically, a user
        modifies the <code>portX.jrnl</code> file that is automatically
-       produced every time <code>serveCSM</code> is started.  (Note:
+       produced every time <code>serveESP</code> is started.  (Note:
        be sure to copy and/or rename this file before using it as an
-       input to <code>serveCSM</code>, since the
-       next <code>serveCSM</code> will overwrite this file.)
+       input to <code>serveESP</code>, since the
+       next <code>serveESP</code> will overwrite this file.)
 
-    <p>The<code>-loadEgads</code> option tells <code>serveCSM</code>
+    <p>The<code>-loadEgads</code> option tells <code>serveESP</code>
        to try to read file named "Body_xxxxxx.egads" during the build
        process, thereby bypassing possibly long operations.  There are
        safeguards to ensure that the Branch type and arguments match
        before the file is loaded.
 
-    <p>The <code>-onormal</code> option tells <code>serveCSM</code> to
+    <p>The <code>-onormal</code> option tells <code>serveESP</code> to
        move the user's eye away from the configuration, making the
        display almost orthonormal (instead of perspective).
 
@@ -5324,7 +5426,7 @@ serveCSM ../data/tutorial3 -loadEgads
        minimized in a least-squares sense.  This option is still
        experimental and should be used with caution.
 
-    <p>The <code>-port</code> option tells <code>serveCSM</code> with
+    <p>The <code>-port</code> option tells <code>serveESP</code> with
        which port to connect.  If a port other than the default is
        used, be certain to use that same port number
        in <code>ESP</code>'s initial prompt.
@@ -5337,7 +5439,7 @@ serveCSM ../data/tutorial3 -loadEgads
        (defined by the specified file) to be generated and the maximum
        distance between it and the base case to be printed.
 
-    <p>The <code>-skipBuild</code> flag tells <code>serveCSM</code> to
+    <p>The <code>-skipBuild</code> flag tells <code>serveESP</code> to
        skip the initial build.  This is useful when the user knows
        that some DESPMTRs will be changed before the build.
 
@@ -5972,6 +6074,7 @@ BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0
                      a SheetBody is created
                   else
                      a SolidBody is created
+                  Xsects cannot be non-manifold WireBody
                   if the first Xsect is a point
                       if begList is 0
                           pointed end is created
@@ -6177,8 +6280,14 @@ COMBINE   toler=0
                   if all Bodys since Mark are SheetBodys
                      create either a SolidBody from closed Shell or an
                      (open) SheetBody
-                  elseif all Bodys since Mark are WireBodys and are co-planar
-                     create SheetBody from closed Loop or close Loop first
+                  elseif there is 1 planar WireBody that is closed
+                     create SheetBody from Loop
+                  elseif there is 1 planar WireBody that is open
+                     create SheetBody from Loop after closing Loop first
+                  elseif there are multiple planar WireBodys that are closed
+                     create SheetBody from closed Loop
+                  elseif there are multiple WireBodys that habe common Nodes
+                     create non-manifold WireBody
                   endif
                   if maxtol>0, then tolerance can be relaxed until successful
                   sets up @-parameters
@@ -6370,7 +6479,7 @@ DIMENSION $pmtrName nrow ncol
       <p><h3 id="dump">dump</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-DUMP      $filename remove=0 toMark=0
+DUMP      $filename remove=0 toMark=0 withTess=0
           use:    write a file that contains the Body
           pops:   Body1 (if remove=1)
           pushes: -
@@ -6383,6 +6492,7 @@ DUMP      $filename remove=0 toMark=0
                   if toMark=1, all Bodys back to the Mark (or all if no Mark)
                      are combined into a single model
                   if toMark=1, the remove flag is ignored
+                  if withTess!=0, add tessellations to .egads file
                   for .ugrid files, toMark must be 0
                   valid filetypes are:
                      .brep   .BREP   --> OpenCASCADE output
@@ -6391,6 +6501,7 @@ DUMP      $filename remove=0 toMark=0
                      .egg    .EGG    --> EGG restart output
                      .iges   .IGES   --> IGES        output
                      .igs    .IGS    --> IGES        output
+                     .plot   .PLOT   --> ASCII plot  output
                      .sens   .SENS   --> ASCII sens  output
                      .step   .STEP   --> STEP        output
                      .stl    .STL    --> ASCII stl   output
@@ -6482,7 +6593,7 @@ EVALUATE  $type arg1 ...
                   elseif arguments are: "edge ibody iedge $beg"
                      ibody is Body number (1:nbody)
                      iedge is Edge number (1:nedge)
-                     evaluate Edge at given t
+                     evaluate Edge at beginning
                      return in @edata:
                         t (clipped),
                         x,      y,      z,
@@ -6491,7 +6602,7 @@ EVALUATE  $type arg1 ...
                   elseif arguments are: "edge ibody iedge $end"
                      ibody is Body number (1:nbody)
                      iedge is Edge number (1:nedge)
-                     evaluate Edge at given t
+                     evaluate Edge at end
                      return in @edata:
                         t (clipped),
                         x,      y,      z,
@@ -6586,7 +6697,10 @@ EXTRUDE   dx dy dz
                   computes Face sensitivities analytically
                   sets up @-parameters
                   the Faces all receive the Branch's Attributes
-                  Attributes on Xsect are maintained
+                  Attributes on Xsect Face are placed on both beg and end Faces
+                  Attributes on Xsect Edges that do not start with
+                     . or _ are placed on the associated Faces
+                  Attributes on Xsect Edges are not placed on Edges
                   face-order is: (base), (end), feat1, ...
                   signals that may be thrown/caught:
                      $illegal_value
@@ -6682,40 +6796,41 @@ HOLLOW    thick=0 entList=0 listStyle=0
           use:    hollow out a SolidBody or SheetBody
           pops:   Body
           pushes: Body
-          notes:  Sketch may not be open
+          notes:  results can be unpredictable due to OpenCASCADE issues
+                  Sketch may not be open
                   Solver may not be open
                   if SolidBody (radius is ignored)
-                     if thick=0 and entList==0
+                     if thick=0 and entList==0         (case A)
                          convert to SheetBody
-                     if thick=0 and entList!=0
+                     if thick=0 and entList!=0         (case B)
                         convert to SheetBody without Faces in entList (if connected)
-                     if thick>0 and entList==0
-                        smaller offset Body is created
-                     if thick<0 and entList==0
+                     if thick>0 and entList==0         (case C)
                         larger offset Body is created
-                     if thick>0 and entList!=0
+                     if thick<0 and entList==0         (case D)
+                        smaller offset Body is created
+                     if thick>0 and entList!=0         (case E)
                         hollow (removing entList) with new Faces inside  original Body
-                     if thick<0 and entList!=0
+                     if thick<0 and entList!=0         (case F)
                         hollow (removing entList) with new Faces outside original Body
                   if a SheetBody with only one Face
-                     if thick=0 and entList==0
+                     if thick=0 and entList==0         (case G)
                         convert to WireBody (if connected)
-                     if thick=0 and entList!=0
+                     if thick=0 and entList!=0         (case H)
                         convert to WireBody without Edges in entList (if connected)
-                     if thick>0 and entList==0
-                        smaller offset Body is created
-                     if thick<0 and entList==0
-                        larger offset Body is created
-                     if thick>0 and entList!=0
+                     if thick>0 and entList==0         (case I)
+                        hollow with new Edges inside  original Body
+                     if thick<0 and entList==0         (case J)
+                        hollow with new Edges outside original Body
+                     if thick>0 and entList!=0         (case K)
                         hollow (removing entList) with new Edges inside  original Body
-                     if thick<0 and entList!=0
+                     if thick<0 and entList!=0         (case L)
                         hollow (removing entList) with new Edges outside original Body
                   if a SheetBody with multiple Faces
-                     if thick=0 and entList!=0
+                     if thick=0 and entList!=0         (case M)
                         remove Faces in entList (if connected)
-                     if thick>0 and entList==0
+                     if thick>0 and entList==0         (case N)
                         hollow all Faces with new Edges inside original Faces
-                     if thick>0 and entList!=0
+                     if thick>0 and entList!=0         (case P)
                         hollow Faces in entList with new Edges inside original Faces
                   entList is multi-valued Parameter, or a semicolon-separated list
                   if listStyle==0 and a SolidBody
@@ -6732,6 +6847,7 @@ HOLLOW    thick=0 entList=0 listStyle=0
                   face-order is based upon order that is returned from EGADS
                   signals that may be thrown/caught:
                      $illegal_argument
+                     $did_not_create_body
                      $insufficient_bodys_on_stack
         </pre>
       <p><h3 id="ifthen">ifthen</h3>
@@ -6778,8 +6894,7 @@ INTERFACE $argName $argType default=0
           notes:  only allowed in a .udc file
                   must be placed before any executable statement
                   argType must be "in", "out", "dim", or "all"
-                  if argType=="dim", then default contains number of elements
-                  if argType=="dim", the default values are zero
+                  argType="dim" is obsolete, use DIMENSION instead
                   if argType=="all", a new scope is not created (and
                                      $argName is ignored)
                   a string variable can be passed into UDC if default
@@ -6948,6 +7063,7 @@ LOFT      smooth
                   all Xsects must have the same number of Segments
                   if Xsect is a SheetBody, then a SolidBody is created
                   if Xsect is a WireBody, then a SheetBody is created
+                  Xsects cannot be non-manifold WireBody
                   the Faces all receive the Branch's Attributes
                   Attributes on Xsects are not maintained
                   face-order is: (base), (end), feat1, ...
@@ -6960,6 +7076,7 @@ LOFT      smooth
                   MAY BE DEPRECATED (use RULE or BLEND)
                   signals that may be thrown/caught:
                      $insufficient_bodys_on_stack
+                     $wrong_types_on_stack
         </pre>
       <p><h3 id="macbeg">macbeg</h3>
         <!-- extract from OpenCSM.h -->
@@ -7165,6 +7282,7 @@ RESTORE   $name index=0
                   Solver may not be open
                   $name is used directly (without evaluation)
                   if $name is . (dot), then duplicate Body on stack
+                  if index<0, get all Bodys that match $name
                   sets up @-parameters
                   error results if nothing has been stored in name
                   the Faces all receive the Branch's Attributes
@@ -7188,7 +7306,10 @@ REVOLVE   xorig yorig zorig dxaxis dyaxis dzaxis angDeg
                      dyaxis, dzaxis, andDeg
                   sets up @-parameters
                   the Faces all receive the Branch's Attributes
-                  Attributes on Xsect are maintained
+                  Attributes on Xsect Face are placed on both beg and end Faces
+                  Attributes on Xsect Edges that do not start with
+                     . or _ are placed on the associated Faces
+                  Attributes on Xsect Edges are not placed on Edges
                   face-order is: (base), (end), feat1, ...
                   signals that may be thrown/caught:
                      $illegal_value
@@ -7198,7 +7319,7 @@ REVOLVE   xorig yorig zorig dxaxis dyaxis dzaxis angDeg
       <p><h3 id="rotatex">rotatex</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-ROTATEX   angDeg yaxis zaxis
+ROTATEX   angDeg yaxis=0 zaxis=0
           use:    rotates Group on top of Stack around an axis that
                   passes through (0, yaxis, zaxis) and is parallel
                   to the x-axis
@@ -7214,7 +7335,7 @@ ROTATEX   angDeg yaxis zaxis
       <p><h3 id="rotatey">rotatey</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-ROTATEY   angDeg zaxis xaxis
+ROTATEY   angDeg zaxis=0 xaxis=0
           use:    rotates Group on top of Stack around an axis that
                   passes through (xaxis, 0, zaxis) and is parallel
                   to the y-axis
@@ -7230,7 +7351,7 @@ ROTATEY   angDeg zaxis xaxis
       <p><h3 id="rotatez">rotatez</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-ROTATEZ   angDeg xaxis yaxis
+ROTATEZ   angDeg xaxis=0 yaxis=0
           use:    rotates Group on top of Stack around an axis that
                   passes tgrough (xaxis, yaxis, 0) and is parallel
                   to the z-axis
@@ -7258,6 +7379,7 @@ RULE      reorder=0 periodic=0
                   first Xsect is unaltered if reorder>0
                   last  Xsect is unaltered if reorder<0
                   all Xsects must have the same number of Edges
+                  Xsects cannot be non-manifold WireBody
                   if all Xsects are NodeBodys
                      a WireBody is created
                   elseif all Xsects are WireBodys (or a NodeBody at one end)
@@ -7326,6 +7448,12 @@ SELECT    $type arg1 ...
                      sets @seltype to 2
                      uses @selbody
                      sets @sellist to iface
+//$$$                  elseif arguments are: "face 0 iford1" or
+//$$$                                        "face ibody1 0"
+//$$$                     sets @seltype to 2
+//$$$                     uses @selbody
+//$$$                     sets @sellist with Faces in @selbody that matches ibody1/iford1
+//$$$                                   (with 0 being treated as a wildcard)
                   elseif arguments are: "face ibody1 iford1 iseq=1"
                      sets @seltype to 2
                      uses @selbody
@@ -7350,6 +7478,15 @@ SELECT    $type arg1 ...
                      sets @seltype to 1
                      uses @selbody
                      sets @sellist to iedge
+//$$$                  elseif arguments are: "edge 0 iford1 ibody2 iford2" or
+//$$$                                        "edge ibody1 0 ibody2 iford2" or
+//$$$                                        "edge ibody1 iford1 0 iford2" or
+//$$$                                        "edge ibody1 iford1 ibody2 0" or
+//$$$                                        "edge ibody1 0 ibody2 0"
+//$$$                     sets @seltype to 1
+//$$$                     uses @selbody
+//$$$                     sets @sellist to Edge in @selbody that adjoins Faces
+//$$$                        ibody1/iford1 and ibody2/iford2 (with 0 being treated as wildcard)
                   elseif arguments are: "edge ibody1 iford1 ibody2 iford2 iseq=1"
                      sets @seltype to 1
                      uses @selbody
@@ -7371,6 +7508,10 @@ SELECT    $type arg1 ...
                      sets @seltype to 1
                      uses @selbody
                      sets @sellist to Edge whose center is closest to (x,y,z)
+                  elseif arguments are: "loop iface iloop"
+                     sets @seltype to 1
+                     uses @selbody
+                     sets @sellist to Edges in order in the Loop
                   elseif arguments are: "node"
                      sets @seltype to 0
                      uses @selbody
@@ -7402,18 +7543,23 @@ SELECT    $type arg1 ...
                   elseif arguments are: "add ibody1 iford1 iseq=1" and @seltype is 2
                      uses @selbody
                      appends to @sellist the Face in @selbody that matches ibody1/iford1
+                     (a 0 matches ibody1=0 amd/or iford1=0)
                   elseif arguments are: "add ibody1 iford1 ibody2 iford2 iseq=1" and @seltype is 1
                      uses @selbody
                      appends to @sellist the Edge in @selbody that adjoins Faces
+                     (a 0 matches ibody1=0, iford1=0, ibody2=0, and/or iford2=0)
                   elseif arguments are: "add iface" and @seltype is 2
                      uses @selbody
                      appends to @sellist Face iface in @selbody
+                     (wildcarding is not allowed)
                   elseif arguments are: "add iedge" and @seltype is 1
                      uses @selbody
                      appends to @sellist Edge iedge in @selbody
+                     (wildcarding is not allowed)
                   elseif arguments are: "add inode" and @seltype is 0
                      uses @selbody
                      appends to @sellist Node inode in @selbody
+                     (wildcarding is not allowed)
                   elseif arguments are: "sub attrName1    attrValue1
                                              attrName2=$* attrValue2=$*
                                              attrName3=$* attrValue3=$*"
@@ -7423,11 +7569,14 @@ SELECT    $type arg1 ...
                   elseif arguments are: "sub ibody1 iford1 iseq=1" and @seltype is 2
                      uses @selbody
                      removes from @sellist the Face in @selbody that matches ibody1/iford1
+                     (a 0 matches ibody1=0 amd/or iford1=0)
                   elseif arguments are: "sub ibody1 iford1 ibody2 iford2 iseq=1" and @seltype is 1
                      uses @selbody
                      removes from @sellist the Edge in @selbody that adjoins Faces
+                     (a 0 matches ibody1=0, iford1=0, ibody2=0, and/or iford2=0)
                   elseif arguments are: "sub ient" and ient is in @sellist
                      removes from @sellist ient
+                     (wildcarding is not allowed)
                   elseif arguments are: "sort $key"
                      sorts @sellist based upon $key which can be: $xmin, $ymin, $zmin,
                         $xmax, $ymax, $zmax, $xcg, $ycg, $zcg, $area, or $length
@@ -7437,7 +7586,7 @@ SELECT    $type arg1 ...
 //                Node specifications are stored in _nodeID Attribute
                   iseq selects from amongst multiple Faces/Edges/Nodes that
                      match the ibody/iford specifications
-                  attrNames and attrValues can be wild-carded
+                  attrNames and attrValues can be wild-carded with $*
                   avoid using forms "SELECT face iface" and "SELECT edge iedge"
                      since iface and iedge are not guaranteed to be the same during
                      rebuilds or on different OpenCASCADE versions or computers
@@ -7696,6 +7845,7 @@ STORE     $name index=0 keep=0
           notes:  Sketch may not be open
                   Solver may not be open
                   $name is used directly (without evaluation)
+                  if index<0, use first available index
                   previous Group in name/index is overwritten
                   if $name=.   then Body is popped off stack
                                     but not actually stored
@@ -7771,9 +7921,10 @@ SWEEP
           use:    create a Body by sweeping an Xsect along an Xsect
           pops:   Xsect1 Xsect2
           pushes: Body
-          notes:  Sketch may not be open
+          notes:  results can be unpredictable due to OpenCASCADE issues
+                  Sketch may not be open
                   Solver may not be open
-                  Xsect1 must be either a SheetBody or WireBody
+                  Xsect1 must be either a SheetBody or non-manifold WireBody
                   Xsect2 must be a WireBody
                   if Xsect2 is not slope-continuous, result may not be
                      as expected
@@ -8365,6 +8516,7 @@ UDPRIM kulfan
            ztail      height of upper and lower trailing edge (2 values)
            aupper     vector of control points for upper surface
            alower     vector of control points fpr lower surface
+           numpts     number of points used to define spline [default 101]
        output arguments:
        notes:
             always generates airfoil with 3 edges (upper, lower, TE)
@@ -8622,6 +8774,20 @@ UDPRIM sew
            combines the various bodies into a single SHEET or SOLID Body
            if specified toler is smaller than Face tolers, use Face tolers
 
+UDPRIM shadow
+       input arguments (specified as name/value pairs):
+           numpts     number of GraphPaper points  [default 1001]
+       output arguments:
+           area       projected area
+           xcent      x-centroid of projected area
+           ycent      y-centroid of projected area
+           ixx        moment  of inertia
+           ixy        product of inertia
+           iyy        moment  of inertia
+       usage:
+           projects Body onto x-y plane and computes mass
+               properties of projection
+                  
 UDPRIM slices
        input arguments (specified as name/value pairs):
            nslice     number of slices
@@ -8997,9 +9163,9 @@ Strings:
 Valid names:
     start with a letter, colon(:), or at-sign(@)
     contains letters, digits, at-signs(@), underscores(_), and colons(:)
-    contains fewer than 32 characters
+    contains fewer than 64 characters
     names that start with an at-sign cannot be set by a CONPMTR, DESPMTR,
-       or SET statement
+       SET, PATBEG, or GETATTR statement
     if a name has a dot-suffix, a property of the name (and not its
         value) is returned
        x.nrow   number of rows     in x or 0 if a string
@@ -9020,35 +9186,74 @@ Array names:
     values are stored across rows ([1,1], [1,2], ..., [2,1], ...)
 
 Types:
-    CONSTANT
-        declared and defined by a CONPMTR statement
-        must be a scalar
-        is available at both .csm and .udc file level
-        can be set  outside ocsmBuild by a call to ocsmSetValu
-        can be read outside ocsmBuild by a call to ocsmGetValu
-    EXTERNAL
+    DESPMTR
+        declared by a DESPMTR statement only at the top level
         if a scalar, declared and defined by a DESPMTR statement
-        if an array, declared by a DIMENSION statement (with despmtr=1)
-                     values defined by one or more DESPMTR statements
+        if an array, declared by a DIMENSION statement
+            values defined by one or more DESPMTR statements
         each value can only be defined in one DESPMTR statement
+        values are not over-written by subsequent DESPMTR statements
         can have an optional lower bound
         can have an optional upper bound
-        is only available at the .csm file level
+        is only available at the top level
         can be set  outside ocsmBuild by a call to ocsmSetValu
         can be read outside ocsmBuild by a call to ocsmGetValu
-    INTERNAL
-        if a scalar, declared and defined by a SET statement
-        if an array, declared by a DIMENSION statement (with despmtr=0)
-                     values defined by one or more SET statements
-        values can be overwritten by subsequent SET statements
-        are created by an INTERFACE statement in a .udc file
-        see scope rules (below)
-    OUTPUT
-        if a scalar, declared and defined by a OUTPMTR statement
-        values can be overwritten by subsequent SET statements
-        see scope rules (below)
+        can be used to find sensitivities
+    CFGPMTR
+        declared by a CFGPMTR statement only at the top level
+        if a scalar, declared and defined by a CFGPMTR statement
+        if an array, declared by a DIMENSION statement
+            values defined by one or more CFGPMTR statements
+        each value can only be defined in one CFGPMTR statement
+        values are not over-written by subsequent CFGPMTR statements
+        can have an optional lower bound
+        can have an optional upper bound
+        is only available at the top level
+        can be set  outside ocsmBuild by a call to ocsmSetValu
+        can be read outside ocsmBuild by a call to ocsmGetValu
+    CONPMTR
+        declared by a CONPMTR statement at the top level or
+            via ocsmLoadDict
+        cannot be declared in a DIMENSION statment
+        is available everywhere
+        can be set  outside ocsmBuild by a call to ocsmSetValu
+        can be read outside ocsmBuild by a call to ocsmGetValu
+    OUTPMTR
+        declared by a OUTPMTR statement only at the top level
+        can only be set at the top level
+        can be read outside ocsmBuild by a call to ocsmGetValu
+    LOCALVAR
+        if a scalar, declared and defined by a SET, PATBEG, or
+            GETATTR statement or via an INTERFACE IN statement
+        if an array, declared by a DIMENSION statement
+            values defined by one or more SET statements
+        can have a string value
+        values can be overwritten by subsequent statements
+        are only available in the .csm or .udc file in which
+            it is defined or in an include-type UDC that is
+            called by the program unit in which iit was defined
     SOLVER
-        not implemented yet
+        is a scalar defined by a SOLBEG statement
+        only available between SOLBEG and SOLEND
+
+                                                            L
+                                                D  C  C  O  O
+                                                E  F  O  U  C
+                                                S  G  N  T  A
+                                                P  P  P  P  L
+                                                M  M  M  M  V
+                                                T  T  T  T  A
+                                                R  R  R  R  R
+                                                -  -  -  -  -
+      Can be vector or array of numbers         Y  Y  Y  Y  Y
+      Can have a string value                   N  N  N  Y  Y
+      Can be restricted by LBOUND or UBOUND     Y  Y  N  N  N
+      Scope (T=top-level, G=global, L=local)    T  T  G  L  L
+      Defined during ocsmLoad or ocsmLoadDict   Y  Y  Y  N  N
+      Can be set via ocsmSetValu(D)             Y  Y  N  N  N
+      Defined and set during ocsmBuild          N  N  N  Y  Y
+      Can be read via ocsmGetValu(S)            Y  Y  Y  Y  N
+      Can find associated sensitivity           Y  N  N  N  N
 
     @-parameters depend on the last SELECT statement(s).
         each time a new Body is added to the Stack, 'SELECT body' is
@@ -9104,11 +9309,13 @@ Types:
         @Izy      x    x    x    0
         @Izz      x    x    x    0
 
+        @toler    x    x    x    0   maximum tolerance (at last SELECT)
         @signal   x    x    x    x   current signal code
-        @nwarn    x    x    x    x   number of warnings
+        @nwarn    x    x    x    x   number of warnings (at last SELECT)
 
         @edata                       only set up by EVALUATE statement
         @stack                       Bodys on stack; 0=Mark; -1=none
+        @scope                       scoping level (at last SELECT)
         @version                     version number
 
         in above table:
@@ -9117,21 +9324,6 @@ Types:
            * -> special value is set (if single Edge)
            0 -> value is set to  0
           -1 -> value is set to -1
-
-Scope:
-    CONSTANT parameters are available everywhere
-    EXTERNAL parameters are only usable within the .csm file
-    INTERNAL within a .csm file
-                created by a DIMENSION or SET statement
-                values are usable only within the .csm file
-             within a .udc file
-                created by an INTERFACE of SET statament
-                values are usable only with the current .udc file
-    OUTPUT within a .csm file
-                created by a OUTPMTR statement
-                values are available anywhere
-    SOLVER   parameters are only accessible between SOLBEG and
-                SOLEND statements
       </pre>
 
     <p><h3 id="sec5.10">5.10: Expression rules</h3>
@@ -9145,6 +9337,9 @@ Valid operators (in order of precedence):
     ^              exponentiation             (evaluated left to right)
     * /            multiply and divide        (evaluated left to right)
     + -            add/concat and subtract    (evaluated left to right)
+
+    An expression that consists of only the name of a Parameter my be
+    prepended by a unary + or -
 
 Valid function calls:
     pi(x)                        3.14159...*x
@@ -9204,7 +9399,8 @@ Valid function calls:
     dip(xa,ya,xb,yb,rad)         acute dip between arc and chord
                                      produces derivative=0
     smallang(x)                  ensures -180<=x<=180
-    val2str(num,digits)          convert num to string
+    val2str(num,digits)          convert num to string ("%d" if digits=0,
+                                     "%f" if digits>0, "%e" if digits<0)
     str2val(string)              convert string to value
     findstr(str1,str2)           find locn of str2 in str1 (bias-1 or 0)
     slice(str,ibeg,iend)         substring of str from ibeg to iend
@@ -9234,13 +9430,15 @@ Valid function calls:
       <pre>
 Attributes assigned to Bodys:
 
-    _body       Body index (bias-1)
+    _body       Body index (1:nbody)
 
-    _brch       Branch index (bias-1)
+    _brch       Branch index (1:nbrch)
 
     _tParams    tessellation parameters that were used
 
     _csys_*     arguments when CSYSTEM was defined
+
+    _hist       history for WireBodys only
 
     <any>       all global Attributes
 
@@ -9279,13 +9477,13 @@ Special User-defined Attributes for Bodys:
 Attributes assigned to Faces:
 
     _body       non-unique 2-tuple associated with first Face creation
-        [0]     Body index in which Face first existed (bias-1)
+        [0]     Body index in which Face first existed (1:nbody)
         [1]     face-order associated with creation (see above)
 
     _brch       non-unique even-numbered list associated with Branches
                    that are active when the Face is created (most
                    recent Branch is listed first)
-        [2*i  ] Branch index (bias-1)
+        [2*i  ] Branch index (1:nbrch)
         [2*i+1] (see below)
 
                 Branches that contribute to brch Attribute are
@@ -9338,16 +9536,16 @@ Special User-defined Attributes for Faces:
 
     _gcolor     color of grid of Face in ESP (see _color)
 
-    _makeQuds   to make quads for this Face
+    _makeQuads  to make quads for this Face
 
     _stlColor   color to use for this Face in an .stl file
 
 Attributes assigned to Edges:
 
     _body       non-unique 2-tuple associated with first Edge creation
-        [0]     Body index in which Edge first existed (bias-1)
-        [1]     100 * min(_body[1][ileft],_body[1][irite])
-                    + max(_body[1][ileft],_body[1][irite])
+        [0]     Body index in which Edge first existed (1:nbody)
+        [1]     10000 * min(_body[1][ileft],_body[1][irite])
+                      + max(_body[1][ileft],_body[1][irite])
                 (or -3 if non-manifold)
 
     _edgeID     unique 5-tuple that is assigned automatically
@@ -9358,7 +9556,7 @@ Attributes assigned to Edges:
           [4]   sequence number
 
                 _edgeID[0]/[1] swapped with edge[2]/[3]
-                   100*_edgeID[0]+_edgeID[1] > 100*_edgeID[2]+_edgeID[3]
+                   10000*_edgeID[0]+_edgeID[1] > 10000*_edgeID[2]+_edgeID[3]
                 if multiple Edges have same _edgeID[0], _edgeID[1],
                    _edgeID[2], and _edgeID[3], then the sequence number
                    is defined based upon the first rule that applies:
@@ -9402,7 +9600,7 @@ Special User-defined Attributes for Nodes:
 
     <p>A plotfile is a file that is specified via the
       <code>-plot</code> command line option
-      to <code>serveCSM</code>.
+      to <code>serveESP</code>.
       The contents of this file is used for either plotting in
       <code>ESP</code> and/or as input for the <code>-histDist</code>
       or <code>-plugs</code> command line options.
@@ -9417,13 +9615,13 @@ Special User-defined Attributes for Nodes:
       list; this name must be unique.  The entity will be colored
       black unless it ends in one of the following sequences:
       <pre>
-	|r   red
-	|g   green
-	|b   blue
-	|c   cyan
-	|m   magenta
-	|y   yellow
-	|w   white
+        |r   red
+        |g   green
+        |b   blue
+        |c   cyan
+        |m   magenta
+        |y   yellow
+        |w   white
       </pre>
       If the name ends in one of the above sequences, the sequence
       will be removed from the name.  The meaning of <code>imax</code>
@@ -9572,7 +9770,213 @@ end
 
     <p><h2 id="sec8">8.0: Release Notes</h2>
 
-    <p><h3 id="sec8.1"> 8.1: New/extended features in v1.20</h3>
+    <p><h3 id="sec8.1"> 8.1: New/extended features in v1.21</h3>
+
+    <p><h4>New/updated commands/statements and functions</h4>
+
+    <p>put note in ESP-help and OpenCSM.h that warns users that
+       results from HOLLOW and SWEEP may be unpredicable due to
+       OpenCASCADE issues
+
+    <p>add SELECT LOOP to get Edges associated with a Loop in a Face
+
+    <p>extend STORE such that if index=-1, the first available index
+       is used
+
+    <p>allow wild-carding (with 0) in SELECT ADD and SELECT SUB
+
+    <p>restrict SPHEREs to have a positive radius
+
+    <p>extend COMBINE to make a non-manifold WireBody for a set of
+       contiguous WireBodys
+
+    <p>allow CONPMTR statement if at top-level scope; update scope
+       test case
+
+    <p>allow default xaxis=0, yaxis=0, and zaxis=0 in ROTATEX,
+       ROTATEY, and ROTATEZ
+
+    <p>allow unary + or - in front of (multi-valued) Parameter when
+       used alone in an expression
+
+    <p>index.lt.0 in RESTORE is now a wildcard, meaning that Bodys
+       in all storages that match name are put onto the stack
+
+    <p>make INTERFACE DIM obsolete; issue WARNING to use DIMESNION
+       statement instead
+
+    <p>do not allow non-manifold WireBodys in RULE, BLEND, LOFT, and
+       SWEEP
+
+    <p><h4>New/modified command line arguments</h4>
+
+    <p>change serveCSM to serveESP
+
+    <p>allow serveESP to start with a .py file
+
+    <p><h4>New/updated UDPs, UDCs, or UDFs</h4>
+
+    <p>COMPARE: group bad points based upon the magnitude of the error
+
+    <P>COMPARE: check distances from Nodes and Edges as
+       well as distances from Faces
+
+    <p>ELLIPSE: remove upper limit check on NEDGE
+
+    <p>GUIDE: fix bug that did not work properly for an input SheetBody
+
+    <p>GUIDE: change NXSECT argument to ATTRREAL so that finite
+       difference sensitivities are triggered
+
+    <p>KULFAN: add NUMPTS argument, which helps avoid small
+       dimples near the leading edge of a very thin section
+
+    <p>NACELLE: new UDF
+
+    <p>NUSCALE: fix bug when ZSCALE=0
+
+    <p>NUSCALE: require positive scale factors when applied to
+       a SolidBody
+
+    <p>SHADOW: new UDF
+
+    <p>WAFFLE: add IFTHEN/ENDIF construct
+
+    <p><h4>OpenCSM updates</h4>
+
+    <p>add @scope at-parameter; add scope test case
+
+    <p>improve sensitivities associated with tip treatments in
+       BLEND
+
+    <p>fix typo in error message associated with COMBINE command
+
+    <p>add documentation about what happens for a 0 in either SELECT
+       ADD or SELECT SUB statement
+
+    <p>update documentation for DUMP in OpenCSM.h
+
+    <p>allow DIMENSIONed variable to be returned from a UDC; update
+       expressions test case to demonstrate multi-value returns
+
+    <p><h4>ESP updates</h4>
+
+    <p>create CAPS TIM to run the new Integaretd Design Environment (IDE)
+
+    <p>create pyscript TIM to asynchronously run python
+
+    <p>add a context-sensitive python editor
+      
+    <p>create viewer TIM to view AIMS and Bounds in CAPS mode
+
+    <p>create plotter TIM to generate (multi-)line plots
+
+    <p>create flowchart TIM to examine AIMs and Bounds
+      
+    <p>add Debug option in ESP editor
+
+    <p>update ESP editor so that users without the ball can see the
+       edits as they happen
+
+    <p>allow non-*host* to initiate file editting
+
+    <p>modify visualization of grids on Faces in serveESP
+
+    <p>update ESP so that double-clicking in MessageWindow takes you
+       to filename:linenum that is clicked on, else takes you to
+       last filename:linenum in MessageWindow
+
+    <p>add tufts for Nodes when displaying tessellation
+       sesnitivities in serveESP
+
+    <p>only show Display table entries (Node/Edge/Face/Csystem/Pips)
+       if it contains any child entities
+
+    <p><h4>Miscellaneous updates</h4>
+
+    <p>add ocsmLoadFromModel function
+
+    <p><h3 id="sec8.2"> 8.2: Bug fixes since v1.20</h3>
+
+    <p><h4>OpenCSM bug fixes</h4>
+
+    <p>fix bug that did not compute sensitivities correctly for UDFs
+       when one (or more) of the input Bodys had non-zero velocities
+
+    <p>compute sensitivity correctly with udfCreateBEM,
+       udfCreatePoly, udfEditAttr, udfPrintBbox, udfPrintBrep, and
+       udoPrintEgo
+
+    <p>fix bug associated with (FD) sensitivities for a MODL with a
+       OUTPMTR being set before a FILLET or CHAMFER
+
+    <p>fix bug that did not compute sensitivity correctly when a
+       DESPMTR was used in an include-type UDC
+
+    <p>fix bug that did not remove UDP cache entries when a Body was
+       deleted (such as during recycling)
+
+    <p>fix bug that re-computed velocities when re-computation was
+       not necessary
+
+    <p>fix bug associated with sensitivities of mass properties
+
+    <p> give @version a value before the first Body is built
+
+    <p>improve tessellation sensitivities for Edges and Faces that
+       are not trimmed by a boolean operation
+
+    <p>fix tessellation sensitivity bug associated with SheetBodys
+       that are INTERSECTed with a SolidBody
+
+    <p>fix Node sensitivity for two parallel Edges
+
+    <p>ensure that tessellation sensitivities on the boundaries of
+       Face and ends of Edges agree with Edge and Node
+       sensitivities
+
+    <p>for a UDP/UDF, only use finite differences if one of its
+       arguements is ATTRREAL and has non-zero dots
+
+    <p>fix bug in ocsmPrintEgo when called on BSPLINE Curve or
+       Surface
+
+    <p>improve error message generated when SKVAR does not contain
+       triplets
+
+    <p>fix bug in ocsmSave that did not write DIMENSION statements
+       correctly when writing either a .csm or .cpc file with a
+       variable nrow and/or ncol
+
+    <p>fix bugs in File-Open and File-Edit for cases with and
+       without UDCs
+
+    <p>fix bug that did not profile MESSAGE statements
+
+    <p>fix bug that did not print OUTPMTRs during call to
+       ocsmPrintPmtrs
+
+    <p>fix sensitivity bug associated with UDP/UDFs that requires
+       finite differences coupled with an OUTPMTR that is tied to
+       a mass property
+
+    <p>fix bug that did not persist attributes on scribed Edges
+       during a boolean operation
+
+      
+    <p><h4>ESP bug fixes</h4>
+
+    <p>fix hint for SCALE in ESP
+
+    <p>shorten hint time-out in ESP to 15 sec
+
+    <p>fix bug if user with ball loaded a new .csm file and then
+       editted (where user without ball saw wrong file)
+
+    <p>change display scaling so that if there is only one NodeBody
+       it still gets displayed
+
+    <p><h3 id="sec8.3"> 8.3: New/extended features in v1.20</h3>
 
     <p><h4>New/updated commands/statements and functions</h4>
 
@@ -9645,7 +10049,7 @@ end
 
     <p><h4>Miscellaneous updates</h4>
 
-    <p><h3 id="sec8.4"> 8.2: Bug fixes since v1.19</h3>
+    <p><h3 id="sec8.4"> 8.4: Bug fixes since v1.19</h3>
 
     <p><h4>OpenCSM bug fixes</h4>
 
@@ -9670,7 +10074,7 @@ end
 
     <p>fix bug in mass property derivatives
 
-    <p>fix bug when starting serveCSM on Windoze from an .egads, .igs,
+    <p>fix bug when starting serveESP on Windoze from an .egads, .igs,
        or .stp file for filename with backslashes; add autoStart test
        case
 
@@ -9723,7 +10127,7 @@ end
 
     <p>fix long delay when browser without ball syncs display
 
-    <p><h3 id="sec8.3"> 8.3: New/extended features in v1.19</h3>
+    <p><h3 id="sec8.5"> 8.5: New/extended features in v1.19</h3>
 
     <p><h4>New/updated commands/statements and functions</h4>
 
@@ -9935,7 +10339,7 @@ end
     <p>add capability to ESP to show table of OUTPMTR values and
        velocities; add pmtrtest2 test case
 
-    <p>add printout of velocities of OUTPMTRs to serveCSMs output
+    <p>add printout of velocities of OUTPMTRs to serveESPs output
 
     <p>allow the ESP DisplayFilter to numerically compare values if
        attrValue is numeric
@@ -9956,7 +10360,7 @@ end
 
     <p>allow user to show either configuration or tessellation
        sensitivities in ESP (and make the -tessel flag obsolete in
-       serveCSM)
+       serveESP)
 
     <p>fix bug in flend that caused out-of-bounds error
 
@@ -9974,7 +10378,7 @@ end
 
     <p>Gloves: add many options
 
-    <p>serveCSM: allow plotting of shaded triangles (jmax=-3) and
+    <p>serveESP: allow plotting of shaded triangles (jmax=-3) and
        quadrilaterals (jmax=-4) in the plotfile in ESP
 
     <p>pyOCSM: new capability that exactly mimics OpenCSM API
@@ -9982,7 +10386,7 @@ end
     <p>Plugs: improve cloud point reclassification process; write
        plugs.despmtrs file at end
 
-    <p><h3 id="sec8.4"> 8.4: Bug fixes since v1.18</h3>
+    <p><h3 id="sec8.6"> 8.6: Bug fixes since v1.18</h3>
 
     <p><h4>OpenCSM bug fixes</h4>
 
@@ -10086,7 +10490,7 @@ end
 
     <p>fix first-column coloring when editing  DesignParameter
 
-    <p><h3 id="sec8.5"> 8.5: New/extended features in v1.18</h3>
+    <p><h3 id="sec8.7"> 8.7: New/extended features in v1.18</h3>
 
     <p><h4>New/updated commands/statements and functions</h4>
 
@@ -10167,7 +10571,7 @@ end
 
     <p>make groups for at- and at-at-parameters in ESP
 
-    <p>in serveCSM -sensTess, show Face tufts in blue and Edge tufts
+    <p>in serveESP -sensTess, show Face tufts in blue and Edge tufts
              in red
 
     <p>add option to ESP to turn on/off all Nodes, Edges, Faces, or
@@ -10175,7 +10579,7 @@ end
 
     <p>allow plotfile to contain triangles (if jmax==-2)
 
-    <p><h3 id="sec8.6"> 8.6: Bug fixes since v1.17</h3>
+    <p><h3 id="sec8.8"> 8.8: Bug fixes since v1.17</h3>
 
     <p>throw error if sketch solver does not converge
 
@@ -10279,7 +10683,7 @@ end
     <p>fix bug after FileEdit when one of the skteches in a RULE or
        BLEND could not be recycled
 
-    <p><h3 id="sec8.7"> 8.7: New/extended features in v1.17</h3>
+    <p><h3 id="sec8.9"> 8.9: New/extended features in v1.17</h3>
 
     <p><h4>New/updated commands/statements and functions</h4>
 
@@ -10370,7 +10774,7 @@ end
 
     <p><h4>OpenCSM updates</h4>
 
-    <p>add summary CPU information to serveCSM
+    <p>add summary CPU information to serveESP
 
     <p>add geometry info in output produced by ocsmPrintEgo
 
@@ -10379,16 +10783,15 @@ end
     <p>return ILLEGAL_VALUE from ocsmSetValu, ocsmSetValuD, or
       ocsmSetBnds if value violates the bounds
 
-    <p>add moments of inertia to -chcckMass option in serveCSM
+    <p>add moments of inertia to -chcckMass option in serveESP
 
     <p>print message out outLevel=0 when an error is caught
 
     <p><h4>ESP updates</h4>
 
-    <p>allow multi-segment line plotting in serveCSM
+    <p>allow multi-segment line plotting in serveESP
 
-
-    <p><h3 id="sec8.8"> 8.8: Bug fixes since v1.16</h3>
+    <p><h3 id="sec8.10"> 8.10: Bug fixes since v1.16</h3>
 
     <p>fix bug that did not allow sensitivity calculations if there
       was a NodeBody on the stack
@@ -10457,7 +10860,7 @@ end
     <p>fix bug that did not free memory after an error was detected
       during argument evaluations
 
-    <p><h3 id="sec8.9"> 8.9: New/extended features in v1.16</h3>
+    <p><h3 id="sec8.11"> 8.11: New/extended features in v1.16</h3>
 
     <p>add ESP_QuickReference
 
@@ -10510,12 +10913,12 @@ end
 
     <p>compute analytic sensisitivities for udpBiconvex
 
-    <p><h3 id="sec8.10"> 8.10: Bug fixes since v1.15</h3>
+    <p><h3 id="sec8.12"> 8.12: Bug fixes since v1.15</h3>
 
     <p>fix bug in Sketcher to use atan2d for ::I[]
 
     <p>fix dbest initialization error in -histDist option to
-      serveCSM
+      serveESP
 
     <p>add one more level to printouts in ocsmPrintEgo so that
       Nodes get printed when the input is a Model
@@ -10573,7 +10976,7 @@ end
     <p>fix bug that did not update Local Variables after FILE->Edit in
  `    ESP
 
-    <p><h3 id="sec8.11"> 8.11: New/extended features in v1.15</h3>
+    <p><h3 id="sec8.13"> 8.13: New/extended features in v1.15</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -10610,12 +11013,12 @@ end
 
     <p><h4>New command line arguments</h4>
 
-    <p>add -histDist flag to serveCSM
+    <p>add -histDist flag to serveESP
 
     <p>allow -addVerify and -verify to use verification files that
       depend on the version of OpenCASCADE being used
 
-    <p>add -checkMass flag to serveCSM
+    <p>add -checkMass flag to serveESP
 
     <p><h4>New/updated UDPs, UDCs, or UDFs</h4>
 
@@ -10698,7 +11101,7 @@ end
 
     <p>allow StepThru mode to show WireBodys
 
-    <p><h3 id="sec8.12"> 8.12: Bug fixes since v1.14</h3>
+    <p><h3 id="sec8.14"> 8.14: Bug fixes since v1.14</h3>
 
     <p>fix erroneous error message ass≈oociated with UNION of
       SheetBodys or WireBodys with the tomark flag
@@ -10723,7 +11126,7 @@ end
 
     <p>improve Branch status indications in ocsmPrintBrchs
 
-    <p>move ocsmPrinBrchs to after ocsmBuild in serveCSM
+    <p>move ocsmPrinBrchs to after ocsmBuild in serveESP
 
     <p>fix writing of NodeBody info during -dumpEgads
 
@@ -10810,7 +11213,7 @@ end
 
     <p>fix typos associated with LINT in Makefile.DARWIN64
 
-    <p><h3 id="sec8.13"> 8.13: New/extended features in v1.14</h3>
+    <p><h3 id="sec8.15"> 8.15: New/extended features in v1.14</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -10865,27 +11268,27 @@ end
 
     <p><h4>New command line arguments</h4>
 
-    <p>Add -skipBuild command line option to serveCSM
+    <p>Add -skipBuild command line option to serveESP
 
     <p>Add -onormal command line option
 
-    <p>Remove -printBbox command line argument from serveCSM
+    <p>Remove -printBbox command line argument from serveESP
 
-    <p>Remove -printBrep command line argument from serveCSM
+    <p>Remove -printBrep command line argument from serveESP
 
-    <p>Remove -checkMass command line option from serveCSM
+    <p>Remove -checkMass command line option from serveESP
 
-    <p>Add -plotBDF flag to serveCSM so that contents of BDF file can
+    <p>Add -plotBDF flag to serveESP so that contents of BDF file can
              be visualized
 
     <p><h4>New/updated UDPs, UDCs, or UDFs</h4>
 
     <p>udpWaffle: upgrade file format; fix nested PATBEG
 
-    <p>udfPrintBbox: new UDF to replace serveCSM's -printBbox command
+    <p>udfPrintBbox: new UDF to replace serveESP's -printBbox command
         line argument
 
-    <p>udfPrintBrep: new UDF to replace serveCSM/s -printBrep command
+    <p>udfPrintBrep: new UDF to replace serveESP/s -printBrep command
 
     <p>udpSupell: add offset argument
 
@@ -10926,7 +11329,7 @@ end
 
     <p>Allow visibility of NodeBodys to be toggled in ESP
 
-    <p><h3 id="sec8.14"> 8.14: Bug fixes since v1.13</h3>
+    <p><h3 id="sec8.16"> 8.16: Bug fixes since v1.13</h3>
 
     <p>Fix error statement associated with mis-matched argument in
        call to UDC
@@ -11058,7 +11461,7 @@ end
 
     <p>Fix bug that truncated long filenames in ESP Edit-File
 
-    <p><h3 id="sec8.15"> 8.15: New/extended features in v1.13</h3>
+    <p><h3 id="sec8.17"> 8.17: New/extended features in v1.13</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -11146,7 +11549,7 @@ end
     <p>Design Parameters are now listed hierarchically in ESP (with
        the hierarcy defined by a colon (:)
 
-    <p><h3 id="sec8.16"> 8.16: Bug fixes since v1.12</h3>
+    <p><h3 id="sec8.18"> 8.18: Bug fixes since v1.12</h3>
 
     <p>Fix bug that caused infinite recursion if trying to generate a
        .sens file for a case that required finite difference
@@ -11184,7 +11587,7 @@ end
     <p>An error is raised if an INTERFACE statement uses name of a
        CONPMTR
 
-    <p><h3 id="sec8.17"> 8.17: New/extended features in v1.12</h3>
+    <p><h3 id="sec8.19"> 8.19: New/extended features in v1.12</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -11289,7 +11692,7 @@ end
 
     <p>Recycling is used (if possible) after FileEdit
 
-    <p><h3 id="sec8.18"> 8.18: Bug fixes since v1.11</h3>
+    <p><h3 id="sec8.20"> 8.20: Bug fixes since v1.11</h3>
 
     <p>Fix many bugs in udpTblade and Tblade itself
 
@@ -11330,7 +11733,7 @@ end
        faulted) after an error encountered during loading a .csm file
        (after FileOpen or FileEdit)
 
-    <p><h3 id="sec8.19"> 8.19: New/extended features in v1.11</h3>
+    <p><h3 id="sec8.21"> 8.21: New/extended features in v1.11</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -11399,7 +11802,7 @@ end
 
     <p>Add ability to save view to and read view from a file
 
-    <p><h3 id="sec8.20"> 8.20: Bug fixes since v1.010</h3>
+    <p><h3 id="sec8.22"> 8.22: Bug fixes since v1.010</h3>
 
     <p>Add printing of Node Attributes in ocsmPrintBrep
 
@@ -11441,7 +11844,7 @@ end
 
     <p>Fix bug to allow HOLLOW after SKEND
 
-    <p><h3 id="sec8.21"> 8.21: New/extended features in v1.10</h3>
+    <p><h3 id="sec8.23"> 8.23: New/extended features in v1.10</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -11498,7 +11901,7 @@ end
 
     <p>Add gallery of cases to ESP-help
 
-    <p><h3 id="sec8.22"> 8.22: Bug fixes since v1.09</h3>
+    <p><h3 id="sec8.24"> 8.24: Bug fixes since v1.09</h3>
 
     <p>Fix code when bad expression is detected to not seg fault
 
@@ -11513,7 +11916,7 @@ end
 
     <p>Fix arrowhead size in CSYSTEMs
 
-    <p><h3 id="sec8.23"> 8.23: New/extended features in v1.09</h3>
+    <p><h3 id="sec8.25"> 8.25: New/extended features in v1.09</h3>
 
     <p><h4>New commands/statements</h4>
 
@@ -11610,7 +12013,7 @@ end
 
     <p><h4>Miscellaneous updates</h4>
 
-    <p>Print mass properties (in serveCSM) for all Bodys on stack
+    <p>Print mass properties (in serveESP) for all Bodys on stack
 
     <p>Quadrilaterals are generated (and visualized) if a Face has a
       _makeQuads attribute
@@ -11636,7 +12039,7 @@ end
 
     <p>Add many new test cases, all with verification data
 
-    <p><h3 id="sec8.24"> 8.24: Bug fixes since v1.08</h3>
+    <p><h3 id="sec8.26"> 8.26: Bug fixes since v1.08</h3>
 
     <p>Improve robustness of UNION when applied to SheetBodys
 
@@ -11675,7 +12078,7 @@ end
 
     <p>Fix erroneous truncation of very long metadata in ESP
 
-    <p><h3 id="sec8.25"> 8.25: New/extended features in v1.08</h3>
+    <p><h3 id="sec8.27"> 8.27: New/extended features in v1.08</h3>
 
     <p>A new ocsmDelPmtr function has been added to the OpenCSM API to
        delete a Design Parameter
@@ -11765,11 +12168,11 @@ end
 
     <p>NodeBodys are now displayed on the screen
 
-    <p>For -outLevel=2 in serveCSM, the debug messages now are
+    <p>For -outLevel=2 in serveESP, the debug messages now are
        explicit as to which messages are sent by the browser and which
        message are sent by the server
 
-    <p><h3 id="sec8.26"> 8.26: Bug fixes since v1.07</h3>
+    <p><h3 id="sec8.28"> 8.28: Bug fixes since v1.07</h3>
 
     <p>Numerous typos were fixed in this help file
 
@@ -11855,11 +12258,11 @@ end
 
     <p>Sensitivities are now correctly computed for non-manifold Edges
 
-    <p><h3 id="sec8.27"> 8.27: New/extended features in v1.07</h3>
+    <p><h3 id="sec8.29"> 8.29: New/extended features in v1.07</h3>
 
     <p><code>CAPRI</code> is no longer supported
 
-    <p>serveCSM now returns 1 if running in batch and an error is
+    <p>serveESP now returns 1 if running in batch and an error is
        encountered
 
     <p>A warning is issued if a SolidBody has a non-positive volume
@@ -11951,7 +12354,7 @@ end
     <p>The <code>popupz</code> user-defined component (udc) was added
        to generate a "pop-up" from an existing surface
 
-    <p>If the server (serveCSM) dies, the Messages window turns pink
+    <p>If the server (serveESP) dies, the Messages window turns pink
        and no alert is issued
 
     <p>Rolling the middle -mouse button zooms in/out
@@ -11977,7 +12380,7 @@ end
        to <code>ESP_START</code> (although <code>ESP_START</code> still
        works)
 
-    <p><h3 id="sec8.28"> 8.28: Bug fixes since v1.06</h3>
+    <p><h3 id="sec8.30"> 8.30: Bug fixes since v1.06</h3>
 
     <p>A journalling error was associated with the UNION command
 
@@ -12020,7 +12423,7 @@ end
 
     <p>An error in the first Branch caused ESP to hang
 
-    <p><h3 id="sec8.29"> 8.29: New/extended features in v1.06</h3>
+    <p><h3 id="sec8.31"> 8.31: New/extended features in v1.06</h3>
 
     <p>User-defined components (UDCs) have been implemented to execute
        consistently with user-defined primitives (UDPs).  The main
@@ -12142,7 +12545,7 @@ end
 
     <p>Branches are indented (with ">") in Tree Window in ESP.
 
-    <p><h3 id="sec8.30"> 8.30: Bug fixes since v1.05</h3>
+    <p><h3 id="sec8.32"> 8.32: Bug fixes since v1.05</h3>
 
     <p>Attribute values can be strings (prepended by "$").
 
@@ -12175,17 +12578,17 @@ end
     <p>Allow blanks in SELECT, UDPARG, and UDPRIM statement in
        ESP (but only at end).
 
-    <p>Fix serveCSM so that the JSON that it transfers to the browser
+    <p>Fix serveESP so that the JSON that it transfers to the browser
        does not contain ",]" nor ",}".
 
-    <p><h3 id="sec8.31"> 8.31: Known problems in v1.09</h3>
+    <p><h3 id="sec8.33"> 8.33: Known problems in v1.09</h3>
 
     <p>Internet Explorer (11) is not recommended since it sometimes
        stops sending messages to the server.
 
     <p>When using 64-bit OS X 10.8 or higher, you should use
        OpenCASCADE 6.6.0 (as opposed to 6.8.0).  There is an error
-       somewhere that causes "serveCSM tutorial1_new" to sometimes
+       somewhere that causes "serveESP tutorial1_new" to sometimes
        produces a segmentation fault during rebuilds.
 
     <p>Edges are not drawn in ESP when running a LINUX64 virtual
@@ -12485,7 +12888,7 @@ EGADS_READERR                         -32
       <p><b>command</b> Synonym for statement.
 
       <p><b>command line</b> The statement typed into a
-      terminal window to start <code>serveCSM</code>.
+      terminal window to start <code>serveESP</code>.
 
       <p><string>Configuation Parameter</b> A value that can be
       set by the user, either programmatically or via the ESP user
@@ -12593,7 +12996,7 @@ EGADS_READERR                         -32
       the current configuration.
 
       <p><b>hostname</b> The name of the computer that is
-      running the server (typically serveCSM).  If using a single
+      running the server (typically serveESP).  If using a single
       computer for both the browser and server, use 'Localhost' as the
       hostname.
 
@@ -12602,7 +13005,7 @@ EGADS_READERR                         -32
       while running ESP.  A user (who has access to the server) can
       copy the journal file to another name and use it to
       automatically replay the session that was journalled during a
-      future invocation of serveCSM.
+      future invocation of serveESP.
 
       <p><b>Key window</b> The window on the bottom left of
       the ESP screen that contains a spectrum to indicate sensitivity
@@ -12655,8 +13058,8 @@ EGADS_READERR                         -32
       along an Edge (or curve), or on a Face (or surface).
 
       <p><b>port</b> The port number on which the server
-      (typically serveCSM) is listening for requests by the browser.
-      serveCSM uses 7681 as its default port.
+      (typically serveESP) is listening for requests by the browser.
+      serveESP uses 7681 as its default port.
 
       <p><b>primitive</b> A CSM statement that generates
       either a box, sphere, cylinder, cone, or torus, or a
@@ -12672,7 +13075,7 @@ EGADS_READERR                         -32
 
       <p><b>server</b> A computer program in which OpenCSM
       runs and which 'serves' Models and Boundary Representations to
-      ESP.  The program 'serveCSM' is the initial server for ESP.
+      ESP.  The program 'serveESP' is the initial server for ESP.
 
       <p><b>sketch</b> A 2-D drawing composed of lines,
       circular arcs, a splines, that is used to define a SheetBody

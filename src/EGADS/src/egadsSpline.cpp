@@ -1954,7 +1954,7 @@ EG_secSplinePointsVels(const egadsSplineVels *vels,
               xyzs[3*npt  ] =  v1[0];
               xyzs[3*npt+1] =  v1[1];
               xyzs[3*npt+2] =  v1[2];
-              EG_checkDirs(edges[jj], t+0.001*dt, point, &t1[3*i]);
+              EG_checkDirs<SurrealS<1>>(edges[jj], t+0.001*dt, point, &t1[3*i]);
             } else {
               t1[3*i  ]     = -point[3]*dt;
               t1[3*i+1]     = -point[4]*dt;
@@ -1962,7 +1962,7 @@ EG_secSplinePointsVels(const egadsSplineVels *vels,
               xyzs[3*npt  ] =  v2[0];
               xyzs[3*npt+1] =  v2[1];
               xyzs[3*npt+2] =  v2[2];
-              EG_checkDirs(edges[jj], t-0.001*dt, point, &t1[3*i]);
+              EG_checkDirs<SurrealS<1>>(edges[jj], t-0.001*dt, point, &t1[3*i]);
             }
           } else if (k == ncp[j].ncp-1) {
             if (senses[jj] == 1) {
@@ -1972,7 +1972,7 @@ EG_secSplinePointsVels(const egadsSplineVels *vels,
               xyzs[3*npt  ] =  v2[0];
               xyzs[3*npt+1] =  v2[1];
               xyzs[3*npt+2] =  v2[2];
-              EG_checkDirs(edges[jj], t-0.001*dt, point, &tN[3*i]);
+              EG_checkDirs<SurrealS<1>>(edges[jj], t-0.001*dt, point, &tN[3*i]);
             } else {
               tN[3*i  ]     =  point[3]*dt;
               tN[3*i+1]     =  point[4]*dt;
@@ -1980,7 +1980,7 @@ EG_secSplinePointsVels(const egadsSplineVels *vels,
               xyzs[3*npt  ] =  v1[0];
               xyzs[3*npt+1] =  v1[1];
               xyzs[3*npt+2] =  v1[2];
-              EG_checkDirs(edges[jj], t+0.001*dt, point, &tN[3*i]);
+              EG_checkDirs<SurrealS<1>>(edges[jj], t+0.001*dt, point, &tN[3*i]);
             }
           }
         }
@@ -2134,7 +2134,7 @@ EG_secSplinePoints(
               xyzs[3*npt  ] =  v1[0];
               xyzs[3*npt+1] =  v1[1];
               xyzs[3*npt+2] =  v1[2];
-              EG_checkDirs(edges[jj], t+0.001*dt, point, &t1[3*i]);
+              EG_checkDirs<T>(edges[jj], t+0.001*dt, point, &t1[3*i]);
             } else {
               t1[3*i  ]     = -point[3]*dt;
               t1[3*i+1]     = -point[4]*dt;
@@ -2142,7 +2142,7 @@ EG_secSplinePoints(
               xyzs[3*npt  ] =  v2[0];
               xyzs[3*npt+1] =  v2[1];
               xyzs[3*npt+2] =  v2[2];
-              EG_checkDirs(edges[jj], t-0.001*dt, point, &t1[3*i]);
+              EG_checkDirs<T>(edges[jj], t-0.001*dt, point, &t1[3*i]);
             }
           } else if (k == ncp[j].ncp-1) {
             if (senses[jj] == 1) {
@@ -2152,7 +2152,7 @@ EG_secSplinePoints(
               xyzs[3*npt  ] =  v2[0];
               xyzs[3*npt+1] =  v2[1];
               xyzs[3*npt+2] =  v2[2];
-              EG_checkDirs(edges[jj], t-0.001*dt, point, &tN[3*i]);
+              EG_checkDirs<T>(edges[jj], t-0.001*dt, point, &tN[3*i]);
             } else {
               tN[3*i  ]     =  point[3]*dt;
               tN[3*i+1]     =  point[4]*dt;
@@ -2160,7 +2160,7 @@ EG_secSplinePoints(
               xyzs[3*npt  ] =  v1[0];
               xyzs[3*npt+1] =  v1[1];
               xyzs[3*npt+2] =  v1[2];
-              EG_checkDirs(edges[jj], t+0.001*dt, point, &tN[3*i]);
+              EG_checkDirs<T>(edges[jj], t+0.001*dt, point, &tN[3*i]);
             }
           }
         }

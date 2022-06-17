@@ -76,11 +76,19 @@ aim_Inputs(aimContext cntxt,
            char       **ainame,         /* pointer to the returned name */
            capsValue  *defaultVal);     /* pointer to default value (filled) */
 
+/* manage the AIM's internal storage/state */
+extern int
+aim_UpdateState(aimContext cntxt,
+                const char *analysisName,
+     /*@null@*/ void       *instStore,  /* instance storage */
+                void       *aimStruc,   /* the AIM context */
+     /*@null@*/ capsValue  *inputs);    /* complete suite of analysis inputs */
+
 /* parse input data & generate input file(s) */
 extern int
 aim_PreAnalysis(aimContext cntxt,
                 const char *analysisName,
-     /*@null@*/ void       *instStore,  /* instance storage */
+     /*@null@*/ const void *instStore,  /* instance storage */
                 void       *aimStruc,   /* the AIM context */
      /*@null@*/ capsValue  *inputs);    /* complete suite of analysis inputs */
 
@@ -88,7 +96,7 @@ aim_PreAnalysis(aimContext cntxt,
 extern int
 aim_Execute(aimContext cntxt,
             const char *analysisName,
- /*@null@*/ void       *instStore,      /* instance storage */
+ /*@null@*/ const void *instStore,      /* instance storage */
             void       *aimStruc,       /* the AIM context */
             int        *state);         /* the state of the execution */
 

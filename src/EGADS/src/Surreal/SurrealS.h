@@ -15,7 +15,7 @@ inline double log1p( double x ) { return log(x + 1); }
 #endif
 #endif
 
-#define SURREAL_TRAD
+#define SURREAL_LAZY
 
 #if defined(SURREAL_TRAD)
 #include "SurrealS_Trad.h"
@@ -25,6 +25,6 @@ inline double log1p( double x ) { return log(x + 1); }
 #error "Please define SURREAL_TRAD or SURREAL_LAZY"
 #endif
 
-#undef SURREAL_TRAD
+#undef SURREAL_LAZY
 
 #endif // SURREALS_H

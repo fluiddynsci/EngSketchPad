@@ -246,7 +246,7 @@ aimDiscr(char *tname, capsDiscr *discr)
   discr->types[0].ndata = 0;         /* data at geom reference positions
                                         (i.e. vertex centered/iso-parametric) */
   discr->types[0].ntri  = 1;
-  discr->types[0].nseg  = 0;
+  discr->types[0].nseg  = 3;
   discr->types[0].nmat  = 0;         /* match points at geom ref positions */
   discr->types[0].tris  = NULL;
   discr->types[0].segs  = NULL;
@@ -257,10 +257,18 @@ aimDiscr(char *tname, capsDiscr *discr)
   /* specify the numbering for the points on the triangle */
   AIM_ALLOC(discr->types[0].tris, discr->types[0].nref, int, discr->aInfo,
             status);
-
   discr->types[0].tris[0] = 1;
   discr->types[0].tris[1] = 2;
   discr->types[0].tris[2] = 3;
+  
+  AIM_ALLOC(discr->types[0].segs, 2*discr->types[0].nref, int, discr->aInfo,
+            status);
+  discr->types[0].segs[0] = 1;
+  discr->types[0].segs[1] = 2;
+  discr->types[0].segs[2] = 2;
+  discr->types[0].segs[3] = 3;
+  discr->types[0].segs[4] = 3;
+  discr->types[0].segs[5] = 1;
 
   /* specify the reference coordinates for each point on the triangle */
   AIM_ALLOC(discr->types[0].gst, 2*discr->types[0].nref, double, discr->aInfo,
@@ -551,21 +559,61 @@ aimInputs(void *instStore, /*@unused@*/ void *aimStruc, int index, char **ainame
 
 
 int
-aimPreAnalysis(void *instStore, void *aimStruc, /*@null@*/ capsValue *inputs)
+aimUpdateState(void *instStore, /*@unused@*/ void *aimStruc,
+               /*@null@*/ capsValue *inputs)
 {
-  int              nBname, stat, state, i, npts, rank, len;
+  int        stat, state, npts;
+  ego        tess, body;
+  aimStorage *aimStore;
+  
+  aimStore = (aimStorage *) instStore;
+#ifdef DEBUG
+  printf(" testingAIM/aimUpdateState instance = %d!\n", aimStore->instance);
+#endif
+  
+  if (aimStore->instance == 0) {
+    /* tessellate parent */
+    if (inputs != NULL) {
+      tess = (ego) inputs[2].vals.AIMptr;
+      if (tess == NULL) {
+        printf("   tess is NULL!\n");
+      } else {
+        stat = EG_statusTessBody(tess, &body, &state, &npts);
+        printf("   tess State = %d  %d   npts = %d\n", stat, state, npts);
+      }
+    }
+  } else if (aimStore->instance == 1) {
+    /* tessellate child */
+    if (inputs != NULL) {
+      tess = (ego) inputs[2].vals.AIMptr;
+      if (tess == NULL) {
+        printf("   tess is NULL!\n");
+      } else {
+        stat = EG_statusTessBody(tess, &body, &state, &npts);
+        printf("   tess State = %d  %d   npts = %d\n", stat, state, npts);
+      }
+    }
+  }
+  
+  return CAPS_SUCCESS;
+}
+
+
+int
+aimPreAnalysis(const void *instStore, void *aimStruc, /*@null@*/ capsValue *inputs)
+{
+  int              nBname, stat, i, npts, rank, len;
   char             **bNames, *units, *full;
   double           *data;
   capsDiscr        *discr;
   capsObject       *vobj;
   capsValue        *value;
   enum capsdMethod method;
-  aimStorage       *aimStore;
+  const aimStorage *aimStore;
   aimMeshRef       *mesh;
-  ego              tess, body;
   FILE             *fp;
 
-  aimStore = (aimStorage *) instStore;
+  aimStore = (const aimStorage *) instStore;
 #ifdef DEBUG
   printf(" testingAIM/aimPreAnalysis instance = %d!\n", aimStore->instance);
 #endif
@@ -587,18 +635,8 @@ aimPreAnalysis(void *instStore, void *aimStruc, /*@null@*/ capsValue *inputs)
   stat = aim_newGeometry(aimStruc);
   printf("     aim_newGeometry = %d!\n", stat);
 
+  /* instance specific code */
   if (aimStore->instance == 0) {
-    /* look for parent's dependency */
-    if (inputs != NULL) {
-      tess = (ego) inputs[2].vals.AIMptr;
-      if (tess == NULL) {
-        printf("   tess is NULL!\n");
-      } else {
-        stat = EG_statusTessBody(tess, &body, &state, &npts);
-        printf("   tess State = %d  %d   npts = %d\n", stat, state, npts);
-      }
-    }
-    
     stat = aim_getDiscr(aimStruc, "Interface", &discr);
     printf("   getDiscr = %d\n", stat);
     if (stat == CAPS_SUCCESS) {
@@ -620,14 +658,6 @@ aimPreAnalysis(void *instStore, void *aimStruc, /*@null@*/ capsValue *inputs)
   } else if (aimStore->instance == 1) {
     /* look for child's dependency */
     if (inputs != NULL) {
-      tess = (ego) inputs[2].vals.AIMptr;
-      if (tess == NULL) {
-        printf("   tess is NULL!\n");
-      } else {
-        stat = EG_statusTessBody(tess, &body, &state, &npts);
-        printf("   tess State = %d  %d   npts = %d\n", stat, state, npts);
-      }
-      
       mesh = (aimMeshRef *) inputs[3].vals.AIMptr;
       /* special internal linking -- CAPS normally sets this up */
       if (mesh == NULL)
@@ -727,9 +757,9 @@ aimOutputs(/*@null@*/ void *instStore, /*@unused@*/ void *aimStruc,
 
 
 int
-aimExecute(void *instStore, /*@unused@*/ void *aimStruc, int *state)
+aimExecute(const void *instStore, /*@unused@*/ void *aimStruc, int *state)
 {
-  aimStorage *aimStore;
+  const aimStorage *aimStore;
 
   aimStore = (aimStorage *) instStore;
 #ifdef DEBUG
@@ -743,7 +773,7 @@ aimExecute(void *instStore, /*@unused@*/ void *aimStruc, int *state)
 
 int
 aimPostAnalysis(void *instStore, void *aimStruc, int restart,
-                /*@null@*/ capsValue *inputs)
+                /*@unused@*/ /*@null@*/ capsValue *inputs)
 {
   int        i, n, stat;
   capsValue  dynOut;
@@ -754,16 +784,8 @@ aimPostAnalysis(void *instStore, void *aimStruc, int restart,
   printf(" testingAIM/aimPostAnalysis instance = %d  restart = %d!\n",
          aimStore->instance, restart);
 #endif
-  
-  if (restart == 1) {
-    /* do pre on restarted post */
-    printf(" testingAIM/aimPostAnalysis: restart -- going into pre!\n");
-    stat = aimPreAnalysis(instStore, aimStruc, inputs);
-    if (stat != CAPS_SUCCESS) {
-      printf(" testingAIM/aimPostAnalysis: aimPreAnalysis = %d\n", stat);
-      return stat;
-    }
-  } else {
+
+  if (restart == 0) {
     stat = aim_initValue(&dynOut);
     if (stat != CAPS_SUCCESS) {
       printf(" testingAIM/aimPostAnalysis: aim_initValue = %d\n", stat);

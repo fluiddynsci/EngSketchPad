@@ -489,11 +489,11 @@ if [ "$ARCH" = Darwin ]; then
 	fi
 else
 	echo "export AFLR_ARCH=Linux-x86-64"            >> ../ESPenv.sh
-	if [ -z "$LD_LIBRARY_PATH" ]; then
-		echo "export LD_LIBRARY_PATH=$CASROOT/$CASARCH/lib:$BASE/lib" >> ../ESPenv.sh
-	else
-		echo "export LD_LIBRARY_PATH=$CASROOT/$CASARCH/lib:$BASE/lib":'$LD_LIBRARY_PATH' >> ../ESPenv.sh
-	fi
+	echo 'if [ -z "$LD_LIBRARY_PATH" ]; then'       >> ../ESPenv.sh
+	echo "    export LD_LIBRARY_PATH=$CASROOT/$CASARCH/lib:$BASE/lib" >> ../ESPenv.sh
+	echo "else"   >> ../ESPenv.sh
+	echo "    export LD_LIBRARY_PATH=$CASROOT/$CASARCH/lib:$BASE/lib":'$LD_LIBRARY_PATH' >> ../ESPenv.sh
+	echo "fi"     >> ../ESPenv.sh
 	udu=UNKNOWN
 	if [ -f "/usr/include/udunits.h" ]; then
 		udu=/usr/include/udunits.h
@@ -564,11 +564,15 @@ if [ "$ARCH" = Darwin ]; then
 	fi
 else
 	echo "setenv AFLR_ARCH Linux-x86-64"     >> ../ESPenv.csh
-	if [ -z "$LD_LIBRARY_PATH" ]; then
-		echo "setenv LD_LIBRARY_PATH $CASROOT/$CASARCH/lib:$BASE/lib" >> ../ESPenv.csh
-	else
-		echo "setenv LD_LIBRARY_PATH $CASROOT/$CASARCH/lib:$BASE/lib":'$LD_LIBRARY_PATH' >> ../ESPenv.csh
-	fi
+	echo 'if ( $?LD_LIBRARY_PATH == 0 ) then' >> ../ESPenv.csh
+	echo "    setenv LD_LIBRARY_PATH $CASROOT/$CASARCH/lib:$BASE/lib" >> ../ESPenv.csh
+	echo "else" >> ../ESPenv.csh
+	echo '    if ( "$LD_LIBRARY_PATH" == "" ) then' >> ../ESPenv.csh
+	echo "        setenv LD_LIBRARY_PATH $CASROOT/$CASARCH/lib:$BASE/lib" >> ../ESPenv.csh
+	echo "    else" >> ../ESPenv.csh
+	echo "        setenv LD_LIBRARY_PATH $CASROOT/$CASARCH/lib:$BASE/lib":'$LD_LIBRARY_PATH' >> ../ESPenv.csh
+	echo "    endif" >> ../ESPenv.csh
+	echo "endif" >> ../ESPenv.csh
 	udu=UNKNOWN
 	if [ -f "/usr/include/udunits.h" ]; then
 		udu=/usr/include/udunits.h

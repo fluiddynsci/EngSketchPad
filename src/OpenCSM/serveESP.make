@@ -1,4 +1,4 @@
-#       Makefile for serveESP
+#       Makefile for serveESP's CAPS-based TIMs
 #
 ifndef ESP_ROOT
 $(error ESP_ROOT must be set -- Please fix the environment...)
@@ -14,30 +14,37 @@ else
 ODIR  = .
 endif
 
-BINLIST =	$(BDIR)/serveESP
-TIMLIST  =	$(LDIR)/viewer.so
+TIMLIST =	$(LDIR)/capsMode.so \
+		$(LDIR)/flowchart.so \
+		$(LDIR)/viewer.so
 
-#Adding the rpath is needed when compiling with Python
-PYTHONLPATH=$(filter -L%,$(PYTHONLIB))
-PYTHONRPATH=$(PYTHONLPATH:-L%=-Wl,-rpath %)
-
-default:	$(BINLIST) $(TIMLIST)
+default:	$(TIMLIST)
 
 #
 #	binaries
 #
-$(BDIR)/serveESP:	$(ODIR)/serveESP.o $(LDIR)/$(OSHLIB)
-	$(CXX) -o $(BDIR)/serveESP $(ODIR)/serveESP.o -L$(LDIR) -lcaps -locsm -lwsserver -legads -ldl $(RPATH) 
+$(LDIR)/capsMode.so:	$(ODIR)/timCapsMode.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/capsMode.so
+	rm $(LDIR)/capsMode.so
+	$(CXX) $(SOFLGS) -o $(LDIR)/capsMode.so $(ODIR)/timCapsMode.o -L$(LDIR) -lcaps -locsm -lwsserver -legads -ldl -lm
 
-$(ODIR)/serveESP.o:	serveESP.c OpenCSM.h common.h tim.h
-	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. serveESP.c -o $(ODIR)/serveESP.o
+$(ODIR)/timCapsMode.o:	timCapsMode.c tim.h $(IDIR)/caps.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. timCapsMode.c -o $(ODIR)/timCapsMode.o
+
+$(LDIR)/flowchart.so:	$(ODIR)/timFlowchart.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/flowchart.so
+	rm $(LDIR)/flowchart.so
+	$(CXX) $(SOFLGS) -o $(LDIR)/flowchart.so $(ODIR)/timFlowchart.o -L$(LDIR) -lcaps -locsm -lwsserver -legads -ldl -lm
+
+$(ODIR)/timFlowchart.o:	timFlowchart.c tim.h $(IDIR)/caps.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. timFlowchart.c -o $(ODIR)/timFlowchart.o
 
 $(LDIR)/viewer.so:	$(ODIR)/timViewer.o $(LDIR)/$(OSHLIB)
 	touch $(LDIR)/viewer.so
 	rm $(LDIR)/viewer.so
-	$(CXX) $(SOFLGS) -o $(LDIR)/viewer.so $(ODIR)/timViewer.o -L$(LDIR) -locsm -lwsserver -legads -ldl -lm
+	$(CXX) $(SOFLGS) -o $(LDIR)/viewer.so $(ODIR)/timViewer.o -L$(LDIR) -lcaps -locsm -lwsserver -legads -ldl -lm
 
-$(ODIR)/timViewer.o:	timViewer.c tim.h
+$(ODIR)/timViewer.o:	timViewer.c tim.h $(IDIR)/caps.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. timViewer.c -o $(ODIR)/timViewer.o
 
 #
@@ -49,14 +56,17 @@ SCANEXCLUDE=
 include $(IDIR)/STANALYZER.make
 
 lint:
-	@echo "Checking serveESP..."
-	$(LINT) -I$(IDIR) serveESP.c OpenCSM.c udp.c tim.c -allocmismatch -duplicatequals -macrovarprefixexclude -exportlocal -mustfreefresh -mayaliasunique -kepttrans -immediatetrans
+	@echo "Checking capsMode.so..."
+	$(LINT) -I$(IDIR) timCapsMode.c
+	@echo " "
+	@echo "Checking flowchart.so..."
+	$(LINT) -I$(IDIR) timFlowchart.c
 	@echo " "
 	@echo "Checking viewer.so..."
 	$(LINT) -I$(IDIR) timViewer.c
 
 clean:
-	(cd $(ODIR); rm -f serveESP.o timViewer.o )
+	(cd $(ODIR); rm -f timCapsMode.o timFlowchart.o timViewer.o )
 
 cleanall:	clean
-	rm -f  $(BINLIST)
+	rm -f  $(TIMLIST)

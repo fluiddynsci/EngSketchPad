@@ -1,8 +1,8 @@
 ###################################################################
 #                                                                 #
 # shapes.py --- start with: serveESP ../data/python/box           #
-#                   Tool->Python     ../data/python/shapes.py     #
-#                   Tool->Python     ../data/python/shapes.py     #
+#                   Tool->Pyscript   ../data/python/shapes.py     #
+#                   Tool->Pyscript   ../data/python/shapes.py     #
 #                                                                 #
 #              Written by John Dannenhoffer @ Syracuse University #
 #                                                                 #
@@ -36,7 +36,7 @@ print("    iminor :", iminor)
 
 # boxModl is inherited from serveESP
 print("\ninheriting boxModl")
-boxModl = ocsm.Ocsm(esp.GetModl(esp.GetEsp("python")))
+boxModl = ocsm.Ocsm(esp.GetModl(esp.GetEsp("pyscript")))
 (builtTo, nbody, bodys) = boxModl.Build(0, 0)
 print("")
 print("    builtTo:", builtTo);
@@ -77,31 +77,27 @@ model   = context.loadModel("../data/python/cone.egads")
 conModl = ocsm.Ocsm(model)
 
 # loop through the modls with the viewer
-esp.TimLoad("viewer", esp.GetEsp("python"), "")
+esp.TimLoad("viewer", esp.GetEsp("pyscript"), "")
 for i in range(3):
     print("showing box...")
-    esp.SetModl(boxModl, esp.GetEsp("python"))
-    esp.TimMesg("viewer", "update|")
-    esp.TimHold("python", "viewer")
+    esp.SetModl(boxModl, esp.GetEsp("pyscript"))
+    esp.TimMesg("viewer", "MODL")
 
     print("showing cylinder...")
-    esp.SetModl(cylModl, esp.GetEsp("python"))
-    esp.TimMesg("viewer", "update|")
-    esp.TimHold("python", "viewer")
+    esp.SetModl(cylModl, esp.GetEsp("pyscript"))
+    esp.TimMesg("viewer", "MODL")
 
     print("showing sphere...")
-    esp.SetModl(sphModl, esp.GetEsp("python"))
-    esp.TimMesg("viewer", "update|")
-    esp.TimHold("python", "viewer")
+    esp.SetModl(sphModl, esp.GetEsp("pyscript"))
+    esp.TimMesg("viewer", "MODL")
     
     print("showing cone...")
-    esp.SetModl(conModl, esp.GetEsp("python"))
-    esp.TimMesg("viewer", "update|")
-    esp.TimHold("python", "viewer")
+    esp.SetModl(conModl, esp.GetEsp("pyscript"))
+    esp.TimMesg("viewer", "MODL")
 
 esp.TimQuit("viewer")
 
-esp.SetModl(cylModl, esp.GetEsp("python"))
+esp.SetModl(cylModl, esp.GetEsp("pyscript"))
 print("cylinder should be active MODL in ESP")
 
-# boxModl and sphModl should get cleaned up after python exits
+# boxModl and sphModl should get cleaned up after pyscript exits

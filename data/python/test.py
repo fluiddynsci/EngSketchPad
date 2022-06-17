@@ -1,7 +1,7 @@
 ###################################################################
 #                                                                 #
 # test.py --- start with: serveESP ../data/python/test.py         #
-#                 Tool->Python     ../data/python/test.py         #
+#                 Tool->Pyscript   ../data/python/test.py         #
 #              or:        python   ../data/python/test.py         #
 #                                                                 #
 #              Written by John Dannenhoffer @ Syracuse University #
@@ -41,7 +41,7 @@ print("    iminor :", iminor)
 print("\nmaking modl(../data/python/test.csm)")
 modl = ocsm.Ocsm("../data/python/test.csm")
 
-esp.SetModl(modl, esp.GetEsp("python"))
+esp.SetModl(modl, esp.GetEsp("pyscript"))
 
 print("\ncalling modl.RegMesgCB(pyMesgCB)")
 modl.RegMesgCB(pyMesgCB)
@@ -67,8 +67,8 @@ print("    npmtr  :", npmtr);    assert (npmtr == 48)
 print("    nbody  :", nbody);    assert (nbody == 1 )
 
 # view the MODL
-esp.TimLoad("viewer", esp.GetEsp("python"), "")
-esp.TimMesg("viewer", "update|")
+esp.TimLoad("viewer", esp.GetEsp("pyscript"), "")
+esp.TimMesg("viewer", "MODL")
 esp.TimQuit("viewer")
 
 # add a sleep so that .py script runs more slowly
@@ -104,4 +104,4 @@ print("    myVol  :", myVol);     assert (abs(myVol[0]-12) < 1e-12)
 #esp.ViewModl(modl)
 
 # return modl to ESP
-#esp.SetModl(modl, esp.GetEsp("python"))
+#esp.SetModl(modl, esp.GetEsp("pyscript"))

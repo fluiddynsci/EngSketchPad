@@ -23,6 +23,7 @@ UBOUND    aspect    10.00
 cfgpmtr   series            8412
 cfgpmtr   series2           0020
 cfgpmtr   sharpte           0
+cfgpmtr   aerosystem        1
 
 # Output Parameters:
 outpmtr  cmean
@@ -66,8 +67,10 @@ restore   HalfWing 0
 # Combine halfs into a whole
 join     0
 
-# Get body into a typical aero-system 
-rotatex 90 0 0
+# Get body into a typical aero-system
+ifthen aerosystem eq 1
+    rotatex 90 0 0
+endif
 
 # Store the wing 
 store     Wing 0 0
@@ -80,6 +83,13 @@ restore   Wing 0
     attribute _name $Wing1
     attribute AFLR4_Cmp_ID 1
     attribute AFLR4_Edge_Refinement_Weight 1
+
+# Set reference values on the wing
+    attribute capsReferenceArea     area
+    attribute capsReferenceChord    cmean
+    attribute capsReferenceSpan     span
+    attribute capsReferenceX        0.0
+    attribute capsMeshLength        cmean
 
 # Wing 2 -  Restore and scale, translate
 restore   Wing 0
@@ -101,11 +111,5 @@ sphere    0   0   0   80
     attribute _name       $Farfield
     attribute AFLR_GBC $FARFIELD_UG3_GBC
     attribute AFLR4_Cmp_ID 3
-
-# Set reference values on the farfield
-    attribute capsReferenceArea     area
-    attribute capsReferenceChord    cmean
-    attribute capsReferenceSpan     span
-    attribute capsMeshLength        cmean
 
 end

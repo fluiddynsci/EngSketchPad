@@ -92,12 +92,26 @@ timLoad(esp_T *ESP,                     /* (in)  pointer to ESP structure */
 
     outLevel = ocsmSetOutLevel(-1);
 
-    /* create the plugs_T structure and initialize it */
-    MALLOC(ESP->udata, plugs_T, 1);
+    if (ESP == NULL) {
+        printf("ERROR:: cannot run timMitten without serveESP\n");
+        status = EGADS_SEQUERR;
+        goto cleanup;
+    }
+    
+    /* create the plugs_T structure */
+    if (ESP->nudata >= MAX_TIM_NESTING) {
+        printf("ERROR:: cannot nest more than %d TIMs\n", MAX_TIM_NESTING);
+        exit(0);
+    }
+    
+    ESP->nudata++;
+    MALLOC(ESP->udata[ESP->nudata-1], plugs_T, 1);
 
-    plugs = (plugs_T *) ESP->udata;
+    strcpy(ESP->timName[ESP->nudata-1], "plugs");
+    
+    plugs = (plugs_T *) (ESP->udata[ESP->nudata-1]);
 
-    /* initialize it */
+    /* initialize the structure */
     plugs->ncloud   = 0;
     plugs->nclass   = 0;
     plugs->cloud    = NULL;
@@ -189,7 +203,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     char    response[MAX_EXPR_LEN];
 
     modl_T  *MODL  =             ESP->MODL;
-    plugs_T *plugs = (plugs_T *)(ESP->udata);
+    plugs_T *plugs = (plugs_T *)(ESP->udata[ESP->nudata-1]);
 
     ROUTINE(timMesg(plugs));
 
@@ -269,12 +283,26 @@ timSave(esp_T *ESP)                     /* (in)  pointer to ESP structure */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
-    plugs_T *plugs = (plugs_T *)(ESP->udata);
+    int    i;
+    
+    plugs_T *plugs;
 
     ROUTINE(timSave(plugs));
 
     /* --------------------------------------------------------------- */
 
+    if (ESP->nudata <= 0) {
+        goto cleanup;
+    } else if (strcmp(ESP->timName[ESP->nudata-1], "plugs") != 0) {
+        printf("WARNING:: TIM on top of stack is not \"plugs\"\n");
+        for (i = 0; i < ESP->nudata; i++) {
+            printf("   timName[%d]=%s\n", i, ESP->timName[i]);
+        }
+        goto cleanup;
+    } else {
+        plugs = (plugs_T *)(ESP->udata[ESP->nudata-1]);
+    }
+    
     if (plugs == NULL) {
         goto cleanup;
     }
@@ -288,7 +316,9 @@ timSave(esp_T *ESP)                     /* (in)  pointer to ESP structure */
     FREE(plugs->pmtrindx);
     FREE(plugs->pmtrorig);
 
-    FREE(ESP->udata);
+    FREE(ESP->udata[ESP->nudata-1]);
+    ESP->timName[   ESP->nudata-1][0] = '\0';
+    ESP->nudata--;
 
     tim_bcst("plugs", "timSave|plugs|");
 
@@ -309,13 +339,25 @@ timQuit(esp_T *ESP,                     /* (in)  pointer to ESP structure */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
-    int     ipmtr;
-    plugs_T *plugs = (plugs_T *)(ESP->udata);
+    int     i, ipmtr;
+    plugs_T *plugs;
 
     ROUTINE(timQuit(plugs));
 
     /* --------------------------------------------------------------- */
 
+    if (ESP->nudata <= 0) {
+        goto cleanup;
+    } else if (strcmp(ESP->timName[ESP->nudata-1], "plugs") != 0) {
+        printf("WARNING:: TIM on top of stack is not \"plugs\"\n");
+        for (i = 0; i < ESP->nudata; i++) {
+            printf("   timName[%d]=%s\n", i, ESP->timName[i]);
+        }
+        goto cleanup;
+    } else {
+        plugs = (plugs_T *)(ESP->udata[ESP->nudata-1]);
+    }
+    
     if (plugs == NULL) {
         goto cleanup;
     }
@@ -337,7 +379,9 @@ timQuit(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     FREE(plugs->pmtrindx);
     FREE(plugs->pmtrorig);
 
-    FREE(ESP->udata);
+    FREE(ESP->udata[ESP->nudata-1]);
+    ESP->timName[   ESP->nudata-1][0] = '\0';
+    ESP->nudata--;
 
     tim_bcst("plugs", "timQuit|plugs|");
 
@@ -2069,7 +2113,7 @@ plotPointCloud(esp_T *ESP)              /* (in)  pointer to ESP structure */
     wvData items[20];
 
     wvContext *cntxt =             ESP->cntxt;
-    plugs_T   *plugs = (plugs_T *)(ESP->udata);
+    plugs_T   *plugs = (plugs_T *)(ESP->udata[ESP->nudata-1]);
 
     ROUTINE(plotPointCloud);
 

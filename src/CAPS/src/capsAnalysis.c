@@ -57,18 +57,18 @@ extern int   caps_statFile(const char *path);
 extern int   caps_mkDir(const char *path);
 extern int   caps_rmDir(const char *path);
 extern int   caps_rename(const char *src, const char *dst);
+extern int   caps_rmCLink(const char *path);
 extern int   caps_isNameOK(const char *name);
-extern int   caps_writeProblem(const capsObject *pobject);
 extern int   caps_dumpAnalysis(capsProblem *problem, capsObject *aobject);
 extern int   caps_writeBound(const capsObject *bobject);
 extern int   caps_writeVertexSet(capsObject *vobject);
 extern int   caps_writeDataSet(capsObject *dobject);
-extern int   caps_writeValueObj(capsProblem *problem, capsObject *valobj);
-extern void  caps_jrnlWrite(capsProblem *problem, capsObject *obj, int status,
-                            int nargs, capsJrnl *args, CAPSLONG sNum0,
+extern void  caps_jrnlWrite(int funID, capsProblem *problem, capsObject *obj,
+                            int status, int nargs, capsJrnl *args, CAPSLONG sNm0,
                             CAPSLONG sNum);
-extern int   caps_jrnlRead(capsProblem *problem, capsObject *obj, int nargs,
-                           capsJrnl *args, CAPSLONG *sNum, int *status);
+extern int   caps_jrnlEnd(capsProblem *problem);
+extern int   caps_jrnlRead(int funID, capsProblem *problem, capsObject *obj,
+                           int nargs, capsJrnl *args, CAPSLONG *sNum, int *stat);
 
 extern int   caps_dupValues(capsValue *val1, capsValue *val2);
 extern int   caps_transferValueX(capsObject *source, enum capstMethod method,
@@ -86,6 +86,7 @@ extern int   caps_checkValueObj(capsObject *object);
 extern int   caps_getDataX(capsObject *dobject, int *npts, int *rank,
                            double **data, char **units, int *nErr,
                            capsErrs **errors);
+       int caps_updateState(capsObject *aobject, int *nErr, capsErrs **errors);
 
 
 
@@ -267,10 +268,9 @@ caps_AIMbackdoor(capsObject *aobject, const char *JSONin, char **JSONout)
   analysis = (capsAnalysis *) aobject->blind;
   problem  = (capsProblem *)  pobject->blind;
 
-  problem->funID = CAPS_AIMBACKDOOR;
   args[0].type   = jString;
   if (problem->dbFlag == 0) {
-    stat           = caps_jrnlRead(problem, aobject, 1, args, &sNum, &ret);
+    stat           = caps_jrnlRead(CAPS_AIMBACKDOOR, problem, aobject, 1, args, &sNum, &ret);
     if (stat == CAPS_JOURNALERR) return stat;
     if (stat == CAPS_JOURNAL) {
       *JSONout = EG_strdup(args[0].members.string);
@@ -282,7 +282,8 @@ caps_AIMbackdoor(capsObject *aobject, const char *JSONin, char **JSONout)
                      &analysis->info, JSONin, JSONout);
   if (problem->dbFlag == 1) return ret;
   args[0].members.string = *JSONout;
-  caps_jrnlWrite(problem, aobject, ret, 1, args, problem->sNum, problem->sNum);
+  caps_jrnlWrite(CAPS_AIMBACKDOOR, problem, aobject, ret, 1, args,
+                 problem->sNum, problem->sNum);
 
   return ret;
 }
@@ -312,9 +313,9 @@ caps_system(capsObject *aobject, /*@null@*/ const char *rpath,
   problem  = (capsProblem *)  pobject->blind;
   if (problem->dbFlag      == 1)         return CAPS_READONLYERR;
 
-  problem->funID = CAPS_SYSTEM;
-  args[0].type   = jString;
-  stat           = caps_jrnlRead(problem, aobject, 0, args, &sNum, &ret);
+  args[0].type = jString;
+  stat         = caps_jrnlRead(CAPS_SYSTEM, problem, aobject, 0, args,
+                               &sNum, &ret);
   if (stat == CAPS_JOURNALERR) return stat;
   if (stat == CAPS_JOURNAL)    return ret;
 
@@ -322,20 +323,21 @@ caps_system(capsObject *aobject, /*@null@*/ const char *rpath,
   args[0].members.string = NULL;
   if (analysis->pre.sNum < aobject->last.sNum) {
     ret = CAPS_CLEAN;
-    caps_jrnlWrite(problem, aobject, ret, 0, args, sNum, problem->sNum);
+    caps_jrnlWrite(CAPS_SYSTEM, problem, aobject, ret, 0, args, sNum,
+                   problem->sNum);
     return ret;
   }
   len = 9 + strlen(problem->root) + 1 + strlen(analysis->path) +
-        4 + strlen(command) + 1;
+        4 + strlen(command) + 3;
   if (rpath == NULL) {
     fullcommand = EG_alloc(len*sizeof(char));
     if (fullcommand == NULL) return EGADS_MALLOC;
 #ifdef WIN32
-    status = snprintf(fullcommand, len, "%c: && cd %s\\%s && %s",
+    status = snprintf(fullcommand, len, "%c: && cd \"%s\\%s\" && %s",
                       problem->root[0], &problem->root[2], analysis->path,
                       command);
 #else
-    status = snprintf(fullcommand, len, "cd %s/%s && %s",
+    status = snprintf(fullcommand, len, "cd '%s/%s' && %s",
                       problem->root, analysis->path, command);
 #endif
   } else {
@@ -343,11 +345,11 @@ caps_system(capsObject *aobject, /*@null@*/ const char *rpath,
     fullcommand = EG_alloc(len*sizeof(char));
     if (fullcommand == NULL) return EGADS_MALLOC;
 #ifdef WIN32
-    status = snprintf(fullcommand, len, "%c: && cd %s\\%s\\%s && %s",
+    status = snprintf(fullcommand, len, "%c: && cd \"%s\\%s\\%s\" && %s",
                       problem->root[0], &problem->root[2], analysis->path,
                       rpath, command);
 #else
-    status = snprintf(fullcommand, len, "cd %s/%s/%s && %s",
+    status = snprintf(fullcommand, len, "cd '%s/%s/%s' && %s",
                       problem->root, analysis->path, rpath, command);
 #endif
   }
@@ -364,7 +366,8 @@ caps_system(capsObject *aobject, /*@null@*/ const char *rpath,
     problem->sNum += 1;
   }
   EG_free(fullcommand);
-  caps_jrnlWrite(problem, aobject, ret, 0, args, sNum, problem->sNum);
+  caps_jrnlWrite(CAPS_SYSTEM, problem, aobject, ret, 0, args, sNum,
+                 problem->sNum);
 
   return ret;
 }
@@ -377,7 +380,7 @@ caps_makeAnalysiX(capsObject *pobject, const char *aname,
                   capsObject **aobject, int *nErr, capsErrs **errors)
 {
   int          i, j, status, nIn, nOut, *ranks, *fInOut, eFlag, nField = 0;
-  int          major, minor, index, len = 0;
+  int          major, minor, len = 0;
   char         dirName[PATH_MAX], filename[PATH_MAX], temp[PATH_MAX];
   char         **fields = NULL, *apath = NULL;
   void         *instStore;
@@ -396,26 +399,33 @@ caps_makeAnalysiX(capsObject *pobject, const char *aname,
     if (status != CAPS_SUCCESS) return status;
     apath = EG_strdup(name);
     if (apath == NULL) return EGADS_MALLOC;
-  } else {
-    index = aim_Index(problem->aimFPTR, aname);
-    if (index < 0) {
-      j = 0;
-    } else {
-      j = problem->aimFPTR.aim_nInst[index];
+    for (i = 0; i < problem->nAnalysis; i++) {
+      if (problem->analysis[i]       == NULL) continue;
+      if (problem->analysis[i]->name == NULL) continue;
+      if (strcmp(apath, problem->analysis[i]->name) == 0) {
+        status = CAPS_BADNAME;
+        goto cleanup;
+      }
     }
-    len   = strlen(aname) + 8;
+  } else {
+    len   = strlen(aname) + 5;
     apath = (char *) EG_alloc(len*sizeof(char));
     if (apath == NULL) return EGADS_MALLOC;
-    snprintf(apath, len, "%s%d", aname, j);
-  }
-  for (i = 0; i < problem->nAnalysis; i++) {
-    if (problem->analysis[i]       == NULL) continue;
-    if (problem->analysis[i]->name == NULL) continue;
-    if (strcmp(apath, problem->analysis[i]->name) == 0) {
+    for (j = 0; j < 1000; j++) {
+      snprintf(apath, len, "%s%d", aname, j);
+      for (i = 0; i < problem->nAnalysis; i++) {
+        if (problem->analysis[i]       == NULL) continue;
+        if (problem->analysis[i]->name == NULL) continue;
+        if (strcmp(apath, problem->analysis[i]->name) == 0) break;
+      }
+      if (i == problem->nAnalysis) break;
+    }
+    if (j == 1000) {
       status = CAPS_BADNAME;
       goto cleanup;
     }
   }
+
 #ifdef WIN32
   snprintf(dirName, PATH_MAX, "%s\\%s", problem->root, apath);
 #else
@@ -438,39 +448,40 @@ caps_makeAnalysiX(capsObject *pobject, const char *aname,
     goto cleanup;
   }
 
-  analysis->loadName         = EG_strdup(aname);
-  analysis->fullPath         = EG_strdup(dirName);
-  analysis->path             = apath;
-  analysis->unitSys          = EG_strdup(unitSys);
-  analysis->major            = CAPSMAJOR;
-  analysis->minor            = CAPSMINOR;
-  analysis->instStore        = NULL;
-  analysis->autoexec         = 0;
-  analysis->eFlag            = 0;
-  analysis->intents          = EG_strdup(intents);
-  analysis->nField           = 0;
-  analysis->fields           = NULL;
-  analysis->ranks            = NULL;
-  analysis->fInOut           = NULL;
-  analysis->nAnalysisIn      = 0;
-  analysis->analysisIn       = NULL;
-  analysis->nAnalysisOut     = 0;
-  analysis->analysisOut      = NULL;
-  analysis->nAnalysisDynO    = 0;
-  analysis->analysisDynO     = NULL;
-  analysis->nBody            = 0;
-  analysis->bodies           = NULL;
-  analysis->nTess            = 0;
-  analysis->tess             = NULL;
-  analysis->pre.nLines       = 0;
-  analysis->pre.lines        = NULL;
-  analysis->pre.pname        = NULL;
-  analysis->pre.pID          = NULL;
-  analysis->pre.user         = NULL;
-  analysis->pre.sNum         = 0;
+  analysis->loadName      = EG_strdup(aname);
+  analysis->fullPath      = EG_strdup(dirName);
+  analysis->path          = apath;
+  analysis->unitSys       = EG_strdup(unitSys);
+  analysis->major         = CAPSMAJOR;
+  analysis->minor         = CAPSMINOR;
+  analysis->instStore     = NULL;
+  analysis->autoexec      = 0;
+  analysis->eFlag         = 0;
+  analysis->reload        = 0;
+  analysis->intents       = EG_strdup(intents);
+  analysis->nField        = 0;
+  analysis->fields        = NULL;
+  analysis->ranks         = NULL;
+  analysis->fInOut        = NULL;
+  analysis->nAnalysisIn   = 0;
+  analysis->analysisIn    = NULL;
+  analysis->nAnalysisOut  = 0;
+  analysis->analysisOut   = NULL;
+  analysis->nAnalysisDynO = 0;
+  analysis->analysisDynO  = NULL;
+  analysis->nBody         = 0;
+  analysis->bodies        = NULL;
+  analysis->nTess         = 0;
+  analysis->tess          = NULL;
+  analysis->uSsN          = 0;
+  analysis->pre.index     = -1;
+  analysis->pre.pname     = NULL;
+  analysis->pre.pID       = NULL;
+  analysis->pre.user      = NULL;
+  analysis->pre.sNum      = 0;
   analysis->info.magicnumber         = CAPSMAGIC;
   analysis->info.instance            = -1;
-  analysis->info.inPost              = 0;
+  analysis->info.funID               = 0;
   analysis->info.problem             = problem;
   analysis->info.analysis            = analysis;
   analysis->info.pIndex              = 0;
@@ -523,7 +534,10 @@ caps_makeAnalysiX(capsObject *pobject, const char *aname,
   /* allocate the objects for input */
   if (nIn != 0) {
     analysis->analysisIn = (capsObject **) EG_alloc(nIn*sizeof(capsObject *));
-    if (analysis->analysisIn == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (analysis->analysisIn == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
     for (i = 0; i < nIn; i++) analysis->analysisIn[i] = NULL;
     value = (capsValue *) EG_alloc(nIn*sizeof(capsValue));
     if (value == NULL) {
@@ -532,6 +546,11 @@ caps_makeAnalysiX(capsObject *pobject, const char *aname,
       goto cleanup;
     }
     problem->sNum += 1;
+    status = caps_writeSerialNum(problem);
+    if (status != CAPS_SUCCESS)
+      printf(" CAPS Warning: caps_writeSerialNum = %d (caps_makeAnalysis)\n",
+             status);
+  
     for (i = 0; i < nIn; i++) {
       value[i].length          = value[i].nrow = value[i].ncol = 1;
       value[i].type            = Integer;
@@ -582,17 +601,27 @@ caps_makeAnalysiX(capsObject *pobject, const char *aname,
         if (*errors != NULL) *nErr = (*errors)->nError;
         goto cleanup;
       }
+      status = caps_addHistory(analysis->analysisIn[i], problem);
+      if (status != CAPS_SUCCESS)
+        printf(" CAPS Warning: caps_addHistory %d = %d (caps_makeAnalysis)\n",
+               i+1, status);
     }
   }
 
   /* allocate the objects for output */
   if (nOut != 0) {
     analysis->analysisOut = (capsObject **) EG_alloc(nOut*sizeof(capsObject *));
-    if (analysis->analysisOut == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (analysis->analysisOut == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
     for (i = 0; i < nOut; i++) analysis->analysisOut[i] = NULL;
 
     value = (capsValue *) EG_alloc(nOut*sizeof(capsValue));
-    if (value == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (value == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
 
     problem->sNum += 1;
     for (i = 0; i < nOut; i++) {
@@ -651,11 +680,17 @@ caps_makeAnalysiX(capsObject *pobject, const char *aname,
   /* get a place in the problem to store the data away */
   if (problem->analysis == NULL) {
     problem->analysis = (capsObject **) EG_alloc(sizeof(capsObject *));
-    if (problem->analysis == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (problem->analysis == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
   } else {
     tmp = (capsObject **) EG_reall( problem->analysis,
                                    (problem->nAnalysis+1)*sizeof(capsObject *));
-    if (tmp == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (tmp == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
     problem->analysis = tmp;
   }
 
@@ -676,7 +711,10 @@ caps_makeAnalysiX(capsObject *pobject, const char *aname,
   /* leave sNum 0 to flag we are unexecuted */
   object->parent = pobject;
   object->name   = EG_strdup(analysis->path);
-  if (object->name == NULL) { status = EGADS_MALLOC; goto cleanup; }
+  if (object->name == NULL) {
+    status = EGADS_MALLOC;
+    goto cleanup;
+  }
   object->type   = ANALYSIS;
   object->blind  = analysis;
 /*@-nullderef@*/
@@ -687,6 +725,11 @@ caps_makeAnalysiX(capsObject *pobject, const char *aname,
 /*@+nullderef@*/
   *aobject = object;
   analysis = NULL;
+  
+  status = caps_addHistory(object, problem);
+  if (status != CAPS_SUCCESS)
+    printf(" CAPS Warning: caps_addHistory = %d (caps_makeAnalysis)\n",
+           status);
 
   problem->analysis[problem->nAnalysis] = object;
   problem->nAnalysis += 1;
@@ -780,12 +823,12 @@ caps_makeAnalysis(capsObject *pobject, const char *aname,
   problem = (capsProblem *) pobject->blind;
   if (problem->dbFlag      == 1)         return CAPS_READONLYERR;
 
-  problem->funID = CAPS_MAKEANALYSIS;
-  args[0].type   = jObject;
-  args[1].type   = jInteger;
-  args[2].type   = jInteger;
-  args[3].type   = jErr;
-  stat           = caps_jrnlRead(problem, *aobject, 4, args, &sNum, &ret);
+  args[0].type = jObject;
+  args[1].type = jInteger;
+  args[2].type = jInteger;
+  args[3].type = jErr;
+  stat         = caps_jrnlRead(CAPS_MAKEANALYSIS, problem, *aobject, 4, args,
+                               &sNum, &ret);
   if (stat == CAPS_JOURNALERR) return stat;
   if (stat == CAPS_JOURNAL) {
     *aobject = args[0].members.obj;
@@ -802,7 +845,8 @@ caps_makeAnalysis(capsObject *pobject, const char *aname,
   args[1].members.integer = *exec;
   args[2].members.integer = *nErr;
   args[3].members.errs    = *errors;
-  caps_jrnlWrite(problem, *aobject, ret, 4, args, sNum, problem->sNum);
+  caps_jrnlWrite(CAPS_MAKEANALYSIS, problem, *aobject, ret, 4, args, sNum,
+                 problem->sNum);
 
   return ret;
 }
@@ -863,40 +907,44 @@ caps_dupAnalysiX(capsObject *from, const char *name, capsObject **aobject)
 
   /* initialize the analysis structure */
   analysis = (capsAnalysis *) EG_alloc(sizeof(capsAnalysis));
-  if (analysis == NULL) { status = EGADS_MALLOC; goto cleanup; }
+  if (analysis == NULL) {
+    status = EGADS_MALLOC;
+    goto cleanup;
+  }
 
-  analysis->loadName         = EG_strdup(froma->loadName);
-  analysis->fullPath         = EG_strdup(dirName);
-  analysis->path             = apath;
-  analysis->unitSys          = EG_strdup(froma->unitSys);
-  analysis->major            = CAPSMAJOR;
-  analysis->minor            = CAPSMINOR;
-  analysis->instStore        = NULL;
-  analysis->autoexec         = froma->autoexec;
-  analysis->eFlag            = froma->eFlag;
-  analysis->intents          = EG_strdup(froma->intents);
-  analysis->nField           = 0;
-  analysis->fields           = NULL;
-  analysis->ranks            = NULL;
-  analysis->fInOut           = NULL;
-  analysis->nAnalysisIn      = 0;
-  analysis->analysisIn       = NULL;
-  analysis->nAnalysisOut     = 0;
-  analysis->analysisOut      = NULL;
-  analysis->nAnalysisDynO    = 0;
-  analysis->analysisDynO     = NULL;
-  analysis->nBody            = 0;
-  analysis->bodies           = NULL;
-  analysis->nTess            = 0;
-  analysis->tess             = NULL;
-  analysis->pre.nLines       = 0;
-  analysis->pre.lines        = NULL;
-  analysis->pre.pname        = NULL;
-  analysis->pre.pID          = NULL;
-  analysis->pre.user         = NULL;
-  analysis->pre.sNum         = 0;
+  analysis->loadName      = EG_strdup(froma->loadName);
+  analysis->fullPath      = EG_strdup(dirName);
+  analysis->path          = apath;
+  analysis->unitSys       = EG_strdup(froma->unitSys);
+  analysis->major         = CAPSMAJOR;
+  analysis->minor         = CAPSMINOR;
+  analysis->instStore     = NULL;
+  analysis->autoexec      = froma->autoexec;
+  analysis->eFlag         = froma->eFlag;
+  analysis->reload        = 0;
+  analysis->intents       = EG_strdup(froma->intents);
+  analysis->nField        = 0;
+  analysis->fields        = NULL;
+  analysis->ranks         = NULL;
+  analysis->fInOut        = NULL;
+  analysis->nAnalysisIn   = 0;
+  analysis->analysisIn    = NULL;
+  analysis->nAnalysisOut  = 0;
+  analysis->analysisOut   = NULL;
+  analysis->nAnalysisDynO = 0;
+  analysis->analysisDynO  = NULL;
+  analysis->nBody         = 0;
+  analysis->bodies        = NULL;
+  analysis->nTess         = 0;
+  analysis->tess          = NULL;
+  analysis->uSsN          = 0;
+  analysis->pre.index     = -1;
+  analysis->pre.pname     = NULL;
+  analysis->pre.pID       = NULL;
+  analysis->pre.user      = NULL;
+  analysis->pre.sNum      = 0;
   analysis->info.magicnumber         = CAPSMAGIC;
-  analysis->info.inPost              = 0;
+  analysis->info.funID               = 0;
   analysis->info.problem             = problem;
   analysis->info.analysis            = analysis;
   analysis->info.pIndex              = 0;
@@ -949,7 +997,10 @@ caps_dupAnalysiX(capsObject *from, const char *name, capsObject **aobject)
   /* allocate the objects for input */
   if (nIn != 0) {
     analysis->analysisIn = (capsObject **) EG_alloc(nIn*sizeof(capsObject *));
-    if (analysis->analysisIn == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (analysis->analysisIn == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
 
     for (i = 0; i < nIn; i++) analysis->analysisIn[i] = NULL;
     value = (capsValue *) EG_alloc(nIn*sizeof(capsValue));
@@ -984,7 +1035,10 @@ caps_dupAnalysiX(capsObject *from, const char *name, capsObject **aobject)
       if (i == 0) object->blind = value;
       object->parent    = NULL;
       object->name      = EG_strdup(froma->analysisIn[i]->name);
-      if (object->name == NULL) { status = EGADS_MALLOC; goto cleanup; }
+      if (object->name == NULL) {
+        status = EGADS_MALLOC;
+        goto cleanup;
+      }
       object->type      = VALUE;
       object->subtype   = ANALYSISIN;
       object->last.sNum = problem->sNum;
@@ -995,7 +1049,10 @@ caps_dupAnalysiX(capsObject *from, const char *name, capsObject **aobject)
     }
 
     src = (capsValue *) froma->analysisIn[0]->blind;
-    if ((nIn != 0) && (src == NULL)) { status = CAPS_NULLBLIND; goto cleanup; }
+    if ((nIn != 0) && (src == NULL)) {
+      status = CAPS_NULLBLIND;
+      goto cleanup;
+    }
     for (i = 0; i < nIn; i++) {
       status = caps_dupValues(&src[i], &value[i]);
       if (status != CAPS_SUCCESS) goto cleanup;
@@ -1005,11 +1062,17 @@ caps_dupAnalysiX(capsObject *from, const char *name, capsObject **aobject)
   /* allocate the objects for output */
   if (nOut != 0) {
     analysis->analysisOut = (capsObject **) EG_alloc(nOut*sizeof(capsObject *));
-    if (analysis->analysisOut == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (analysis->analysisOut == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
     for (i = 0; i < nOut; i++) analysis->analysisOut[i] = NULL;
 
     value = (capsValue *) EG_alloc(nOut*sizeof(capsValue));
-    if (value == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (value == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
 
     problem->sNum += 1;
     for (i = 0; i < nOut; i++) {
@@ -1038,7 +1101,10 @@ caps_dupAnalysiX(capsObject *from, const char *name, capsObject **aobject)
       if (i == 0) object->blind = value;
       object->parent    = NULL;
       object->name      = EG_strdup(froma->analysisOut[i]->name);
-      if (object->name == NULL) { status = EGADS_MALLOC; goto cleanup; }
+      if (object->name == NULL) {
+        status = EGADS_MALLOC;
+        goto cleanup;
+      }
       object->type      = VALUE;
       object->subtype   = ANALYSISOUT;
       object->last.sNum = problem->sNum;
@@ -1049,7 +1115,10 @@ caps_dupAnalysiX(capsObject *from, const char *name, capsObject **aobject)
     }
 
     src = (capsValue *) froma->analysisOut[0]->blind;
-    if ((nOut != 0) && (src == NULL)) { status = CAPS_NULLBLIND; goto cleanup; }
+    if ((nOut != 0) && (src == NULL)) {
+      status = CAPS_NULLBLIND;
+      goto cleanup;
+    }
     for (i = 0; i < nOut; i++) {
       status = caps_dupValues(&src[i], &value[i]);
       if (status != CAPS_SUCCESS) goto cleanup;
@@ -1059,11 +1128,17 @@ caps_dupAnalysiX(capsObject *from, const char *name, capsObject **aobject)
   /* get a place in the problem to store the data away */
   if (problem->analysis == NULL) {
     problem->analysis = (capsObject **) EG_alloc(sizeof(capsObject *));
-    if (problem->analysis == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (problem->analysis == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
   } else {
     tmp = (capsObject **) EG_reall( problem->analysis,
                                    (problem->nAnalysis+1)*sizeof(capsObject *));
-    if (tmp == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    if (tmp == NULL) {
+      status = EGADS_MALLOC;
+      goto cleanup;
+    }
     problem->analysis = tmp;
   }
 
@@ -1082,7 +1157,10 @@ caps_dupAnalysiX(capsObject *from, const char *name, capsObject **aobject)
   /* leave sNum 0 to flag we are unexecuted */
   object->parent = pobject;
   object->name   = EG_strdup(analysis->path);
-  if (object->name == NULL) { status = EGADS_MALLOC; goto cleanup; }
+  if (object->name == NULL) {
+    status = EGADS_MALLOC;
+    goto cleanup;
+  }
   object->type   = ANALYSIS;
   object->blind  = analysis;
 /*@-nullderef@*/
@@ -1184,9 +1262,9 @@ caps_dupAnalysis(capsObject *from, const char *name, capsObject **aobject)
   problem = (capsProblem *) pobject->blind;
   if (problem->dbFlag      == 1)      return CAPS_READONLYERR;
 
-  problem->funID = CAPS_DUPANALYSIS;
-  args[0].type   = jObject;
-  stat           = caps_jrnlRead(problem, *aobject, 1, args, &sNum, &ret);
+  args[0].type = jObject;
+  stat         = caps_jrnlRead(CAPS_DUPANALYSIS, problem, *aobject, 1, args,
+                              &sNum, &ret);
   if (stat == CAPS_JOURNALERR) return stat;
   if (stat == CAPS_JOURNAL) {
     *aobject = args[0].members.obj;
@@ -1196,56 +1274,10 @@ caps_dupAnalysis(capsObject *from, const char *name, capsObject **aobject)
   sNum = problem->sNum;
   ret  = caps_dupAnalysiX(from, name, aobject);
   args[0].members.obj = *aobject;
-  caps_jrnlWrite(problem, *aobject, ret, 1, args, sNum, problem->sNum);
+  caps_jrnlWrite(CAPS_DUPANALYSIS, problem, *aobject, ret, 1, args, sNum,
+                 problem->sNum);
 
   return ret;
-}
-
-
-int
-caps_resetAnalysis(capsObject *aobject, int *nErr, capsErrs **errors)
-{
-  int          status;
-  capsObject   *pobject;
-  capsProblem  *problem;
-  capsAnalysis *analysis;
-
-  if (nErr                 == NULL)       return CAPS_NULLVALUE;
-  if (errors               == NULL)       return CAPS_NULLVALUE;
-  *nErr   = 0;
-  *errors = NULL;
-  if (aobject              == NULL)       return CAPS_NULLOBJ;
-  if (aobject->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
-  if (aobject->type        != ANALYSIS)   return CAPS_BADTYPE;
-  if (aobject->blind       == NULL)       return CAPS_NULLBLIND;
-  analysis = (capsAnalysis *) aobject->blind;
-  status   = caps_findProblem(aobject, CAPS_RESETANALYSIS, &pobject);
-  if (status != CAPS_SUCCESS) return status;
-  problem  = (capsProblem *) pobject->blind;
-  if (problem->dbFlag      == 1)          return CAPS_READONLYERR;
-
-  /* ignore if restarting */
-  if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;
-  if (problem->stFlag == 4)               return CAPS_SUCCESS;
-
-  status = caps_rmDir(analysis->fullPath);
-  if (status != EGADS_SUCCESS) {
-    caps_makeSimpleErr(pobject, CERROR,
-                       "Cannot remove directory (caps_resetAnalysis):",
-                       analysis->fullPath, NULL, errors);
-    if (*errors != NULL) *nErr = (*errors)->nError;
-    return status;
-  }
-  status = caps_mkDir(analysis->fullPath);
-  if (status != EGADS_SUCCESS) {
-    caps_makeSimpleErr(pobject, CERROR,
-                       "Cannot make directory (caps_resetAnalysis):",
-                       analysis->fullPath, NULL, errors);
-    if (*errors != NULL) *nErr = (*errors)->nError;
-    return status;
-  }
-
-  return CAPS_SUCCESS;
 }
 
 
@@ -1255,6 +1287,9 @@ caps_analysisInfX(capsObject *aobject, char **apath, char **unitSys, int *major,
                   int **ranks, int **fInOut, int *execute, int *status)
 {
   int          i, stat, ret, gstatus;
+  int          majorX, minorX, nFieldX, execX, dirtyX;
+  int          *ranksX, *fInOutX;
+  char         *intentsX, *apathX, *unitSysX, **fnamesX;
   CAPSLONG     sn;
   capsAnalysis *analysis;
   capsObject   *pobject, *source, *object, *last;
@@ -1355,6 +1390,18 @@ caps_analysisInfX(capsObject *aobject, char **apath, char **unitSys, int *major,
         *status = 1;
         break;
       }
+      /* if the value is linked, check the state of the linked parent */
+      if ((last != object) && (last->parent != NULL) &&
+          (last->parent->type == ANALYSIS)) {
+        stat = caps_analysisInfX(last->parent, &apathX, &unitSysX, &majorX,
+                                 &minorX, &intentsX, &nFieldX, &fnamesX,
+                                 &ranksX, &fInOutX, &execX, &dirtyX);
+        if (stat != CAPS_SUCCESS) return stat;
+        if (dirtyX > 0) {
+          *status = 1;
+          break;
+        }
+      }
     }
     if (*status == 0) {
       stat = caps_snDataSets(aobject, 0, &sn);
@@ -1422,10 +1469,10 @@ caps_analysisInfo(capsObject *aobject, char **apath, char **unitSys, int *major,
   *fInOut  = analysis->fInOut;
   if ((analysis->autoexec == 1) && (analysis->eFlag == 1)) *execute = 2;
 
-  problem->funID = CAPS_ANALYSISINFO;
-  args[0].type   = jInteger;
+  args[0].type = jInteger;
   if (problem->dbFlag == 0) {
-    stat           = caps_jrnlRead(problem, aobject, 1, args, &sNum, &ret);
+    stat = caps_jrnlRead(CAPS_ANALYSISINFO, problem, aobject, 1, args, &sNum,
+                         &ret);
     if (stat == CAPS_JOURNALERR) return stat;
     if (stat == CAPS_JOURNAL) {
       *status = args[0].members.integer;
@@ -1438,14 +1485,15 @@ caps_analysisInfo(capsObject *aobject, char **apath, char **unitSys, int *major,
                            nField, fnames, ranks, fInOut, execute, status);
   if (problem->dbFlag == 1) return ret;
   args[0].members.integer = *status;
-  caps_jrnlWrite(problem, aobject, ret, 1, args, sNum, problem->sNum);
+  caps_jrnlWrite(CAPS_ANALYSISINFO, problem, aobject, ret, 1, args, sNum,
+                 problem->sNum);
 
   return ret;
 }
 
 
 int
-caps_circularAutoExecs(capsObject *asrc, capsObject *aobject)
+caps_circularAutoExecs(capsObject *asrc, /*@null@*/ capsObject *aobject)
 {
   int           i, j, k, stat;
   int           found;
@@ -1497,7 +1545,7 @@ caps_circularAutoExecs(capsObject *asrc, capsObject *aobject)
   if (asrc == aobject) return CAPS_CIRCULARLINK;
 
   /* we can auto execute, do we have any links?
-   * first check for AnaluysisIn links, then FieldIn links
+   * first check for AnalysisIn links, then FieldIn links
    */
 
   /* check AnalysisIn links */
@@ -2230,35 +2278,11 @@ caps_fillBuiltIn(capsObject *bobject, capsDiscr *discr, capsObject *dobject,
 
   dataset->data = values;
   dataset->npts = npts;
-/*
-  if (dobject->last.sNum != 0) {
-    if (dataset->history == NULL) {
-      dataset->nHist   = 0;
-      dataset->history = (capsOwn *) EG_alloc(sizeof(capsOwn));
-      if (dataset->history == NULL) OK = 0;
-    } else {
-      tmp = (capsOwn *) EG_reall( dataset->history,
-                                 (dataset->nHist+1)*sizeof(capsOwn));
-      if (tmp == NULL) {
-        OK = 0;
-      } else {
-        dataset->history = tmp;
-      }
-    }
-    if ((OK == 1) && (dataset->history != NULL)) {
-      dataset->history[dataset->nHist]        = dobject->last;
-      dataset->history[dataset->nHist].nLines = 0;
-      dataset->history[dataset->nHist].lines  = NULL;
-      dataset->history[dataset->nHist].pname  = EG_strdup(dobject->last.pname);
-      dataset->history[dataset->nHist].pID    = EG_strdup(dobject->last.pID);
-      dataset->history[dataset->nHist].user   = EG_strdup(dobject->last.user);
-      dataset->nHist += 1;
-    }
-  }
-*/
   caps_freeOwner(&dobject->last);
   dobject->last.sNum = sNum;
-  caps_fillDateTime(dobject->last.datetime);
+  stat = caps_addHistory(dobject, problem);
+  if (stat != CAPS_SUCCESS)
+    printf(" CAPS Warning: caps_addHistory = %d (caps_fillBuiltIn)\n", stat);
   stat = caps_writeDataSet(dobject);
   if (stat != CAPS_SUCCESS)
     printf(" CAPS Warning: caps_writeDataSet = %d (caps_fillBuiltIn)\n", stat);
@@ -3263,8 +3287,8 @@ caps_geomOutSensit(capsProblem *problem, int ipmtr, int irow, int icol)
     value = (capsValue *) problem->geomIn[problem->regGIN[i].index-1]->blind;
     if (value                   == NULL)  continue;
     if (value->pIndex           != ipmtr) continue;
-    if (problem->regGIN[i].irow != irow && problem->regGIN[i].irow > 0)  continue;
-    if (problem->regGIN[i].icol != icol && problem->regGIN[i].icol > 0)  continue;
+    if (problem->regGIN[i].irow != irow && problem->regGIN[i].irow > 0) continue;
+    if (problem->regGIN[i].icol != icol && problem->regGIN[i].icol > 0) continue;
 
     if ((problem->regGIN[i].irow == 0) &&
         (problem->regGIN[i].icol == 0))
@@ -3275,12 +3299,13 @@ caps_geomOutSensit(capsProblem *problem, int ipmtr, int irow, int icol)
     for (j = 0; j < problem->nGeomOut; j++) {
       if (problem->geomOut[j] == NULL) continue;
       value = (capsValue *) problem->geomOut[j]->blind;
-      if (value                  == NULL) continue;
-      if (value->derivs          == NULL) continue;
-      
+      if (value               == NULL) continue;
+      if (value->derivs       == NULL) continue;
+
       len_wrt = value->derivs[i].len_wrt;
       if (value->derivs[i].deriv == NULL)
-        value->derivs[i].deriv = (double *) EG_alloc(value->length*len_wrt*sizeof(double));
+        value->derivs[i].deriv = (double *) EG_alloc(value->length*len_wrt*
+                                                     sizeof(double));
       if (value->derivs[i].deriv == NULL) continue;
 
       reals = value->vals.reals;
@@ -3330,12 +3355,10 @@ caps_transferLinks(capsAnalysis *analysis, int *nErr, capsErrs **errors)
         return status;
       }
       caps_freeOwner(&object->last);
-      object->last        = last->last;
-      object->last.nLines = 0;
-      object->last.lines  = NULL;
-      object->last.pname  = EG_strdup(last->last.pname);
-      object->last.pID    = EG_strdup(last->last.pID);
-      object->last.user   = EG_strdup(last->last.user);
+      object->last       = last->last;
+      object->last.pname = EG_strdup(last->last.pname);
+      object->last.pID   = EG_strdup(last->last.pID);
+      object->last.user  = EG_strdup(last->last.user);
     }
   }
 
@@ -3392,8 +3415,8 @@ caps_refillBound(capsProblem *problem, capsObject *bobject,
         anal = (capsAnalysis *) vertexset->analysis->blind;
         aim_FreeDiscr(problem->aimFPTR, anal->loadName, vertexset->discr);
 
-        /* fill in any values that have links */
-        status = caps_transferLinks(anal, nErr, errors);
+        /* update AIM's internal state */
+        status = caps_updateState(vertexset->analysis, nErr, errors);
         if (status != CAPS_SUCCESS) return status;
 
         status = aim_Discr(problem->aimFPTR, anal->loadName,
@@ -3428,7 +3451,10 @@ caps_refillBound(capsProblem *problem, capsObject *bobject,
         }
         caps_freeOwner(&bound->vertexSet[j]->last);
         bound->vertexSet[j]->last.sNum = problem->sNum;
-        caps_fillDateTime(bound->vertexSet[j]->last.datetime);
+        status = caps_addHistory(bound->vertexSet[j], problem);
+        if (status != CAPS_SUCCESS)
+          printf(" CAPS Warning: caps_addHistory = %d (caps_refillBound)\n",
+                 status);
         status = caps_writeVertexSet(bound->vertexSet[j]);
         if (status != CAPS_SUCCESS)
           printf(" CAPS Warning: caps_writeVertexSet = %d (caps_refillBound)\n",
@@ -3473,7 +3499,9 @@ caps_refillBound(capsProblem *problem, capsObject *bobject,
 
   caps_freeOwner(&bobject->last);
   bobject->last.sNum = problem->sNum;
-  caps_fillDateTime(bobject->last.datetime);
+  status = caps_addHistory(bobject, problem);
+  if (status != CAPS_SUCCESS)
+    printf(" CAPS Warning: caps_addHistory = %d (caps_refillBound)\n", status);
   status = caps_writeBound(bobject);
   if (status != CAPS_SUCCESS)
     printf(" CAPS Warning: caps_writeBound = %d (caps_refillBound)\n", status);
@@ -3560,7 +3588,8 @@ caps_refillBound(capsProblem *problem, capsObject *bobject,
       buildTo = 0;
       nbody   = 0;
       outLevel = ocsmSetOutLevel(0);
-      printf(" CAPS Info: Building sensitivity information for: %s[%d,%d]\n", problem->geomIn[i]->name, irow, icol);
+      printf(" CAPS Info: Building sensitivity information for: %s[%d,%d]\n",
+             problem->geomIn[i]->name, irow, icol);
       status  = ocsmBuild(problem->modl, buildTo, &builtTo, &nbody, NULL);
       ocsmSetOutLevel(outLevel);
       printf(" CAPS Info: parameter %d %d %d sensitivity status = %d\n",
@@ -3597,36 +3626,13 @@ caps_refillBound(capsProblem *problem, capsObject *bobject,
           if (dataset->data                       == NULL)        continue;
           caps_fillSensit(problem, discr, dataset);
           dataset->npts = discr->nPoints;
-/*
-          OK = 1;
-          if (dobject->last.sNum != 0) {
-            if (dataset->history == NULL) {
-              dataset->nHist   = 0;
-              dataset->history = (capsOwn *) EG_alloc(sizeof(capsOwn));
-              if (dataset->history == NULL) OK = 0;
-            } else {
-              tmp = (capsOwn *) EG_reall( dataset->history,
-                                         (dataset->nHist+1)*sizeof(capsOwn));
-              if (tmp == NULL) {
-                OK = 0;
-              } else {
-                dataset->history = tmp;
-              }
-            }
-            if ((OK == 1) && (dataset->history != NULL)) {
-              dataset->history[dataset->nHist]        = dobject->last;
-              dataset->history[dataset->nHist].nLines = 0;
-              dataset->history[dataset->nHist].lines  = NULL;
-              dataset->history[dataset->nHist].pname  = EG_strdup(dobject->last.pname);
-              dataset->history[dataset->nHist].pID    = EG_strdup(dobject->last.pID);
-              dataset->history[dataset->nHist].user   = EG_strdup(dobject->last.user);
-              dataset->nHist += 1;
-            }
-          }
-*/
           caps_freeOwner(&dobject->last);
           vertexset->dataSets[k]->last.sNum = problem->sNum;
-          caps_fillDateTime(dobject->last.datetime);
+          status = caps_addHistory(dobject, problem);
+          if (status != CAPS_SUCCESS)
+            printf(" CAPS Warning: caps_addHistory = %d (caps_refillBound)\n",
+                   status);
+
           status = caps_writeDataSet(dobject);
           if (status != CAPS_SUCCESS)
             printf(" CAPS Warning: caps_writeDataSet = %d (caps_refillBound)\n",
@@ -3635,7 +3641,8 @@ caps_refillBound(capsProblem *problem, capsObject *bobject,
 
         MODL = (modl_T *) problem->modl;
         if (MODL->dtime != 0)
-          printf(" CAPS Info: Sensitivity finite difference used for: %s[%d,%d]\n", problem->geomIn[i]->name, irow, icol);
+          printf(" CAPS Info: Sensitivity finite difference used for: %s[%d,%d]\n",
+                 problem->geomIn[i]->name, irow, icol);
       }
     }
     EG_free(names);
@@ -3771,7 +3778,8 @@ caps_getBodies(capsObject *aobject, int *nBody, ego **bodies,
   args[1].type   = jInteger;
   args[2].type   = jErr;
   if (problem->dbFlag == 0) {
-    stat           = caps_jrnlRead(problem, aobject, 3, args, &sNum, &ret);
+    stat         = caps_jrnlRead(CAPS_GETBODIES, problem, aobject, 3, args,
+                                 &sNum, &ret);
     if (stat == CAPS_JOURNALERR) return stat;
     if (stat == CAPS_JOURNAL) {
       *nErr   = args[1].members.integer;
@@ -3829,7 +3837,8 @@ caps_getBodies(capsObject *aobject, int *nBody, ego **bodies,
 cleanup:
   args[1].members.integer = *nErr;
   args[2].members.errs    = *errors;
-  caps_jrnlWrite(problem, aobject, stat, 3, args, sNum, problem->sNum);
+  caps_jrnlWrite(CAPS_GETBODIES, problem, aobject, stat, 3, args, sNum,
+                 problem->sNum);
 
   if (egos != NULL) EG_free(egos);
 
@@ -3865,7 +3874,8 @@ caps_getTessels(capsObject *aobject, int *nTessel, ego **tessels,
   args[1].type   = jInteger;
   args[2].type   = jErr;
   if (problem->dbFlag == 0) {
-    stat           = caps_jrnlRead(problem, aobject, 3, args, &sNum, &ret);
+    stat         = caps_jrnlRead(CAPS_GETTESSELS, problem, aobject, 3, args,
+                                 &sNum, &ret);
     if (stat == CAPS_JOURNALERR) return stat;
     if (stat == CAPS_JOURNAL) {
       *nErr   = args[1].members.integer;
@@ -3962,7 +3972,8 @@ caps_getTessels(capsObject *aobject, int *nTessel, ego **tessels,
 cleanup:
   args[1].members.integer = *nErr;
   args[2].members.errs    = *errors;
-  caps_jrnlWrite(problem, aobject, stat, 3, args, sNum, problem->sNum);
+  caps_jrnlWrite(CAPS_GETTESSELS, problem, aobject, stat, 3, args, sNum,
+                 problem->sNum);
 
   if (egos != NULL) EG_free(egos);
 
@@ -3970,13 +3981,86 @@ cleanup:
 }
 
 
+int
+caps_updateState(capsObject *aobject, int *nErr, capsErrs **errors)
+{
+  int           status, i;
+  capsValue     *valIn, *value;
+  capsProblem   *problem;
+  capsAnalysis  *analysis;
+  capsObject    *pobject, *source, *object, *last;
+
+  analysis = NULL;
+  valIn    = NULL;
+  if (aobject->type != ANALYSIS) return CAPS_BADTYPE;
+
+  analysis = (capsAnalysis *) aobject->blind;
+  pobject  = (capsObject *)   aobject->parent;
+  problem  = (capsProblem *)  pobject->blind;
+  if (analysis->nAnalysisIn > 0)
+    valIn = (capsValue *) analysis->analysisIn[0]->blind;
+
+  /* make sure geometry is up-to-date */
+  status = caps_build(pobject, nErr, errors);
+  if ((status != CAPS_SUCCESS) && (status != CAPS_CLEAN)) return status;
+
+  /* make sure the analysis has the bodies */
+  if ((problem->nBodies <= 0) || (problem->bodies == NULL)) {
+    printf(" caps_updateState Warning: No bodies to %s!\n", analysis->loadName);
+    if (analysis->bodies != NULL) EG_free(analysis->bodies);
+    analysis->bodies = NULL;
+    analysis->nBody  = 0;
+  } else if (analysis->bodies == NULL) {
+    status = caps_filter(problem, analysis);
+    if (status != CAPS_SUCCESS) return status;
+  }
+
+  /* update state if geometry is new */
+  if (problem->geometry.sNum > analysis->uSsN) analysis->uSsN = 0;
+
+  /* fill in any values that have links */
+  status = caps_transferLinks(analysis, nErr, errors);
+  if (status != CAPS_SUCCESS) return status;
+
+  /* check for dirty analysis inputs */
+  for (i = 0; i < analysis->nAnalysisIn; i++) {
+    source = object = analysis->analysisIn[i];
+    do {
+      if (source->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
+      if (source->type        != VALUE)     return CAPS_BADTYPE;
+      if (source->blind       == NULL)      return CAPS_NULLBLIND;
+      value = (capsValue *) source->blind;
+      if (value->link == object)            return CAPS_CIRCULARLINK;
+      last   = source;
+      source = value->link;
+    } while (value->link != NULL);
+    if (last->last.sNum > analysis->uSsN) {
+      analysis->uSsN = 0;
+      break;
+    }
+  }
+
+  /* update AIM's internal state? */
+  if (analysis->uSsN == 0) {
+    analysis->info.funID = AIM_UPDATESTATE;
+    status  = aim_UpdateState(problem->aimFPTR, analysis->loadName,
+                              analysis->instStore, &analysis->info, valIn);
+    analysis->info.funID = 0;
+    caps_getAIMerrs(analysis, nErr, errors);
+    if (status != CAPS_SUCCESS) return status;
+    analysis->uSsN = problem->sNum;
+  }
+
+  return CAPS_SUCCESS;
+}
+
+
 static int
 caps_preAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors)
 {
-  int           i, j, k, npts, rank, stat, status, gstatus;
+  int           i, j, k, npts, rank, stat, status;
   double        *data;
   char          *units;
-  CAPSLONG      sn;
   capsValue     *valIn, *value;
   capsProblem   *problem;
   capsAnalysis  *analysis;
@@ -3997,61 +4081,44 @@ caps_preAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors)
     valIn    = (capsValue *)    analysis->analysisIn[0]->blind;
   }
 
-  /* make sure geometry is up-to-date */
-  gstatus = caps_build(pobject, nErr, errors);
+  /* only update geometry for problem object */
   if (analysis == NULL) {
-    if (gstatus == CAPS_CLEAN) return CAPS_CLEAN;
+    status = caps_build(pobject, nErr, errors);
     if (problem->nBodies == 0)
-      printf(" caps_preAnalysis Warning: No bodies generated!\n");
-    return CAPS_SUCCESS;
+      printf(" Warning: No bodies generated!\n");
+    return status;
   }
-  if ((gstatus != CAPS_SUCCESS) && (gstatus != CAPS_CLEAN)) return gstatus;
+
+  /* update AIM's internal state? */
+  status = caps_updateState(aobject, nErr, errors);
+  if (status != CAPS_SUCCESS) return status;
+
+  /* are we "geometry" clean? */
+  status = 0;
+  if (problem->geometry.sNum > analysis->pre.sNum)
+    status = 1;
 
   /* are we "analysis" clean? */
-  status = 0;
-  if (analysis != NULL) {
-    if (analysis->pre.sNum == 0) {
-      status = 1;
-    } else {
-      /* check for dirty analysis inputs */
-      for (i = 0; i < analysis->nAnalysisIn; i++) {
-        source = object = analysis->analysisIn[i];
-        do {
-          if (source->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
-          if (source->type        != VALUE)     return CAPS_BADTYPE;
-          if (source->blind       == NULL)      return CAPS_NULLBLIND;
-          value = (capsValue *) source->blind;
-          if (value->link == object)            return CAPS_CIRCULARLINK;
-          last   = source;
-          source = value->link;
-        } while (value->link != NULL);
-        if (last->last.sNum > analysis->pre.sNum) {
-          status = 1;
-          break;
-        }
-      }
-      if (status == 0) {
-        stat = caps_snDataSets(aobject, 1, &sn);
-        if (stat == CAPS_SUCCESS)
-          if (sn > analysis->pre.sNum) status = 1;
+  if (analysis->pre.sNum == 0 || status == 1) {
+    status = 1;
+  } else {
+    /* check for dirty analysis inputs */
+    for (i = 0; i < analysis->nAnalysisIn; i++) {
+      source = object = analysis->analysisIn[i];
+      do {
+        if (source->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
+        if (source->type        != VALUE)     return CAPS_BADTYPE;
+        if (source->blind       == NULL)      return CAPS_NULLBLIND;
+        value = (capsValue *) source->blind;
+        if (value->link == object)            return CAPS_CIRCULARLINK;
+        last   = source;
+        source = value->link;
+      } while (value->link != NULL);
+      if (last->last.sNum > analysis->pre.sNum) {
+        status = 1;
+        break;
       }
     }
-    if ((status == 0) && (gstatus == CAPS_CLEAN) &&
-        (problem->geometry.sNum < analysis->pre.sNum)) return CAPS_CLEAN;
-
-    /* fill in any values that have links */
-    stat = caps_transferLinks(analysis, nErr, errors);
-    if (stat != CAPS_SUCCESS) return stat;
-  }
-
-  if ((problem->nBodies <= 0) || (problem->bodies == NULL)) {
-    printf(" caps_preAnalysis Warning: No bodies to %s!\n", analysis->loadName);
-    if (analysis->bodies != NULL) EG_free(analysis->bodies);
-    analysis->bodies = NULL;
-    analysis->nBody  = 0;
-  } else if (analysis->bodies == NULL) {
-    stat = caps_filter(problem, analysis);
-    if (stat != CAPS_SUCCESS) return stat;
   }
 
   /* do we need to fill FieldIn datasets? */
@@ -4078,13 +4145,27 @@ caps_preAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors)
         stat = caps_getDataX(vertexset->dataSets[k], &npts, &rank, &data,
                              &units, nErr, errors);
         if (stat != CAPS_SUCCESS) return stat;
+        if (vertexset->dataSets[k]->last.sNum > analysis->pre.sNum)
+          status = 1;
       }
     }
   }
 
+  /* geometry, AnalysisIn, and DataSets are all clean */
+  if (status == 0) return CAPS_CLEAN;
+
+  /* running preAnalysis means reload is no longer viable */
+  analysis->reload = 0;
+
+  /* remove Clink */
+  stat = caps_rmCLink(analysis->fullPath);
+  if (stat != CAPS_SUCCESS) return stat;
+
   /* do it! */
+  analysis->info.funID = AIM_PREANALYSIS;
   stat = aim_PreAnalysis(problem->aimFPTR, analysis->loadName,
-                        analysis->instStore, &analysis->info, valIn);
+                         analysis->instStore, &analysis->info, valIn);
+  analysis->info.funID = 0;
   caps_getAIMerrs(analysis, nErr, errors);
   if (stat == CAPS_SUCCESS) {
     caps_freeValueObjects(1, analysis->nAnalysisDynO, analysis->analysisDynO);
@@ -4134,24 +4215,25 @@ caps_preAnalysiZ(capsObject *aobject, int *nErr, capsErrs **errors)
     if (analysis->analysisIn[0]->blind == NULL)      return CAPS_NULLVALUE;
   }
 
-  problem->funID = CAPS_PREANALYSIS;
-  args[0].type   = jInteger;
-  args[1].type   = jErr;
-  stat           = caps_jrnlRead(problem, aobject, 2, args, &sNum, &ret);
+  args[0].type = jInteger;
+  args[1].type = jErr;
+  stat         = caps_jrnlRead(CAPS_PREANALYSIS, problem, aobject, 2, args,
+                               &sNum, &ret);
   if (stat == CAPS_JOURNALERR) return stat;
   if (stat == CAPS_JOURNAL) {
     *nErr    = args[0].members.integer;
     *errors  = args[1].members.errs;
     return ret;
   }
-  
+
   ret   = caps_preAnalysiX(aobject, nErr, errors);
   *nErr = 0;
   if (*errors != NULL) *nErr = (*errors)->nError;
 
   args[0].members.integer = *nErr;
   args[1].members.errs    = *errors;
-  caps_jrnlWrite(problem, aobject, ret, 2, args, sNum, problem->sNum);
+  caps_jrnlWrite(CAPS_PREANALYSIS, problem, aobject, ret, 2, args, sNum,
+                 problem->sNum);
 
   return ret;
 }
@@ -4172,11 +4254,11 @@ caps_preAnalysis(capsObject *aobject, int *nErr, capsErrs **errors)
   if (pobject->blind       == NULL)      return CAPS_NULLBLIND;
   problem  = (capsProblem *)  pobject->blind;
   if (problem->dbFlag      == 1)         return CAPS_READONLYERR;
-  
+
   analysis = (capsAnalysis *) aobject->blind;
   if ((analysis->autoexec  == 1) &&
       (analysis->eFlag     == 1)) {
-    snprintf(temp, PATH_MAX, "Cannot call preAnalysis with AIM that auto-executes!");
+    snprintf(temp, PATH_MAX, "Can't call preAnalysis with AIM that auto-executes!");
     caps_makeSimpleErr(aobject, CERROR, temp, NULL, NULL, errors);
     if (*errors != NULL) *nErr = (*errors)->nError;
     return CAPS_EXECERR;
@@ -4243,7 +4325,7 @@ caps_boundDependent(capsProblem *problem, capsObject *aobject,
 
 
 int
-caps_postAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors, int flag)
+caps_postAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors)
 {
   int          i, major, minor, nField, *ranks, *fInOut, status, exec, dirty;
   char         *intents, *apath, *unitSys, **fnames;
@@ -4255,28 +4337,31 @@ caps_postAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors, int flag)
   analysis = (capsAnalysis *) aobject->blind;
   pobject  = (capsObject *)   aobject->parent;
   problem  = (capsProblem *)  pobject->blind;
-  
-  /* don't call post if we have never been in pre */
-  if (flag == 1)
-    if (analysis->pre.sNum == 0) return CAPS_SUCCESS;
 
   /* check to see if we need to do post */
   status = caps_analysisInfX(aobject, &apath, &unitSys, &major, &minor, &intents,
                              &nField, &fnames, &ranks, &fInOut, &exec, &dirty);
   if (status != CAPS_SUCCESS) return status;
-  if (flag == 0) {
-    if (dirty == 0) return CAPS_CLEAN;
-    if (dirty <  5) return CAPS_DIRTY;
-  }
+  if (dirty == 0) return CAPS_CLEAN;
+  if (dirty <  5) return CAPS_DIRTY;
 
   if (analysis->nAnalysisIn > 0)
     valIn = (capsValue *) analysis->analysisIn[0]->blind;
 
+  /* pre was called with continuation, so links need to be re-populated and the state updated */
+  if (analysis->reload == 2) {
+    /* update AIM's internal state */
+    status = caps_updateState(aobject, nErr, errors);
+    if (status != CAPS_SUCCESS) return status;
+
+    analysis->reload = 0;
+  }
+
   /* call post in the AIM */
-  analysis->info.inPost = 1;
+  analysis->info.funID = AIM_POSTANALYSIS;
   status = aim_PostAnalysis(problem->aimFPTR, analysis->loadName,
-                            analysis->instStore, &analysis->info, flag, valIn);
-  analysis->info.inPost = 0;
+                            analysis->instStore, &analysis->info, 0, valIn);
+  analysis->info.funID = 0;
   caps_getAIMerrs(analysis, nErr, errors);
   if (status != CAPS_SUCCESS) {
     caps_freeValueObjects(1, analysis->nAnalysisDynO, analysis->analysisDynO);
@@ -4286,14 +4371,22 @@ caps_postAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors, int flag)
   }
 
   /* set the time/date stamp */
-  if (flag == 1) return CAPS_SUCCESS;
   caps_freeOwner(&aobject->last);
   problem->sNum     += 1;
   aobject->last.sNum = problem->sNum;
-  caps_fillDateTime(aobject->last.datetime);
+  status = caps_addHistory(aobject, problem);
+  if (status != CAPS_SUCCESS)
+    printf(" CAPS Warning: caps_addHistory = %d (caps_postAnalysis)\n", status);
+  status = caps_writeSerialNum(problem);
+  if (status != CAPS_SUCCESS)
+    printf(" CAPS Error: caps_writeSerialNum = %d (caps_postAnalysis)\n",
+           status);
   for (i = 0; i < analysis->nAnalysisDynO; i++) {
     analysis->analysisDynO[i]->last.sNum = problem->sNum;
-    caps_fillDateTime(analysis->analysisDynO[i]->last.datetime);
+    status = caps_addHistory(analysis->analysisDynO[i], problem);
+    if (status != CAPS_SUCCESS)
+      printf(" CAPS Warning: caps_addHistory = %d (caps_postAnalysis)\n",
+             status);
   }
   status = caps_dumpAnalysis(problem, aobject);
   if (status != CAPS_SUCCESS)
@@ -4306,11 +4399,8 @@ caps_postAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors, int flag)
 static int
 caps_postAnalysiZ(capsObject *aobject, int *nErr, capsErrs **errors)
 {
-  int          i, stat, ret, flag = 0;
+  int          stat, ret;
   CAPSLONG     sNum;
-  capsErrs     *errs = NULL;
-  capsValue    *value;
-  capsAnalysis *analysis;
   capsProblem  *problem;
   capsObject   *pobject;
   capsJrnl     args[2];
@@ -4322,55 +4412,27 @@ caps_postAnalysiZ(capsObject *aobject, int *nErr, capsErrs **errors)
   if (aobject->type        != ANALYSIS)        return CAPS_BADTYPE;
   if (aobject->blind       == NULL)            return CAPS_NULLBLIND;
   if (aobject->parent      == NULL)            return CAPS_NULLOBJ;
-  analysis = (capsAnalysis *) aobject->blind;
   pobject  = (capsObject *)   aobject->parent;
   if (pobject->blind       == NULL)            return CAPS_NULLBLIND;
   problem  = (capsProblem *)  pobject->blind;
 
-  problem->funID = CAPS_POSTANALYSIS;
-  args[0].type   = jInteger;
-  args[1].type   = jErr;
-  stat           = caps_jrnlRead(problem, aobject, 2, args, &sNum, &ret);
+  args[0].type = jInteger;
+  args[1].type = jErr;
+  stat         = caps_jrnlRead(CAPS_POSTANALYSIS, problem, aobject, 2, args,
+                               &sNum, &ret);
   if (stat == CAPS_JOURNALERR) return stat;
   if (stat == CAPS_JOURNAL) {
     *nErr    = args[0].members.integer;
     *errors  = args[1].members.errs;
-    if (sNum < aobject->last.sNum) return ret;
-    flag = 1;
-  }
-
-  sNum = problem->sNum;
-  ret  = caps_postAnalysiX(aobject, nErr, errors, flag);
-  if (flag == 0) {
-    args[0].members.integer = *nErr;
-    args[1].members.errs    = *errors;
-    caps_jrnlWrite(problem, aobject, ret, 2, args, sNum, problem->sNum);
     return ret;
   }
 
-  /* restart -- fill any Pointer outputs */
-  for (i = 0; i < analysis->nAnalysisOut; i++) {
-    value = analysis->analysisOut[i]->blind;
-    if  (value == NULL) continue;
-    if ((value->type != Pointer) && (value->type != PointerMesh)) continue;
-    if  (analysis->analysisOut[i]->last.sNum == 0) continue;
-    stat = aim_CalcOutput(problem->aimFPTR, analysis->loadName,
-                          analysis->instStore, &analysis->info, i+1, value);
-    if (*nErr != 0) {
-      errs    = *errors;
-      *nErr   = 0;
-      *errors = NULL;
-    }
-    caps_getAIMerrs(analysis, nErr, errors);
-    caps_concatErrs(errs, errors);
-    *nErr = 0;
-    if (*errors != NULL) *nErr = (*errors)->nError;
-    if (stat != CAPS_SUCCESS)
-      printf(" CAPS Warning: aim_CalcOutput = %d (caps_postAnalysis)\n", stat);
-  }
-  stat = caps_writeProblem(pobject);
-  if (stat != CAPS_SUCCESS)
-    printf(" CAPS Warning: caps_writeProblem = %d (caps_postAnalysis)\n", stat);
+  sNum = problem->sNum;
+  ret  = caps_postAnalysiX(aobject, nErr, errors);
+  args[0].members.integer = *nErr;
+  args[1].members.errs    = *errors;
+  caps_jrnlWrite(CAPS_POSTANALYSIS, problem, aobject, ret, 2, args, sNum,
+                 problem->sNum);
 
   return ret;
 }
@@ -4391,7 +4453,7 @@ caps_postAnalysis(capsObject *aobject, int *nErr, capsErrs **errors)
   if (pobject->blind       == NULL)      return CAPS_NULLBLIND;
   problem  = (capsProblem *)  pobject->blind;
   if (problem->dbFlag      == 1)         return CAPS_READONLYERR;
-  
+
   analysis = (capsAnalysis *) aobject->blind;
   if ((analysis->autoexec == 1) &&
       (analysis->eFlag == 1)) {
@@ -4473,13 +4535,19 @@ caps_buildBound(capsObject *bobject, int *nErr, capsErrs **errors)
        then it has been replaced and the VertexSet needs to be updated */
     for (j = 0; j < vs->discr->nBodys; j++) {
       tess = vs->discr->bodys[j].tess;
-      if (tess         == NULL ) { dirty = 1; continue; }
-      if (tess->oclass == EMPTY) { dirty = 1; continue; }
+      if (tess         == NULL ) {
+        dirty = 1;
+        continue;
+      }
+      if (tess->oclass == EMPTY) {
+        dirty = 1;
+        continue;
+      }
       found = 0;
       for (ia = 0; ia < problem->nAnalysis && found == 0; ia++) {
         anal = (capsAnalysis *) problem->analysis[ia]->blind;
         for (it = 0; it < anal->nTess; it++) {
-          if ( tess == anal->tess[it] ) {
+          if (tess == anal->tess[it]) {
             found = 1;
             break;
           }
@@ -4498,9 +4566,9 @@ caps_buildBound(capsObject *bobject, int *nErr, capsErrs **errors)
     printf(" CAPS Warning: caps_writeBound = %d (caps_buildBound)\n", stat);
 
   problem->sNum += 1;
-  stat = caps_writeProblem(pobject);
+  stat = caps_writeSerialNum(problem);
   if (stat != CAPS_SUCCESS)
-    printf(" CAPS Warning: caps_writeProblem = %d (caps_buildBound)\n",
+    printf(" CAPS Warning: caps_writeSerialNum = %d (caps_buildBound)\n",
            stat);
 
   return stat;
@@ -4712,7 +4780,8 @@ caps_dirtyAnalysis(capsObject *object, int *nAobj, capsObject ***aobjs)
 
   args[0].type = jObjs;
   if (problem->dbFlag == 0) {
-    stat         = caps_jrnlRead(problem, object, 1, args, &sNum, &ret);
+    stat       = caps_jrnlRead(CAPS_DIRTYANALYSIS, problem, object, 1, args,
+                               &sNum, &ret);
     if (stat == CAPS_JOURNALERR) return stat;
     if (stat == CAPS_JOURNAL) {
       *nAobj = args[0].num;
@@ -4729,10 +4798,11 @@ caps_dirtyAnalysis(capsObject *object, int *nAobj, capsObject ***aobjs)
   sNum = problem->sNum;
   ret  = caps_dirtyAnalysiX(object, problem, nAobj, aobjs);
   if (problem->dbFlag == 1) return ret;
-  
+
   args[0].num          = *nAobj;
   args[0].members.objs = *aobjs;
-  caps_jrnlWrite(problem, object, ret, 1, args, sNum, problem->sNum);
+  caps_jrnlWrite(CAPS_DIRTYANALYSIS, problem, object, ret, 1, args, sNum,
+                 problem->sNum);
 
   return ret;
 }
@@ -4746,19 +4816,19 @@ caps_runAnalysis(capsObject *aobject, int *stat, int *nErr, capsErrs **errors)
   capsProblem  *problem;
   capsAnalysis *analysis;
 
-  if (aobject              == NULL)      return CAPS_NULLOBJ;
-  if (aobject->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
-  if (aobject->type        != ANALYSIS)  return CAPS_BADTYPE;
-  if (aobject->blind       == NULL)      return CAPS_NULLBLIND;
+  if (aobject              == NULL)       return CAPS_NULLOBJ;
+  if (aobject->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
+  if (aobject->type        != ANALYSIS)   return CAPS_BADTYPE;
+  if (aobject->blind       == NULL)       return CAPS_NULLBLIND;
   analysis = (capsAnalysis *) aobject->blind;
   status   = caps_findProblem(aobject, CAPS_RUNANALYSIS, &pobject);
   if (status != CAPS_SUCCESS) return status;
   problem  = (capsProblem *) pobject->blind;
-  if (problem->dbFlag      == 1)         return CAPS_READONLYERR;
+  if (problem->dbFlag      == 1)          return CAPS_READONLYERR;
 
-  /* ignore if restarting */
+  /* ignore if restarting
   if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;
-  if (problem->stFlag == 4)               return CAPS_SUCCESS;
+  if (problem->stFlag == oContinue)       return CAPS_SUCCESS; */
 
   /* call the AIM */
   status = aim_Execute(problem->aimFPTR, analysis->loadName,
@@ -4779,15 +4849,15 @@ caps_checkAnalysis(capsObject *aobject, int *phase, int *nErr, capsErrs **errors
   capsProblem  *problem;
   capsAnalysis *analysis;
 
-  if (nErr                 == NULL)      return CAPS_NULLVALUE;
-  if (errors               == NULL)      return CAPS_NULLVALUE;
+  if (nErr                 == NULL)       return CAPS_NULLVALUE;
+  if (errors               == NULL)       return CAPS_NULLVALUE;
   *phase  = 0;
   *nErr   = 0;
   *errors = NULL;
-  if (aobject              == NULL)      return CAPS_NULLOBJ;
-  if (aobject->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
-  if (aobject->type        != ANALYSIS)  return CAPS_BADTYPE;
-  if (aobject->blind       == NULL)      return CAPS_NULLBLIND;
+  if (aobject              == NULL)       return CAPS_NULLOBJ;
+  if (aobject->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
+  if (aobject->type        != ANALYSIS)   return CAPS_BADTYPE;
+  if (aobject->blind       == NULL)       return CAPS_NULLBLIND;
   analysis = (capsAnalysis *) aobject->blind;
   status   = caps_findProblem(aobject, CAPS_CHECKANALYSIS, &pobject);
   if (status != CAPS_SUCCESS) return status;
@@ -4795,7 +4865,10 @@ caps_checkAnalysis(capsObject *aobject, int *phase, int *nErr, capsErrs **errors
 
   /* ignore if restarting */
   if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;
-  if (problem->stFlag == 4)               return CAPS_SUCCESS;
+  if (problem->stFlag == oContinue) {
+    status = caps_jrnlEnd(problem);
+    if (status != CAPS_CLEAN)             return CAPS_SUCCESS;
+  }
 
   /* call the AIM */
   status = aim_Check(problem->aimFPTR, analysis->loadName,
@@ -4871,9 +4944,9 @@ caps_execute(capsObject *object, int *state, int *nErr, capsErrs **errors)
 int
 caps_execX(capsObject *aobject, int *nErr, capsErrs **errors)
 {
-  int          i, stat, state, flag;
+  int          stat, state;
   capsErrs     *errs = NULL;
-  capsObject   *pobject, **tmp;
+  capsObject   *pobject;
   capsAnalysis *analysis;
   capsProblem  *problem;
 
@@ -4921,35 +4994,13 @@ caps_execX(capsObject *aobject, int *nErr, capsErrs **errors)
     *errors = NULL;
   }
 
-  flag = 0;
-  stat = caps_postAnalysiX(aobject, nErr, errors, flag);
+  stat = caps_postAnalysiX(aobject, nErr, errors);
   caps_concatErrs(errs, errors);
   if (stat != CAPS_SUCCESS) {
     *nErr = 0;
     if (*errors != NULL) *nErr = (*errors)->nError;
     return stat;
   }
-  
-  /* add this object to our list of executed AIMs */
-  for (i = 0; i < problem->nExec; i++)
-    if (problem->execs[i] == aobject) {
-      printf(" CAPS Info: Analysis already in list %d (caps_execX)\n", i);
-      return CAPS_SUCCESS;
-    }
-  if ((problem->nExec == 0) || (problem->execs == NULL)) {
-    tmp = (capsObject **) EG_alloc(sizeof(capsObject *));
-    problem->nExec = 0;
-  } else {
-    tmp = (capsObject **) EG_reall( problem->execs,
-                                   (problem->nExec+1)*sizeof(capsObject *));
-  }
-  if (tmp == NULL) {
-    printf(" CAPS Info: MALLOC on storing Analysis execution (caps_execX)\n");
-    return CAPS_SUCCESS;
-  }
-  problem->execs                 = tmp;
-  problem->execs[problem->nExec] = aobject;
-  problem->nExec++;
 
   return CAPS_SUCCESS;
 }

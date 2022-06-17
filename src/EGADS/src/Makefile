@@ -103,19 +103,19 @@ $(LDIR)/libemp.a:		emp.o
 	(cd $(ODIR); ar $(LOPTS) $(LDIR)/libemp.a emp.o; $(RANLB) )
 
 $(ODIR)/SurrealD1:	../util/SurrealD1_btest.cpp
-	$(CXX) -o $(ODIR)/SurrealD1 -O -I. ../util/SurrealD1_btest.cpp
+	$(CXX) -o $(ODIR)/SurrealD1 -O -std=c++11 -I. ../util/SurrealD1_btest.cpp
 	$(ODIR)/SurrealD1
 
 $(ODIR)/SurrealD4:	../util/SurrealD4_btest.cpp
-	$(CXX) -o $(ODIR)/SurrealD4 -O -I. ../util/SurrealD4_btest.cpp
+	$(CXX) -o $(ODIR)/SurrealD4 -O -std=c++11 -I. ../util/SurrealD4_btest.cpp
 	$(ODIR)/SurrealD4
 
 $(ODIR)/SurrealS1:	../util/SurrealS1_btest.cpp
-	$(CXX) -o $(ODIR)/SurrealS1 -O -I. ../util/SurrealS1_btest.cpp
+	$(CXX) -o $(ODIR)/SurrealS1 -O -std=c++11 -I. ../util/SurrealS1_btest.cpp
 	$(ODIR)/SurrealS1
 
 $(ODIR)/SurrealS4:	../util/SurrealS4_btest.cpp
-	$(CXX) -o $(ODIR)/SurrealS4 -O -I. ../util/SurrealS4_btest.cpp
+	$(CXX) -o $(ODIR)/SurrealS4 -O -std=c++11 -I. ../util/SurrealS4_btest.cpp
 	$(ODIR)/SurrealS4
 
 $(LDIR)/libuvmap.a:	includes $(ODIR)/SurrealD1 $(ODIR)/SurrealD4 $(ODIR)/SurrealS1 $(ODIR)/SurrealS4

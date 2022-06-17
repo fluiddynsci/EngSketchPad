@@ -55,6 +55,12 @@
 
 
 //
+// name of TIM object
+//
+plugs.name = "plugs";
+
+
+//
 // callback when Plugs is launched
 //
 plugs.launch = function () {

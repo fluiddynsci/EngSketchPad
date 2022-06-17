@@ -97,6 +97,33 @@ __PROTO_H_AND_D__ double EG_orienTri(double *t0, double *t1, double *t2);
   static int sides[3][2] = {{1,2}, {2,0}, {0,1}};
 
 
+#ifdef WRITETRIS
+static void
+EG_writeTris(triStruct *ts, const char *filename)
+{
+  int  k;
+  FILE *fp;
+  
+  fp = fopen(filename, "w");
+  if (fp == NULL) {
+    printf(" EGADS ERROR: Opening %s!\n", filename);
+    return;
+  }
+  fprintf(fp, "1\n");  /* number of bodies */
+  fprintf(fp, "1\n");  /* number of Faces */
+  fprintf(fp, "%d %d\n", ts->nverts, ts->ntris);
+  for (k = 0; k < ts->nverts; k++)
+    fprintf(fp, "%lf %lf %lf\n", ts->verts[k].xyz[0], ts->verts[k].xyz[1],
+            ts->verts[k].xyz[2]);
+  for (k = 0; k < ts->ntris; k++)
+    fprintf(fp, "%d %d %d\n", ts->tris[k].indices[0], ts->tris[k].indices[1],
+            ts->tris[k].indices[2]);
+  
+  fclose(fp);
+}
+#endif
+
+
 #ifdef DEBUG
 __HOST_AND_DEVICE__ static void
 EG_checkTess(triStruct *ts)
@@ -2368,7 +2395,7 @@ EG_tessellate(int outLevel, triStruct *ts, long tID)
   int    i, j, k, l, stri, i0, i1, last, split, count, lsplit, qi1, qi3;
   int    eg_split, sideMid, badStart = 0;
   double result[18], trange[2], laccum, dist, lang, maxlen2, dot, xvec[3];
-  double norm[3], *deru, *derv, *aux;
+  double norm[3], nrm[3], x1[3], x2[3], *deru, *derv, *aux;
   triTri *tt;
 
   ts->edist2 = 0.0;             /* average edge segment length */
@@ -2983,7 +3010,39 @@ EG_tessellate(int outLevel, triStruct *ts, long tID)
 
   } else {
 
-    /* planar surfaces */
+    /* planar surfaces -- check for inversions */
+    
+    norm[0] = norm[1] = norm[2] = 0.0;
+    for (flag = i = 0; i < ts->ntris; i++) {
+      n0    = ts->tris[i].indices[0];
+      n1    = ts->tris[i].indices[1];
+      n2    = ts->tris[i].indices[2];
+      x1[0] = ts->verts[n1-1].xyz[0] - ts->verts[n0-1].xyz[0];
+      x2[0] = ts->verts[n2-1].xyz[0] - ts->verts[n0-1].xyz[0];
+      x1[1] = ts->verts[n1-1].xyz[1] - ts->verts[n0-1].xyz[1];
+      x2[1] = ts->verts[n2-1].xyz[1] - ts->verts[n0-1].xyz[1];
+      x1[2] = ts->verts[n1-1].xyz[2] - ts->verts[n0-1].xyz[2];
+      x2[2] = ts->verts[n2-1].xyz[2] - ts->verts[n0-1].xyz[2];
+      CROSS(nrm, x1, x2);
+      dist = DOT(nrm, nrm);
+      if (dist != 0.0) {
+        dist   = 1.0/sqrt(dist);
+        nrm[0] *= dist;
+        nrm[1] *= dist;
+        nrm[2] *= dist;
+      }
+      if (i != 0) {
+        if (DOT(norm,nrm) < 0.0) flag++;
+      } else {
+        norm[0] = nrm[0];
+        norm[1] = nrm[1];
+        norm[2] = nrm[2];
+      }
+    }
+#ifdef DEBUG
+    if (flag != 0) printf(" *** Face %d: Planar # inverted = %d (%d) ***\n",
+                          ts->fIndex, flag, ts->ntris);
+#endif
 
     ts->phase = -3;
     EG_swapTris(EG_angXYZTest, "angleXYZ", 0.0, ts);
@@ -2992,7 +3051,7 @@ EG_tessellate(int outLevel, triStruct *ts, long tID)
     /* break up long edges */
 
     if (ts->maxlen > 0.0) {
-      count = i = 0;
+      count = i = k = l = 0;
       do {
         split = EG_addSideDist(i, maxlen2, sideMid, ts);
         if (split > 0) {
@@ -3005,6 +3064,17 @@ EG_tessellate(int outLevel, triStruct *ts, long tID)
           if (ts->nverts > ts->maxPts) break;
         if (ts->maxPts < 0)
           if ((ts->nverts-ts->nfrvrts+2) > -ts->maxPts) break;
+        /* resolves strange problem with fillArea not providing a good start */
+        if ((i != 1) && (flag != 0)) {
+          if ((k == 0) && (split != 1)) {
+            k = 1;
+          } else if ((k == 1) && (split == 1) && (l == 1)) {
+            printf(" *** Face %d: Planar early breakout -- count = %d ***\n",
+                   ts->fIndex, count);
+            break;
+          }
+        }
+        l = split;
       } while (split > 0);
 #ifdef REPORT
       printf("%lX  XYZang = %le,   split = %d\n", tID, ts->accum, count);

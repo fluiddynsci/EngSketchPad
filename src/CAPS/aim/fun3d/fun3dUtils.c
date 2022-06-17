@@ -347,57 +347,15 @@ fun3d_read2DBinaryUgrid(void *aimInfo, FILE *fp, meshStruct *surfaceMesh)
 }
 
 
-// Create a 3D mesh for FUN3D from a 2D mesh
-int fun3d_2DMesh(void *aimInfo,
-                 aimMeshRef *meshRef,
-                 const char *projectName,
-                 mapAttrToIndexStruct *groupMap,
-                 cfdBoundaryConditionStruct *bcProps)
+// Create a 3D BC for FUN3D from a 2D mesh
+int fun3d_2DBC(void *aimInfo,
+               cfdBoundaryConditionStruct *bcProps)
 {
-
     int status; // Function return status
 
     int i; // Indexing
 
     int faceBCIndex = -1, extrusionBCIndex = -1;
-
-    double extrusion = -1.0; // Extrusion length
-
-    // Flip coordinates
-    int xMeshConstant = (int) true, yMeshConstant = (int) true, zMeshConstant= (int) true; // 2D mesh checks
-    double tempCoord;
-
-    meshStruct surfaceMesh;
-    meshStruct volumeMesh;
-
-    char filename[PATH_MAX];
-//    int elementIndex;
-    FILE *fp = NULL;
-
-    status = initiate_meshStruct(&surfaceMesh);
-    AIM_STATUS(aimInfo, status);
-
-    status = initiate_meshStruct(&volumeMesh);
-    AIM_STATUS(aimInfo, status);
-
-    sprintf(filename, "%s%s", meshRef->fileName, MESHEXTENSION);
-
-    fp = fopen(filename, "rb");
-    if (fp == NULL) {
-      AIM_ERROR(aimInfo, "Cannot open file: %s\n", filename);
-      status = CAPS_IOERR;
-      goto cleanup;
-    }
-
-    status = fun3d_read2DBinaryUgrid(aimInfo, fp, &surfaceMesh);
-    AIM_STATUS(aimInfo, status);
-
-    // add boundary elements if they are missing
-    if (surfaceMesh.meshQuickRef.numLine == 0) {
-        status = mesh_addTess2Dbc(aimInfo, &surfaceMesh, groupMap);
-        if (status != CAPS_SUCCESS) goto cleanup;
-    }
-
 
     // Find the faceBCIndex for the symmetry plane
     for (i = 0; i < bcProps->numSurfaceProp-1; i++) {
@@ -446,6 +404,62 @@ int fun3d_2DMesh(void *aimInfo,
     }
     bcProps->surfaceProp[bcProps->numSurfaceProp-1].bcID = extrusionBCIndex;
 
+    status = CAPS_SUCCESS;
+
+cleanup:
+    return status;
+}
+
+
+// Create a 3D mesh for FUN3D from a 2D mesh
+int fun3d_2DMesh(void *aimInfo,
+                 aimMeshRef *meshRef,
+                 const char *projectName,
+                 const mapAttrToIndexStruct *groupMap)
+{
+
+    int status; // Function return status
+
+    int i; // Indexing
+
+    int faceBCIndex = -1, extrusionBCIndex = -1;
+
+    double extrusion = -1.0; // Extrusion length
+
+    // Flip coordinates
+    int xMeshConstant = (int) true, yMeshConstant = (int) true, zMeshConstant= (int) true; // 2D mesh checks
+    double tempCoord;
+
+    meshStruct surfaceMesh;
+    meshStruct volumeMesh;
+
+    char filename[PATH_MAX];
+//    int elementIndex;
+    FILE *fp = NULL;
+
+    status = initiate_meshStruct(&surfaceMesh);
+    AIM_STATUS(aimInfo, status);
+
+    status = initiate_meshStruct(&volumeMesh);
+    AIM_STATUS(aimInfo, status);
+
+    sprintf(filename, "%s%s", meshRef->fileName, MESHEXTENSION);
+
+    fp = fopen(filename, "rb");
+    if (fp == NULL) {
+      AIM_ERROR(aimInfo, "Cannot open file: %s\n", filename);
+      status = CAPS_IOERR;
+      goto cleanup;
+    }
+
+    status = fun3d_read2DBinaryUgrid(aimInfo, fp, &surfaceMesh);
+    AIM_STATUS(aimInfo, status);
+
+    // add boundary elements if they are missing
+    if (surfaceMesh.meshQuickRef.numLine == 0) {
+        status = mesh_addTess2Dbc(aimInfo, &surfaceMesh, groupMap);
+        if (status != CAPS_SUCCESS) goto cleanup;
+    }
 
     // Set the symmetry index for all Tri/Quad
     for (i = 0; i < surfaceMesh.numElement; i++) {
@@ -652,8 +666,8 @@ cleanup:
 // Write FUN3D data transfer files
 int fun3d_dataTransfer(void *aimInfo,
                        const char *projectName,
-                       mapAttrToIndexStruct *groupMap,
-                       cfdBoundaryConditionStruct bcProps,
+                       const mapAttrToIndexStruct *groupMap,
+                       const cfdBoundaryConditionStruct bcProps,
                        aimMeshRef *meshRef,
                        /*@null@*/ cfdModalAeroelasticStruct *eigenVector)
 {
@@ -1613,10 +1627,11 @@ cleanup:
 
 
 // Write FUN3D parameterization/sensitivity file
+// Will not calculate shape sensitivities if there are no geometry design variable; will
+// simple check and dump out the body meshes in model.tec files
 int  fun3d_writeParameterization(void *aimInfo,
                                  int numDesignVariable,
                                  cfdDesignVariableStruct designVariable[],
-                                 int writeSensitivity,
                                  aimMeshRef *meshRef)
 {
 
@@ -1672,6 +1687,8 @@ int  fun3d_writeParameterization(void *aimInfo,
     for (i = 0; i < numDesignVariable; i++) {
         geomSelect[i] = (int) false;
 
+        printf("DesignVariable = %s\n", designVariable[i].name);
+
         index = aim_getIndex(aimInfo, designVariable[i].name, GEOMETRYIN);
         if (index == CAPS_NOTFOUND) continue;
         if (index < CAPS_SUCCESS ) {
@@ -1686,15 +1703,20 @@ int  fun3d_writeParameterization(void *aimInfo,
             goto cleanup;
         }
 
-        // Fun3D always requires rubberize files, but don't compute sensitivities if not needed
-        geomSelect[i] = writeSensitivity;
 
-        if (writeSensitivity == (int)true) {
-          status = aim_getValue(aimInfo, index, GEOMETRYIN, &geomInVal);
-          AIM_STATUS(aimInfo, status);
+        status = aim_getValue(aimInfo, index, GEOMETRYIN, &geomInVal);
+        AIM_STATUS(aimInfo, status);
 
-          numOutVariable += 3*geomInVal->length; // xD1, yD1, zD1, ...
-        }
+        numOutVariable += 3*geomInVal->length; // xD1, yD1, zD1, ...
+
+        // Don't compute sensitivities if not needed
+        geomSelect[i] = (int) true;
+    }
+
+    // No need to write Rubberize files without GeometryIn design variables
+    if (numOutVariable == 4) {
+        status = CAPS_SUCCESS;
+        goto cleanup;
     }
 
     if (numOutVariable > 99999999) {
@@ -1887,10 +1909,7 @@ int  fun3d_writeParameterization(void *aimInfo,
       }
       AIM_FREE(faces);
 
-      if (writeSensitivity == (int)true)
-        sprintf(message,"%s %d,", "sensitivity file for body", i+1);
-      else
-        sprintf(message,"%s %d,", "mesh file for body", i+1);
+      sprintf(message,"%s %d,", "sensitivity file for body", i+1);
 
       stringLength = strlen(folder) + 1 + strlen(filePre) + 7 + strlen(fileExt) + 1 ;
 
@@ -2019,8 +2038,10 @@ cleanup:
 
 
 // Write FUN3D  rubber.data file
+// Will not write shape entries unless explicitly told to check if they are need
 int fun3d_writeRubber(void *aimInfo,
                       cfdDesignStruct design,
+                      int checkGeomShape,
                       double fun3dVersion,
                       aimMeshRef *meshRef)
 {
@@ -2046,13 +2067,19 @@ int fun3d_writeRubber(void *aimInfo,
 
     numBody = meshRef->nmap;
 
-    // Determine number of geometry input variables
-    for (i = 0; i < design.numDesignVariable; i++) {
+    if (checkGeomShape == (int) true) {
+        // Determine number of geometry input variables
+        for (i = 0; i < design.numDesignVariable; i++) {
 
-        if (design.designVariable[i].type != DesignVariableGeometry) continue;
+            if (design.designVariable[i].type != DesignVariableGeometry) continue;
 
-        numShapeVar += design.designVariable[i].var->length; // xD1, yD1, zD1, ...
+            numShapeVar += design.designVariable[i].var->length; // xD1, yD1, zD1, ...
+        }
     }
+
+    // Don't write out body information if there are no geometry design variables
+    if (numShapeVar == 0) numBody = 0;
+
 
     fprintf(fp, "################################################################################\n");
     fprintf(fp, "########################### Design Variable Information ########################\n");
@@ -2509,13 +2536,17 @@ static int findHeader(const char *header, char **line, size_t *nline, int *iline
 
 
 // Read objective value and derivatives from FUN3D rubber.data file
+// Will not read shape entries unless explicitly told to check if they are needed
 int fun3d_readRubber(void *aimInfo,
                      cfdDesignStruct design,
+                     int checkGeomShape,
                      double fun3dVersion)
 {
     int status; // Function return status
 
     int i, j, k, ibody; // Indexing
+
+    int numShapeVar = 0;
 
     size_t nline;
     int iline=0;
@@ -2543,6 +2574,7 @@ int fun3d_readRubber(void *aimInfo,
     }
 
     for (i = 0; i < design.numDesignFunctional; i++) {
+
         status = findHeader("Current value of function", &line, &nline, &iline, fp);
         AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
 
@@ -2663,13 +2695,21 @@ int fun3d_readRubber(void *aimInfo,
         }
 
 
-        // zero out previous derivatives
-        for (j = 0; j < design.designFunctional[i].numDesignVariable; j++) {
-            if (design.designFunctional[i].dvar[j].type != DesignVariableGeometry) continue;
-            for (k = 0; k < design.designVariable[j].var->length; k++ ) {
-              design.designFunctional[i].dvar[j].value[k] = 0;
+        numShapeVar = 0; // Need to re-zero every functional loop
+
+        if (checkGeomShape == (int) true) {
+            // zero out previous derivatives
+            for (j = 0; j < design.designFunctional[i].numDesignVariable; j++) {
+                if (design.designFunctional[i].dvar[j].type != DesignVariableGeometry) continue;
+                numShapeVar++;
+                for (k = 0; k < design.designVariable[j].var->length; k++ ) {
+                  design.designFunctional[i].dvar[j].value[k] = 0;
+                }
             }
         }
+
+        // No body information if there are no Geometry derivatives
+        if (numShapeVar == 0) numBody = 0;
 
         for (ibody = 0; ibody < numBody; ibody++) {
 

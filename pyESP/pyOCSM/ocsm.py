@@ -96,6 +96,43 @@ def SetOutLevel(ilevel):
 
 # ======================================================================
 
+def SetAuxPtr(auxPtr):
+    """
+    ocsm.SetAuxPtr - set (global) auxiliary pointer
+
+    inputs:
+        auxPtr      auxiliary pointer
+    outputs:
+        (None)
+    """
+    _ocsm.ocsmSetAuxPtr.argtypes = [ctypes.c_void_p]
+
+    status = _ocsm.ocsmSetAuxPtr(auxPtr)
+    _processStatus(status, "SetAuxPtr")
+
+    return
+
+# ======================================================================
+
+def GetAuxPtr():
+    """
+    ocsm.GetAuxPtr - get (global) auxiliary pointer
+
+    inputs:
+        (none)
+    outputs:
+        auxPtr      auxiliary pointer
+    """
+    _ocsm.ocsmGetAuxPtr.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+    _ocsm.ocsmGetAuxPtr.restype  =  ctypes.c_int
+
+    auxPtr = ctypes.c_void_p()
+    status = _ocsm.ocsmGetAuxPtr(ctypes.byref(auxPtr))
+
+    return auxPtr
+
+# ======================================================================
+
 def PrintEgo(theEgo):
     """
     ocsm.PrintEgo - print the contents of an EGADS ego

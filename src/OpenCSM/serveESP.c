@@ -36,12 +36,6 @@
 #include <unistd.h>
 #include <assert.h>
 
-#define TESS_PARAM_0             0.0250
-#define TESS_PARAM_1             0.0075
-#define TESS_PARAM_2             20.0
-
-#define USING_CAPS               1
-
 #ifdef WIN32
     #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
@@ -70,12 +64,6 @@
 #include "egg.h"
 
 #include "tim.h"
-
-#ifdef USING_CAPS
-   #include "caps.h"
-   extern int caps_cpFile(const char *src, const char *dst);
-   extern int caps_rmFile(const char *path);
-#endif
 
 /***********************************************************************/
 /*                                                                     */
@@ -255,7 +243,6 @@ static int        skipBuild  = 0;      /* =1 to skip initial build */
 static int        skipTess   = 0;      /* -1 to skip tessellation at end of build */
 static int        tessel     = 0;      /* =1 for tessellation sensitivities */
 static int        verify     = 0;      /* =1 to enable verification */
-static char       *capsname  = NULL;   /* name of CAPS directory */
 static char       *filename  = NULL;   /* name of .csm file */
 static char       *vrfyname  = NULL;   /* name of .vfy file */
 static char       *despname  = NULL;   /* name of DESPMTRs file */
@@ -263,15 +250,10 @@ static char       *dictname  = NULL;   /* name of dictionary file */
 static char       *dxddname  = NULL;   /* name of despmtr for -dxdd */
 static char       *ptrbname  = NULL;   /* name of perturbation file */
 static char       *eggname   = NULL;   /* name of external grid generator */
-static char       *pyname    = NULL;   /* name of python file (if given) */
+static char       *pyname    = NULL;   /* name of pyscript file (if given) */
 static char       *plotfile  = NULL;   /* name of plotdata file */
 static char       *tessfile  = NULL;   /* name of tessellation file */
 static char       *BDFname   = NULL;   /* name of BDF file to plot */
-
-#ifdef USING_CAPS
-/* global variables associated with Caps */
-static int         capsPhase = -1;
-#endif
 
 /* global variables associated with graphical user interface (gui) */
 #define MAX_CLIENTS  100
@@ -328,6 +310,11 @@ static char       *messages = NULL;
 /* global variables associated with journals */
 static FILE       *jrnl_out = NULL;    /* output journal file */
 
+//#define TRACE_BROADCAST(BUFFER)  if (strlen(BUFFER) > 0) printf("<<< server2browser: %.80s\n", BUFFER)
+#ifndef TRACE_BROADCAST
+   #define TRACE_BROADCAST(BUFFER)
+#endif
+
 /***********************************************************************/
 /*                                                                     */
 /* declarations                                                        */
@@ -340,7 +327,7 @@ static FILE       *jrnl_out = NULL;    /* output journal file */
 static void       addToResponse(char text[]);
 static void       addToSgMetaData(char format[], ...);
 static int        applyDisplacement(esp_T *ESP, int ipmtr);
-       void       browserMessage(void *udata, void *wsi, char text[],int lena);
+       void       browserMessage(void *esp, void *wsi, char text[],int lena);
 static int        buildBodys(esp_T *ESP, int buildTo, int *builtTo, int *buildStatus, int *nwarn);
 static int        buildSceneGraph(esp_T *ESP);
 static int        buildSceneGraphBody(esp_T *ESP, int ibody);
@@ -349,9 +336,6 @@ static int        getToken(char text[], int nskip, char sep, char token[]);
 static int        maxDistance(modl_T *MODL1, modl_T *MODL2, int ibody, double *dist);
        void       mesgCallbackFromOpenCSM(char mesg[]);
 static int        processBrowserToServer(esp_T *ESP, char text[]);
-#ifdef USING_CAPS
-static void       showCapsErrors(int nerror, capsErrs errors[]);
-#endif
        void       sizeCallbackFromOpenCSM(void *modl, int ipmtr, int nrow, int ncel);
 static void       spec_col(float scalar, float out[]);
 static int        storeUndo(modl_T *MODL, char cmd[], char arg[]);
@@ -391,13 +375,6 @@ main(int       argc,                    /* (in)  number of arguments */
     FILE      *jrnl_in=NULL, *ptrb_fp, *vrfy_fp, *auto_fp, *test_fp;
     esp_T     *ESP=NULL;
     modl_T    *MODL=NULL;
-#ifdef USING_CAPS
-    int       nbrch, npmtr, nerror;
-    char      phase_old[11], phase_new[11], capsCsm[MAX_FILENAME_LEN];
-    FILE      *temp_fp;
-    capsObj   cProject;
-    capsErrs  *errors;
-#endif
 
     char      egadsName[128];
     ego       context, emodel;
@@ -421,7 +398,6 @@ main(int       argc,                    /* (in)  number of arguments */
     MALLOC(casename,    char, MAX_FILENAME_LEN);
     MALLOC(jrnlname,    char, MAX_FILENAME_LEN);
     MALLOC(tempname,    char, MAX_FILENAME_LEN);
-    MALLOC(capsname,    char, MAX_FILENAME_LEN);
     MALLOC(filename,    char, MAX_FILENAME_LEN);
     MALLOC(vrfyname,    char, MAX_FILENAME_LEN);
     MALLOC(despname,    char, MAX_FILENAME_LEN);
@@ -452,7 +428,6 @@ main(int       argc,                    /* (in)  number of arguments */
     /* get the flags and casename(s) from the command line */
     casename[ 0] = '\0';
     jrnlname[ 0] = '\0';
-    capsname[ 0] = '\0';
     filename[ 0] = '\0';
     vrfyname[ 0] = '\0';
     despname[ 0] = '\0';
@@ -477,19 +452,6 @@ main(int       argc,                    /* (in)  number of arguments */
             allVels = 1;
         } else if (strcmp(argv[i], "-batch") == 0) {
             batch = 1;
-        } else if (strcmp(argv[i], "-caps") == 0) {
-#ifdef USING_CAPS
-            if (i < argc-1) {
-                STRNCPY(capsname, argv[++i], MAX_FILENAME_LEN);
-            } else {
-                showUsage = 1;
-                break;
-            }
-#else
-            SPRINT0(0, "ERROR:: serveESP compiled without USING_CAPS");
-            status = EXIT_FAILURE;
-            goto cleanup;
-#endif
         } else if (strcmp(argv[i], "-despmtrs") == 0) {
             if (i < argc-1) {
                 STRNCPY(despname, argv[++i], MAX_FILENAME_LEN);
@@ -630,9 +592,6 @@ main(int       argc,                    /* (in)  number of arguments */
         SPRINT0(0, "   where [options...] = -addVerify");
         SPRINT0(0, "                        -allVels");
         SPRINT0(0, "                        -batch");
-#ifdef USING_CAPS
-        SPRINT0(0, "                        -caps capsname");
-#endif
         SPRINT0(0, "                        -despmtrs despname");
         SPRINT0(0, "                        -dict dictname");
         SPRINT0(0, "                        -dumpEgads");
@@ -679,9 +638,6 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT1(1, "    addVerify   = %d", addVerify  );
     SPRINT1(1, "    allVels     = %d", allVels    );
     SPRINT1(1, "    batch       = %d", batch      );
-#ifdef USING_CAPS
-    SPRINT1(1, "    capsname    = %s", capsname   );
-#endif
     SPRINT1(1, "    despmtrs    = %s", despname   );
     SPRINT1(1, "    dictname    = %s", dictname   );
     SPRINT1(1, "    dxddname    = %s", dxddname   );
@@ -701,22 +657,27 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT1(1, "    tessfile    = %s", tessfile   );
     SPRINT1(1, "    verify      = %d", verify     );
     SPRINT1(1, "    ESP_ROOT    = %s", /*@ignore@*/getenv("ESP_ROOT")/*@end@*/);
+    SPRINT1(1, "    ESP_PREFIX  = %s", /*@ignore@*/getenv("ESP_PREFIX")/*@end@*/);
     SPRINT0(1, " ");
 
-    /* get the structure that will hole the high-level pointers */
+    /* get the structure that will hold the high-level pointers */
     MALLOC(ESP, esp_T, 1);
 
     ESP->EGADS      = NULL;
     ESP->MODL       = NULL;
+    ESP->MODLorig   = NULL;
     ESP->CAPS       = NULL;
     ESP->cntxt      = NULL;
     ESP->sgFocus[0] = 0;
     ESP->sgFocus[1] = 0;
     ESP->sgFocus[2] = 0;
     ESP->sgFocus[3] = 1;
-    ESP->udata      = NULL;
-    ESP->udata2     = NULL;
     ESP->sgMutex    = NULL;
+    ESP->nudata     = 0;
+    for (i = 0; i < MAX_TIM_NESTING; i++) {
+        ESP->udata[  i]    = NULL;
+        ESP->timName[i][0] = '\0';
+    }
 
     /* create a mutex to make sure only one thread can modify the scene graph at a time */
     ESP->sgMutex = EMP_LockCreate();
@@ -743,13 +704,13 @@ main(int       argc,                    /* (in)  number of arguments */
 
     if (strlen(egadsName) > 0) {
         status = EG_open(&context);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        if (status < SUCCESS) goto cleanup;
 
         status = EG_loadModel(context, 0, egadsName, &emodel);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        if (status < SUCCESS) goto cleanup;
 
         status = ocsmLoadFromModel(emodel, (void **)&(ESP->MODL));
-        if (status < EGADS_SUCCESS) goto cleanup;
+        if (status < SUCCESS) goto cleanup;
 
         MODL = ESP->MODL;
 
@@ -827,7 +788,7 @@ main(int       argc,                    /* (in)  number of arguments */
                 fclose(test_fp);
             }
 
-            /* python file given */
+            /* pyscript file given */
             strcpy(pyname, filename);
             filename[0] = '\0';
             jrnlname[0] = '\0';
@@ -842,144 +803,44 @@ main(int       argc,                    /* (in)  number of arguments */
         filename[0] = '\0';
     }
 
-#ifdef USING_CAPS
-    /* if a capsname is given, we are in CAPS mode */
-    if (strlen(capsname) > 0) {
-
-        /* check if the CAPSproject already exists */
-        snprintf(tempname, MAX_FILENAME_LEN, "%s%cCapsLastPhase", capsname, SLASH);
-        temp_fp = fopen(tempname, "r");
-
-        /* caps Project does not exist, so casename must be non-null */
-        if (temp_fp == NULL) {
-            if (strlen(casename) == 0) {
-                SPRINT1(0, "ERROR:: capsProject \"%s\" does not exist, so casename must be given", capsname);
-                status = EXIT_FAILURE;
-                goto cleanup;
-            }
-
-            capsPhase = 0;
-
-            /* make a copy of the .csm file */
-            snprintf(capsCsm, MAX_FILENAME_LEN, "%s.csm", capsname);
-
-            status = caps_cpFile(filename, capsCsm);
-            CHECK_STATUS(caps_cpFile);
-
-            /* open a new capsProject with the copies .csm file */
-            SPRINT3(1, "--> enter caps_open(%s:%s) new from %s", capsname, "P0001", capsCsm);
-            old_time = clock();
-            status = caps_open(capsname, "P0001", 0, capsCsm,  outLevel, &cProject, &nerror, &errors);
-            new_time = clock();
-            printf("caps_open -> status=%d, nerror=%d\n", status, nerror);
-
-        /* capsProject does exist, so figure out the last phase associated with capsname */
-        } else {
-            fscanf(temp_fp, "%d", &capsPhase);
-            fclose(temp_fp);
-
-            snprintf(phase_old, 10, "P%04d", capsPhase  );
-            snprintf(phase_new, 10, "P%04d", capsPhase+1);
-
-            /* if casename is not given, open a new phase in the capsProject */
-            if (strlen(casename) == 0) {
-                SPRINT2(1, "--> enter caps_open(%s:%s) new phase", capsname, phase_new);
-                old_time = clock();
-                status = caps_open(capsname, phase_new, 3, phase_old,  outLevel, &cProject, &nerror, &errors);
-                new_time = clock();
-                printf("caps_open -> status=%d, nerror=%d\n", status, nerror);
-
-            /* a new casename is given too, so copy the .csm file into the capsProject's .csm */
-            } else {
-                snprintf(capsCsm, MAX_FILENAME_LEN, "%s.csm", capsname);
-
-                (void) caps_rmFile(capsCsm);
-
-                status = caps_cpFile(filename, capsCsm);
-                CHECK_STATUS(caps_cpFile);
-
-                SPRINT3(1, "--> enter caps_open(%s:%s) new phase from %s", capsname, phase_new, capsCsm);
-                old_time = clock();
-                status = caps_open(capsname, phase_new, 5, phase_old, outLevel, &cProject, &nerror, &errors);
-                new_time = clock();
-                printf("caps_open -> status=%d, nerror=%d\n", status, nerror);
-            }
-        }
-        if (status < EGADS_SUCCESS || nerror > 0) {
-            SPRINT1(0, "ERROR:: could not open capsname=\"%s\"", capsname);
-            showCapsErrors(nerror, errors);
-            status = EXIT_FAILURE;
-            goto cleanup;
-        }
-
-        ESP->CAPS = (capsObj)cProject;
-
-        /* if we created a new capsProblem, create a 0-length file to mark it as Caps*/
-        snprintf(tempname, MAX_FILENAME_LEN, "%s%cCapsLastPhase", capsname, SLASH);
-        temp_fp = fopen(tempname, "w");
-        if (temp_fp != NULL) {
-            fclose(temp_fp);
-        }
-
-        /* get the MODL out of ESP->CAPS */
-        SPLINT_CHECK_FOR_NULL(ESP->CAPS);
-
-        MODL = ESP->MODL = ((capsProblem*) (cProject->blind))->modl;
-
-        /* output statistics about the MODL */
-        status = ocsmInfo(MODL, &nbrch, &npmtr, &nbody);
-        if (status < EGADS_SUCCESS) {
-            SPRINT0(0, "ERROR:: could not get info out of MODL");
-            status = EXIT_FAILURE;
-            goto cleanup;
-        }
-
-        SPRINT4(1, "--> caps_open(%s) -> nbrch=%d, npmtr=%d, nbody=%d", capsname, nbrch, npmtr, nbody);
-        SPRINT1(1, "==> caps_open CPUtime=%9.3f sec",
-                (double)(new_time-old_time) / (double)(CLOCKS_PER_SEC));
-
     /* read the .csm file and create the MODL */
-    } else {
-#else
-    if (1) {
-#endif
-        old_time = clock();
-        status   = ocsmLoad(filename, (void **)&(ESP->MODL));
-        MODL = ESP->MODL;
+    old_time = clock();
+    status   = ocsmLoad(filename, (void **)&(MODL));
+    ESP->MODL     = MODL;
+    ESP->MODLorig = MODL;
 
-        new_time = clock();
-        SPRINT3(1, "--> ocsmLoad(%s) -> status=%d (%s)", filename, status, ocsmGetText(status));
-        SPRINT1(1, "==> ocsmLoad CPUtime=%9.3f sec",
-                (double)(new_time-old_time) / (double)(CLOCKS_PER_SEC));
+    new_time = clock();
+    SPRINT3(1, "--> ocsmLoad(%s) -> status=%d (%s)", filename, status, ocsmGetText(status));
+    SPRINT1(1, "==> ocsmLoad CPUtime=%9.3f sec",
+            (double)(new_time-old_time) / (double)(CLOCKS_PER_SEC));
 
-        if (status < SUCCESS && batch == 1) {
-            SPRINT0(0, "ERROR:: problem in ocsmLoad");
-            status = -999;
-            goto cleanup;
-        } else if (status < SUCCESS) {
-            SPRINT0(0, "ERROR:: problem in ocsmLoad\a");
-            pendingError = 1;
-        }
+    if (status < SUCCESS && batch == 1) {
+        SPRINT0(0, "ERROR:: problem in ocsmLoad");
+        status = -999;
+        goto cleanup;
+    } else if (status < SUCCESS) {
+        SPRINT0(0, "ERROR:: problem in ocsmLoad\a");
+        pendingError = 1;
     }
 
     SPLINT_CHECK_FOR_NULL(MODL);
 
     if (pendingError == 0) {
         status = ocsmLoadDict(MODL, dictname);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        if (status < SUCCESS) goto cleanup;
     }
 
     if (pendingError == 0) {
         status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        if (status < SUCCESS) goto cleanup;
 
         status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        if (status < SUCCESS) goto cleanup;
     }
 
     if (strlen(despname) > 0) {
         status = ocsmUpdateDespmtrs(MODL, despname);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        if (status < SUCCESS) goto cleanup;
     }
 
     if (pendingError == 0) {
@@ -1026,8 +887,9 @@ main(int       argc,                    /* (in)  number of arguments */
     /* if verify is on, add verification data from .vfy file to Branches */
     if (verify == 1 && pendingError == 0) {
         old_time = clock();
-        status   = ocsmLoad(vrfyname, (void **)&(ESP->MODL));
-        MODL = ESP->MODL;
+        status   = ocsmLoad(vrfyname, (void **)&(MODL));
+        ESP->MODL     = MODL;
+        ESP->MODLorig = MODL;
 
         new_time = clock();
         SPRINT3(1, "--> ocsmLoad(%s) -> status=%d (%s)", vrfyname, status, ocsmGetText(status));
@@ -1123,7 +985,7 @@ somewhere:
 
     if (strlen(egadsName) > 0) {
         status = buildSceneGraph(ESP);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        if (status < SUCCESS) goto cleanup;
     }
 
     /* build the Bodys from the MODL */
@@ -1258,6 +1120,15 @@ somewhere:
                 SPRINT1(0, "ERROR:: ocsmBuild -> status=%d\n", status);
                 status = -999;
                 goto cleanup;
+            }
+
+            if (outLevel >= 1) {
+                status = ocsmPrintProfile(MODL, "");
+                if (status != SUCCESS) {
+                    SPRINT1(0, "ERROR:: ocsmPrintProfile -> status=%d\n", status);
+                    status = -999;
+                    goto cleanup;
+                }
             }
 
             /* write the .tess file and exit */
@@ -1818,31 +1689,7 @@ somewhere:
         CHECK_STATUS(printHistogram);
     }
 
-#ifdef USING_CAPS
-    /* close the CAPS problem */
-    if (strlen(capsname) > 0) {
-        snprintf(tempname, MAX_FILENAME_LEN, "%s%cCapsLastPhase", capsname, SLASH);
-        temp_fp = fopen(tempname, "w");
-        if (temp_fp == NULL) {
-            SPRINT0(0, "ERROR:: could not record new Caps phase");
-            status = EXIT_FAILURE;
-            goto cleanup;
-        }
-        fprintf(temp_fp, "%d\n", capsPhase+1);
-        fclose(temp_fp);
-
-        SPLINT_CHECK_FOR_NULL(ESP->CAPS);
-
-        status = caps_close(ESP->CAPS, 1, NULL);
-        printf("caps_close -> status=%d\n", status);
-
-    /* free up storage associated with OpenCSM and EGADS */
-    } else {
-#else
-    if (1) {
-#endif
-        cleanupMemory(MODL, 0);
-    }
+    cleanupMemory(MODL, 0);
 
     /* free up stoage associated with GUI */
     wv_cleanupServers();
@@ -1941,7 +1788,6 @@ cleanup:
     FREE(vrfyname   );
     FREE(despname   );
     FREE(filename   );
-    FREE(capsname   );
     FREE(tempname   );
     FREE(jrnlname   );
     FREE(casename   );
@@ -2224,7 +2070,7 @@ cleanup:
 /***********************************************************************/
 
 void
-browserMessage(void    *udata,
+browserMessage(void    *esp,
    /*@unused@*/void    *wsi,
                char    text[],
    /*@unused@*/int     lena)
@@ -2234,7 +2080,7 @@ browserMessage(void    *udata,
     int       sendKeyData, ibody, onstack;
     char      message2[MAX_LINE_LEN];
 
-    esp_T     *ESP   = (esp_T *)udata;
+    esp_T     *ESP   = (esp_T *)esp;
     modl_T    *MODL;
     wvContext *cntxt;
 
@@ -2272,7 +2118,7 @@ browserMessage(void    *udata,
 
     /* send the response */
     if (strlen(response) > 0) {
-        SPRINT1(2, "\n<<< server2browser: %s", response);
+        TRACE_BROADCAST( response);
         wv_broadcastText(response);
     }
 
@@ -2280,6 +2126,7 @@ browserMessage(void    *udata,
        inform the user about the lowest and highest sensitivity values */
     if (sensPost > 0) {
         snprintf(message2, MAX_LINE_LEN-1, "Sensitivities are in the range between %f and %f", sensLo, sensHi);
+        TRACE_BROADCAST( message2);
         wv_broadcastText(message2);
 
         sensPost = 0;
@@ -2297,7 +2144,7 @@ browserMessage(void    *udata,
         SPLINT_CHECK_FOR_NULL(filelist);
 
         snprintf(message2, MAX_LINE_LEN-1, "getFilenames|%s", filelist);
-        SPRINT1(2, "\n<<< server2browser: getFilenames|%s", filelist);
+        TRACE_BROADCAST( message2);
         wv_broadcastText(message2);
 
         updatedFilelist = 0;
@@ -2305,7 +2152,7 @@ browserMessage(void    *udata,
 
     /* send the scene graph meta data if it has not already been sent */
     if (STRLEN(sgMetaData) > 0) {
-        SPRINT1(2, "\n<<< server2browser: sgData: %s", sgMetaData);
+        TRACE_BROADCAST( sgMetaData);
         wv_broadcastText(sgMetaData);
 
         /* nullify meta data so that it does not get sent again */
@@ -2315,7 +2162,7 @@ browserMessage(void    *udata,
     }
 
     if (STRLEN(sgFocusData) > 0) {
-        SPRINT1(2, "\n<<< server2browser: sgFocus: %s", sgFocusData);
+        TRACE_BROADCAST( sgFocusData);
         wv_broadcastText(sgFocusData);
 
         sendKeyData    = 1;
@@ -2329,33 +2176,39 @@ browserMessage(void    *udata,
             } else {
                 status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Tess: d(norm)/d(***)");
             }
-            SPRINT0(2, "\n<<< server2browser: setWvKey|on|");
+            TRACE_BROADCAST( "setWvKey|on|");
             wv_broadcastText("setWvKey|on|");
         } else if (haveDots == 1) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], dotName         );
-            SPRINT0(2, "\n<<< server2browser: setWvKey|on|");
+            TRACE_BROADCAST( "setWvKey|on|");
             wv_broadcastText("setWvKey|on|");
         } else if (plotType == 1) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Normalized U");
+            TRACE_BROADCAST( "setWvKey|on|");
             wv_broadcastText("setWvKey|on|");
         } else if (plotType == 2) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Normalized V");
+            TRACE_BROADCAST( "setWvKey|on|");
             wv_broadcastText("setWvKey|on|");
         } else if (plotType == 3) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Minimum Curv");
+            TRACE_BROADCAST( "setWvKey|on|");
             wv_broadcastText("setWvKey|on|");
         } else if (plotType == 4) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Maximum Curv");
+            TRACE_BROADCAST( "setWvKey|on|");
             wv_broadcastText("setWvKey|on|");
         } else if (plotType == 5) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "Gaussian Curv");
+            TRACE_BROADCAST( "setWvKey|on|");
             wv_broadcastText("setWvKey|on|");
         } else if (plotType == 6) {
             status = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], "normals");
+            TRACE_BROADCAST( "setWvKey|on|");
             wv_broadcastText("setWvKey|on|");
         } else {
             status = wv_setKey(cntxt,   0, NULL,      lims[0], lims[1], NULL            );
-            SPRINT0(2, "\n<<< server2browser: setWvKey|off|");
+            TRACE_BROADCAST( "setWvKey|off|");
             wv_broadcastText("setWvKey|off|");
         }
         if (status != SUCCESS) {
@@ -2368,7 +2221,7 @@ browserMessage(void    *udata,
         snprintf(response, max_resp_len, "%s|%s|",
                  MODL->sigMesg, messages);
 
-        SPRINT1(2, "\n<<< server2browser: %s", response);
+        TRACE_BROADCAST( response);
         wv_broadcastText(response);
 
         pendingError =  0;
@@ -2378,7 +2231,7 @@ browserMessage(void    *udata,
         snprintf(response, max_resp_len, "ERROR:: could not find Design Velocities; shown as zeros|%s|",
             messages);
 
-        SPRINT1(2, "\n<<< server2browser: %s", response);
+        TRACE_BROADCAST( response);
         wv_broadcastText(response);
 
         pendingError =  0;
@@ -2393,7 +2246,7 @@ browserMessage(void    *udata,
         snprintf(response, max_resp_len, "build|%d|%d|%s|",
                  successBuild, onstack, messages);
 
-        SPRINT1(2, "\n<< server2browser: %s", response);
+        TRACE_BROADCAST( response);
         wv_broadcastText(response);
 
         pendingError =  0;
@@ -2507,6 +2360,22 @@ buildBodys(esp_T   *ESP,
                 if (strcmp(MODL->pmtr[ipmtr].name, "@nwarn") == 0) {
                     *nwarn = NINT(MODL->pmtr[ipmtr].value[0]);
                     break;
+                }
+            }
+
+            /* print the profile of CPU time */
+            if (MODL->sigCode == 0 && outLevel >= 1) {
+                status2 = ocsmPrintProfile(MODL, "");
+                if (status2 != SUCCESS) {
+                    SPRINT1(0, "ERROR:: ocsmPrintProfile -> status=%d", status2);
+                }
+            }
+
+            /* print out the externally-visible Parameters */
+            if (outLevel > 0 && MODL->sigCode == 0) {
+                status2 = ocsmPrintPmtrs(MODL, "");
+                if (status2 != SUCCESS) {
+                    SPRINT1(0, "ERROR:: ocsmPrintPmtrs -> status=%d", status2);
                 }
             }
 
@@ -2737,6 +2606,19 @@ buildSceneGraph(esp_T  *ESP)
         }
     }
 
+    if (fabs(bigbox[0]-bigbox[3]) < EPS06) {
+        bigbox[0] -= EPS06;
+        bigbox[3] += EPS06;
+    }
+    if (fabs(bigbox[1]-bigbox[4]) < EPS06) {
+        bigbox[1] -= EPS06;
+        bigbox[4] += EPS06;
+    }
+    if (fabs(bigbox[2]-bigbox[5]) < EPS06) {
+        bigbox[2] -= EPS06;
+        bigbox[5] += EPS06;
+    }
+
                                     size = bigbox[3] - bigbox[0];
     if (size < bigbox[4]-bigbox[1]) size = bigbox[4] - bigbox[1];
     if (size < bigbox[5]-bigbox[2]) size = bigbox[5] - bigbox[2];
@@ -2763,6 +2645,10 @@ buildSceneGraph(esp_T  *ESP)
     /* loop through the Bodys */
     for (ibody = 1; ibody <= MODL->nbody; ibody++) {
         if (MODL->body[ibody].onstack != 1) continue;
+
+        if (enodes != NULL) EG_free(enodes);
+        if (eedges != NULL) EG_free(eedges);
+        if (efaces != NULL) EG_free(efaces);
 
         if (MODL->body[ibody].eebody == NULL) {
             ebody = MODL->body[ibody].ebody;
@@ -3183,7 +3069,6 @@ buildSceneGraph(esp_T  *ESP)
                         goto cleanup;
                     }
                 } else {
-//$$$
                     status = ocsmGetTessVel(MODL, ibody, OCSM_FACE, iface, (const double**)(&vel));
                     if (status != SUCCESS) {
                         SPRINT3(0, "ERROR:: ocsmGetTessVel(%d,%d) -> status=%d", ibody, iface, status);
@@ -3576,7 +3461,6 @@ buildSceneGraph(esp_T  *ESP)
                 snprintf(gpname, MAX_STRVAL_LEN-1, "PlotLine: Face_%d:%d_tufts", ibody, iface);
                 attrs = WV_ON;
 
-//$$$
                 status = ocsmGetTessVel(MODL, ibody, OCSM_FACE, iface, (const double**)(&vel));
                 if (status != SUCCESS) {
                     SPRINT3(0, "ERROR:: ocsmGetTessVel(%d,%d) -> status=%d", ibody, iface, status);
@@ -3890,7 +3774,6 @@ buildSceneGraph(esp_T  *ESP)
                 snprintf(gpname, MAX_STRVAL_LEN-1, "PlotLine: Edge_%d:%d_tufts", ibody, iedge);
                 attrs = WV_ON;
 
-//$$$
                 status = ocsmGetTessVel(MODL, ibody, OCSM_EDGE, iedge, (const double**)(&vel));
                 CHECK_STATUS(ocsmGetTessVel);
 
@@ -4064,7 +3947,6 @@ buildSceneGraph(esp_T  *ESP)
                 snprintf(gpname, MAX_STRVAL_LEN-1, "PlotLine: Node_%d:%d_tufts", ibody, inode);
                 attrs = WV_ON;
 
-//$$$
                 status = ocsmGetTessVel(MODL, ibody, OCSM_NODE, inode, (const double**)(&vel));
                 CHECK_STATUS(ocsmGetTessVel);
 
@@ -5165,19 +5047,15 @@ buildSceneGraphBody(esp_T  *ESP,
 {
     int       status = SUCCESS;         /* return status */
 
-    int       iface, iedge, inode, atype, alen, attrs, head[3];
+    int       iface, iedge, inode, attrs, head[3];
     int       npnt, ipnt, ntri, itri, igprim, nseg, k;
     int       *segs=NULL, *ivrts=NULL;
     CINT      *ptype, *pindx, *tris, *tric;
     float     color[18];
-    double    xyz_dum[6], bbox[6], size, params[3];
+    double    xyz_dum[6];
     CDOUBLE   *xyz, *uv, *t;
     char      gpname[MAX_STRVAL_LEN];
     ego       etess;
-
-    CINT      *tempIlist;
-    CDOUBLE   *tempRlist;
-    CCHAR     *tempClist;
 
     wvContext *cntxt = ESP->cntxt;
     modl_T    *MODL  = ESP->MODL;
@@ -5199,43 +5077,11 @@ buildSceneGraphBody(esp_T  *ESP,
 
     /* tessellate Body if not already tessellated */
     if (etess == NULL) {
-        status = EG_attributeRet(MODL->body[ibody].ebody, "_tParams",
-                                 &atype, &alen, &tempIlist, &tempRlist, &tempClist);
-        if (status == EGADS_NOTFOUND) {
-            status = EG_attributeRet(MODL->body[ibody].ebody, ".tParams",
-                                     &atype, &alen, &tempIlist, &tempRlist, &tempClist);
-            if (status == SUCCESS && alen == 3) {
-                params[0] = tempRlist[0];
-                params[1] = tempRlist[1];
-                params[2] = tempRlist[2];
-
-            } else {
-                status = EG_getBoundingBox(MODL->body[ibody].ebody, bbox);
-                CHECK_STATUS(EG_getBoundingBox);
-
-                size = sqrt(SQR(bbox[3]-bbox[0]) + SQR(bbox[4]-bbox[1]) + SQR(bbox[5]-bbox[2]));
-
-                params[0] = TESS_PARAM_0 * size;
-                params[1] = TESS_PARAM_1 * size;
-                params[2] = TESS_PARAM_2;
-            }
-
-            status = EG_attributeAdd(MODL->body[ibody].ebody, "_tParams",
-                                     ATTRREAL, 3, NULL, params, NULL);
-            CHECK_STATUS(EG_attributeAdd);
-        }
-
-        status = EG_attributeRet(MODL->body[ibody].ebody, "_tParams",
-                                 &atype, &alen, &tempIlist, &tempRlist, &tempClist);
-        if (status == SUCCESS && atype == ATTRREAL && alen == 3) {
-            status = EG_makeTessBody(MODL->body[ibody].ebody, (double*)tempRlist,
-                                     &(etess));
-            if (etess != NULL) {
-                MODL->body[ibody].etess = etess;
-            }
-        } else {
+        status = ocsmTessellate(MODL, ibody);
+        if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: cannot tessellate ibody %d", ibody);
         }
+        etess = MODL->body[ibody].etess;
     }
     SPLINT_CHECK_FOR_NULL(etess);
 
@@ -5606,48 +5452,75 @@ getToken(char   text[],                 /* (in)  full text */
          char   sep,                    /* (in)  separator character */
          char   token[])                /* (out) token */
 {
-    int    lentok, i, count, iskip;
+    int    status = SUCCESS;
+
+    int    lentok, i, j, count, iskip;
+    char   *newText=NULL;
+
+    ROUTINE(getToken);
 
     /* --------------------------------------------------------------- */
 
     token[0] = '\0';
     lentok   = 0;
 
-    /* convert tabs to spaces */
+    MALLOC(newText, char, strlen(text)+2);
+
+    /* convert tabs to spaces, remove leading white space, and
+       compress other white space */
+    j = 0;
     for (i = 0; i < STRLEN(text); i++) {
-        if (text[i] == '\t') {
-            text[i] = ' ';
+
+        /* convert tabs and newlines */
+        if (text[i] == '\t' || text[i] == '\n') {
+            newText[j++] = ' ';
+        } else {
+            newText[j++] = text[i];
+        }
+
+        /* remove leading white space */
+        if (j == 1 && newText[0] == ' ') {
+            j--;
+        }
+
+        /* compress white space */
+        if (j > 1 && newText[j-2] == ' ' && newText[j-1] == ' ') {
+            j--;
         }
     }
+    newText[j] = '\0';
+
+    if (strlen(newText) == 0) goto cleanup;
 
     /* count the number of separators */
     count = 0;
-    for (i = 0; i < STRLEN(text); i++) {
-        if (text[i] == sep) {
+    for (i = 0; i < STRLEN(newText); i++) {
+        if (newText[i] == sep) {
             count++;
         }
     }
 
-    if (count < nskip+1) return 0;
+    if (count < nskip) {
+        goto cleanup;
+    } else if (count == nskip && newText[strlen(newText)-1] == sep) {
+        goto cleanup;
+    }
 
     /* skip over nskip tokens */
     i = 0;
     for (iskip = 0; iskip < nskip; iskip++) {
-        while (text[i] != sep) {
+        while (newText[i] != sep) {
             i++;
         }
         i++;
     }
 
     /* if token we are looking for is empty, return 0 */
-    if (text[i] == sep) {
-        token[0] = '0';
-        token[1] = '\0';
-    }
+    if (newText[i] == sep) goto cleanup;
 
     /* extract the token we are looking for */
-    while (text[i] != sep) {
-        token[lentok++] = text[i++];
+    while (newText[i] != sep) {
+        token[lentok++] = newText[i++];
         token[lentok  ] = '\0';
 
         if (lentok >= MAX_EXPR_LEN-1) {
@@ -5656,7 +5529,13 @@ getToken(char   text[],                 /* (in)  full text */
         }
     }
 
-    return STRLEN(token);
+    status =  STRLEN(token);
+
+cleanup:
+
+    FREE(newText);
+
+    return status;
 }
 
 
@@ -5945,12 +5824,11 @@ processBrowserToServer(esp_T   *ESP,
     int       i, ibrch, itype, nlist, builtTo, buildStatus, ichar, iundo;
     int       ipmtr, jpmtr, nrow, ncol, irow, icol, index, iattr, actv, itemp, linenum;
     int       itoken1, itoken2, itoken3, ibody, onstack, direction=1, nwarn;
-    int       my_length = 4096;
     int       nclient;
     CINT      *tempIlist;
     double    scale, value, dot;
     CDOUBLE   *tempRlist;
-    char      *pEnd, bname[MAX_NAME_LEN+1], *bodyinfo=NULL;
+    char      *pEnd, bname[MAX_NAME_LEN+1], *bodyinfo=NULL, *tempEnv;
     CCHAR     *tempClist;
 
     char      *name=NULL,   *type=NULL, *valu=NULL;
@@ -5958,7 +5836,7 @@ processBrowserToServer(esp_T   *ESP,
     char      *arg4=NULL,   *arg5=NULL, *arg6=NULL;
     char      *arg7=NULL,   *arg8=NULL, *arg9=NULL;
     char      *entry=NULL,  *temp=NULL, *temp2=NULL;
-    char      *matrix=NULL, *my_response=NULL;
+    char      *matrix=NULL;
 
 #define  MAX_TOKN_LEN  16384
 
@@ -6018,10 +5896,16 @@ processBrowserToServer(esp_T   *ESP,
         SPRINT0(1, "********************************************");
 
         /* build the response */
-        if (strlen(capsname) == 0) {
-            snprintf(response, max_resp_len, "identify|serveESP|%d|%s|", nclient, pyname);
+        snprintf(response, max_resp_len, "identify|serveESP|%d|%s|||", nclient, pyname);
+        response_len = STRLEN(response);
+
+    /* "getEspPrefix|" */
+    } else if (strncmp(text, "getEspPrefix|", 13) == 0) {
+        tempEnv = getenv("ESP_PREFIX");
+        if (tempEnv != NULL) {
+            snprintf(response, max_resp_len, "getEspPrefix|%s|", tempEnv);
         } else {
-            snprintf(response, max_resp_len, "identify|serveCAPS|%d|%s|", nclient, pyname);
+            snprintf(response, max_resp_len, "getEspPrefix||");
         }
         response_len = STRLEN(response);
 
@@ -6398,56 +6282,64 @@ processBrowserToServer(esp_T   *ESP,
             fflush( jrnl_out);
         }
 
-        /* extract arguments */
-        ipmtr = 0;
-        irow  = 0;
-        icol  = 0;
+        if (ESP->CAPS == NULL) {
 
-        getToken(text, 1, '|', arg1);
+            /* extract arguments */
+            ipmtr = 0;
+            irow  = 0;
+            icol  = 0;
 
-        for (jpmtr = 1; jpmtr <= MODL->npmtr; jpmtr++) {
-            if (strcmp(arg1, MODL->pmtr[jpmtr].name) == 0) {
-                ipmtr = jpmtr;
-                break;
-            }
-        }
+            getToken(text, 1, '|', arg1);
 
-        if (ipmtr > 0) {
-            if (getToken(text, 2, '|', arg2)) irow  = strtol(arg2, &pEnd, 10);
-            if (getToken(text, 3, '|', arg3)) icol  = strtol(arg3, &pEnd, 10);
-
-            /* store an undo snapshot */
-            status = storeUndo(MODL, "setPmtr", MODL->pmtr[ipmtr].name);
-            if (status != SUCCESS) {
-                SPRINT1(0, "ERROR:: storeUndo(setPmtr) detected: %s", ocsmGetText(status));
+            for (jpmtr = 1; jpmtr <= MODL->npmtr; jpmtr++) {
+                if (strcmp(arg1, MODL->pmtr[jpmtr].name) == 0) {
+                    ipmtr = jpmtr;
+                    break;
+                }
             }
 
-            if (getToken(text, 4, '|', arg4)) {
-                status = ocsmSetValu(MODL, ipmtr, irow, icol, arg4);
+            if (ipmtr > 0) {
+                if (getToken(text, 2, '|', arg2)) irow  = strtol(arg2, &pEnd, 10);
+                if (getToken(text, 3, '|', arg3)) icol  = strtol(arg3, &pEnd, 10);
+
+                /* store an undo snapshot */
+                status = storeUndo(MODL, "setPmtr", MODL->pmtr[ipmtr].name);
                 if (status != SUCCESS) {
-                    SPRINT5(0, "ERROR:: ocsmSetValu(%d,%d,%d,%s) detected: %s",
-                            ipmtr, irow, icol, arg4, ocsmGetText(status));
+                    SPRINT1(0, "ERROR:: storeUndo(setPmtr) detected: %s", ocsmGetText(status));
+                }
+
+                if (getToken(text, 4, '|', arg4)) {
+                    status = ocsmSetValu(MODL, ipmtr, irow, icol, arg4);
+                    if (status != SUCCESS) {
+                        SPRINT5(0, "ERROR:: ocsmSetValu(%d,%d,%d,%s) detected: %s",
+                                ipmtr, irow, icol, arg4, ocsmGetText(status));
+                    }
+                } else {
+                    status = -999;
+                }
+
+                /* build the response */
+                if (status == SUCCESS) {
+                    snprintf(response, max_resp_len, "setPmtr|");
+                } else {
+                    snprintf(response, max_resp_len, "setPmtr|ERROR:: %s",
+                             ocsmGetText(status));
                 }
             } else {
-                status = -999;
-            }
-
-            /* build the response */
-            if (status == SUCCESS) {
-                snprintf(response, max_resp_len, "setPmtr|");
-            } else {
                 snprintf(response, max_resp_len, "setPmtr|ERROR:: %s",
-                         ocsmGetText(status));
+                         ocsmGetText(OCSM_NAME_NOT_FOUND));
             }
-        } else {
-            snprintf(response, max_resp_len, "setPmtr|ERROR:: %s",
-                     ocsmGetText(OCSM_NAME_NOT_FOUND));
-        }
-        response_len = STRLEN(response);
+            response_len = STRLEN(response);
 
-        /* write autosave file */
-        status = ocsmSave(MODL, "autosave.csm");
-        SPRINT1(2, "ocsmSave(autosave.csm) -> status=%d", status);
+            /* write autosave file */
+            status = ocsmSave(MODL, "autosave.csm");
+            SPRINT1(2, "ocsmSave(autosave.csm) -> status=%d", status);
+
+        /* we are in CAPS mode, so let CapsMode take care if it */
+        } else {
+            snprintf(response, max_resp_len, "timMesg(capsMode|%s", text);
+            response_len = STRLEN(response);
+        }
 
     /* "delPmtr|ipmtr|" */
     } else if (strncmp(text, "delPmtr|", 8) == 0) {
@@ -7022,190 +6914,6 @@ processBrowserToServer(esp_T   *ESP,
         status = ocsmSave(MODL, "autosave.csm");
         SPRINT1(2, "ocsmSave(autosave.csm) -> status=%d", status);
 
-#ifdef USING_CAPS
-    /* "getCvals|" */
-    } else if (strncmp(text, "getCvals|", 9) == 0) {
-        int            icval, ncval, nerror;
-        const int      *partial;
-        const double   *reals;
-        char           *name2;
-        const char     *units;
-        const void     *data;
-        capsObj        cValue, link, parent;
-        capsErrs       *errors;
-        enum capsoType otype;
-        enum capssType stype;
-        enum capsvType vtype;
-        capsOwn        last;
-
-        /* build the response in JSON format */
-        status = caps_size(ESP->CAPS, VALUE, PARAMETER, &ncval, &nerror, &errors);
-        printf("caps_size -> status=%d, ncval=%d, nerror=%d\n", status, ncval, nerror);
-
-        if (ncval > 0) {
-            snprintf(response, max_resp_len, "getCvals|[");
-        } else {
-            snprintf(response, max_resp_len, "getCvals|");
-        }
-        response_len = STRLEN(response);
-
-        for (icval = 1; icval <= ncval; icval++) {
-            status = caps_childByIndex(ESP->CAPS, VALUE, PARAMETER, icval, &cValue);
-            printf("caps_childByIndex(%d) -> status=%d\n", icval, status);
-
-            status = caps_info(cValue, &name2, &otype, &stype, &link, &parent, &last);
-            printf("caps_info -> status=%d\n", status);
-
-            status = caps_getValue(cValue, &vtype, &nrow, &ncol, &data, &partial, &units, &nerror, &errors);
-            printf("caps_getValue -> status=%d, nerror=%d\n", status, nerror);
-            reals = data;
-
-            snprintf(entry, MAX_STR_LEN, "{\"name\":\"%s\",\"nrow\":%d,\"ncol\":%d,\"value\":[",
-                     name2, nrow, ncol);
-            addToResponse(entry);
-
-            for (i = 0; i < nrow*ncol-1; i++) {
-                snprintf(entry, MAX_STR_LEN, "%lg,", reals[i]);
-                addToResponse(entry);
-            }
-            if (icval < ncval) {
-                snprintf(entry, MAX_STR_LEN, "%lg]},", reals[nrow*ncol-1]);
-            } else {
-                snprintf(entry, MAX_STR_LEN, "%lg]}]", reals[nrow*ncol-1]);
-            }
-            addToResponse(entry);
-        }
-        printf("serverToBrowser(%s)\n", response);
-
-    /* "newCval|name|nrow|ncol|units|value1|..." */
-    } else if (strncmp(text, "newCval|", 8) == 0) {
-        double  *cvals=NULL;
-        char    units[MAX_EXPR_LEN];
-        capsObj cValue;
-
-        /* write journal entry */
-        if (jrnl_out != NULL) {
-            fprintf(jrnl_out, "%s\n", text);
-            fflush( jrnl_out);
-        }
-
-        /* extract arguments */
-        nrow = 0;
-        ncol = 0;
-
-        if (getToken(text,  1, '|', name) == 0) name[0] = '\0';
-        if (getToken(text,  2, '|', arg1)     ) nrow = strtol(arg1, &pEnd, 10);
-        if (getToken(text,  3, '|', arg2)     ) ncol = strtol(arg2, &pEnd, 10);
-        if (getToken(text,  4, '|', arg3) == 0) units[0] = '\0';
-
-        MALLOC(cvals, double, nrow*ncol);
-
-        i = 5;
-        for (irow = 1; irow <= nrow; irow++) {
-            for (icol = 1; icol <= ncol; icol++) {
-                if (getToken(text, i, '|', arg4)) {
-                    cvals[i-5] = atof(arg4);
-                }
-
-                i++;
-            }
-        }
-
-        /* build the response */
-        if (strcmp(units, ".") == 0) {
-            status = caps_makeValue(ESP->CAPS, name, PARAMETER, Double, nrow, ncol, cvals, NULL, "",    &cValue);
-        } else {
-            status = caps_makeValue(ESP->CAPS, name, PARAMETER, Double, nrow, ncol, cvals, NULL, units, &cValue);
-        }
-        printf("caps_makeValue -> status=%d\n", status);
-        if (status == SUCCESS) {
-            snprintf(response, max_resp_len, "newCval|");
-        } else {
-            snprintf(response, max_resp_len, "ERROR:: newCval(%s,%s,%s,%s) detected: %d",
-                     name, arg1, arg2, arg3, status);
-        }
-        response_len = STRLEN(response);
-
-        FREE(cvals);
-        printf("serverToBrowser(%s)\n", response);
-
-    /* "setCval|name|irow|icol|value| " */
-    } else if (strncmp(text, "setCval|", 8) == 0) {
-        int            icval, nerror;
-        const int      *partial;
-        enum capsvType vtype;
-        double         *cvals_new=NULL;
-        const double   *cvals_old;
-        const void     *data;
-        const char     *units;
-        capsObj        cValue;
-        capsErrs       *errors;
-
-        /* write journal entry */
-        if (jrnl_out != NULL) {
-            fprintf(jrnl_out, "%s\n", text);
-            fflush( jrnl_out);
-        }
-
-        /* extract arguments */
-        irow  = 0;
-        icol  = 0;
-
-        getToken(text, 1, '|', arg1);
-        if (getToken(text, 2, '|', arg2)) irow  = strtol(arg2, &pEnd, 10);
-        if (getToken(text, 3, '|', arg3)) icol  = strtol(arg3, &pEnd, 10);
-        getToken(text, 4, '|', arg4);
-
-        status = caps_childByName(ESP->CAPS, VALUE, PARAMETER, arg1, &cValue, &nerror, &errors);
-        printf("caps_childByName -> status=%d, nerror=%d\n", status, nerror);
-        if (status < SUCCESS) {
-            showCapsErrors(nerror, errors);
-            snprintf(response, max_resp_len, "setCval|ERROR:: caps_childByName -> status=%d", status);
-        }
-
-        if (nerror == 0) {
-            /*@-nullpass@*/
-            status = caps_getValue(cValue, &vtype, &nrow, &ncol, &data, &partial, &units, &nerror, &errors);
-            /*@+nullpass@*/
-            printf("caps_getValue -> status=%d, nerror=%d\n", status, nerror);
-            cvals_old = data;
-            if (status < SUCCESS) {
-                showCapsErrors(nerror, errors);
-                snprintf(response, max_resp_len, "setCval|ERROR:: caps_getValue -> status=%d", status);
-            }
-        }
-
-        if (nerror == 0) {
-            MALLOC(cvals_new, double, nrow*ncol);
-
-            for (icval = 0; icval < nrow*ncol; icval++) {
-                cvals_new[icval] = cvals_old[icval];
-            }
-
-            if        (irow < 1 || irow > nrow) {
-                snprintf(response, max_resp_len, "setCval|ERROR:: illegal irow (%d) value", irow);
-            } else if (icol < 1 || icol > ncol) {
-                snprintf(response, max_resp_len, "setCval|ERROR:: illegal icol (%d) value", icol);
-            } else {
-                icval = (irow-1) * ncol + (icol-1);
-                cvals_new[icval] = atof(arg4);
-
-                status = caps_setValue(cValue, vtype, nrow, ncol, cvals_new, NULL, units, &nerror, &errors);
-                printf("caps_setValue -> status=%d, nerror=%d\n", status, nerror);
-                if (status < SUCCESS) {
-                    showCapsErrors(nerror, errors);
-                    snprintf(response, max_resp_len, "setCval|ERROR:: caps_setValue -> status=%d", status);
-                } else {
-                    snprintf(response, max_resp_len, "setCval|");
-                }
-            }
-        }
-        response_len = STRLEN(response);
-
-        FREE(cvals_new);
-        printf("serverToBrowser(%s)\n", response);
-#endif
-
     /* "undo|" */
     } else if (strncmp(text, "undo|", 5) == 0) {
 
@@ -7260,8 +6968,9 @@ processBrowserToServer(esp_T   *ESP,
 
         /* load an empty MODL */
         filename[0] = '\0';
-        status = ocsmLoad(filename, (void **)&(ESP->MODL));
-        MODL = ESP->MODL;
+        status = ocsmLoad(filename, (void **)&(MODL));
+        ESP->MODL     = MODL;
+        ESP->MODLorig = MODL;
 
         if (status != SUCCESS) {
             SPRINT1(0, "ERROR:: osmLoad(NULL) -> status=%d", status);
@@ -7280,14 +6989,14 @@ processBrowserToServer(esp_T   *ESP,
         }
 
         status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(ocsmRegMesgCB);
 
         status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(ocsmRegSizeCB);
 
         if (strlen(despname) > 0) {
             status = ocsmUpdateDespmtrs(MODL, despname);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            if (status < SUCCESS) goto cleanup;
         }
 
         status = buildBodys(ESP, 0, &builtTo, &buildStatus, &nwarn);
@@ -7322,12 +7031,22 @@ processBrowserToServer(esp_T   *ESP,
         /* extract argument */
         getToken(text, 1, '|', filename);
 
+        /* make sure the file exists */
+        fp = fopen(filename, "r");
+        if (fp != NULL) {
+            fclose(fp);
+        } else {
+            snprintf(response, max_resp_len, "load|ERROR|File \"%s\" not found", filename);
+            goto cleanup;
+        }
+
         /* save the current MODL (to be deleted below) */
-        saved_MODL = MODL;
+        saved_MODL = ESP->MODL;
 
         /* load the new MODL */
-        status = ocsmLoad(filename, (void **)&(ESP->MODL));
-        MODL = ESP->MODL;
+        status = ocsmLoad(filename, (void **)&(MODL));
+        ESP->MODL     = MODL;
+        ESP->MODLorig = MODL;
 
         if (status != SUCCESS) {
             snprintf(response, max_resp_len, "%s||",
@@ -7342,23 +7061,23 @@ processBrowserToServer(esp_T   *ESP,
             }
 
             status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(ocsmRegMesgCB);
 
             status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(ocsmRegSizeCB);
 
             if (strlen(despname) > 0) {
                 status = ocsmUpdateDespmtrs(MODL, despname);
-                if (status < EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(ocsmUpdateDespmtrs);
             }
 
             /* apply and free up a saved MODL (if it exists) */
             if (saved_MODL != NULL) {
                 status = updateModl(saved_MODL, MODL);
-                if (status < EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(updateModl);
 
                 status = ocsmFree(saved_MODL);
-                if (status < EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(ocsmFree);
             }
 
             status = buildBodys(ESP, 0, &builtTo, &buildStatus, &nwarn);
@@ -7413,6 +7132,30 @@ processBrowserToServer(esp_T   *ESP,
         }
         response_len = STRLEN(response);
 
+    /* "insert|filename|" */
+    } else if (strncmp(text, "insert|", 7) == 0) {
+
+        /* extract argument */
+        getToken(text, 1, '|', arg1);
+
+        /* send filename's contents to the browser */
+        fp = fopen(arg1, "r");
+        if (fp != NULL) {
+            snprintf(response, max_resp_len, "insert|");
+            response_len = STRLEN(response);
+
+            while (1) {
+                if (fgets(entry, MAX_STR_LEN-1, fp) == NULL) break;
+                addToResponse(entry);
+                if (feof(fp) != 0) break;
+            }
+
+            fclose(fp);
+            fp = NULL;
+        }
+
+        response_len = STRLEN(response);
+
     /* "getFilenames|" */
     } else if (strncmp(text, "getFilenames|", 13) == 0) {
 
@@ -7429,6 +7172,15 @@ processBrowserToServer(esp_T   *ESP,
         }
         SPLINT_CHECK_FOR_NULL(filelist);
         updatedFilelist = 0;
+
+        /* remember the first name in the filelist */
+        strncpy(filename, filelist, MAX_FILENAME_LEN);
+        for (i = 0; i < strlen(filename); i++) {
+            if (filename[i] == '|') {
+                filename[i] = '\0';
+                break;
+            }
+        }
 
         /* build the response */
         snprintf(response, max_resp_len, "getFilenames|%s",
@@ -7521,8 +7273,9 @@ processBrowserToServer(esp_T   *ESP,
         saved_MODL = MODL;
 
         /* load the new MODL */
-        status = ocsmLoad(filename, (void **)&(ESP->MODL));
-        MODL = ESP->MODL;
+        status = ocsmLoad(filename, (void **)&(MODL));
+        ESP->MODL     = MODL;
+        ESP->MODLorig = MODL;
 
         if (status != SUCCESS) {
             snprintf(response, max_resp_len, "%s||",
@@ -7537,18 +7290,18 @@ processBrowserToServer(esp_T   *ESP,
             }
 
             status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(ocsmRegMesgCB);
 
             status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(ocsmRegSizeCB);
 
             if (strlen(despname) > 0) {
                 status = ocsmUpdateDespmtrs(MODL, despname);
-                if (status < EGADS_SUCCESS) goto cleanup;
+                CHECK_STATUS(ocsmUpdateDespmtrs);
             }
 
             status = updateModl(saved_MODL, MODL);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            CHECK_STATUS(updateModl);
 
             snprintf(response, max_resp_len, "load|");
         }
@@ -7862,12 +7615,12 @@ processBrowserToServer(esp_T   *ESP,
         if (plotType < 7) {
             if (MODL->erepAtEnd == 1) {
                 status = buildBodys(ESP, 0, &builtTo, &buildStatus, &nwarn);
-                if (status != SUCCESS) goto cleanup;
+                CHECK_STATUS(buildStatus);
             }
         } else {
             if (MODL->erepAtEnd == 0) {
                 status = buildBodys(ESP, 0, &builtTo, &buildStatus, &nwarn);
-                if (status != SUCCESS) goto cleanup;
+                CHECK_STATUS(buildStatus);
             }
         }
 
@@ -7946,14 +7699,16 @@ processBrowserToServer(esp_T   *ESP,
 
         /* load the tim */
         status = tim_load(arg1, ESP, arg2);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(tim_load);
+
+        MODL = ESP->MODL;
 
         /* reset the callbacks in case in was changed */
         status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(ocsmRegMesgCB);
 
         status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(ocsmRegSizeCB);
 
     /* "timMesg|timname|...|" */
     } else if (strncmp(text, "timMesg|", 8) == 0) {
@@ -7975,17 +7730,17 @@ processBrowserToServer(esp_T   *ESP,
             if (text[i] == '|') break;
         }
 
-        MALLOC(my_response, char, my_length);
-
         status = tim_mesg(arg1, &text[i+1]);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(tim_mesg);
+
+        MODL = ESP->MODL;
 
         /* reset the callbacks in case they were changed */
         status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(ocsmRegMesgCB);
 
         status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(ocsmRegSizeCB);
 
     /* "timSave|timname|" */
     } else if (strncmp(text, "timSave|", 8) == 0) {
@@ -8003,7 +7758,7 @@ processBrowserToServer(esp_T   *ESP,
         getToken(text, 1, '|', arg1);
 
         status = tim_save(arg1);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(tim_save);
 
     /* "timQuit|timname|" */
     } else if (strncmp(text, "timQuit|", 8) == 0) {
@@ -8021,10 +7776,10 @@ processBrowserToServer(esp_T   *ESP,
         getToken(text, 1, '|', arg1);
 
         status = tim_quit(arg1);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        CHECK_STATUS(tim_quit);
 
     /* "timDraw|" */
-    } else if (strncmp(text, "timDraw|timName|", 8) == 0) {
+    } else if (strncmp(text, "timDraw|", 8) == 0) {
 
         getToken(text, 1, '|', arg1);
 
@@ -8032,7 +7787,6 @@ processBrowserToServer(esp_T   *ESP,
 
     /* "overlayEnd|timName|" */
     } else if (strncmp(text, "overlayEnd|", 11) == 0) {
-
         getToken(text, 1, '|', arg1);
 
         tim_lift(arg1);
@@ -8067,56 +7821,6 @@ cleanup:
 
     return status;
 }
-
-
-/***********************************************************************/
-/*                                                                     */
-/*   showCapsErrors - show errors in caps error structure              */
-/*                                                                     */
-/***********************************************************************/
-
-#ifdef USING_CAPS
-static void
-showCapsErrors(int      nerror,         /* (in)  number of errors */
-               capsErrs errors[])       /* (in)  stuctures holding error info */
-{
-    int         i, j, stat, eType, nLines;
-    char        **lines;
-    capsObj     obj;
-    static char *type[5] = {"Cont:   ",
-                            "Info:   ",
-                            "Warning:",
-                            "Error:  ",
-                            "Status: "};
-
-    ROUTINE(showCapsErrors);
-
-    /* --------------------------------------------------------------- */
-
-    if (errors == NULL) goto cleanup;
-
-    for (i = 1; i <= nerror; i++) {
-        stat = caps_errorInfo(errors, i, &obj, &eType, &nLines, &lines);
-        if (stat != CAPS_SUCCESS) {
-            printf("%d/%d caps_errorInfo = %d\n", i, nerror, stat);
-            continue;
-        }
-        for (j = 0; j < nLines; j++) {
-            if (j == 0) {
-                printf("CAPS %s ", type[eType+1]);
-            } else {
-                printf("              ");
-            }
-            printf("%s\n", lines[j]);
-        }
-    }
-
-    caps_freeError(errors);
-
-cleanup:
-    return;
-}
-#endif
 
 
 /***********************************************************************/
@@ -8183,7 +7887,7 @@ sizeCallbackFromOpenCSM(void   *modl,   /* (in)  pointer to MODL */
                         snprintf(entry, MAX_STR_LEN, "%lg],\"dot\":[", MODL->pmtr[ipmtr].value[index++]);
                     }
                     addToResponse(entry);
-                    }
+                }
             }
 
             index = 0;
@@ -8302,7 +8006,7 @@ sizeCallbackFromOpenCSM(void   *modl,   /* (in)  pointer to MODL */
     }
 
     /* send to browsers */
-    SPRINT1(2, "\n<<< server2browser: %s", response);
+    TRACE_BROADCAST( response);
     wv_broadcastText(response);
 
     response[0]  = '\0';

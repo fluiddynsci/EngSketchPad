@@ -12,6 +12,7 @@ class TestMSES_Kulfan(unittest.TestCase):
     def setUpClass(cls):
         # Create working directory variable
         cls.problemName = "workDir_msesKulfanTest"
+        cls.iProb = 1
         #workDir = os.path.join(str(args.workDir[0]), workDir)
 
         cls.cleanUp()
@@ -24,8 +25,9 @@ class TestMSES_Kulfan(unittest.TestCase):
         # Load mses aim
         cls.mses = cls.myProblem.analysis.create(aim = "msesAIM")
 
-        # Set Mach number
+        # Set Mach number and GridAlpha
         cls.mses.input.Mach = 0.5
+        cls.mses.input.GridAlpha = 3.0
 
     @classmethod
     def tearDownClass(cls):
@@ -43,21 +45,53 @@ class TestMSES_Kulfan(unittest.TestCase):
                 shutil.rmtree(dir)
 
 #==============================================================================
+    def test_allInputs(self):
+        mses = self.myProblem.analysis.create(aim = "msesAIM")
+        
+        mses.input.Mach = 0.5
+        mses.input.Re = 1e6
+        mses.input.Alpha = None
+        mses.input.CL = 0.1
+        mses.input.Acrit = 5
+        mses.input.xTransition_Upper = 0.1
+        mses.input.xTransition_Lower = 0.5
+        mses.input.Mcrit = 0.9
+        mses.input.MuCon = 1.0
+        mses.input.ISMOM = 4
+        mses.input.IFFBC = 2
+        mses.input.GridAlpha = 1.0
+        mses.input.Airfoil_Points = 201
+        mses.input.Inlet_Points = 41
+        mses.input.Outlet_Points = 41
+        mses.input.Upper_Stremlines = 21
+        mses.input.Lower_Stremlines = 21
+        mses.input.Coarse_Iteration = 100
+        mses.input.xGridRange = [-2, 3]
+        mses.input.yGridRange = [-2, 3]
+        mses.input.Design_Variable = {"auppervar": {},
+                                      "alowervar": {},
+                                      "classvar": {},
+                                      "ztailvar": {}}
+        mses.input.Cheby_Modes = [0]*20
+
+#==============================================================================
     def test_execute(self):
 
-        AlphaTrue = 3.0
-        ClTrue    = 0.8404364788053338
-        CdTrue    = 0.006555756386418418
-        CdpTrue   = 0.002221088763744491
-        CdvTrue   = 0.006555756386418418
-        CdwTrue   = 0.0
-        CmTrue    = -0.10472886188421521
+        AlphaTrue =  3.0
+        ClTrue    =  0.8394186474518254
+        CdTrue    =  0.006555029283599085
+        CdpTrue   =  0.002216345232296256
+        CdvTrue   =  0.006555029283599085
+        CdwTrue   =  0.0
+        CmTrue    =  -0.10463276571925233
 
-        # Set custom AoA and Re
+        # Set custom AoA and Re 
         self.mses.input.Alpha = AlphaTrue
         self.mses.input.CL    = None
         self.mses.input.Re    = 1e6
         self.mses.input.Mach  = 0.2
+        self.mses.input.xTransition_Upper = 1.0
+        self.mses.input.xTransition_Lower = 1.0
 
         # Retrieve results
         Alpha = self.mses.output.Alpha
@@ -67,35 +101,38 @@ class TestMSES_Kulfan(unittest.TestCase):
         Cdv   = self.mses.output.CD_v
         Cdw   = self.mses.output.CD_w
         Cm    = self.mses.output.CM
-        # print("Alpha = ", Alpha)
-        # print("Cl  = ", Cl)
-        # print("Cd  = ", Cd)
-        # print("Cdp = ", Cdp)
-        # print("Cdv = ", Cdv)
-        # print("Cdw = ", Cdw)
-        # print("Cm  = ", Cm)
+        # print("AlphaTrue = ", Alpha)
+        # print("ClTrue    = ", Cl)
+        # print("CdTrue    = ", Cd)
+        # print("CdpTrue   = ", Cdp)
+        # print("CdvTrue   = ", Cdv)
+        # print("CdwTrue   = ", Cdw)
+        # print("CmTrue    = ", Cm)
 
         self.assertAlmostEqual(AlphaTrue, Alpha, 3)
-        self.assertAlmostEqual(ClTrue , Cl , 3)
-        self.assertAlmostEqual(CdTrue , Cd , 3)
-        self.assertAlmostEqual(CdpTrue, Cdp, 3)
-        self.assertAlmostEqual(CdvTrue, Cdv, 3)
-        self.assertAlmostEqual(CdwTrue, Cdw, 3)
-        self.assertAlmostEqual(CmTrue , Cm , 3)
+        self.assertAlmostEqual(ClTrue   , Cl   , 3)
+        self.assertAlmostEqual(CdTrue   , Cd   , 3)
+        self.assertAlmostEqual(CdpTrue  , Cdp  , 3)
+        self.assertAlmostEqual(CdvTrue  , Cdv  , 3)
+        self.assertAlmostEqual(CdwTrue  , Cdw  , 3)
+        self.assertAlmostEqual(CmTrue   , Cm   , 3)
 
 
-        AlphaTrue = 3.5586937597499455
-        ClTrue    = 0.9
-        CdTrue    = 0.0068401834989933906
-        CdpTrue   = 0.002417738651453858
-        CdvTrue   = 0.0068401834989933906
-        CdwTrue   = 0.0
-        CmTrue    = -0.10404788841883214
+        AlphaTrue =  3.601263317256423
+        ClTrue    =  0.9
+        CdTrue    =  0.007219418142688761
+        CdpTrue   =  0.0024180255576456413
+        CdvTrue   =  0.007219418142688761
+        CdwTrue   =  0.0
+        CmTrue    =  -0.10344222164778835
 
-        # Set custom AoA and Re
+        # Set custom Cl
+        self.mses.input.GridAlpha = 3.0
         self.mses.input.Alpha = None
         self.mses.input.CL    = ClTrue
         self.mses.input.Re    = 1e6
+        self.mses.input.xTransition_Upper = 0.7
+        self.mses.input.xTransition_Lower = 0.8
 
         # Retrieve results
         Alpha = self.mses.output.Alpha
@@ -105,22 +142,21 @@ class TestMSES_Kulfan(unittest.TestCase):
         Cdv   = self.mses.output.CD_v
         Cdw   = self.mses.output.CD_w
         Cm    = self.mses.output.CM
-        # print("Alpha = ", Alpha)
-        # print("Cl  = ", Cl)
-        # print("Cd  = ", Cd)
-        # print("Cdp = ", Cdp)
-        # print("Cdv = ", Cdv)
-        # print("Cdw = ", Cdw)
-        # print("Cm  = ", Cm)
+        # print("AlphaTrue = ", Alpha)
+        # print("ClTrue    = ", Cl)
+        # print("CdTrue    = ", Cd)
+        # print("CdpTrue   = ", Cdp)
+        # print("CdvTrue   = ", Cdv)
+        # print("CdwTrue   = ", Cdw)
+        # print("CmTrue    = ", Cm)
 
         self.assertAlmostEqual(AlphaTrue, Alpha, 3)
-        self.assertAlmostEqual(ClTrue , Cl , 3)
-        self.assertAlmostEqual(CdTrue , Cd , 3)
-        self.assertAlmostEqual(CdpTrue, Cdp, 3)
-        self.assertAlmostEqual(CdvTrue, Cdv, 3)
-        self.assertAlmostEqual(CdwTrue, Cdw, 3)
-        self.assertAlmostEqual(CmTrue , Cm , 3)
-
+        self.assertAlmostEqual(ClTrue   , Cl   , 3)
+        self.assertAlmostEqual(CdTrue   , Cd   , 3)
+        self.assertAlmostEqual(CdpTrue  , Cdp  , 3)
+        self.assertAlmostEqual(CdvTrue  , Cdv  , 3)
+        self.assertAlmostEqual(CdwTrue  , Cdw  , 3)
+        self.assertAlmostEqual(CmTrue   , Cm   , 3)
 
 #==============================================================================
     def test_Cheby_Modes(self):
@@ -132,13 +168,74 @@ class TestMSES_Kulfan(unittest.TestCase):
         self.mses.input.CL    = None
         self.mses.input.Re    = 0.0
         self.mses.input.Mach  = 0.2
+
         self.mses.input.Cheby_Modes = [1e-4]*40
-
         Cl_mod   = self.mses.output["CL"].deriv("Cheby_Modes")
-
         self.assertEqual(len(Cl_mod), 40)
 
+        self.mses.input.Cheby_Modes = [1e-4]*20
+        Cl_mod   = self.mses.output["CL"].deriv("Cheby_Modes")
+        self.assertEqual(len(Cl_mod), 20)
+
         self.mses.input.Cheby_Modes = None
+        self.mses.input.Design_Variable = {"auppervar": {},
+                                           "alowervar": {},
+                                           "classvar": {},
+                                           "ztailvar": {}}
+
+        Cheby_Modes = self.mses.output.Cheby_Modes
+        Cheby_Modes_auppervar = self.mses.output["Cheby_Modes"].deriv("auppervar")
+        Cheby_Modes_alowervar = self.mses.output["Cheby_Modes"].deriv("alowervar")
+        Cheby_Modes_classvar  = self.mses.output["Cheby_Modes"].deriv("classvar")
+        Cheby_Modes_ztailvar  = self.mses.output["Cheby_Modes"].deriv("ztailvar")
+
+        self.mses.input.Design_Variable = None
+
+#==============================================================================
+    def test_Cheby_Modes_Symmetric(self):
+        # For a symmetric airfoil, the Cheby_Mode derivatives w.r.t. thickness
+        # should be identical top and bottom
+
+        myProblem = pyCAPS.Problem(problemName = self.problemName+str(self.iProb),
+                                   capsFile = os.path.join("..","csmData","kulfanSymmetricSection.csm"),
+                                   outLevel = 0); self.iProb += 1
+
+        # Load mses aim
+        mses = myProblem.analysis.create(aim = "msesAIM")
+
+        AlphaTrue = 0.0
+
+        # Set custom AoA and Re
+        mses.input.Alpha = AlphaTrue
+        mses.input.CL    = None
+        mses.input.Re    = 1e6
+        mses.input.Mach  = 0.2
+        mses.input.xTransition_Upper = 0.1
+        mses.input.xTransition_Lower = 0.1
+
+        mses.input.Cheby_Modes = [0]*40
+        mses.input.Design_Variable = None
+        
+        Cheby_Modes = mses.output.Cheby_Modes
+        CD_Cheby_Modes = mses.output["CD"].deriv("Cheby_Modes")
+        
+        nCheby = int(len(CD_Cheby_Modes)/2)
+        for i in range(nCheby):
+            self.assertAlmostEqual(CD_Cheby_Modes[i], CD_Cheby_Modes[i+nCheby], 2)
+
+
+        mses.input.Cheby_Modes = None
+        mses.input.Design_Variable = {"avar": {}}
+
+        Cheby_Modes = mses.output.Cheby_Modes
+        Cheby_Modes_avar = mses.output["Cheby_Modes"].deriv("avar")
+
+        nCheby = int(len(Cheby_Modes_avar)/2)
+        for i in range(1,nCheby):
+            for j in range(len(Cheby_Modes_avar[i])):
+                self.assertAlmostEqual(Cheby_Modes_avar[i][j], Cheby_Modes_avar[i+nCheby][j], 5)
+
+        mses.input.Design_Variable = None
 
 #==============================================================================
     def test_sensitivity_AnalysisIn(self):
@@ -243,27 +340,24 @@ class TestMSES_Kulfan(unittest.TestCase):
         #     self.myProblem.geometry.despmtr.auppervar = auppervar
         #
         #     print("******", (Clp - Clm)/(2*eps), Cl_auppervar[i])
-        #     #self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_auppervar[i], 4)
+        #     #self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_auppervar[i], 3)
         #
         # return
 
         self.mses.input.Design_Variable = {"auppervar": {},
                                            "alowervar": {},
-                                           "classvar": {},
-                                           "ztailvar": {}}
+                                           "classvar": {}}
 
 
         Cl = self.mses.output.CL
         Cl_auppervar = self.mses.output["CL"].deriv("auppervar")
         Cl_alowervar = self.mses.output["CL"].deriv("alowervar")
         Cl_classvar  = self.mses.output["CL"].deriv("classvar")
-        Cl_ztailvar  = self.mses.output["CL"].deriv("ztailvar")
 
         self.mses.input.Design_Variable = None
         auppervar = self.myProblem.geometry.despmtr.auppervar
         alowervar = self.myProblem.geometry.despmtr.alowervar
         classvar  = self.myProblem.geometry.despmtr.classvar
-        ztailvar  = self.myProblem.geometry.despmtr.ztailvar
 
         print("auppervar")
         for i in range(len(auppervar)):
@@ -280,7 +374,7 @@ class TestMSES_Kulfan(unittest.TestCase):
             self.myProblem.geometry.despmtr.auppervar = auppervar
 
             print("******", (Clp - Clm)/(2*eps), Cl_auppervar[i])
-            #self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_auppervar[i], 4)
+            #self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_auppervar[i], 3)
 
         print("alowervar")
         for i in range(len(alowervar)):
@@ -297,7 +391,7 @@ class TestMSES_Kulfan(unittest.TestCase):
             self.myProblem.geometry.despmtr.alowervar = alowervar
 
             print("******", (Clp - Clm)/(2*eps), Cl_alowervar[i])
-            #self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_alowervar[i], 4)
+            #self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_alowervar[i], 3)
 
         print("classvar")
         for i in range(len(classvar)):
@@ -314,25 +408,7 @@ class TestMSES_Kulfan(unittest.TestCase):
             self.myProblem.geometry.despmtr.classvar = classvar
 
             print("******", (Clp - Clm)/(2*eps), Cl_classvar[i])
-            #self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_classvar[i], 4)
-
-        print("ztailvar")
-        for i in range(len(ztailvar)):
-            ztailvar[i] += eps
-            self.myProblem.geometry.despmtr.ztailvar = ztailvar
-            Clp = self.mses.output.CL
-
-            ztailvar[i] -= 2*eps
-            self.myProblem.geometry.despmtr.ztailvar = ztailvar
-            Clm = self.mses.output.CL
-
-            # remove the step change
-            ztailvar[i] += eps
-            self.myProblem.geometry.despmtr.ztailvar = ztailvar
-
-            print("******", (Clp - Clm)/(2*eps), Cl_ztailvar[i])
-            #self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_ztailvar[i], 4)
-
+            #self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_classvar[i], 3)
 
 #==============================================================================
     def off_test_geom_sensitivity_CD(self):
@@ -368,27 +444,24 @@ class TestMSES_Kulfan(unittest.TestCase):
         #     self.myProblem.geometry.despmtr.auppervar = auppervar
         #
         #     print("******", (Cdp - Cdm)/(2*eps), Cd_auppervar[i])
-        #     #self.assertAlmostEqual((Cdp - Cdm)/(2*eps), Cd_auppervar[i], 4)
+        #     #self.assertAlmostEqual((Cdp - Cdm)/(2*eps), Cd_auppervar[i], 3)
         #
         # return
 
         self.mses.input.Design_Variable = {"auppervar": {},
                                            "alowervar": {},
-                                           "classvar": {},
-                                           "ztailvar": {}}
+                                           "classvar": {}}
 
 
         Cd = self.mses.output.CD
         Cd_auppervar = self.mses.output["CD"].deriv("auppervar")
         Cd_alowervar = self.mses.output["CD"].deriv("alowervar")
         Cd_classvar  = self.mses.output["CD"].deriv("classvar")
-        Cd_ztailvar  = self.mses.output["CD"].deriv("ztailvar")
 
         self.mses.input.Design_Variable = None
         auppervar = self.myProblem.geometry.despmtr.auppervar
         alowervar = self.myProblem.geometry.despmtr.alowervar
         classvar  = self.myProblem.geometry.despmtr.classvar
-        ztailvar  = self.myProblem.geometry.despmtr.ztailvar
 
         print("auppervar")
         for i in range(len(auppervar)):
@@ -405,7 +478,7 @@ class TestMSES_Kulfan(unittest.TestCase):
             self.myProblem.geometry.despmtr.auppervar = auppervar
 
             print("******", (Cdp - Cdm)/(2*eps), Cd_auppervar[i])
-            #self.assertAlmostEqual((Cdp - Cdm)/(2*eps), Cd_auppervar[i], 4)
+            #self.assertAlmostEqual((Cdp - Cdm)/(2*eps), Cd_auppervar[i], 3)
 
         print("alowervar")
         for i in range(len(alowervar)):
@@ -422,7 +495,7 @@ class TestMSES_Kulfan(unittest.TestCase):
             self.myProblem.geometry.despmtr.alowervar = alowervar
 
             print("******", (Cdp - Cdm)/(2*eps), Cd_alowervar[i])
-            #self.assertAlmostEqual((Cdp - Cdm)/(2*eps), Cd_alowervar[i], 4)
+            #self.assertAlmostEqual((Cdp - Cdm)/(2*eps), Cd_alowervar[i], 3)
 
         print("classvar")
         for i in range(len(classvar)):
@@ -439,24 +512,234 @@ class TestMSES_Kulfan(unittest.TestCase):
             self.myProblem.geometry.despmtr.classvar = classvar
 
             print("******", (Cdp - Cdm)/(2*eps), Cd_classvar[i])
-            #self.assertAlmostEqual((Cdp - Cdm)/(2*eps), Cd_classvar[i], 4)
+            #self.assertAlmostEqual((Cdp - Cdm)/(2*eps), Cd_classvar[i], 3)
 
-        print("ztailvar")
-        for i in range(len(ztailvar)):
-            ztailvar[i] += eps
-            self.myProblem.geometry.despmtr.ztailvar = ztailvar
-            Cdp = self.mses.output.CD
 
-            ztailvar[i] -= 2*eps
-            self.myProblem.geometry.despmtr.ztailvar = ztailvar
-            Cdm = self.mses.output.CD
+###############################################################################
+class TestMSES_NACA(unittest.TestCase):
 
-            # remove the step change
-            ztailvar[i] += eps
-            self.myProblem.geometry.despmtr.ztailvar = ztailvar
+    @classmethod
+    def setUpClass(cls):
+        # Create working directory variable
+        cls.problemName = "workDir_msesNACATest"
+        cls.iProb = 1
+        #workDir = os.path.join(str(args.workDir[0]), workDir)
 
-            print("******", (Cdp - Cdm)/(2*eps), Cd_ztailvar[i])
-            #self.assertAlmostEqual((Cdp - Cdm)/(2*eps), Cd_ztailvar[i], 4)
+        cls.cleanUp()
+
+        # Load CSM file
+        cls.myProblem = pyCAPS.Problem(problemName = cls.problemName,
+                                       capsFile = os.path.join("..","csmData","airfoilSection.csm"),
+                                       outLevel = 0)
+
+        # Load mses aim
+        cls.mses = cls.myProblem.analysis.create(aim = "msesAIM")
+
+        # Set Mach number
+        cls.mses.input.Mach = 0.5
+
+    @classmethod
+    def tearDownClass(cls):
+        del cls.mses
+        del cls.myProblem
+        cls.cleanUp()
+
+    @classmethod
+    def cleanUp(cls):
+
+        # Remove analysis directories
+        dirs = glob.glob( cls.problemName + '*')
+        for dir in dirs:
+            if os.path.isdir(dir):
+                shutil.rmtree(dir)
+
+#==============================================================================
+    def test_Cheby_Modes_Symmetric(self):
+        # For a symmetric airfoil, the Cheby_Mode derivatives w.r.t. thickness
+        # should be identical top and bottom
+
+        AlphaTrue = 0.0
+
+        # Set custom AoA and Re
+        self.mses.input.Alpha = AlphaTrue
+        self.mses.input.CL    = None
+        self.mses.input.Re    = 0.0
+        self.mses.input.Mach  = 0.2
+
+        self.mses.input.Cheby_Modes = None
+        self.mses.input.Design_Variable = {"thick": {}}
+
+        Cheby_Modes = self.mses.output.Cheby_Modes
+        Cheby_Modes_thick = self.mses.output["Cheby_Modes"].deriv("thick")
+
+        nCheby = int(len(Cheby_Modes_thick)/2)
+        for i in range(nCheby):
+            self.assertAlmostEqual(Cheby_Modes_thick[i], Cheby_Modes_thick[i+nCheby], 5)
+
+        self.mses.input.Design_Variable = None
+
+
+#==============================================================================
+    def test_geom_sensitivity_CL(self):
+
+        eps = 1e-4
+        AlphaTrue = 3.0
+
+        # Set custom AoA and Re
+        self.mses.input.Alpha = AlphaTrue
+        self.mses.input.CL    = None
+        self.mses.input.Re    = 0
+
+        self.mses.input.Design_Variable = {"thick": {},
+                                           "camber": {}}
+
+
+        Cl = self.mses.output.CL
+        Cl_thick = self.mses.output["CL"].deriv("thick")
+        Cl_camber = self.mses.output["CL"].deriv("camber")
+
+        self.mses.input.Design_Variable = None
+        thick = self.myProblem.geometry.despmtr.thick
+        camber = self.myProblem.geometry.despmtr.camber
+
+        #-------------------------------------------
+        thick += eps
+        self.myProblem.geometry.despmtr.thick = thick
+        Clp = self.mses.output.CL
+
+        thick -= 2*eps
+        self.myProblem.geometry.despmtr.thick = thick
+        Clm = self.mses.output.CL
+
+        # remove the step change
+        thick += eps
+        self.myProblem.geometry.despmtr.thick = thick
+
+        #print("thick")
+        #print("******", (Clp - Clm)/(2*eps), Cl_thick)
+        self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_thick, 2)
+        #-------------------------------------------
+
+        #-------------------------------------------
+        camber += eps
+        self.myProblem.geometry.despmtr.camber = camber
+        Clp = self.mses.output.CL
+
+        camber -= 2*eps
+        self.myProblem.geometry.despmtr.camber = camber
+        Clm = self.mses.output.CL
+
+        # remove the step change
+        camber += eps
+        self.myProblem.geometry.despmtr.camber = camber
+
+        #print("camber")
+        #print("******", (Clp - Clm)/(2*eps), Cl_camber)
+        self.assertAlmostEqual((Clp - Clm)/(2*eps), Cl_camber, 1)
+        #-------------------------------------------
+
+#==============================================================================
+    def run_journal(self, myProblem, line_exit):
+
+        verbose = False
+
+        line = 0
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        # Load AIM
+        if verbose: print(6*"-","Load msesAIM", line)
+        mses = myProblem.analysis.create(aim = "msesAIM"); line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+
+        # Set custom AoA and Re
+        if verbose: print(6*"-","Modify Alpha", line)
+        mses.input.Alpha = 0.0; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","Modify Re", line)
+        mses.input.Re    = 1.0e6; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","Modify Mach", line)
+        mses.input.Mach  = 0.2; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","Modify Design_Variable", line)
+        mses.input.Design_Variable = {"thick": {}}; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","Get Cheby_Modes_thick", line)
+        Cheby_Modes_thick = mses.output["Cheby_Modes"].deriv("thick"); line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        nCheby = int(len(Cheby_Modes_thick)/2)
+        for i in range(nCheby):
+            self.assertAlmostEqual(Cheby_Modes_thick[i], Cheby_Modes_thick[i+nCheby], 4)
+
+        if verbose: print(6*"-","Get CL", line)
+        CL1 = mses.output.CL; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","Modify Alpha", line)
+        mses.input.Alpha = 2.0; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","Get CL", line)
+        CL2 = mses.output.CL; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+        
+        self.assertGreater(CL2, CL1, 3)
+        
+        if verbose: print(6*"-","Get Cheby_Modes_thick", line)
+        Cheby_Modes_thick = mses.output["Cheby_Modes"].deriv("thick"); line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        nCheby = int(len(Cheby_Modes_thick)/2)
+        for i in range(nCheby):
+            self.assertAlmostEqual(Cheby_Modes_thick[i], Cheby_Modes_thick[i+nCheby], 4)
+
+        # make sure the last call journals everything
+        return line+2
+
+#==============================================================================
+    def test_journal(self):
+
+        capsFile = os.path.join("..","csmData","airfoilSection.csm")
+        problemName = self.problemName+str(self.iProb)
+        
+        myProblem = pyCAPS.Problem(problemName, capsFile=capsFile, outLevel=0)
+
+        # Run once to get the total line count
+        line_total = self.run_journal(myProblem, -1)
+        
+        myProblem.close()
+        shutil.rmtree(problemName)
+        
+        #print(80*"=")
+        #print(80*"=")
+        # Create the problem to start journaling
+        myProblem = pyCAPS.Problem(problemName, capsFile=capsFile, outLevel=0)
+        myProblem.close()
+        
+        for line_exit in range(line_total):
+            #print(80*"=")
+            myProblem = pyCAPS.Problem(problemName, phaseName="Scratch", capsFile=capsFile, outLevel=0)
+            self.run_journal(myProblem, line_exit)
+            myProblem.close()
+            
+        self.__class__.iProb += 1
 
 if __name__ == '__main__':
     unittest.main()

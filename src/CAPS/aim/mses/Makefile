@@ -34,10 +34,10 @@ cleanall:	clean
 
 dox: doc/html/index.html
 doc/html/index.html: \
-				../../examples/pyCAPS/mses_PyTest.py \
 				../../examples/csmData/airfoilSection.csm \
 				$(wildcard *.c) $(wildcard ../utils/*.c) $(wildcard doc/*.cfg) $(wildcard doc/*.tex) $(wildcard doc/*.xml) $(wildcard doc/*.dox)
 	(cd doc; doxygen msesAIM_dox.cfg; cd latex; make; mv refman.pdf msesAIM.pdf)
+#				../../examples/pyCAPS/mses_PyTest.py \
 
 doxclean:
 	(cd doc; rm -f INPUT; rm -rf html latex; rm -f msesAIM.tag)

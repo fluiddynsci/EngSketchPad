@@ -41,6 +41,9 @@ all:
 	cd hsm
 	nmake -f NMakefile
 	cd ..
+	cd skeleton
+	nmake -f NMakefile
+	cd ..
 	cd su2
 	nmake -f NMakefile
 	cd ..
@@ -121,6 +124,9 @@ clean:
 	cd hsm
 	nmake -f NMakefile clean
 	cd ..
+	cd skeleton
+	nmake -f NMakefile clean
+	cd ..
 	cd su2
 	nmake -f NMakefile clean
 	cd ..
@@ -199,6 +205,9 @@ cleanall:
 	nmake -f NMakefile cleanall
 	cd ..
 	cd hsm
+	nmake -f NMakefile cleanall
+	cd ..
+	cd skeleton
 	nmake -f NMakefile cleanall
 	cd ..
 	cd su2

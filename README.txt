@@ -1,12 +1,13 @@
                         ESP: The Engineering Sketch Pad
-                         Rev 1.21 beta -- February 2022
+                           Rev 1.21 beta -- June 2022
 
 
 0. Preamble
 
-    Windows 7 & 8 are no longer supported, only Windows 10 is tested. 
-    This also means that older versions of MS Visual Studio are no longer 
-    being tested either. Only MSVS versions 2017 and up are fully supported.
+    Windows 7 & 8 are no longer supported, only Windows 10 is tested (we have
+    not begun testing against Windows 11). This also means that older versions 
+    of MS Visual Studio are no longer being tested either. Only MSVS versions 
+    2017 and up are fully supported.
 
     This ESP release no longer works with Python 2.7. The minimum supported
     version is now Python 3.8. Also, we now only support OpenCASCADE at Rev 
@@ -22,16 +23,19 @@
     Do NOT apply the overlays -- they are specifically for ESP 1.19.
 
     Apple notes: 
-    (1) You CANNOT download the distributions using a browser. For 
-        instructions on how to get ESP see MACdownloads.txt on the web site.
+    (1) You CANNOT download the distributions using a browser. For instructions 
+        on how to get ESP see MACdownloads.txt on the web site.
     (2) You must have XQuartz at a minimum release of 2.8.1 for some supplied
         executables to function.
     (3) Big Sur and Monterey are now fully tested. 
-    (4) Apple M1 computers are natively supported but require Rosetta2 for 
-        the execution of some legacy CAPS apps. Rosetta2 can be installed by 
+    (4) Apple M1 computers are natively supported but require Rosetta2 for the 
+        running of some legacy CAPS apps. Rosetta2 can be installed by 
         executing the following command: "softwareupdate --install-rosetta".
     (5) M1 builds must be done in a "native" shell. That is, typing "arch"
         must return "arm64".
+    (6) If Safari blocks a pop-up (for example, the flowchart in ESP),
+        you can press the rectangular button in the Smart Search field
+        and allow the file to be seen.
 
 
 1. Prerequisites
@@ -49,7 +53,7 @@
     these include Mozilla's FireFox, Google Chrome and Apple's Safari. 
     Internet Explorer and legacy versions of Edge are NOT supported because 
     of a problem in their Websockets implementation. The "Chromium" version
-    of Microsoft Edge is now supported. Also, note that there have been some
+    of Microsoft Edge is fully supported. Also, note that there have been some
     reports of problems with Intel Graphics and some WebGL Browsers. For 
     LINUX, "zlib" development is required.
 
@@ -65,6 +69,7 @@
     bin               - a directory that will contain executables
     CAPSexamples      - a directory with CAPS examples
     config            - files that allow for automatic configuration
+    contributions     - user contributions
     data              - test and example scripts
     doc               - documentation
     ESP               - web client code for the Engineering Sketch Pad
@@ -83,36 +88,39 @@
 
 1.2.1 EGADS
 
-    The significant updates made to EGADS from Rev 1.19 are:
+    The significant updates made to EGADS from Rev 1.20 are:
 
-    1) EGADSlite now supports Effective (virtual) Topology.
-    2) IGES I/O handles length units (like STEP).
-    3) pyEGADS: The tuple returned from egads.getTopology is now consistent 
-       with the arguments to egads.makeTopology. Existing scripts will need 
-       to be updated.
+    * Blends with C0s had vanishing derivatives -- this has been fixed
+    * The Tessellator is now more robust against bad PCurves
+    * STEP / IGES import and export now handle units in a consistent manner
+    * The STEP "Name" attribute is now imported and exported with STEP IO 
 
-1.2.2 OpenCSM & ESP
+1.2.2 OpenCSM
 
     In addition to many big fixes (see $ESP_ROOT/src/OpenCSMnotes.txt
     for a full list), the significant upgrades are documented in section 
     8.1 of ESP-help.html; bug fixes are documented in section 8.2 of the 
     same document.
 
-    The most notable change is a significant improvement in the speed, 
-    especially when recycling.  This was done by careful code 
-    optimization and by setting the _tParams attribute on a Body only
-    when a tessellation is done.
+1.2.3 CAPS
 
-1.2.3 Known issues in v1.20:
+    * The addition of Analysis Dynamic Output Value Objects
+    * A number of examples of using CAPS as a component in OpenMDAO
+    * More complete sensitivity handling
+    * The addition of TASC and MSES AIMs
+    * "Phasing" fully implemented and tested -- the application "phaseUtil"
+      to manage the files in a Phase (see $ESP_ROOT/doc/Concepts.pdf).
+    * Script/App restarting is now functional
+    * The AIM infrastructure has undergone some changes that will require 
+      modification of any existing AIMs (not distributed here). Please refer 
+      to the AIM development guide ($ESP_ROOT/doc/CAPS/AIMdevel.pdf).
 
+1.2.4 ESP
 
-1.2.4 CAPS
+    * Transition to a new server: serveESP
 
-    1) Improved error handling in CAPS/AIMs (still a work in progress).
-    2) pyCAPS has been rewritten using Python's ctypes module and the
-       interface has been refactored.
-    3) Formalized process for working with units in Python
-    4) Many AIMs can now auto-execute
+1.2.5 Known issues in v1.21:
+
 
 
 2. Building the Software
@@ -298,13 +306,13 @@
 
 3.0 Running
 
-3.1 serveCSM and ESP
+3.1 serveESP
 
     To start ESP there are two steps: (1) start the "server" and (2) start 
     the "browser". This can be done in a variety of ways, but the two most 
     common follow.
 
-3.1.1 Procedure 1: have ESP automatically started from serveCSM
+3.1.1 Procedure 1: have ESP automatically started
 
     If it exists, the ESP_START environment variable contains the command 
     that should be executed to start the browser once the server has 
@@ -321,12 +329,12 @@
     will differ slightly, depending on how the browser can be started from 
     the command line, for example for Windows it may be:
 
-        % set ESP_START=""C:\Program Files (x86)\Mozilla Firefox\firefox.exe" %ESP_ROOT%\ESP\ESP.html"
+        % set ESP_START="start /b "C:\Program Files (x86)\Mozilla Firefox\firefox.exe" %ESP_ROOT%\ESP\ESP.html"
 
     To run the program, use:
 
          % cd $ESP_ROOT/bin
-         % ./serveCSM ../data/tutorial1
+         % ./serveESP ../data/tutorial1
 
 3.1.2 Procedure 2: start the browser manually
 
@@ -334,9 +342,9 @@
     commands:
 
         % cd $ESP_ROOT/bin
-        % ./serveCSM ../data/tutorial1
+        % ./serveESP ../data/tutorial1
 
-    will start the server.  The last lines of output from serveCSM tells 
+    will start the server.  The last lines of output from serveESP tells 
     the user that the server is waiting for a browser to attach to it. 
     This can be done by starting a browser (FireFox and GoogleChrome have 
     been tested) and loading the file:
@@ -344,15 +352,15 @@
         $ESP_ROOT/ESP/ESP.html
 
     Whether you used procedure 1 or 2, as long as the browser stays connected 
-    to serveCSM, serveCSM will stay alive and handle requests sent to it from 
-    the browser. Once the last browser that is connected to serveCSM exits, 
-    serveCSM will shut down.
+    to serveESP, serveESP will stay alive and handle requests sent to it from 
+    the browser. Once the last browser that is connected to serveESP exits, 
+    serveESP will shut down.
 
-    Note that the default "port" used by serveCSM is 7681. One can change 
-    the port in the call to serveCSM with a command such as:
+    Note that the default "port" used by serveESP is 7681. One can change 
+    the port in the call to serveESP with a command such as:
 
         % cd $ESP_ROOT/bin
-        % ./serveCSM ../data/tutorial1 -port 7788
+        % ./serveESP ../data/tutorial1 -port 7788
 
     Once the browser starts, you will be prompted for a "hostname:port".  
     Make the appropriate response depending on the network situation. Once 
@@ -372,7 +380,7 @@
 
     vTess allows for the examination of geometry through its discrete
     representation. Like egads2cart, the acceptable geometric input is STEP, 
-    EGADS or OpenCASCADE BRep files. vTess acts like serveCSM and wvClient 
+    EGADS or OpenCASCADE BRep files. vTess acts like serveESP and wvClient 
     should be used like ESP in the discussion in Section 3.1 above.
 
         % cd $ESP_ROOT/bin
@@ -395,7 +403,7 @@
 
 4.2 Athena Vortex Lattice
 
-    The interface to AVL is designed for V3.36, and the avl executable
+    The interface to AVL is designed for V3.40, and the avl executable
     is provided in $ESP_ROOT/bin.
     
 4.3 Astros and mAstros
@@ -404,7 +412,7 @@
     can be run with the Astros AIM. An mAstros executable is part of this
     distribution and is used with the CAPS training material. The pyCAPS 
     Astros examples use the environment variable ASTROS_ROOT (set to the 
-    path where Astros can be found) to locate Astros and it's runtime files.
+    path where Astros can be found) to locate Astros and its runtime files.
     If not set it defaults to mAstros execution. 
 
 4.4 Cart3D
@@ -441,7 +449,7 @@
 4.9 SU2
 
     Supported versions are: 4.1.1 (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) 
-    and 7.2.0 (Blackbird). SU2 version 6.0 will work except for the use of 
+    and 7.3.0 (Blackbird). SU2 version 6.0 will work except for the use of 
     displacements in a Fluid/Structure Interaction setting.
     
 4.10 xfoil

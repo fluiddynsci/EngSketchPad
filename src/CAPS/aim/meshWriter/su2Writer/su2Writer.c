@@ -245,7 +245,7 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
     }
 
     // Probably eventually want to change this to a string tag
-    fprintf(fp,"MARKER_TAG= %d\n", meshData->elemGroups[igroup].ID);
+    fprintf(fp,"MARKER_TAG= BC_%d\n", meshData->elemGroups[igroup].ID);
     // see note at the beginning of function
 
     //Number of elements with a particular ID

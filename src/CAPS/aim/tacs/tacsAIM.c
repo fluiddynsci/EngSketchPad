@@ -17,9 +17,6 @@
  * \ref aimOutputsTACS and \ref attributeTACS, respectively.
  *
  * Details of the AIM's automated data transfer capabilities are outlined in \ref dataTransferTACS
- *
- * \section clearanceTACS Clearance Statement
- *  This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
  */
 
 /*! \page attributeTACS AIM attributes
@@ -689,43 +686,18 @@ cleanup:
 }
 
 
-int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
+// ********************** AIM Function Break *****************************
+int aimUpdateState(void *instStore, void *aimInfo,
+                   capsValue *aimInputs)
 {
+    int status; // Function return status
 
-    int i, j, k, l; // Indexing
-
-    int status; // Status return
-
-    int found; // Boolean operator
-
-    int *tempIntegerArray = NULL; // Temporary array to store a list of integers
-
-    // Analysis information
-    char *analysisType = NULL;
-    int haveSubAeroelasticTrim = (int) false;
-    int haveSubAeroelasticFlutter = (int) false;
-
-    // Aeroelastic Information
-    int numAEStatSurf = 0;
-    //char **aeStatSurf = NULL;
-
-    // File format information
-    char *tempString = NULL, *delimiter = NULL;
-
-    // File IO
-    char *filename = NULL; // Output file name
-    FILE *fp = NULL; // Output file pointer
-
-    feaLoadStruct *feaLoad;
-    int numThermalLoad=0;
-
-    int numSetID;
-    int tempID, *setID = NULL;
+    const char *analysisType = NULL;
 
     aimStorage *tacsInstance;
 
     tacsInstance = (aimStorage *) instStore;
-    if (aimInputs == NULL) return CAPS_NULLVALUE;
+    AIM_NOTNULL(aimInputs, aimInfo, status);
 
     // Get project name
     tacsInstance->projectName = aimInputs[Proj_Name-1].vals.string;
@@ -814,20 +786,6 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
                              &tacsInstance->loadMap,
                              &tacsInstance->feaProblem);
         AIM_STATUS(aimInfo, status);
-
-        // Loop through loads to see if any of them are supposed to be from an external source
-        for (i = 0; i < tacsInstance->feaProblem.numLoad; i++) {
-
-            if (tacsInstance->feaProblem.feaLoad[i].loadType == PressureExternal) {
-
-                // Transfer external pressures from the AIM discrObj
-                status = fea_transferExternalPressure(aimInfo,
-                                                      &tacsInstance->feaProblem.feaMesh,
-                                                      &tacsInstance->feaProblem.feaLoad[i]);
-                AIM_STATUS(aimInfo, status);
-
-            } // End PressureExternal if
-        } // End load for loop
     } else printf("Load tuple is NULL - No loads applied\n");
 
     // Set design variables
@@ -908,13 +866,13 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // Set file format type
     if        (strcasecmp(aimInputs[File_Format-1].vals.string, "Small") == 0) {
-    	tacsInstance->feaProblem.feaFileFormat.fileType = SmallField;
+      tacsInstance->feaProblem.feaFileFormat.fileType = SmallField;
     } else if (strcasecmp(aimInputs[File_Format-1].vals.string, "Large") == 0) {
-    	tacsInstance->feaProblem.feaFileFormat.fileType = LargeField;
+      tacsInstance->feaProblem.feaFileFormat.fileType = LargeField;
     } else if (strcasecmp(aimInputs[File_Format-1].vals.string, "Free") == 0)  {
-    	tacsInstance->feaProblem.feaFileFormat.fileType = FreeField;
+      tacsInstance->feaProblem.feaFileFormat.fileType = FreeField;
     } else {
-    	printf("Unrecognized \"File_Format\", valid choices are [Small, Large, or Free]. Reverting to default\n");
+      printf("Unrecognized \"File_Format\", valid choices are [Small, Large, or Free]. Reverting to default\n");
     }
 
     // Set grid file format type
@@ -928,9 +886,74 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         printf("Unrecognized \"Mesh_File_Format\", valid choices are [Small, Large, or Free]. Reverting to default\n");
     }
 
+cleanup:
+    return status;
+}
+
+
+// ********************** AIM Function Break *****************************
+int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
+{
+
+    int i, j, k, l; // Indexing
+
+    int status; // Status return
+
+    int found; // Boolean operator
+
+    int *tempIntegerArray = NULL; // Temporary array to store a list of integers
+
+    // Analysis information
+    const char *analysisType = NULL;
+    int haveSubAeroelasticTrim = (int) false;
+    int haveSubAeroelasticFlutter = (int) false;
+
+    // Aeroelastic Information
+    int numAEStatSurf = 0;
+    //char **aeStatSurf = NULL;
+
+    // File format information
+    char *tempString = NULL, *delimiter = NULL;
+
+    // File IO
+    char *filename = NULL; // Output file name
+    FILE *fp = NULL; // Output file pointer
+
+    feaLoadStruct *feaLoad=NULL;
+    int numThermalLoad=0;
+
+    int numSetID;
+    int tempID, *setID = NULL;
+
+    const aimStorage *tacsInstance;
+
+    tacsInstance = (const aimStorage *) instStore;
+    AIM_NOTNULL(aimInputs, aimInfo, status);
+
+    // Analysis type
+    analysisType = aimInputs[Analysis_Type-1].vals.string;
+
+    if (tacsInstance->feaProblem.numLoad > 0) {
+        AIM_ALLOC(feaLoad, tacsInstance->feaProblem.numLoad, feaLoadStruct, aimInfo, status);
+        for (i = 0; i < tacsInstance->feaProblem.numLoad; i++) initiate_feaLoadStruct(&feaLoad[i]);
+        for (i = 0; i < tacsInstance->feaProblem.numLoad; i++) {
+            status = copy_feaLoadStruct(aimInfo, &tacsInstance->feaProblem.feaLoad[i], &feaLoad[i]);
+            AIM_STATUS(aimInfo, status);
+
+            if (feaLoad[i].loadType == PressureExternal) {
+
+                // Transfer external pressures from the AIM discrObj
+                status = fea_transferExternalPressure(aimInfo,
+                                                      &tacsInstance->feaProblem.feaMesh,
+                                                      &feaLoad[i]);
+                AIM_STATUS(aimInfo, status);
+            }
+        }
+    }
+
     // Write TACS Mesh
     filename = EG_alloc(MXCHAR +1);
-    if (filename == NULL) return EGADS_MALLOC;
+    if (filename == NULL) { status = EGADS_MALLOC; goto cleanup; }
 
     strcpy(filename, tacsInstance->projectName);
 
@@ -940,20 +963,17 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
                                &tacsInstance->feaProblem.feaMesh,
                                tacsInstance->feaProblem.feaFileFormat.gridFileType,
                                1.0);
-    if (status != CAPS_SUCCESS) {
-        EG_free(filename);
-        return status;
-    }
+    AIM_STATUS(aimInfo, status);
 
     // Write TACS subElement types not supported by mesh_writeNASTRAN
     strcat(filename, ".bdf");
     fp = aim_fopen(aimInfo, filename, "a");
     if (fp == NULL) {
-        printf("Unable to open file: %s\n", filename);
-        EG_free(filename);
-        return CAPS_IOERR;
+        AIM_ERROR(aimInfo, "Unable to open file: %s", filename);
+        status = CAPS_IOERR;
+        goto cleanup;
     }
-    EG_free(filename);
+    AIM_FREE(filename);
 
     printf("Writing subElement types (if any) - appending mesh file\n");
     status = nastran_writeSubElementCard(fp,
@@ -980,18 +1000,18 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // Write nastran input file
     filename = EG_alloc(MXCHAR +1);
-    if (filename == NULL) return EGADS_MALLOC;
+    if (filename == NULL) { status = EGADS_MALLOC; goto cleanup; }
     strcpy(filename, tacsInstance->projectName);
     strcat(filename, ".dat");
 
     printf("\nWriting TACS instruction file....\n");
     fp = aim_fopen(aimInfo, filename, "w");
     if (fp == NULL) {
-        AIM_ERROR(aimInfo, "Unable to open file: %s\n", filename);
-        EG_free(filename);
-        return CAPS_IOERR;
+        AIM_ERROR(aimInfo, "Unable to open file: %s", filename);
+        status = CAPS_IOERR;
+        goto cleanup;
     }
-    EG_free(filename);
+    AIM_FREE(filename);
 
     // define file format delimiter type
     if (tacsInstance->feaProblem.feaFileFormat.fileType == FreeField) {
@@ -1166,19 +1186,17 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         }
 
         // Write loads for sub-case
-        if (tacsInstance->feaProblem.numLoad != 0) {
+        if (feaLoad != NULL) {
 
             found = (int) false;
 
             for (k = 0; k < tacsInstance->feaProblem.numLoad; k++) {
 
-                feaLoad = &tacsInstance->feaProblem.feaLoad[k];
-
                 if (tacsInstance->feaProblem.feaAnalysis[i].numLoad != 0) { // if loads specified in analysis
 
                     for (j = 0; j < tacsInstance->feaProblem.feaAnalysis[i].numLoad; j++) { // See if the load is in the loadSet
 
-                        if (feaLoad->loadID == tacsInstance->feaProblem.feaAnalysis[i].loadSetID[j]) break;
+                        if (feaLoad[k].loadID == tacsInstance->feaProblem.feaAnalysis[i].loadSetID[j]) break;
                     }
 
                     if (j >= tacsInstance->feaProblem.feaAnalysis[i].numLoad) continue; // If it isn't in the loadSet move on
@@ -1186,9 +1204,9 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
                     //pass
                 }
 
-                if (feaLoad->loadType == Thermal && numThermalLoad == 0) {
+                if (feaLoad[k].loadType == Thermal && numThermalLoad == 0) {
 
-                    fprintf(fp, "\tTemperature = %d\n", feaLoad->loadID);
+                    fprintf(fp, "\tTemperature = %d\n", feaLoad[k].loadID);
                     numThermalLoad += 1;
                     if (numThermalLoad > 1) {
                         printf("More than 1 Thermal load found - nastranAIM does NOT currently doesn't support multiple thermal loads in a given case!\n");
@@ -1384,6 +1402,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         AIM_STATUS(aimInfo, status);
 
         if (tacsInstance->feaProblem.feaAnalysis[i].numLoad != 0) {
+            AIM_NOTNULL(feaLoad, aimInfo, status);
 
             // Create a temporary list of load IDs
             tempIntegerArray = (int *) EG_alloc(tacsInstance->feaProblem.feaAnalysis[i].numLoad*sizeof(int));
@@ -1395,10 +1414,10 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
             k = 0;
             for (j = 0; j <  tacsInstance->feaProblem.feaAnalysis[i].numLoad; j++) {
                 for (l = 0; l < tacsInstance->feaProblem.numLoad; l++) {
-                    if (tacsInstance->feaProblem.feaAnalysis[i].loadSetID[j] == tacsInstance->feaProblem.feaLoad[l].loadID) break;
+                    if (tacsInstance->feaProblem.feaAnalysis[i].loadSetID[j] == feaLoad[l].loadID) break;
                 }
-                if (tacsInstance->feaProblem.feaLoad[l].loadType == Thermal) continue;
-                tempIntegerArray[j] = tacsInstance->feaProblem.feaLoad[l].loadID;
+                if (feaLoad[l].loadType == Thermal) continue;
+                tempIntegerArray[j] = feaLoad[l].loadID;
                 k += 1;
             }
 
@@ -1414,7 +1433,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
                                                tacsInstance->feaProblem.numLoad+i+1,
                                                k,
                                                tempIntegerArray,
-                                               tacsInstance->feaProblem.feaLoad,
+                                               feaLoad,
                                                &tacsInstance->feaProblem.feaFileFormat);
             AIM_STATUS(aimInfo, status);
 
@@ -1424,7 +1443,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
         } else { // If no loads for an individual analysis are specified assume that all loads should be applied
 
-            if (tacsInstance->feaProblem.numLoad != 0) {
+            if (feaLoad != NULL) {
 
                 // Create a temporary list of load IDs
                 tempIntegerArray = (int *) EG_alloc(tacsInstance->feaProblem.numLoad*sizeof(int));
@@ -1435,8 +1454,8 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
                 k = 0;
                 for (j = 0; j < tacsInstance->feaProblem.numLoad; j++) {
-                    if (tacsInstance->feaProblem.feaLoad[j].loadType == Gravity) continue;
-                    tempIntegerArray[j] = tacsInstance->feaProblem.feaLoad[j].loadID;
+                    if (feaLoad[j].loadType == Gravity) continue;
+                    tempIntegerArray[j] = feaLoad[j].loadID;
                     k += 1;
                 }
 
@@ -1460,7 +1479,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
                                                   tacsInstance->feaProblem.numLoad+i+1,
                                                   k,
                                                   tempIntegerArray,
-                                                  tacsInstance->feaProblem.feaLoad,
+                                                  feaLoad,
                                                   &tacsInstance->feaProblem.feaFileFormat);
                 AIM_STATUS(aimInfo, status);
 
@@ -1549,11 +1568,12 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // Loads
     for (i = 0; i < tacsInstance->feaProblem.numLoad; i++) {
+        AIM_NOTNULL(feaLoad, aimInfo, status);
 
         if (i == 0) printf("\tWriting load cards\n");
 
         status = nastran_writeLoadCard(fp,
-                                       &tacsInstance->feaProblem.feaLoad[i],
+                                       &feaLoad[i],
                                        &tacsInstance->feaProblem.feaFileFormat);
         AIM_STATUS(aimInfo, status);
     }
@@ -1714,10 +1734,18 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
 cleanup:
     if (status != CAPS_SUCCESS)
-        printf("\tPremature exit in nastranAIM preAnalysis, status = %d\n",
+        printf("\tPremature exit in tacsAIM preAnalysis, status = %d\n",
                status);
 
-    if (tempIntegerArray != NULL) EG_free(tempIntegerArray);
+    if (feaLoad != NULL) {
+        for (i = 0; i < tacsInstance->feaProblem.numLoad; i++) {
+            destroy_feaLoadStruct(&feaLoad[i]);
+        }
+        AIM_FREE(feaLoad);
+    }
+
+    AIM_FREE(tempIntegerArray);
+    AIM_FREE(filename);
 
     if (fp != NULL) fclose(fp);
 
@@ -1732,7 +1760,8 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
   int status = CAPS_SUCCESS; // Function return status
 
   int i, j, k, idv, irow, icol, ibody; // Indexing
-  int index, nGeomIn=0;
+  int index, nGeomIn=0,numDesignVariable;
+  int found;
 
   char tmp[128];
   int numFunctional=0;
@@ -1762,9 +1791,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
 
       // Loop over the geometry in values and compute sensitivities for all bodies
       index = aim_getIndex(aimInfo, name, GEOMETRYIN);
-      if (index == CAPS_NOTFOUND){
-       continue;
-      }
+      if (index == CAPS_NOTFOUND) continue;
       if (index < CAPS_SUCCESS ) {
         status = index;
         AIM_STATUS(aimInfo, status);
@@ -1778,12 +1805,6 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
       }
 
       nGeomIn++;
-    }
-
-    // No geometry sensitivties, so don't look for .sens file
-    if (nGeomIn == 0) {
-      status = CAPS_SUCCESS;
-      goto cleanup;
     }
 
     numNode = 0;
@@ -1812,10 +1833,15 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
       goto cleanup;
     }
 
-    // Number of nodes and functinoals in the file
-    status = fscanf(fp, "%d", &numFunctional);
-    if (status == EOF || status != 1) {
-      AIM_ERROR(aimInfo, "Failed to read sens file number of functionals");
+    // Number of nodes and functionals and AnalysIn design variables in the file
+    status = fscanf(fp, "%d %d", &numFunctional, &numDesignVariable);
+    if (status == EOF || status != 2) {
+      AIM_ERROR(aimInfo, "Failed to read sens file number of functionals and analysis design variables");
+      status = CAPS_IOERR; goto cleanup;
+    }
+    if (tacsInstance->feaProblem.numDesignVariable != numDesignVariable+nGeomIn) {
+      AIM_ERROR(aimInfo, "Incorrect number of design variables in sens file. Expected %d and found %d",
+                tacsInstance->feaProblem.numDesignVariable-nGeomIn, numDesignVariable);
       status = CAPS_IOERR; goto cleanup;
     }
 
@@ -1888,6 +1914,46 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
           status = CAPS_IOERR; goto cleanup;
         }
       }
+
+      /* read additional derivatives from .sens file */
+      for (k = nGeomIn; k < tacsInstance->feaProblem.numDesignVariable; k++) {
+
+        /* get derivative name */
+        status = fscanf(fp, "%s", tmp);
+        if (status == EOF) {
+          AIM_ERROR(aimInfo, "Failed to read sens file design variable name");
+          status = CAPS_IOERR; goto cleanup;
+        }
+
+        found = (int)false;
+        for (idv = 0; idv < tacsInstance->feaProblem.numDesignVariable; idv++)
+          if ( strcasecmp(tacsInstance->feaProblem.feaDesignVariable[idv].name, tmp) == 0) {
+            found = (int)true;
+            break;
+          }
+        if (found == (int)false) {
+          AIM_ERROR(aimInfo, "Design variable '%s' in sens file not in Design_Varible input", tmp);
+          status = CAPS_IOERR; goto cleanup;
+        }
+
+        AIM_STRDUP(values[i].derivs[idv].name, tmp, aimInfo, status);
+
+        status = fscanf(fp, "%d", &values[i].derivs[idv].len_wrt);
+        if (status == EOF || status != 1) {
+          AIM_ERROR(aimInfo, "Failed to read sens file number of design variable derivatives");
+          status = CAPS_IOERR; goto cleanup;
+        }
+
+        AIM_ALLOC(values[i].derivs[idv].deriv, values[i].derivs[idv].len_wrt, double, aimInfo, status);
+        for (j = 0; j < values[i].derivs[idv].len_wrt; j++) {
+
+          status = fscanf(fp, "%lf", &values[i].derivs[idv].deriv[j]);
+          if (status == EOF || status != 1) {
+            AIM_ERROR(aimInfo, "Failed to read sens file design variable derivative");
+            status = CAPS_IOERR; goto cleanup;
+          }
+        }
+      }
     }
 
     AIM_ALLOC(dxyz, tacsInstance->numMesh, double*, aimInfo, status);
@@ -1920,7 +1986,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
             status = aim_tessSensitivity(aimInfo,
                                          name,
                                          irow+1, icol+1, // row, col
-                                         tacsInstance->feaMesh[ibody].bodyTessMap.egadsTess,
+                                         tacsInstance->feaMesh[ibody].egadsTess,
                                          &numNode, &dxyz[ibody]);
             AIM_STATUS(aimInfo, status, "Sensitivity for: %s\n", name);
             AIM_NOTNULL(dxyz[ibody], aimInfo, status);
@@ -2210,7 +2276,7 @@ int aimDiscr(char *tname, capsDiscr *discr)
 
     AIM_ALLOC(tess, tacsInstance->numMesh, ego, discr->aInfo, status);
     for (i = 0; i < tacsInstance->numMesh; i++) {
-      tess[i] = tacsInstance->feaMesh[i].bodyTessMap.egadsTess;
+      tess[i] = tacsInstance->feaMesh[i].egadsTess;
     }
 
     status = mesh_fillDiscr(tname, &tacsInstance->groupMap, tacsInstance->numMesh, tess, discr);

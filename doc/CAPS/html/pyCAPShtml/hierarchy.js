@@ -16,7 +16,11 @@ var hierarchy =
       [ "ValueOutSequence", "classpy_c_a_p_s_1_1problem_1_1_value_out_sequence.html", null ],
       [ "VertexSetSequence", "classpy_c_a_p_s_1_1problem_1_1_vertex_set_sequence.html", null ]
     ] ],
-    [ "ValueIn", "classpy_c_a_p_s_1_1problem_1_1_value_in.html", null ],
+    [ "ValueDynOut", "classpy_c_a_p_s_1_1problem_1_1_value_dyn_out.html", null ],
+    [ "ValueDynOutSequence", "classpy_c_a_p_s_1_1problem_1_1_value_dyn_out_sequence.html", null ],
+    [ "ValueIn", "classpy_c_a_p_s_1_1problem_1_1_value_in.html", [
+      [ "ValueInParam", "classpy_c_a_p_s_1_1problem_1_1_value_in_param.html", null ]
+    ] ],
     [ "ValueOut", "classpy_c_a_p_s_1_1problem_1_1_value_out.html", null ],
     [ "VertexSet", "classpy_c_a_p_s_1_1problem_1_1_vertex_set.html", null ]
 ];

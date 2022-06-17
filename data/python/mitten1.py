@@ -1,7 +1,7 @@
 ###################################################################
 #                                                                 #
 # mitten1.py --- start with: serveESP ../data/basic/mitten1       #
-#                    Tool->Python     ../data/python/mitten1.py   #
+#                    Tool->Pyscript   ../data/python/mitten1.py   #
 #                                                                 #
 #              Written by John Dannenhoffer @ Syracuse University #
 #                                                                 #
@@ -34,7 +34,7 @@ print("    imajor :", imajor)
 print("    iminor :", iminor)
 
 # load the "mitten" TIM
-esp.TimLoad("mitten", esp.GetEsp("python"), "A")
+esp.TimLoad("mitten", esp.GetEsp("pyscript"), "A")
 
 # move block to left
 esp.TimMesg("mitten", "xcent|-1|")
@@ -47,7 +47,7 @@ esp.TimMesg("mitten", "countdown|5|")
 esp.TimSave("mitten")
 
 # load the "mitten" TIM
-esp.TimLoad("mitten", esp.GetEsp("python"), "B")
+esp.TimLoad("mitten", esp.GetEsp("pyscript"), "B")
 
 # move block to left
 esp.TimMesg("mitten", "xcent|+1|")

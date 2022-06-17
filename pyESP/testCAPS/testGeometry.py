@@ -212,7 +212,7 @@ class TestGeometry(unittest.TestCase):
         with self.assertRaises(AttributeError):
             myGeometry.outpmtr.series3 = 1212
 
-        # Check outpmtr matrix access
+        # Check despmtr matrix access
         self.assertEqual(myGeometry.despmtr.despMat, [[11.0, 12.0], [13.0, 14.0], [15.0, 16.0]])
         myGeometry.despmtr.despMat = [[11.0, 12.0], [13.0, 14.0], [30.0, 32.0]]
         self.assertEqual(myGeometry.despmtr.despMat, [[11.0, 12.0], [13.0, 14.0], [30.0, 32.0]])

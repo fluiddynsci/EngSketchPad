@@ -239,6 +239,11 @@ if [[ "$TYPE" == "AEROELASTIC" || "$TYPE" == "ALL" ]]; then
     testsRan=1
 fi
 
+###### CorsairLite examples ######
+if [[ "$TYPE" == "CORSAIRLITE" || "$TYPE" == "ALL" ]]; then
+    testsRan=1
+fi
+
 
 # Cleanup if we have success
 if [[ $stat == 0 ]]; then

@@ -27,6 +27,27 @@
  *     MA  02110-1301  USA
  */
 
+/*
+   timLoad|plotter|
+
+   timMesg|plotter|new|title|xlabel|ylabel|
+
+   timMesg|plotter|add|xvalue1;xvalue2;...|yvalue1;yvalue2;...|type|
+
+   type:
+     r red      - solid     o circle
+     g green    : dotted    x x-mark
+     b blue     _ dashed    + plus
+     c cyan     ; dot-dash  * star
+     m magenta              s square
+     y yellow               ^ triangle-up
+     k black                v triangle-down
+     w white
+
+   timMesg|plotter|show|
+   timMesg|plotter|show|nohold|
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -77,21 +98,33 @@ timLoad(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     int    status=0;                    /* (out) return status */
 
     plotter_T *plotter;
-    
+
     ROUTINE(timLoad(plotter));
 
     /* --------------------------------------------------------------- */
 
-    printf("enter timLoad(plotter)\n");
-
     outLevel = ocsmSetOutLevel(-1);
 
-    /* create the plotter_T structure and initialize it */
-    MALLOC(ESP->udata2, plotter_T, 1);
+    if (ESP == NULL) {
+        printf("ERROR:: cannot run timPlotter without serveESP\n");
+        status = EGADS_SEQUERR;
+        goto cleanup;
+    }
 
-    plotter = (plotter_T *) ESP->udata2;
+    /* create the plotter_T structure */
+    if (ESP->nudata >= MAX_TIM_NESTING) {
+        printf("ERROR:: cannot nest more than %d TIMs\n", MAX_TIM_NESTING);
+        exit(0);
+    }
+    
+    ESP->nudata++;
+    MALLOC(ESP->udata[ESP->nudata-1], plotter_T, 1);
 
-    /* initialize it */
+    strcpy(ESP->timName[ESP->nudata-1], "plotter");
+
+    plotter = (plotter_T *) (ESP->udata[ESP->nudata-1]);
+
+    /* initialize the structure */
     plotter->title  = NULL;
     plotter->xlabel = NULL;
     plotter->ylabel = NULL;
@@ -102,7 +135,6 @@ timLoad(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     status = 1;
 
 cleanup:
-    printf("exit  timLoad(plotter)\n");
     return status;
 }
 
@@ -122,16 +154,14 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     int    iline, i;
     char   *arg1=NULL, *arg2=NULL, *arg3=NULL, *xystr=NULL;
     char   *pEnd;
-    int    nresponse=0; 
+    int    nresponse=0;
     char   *response=NULL;
-        
-    plotter_T *plotter = (plotter_T *) ESP->udata2;
-    
+
+    plotter_T *plotter = (plotter_T *) (ESP->udata[ESP->nudata-1]);
+
     ROUTINE(timMesg(plotter));
 
     /* --------------------------------------------------------------- */
-
-    printf("enter timMesg(plotter), command=%s\n", command);
 
     /* "new|title|xlabel|ylabel|" */
     if (strncmp(command, "new|", 4) == 0) {
@@ -139,10 +169,10 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
         /* extract arguments */
         GetToken(command, 1, '|', &arg1);
         SPLINT_CHECK_FOR_NULL(arg1);
-        
+
         GetToken(command, 2, '|', &arg2);
         SPLINT_CHECK_FOR_NULL(arg2);
-        
+
         GetToken(command, 3, '|', &arg3);
         SPLINT_CHECK_FOR_NULL(arg3);
 
@@ -175,17 +205,17 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
         /* extract arguments */
         GetToken(command, 1, '|', &arg1);
         SPLINT_CHECK_FOR_NULL(arg1);
-        
+
         GetToken(command, 2, '|', &arg2);
         SPLINT_CHECK_FOR_NULL(arg2);
-        
+
         GetToken(command, 3, '|', &arg3);
         SPLINT_CHECK_FOR_NULL(arg3);
 
         /* initialize a new line */
         RALLOC(plotter->lines, line_T, plotter->nline+1);
 
-        plotter = (plotter_T *) ESP->udata2;
+        plotter = (plotter_T *) (ESP->udata[ESP->nudata-1]);
         iline   = plotter->nline;
 
         plotter->lines[iline].x     = NULL;
@@ -211,7 +241,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
             SPLINT_CHECK_FOR_NULL(xystr);
             plotter->lines[iline].x[i] = strtod(xystr, &pEnd);
             FREE(xystr);
-            
+
             GetToken(arg2, i, ';', &xystr);
             SPLINT_CHECK_FOR_NULL(xystr);
             plotter->lines[iline].y[i] = strtod(xystr, &pEnd);
@@ -226,6 +256,9 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     } else if (strncmp(command, "show", 4) == 0) {
 
         if (plotter->nline <= 0) goto cleanup;
+
+        /* tell ESP that we are starting an overlay */
+        tim_bcst("plotter", "overlayBeg|pyscript|plotter|");
 
         /* build the json stream */
         nresponse = 10000;
@@ -255,7 +288,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
                 } else {
                     strcat(response, "],\"style\":\"");
                     strcat(response, plotter->lines[iline].style);
-                    strcat(response, "}");
+                    strcat(response, "\"}");
                 }
             }
             if (iline < plotter->nline-1) {
@@ -265,9 +298,12 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
             }
         }
 
-        printf("response=%s\n", response);
-
         tim_bcst("plotter", response);
+
+        /* automatically hold ESP if the "nohold" option is not given */
+        if (strncmp(command, "show|nohold|", 12) != 0) {
+            tim_hold("pyscript", "plotter");
+        }
     }
 
 cleanup:
@@ -276,8 +312,7 @@ cleanup:
     FREE(arg3);
     FREE(xystr);
     FREE(response);
-    
-    printf("exit  timMesg(plotter)\n");
+
     return status;
 }
 
@@ -297,13 +332,10 @@ timSave(esp_T *ESP)                     /* (in)  pointer to ESP structure */
 
     /* --------------------------------------------------------------- */
 
-    printf("enter timSave(plotter)\n");
-    
     /* same as quit */
     status = timQuit(ESP, 0);
-    
+
 //cleanup:
-    printf("exit  timSave(plotter)\n");
     return status;
 }
 
@@ -320,17 +352,30 @@ timQuit(esp_T *ESP,                     /* (in)  pointer to ESP structure */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
-    int    iline;
-    
-    plotter_T *plotter = (plotter_T *)(ESP->udata2);
+    int    i, iline;
+
+    plotter_T *plotter;
 
     ROUTINE(timQuit(plotter));
 
     /* --------------------------------------------------------------- */
 
-    printf("enter timQuit(plotter)\n");
+    if (ESP->nudata <= 0) {
+        goto cleanup;
+    } else if (strcmp(ESP->timName[ESP->nudata-1], "plotter") != 0) {
+        printf("WARNING:: TIM on top of stack is not \"plotter\"\n");
+        for (i = 0; i < ESP->nudata; i++) {
+            printf("   timName[%d]=%s\n", i, ESP->timName[i]);
+        }
+        goto cleanup;
+    } else {
+        plotter = (plotter_T *)(ESP->udata[ESP->nudata-1]);
+    }
     
-    /* delete any previous plots */
+    /* do nothing if we have already cleared plotter data */
+    if (plotter == NULL) goto cleanup;
+
+    /* delete any previous plot data */
     for (iline = 0; iline < plotter->nline; iline++) {
         FREE(plotter->lines[iline].x    );
         FREE(plotter->lines[iline].y    );
@@ -341,14 +386,15 @@ timQuit(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     FREE(plotter->xlabel);
     FREE(plotter->ylabel);
     FREE(plotter->lines );
-    
+
     plotter->nline = 0;
-        
-    FREE(ESP->udata2);
+
+    FREE(ESP->udata[ESP->nudata-1]);
+    ESP->timName[   ESP->nudata-1][0] = '\0';
+    ESP->nudata--;
 
     tim_bcst("plotter", "timQuit|plotter|");
 
-//cleanup:
-    printf("exit  timQuit(plotter)\n");
+cleanup:
     return status;
 }

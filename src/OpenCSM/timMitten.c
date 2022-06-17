@@ -63,8 +63,6 @@ typedef struct {
 
 static int mittenBuildBox(esp_T *ESP, double rotate);
 
-static void *oldUdata=NULL;
-
 
 /***********************************************************************/
 /*                                                                     */
@@ -91,11 +89,17 @@ timLoad(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     }
     
     /* create the mitten_T structure */
-    oldUdata = ESP->udata;
-    ESP->udata = NULL;
-    MALLOC(ESP->udata, mitten_T, 1);
+    if (ESP->nudata >= MAX_TIM_NESTING) {
+        printf("ERROR:: cannot nest more than %d TIMs\n", MAX_TIM_NESTING);
+        exit(0);
+    }
+    
+    ESP->nudata++;
+    MALLOC(ESP->udata[ESP->nudata-1], mitten_T, 1);
 
-    mitn = (mitten_T *) ESP->udata;
+    strcpy(ESP->timName[ESP->nudata-1], "mitten");
+
+    mitn = (mitten_T *) (ESP->udata[ESP->nudata-1]);
 
     /* initialize the structure */
     mitn->xcent = 0;
@@ -141,7 +145,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     double delta=0, fact=1, angle=0, delay=0;
     char   *arg1=NULL, *pEnd;
     char   response[MAX_EXPR_LEN];
-    mitten_T *mitn = (mitten_T *)(ESP->udata);
+    mitten_T *mitn = (mitten_T *)(ESP->udata[ESP->nudata-1]);
 
     ROUTINE(timMesg(mitten));
 
@@ -283,16 +287,28 @@ timSave(esp_T *ESP)                     /* (in)  pointer to TI Mstructure */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
-    int    iface, igprim;
+    int    i, iface, igprim;
     char   gpname[255];
     FILE   *fp=NULL;
 
-    mitten_T *mitn = (mitten_T *)(ESP->udata);
+    mitten_T *mitn;
 
     ROUTINE(timSave(mitten));
 
     /* --------------------------------------------------------------- */
 
+    if (ESP->nudata <= 0) {
+        goto cleanup;
+    } else if (strcmp(ESP->timName[ESP->nudata-1], "mitten") != 0) {
+        printf("WARNING:: TIM on top of stack is not \"mitten\"\n");
+        for (i = 0; i < ESP->nudata; i++) {
+            printf("   timName[%d]=%s\n", i, ESP->timName[i]);
+        }
+        goto cleanup;
+    } else {
+        mitn = (mitten_T *)(ESP->udata[ESP->nudata-1]);
+    }
+    
     /* add the mitten Body to the bottm of the .csm file */
     fp = fopen(ESP->MODL->filename, "a");
     if (fp == NULL) {
@@ -329,8 +345,9 @@ timSave(esp_T *ESP)                     /* (in)  pointer to TI Mstructure */
     }
 
     /* free up the mitten_T structure */
-    FREE(ESP->udata);
-    ESP->udata = oldUdata;
+    FREE(ESP->udata[ESP->nudata-1]);
+    ESP->timName[   ESP->nudata-1][0] = '\0';
+    ESP->nudata--;
 
 cleanup:
     return status;
@@ -349,14 +366,26 @@ timQuit(esp_T *ESP,                     /* (in)  pointer to ESP structure */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
-    int      iface, igprim;
+    int      i, iface, igprim;
     char     gpname[255];
-    mitten_T *mitn = (mitten_T *)(ESP->udata);
+    mitten_T *mitn;
 
     ROUTINE(timQuit(mitten));
 
     /* --------------------------------------------------------------- */
 
+    if (ESP->nudata <= 0) {
+        goto cleanup;
+    } else if (strcmp(ESP->timName[ESP->nudata-1], "mitten") != 0) {
+        printf("WARNING:: TIM on top of stack is not \"mitten\"\n");
+        for (i = 0; i < ESP->nudata; i++) {
+            printf("   timName[%d]=%s\n", i, ESP->timName[i]);
+        }
+        goto cleanup;
+    } else {
+        mitn = (mitten_T *)(ESP->udata[ESP->nudata-1]);
+    }
+    
     if (mitn == NULL) goto cleanup;
     
     /* remove the Body from the scene graph */
@@ -373,7 +402,9 @@ timQuit(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     }
 
     /* free up the mitten_T structure */
-    FREE(ESP->udata);
+    FREE(ESP->udata[ESP->nudata-1]);
+    ESP->timName[   ESP->nudata-1][0] = '\0';
+    ESP->nudata--;
 
 cleanup:
     return status;
@@ -400,7 +431,7 @@ mittenBuildBox(esp_T    *ESP,           /* (in)  pointer to ESP structure */
     char    gpname[255];
     ego     etemp, exform, ebody, etess;
     wvData  items[20];
-    mitten_T *mitn = (mitten_T *)(ESP->udata);
+    mitten_T *mitn = (mitten_T *)(ESP->udata[ESP->nudata-1]);
 
     ROUTINE(mittenBuildBox);
 

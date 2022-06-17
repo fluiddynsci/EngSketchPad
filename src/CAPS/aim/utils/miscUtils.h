@@ -7,6 +7,7 @@
 #include "capsTypes.h"  // Bring in CAPS types
 #include "cfdTypes.h"   // Bring in cfd structures
 #include "miscTypes.h"  // Bring in miscellaneous structures
+#include "aimMesh.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -179,7 +180,7 @@ int merge_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMap1,
                                mapAttrToIndexStruct *attrMapOut);
 
 // Search a mapAttrToIndex structure for a given keyword and set/return the corresponding index
-int get_mapAttrToIndexIndex(mapAttrToIndexStruct *attrMap, const char *keyWord,
+int get_mapAttrToIndexIndex(const mapAttrToIndexStruct *attrMap, const char *keyWord,
                             int *index);
 
 // Search a mapAttrToIndex structure for a given index and return the corresponding keyword
@@ -241,10 +242,7 @@ int retrieve_CAPSMeshAttr(ego geomEntity, const char **string);
 int retrieve_CoordSystemAttr(ego geomEntity, const char **string);
 */
 
-// Create a mapping between unique, generic (specified via mapName) attribute names and an index value
-int create_genericAttrToIndexMap(int numBody, ego bodies[], int attrLevel,
-                                 const char *mapName,
-                                 mapAttrToIndexStruct *attrMap);
+int create_MeshRefToIndexMap(void *aimInfo, aimMeshRef *meshRef, mapAttrToIndexStruct *attrMap);
 
 // Create a mapping between unique capsGroup attribute names and an index value
 int create_CAPSGroupAttrToIndexMap(int numBody, ego bodies[], int attrLevel,

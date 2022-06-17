@@ -10,12 +10,13 @@
 ###########################################################################
 
 import ctypes
-from ctypes import POINTER, c_short, c_int, c_ulong, c_size_t, c_double, c_void_p, c_char, c_char_p
+from ctypes import POINTER, c_short, c_int, c_ulong, c_ulonglong, c_double, c_void_p, c_char_p
 import os
 import sys
 import json
 import copy
 import signal
+import functools
 from sys import version_info
 #import xml.etree.ElementTree as xmlElementTree
 
@@ -46,6 +47,12 @@ else:
     raise IOError("Unknown platform: " + sys.platform)
 
 __all__ = []
+
+# =============================================================================
+if sys.platform.startswith('win32'):
+    CAPSLONG = c_ulonglong
+else:
+    CAPSLONG = c_ulong
 
 # =============================================================================
 # alias for clarification
@@ -79,8 +86,7 @@ class c_capsOwn(ctypes.Structure):
     pass
 
 c_capsOwn.__slots__ = [
-    'nLines',
-    'lines',
+    'index',
     'pname',
     'pID',
     'user',
@@ -88,13 +94,12 @@ c_capsOwn.__slots__ = [
     'sNum',
 ]
 c_capsOwn._fields_ = [
-    ('nLines', c_int),
-    ('lines', c_char_p),
+    ('index', c_int),
     ('pname', c_char_p),
     ('pID', c_char_p),
     ('user', c_char_p),
     ('datetime', c_short * int(6)),
-    ('sNum', c_ulong),
+    ('sNum', CAPSLONG),
 ]
 
 # =============================================================================
@@ -106,6 +111,7 @@ c_capsObject.__slots__ = [
     'magicnumber',
     'type',
     'subtype',
+    'delMark',
     'name',
     'attrs',
     'blind',
@@ -119,10 +125,11 @@ c_capsObject._fields_ = [
     ('magicnumber', c_int),
     ('type', c_int),
     ('subtype', c_int),
+    ('delMark', c_int),
     ('name', c_char_p),
     ('attrs', POINTER(egads.c_egAttrs)),
-    ('blind', POINTER(None)),
-    ('flist', POINTER(None)),
+    ('blind', c_void_p),
+    ('flist', c_void_p),
     ('nHistory', c_int),
     ('history', POINTER(c_capsOwn)),
     ('last', c_capsOwn),
@@ -291,23 +298,16 @@ _caps.caps_childByName.restype = c_int
 _caps.caps_bodyByIndex.argtypes = [c_capsObj, c_int, POINTER(egads.c_ego), POINTER(c_char_p)]
 _caps.caps_bodyByIndex.restype = c_int
 
-_caps.caps_ownerInfo.argtypes = [c_capsOwn, POINTER(c_char_p), POINTER(c_char_p), POINTER(c_char_p), POINTER(c_int), POINTER(c_char_p), POINTER(c_short), POINTER(c_ulong)]
+_caps.caps_ownerInfo.argtypes = [c_capsObj, c_capsOwn, POINTER(c_char_p), 
+                                 POINTER(c_char_p), POINTER(c_char_p), POINTER(c_char_p), POINTER(c_int), 
+                                 POINTER(POINTER(c_char_p)), POINTER(c_short), POINTER(CAPSLONG)]
 _caps.caps_ownerInfo.restype = c_int
-
-_caps.caps_setOwner.argtypes = [c_capsObj, c_char_p, c_int, POINTER(c_char_p), POINTER(c_capsOwn)]
-_caps.caps_setOwner.restype = c_int
-
-_caps.caps_addHistory.argtypes = [c_capsObj, c_capsOwn]
-_caps.caps_addHistory.restype = c_int
 
 _caps.caps_getHistory.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_capsOwn))]
 _caps.caps_getHistory.restype = c_int
 
-_caps.caps_freeOwner.argtypes = [POINTER(c_capsOwn)]
-_caps.caps_freeOwner.restype = None
-
-_caps.caps_delete.argtypes = [c_capsObj]
-_caps.caps_delete.restype = c_int
+_caps.caps_markForDelete.argtypes = [c_capsObj]
+_caps.caps_markForDelete.restype = c_int
 
 _caps.caps_errorInfo.argtypes = [POINTER(c_capsErrs), c_int, POINTER(POINTER(c_capsObj)), POINTER(c_int), POINTER(c_int), POINTER(POINTER(c_char_p))]
 _caps.caps_errorInfo.restype = c_int
@@ -348,6 +348,9 @@ _caps.caps_deleteAttr.restype = c_int
 _caps.caps_phaseState.argtypes = [c_char_p, c_char_p, POINTER(c_int)]
 _caps.caps_phaseState.restype = c_int
 
+_caps.caps_phaseNewCSM.argtypes = [c_char_p, c_char_p, c_char_p]
+_caps.caps_phaseNewCSM.restype = c_int
+
 _caps.caps_journalState.argtypes = [c_capsObj]
 _caps.caps_journalState.restype = c_int
 
@@ -362,6 +365,12 @@ _caps.caps_outLevel.restype = c_int
 
 _caps.caps_getRootPath.argtypes = [c_capsObj, POINTER(c_char_p)]
 _caps.caps_getRootPath.restype = c_int
+
+_caps.caps_intentPhrase.argtypes = [c_capsObj, c_int, POINTER(c_char_p)]
+_caps.caps_intentPhrase.restype = c_int
+
+_caps.caps_debug.argtypes = [c_capsObj]
+_caps.caps_debug.restype = c_int
 
 # analysis functions 
 
@@ -385,9 +394,6 @@ _caps.caps_makeAnalysis.restype = c_int
 
 _caps.caps_dupAnalysis.argtypes = [c_capsObj, c_char_p, POINTER(c_capsObj)]
 _caps.caps_dupAnalysis.restype = c_int
-
-_caps.caps_resetAnalysis.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_capsErrs))]
-_caps.caps_resetAnalysis.restype = c_int
 
 _caps.caps_dirtyAnalysis.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_capsObj))]
 _caps.caps_dirtyAnalysis.restype = c_int
@@ -451,11 +457,11 @@ _caps.caps_getData.restype = c_int
 _caps.caps_getDataSets.argtypes = [c_capsObj, c_char_p, POINTER(c_int), POINTER(POINTER(c_capsObj))]
 _caps.caps_getDataSets.restype = c_int
 
-_caps.caps_triangulate.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_int)), 
-                                              POINTER(c_int), POINTER(POINTER(c_int)),
-                                              POINTER(c_int), POINTER(POINTER(c_int)),
-                                              POINTER(c_int), POINTER(POINTER(c_int))]
-_caps.caps_triangulate.restype = c_int
+_caps.caps_getTriangles.argtypes = [c_capsObj, POINTER(c_int), POINTER(POINTER(c_int)), 
+                                               POINTER(c_int), POINTER(POINTER(c_int)),
+                                               POINTER(c_int), POINTER(POINTER(c_int)),
+                                               POINTER(c_int), POINTER(POINTER(c_int))]
+_caps.caps_getTriangles.restype = c_int
 
 # value functions 
 
@@ -529,14 +535,19 @@ _caps.caps_externSignal.restype = None
 _caps.caps_rmLock.argtypes = []
 _caps.caps_rmLock.restype = None
 
-_caps.caps_printObjects.argtypes = [c_capsObj, c_int]
+_caps.caps_printObjects.argtypes = [c_capsObj, c_capsObj, c_int]
 _caps.caps_printObjects.restype = None
+
+_caps.caps_outputObjects.argtypes = [c_capsObj, POINTER(c_char_p)]
+_caps.caps_outputObjects.restype = c_int
+
 
 # =============================================================================
 
 # Extract CAPS error codes
 _caps_error_codes = {}
 globalDict = globals()
+minErr = 0
 with open(os.path.join(_ESP_ROOT,"include","capsErrors.h")) as fp:
     lines = fp.readlines()
     for line in lines:
@@ -546,9 +557,13 @@ with open(os.path.join(_ESP_ROOT,"include","capsErrors.h")) as fp:
         _caps_error_codes[int(define[2])] = define[1]
         globalDict[define[1]] = int(define[2])
         __all__.append(define[1])
+        minErr = min(int(define[2]), minErr)
+globalDict["CAPS_CLOSED"] = minErr
 del fp
 del lines
 del define
+del globalDict
+del minErr
 
 # Extract CAPS enums
 class oFlag:   
@@ -557,7 +572,9 @@ class oFlag:
     oEGO       = 2
     oPhaseName = 3
     oContinue  = 4
-    oReload    = 5
+    oPNewCSM   = 5
+    oPNnoDel   = 6
+    oReadOnly  = 7
 
 __all__.append("oType")
 class oType:
@@ -697,6 +714,7 @@ _caps.caps_externSignal()
 signal.signal(signal.SIGSEGV, signal_handler)
 signal.signal(signal.SIGINT , signal_handler)
 signal.signal(signal.SIGABRT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 if not sys.platform.startswith('win32'):
     signal.signal(signal.SIGHUP , signal_handler)
     signal.signal(signal.SIGBUS , signal_handler)
@@ -799,21 +817,13 @@ def _raiseStatus(status, msg=None, errors=None):
 #     else:
 #         raise CAPSError(msg='c_obj must be a c_capsObj, c_capsOwn, or c_capsErrs instance')
 
-# =============================================================================
-
-# Free CAPS owner.
-def _caps_freeOwner(owner):
-    
-    stat = _caps.caps_freeOwner(owner)
-    if stat: _raiseStatus(stat, msg = "while freeing CAPS capsOwner")
-
 #==============================================================================
 __all__.append("capsOwn")
 class capsOwn:
     """
     Wrapper to represent a capsOwn structure
     """
-    def __init__(self, owner, freeOwner=False):
+    def __init__(self, owner, problemObj):
         """
         Constructor for internal use only
 
@@ -822,20 +832,11 @@ class capsOwn:
         owner: 
             c_capsOwn instance
 
-        freeOwner: 
-            if true, caps_freeOwner is called during garbage collection
+        problemObj:
+            capsObj Problem Object
         """
-        self._finalize = None
-        if not isinstance(owner, c_capsOwn): raise CAPSError(msg=CAPSError.InternalError+"owner must be type c_capsOwn")
         self._owner = owner
-        if freeOwner:
-            self._finalize = egads.finalize(self, _caps_freeOwner, self._owner)
-
-#==============================================================================
-    def __del__(self):
-        # free the owner
-        if self._finalize is not None:
-            self._finalize()
+        self._problemObj = problemObj
 
 #==============================================================================
     def info(self):
@@ -863,18 +864,23 @@ class capsOwn:
         sNum:
             the sequence number (always increasing)
         """
+        if self.problemObj._obj is None:
+            _raiseStatus(CAPS_CLOSED, "The CAPS Problem object has been closed")
+
+        phase  = c_char_p()
         pname  = c_char_p()
         pID    = c_char_p()
         userID = c_char_p()
         nLines = c_int()
-        plines  = POINTER(c_char_p)()
+        plines = POINTER(c_char_p)()
         pdatetime = (c_short*6)()
-        sNum   = c_ulong()
-        stat = _caps.caps_ownerInfo(self._owner, ctypes.byref(pname), ctypes.byref(pID),
-                                    ctypes.byref(userID), ctypes.byref(nLines), ctypes.byref(plines),
-                                    pdatetime, ctypes.byref(sNum))
+        sNum   = CAPSLONG()
+        stat = _caps.caps_ownerInfo(self._problemObj._obj, self._owner, ctypes.byref(phase),
+                                    ctypes.byref(pname), ctypes.byref(pID), ctypes.byref(userID), ctypes.byref(nLines), 
+                                    ctypes.byref(plines), pdatetime, ctypes.byref(sNum))
         if stat: _raiseStatus(stat)
  
+        phase  = _decode(phase.value)
         pname  = _decode(pname.value)
         pID    = _decode(pID.value)
         userID = _decode(userID.value)
@@ -952,18 +958,22 @@ class capsErrs:
 # =============================================================================
 
 # Close a CAPS problem.
-def _close_capsProblem(problemObj):
+def _close_capsProblem(obj, problemState):
     
-    stat = _caps.caps_close(problemObj, 0, None)
+    stat = _caps.caps_close(obj, c_int(0), None)
     if stat: _raiseStatus(stat, msg = "while closing CAPS Problem")
+    problemState.closed = True
 
-#==============================================================================
-
-# free a CAPS Object (only User defined Value and Bound Objects)
-def _caps_delete(obj):
-    
-    stat = _caps.caps_delete(obj)
-    if stat: _raiseStatus(stat, msg = "while deleting CAPS Object")
+# =============================================================================
+def checkClosed(func):
+    """Checks if the problem object has already been closed"""
+    @functools.wraps(func)
+    def wrapper_checkClosed(*args, **kwargs):
+        self = args[0]
+        if self.problemObj()._obj is None:
+            _raiseStatus(CAPS_CLOSED, "The CAPS Problem object has been closed")
+        return func(*args, **kwargs)
+    return wrapper_checkClosed
 
 #==============================================================================
 __all__.append("phaseState")
@@ -989,9 +999,34 @@ def phaseState(prName, phName):
 
     bitFlag = c_int()
     stat = _caps.caps_phaseState(prName, phName, ctypes.byref(bitFlag))
-    if stat: _raiseStatus(stat)
+    if stat != CAPS_SUCCESS and stat != egads.EGADS_NOTFOUND: _raiseStatus(stat)
 
-    return bitFlag.value
+    return bitFlag.value if stat == CAPS_SUCCESS else CAPS_NOTFOUND
+
+
+#==============================================================================
+__all__.append("phaseNewCSM")
+def phaseNewCSM(prName, phName, csm):
+    """
+    Check State of CAPS Problem Phase
+
+    Parameters
+    ----------
+    prName:
+        path ending with the CAPS problem name
+
+    phName:
+        the current phase name (None is equivalent to 'Scratch')
+
+    csm:
+        the CSM file to use in the new phase – for caps_open flag = 5
+    """
+    prName = prName.encode() if isinstance(prName, str) else prName
+    phName = phName.encode() if isinstance(phName, str) else phName
+    csm    = csm.encode()    if isinstance(csm   , str) else csm
+
+    stat = _caps.caps_phaseNewCSM(prName, phName, csm)
+    if stat != CAPS_SUCCESS: _raiseStatus(stat)
 
 #==============================================================================
 __all__.append("open")
@@ -1022,7 +1057,9 @@ def open(prName, phName, flag, ptr, outLevel=1):
         oFlag.oEGO       – ptr is a Model ego, 
         oFlag.oPhaseName – ptr is the starting phase name, 
         oFlag.oContinue  – continuation (ptr can be NULL)
-        oFlag.oReload    – ptr is the starting phase name with reloading of OpenCSM file
+        oFlag.oPNewCSM   – ptr is the starting phase name with reloading of the CSM/UDC files
+        oFlag.oPNnoDel   – ptr is the starting phase name but does not remove Objects marked for deletion
+        oFlag.oReadOnly  – Open the existing phName in read-only mode (ptr can be None)
 
     outLevel:
         0 - minimal, 1 - standard (default), 2 - debug
@@ -1033,6 +1070,7 @@ def open(prName, phName, flag, ptr, outLevel=1):
     """
     prName = prName.encode() if isinstance(prName, str) else prName
     phName = phName.encode() if isinstance(phName, str) else phName
+    pptr = None
     if isinstance(ptr, (str, bytes)) or \
        (version_info.major <= 2 and isinstance(ptr, unicode)):
         pptr = c_char_p(ptr if isinstance(ptr, bytes) else ptr.encode())
@@ -1042,8 +1080,6 @@ def open(prName, phName, flag, ptr, outLevel=1):
         if not isinstance(ptr._modl, c_void_p):
             raise CAPSError(CAPS_BADVALUE, "ptr has _modl that is not a ctypes.c_void_p. Is it an intance of pyOCSM.Ocsm? ptr = {!r}".format(ptr))
         pptr = ctypes.cast(ptr._modl, c_void_p)
-    else:
-        raise CAPSError(CAPS_BADVALUE, "ptr type should be str, bytes, or pyOCSM.Ocsm: ptr = {!r}".format(ptr))
 
     nErr = c_int()
     errs = POINTER(c_capsErrs)()
@@ -1064,7 +1100,7 @@ class capsObj:
     Base class Wrapper to represent a CAPS Object
     """
 #==============================================================================
-    def __init__(self, obj, problemObj, deleteFunction):
+    def __init__(self, obj, problemObj, deleteFunction=None):
         """
         Constructor only intended for internal use.
 
@@ -1084,8 +1120,18 @@ class capsObj:
         if not isinstance(obj, c_capsObj): raise CAPSError(msg=CAPSError.InternalError+"obj must be type c_capsObj")
         self._obj = obj
         self._problemObj = problemObj
+                
+        if problemObj is not None:
+            problemState = problemObj._problemState
+        else:
+            class ProblemState:
+                pass
+            self._problemState = ProblemState()
+            self._problemState.closed = False
+            problemState = self._problemState
+
         if deleteFunction is not None:
-            self._finalize = egads.finalize(self, deleteFunction, self._obj)
+            self._finalize = egads.finalize(self, deleteFunction, obj, problemState)
 
 #==============================================================================
     def __del__(self):
@@ -1097,6 +1143,7 @@ class capsObj:
         self._problemObj = None
 
 #==============================================================================
+    @checkClosed
     def close(self, complete = 0, phName = None):
         """
         Closes a Problem object
@@ -1107,7 +1154,7 @@ class capsObj:
            a CAPS Problem Object
 
         complete:
-            0 – the phase is not complete, 1 – the phase is completed and should not be modified
+            -1 – delete the phase, 0 – the phase is not complete, 1 – the phase is completed and should not be modified
 
         phName:
             Phase Name of the Scratch phase is closed as complete
@@ -1115,17 +1162,19 @@ class capsObj:
         # detach the finalizer
         if self._finalize is not None:
             self._finalize.detach()
-        
-        phName   = phName.encode() if isinstance(phName, str) else phName
 
-        stat = _caps.caps_close(self._obj, c_int(complete), phName)
-        if stat: _raiseStatus(stat, msg = "while closing CAPS Problem")
+            phName   = phName.encode() if isinstance(phName, str) else phName
+    
+            stat = _caps.caps_close(self._obj, c_int(complete), phName)
+            if stat: _raiseStatus(stat, msg = "while closing CAPS Problem")
 
         self._obj = None
         self._finalize = None
         self._problemObj = None
+        self._problemState.closed = True
 
 #==============================================================================
+    @checkClosed
     def __eq__(self, obj):
         """
         checks pointer equality of underlying c_capsObj memory address
@@ -1133,6 +1182,7 @@ class capsObj:
         return isinstance(obj, capsObj) and ctypes.addressof(obj._obj.contents) == ctypes.addressof(self._obj.contents)
 
 #==============================================================================
+    @checkClosed
     def __ne__(self, obj):
         return not self == obj
 
@@ -1144,6 +1194,7 @@ class capsObj:
         return self if self._problemObj is None else self._problemObj
 
 #==============================================================================
+    @checkClosed
     def info(self):
         """
         Return information about the object
@@ -1181,13 +1232,14 @@ class capsObj:
         name   = _decode(name.value)
         otype  = otype.value
         stype  = stype.value
-        link   = capsObj(link  , self.problemObj(), None) if link   else None
-        parent = capsObj(parent, self.problemObj(), None) if parent else None
-        last   = capsOwn(last)                            if last   else None
+        link   = capsObj(link  , self.problemObj()) if link   else None
+        parent = capsObj(parent, self.problemObj()) if parent else None
+        last   = capsOwn(last  , self.problemObj()) if last   else None
         
         return name, otype, stype, link, parent, last
 
 #==============================================================================
+    @checkClosed
     def size(self, type, stype):
         """
         Children sizing information from a Patent Object
@@ -1213,6 +1265,7 @@ class capsObj:
         return size.value
 
 #==============================================================================
+    @checkClosed
     def childByName(self, otype, stype, name):
         """
         Retrieve a CAPS child object by name
@@ -1242,9 +1295,10 @@ class capsObj:
                                       c_char_p(name), ctypes.byref(child),
                                       ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
-        return capsObj(child, self.problemObj(), None)
+        return capsObj(child, self.problemObj())
 
 #==============================================================================
+    @checkClosed
     def childByIndex(self, otype, stype, index):
         """
         Retrieve a CAPS child object by name
@@ -1270,26 +1324,14 @@ class capsObj:
         stat = _caps.caps_childByIndex(self._obj, c_int(otype), c_int(stype), 
                                        c_int(index), ctypes.byref(child))
         if stat: _raiseStatus(stat)
-        return capsObj(child, self.problemObj(), None)
+        return capsObj(child, self.problemObj())
 
 #==============================================================================
-    def addHistory(self, history):
-        """
-        Add history to a CAPS Object
-
-        Parameters
-        -------
-        history:
-             a capsOwn structure with history information
-        """
-        stat = _caps.caps_addHistory(self._obj, history._owner)
-        if stat: _raiseStatus(stat)
-    
-#==============================================================================
+    @checkClosed
     def getHistory(self):
         """
         Retrieve history of a CAPS Object
-
+    
         Returns
         -------
             list of capsOwn structures
@@ -1298,28 +1340,24 @@ class capsObj:
         phist = POINTER(c_capsOwn)()
         stat = _caps.caps_getHistory(self._obj, ctypes.byref(nhist), ctypes.byref(phist))
         if stat: _raiseStatus(stat)
-        
+    
         nhist = nhist.value
-        hist = [None]*nhist
-        for i in range(nhist):
-            hist[i] = capsOwn(phist[i])
-
+        hist = [capsOwn(phist[i]) for i in range(nhist)]
+    
         return hist
 
 #==============================================================================
-    def addHistory(self, hist):
+    @checkClosed
+    def markForDelete(self):
         """
-        Add history to a CAPS Object
-
-        Parameters
-        ----------
-        hist:
-            a CAPS capsOwn structure to add to the history for the Object 
+        Marks the CAPS Object for deletion in the next Phase. 
+        Only applies to Analysis, Parameter Value, and Bound Objects.
         """
-        stat = _caps.caps_addHistory(self._obj, hist._owner)
-        if stat: _raiseStatus(stat)
+        stat = _caps.caps_markForDelete(self._obj)
+        if stat: _raiseStatus(stat, msg = "while marking CAPS Object for deletion")
 
 #==============================================================================
+    @checkClosed
     def attrByName(self, name):
         """
         Retrieve an attribute by name
@@ -1339,12 +1377,11 @@ class capsObj:
         
         stat = _caps.caps_attrByName(self._obj, name, ctypes.byref(attr))
         if stat: _raiseStatus(stat)
-
-        deleteFunc = _caps_delete if attr.contents.subtype == sType.USER else None
-
-        return capsObj(attr, self.problemObj(), deleteFunction=deleteFunc)
+        
+        return capsObj(attr, self.problemObj())
 
 #==============================================================================
+    @checkClosed
     def attrByIndex(self, index):
         """
         Retrieve an Attribute by index
@@ -1362,12 +1399,11 @@ class capsObj:
         
         stat = _caps.caps_attrByIndex(self._obj, c_int(index), ctypes.byref(attr))
         if stat: _raiseStatus(stat)
-        
-        deleteFunc = _caps_delete if attr.contents.subtype == sType.USER else None
 
-        return capsObj(attr, self.problemObj(), deleteFunction=deleteFunc)
+        return capsObj(attr, self.problemObj())
 
 #==============================================================================
+    @checkClosed
     def setAttr(self, attr, name=None):
         """
         Set an Attribute
@@ -1388,6 +1424,7 @@ class capsObj:
         if stat: _raiseStatus(stat)
 
 #==============================================================================
+    @checkClosed
     def deleteAttr(self, name):
         """
         Set an Attribute
@@ -1404,6 +1441,7 @@ class capsObj:
         if stat: _raiseStatus(stat)
 
 #==============================================================================
+    @checkClosed
     def journalState(self):
         """
         Get the journal state for a problem object
@@ -1417,14 +1455,14 @@ class capsObj:
 
         Returns
         -------
-        True if Journaling False otherwise
+        The oFlag value associated with journalin state
         """
         stat = _caps.caps_journalState(self._obj)
-        if stat == 0: return False
-        if stat == 4: return True
-        _raiseStatus(stat)
+        if stat < 0: _raiseStatus(stat)
+        return stat
 
 #==============================================================================
+    @checkClosed
     def setOutLevel(self, outlevel=1):
         """
         Sets the CAPS verbosity level
@@ -1443,6 +1481,7 @@ class capsObj:
         return stat
 
 #==============================================================================
+    @checkClosed
     def getRootPath(self):
         """
         Get Problem root
@@ -1459,10 +1498,52 @@ class capsObj:
         """
         root  = c_char_p()
         stat = _caps.caps_getRootPath(self._obj, ctypes.byref(root))
-        if stat < 0: _raiseStatus(stat)
+        if stat: _raiseStatus(stat)
         return _decode(root.value)
 
 #==============================================================================
+    # @checkClosed
+    def intentPhrase(self, lines):
+        """
+        Get Problem root
+    
+        Parameters
+        ----------
+        self: 
+            a CAPS Problem Object
+    
+        lines:
+            List of intent phrases for history tracking
+        """
+        nlines = len(lines)
+        plines = (c_char_p*nlines)()
+        for i in range(nlines):
+            plines[i] = lines[i].encode() if isinstance(lines[i], str) else lines[i]
+    
+        stat = _caps.caps_intentPhrase(self._obj, c_int(nlines), plines)
+        if stat: _raiseStatus(stat)
+
+#==============================================================================
+    # @checkClosed
+    def debug(self):
+        """
+        Toggle CAPS Problem Object debug mode
+    
+        Parameters
+        ----------
+        self: 
+            a CAPS Problem Object
+        
+        Returns
+        -------
+            debug status 0 -- off, 1 -- on
+        """
+        stat = _caps.caps_debug(self._obj)
+        if stat < 0: _raiseStatus(stat)
+        return stat
+
+#==============================================================================
+    @checkClosed
     def bodyByIndex(self, index):
         """
         Retrived an EGADS body ego based on index
@@ -1489,6 +1570,7 @@ class capsObj:
         return egads.c_to_py(body), units
 
 #==============================================================================
+    @checkClosed
     def getBodies(self):
         """
         Retrived EGADS ego bodies from an Analysis Object
@@ -1511,23 +1593,7 @@ class capsObj:
         return bodies
 
 #==============================================================================
-    def getRootPath(self):
-        """
-        Retrieve the problem root path
-
-        Note: All other uses of path is relative to this point.
-        
-        Returns
-        -------
-            the root path
-        """
-        fullPath = c_char_p()
-        stat = _caps.caps_getRootPath(self._obj, ctypes.byref(fullPath))
-        if stat: _raiseStatus(stat)
-        
-        return _decode(fullPath.value)
-
-#==============================================================================
+    @checkClosed
     def convertValue(self, inVal, inUnit):
         """
         Perform unit conversion
@@ -1553,6 +1619,7 @@ class capsObj:
         return outVal.value
 
 #==============================================================================
+    @checkClosed
     def reset(self):
         """
         Reset the problem. This is equivalent to a clean slate restart.
@@ -1563,6 +1630,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def writeParameters(self, fileName):
         """
         This outputs an OpenCSM Design Parameter file.
@@ -1578,6 +1646,7 @@ class capsObj:
         if stat: _raiseStatus(stat)
 
 #==============================================================================
+    @checkClosed
     def readParameters(self, fileName):
         """
         This reads an OpenCSM Design Parameter file and overwrites (makes dirty) 
@@ -1594,6 +1663,7 @@ class capsObj:
         if stat: _raiseStatus(stat)
 
 #==============================================================================
+    @checkClosed
     def writeGeometry(self, fileName, flag = 1):
         """
         Writes all bodies in the Problem/Analysis Object to a file
@@ -1619,34 +1689,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
-    def setOwner(self, pname, lines, owner):
-        """
-        Sets owner data
-        
-        This increases the Problem's sequence number
-
-        Parameters
-        ----------
-        pname:
-            a pointer to the process name character string 
-
-        lines:
-            a list of strings with the description
-            
-        owner:
-            a capsOwn structure
-        """
-        pname = pname.encode() if isinstance(pname,str) else pname
-        
-        nLines = len(lines)
-        plines = (c_char_p*nLines)()
-        for i in range(nLines):
-            plines[i] = lines[i].encode() if isinstance(lines[i],str) else lines[i]
-
-        stat = _caps.caps_setOwner(self._obj, pname, c_int(nLines), plines, owner._owner)
-        if stat: _raiseStatus(stat)
-
-#==============================================================================
+    @checkClosed
     def makeValue(self, vname, stype, data):
         """
         Create a value object
@@ -1691,11 +1734,10 @@ class capsObj:
                                     c_int(nrow), c_int(ncol), pdata, partial, units, ctypes.byref(val))
         if stat: _raiseStatus(stat)
 
-        deleteFunc = _caps_delete if stype == sType.USER else None
-
-        return capsObj(val, self.problemObj(), deleteFunction=deleteFunc)
+        return capsObj(val, self.problemObj())
 
 #==============================================================================
+    @checkClosed
     def queryAnalysis(self, aname):
         """
         Query Analysis -- Does not 'load' or create an object
@@ -1735,14 +1777,17 @@ class capsObj:
         return nIn, nOut, execute
 
 #==============================================================================
+    @checkClosed
     def getInput(self):
         raise CAPSError(msg="Implement")
 
 #==============================================================================
+    @checkClosed
     def getOutput(self):
         raise CAPSError(msg="Implement")
 
 #==============================================================================
+    @checkClosed
     def makeAnalysis(self, aname, name, unitSys=None, intent=None, execute=1):
         """
         Load Analysis into the Problem
@@ -1805,9 +1850,10 @@ class capsObj:
                 msg += " with name '" + _decode(name) + "'"
             _raiseStatus(stat, msg=msg, errors=capsErrs(nErr, errs))
 
-        return capsObj(analysis, self.problemObj(), None)
+        return capsObj(analysis, self.problemObj())
 
 #==============================================================================
+    @checkClosed
     def makeBound(self, dim, bname):
         """
         Creates an Bound Object
@@ -1830,9 +1876,10 @@ class capsObj:
         stat = _caps.caps_makeBound(self._obj, c_int(dim), bname, ctypes.byref(bound))
         if stat: _raiseStatus(stat)
 
-        return capsObj(bound, self.problemObj(), deleteFunction=_caps_delete)
+        return capsObj(bound, self.problemObj())
 
 #==============================================================================
+    @checkClosed
     def getValue(self):
         """
         Returns the data in the Value Object
@@ -1925,6 +1972,7 @@ class capsObj:
         return _withUnits(data, units)
 
 #==============================================================================
+    @checkClosed
     def getValueUnit(self):
         """
         Returns the unit in the Value Object
@@ -2129,6 +2177,7 @@ class capsObj:
         return vtype, nrow, ncol, val, partial
 
 #==============================================================================
+    @checkClosed
     def setValue(self, data):
         """
         Set data in the Value object
@@ -2164,6 +2213,7 @@ class capsObj:
             _raiseStatus(stat, msg="Trying to set value for: {!r}".format(name), errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def getLimits(self):
         """
         Returns the value limits
@@ -2199,6 +2249,7 @@ class capsObj:
         return _withUnits(limits, units)
 
 #==============================================================================
+    @checkClosed
     def setLimits(self, limits):
         """
         Set the value limits
@@ -2250,6 +2301,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def getValueProps(self):
         """
         Returns the value properties
@@ -2291,6 +2343,7 @@ class capsObj:
         return dim, pmtr, lfix, sfix, ntype
 
 #==============================================================================
+    @checkClosed
     def setValueProps(self, dim, lfix, sfix, ntype):
         """
         Sets the value properties (only for the User & Parameter subtypes) 
@@ -2318,6 +2371,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def transferValues(self, tmethod, src):
         """
         Transfers values from src Value Object (not for AIM pointer or Tuple vtypes) - or - DataSet Object
@@ -2343,6 +2397,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def linkValue(self, link, tmethod):
         """
         Links values from Value Object (not for Tuple vtype or Value subtype User)  - or - DataSet Object
@@ -2379,6 +2434,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def removeLink(self):
         """
         Remove a link to this Value Object
@@ -2390,6 +2446,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def hasDeriv(self):
         """
         Get a list of the Derivatives available
@@ -2424,6 +2481,7 @@ class capsObj:
         return names
 
 #==============================================================================
+    @checkClosed
     def getDeriv(self, name):
         """
         Get Derivative values
@@ -2469,6 +2527,7 @@ class capsObj:
         return deriv
 
 #==============================================================================
+    @checkClosed
     def dupAnalysis(self, name):
         """
         Initializeds a new analysis based on this Analysis Object
@@ -2490,19 +2549,10 @@ class capsObj:
         stat = _caps.caps_dupAnalysis(self._obj, name, ctypes.byref(analysis))
         if stat: _raiseStatus(stat)
 
-        return capsObj(analysis, self.problemObj(), None)
+        return capsObj(analysis, self.problemObj())
 
 #==============================================================================
-    def resetAnalysis(self):
-        """
-        Reset the Analysis
-        """
-        nErr = c_int()
-        errs = POINTER(c_capsErrs)()
-        stat = _caps.caps_resetAnalysis(self._obj, ctypes.byref(nErr), ctypes.byref(errs))
-        if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
-
-#==============================================================================
+    @checkClosed
     def dirtyAnalysis(self):
         """
         Resturns the list of dirty Analysis Objects
@@ -2519,6 +2569,7 @@ class capsObj:
         return anlysis
 
 #==============================================================================
+    @checkClosed
     def analysisInfo(self):
         """
         Get information about the Anaysis Object
@@ -2595,6 +2646,7 @@ class capsObj:
         return dir, unitSys, major, minor, intent, fnames, franks, fInOut, execute, status
 
 #==============================================================================
+    @checkClosed
     def preAnalysis(self):
         """
         Generate Analysis Inputs
@@ -2605,6 +2657,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def system(self, cmd, rpath=None):
         """
         Execute the Command Line String
@@ -2631,6 +2684,7 @@ class capsObj:
         if stat: _raiseStatus(stat)
 
 #==============================================================================
+    @checkClosed
     def execute(self):
         """
         Execute Analysis if AIM does execution or AutoExec
@@ -2642,6 +2696,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def postAnalysis(self):
         """
         Mark Analysis as run
@@ -2654,6 +2709,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def boundInfo(self):
         """
         Get information about the Bound Object
@@ -2685,6 +2741,7 @@ class capsObj:
         return state, dim, plims
 
 #==============================================================================
+    @checkClosed
     def closeBound(self):
         """
         Completes the Bound Object
@@ -2693,6 +2750,7 @@ class capsObj:
         if stat: _raiseStatus(stat)
 
 #==============================================================================
+    @checkClosed
     def makeVertexSet(self, analysis, vname=None):
         """
         Create a VertexSet on the Bound Object
@@ -2719,9 +2777,10 @@ class capsObj:
                                         ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
         
-        return capsObj(vset, self.problemObj(), None)
+        return capsObj(vset, self.problemObj())
 
 #==============================================================================
+    @checkClosed
     def getDataSets(self, dname):
         """
         Get DataSet Objects by name
@@ -2743,7 +2802,8 @@ class capsObj:
         return datasets
 
 #==============================================================================
-    def triangulate(self):
+    @checkClosed
+    def getTriangles(self):
         """
         Get Triangulations for a 2D VertexSet
         
@@ -2769,10 +2829,10 @@ class capsObj:
         pDtris  = POINTER(c_int)()
         nDsegs  = c_int()
         pDsegs  = POINTER(c_int)()
-        stat = _caps.caps_triangulate(self._obj, ctypes.byref(nGtris), ctypes.byref(pGtris), 
-                                                 ctypes.byref(nGsegs), ctypes.byref(pGsegs), 
-                                                 ctypes.byref(nDtris), ctypes.byref(pDtris),
-                                                 ctypes.byref(nDsegs), ctypes.byref(pDsegs))
+        stat = _caps.caps_getTriangles(self._obj, ctypes.byref(nGtris), ctypes.byref(pGtris), 
+                                                  ctypes.byref(nGsegs), ctypes.byref(pGsegs), 
+                                                  ctypes.byref(nDtris), ctypes.byref(pDtris),
+                                                  ctypes.byref(nDsegs), ctypes.byref(pDsegs))
         if stat: _raiseStatus(stat)
         
         Gtris = None
@@ -2799,6 +2859,7 @@ class capsObj:
         return Gtris, Gsegs, Dtris, Dsegs
 
 #==============================================================================
+    @checkClosed
     def vertexSetInfo(self):
         """
         Get information about the VertexSet Object
@@ -2833,6 +2894,7 @@ class capsObj:
         return nGpts, nDpts, bound, analysis
 
 #==============================================================================
+    @checkClosed
     def fillUnVertexSet(self, xyzs):
         """
         Fill an Unconnected VertexSet
@@ -2851,6 +2913,7 @@ class capsObj:
         if stat: _raiseStatus(stat)
 
 #==============================================================================
+    @checkClosed
     def makeDataSet(self, dname, dmethod, rank=0):
         """
         Create a DataSet Object -- associated Bound must be Open
@@ -2875,9 +2938,10 @@ class capsObj:
                                       ctypes.byref(nErr), ctypes.byref(errs))
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
-        return capsObj(dset, self.problemObj(), None)
+        return capsObj(dset, self.problemObj())
 
 #==============================================================================
+    @checkClosed
     def dataSetInfo(self):
         """
         Returns info about a DataSet Object
@@ -2902,11 +2966,12 @@ class capsObj:
                                       ctypes.byref(dmethod))
         if stat: _raiseStatus(stat)
 
-        link = capsObj(link, self.problemObj(), None) if link else None
+        link = capsObj(link, self.problemObj()) if link else None
 
         return ftype.value, link, dmethod.value
 
 #==============================================================================
+    @checkClosed
     def linkDataSet(self, link, dmethod):
         """
         Links data from DataSet Object
@@ -2937,6 +3002,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def initDataSet(self, startup):
         """
         Initialize DataSet for cyclic/incremental startup
@@ -2960,6 +3026,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def getData(self):
         """
         Get data from the DataSet
@@ -2995,6 +3062,7 @@ class capsObj:
         return _withUnits(data, units)
 
 #==============================================================================
+    @checkClosed
     def setData(self, data):
         """
         Set data for the DataSet
@@ -3025,6 +3093,7 @@ class capsObj:
         if stat: _raiseStatus(stat, errors=capsErrs(nErr, errs))
 
 #==============================================================================
+    @checkClosed
     def fillUnVertexSet(self, xyzs):
         """
         Fill an Unconnected VertexSet
@@ -3043,6 +3112,13 @@ class capsObj:
         if stat: _raiseStatus(stat)
 
 #==============================================================================
+    @checkClosed
+    def outputObjects(self):
+        stat = _caps.caps_outputObjects(self._obj, None)
+        if stat: _raiseStatus(stat)
+
+#==============================================================================
+    @checkClosed
     def AIMbackdoor(self, JSONin):
         
         JSONin = JSONin.encode() if isinstance(JSONin, str) else JSONin

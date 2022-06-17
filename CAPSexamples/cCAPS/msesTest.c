@@ -49,7 +49,7 @@ printErrors(int nErr, capsErrs *errors)
       printf("%s\n", lines[j]);
     }
   }
-  
+
   caps_freeError(errors);
 }
 
@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 
     // mses analysis executes automatically
 
-    // Get total CD
+    // Get CL
     status = caps_childByName(msesObj, VALUE, ANALYSISOUT, "CL", &tempObj,
                               &nErr, &errors);
     if (nErr != 0) printErrors(nErr, errors);

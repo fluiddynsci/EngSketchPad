@@ -36,7 +36,7 @@ print("    iminor :", iminor)
 # make a new Modl
 print("\nmaking modl(../data/basic/mitten1.csm)")
 modl = ocsm.Ocsm("../data/basic/mitten1.csm")
-esp.SetModl(modl, esp.GetEsp("python"))
+esp.SetModl(modl, esp.GetEsp("pyscript"))
 
 print("\ncalling modl.RegMesgCB(pyMesgCB)")
 modl.RegMesgCB(pyMesgCB)
@@ -62,7 +62,7 @@ print("    npmtr  :", npmtr);
 print("    nbody  :", nbody);
 
 # load the "mitten" TIM
-esp.TimLoad("mitten", esp.GetEsp("python"), "A")
+esp.TimLoad("mitten", esp.GetEsp("pyscript"), "A")
 
 # move block to left
 esp.TimMesg("mitten", "xcent|-1|")
@@ -76,8 +76,8 @@ esp.TimMesg("mitten", "countdown|5|")
 # save the "mitten" results in the mitten1.csm file
 esp.TimSave("mitten")
 
-print("Please choose \"File->Open mitten1.csm\"")
+print("Please choose \"File->Open ../data/basic/mitten1.csm\"")
 print("Then   choose \"File->Edit mitten1.csm\" to make your changes permanent")
 
 # return modl to ESP
-esp.SetModl(modl, esp.GetEsp("python"))
+esp.SetModl(modl, esp.GetEsp("pyscript"))

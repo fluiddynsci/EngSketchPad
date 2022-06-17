@@ -141,11 +141,6 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         status  = EGADS_RANGERR;
         goto cleanup;
 
-    } else if (NEDGE(0) > 8) {
-        snprintf(message, 100, "nedge = %d > 8\n", NEDGE(0));
-        status  = EGADS_RANGERR;
-        goto cleanup;
-
     } else if (udps[0].arg[5].size > 1) {
         nedge = udps[0].arg[5].size;
         for (i = 1; i < nedge; i++) {

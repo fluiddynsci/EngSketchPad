@@ -53,24 +53,15 @@ __ProtoExt__ int
   caps_bodyByIndex( capsObj pobject, int index, ego *body, char **units );
 
 __ProtoExt__ int
-  caps_ownerInfo( const capsOwn owner, char **pname, char **pID, char **userID,
-                  int *nLines, char ***lines, short *datetime, CAPSLONG *sNum );
-
-__ProtoExt__ int
-  caps_setOwner( const capsObj pobject, const char *pname,
-                 int nLines, char **lines, capsOwn *owner );
-
-__ProtoExt__ int
-  caps_addHistory( capsObj object, capsOwn history );
+  caps_ownerInfo( const capsObj pobject, const capsOwn owner, char **phase,
+                  char **pname, char **pID, char **userID, int *nLines,
+                  char ***lines, short *datetime, CAPSLONG *sNum );
 
 __ProtoExt__ int
   caps_getHistory( capsObj object, int *nHist, capsOwn **history );
 
-__ProtoExt__ void
-  caps_freeOwner( capsOwn *owner );
-
 __ProtoExt__ int
-  caps_delete( capsObj object );
+  caps_markForDelete( capsObj object );
 
 __ProtoExt__ int
   caps_errorInfo( capsErrs *errs, int eIndex, capsObj *errObj, int *eType,
@@ -78,6 +69,9 @@ __ProtoExt__ int
 
 __ProtoExt__ int
   caps_freeError( /*@only@*/ capsErrs *errs );
+
+__ProtoExt__ int
+  caps_printErrors( /*@null@*/ FILE *fp, int nErr, capsErrs *errs );
 
 __ProtoExt__ void
   caps_freeValue( capsValue *value );
@@ -118,16 +112,19 @@ __ProtoExt__ int
                    int *bitFlag );
 
 __ProtoExt__ int
+  caps_phaseNewCSM( const char *prName, const char *phName, const char *csm );
+
+__ProtoExt__ int
   caps_journalState( const capsObj pobject );
 
 __ProtoExt__ int
   caps_open( const char *prName, /*@null@*/ const char *phName, int flag,
-             void *ptr, int outLevel, capsObj *pobject, int *nErr,
+             /*@null@*/ void *ptr, int outLevel, capsObj *pobject, int *nErr,
              capsErrs **errors );
 
 __ProtoExt__ int
   caps_brokenLink( /*@null@*/ void (*callBack)(capsObj problem, capsObj obj,
-                                               int src, enum capstMethod tmeth,
+                                               enum capstMethod tmeth,
                                                char *name, enum capssType st) );
 
 __ProtoExt__ int
@@ -137,7 +134,11 @@ __ProtoExt__ int
   caps_outLevel( capsObj pobject, int outLevel );
 
 __ProtoExt__ int
-  caps_getRootPath( capsObj pobject, const char** fullPath );
+  caps_getRootPath( capsObj pobject, const char **fullPath );
+
+__ProtoExt__ int
+  caps_intentPhrase( capsObj pobject, int nLines,
+                     /*@null@*/ const char **lines );
 
 __ProtoExt__ int
   caps_debug( capsObj pobject );
@@ -175,9 +176,6 @@ __ProtoExt__ int
 
 __ProtoExt__ int
   caps_dupAnalysis( capsObj from, const char *name,capsObj *aobj );
-
-__ProtoExt__ int
-  caps_resetAnalysis( capsObj aobject, int *nErr, capsErrs **errors );
 
 __ProtoExt__ int
   caps_dirtyAnalysis( capsObj pobj, int *nAobj, capsObj **aobjs );
@@ -264,10 +262,10 @@ __ProtoExt__ int
                     capsObj **dobjs );
 
 __ProtoExt__ int
-  caps_triangulate( capsObj vobject, int *nGtris,            int **gtris,
-                                     int *nGsegs, /*@null@*/ int **gsegs,
-                                     int *nDtris,            int **dtris,
-                                     int *nDsegs, /*@null@*/ int **dsegs );
+  caps_getTriangles( capsObj vobject, int *nGtris,            int **gtris,
+                                      int *nGsegs, /*@null@*/ int **gsegs,
+                                      int *nDtris,            int **dtris,
+                                      int *nDsegs, /*@null@*/ int **dsegs );
 
 
 /* value functions */
@@ -298,7 +296,7 @@ __ProtoExt__ int
                   capsErrs **errors );
 
 __ProtoExt__ int
-  caps_getValueProps( capsObj object, int *dim, int *pmtr,
+  caps_getValueProps( capsObj object, int *dim, int *gInType,
                       enum capsFixed *lfix, enum capsFixed *sfix,
                       enum capsNull *ntype );
 
@@ -370,7 +368,7 @@ __ProtoExt__ void
   caps_rmLock();
 
 __ProtoExt__ void
-  caps_printObjects( capsObj object, int indent );
+  caps_printObjects( capsObj pobject, capsObj object, int indent );
 
 #ifdef __cplusplus
 }

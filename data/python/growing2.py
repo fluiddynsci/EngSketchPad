@@ -1,7 +1,7 @@
 ###################################################################
 #                                                                 #
 # growing2.py --- start with: serveESP ../data/python/growing2.py #
-#                     Tool->Python     ../data/python/growing2.py #
+#                     Tool->Pyscript   ../data/python/growing2.py #
 #                 or:         python   ../data/python/growing2.py #
 #                                                                 #
 #              Written by John Dannenhoffer @ Syracuse University #
@@ -65,13 +65,12 @@ print("    npmtr  :", npmtr);
 print("    nbody  :", nbody);
 
 # inform ESP of modl
-esp.SetModl(modl, esp.GetEsp("python"))
+esp.SetModl(modl, esp.GetEsp("pyscript"))
 
 # loop through successively larger cylinders
-esp.TimLoad("viewer", esp.GetEsp("python"), "")
+esp.TimLoad("viewer", esp.GetEsp("pyscript"), "")
 for xsize in [0.5, 1.0, 1.5, 2.001, 2.5, 3.0]:
-    esp.TimMesg("viewer", "update|")
-    esp.TimHold("python", "viewer")
+    esp.TimMesg("viewer", "MODL")
 
     ipmtr = modl.FindPmtr("xsize", 0, 0, 0)
     modl.SetValuD(ipmtr, 1, 1, xsize)
@@ -79,6 +78,6 @@ for xsize in [0.5, 1.0, 1.5, 2.001, 2.5, 3.0]:
     modl.Build(0, 0)
 
 # show final configuration
-esp.TimMesg("viewer", "update|")
+esp.TimMesg("viewer", "MODL")
 esp.TimQuit("viewer")
 

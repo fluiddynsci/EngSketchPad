@@ -61,6 +61,12 @@
 
 
 //
+// name of TIM object
+//
+ereped.name = "ereped";
+
+
+//
 // callback when ErepEd is launched
 //
 ereped.launch = function () {
@@ -481,7 +487,7 @@ ereped.cmdSave = function () {
 
     // add a DUMP if any changes were made
 //    if (nchange > 0) {
-        browserToServer("newBrch|"+ibrch+"|dump|"+ereped.attrName+".egads|||||||||");
+        browserToServer("newBrch|"+ibrch+"|dump|"+ereped.attrName+".egads|0|0|0||||||");
 
         postMessage("====> Re-build is needed <====");
 //    }

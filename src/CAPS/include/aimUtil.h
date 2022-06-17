@@ -50,6 +50,9 @@ __ProtoExt__ int
   aim_getRootPath( void *aimInfo, const char **fullPath );
 
 __ProtoExt__ int
+  aim_fileLink( void *aimStruc, /*@null@*/ char *srcPath );
+
+__ProtoExt__ int
   aim_file( void *aimInfo, const char *file, char *aimFile );
 
 __ProtoExt__ /*@null@*/ /*@out@*/ /*@only@*/ FILE *
@@ -57,6 +60,9 @@ __ProtoExt__ /*@null@*/ /*@out@*/ /*@only@*/ FILE *
 
 __ProtoExt__ int
   aim_isFile(void *aimStruc, const char *file);
+
+__ProtoExt__ int
+  aim_rmFile(void *aimStruc, const char *file);
 
 __ProtoExt__ int
   aim_cpFile(void *aimStruc, const char *src, const char *dst);
@@ -432,10 +438,13 @@ aimOutputs( /*@null@*/ void *instStore, void *aimInfo, int index, char **aoname,
             capsValue *form );
 
 int
-aimPreAnalysis( void *instStore, void *aimInfo, /*@null@*/ capsValue *inputs );
+aimUpdateState( void *instStore, void *aimInfo, /*@null@*/ capsValue *inputs );
 
 int
-aimExecute( void *instStore, void *aimInfo, int *state );
+aimPreAnalysis( const void *instStore, void *aimInfo, /*@null@*/ capsValue *inputs );
+
+int
+aimExecute( const void *instStore, void *aimInfo, int *state );
 
 int
 aimPostAnalysis( void *instStore, void *aimInfo, int restart,

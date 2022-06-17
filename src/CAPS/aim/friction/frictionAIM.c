@@ -442,7 +442,15 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
 
 // ********************** AIM Function Break *****************************
-int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
+int aimUpdateState(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+                   /*@unused@*/ capsValue *aimInputs)
+{
+    return CAPS_SUCCESS;
+}
+
+
+// ********************** AIM Function Break *****************************
+int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo,
                    /*@null@*/ capsValue *inputs)
 {
 
@@ -1062,7 +1070,7 @@ cleanup:
 
 
 // ********************** AIM Function Break *****************************
-int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+int aimExecute(/*@unused@*/ const void *instStore, /*@unused@*/ void *aimInfo,
                int *state)
 {
   /*! \page aimExecuteFRICTION AIM Execution

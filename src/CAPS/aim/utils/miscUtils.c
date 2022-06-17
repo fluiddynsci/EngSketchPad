@@ -1607,7 +1607,7 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
     int i; // Index
 
     int inputTest = 0; // Input check
-    int scival, offset;
+    int scival, offset, remain, len = fieldWidth, diff = 0;
     int minfieldWidth = 0; // Minimum field width for input
 
     //int powerExpUpper, powerExpLower; // Exponent powers for max width number comparison
@@ -1675,8 +1675,10 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
         // do loop as the exponent might change due to rounding
         sprintf(sci, "%+d", scival);
         do {
+            remain = (int)(fieldWidth-offset-strlen(sci)-1);
+          
             // check if the scientific number fits in the fieldWidth
-            if ((int)(fieldWidth-offset-strlen(sci)-1) < 0) {
+            if (remain < 0) {
                 printf("Error in convert_doubleToString: Cannot write %E with field with %d!\n", doubleVal, fieldWidth);
                 printf("\tReturning a 'NaN' string.\n");
                 EG_free(stringVal);
@@ -1685,7 +1687,7 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
             }
 
             // construct the format statement based on the available digits
-            sprintf(tmp, "%#1.*E", (int)(fieldWidth-offset-strlen(sci)-1), doubleVal);
+            sprintf(tmp, "%#1.*E", remain, doubleVal);
 
             // truncate at 'E'
             i = fieldWidth-strlen(sci)-1;
@@ -1697,12 +1699,16 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
 
             // print the final string with the exponent
             sprintf(numString, "%sE%s", tmp, sci);
+          
+            // catch situations where 2 charachters are changed
+            diff = abs(len - (int)strlen(numString));
+            len = strlen(numString);
+            if (diff == 2 && len < fieldWidth) break;
 
-        } while ( strlen(numString) != fieldWidth );
+        } while ( len != fieldWidth );
     }
 
     // Populate output string array with blank spaces and number string depending on justification
-    // Fairly confident this is mute as the above padds everything with 0's
     if (leftOrRight == 0) {
 
         strncpy(stringVal, numString, fieldWidth);
@@ -1854,7 +1860,7 @@ int print_AllAttr( void *aimInfo, ego obj )
 }
 
 // Search a mapAttrToIndex structure for a given keyword and set/return the corresponding index
-int get_mapAttrToIndexIndex(mapAttrToIndexStruct *attrMap, const char *keyWord, int *index) {
+int get_mapAttrToIndexIndex(const mapAttrToIndexStruct *attrMap, const char *keyWord, int *index) {
 
     // If the keyword is not found a CAPS_NOTFOUND is returned
 
@@ -1939,24 +1945,8 @@ int increment_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMap, const char *ke
         return EGADS_EXISTS;
     }
 
-    if (attrMap->numAttribute == 1 ) {
-
-        /*
-        printf("Size of char** - %d\n", (int) sizeof(char **));
-        printf("Size of const char* - %d\n", (int) sizeof(const char *));
-        printf("Size of char* - %d\n", (int) sizeof(char *));
-        printf("Size of char - %d\n", (int) sizeof(char));
-        printf("Size of int* - %d\n", (int) sizeof(int *));
-        printf("Size of int - %d\n", (int) sizeof(int));
-         */
-
-        attrMap->attributeName  = (char **) EG_alloc(attrMap->numAttribute*sizeof(char *));
-        attrMap->attributeIndex = (int   *) EG_alloc(attrMap->numAttribute*sizeof(int   ));
-    } else {
-
-        attrMap->attributeName  = (char **) EG_reall(attrMap->attributeName , attrMap->numAttribute*sizeof(char *));
-        attrMap->attributeIndex = (int   *) EG_reall(attrMap->attributeIndex, attrMap->numAttribute*sizeof(int   ));
-    }
+    attrMap->attributeName  = (char **) EG_reall(attrMap->attributeName , attrMap->numAttribute*sizeof(char *));
+    attrMap->attributeIndex = (int   *) EG_reall(attrMap->attributeIndex, attrMap->numAttribute*sizeof(int   ));
 
     if (attrMap->attributeName  == NULL) return EGADS_MALLOC;
     if (attrMap->attributeIndex == NULL) return EGADS_MALLOC;
@@ -2315,7 +2305,48 @@ int retrieve_CoordSystemAttr(ego geomEntity, const char **name) {
 }
 */
 
+
 // Create a mapping between unique, generic (specified via mapName) attribute names and an index value
+int create_MeshRefToIndexMap(void *aimInfo, aimMeshRef *meshRef, mapAttrToIndexStruct *attrMap) {
+
+    // In:
+    //    meshRef   = mesh reference with BND information
+    //
+    // Out:
+    //         attrMap = A filled mapAttrToIndex structure
+
+    int i; // Indexing variables
+
+    int status; // Function return integer
+
+    // Destroy attrMap in case it is already allocated - this implies that is must have at least been initiated
+    status =  destroy_mapAttrToIndexStruct(attrMap);
+    if (status != CAPS_SUCCESS) return status;
+
+    AIM_STRDUP(attrMap->mapName, "capsGroup", aimInfo, status);
+
+    AIM_ALLOC(attrMap->attributeName , meshRef->nbnd, char *, aimInfo, status);
+    AIM_ALLOC(attrMap->attributeIndex, meshRef->nbnd, int   , aimInfo, status);
+    attrMap->numAttribute = meshRef->nbnd;
+
+    for (i = 0; i < meshRef->nbnd; i++)
+      attrMap->attributeName[i] = NULL;
+
+    for (i = 0; i < meshRef->nbnd; i++) {
+      AIM_STRDUP(attrMap->attributeName[i], meshRef->bnds[i].groupName, aimInfo, status);
+      attrMap->attributeIndex[i] = meshRef->bnds[i].ID;
+    }
+
+    status = CAPS_SUCCESS;
+
+cleanup:
+
+    return status;
+}
+
+
+// Create a mapping between unique, generic (specified via mapName) attribute names and an index value
+static
 int create_genericAttrToIndexMap(int numBody, ego bodies[], int attrLevelIn, const char *mapName, mapAttrToIndexStruct *attrMap) {
 
     // In:
@@ -2436,14 +2467,9 @@ int create_genericAttrToIndexMap(int numBody, ego bodies[], int attrLevelIn, con
             }
         } // End node loop
 
-
-        if (faces != NULL) EG_free(faces);
-        if (edges != NULL) EG_free(edges);
-        if (nodes != NULL) EG_free(nodes);
-
-        faces = NULL;
-        edges = NULL;
-        nodes = NULL;
+        AIM_FREE(faces);
+        AIM_FREE(edges);
+        AIM_FREE(nodes);
 
     } // End body loop
 
@@ -2454,15 +2480,13 @@ int create_genericAttrToIndexMap(int numBody, ego bodies[], int attrLevelIn, con
 
     status = CAPS_SUCCESS;
 
-    goto cleanup;
+cleanup:
 
-    cleanup:
+    AIM_FREE(faces);
+    AIM_FREE(edges);
+    AIM_FREE(nodes);
 
-        if (faces != NULL) EG_free(faces);
-        if (edges != NULL) EG_free(edges);
-        if (nodes != NULL) EG_free(nodes);
-
-        return status;
+    return status;
 }
 
 // Create a mapping between unique capsGroup attribute names and an index value

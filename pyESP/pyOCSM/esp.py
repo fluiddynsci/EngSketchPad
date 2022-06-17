@@ -1,6 +1,6 @@
 ###################################################################
 #                                                                 #
-# pyESP --- Python interface to serveESP/timPython                #
+# pyESP --- Python interface to serveESP/timPyscript              #
 #                                                                 #
 #              Written by John Dannenhoffer @ Syracuse University #
 #                                                                 #
@@ -29,6 +29,7 @@ import sys
 import atexit
 
 from   pyEGADS import egads
+from   pyOCSM  import ocsm
 from   pyCAPS  import caps
 
 # get the value of _ESP_ROOT
@@ -39,17 +40,17 @@ except:
 
 # load the shared library
 if sys.platform.startswith('darwin'):
-    _esp  = ctypes.CDLL(_ESP_ROOT + "/lib/python.so")
+    _esp  = ctypes.CDLL(_ESP_ROOT + "/lib/pyscript.so")
     _ocsm = ctypes.CDLL(_ESP_ROOT + "/lib/libocsm.dylib")
 elif sys.platform.startswith('linux'):
-    _esp  = ctypes.CDLL(_ESP_ROOT + "/lib/python.so")
+    _esp  = ctypes.CDLL(_ESP_ROOT + "/lib/pyscript.so")
     _ocsm = ctypes.CDLL(_ESP_ROOT + "/lib/libocsm.so")
 elif sys.platform.startswith('win32'):
     if sys.version_info.major == 3 and sys.version_info.minor < 8:
-        _esp  = ctypes.CDLL(_ESP_ROOT + "\\lib\\python.dll")
+        _esp  = ctypes.CDLL(_ESP_ROOT + "\\lib\\pyscript.dll")
         _ocsm = ctypes.CDLL(_ESP_ROOT + "\\lib\\ocsm.dll")
     else:
-        _esp  = ctypes.CDLL(_ESP_ROOT + "\\lib\\python.dll", winmode=0)
+        _esp  = ctypes.CDLL(_ESP_ROOT + "\\lib\\pyscript.dll", winmode=0)
         _ocsm = ctypes.CDLL(_ESP_ROOT + "\\lib\\ocsm.dll")
 else:
     raise IOError("Unknown platform: " + sys.platform)
@@ -167,11 +168,13 @@ def ViewModl(modl):
     outputs:
         (None}
     """
-    _esp.timViewModl.argtypes = [ctypes.c_void_p]
-    _esp.timViewModl.restype  =  ctypes.c_int
 
-    status = _esp.timViewModl(modl._modl)
-    _processStatus(status, "ViewModl")
+    if ocsm.GetAuxPtr():
+        _esp.timViewModl.argtypes = [ctypes.c_void_p]
+        _esp.timViewModl.restype  =  ctypes.c_int
+
+        status = _esp.timViewModl(modl._modl)
+        _processStatus(status, "ViewModl")
 
     return None
 
@@ -354,6 +357,27 @@ def TimBcst(timName, text):
 
     status = _ocsm.tim_bcst(timName, text)
     _processStatus(status, "TimBcst")
+
+    return
+
+
+# ======================================================================
+
+def UpdateESP():
+    """
+    UpdateESP - update ESP after rebuilding
+
+    inputs:
+        (None)
+    outputs:
+        (None)
+    """
+
+    if ocsm.GetAuxPtr():
+        _ocsm.update_esp.restype  =  ctypes.c_int
+
+        status = _ocsm.update_esp()
+        _processStatus(status, "UpdateESP")
 
     return
 

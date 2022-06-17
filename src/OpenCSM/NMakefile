@@ -11,6 +11,7 @@ ODIR  = .
 !ENDIF
 
 BINLIST = 	$(BDIR)\serveCSM.exe \
+		$(BDIR)\serveESP.exe \
 		$(BDIR)\sensCSM.exe
 LIBLIST =	$(LDIR)\ocsm.dll \
 		$(LDIR)\bezier.dll \
@@ -26,6 +27,7 @@ LIBLIST =	$(LDIR)\ocsm.dll \
 		$(LDIR)\printBbox.dll \
 		$(LDIR)\printBrep.dll \
 		$(LDIR)\printEgo.dll \
+		$(LDIR)\shadow.dll \
 		$(LDIR)\flend.dll \
 		$(LDIR)\ganged.dll \
 		$(LDIR)\guide.dll \
@@ -55,12 +57,20 @@ LIBLIST =	$(LDIR)\ocsm.dll \
 		$(LDIR)\waffle.dll \
 		$(LDIR)\PDT2.dll
 LIBFLIST = 	$(LDIR)\naca456.dll
+!ifdef PYTHONINC
 TIMLIST  =      $(LDIR)\ereped.dll \
                 $(LDIR)\mitten.dll \
                 $(LDIR)\plotter.dll \
                 $(LDIR)\plugs.dll \
-                $(LDIR)\python.dll \
+                $(LDIR)\pyscript.dll \
                 $(LDIR)\slugs.dll
+!else
+TIMLIST  =      $(LDIR)\ereped.dll \
+                $(LDIR)\mitten.dll \
+                $(LDIR)\plotter.dll \
+                $(LDIR)\plugs.dll \
+                $(LDIR)\slugs.dll
+!endif
 INCLIST = 	$(IDIR)\OpenCSM.h \
 		$(IDIR)\common.h \
 		$(IDIR)\udp.h \
@@ -85,6 +95,13 @@ $(BDIR)\serveCSM.exe:	$(ODIR)\serveCSM.obj $(LDIR)\ocsm.dll
 
 $(ODIR)\serveCSM.obj:	OpenCSM.h common.h serveCSM.c
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) /I$(IDIR)\winhelpers serveCSM.c /Fo$(ODIR)\serveCSM.obj
+
+$(BDIR)\serveESP.exe:	$(ODIR)\serveESP.obj $(LDIR)\ocsm.dll
+	cl /Fe$(BDIR)\serveESP.exe $(ODIR)\serveESP.obj /link /LIBPATH:$(LDIR) ocsm.lib wsserver.lib egads.lib
+        $(MCOMP) /manifest $(BDIR)\serveESP.exe.manifest               /outputresource:$(BDIR)\serveESP.exe;1
+
+$(ODIR)\serveESP.obj:	OpenCSM.h common.h serveESP.c
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) /I$(IDIR)\winhelpers serveESP.c /Fo$(ODIR)\serveESP.obj
 
 $(BDIR)\sensCSM.exe:	$(ODIR)\sensCSM.obj $(LDIR)\ocsm.dll
 	cl /Fe$(BDIR)\sensCSM.exe $(ODIR)\sensCSM.obj /link /LIBPATH:$(LDIR) ocsm.lib egads.lib
@@ -387,6 +404,14 @@ $(LDIR)\printEgo.dll:	$(ODIR)\udfPrintEgo.obj $(LDIR)\ocsm.dll
 $(ODIR)\udfPrintEgo.obj:	udfPrintEgo.c udpUtilities.c udpUtilities.h
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udfPrintEgo.c /Fo$(ODIR)\udfPrintEgo.obj
 
+$(LDIR)\shadow.dll:	$(ODIR)\udfShadow.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\shadow.dll $(LDIR)\shadow.lib $(LDIR)\shadow.exp
+	link /out:$(LDIR)\shadow.dll /dll /def:udp.def $(ODIR)\udfShadow.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
+	$(MCOMP) /manifest $(LDIR)\shadow.dll.manifest /outputresource:$(LDIR)\shadow.dll;2
+
+$(ODIR)\udfShadow.obj:	udfShadow.c udpUtilities.c udpUtilities.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udfShadow.c /Fo$(ODIR)\udfShadow.obj
+
 $(LDIR)\radwaf.dll:	$(ODIR)\udpRadwaf.obj $(LDIR)\ocsm.dll
 	-del $(LDIR)\radwaf.dll $(LDIR)\radwaf.lib $(LDIR)\radwaf.exp
 	link /out:$(LDIR)\radwaf.dll /dll /def:udp.def $(ODIR)\udpRadwaf.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
@@ -498,13 +523,13 @@ $(LDIR)\plugs.dll:	$(ODIR)\timPlugs.obj $(LDIR)\ocsm.dll
 $(ODIR)\timPlugs.obj:	timPlugs.c tim.h
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) timPlugs.c /Fo$(ODIR)\timPlugs.obj
 
-$(LDIR)\python.dll:	$(ODIR)\timPython.obj $(LDIR)\ocsm.dll
-	-del $(LDIR)\python.dll $(LDIR)\python.lib $(LDIR)\python.exp
-	link /out:$(LDIR)\python.dll /dll /def:timPython.def $(ODIR)\timPython.obj $(LDIR)\ocsm.lib $(LDIR)\wsserver.lib $(LDIR)\egads.lib $(PYTHONLIB)
-	$(MCOMP) /manifest $(LDIR)\python.dll.manifest /outputresource:$(LDIR)\python.dll;2
+$(LDIR)\pyscript.dll:	$(ODIR)\timPyscript.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\pyscript.dll $(LDIR)\pyscript.lib $(LDIR)\pyscript.exp
+	link /out:$(LDIR)\pyscript.dll /dll /def:timPyscript.def $(ODIR)\timPyscript.obj $(LDIR)\ocsm.lib $(LDIR)\wsserver.lib $(LDIR)\egads.lib $(PYTHONLIB)
+	$(MCOMP) /manifest $(LDIR)\pyscript.dll.manifest /outputresource:$(LDIR)\pyscript.dll;2
 
-$(ODIR)\timPython.obj:	timPython.c tim.h
-	cl /c $(COPTS) $(DEFINE) /I$(IDIR) /I$(PYTHONINC) timPython.c /Fo$(ODIR)\timPython.obj
+$(ODIR)\timPyscript.obj:	timPyscript.c tim.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) /I$(PYTHONINC) timPyscript.c /Fo$(ODIR)\timPyscript.obj
 
 $(LDIR)\slugs.dll:	$(ODIR)\timSlugs.obj $(LDIR)\ocsm.dll
 	-del $(LDIR)\slugs.dll $(LDIR)\slugs.lib $(LDIR)\slugs.exp
@@ -554,6 +579,7 @@ $(IDIR)\udpUtilities.c:	udpUtilities.c
 #
 clean:
 	-del $(ODIR)\serveCSM.obj
+	-del $(ODIR)\serveESP.obj
 	-del $(ODIR)\sensCSM.obj
 	-del $(ODIR)\OpenCSM.obj
 	-del $(ODIR)\udp.obj
@@ -591,6 +617,7 @@ clean:
 	-del $(ODIR)\udfPrintBbox.obj
 	-del $(ODIR)\udfPrintBrep.obj
 	-del $(ODIR)\udfPrintEgo.obj
+	-del $(ODIR)\udfShadow.obj
 	-del $(ODIR)\udpRadwaf.obj
 	-del $(ODIR)\udpSample.obj
 	-del $(ODIR)\udpSew.obj
@@ -604,11 +631,13 @@ clean:
 	-del $(ODIR)\timMitten.obj
 	-del $(ODIR)\timPlotter.obj
 	-del $(ODIR)\timPlugs.obj
-	-del $(ODIR)\timPython.obj
+	-del $(ODIR)\timPyscript.obj
 	-del $(ODIR)\timSlugs.obj
 
 cleanall:	clean
-	-del $(BDIR)\serveCSM.exe   $(BDIR)\sensCSM.exe    $(BDIR)\*.manifest
+	-del $(BDIR)\serveCSM.exe
+	-del $(BDIR)\serveESP.exe
+	-del $(BDIR)\sensCSM.exe    $(BDIR)\*.manifest
 	-del $(LDIR)\ocsm.dll       $(LDIR)\ocsm.lib       $(LDIR)\ocsm.exp
 	-del $(LDIR)\bezier.dll     $(LDIR)\bezier.lib     $(LDIR)\bezier.exp
 	-del $(LDIR)\biconvex.dll   $(LDIR)\biconvex.lib   $(LDIR)\biconvex.exp
@@ -643,6 +672,7 @@ cleanall:	clean
 	-del $(LDIR)\printBbox.dll  $(LDIR)\printBbox.lib  $(LDIR)\printBbox.exp
 	-del $(LDIR)\printBrep.dll  $(LDIR)\printBrep.lib  $(LDIR)\printBrep.exp
 	-del $(LDIR)\printEgo.dll   $(LDIR)\printEgo.lib   $(LDIR)\printEgo.exp
+	-del $(LDIR)\shadow.dll     $(LDIR)\shadow.lib     $(LDIR)\shadow.exp
 	-del $(LDIR)\radwaf.dll     $(LDIR)\radwaf.lib     $(LDIR)\radwaf.exp
 	-del $(LDIR)\sample.dll     $(LDIR)\sample.lib     $(LDIR)\sample.exp
 	-del $(LDIR)\sew.dll        $(LDIR)\sew.lib        $(LDIR)\sew.exp
@@ -656,7 +686,7 @@ cleanall:	clean
 	-del $(LDIR)\mitten.dll     $(LDIR)\mitten.lib     $(LDIR)\mitten.exp
 	-del $(LDIR)\plotter.dll    $(LDIR)\plotter.lib    $(LDIR)\plotter.exp
 	-del $(LDIR)\plugs.dll      $(LDIR)\plugs.lib      $(LDIR)\plugs.exp
-	-del $(LDIR)\python.dll     $(LDIR)\python.lib     $(LDIR)\python.exp
+	-del $(LDIR)\pyscript.dll   $(LDIR)\pyscript.lib   $(LDIR)\pyscript.exp
 	-del $(LDIR)\slugs.dll      $(LDIR)\slugs.lib      $(LDIR)\slugs.exp
 	-del $(IDIR)\OpenCSM.h      $(IDIR)\common.h       $(IDIR)\udp.h
 	-del $(IDIR)\esp.h          $(IDIR)\tim.h

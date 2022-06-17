@@ -190,6 +190,8 @@ __ProtoExt__ int  EG_getMassProperties( const ego topo,
 __ProtoExt__ int  EG_isEquivalent( const ego topo1, const ego topo2 );
 __ProtoExt__ int  EG_sewFaces( int nobj, const ego *objs, double toler,
                                int flag, ego *result );
+__ProtoExt__ int  EG_makeNmWireBody( int nobj, const ego *objs, double toler,
+                                     ego *result );
 __ProtoExt__ int  EG_replaceFaces( const ego body, int nobj, ego *objs,
                                    ego *result );
 __ProtoExt__ int  EG_mapBody( const ego sBody,   const ego dBody,

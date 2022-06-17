@@ -1342,8 +1342,8 @@ EG_getTessFace(const egObject *tess, int indx, int *len, const double **xyz,
     return EGADS_NOTBODY;
   }
   if (btess->tess2d == NULL) {
-    if (outLevel > 0)
-      printf(" EGADS Error: No Face Tessellations (EG_getTessFace)!\n");
+    if (outLevel > 1)
+      printf(" EGADS Info: No Face Tessellations (EG_getTessFace)!\n");
     return EGADS_NODATA;  
   }
   if ((index < 1) || (index > btess->nFace)) {
@@ -6585,14 +6585,42 @@ EG_finishTess(egObject *tess, double *paramx)
   
   /* Wire Body or Edges Only */
   if ((object->mtype == WIREBODY) || (paramx[0] < 0.0)) {
+    if (btess->tess2d != NULL) {
+      for (i = 0; i < 2*btess->nFace; i++) {
+        if (btess->tess2d[i].mKnots != NULL)
+          EG_deleteObject(btess->tess2d[i].mKnots);
+        if (btess->tess2d[i].xyz    != NULL)
+          EG_free(btess->tess2d[i].xyz);
+        if (btess->tess2d[i].uv     != NULL)
+          EG_free(btess->tess2d[i].uv);
+        if (btess->tess2d[i].global != NULL)
+          EG_free(btess->tess2d[i].global);
+        if (btess->tess2d[i].ptype  != NULL)
+          EG_free(btess->tess2d[i].ptype);
+        if (btess->tess2d[i].pindex != NULL)
+          EG_free(btess->tess2d[i].pindex);
+        if (btess->tess2d[i].bary   != NULL)
+          EG_free(btess->tess2d[i].bary);
+        if (btess->tess2d[i].frame  != NULL)
+          EG_free(btess->tess2d[i].frame);
+        if (btess->tess2d[i].frlps  != NULL)
+          EG_free(btess->tess2d[i].frlps);
+        if (btess->tess2d[i].tris   != NULL)
+          EG_free(btess->tess2d[i].tris);
+        if (btess->tess2d[i].tric   != NULL)
+          EG_free(btess->tess2d[i].tric);
+      }
+      EG_free(btess->tess2d);
+    }
+    btess->tess2d = NULL;
     btess->nFace = 0;
     btess->done = 1;
     return EGADS_SUCCESS;
   }
-  
+
   for (j = i = 0; i < btess->nFace; i++)
     if (btess->tess2d[i].xyz == NULL) j++;
-  if (j == 0) {
+  if (j == 0 && btess->tess2d != NULL) {
     btess->done = 1;
     return EGADS_SUCCESS;
   }
@@ -6607,6 +6635,34 @@ EG_finishTess(egObject *tess, double *paramx)
     printf(" EGADS Error: EG_getBodyTopos = %d (EG_finishTess)!\n",
            stat);
     return stat;
+  }
+  if (btess->tess2d == NULL) {
+    btess->tess2d = (egTess2D *) EG_alloc(2*nface*sizeof(egTess2D));
+    if (btess->tess2d == NULL) {
+      printf(" EGADS Error: Alloc %d Faces (EG_makeTessBody)!\n", nface);
+      return EGADS_MALLOC;
+    }
+    for (j = 0; j < 2*nface; j++) {
+      btess->tess2d[j].mKnots = NULL;
+      btess->tess2d[j].xyz    = NULL;
+      btess->tess2d[j].uv     = NULL;
+      btess->tess2d[j].global = NULL;
+      btess->tess2d[j].ptype  = NULL;
+      btess->tess2d[j].pindex = NULL;
+      btess->tess2d[j].bary   = NULL;
+      btess->tess2d[j].frame  = NULL;
+      btess->tess2d[j].frlps  = NULL;
+      btess->tess2d[j].tris   = NULL;
+      btess->tess2d[j].tric   = NULL;
+      btess->tess2d[j].patch  = NULL;
+      btess->tess2d[j].npts   = 0;
+      btess->tess2d[j].nframe = 0;
+      btess->tess2d[j].nfrlps = 0;
+      btess->tess2d[j].ntris  = 0;
+      btess->tess2d[j].npatch = 0;
+      btess->tess2d[j].tfi    = 0;
+    }
+    btess->nFace = nface;
   }
   
   /* setup for the mixed type marker */

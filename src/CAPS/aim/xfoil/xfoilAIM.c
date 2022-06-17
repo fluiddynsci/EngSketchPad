@@ -79,6 +79,8 @@ enum aimInputs
   inCL_Inviscid,
   inAppend_PolarFile,
   inViscous_Iteration,
+  inNum_Panel,
+  inLETE_Panel_Density_Ratio,
   inWrite_Cp,
   NUMINPUT = inWrite_Cp            /* Total number of inputs */
 };
@@ -246,12 +248,32 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     } else if (index == inViscous_Iteration) {
         *ainame              = EG_strdup("Viscous_Iteration");
         defval->type         = Integer;
-        defval->vals.integer = 20;
+        defval->vals.integer = 100;
 
         /*! \page aimInputsXFOIL
-         * - <B> Viscous_Iteration = 20</B> <br>
+         * - <B> Viscous_Iteration = 100</B> <br>
          *  Viscous solution iteration limit. Only set if a Re isn't 0.0 .
          */
+    } else if (index == inNum_Panel) {
+        *ainame              = EG_strdup("Num_Panel");
+        defval->type         = Integer;
+        defval->vals.integer = 200;
+
+        /*! \page aimInputsXFOIL
+         * - <B> Num_Panel = 200</B> <br>
+         *  Number of discrete panels.
+         */
+
+    } else if (index == inLETE_Panel_Density_Ratio) {
+        *ainame           = EG_strdup("LETE_Panel_Density_Ratio");
+        defval->type      = Double;
+        defval->vals.real = 0.25;
+
+        /*! \page aimInputsXFOIL
+         * - <B> LETE_Panel_Density_Ratio = 0.25</B> <br>
+         *  Panel density ratio between LE/TE.
+         */
+
     } else if (index == inWrite_Cp) {
         *ainame              = EG_strdup("Write_Cp");
         defval->type         = Boolean;
@@ -270,7 +292,15 @@ cleanup:
 }
 
 
-int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
+// ********************** AIM Function Break *****************************
+int aimUpdateState(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+                   /*@unused@*/ capsValue *aimInputs)
+{
+    return CAPS_SUCCESS;
+}
+
+// ********************** AIM Function Break *****************************
+int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo,
                    capsValue *aimInputs)
 {
     int status; // Function return status
@@ -283,7 +313,6 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
     ego *bodies = NULL;
 
     vlmSectionStruct vlmSection;
-    char aimFile[PATH_MAX];
 
     // File I/O
     FILE *fp = NULL;
@@ -370,9 +399,21 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
     fprintf(fp, "LOAD\n"); // Load airfoil
     fprintf(fp, "%s\n", xfoilFilename);
 
+    fprintf(fp, "PPAR\n"); // Set the number of panels
+    fprintf(fp, "N\n");
+    fprintf(fp, "%d\n", aimInputs[inNum_Panel-1].vals.integer);
+
+    fprintf(fp, "T\n"); // Set LE/TE panel density ratio
+    fprintf(fp, "%16.12e\n", aimInputs[inLETE_Panel_Density_Ratio-1].vals.real);
+
+    fprintf(fp, "\n\n"); // return to main menu
+
     fprintf(fp, "PANE\n"); // USE PANE Option to clean up airfoil mesh
 
     fprintf(fp, "OPER\n"); // Enter OPER
+    fprintf(fp, "VPAR\n"); // Enter VPAR
+    fprintf(fp, "VACC 0\n"); // Turn of Vacc to improve robustness
+    fprintf(fp, "\n"); // Return to OPER
 
     fprintf(fp, "Mach %f\n", aimInputs[inMach-1].vals.real);    // Set Mach number
 
@@ -393,15 +434,8 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
     // Check to see if polar file exist
     if (aim_isFile(aimInfo, polarFilename) == CAPS_SUCCESS){
         if (aimInputs[inAppend_PolarFile-1].vals.integer == (int) false) {
-            status = aim_file(aimInfo, polarFilename, aimFile);
+            status = aim_rmFile(aimInfo, polarFilename);
             AIM_STATUS(aimInfo, status);
-            status = remove(aimFile); // Remove the file
-            if(status != CAPS_SUCCESS) {
-                AIM_ERROR(aimInfo, "Unable to delete the file - %s",
-                          aimFile);
-                status = CAPS_IOERR;
-                goto cleanup;
-            }
         } else {
             fprintf(fp,"n\n");
         }
@@ -487,7 +521,7 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
 }
 
 
-int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+int aimExecute(/*@unused@*/ const void *instStore, /*@unused@*/ void *aimInfo,
                int *state)
 {
   /*! \page aimExecuteXFOIL AIM Execution

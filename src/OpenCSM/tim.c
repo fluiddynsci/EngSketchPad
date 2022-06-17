@@ -106,15 +106,34 @@ typedef struct {
 } emp_T;
 
 /* prototypes */
+//$$$int             tim_load(char myTimName[], esp_T *ESP, void *data);
+//$$$void           *tim_getEsp(char myTimName[]);
+//$$$int             tim_mesg(char myTimName[], char command[]);
+//$$$int             tim_hold(char myTimName[], char overlay[]);
+//$$$int             tim_lift(char myTimName[]);
+//$$$int             tim_bcst(char myTimName[], char text[]);
+//$$$int             tim_save(char myTimName[]);
+//$$$int             tim_quit(char myTimName[]);
+//$$$void            tim_lock();
+//$$$void            tim_free();
+//$$$int             update_esp();
+
 static /*@null@*/DLL timDLopen(const char *name);
 static void          timDLclose(/*@unused@*/ /*@only@*/ DLL dll);
 static timDLLfunc    timDLget(DLL dll, const char *symname, /*@null@*/ const char *name);
 static int           timDLoaded(const char *name);
 static int           timDYNload(const char *name);
 
+       int           GetToken(char text[], int nskip, char sep, char *token[]);
 static void          timExec(void *);
+static int           OverlayInContMode(char command[], char myTimName[]);
 
 /*@-mustfreefresh@*/
+
+//#define TRACE_BROADCAST(BUFFER)  if (strlen(BUFFER) > 0) printf("<<< server2browser: %.80s\n", BUFFER)
+#ifndef TRACE_BROADCAST
+   #define TRACE_BROADCAST(BUFFER)
+#endif
 
 
 /***********************************************************************/
@@ -124,46 +143,60 @@ static void          timExec(void *);
 /***********************************************************************/
 
 int
-tim_load(char       timName[],          /* (in)  name of TIM */
+tim_load(char       myTimName[],        /* (in)  name of TIM */
          esp_T      *ESP,               /* (in)  pointer to ESP structure */
 /*@null@*/void      *data)              /* (in)  user-provided data */
 {
-    int i, status;
+    int     status = SUCCESS;           /* (out) return status */
+
+    int     i;
 
     /* --------------------------------------------------------------- */
 
+    if (SHOW_STATES) printf("tim_load(%s)\n", myTimName);
+
+    /* skip this TIM if spawned from pyscript while in continuation mode */
+    if (OverlayInContMode("tim_load", myTimName) == 1) {
+        goto cleanup;
+    }
+
     /* determine if dynamic library is already loaded */
-    i = timDLoaded(timName);
+    i = timDLoaded(myTimName);
 
     /* if not loaded, try to load it now */
     if (i == -1) {
-        i = timDYNload(timName);
+        i = timDYNload(myTimName);
         if (i < 0) {
-            printf("ERROR:: tim_load(%s) could not be dynamically loaded\n", timName);
+            printf("ERROR:: tim_load(%s) could not be dynamically loaded\n", myTimName);
             status = i;
             goto cleanup;
         }
 
         timState[i] = TIM_INACTIVE;
-        if (SHOW_STATES) printf("in tim_load: setting TIM_INACTIVE\n");
+        if (SHOW_STATES) printf("in tim_load(%s): setting TIM_INACTIVE\n", myTimName);
     }
 
     /* if not currently "inactive", return an error */
     if (timState[i] != TIM_INACTIVE) {
-        printf("ERROR:: tim_load(%s) is not inactive, state=%d\n", timName, timState[i]);
+        printf("ERROR:: tim_load(%s) is not inactive, state=%d\n", myTimName, timState[i]);
         status = EGADS_SEQUERR;
         goto cleanup;
     }
 
     timState[i] = TIM_LOADING;
-    if (SHOW_STATES) printf("in tim_load: setting TIM_LOADING\n");
+    if (SHOW_STATES) printf("in tim_load(%s): setting TIM_LOADING\n", myTimName);
 
     /* save the data and call the load routine in the TIM */
     timEsp[i] = ESP;
 
     status = tim_Load[i](ESP, data);
-    if (status < EGADS_SUCCESS) {
-        printf("ERROR:: tim_load(%s) returned status=%d\n", timName, status);
+    if (status == EGADS_SEQUERR) {
+        timState[i] = TIM_NOTAVAIL;
+        if (SHOW_STATES) printf("in tim_load(%s): setting TIM_NOTAVAIL\n", myTimName);
+        status = EGADS_SUCCESS;
+        goto cleanup;
+    } else if (status < EGADS_SUCCESS) {
+        printf("ERROR:: tim_load(%s) returned status=%d\n", myTimName, status);
         goto cleanup;
     }
 
@@ -171,8 +204,10 @@ tim_load(char       timName[],          /* (in)  name of TIM */
     timHold[i] = status;
 
     /* mark the TIM as being ready */
-    timState[i] = TIM_READY;
-    if (SHOW_STATES) printf("in tim_load: setting TIM_READY\n");
+    if (timState[i] != TIM_INACTIVE) {
+        timState[i] = TIM_READY;
+        if (SHOW_STATES) printf("in tim_load(%s): setting TIM_READY\n", myTimName);
+    }
 
 cleanup:
     return status;
@@ -186,18 +221,18 @@ cleanup:
 /***********************************************************************/
 
 /*@null@*/void *
-tim_getEsp(char timName[])
+tim_getEsp(char myTimName[])            /* (in)  name of TIM */
 {
     int  i;
 
     /* --------------------------------------------------------------- */
 
     /* determine if dynamic library is already loaded */
-    i = timDLoaded(timName);
+    i = timDLoaded(myTimName);
 
     /* if not loaded, return an error */
     if (i == -1) {
-        printf("WARNING:: tim_getEsp(%s) is not currently loaded\n", timName);
+        printf("WARNING:: tim_getEsp(%s) is not currently loaded\n", myTimName);
         return NULL;
     }
 
@@ -213,24 +248,37 @@ tim_getEsp(char timName[])
 /***********************************************************************/
 
 int
-tim_mesg(char   timName[],              /* (in)  name of TIM */
+tim_mesg(char   myTimName[],            /* (in)  name of TIM */
          char   command[])              /* (in)  command to process */
 {
-    int i, status=EGADS_SUCCESS;
+    int     status = SUCCESS;           /* (out) return status */
 
-    emp_T  *myEmp=NULL;
+    int     i;
+    emp_T   *myEmp=NULL;
 
     ROUTINE(tim_mesg);
 
     /* --------------------------------------------------------------- */
 
+    if (SHOW_STATES) printf("tim_mesg(%s, %s)\n", myTimName, command);
+
+    /* skip this TIM if spawned from pyscript while in continuation mode */
+    if (OverlayInContMode("tim_mesg", myTimName) == 1) {
+        goto cleanup;
+    }
+
     /* determine if dynamic library is already loaded */
-    i = timDLoaded(timName);
+    i = timDLoaded(myTimName);
 
     /* if not loaded, return an error */
     if (i == -1) {
-        printf("ERROR:: tim_mesg(%s) is not currently loaded\n", timName);
-        status = EGADS_NOTFOUND;
+        printf("ERROR:: tim_mesg(%s) is not currently loaded\n", myTimName);
+//$$$        status = EGADS_NOTFOUND;
+        goto cleanup;
+    }
+
+    /* if not available, return immediately */
+    if (timState[i] == TIM_NOTAVAIL) {
         goto cleanup;
     }
 
@@ -239,9 +287,19 @@ tim_mesg(char   timName[],              /* (in)  name of TIM */
         EMP_ThreadWait(timThread[i]);
     }
 
+    /* allow overlay to run when currently executing */
+    if (timState[i] == TIM_EXECUTING) {
+        if (strcmp(myTimName, "viewer")    == 0 ||
+            strcmp(myTimName, "plotter")   == 0 ||
+            strcmp(myTimName, "flowchart") == 0   ) {
+            timState[i] = TIM_READY;
+            if (SHOW_STATES) printf("tim_mesg(%s): changing TIM_EXECUTING to TIM_READT\n", myTimName);
+        }
+    }
+
     /* make sure TIM is currently ready */
     if (timState[i] != TIM_READY) {
-        printf("ERROR:: tim_mesg(%s) is not in ready, state=%d\n", timName, timState[i]);
+        printf("ERROR:: tim_mesg(%s) is not in ready, state=%d\n", myTimName, timState[i]);
         status = EGADS_SEQUERR;
         goto cleanup;
     }
@@ -253,19 +311,19 @@ tim_mesg(char   timName[],              /* (in)  name of TIM */
     }
 
     timState[i] = TIM_EXECUTING;
-    if (SHOW_STATES) printf("in tim_mesg: setting TIM_EXECUTING\n");
+    if (SHOW_STATES) printf("in tim_mesg(%s): setting TIM_EXECUTING\n", myTimName);
 
     /* if we are holding until released, call the message routine directly */
     if (timHold[i] == 1) {
         status = tim_Mesg[i](timEsp[i], command);
         if (status < EGADS_SUCCESS) {
-            printf("ERROR:: tim_mesg(%s, %s) returned status=%d\n", timName, command, status);
+            printf("ERROR:: tim_mesg(%s, %s) returned status=%d\n", myTimName, command, status);
             goto cleanup;
         }
 
         /* mark the TIM as being ready */
         timState[i] = TIM_READY;
-        if (SHOW_STATES) printf("in tim_mesg: setting TIM_READY\n");
+        if (SHOW_STATES) printf("in tim_mesg(%s): setting TIM_READY\n", myTimName);
 
     /* otherwise we need to create a thread in which the message routine will run */
     } else {
@@ -297,30 +355,43 @@ cleanup:
 /***********************************************************************/
 
 int
-tim_hold(char   timName[],              /* (in)  name of TIM to hold */
+tim_hold(char   myTimName[],            /* (in)  name of TIM to hold */
          char   overlay[])              /* (in)  name of overlay to lift hold */
 {
-    int i, status=EGADS_SUCCESS;
+    int     status = SUCCESS;           /* (out) return status */
 
-    char  message[MAX_EXPR_LEN];
-    esp_T *ESP=NULL;
+    int     i;
+    char    message[MAX_EXPR_LEN];
+    esp_T   *ESP=NULL;
 
     ROUTINE(tim_mesg);
 
     /* --------------------------------------------------------------- */
 
+    if (SHOW_STATES) printf("tim_hold(%s, %s)\n", myTimName, overlay);
+
+    /* skip this TIM if spawned from pyscript while in continuation mode */
+    if (OverlayInContMode("tim_hold", overlay) == 1) {
+        goto cleanup;
+    }
+
     /* determine if dynamic library is already loaded */
-    i = timDLoaded(timName);
+    i = timDLoaded(myTimName);
 
     /* if not loaded, return an error */
     if (i == -1) {
-        printf("ERROR:: tim_hold(%s) is not currently loaded\n", timName);
+        printf("ERROR:: tim_hold(%s) is not currently loaded\n", myTimName);
+        goto cleanup;
+    }
+
+    /* if not available, return immediately */
+    if (timState[i] == TIM_NOTAVAIL) {
         goto cleanup;
     }
 
     /* send a message to the browsers to tell them which hold to lift */
-    snprintf(message, MAX_EXPR_LEN, "overlayBeg|%s|%s|", timName, overlay);
-    tim_bcst(timName, message);
+    snprintf(message, MAX_EXPR_LEN, "overlayBeg|%s|%s|", myTimName, overlay);
+    tim_bcst(myTimName, message);
 
     /* now wait until the browswer lifts the hold */
     EMP_LockSet(timMutex[i]);
@@ -334,14 +405,11 @@ tim_hold(char   timName[],              /* (in)  name of TIM to hold */
     }
 
     /* reset the EGADS thread */
-        /* update the thread using the context */
     ESP = (esp_T *)(timEsp[i]);
     if (ESP->MODL->context != NULL) {
         status = EG_updateThread(ESP->MODL->context);
         CHECK_STATUS(EG_updateThread);
     }
-
-
 
 cleanup:
     return status;
@@ -355,21 +423,25 @@ cleanup:
 /***********************************************************************/
 
 int
-tim_lift(char   timName[])            /* (in)  name of TIM */
+tim_lift(char   myTimName[])            /* (in)  name of TIM */
 {
-    int i, status=EGADS_SUCCESS;
+    int     status = SUCCESS;           /* (out) return status */
+
+    int     i;
 
     ROUTINE(tim_lift);
 
     /* --------------------------------------------------------------- */
 
+    if (SHOW_STATES) printf("tim_lift(%s)\n", myTimName);
+
     /* determine if dynamic library is already loaded */
-    i = timDLoaded(timName);
+    i = timDLoaded(myTimName);
 
     /* if not loaded, return an error */
     if (i == -1) {
-        printf("ERROR:: tim_lift(%s) is not currently loaded\n", timName);
-        status = EGADS_NOTFOUND;
+        printf("ERROR:: tim_lift(%s) is not currently loaded\n", myTimName);
+//$$$        status = EGADS_NOTFOUND;
         goto cleanup;
     }
 
@@ -387,26 +459,36 @@ cleanup:
 /***********************************************************************/
 
 int
-tim_bcst(char   timName[],              /* (in)  name of TIM */
+tim_bcst(char   myTimName[],            /* (in)  name of TIM */
          char   text[])                 /* (in)  text to broadcast */
 {
+    int     status = SUCCESS;           /* (out) return status */
 
-    int    i, status=EGADS_SUCCESS;
-    esp_T  *ESP=NULL;
+    int     i;
+    esp_T   *ESP=NULL;
 
     /* --------------------------------------------------------------- */
 
     /* determine if dynamic library is already loaded */
-    i = timDLoaded(timName);
+    i = timDLoaded(myTimName);
 
     /* if not loaded, return an error */
     if (i == -1) {
-        printf("ERROR:: tim_bcst(%s) is not currently loaded\n", timName);
-        status = EGADS_NOTFOUND;
+        printf("ERROR:: tim_bcst(%s) is not currently loaded\n", myTimName);
+//$$$        status = EGADS_NOTFOUND;
+        goto cleanup;
+    }
+
+    /* if not available, return immediately */
+    if (timState[i] == TIM_NOTAVAIL) {
         goto cleanup;
     }
 
     ESP = (esp_T *) timEsp[i];
+
+    if (ESP == NULL) {
+        goto cleanup;
+    }
 
     /* only broadcast if wv is currently running */
     if (ESP->cntxt == NULL) {
@@ -416,11 +498,12 @@ tim_bcst(char   timName[],              /* (in)  name of TIM */
     /* if we have a MODL and its outLevel >= 2, write tracing info to STDOUT */
     if (ESP->MODL != NULL) {
         if (ocsmSetOutLevel(-1) >= 2) {
-            printf("\n<<< server2browser: %s\n", text);
+            if (strlen(text) > 0) printf("\n<<< server2browser: %s\n", text);
         }
     }
 
     /* broadcast the message */
+    TRACE_BROADCAST( text);
     wv_broadcastText(text);
 
 cleanup:
@@ -435,19 +518,33 @@ cleanup:
 /***********************************************************************/
 
 int
-tim_save(char   timName[])              /* (in)  name of TIM */
+tim_save(char   myTimName[])            /* (in)  name of TIM */
 {
-    int    i, status;
+    int     status = SUCCESS;           /* (out) return status */
+
+    int     i;
 
     /* --------------------------------------------------------------- */
 
+    if (SHOW_STATES) printf("tim_save(%s)\n", myTimName);
+
+    /* skip this TIM if spawned from pyscript while in continuation mode */
+    if (OverlayInContMode("tim_save", myTimName) == 1) {
+        goto cleanup;
+    }
+
     /* determine if dynamic library is already loaded */
-    i = timDLoaded(timName);
+    i = timDLoaded(myTimName);
 
     /* if not loaded, return an error */
     if (i == -1) {
-        printf("ERROR:: tim_save(%s) is not currently loaded\n", timName);
-        status = EGADS_NOTFOUND;
+        printf("ERROR:: tim_save(%s) is not currently loaded\n", myTimName);
+//$$$        status = EGADS_NOTFOUND;
+        goto cleanup;
+    }
+
+    /* if not available, return immediately */
+    if (timState[i] == TIM_NOTAVAIL) {
         goto cleanup;
     }
 
@@ -458,18 +555,18 @@ tim_save(char   timName[])              /* (in)  name of TIM */
 
     /* make sure TIM is currently ready */
     if (timState[i] != TIM_READY) {
-        printf("ERROR:: tim_save(%s) is not in ready, state=%d\n", timName, timState[i]);
+        printf("ERROR:: tim_save(%s) is not in ready, state=%d\n", myTimName, timState[i]);
         status = EGADS_SEQUERR;
         goto cleanup;
     }
 
     timState[i] = TIM_CLOSING;
-    if (SHOW_STATES) printf("in tim_save: setting TIM_CLOSING\n");
+    if (SHOW_STATES) printf("in tim_save(%s): setting TIM_CLOSING\n", myTimName);
 
     /* call the save routine in the TIM */
     status = tim_Save[i](timEsp[i]);
     if (status < EGADS_SUCCESS) {
-        printf("ERROR:: tim_save(%s) returned status=%d\n", timName, status);
+        printf("ERROR:: tim_save(%s) returned status=%d\n", myTimName, status);
         goto cleanup;
     }
 
@@ -481,7 +578,7 @@ tim_save(char   timName[])              /* (in)  name of TIM */
 
     /* mark the TIM as being inactive */
     timState[i] = TIM_INACTIVE;
-    if (SHOW_STATES) printf("in tim_save: setting TIM_INACTIVE\n");
+    if (SHOW_STATES) printf("in tim_save(%s): setting TIM_INACTIVE\n", myTimName);
 
 cleanup:
     return status;
@@ -495,19 +592,33 @@ cleanup:
 /***********************************************************************/
 
 int
-tim_quit(char   timName[])              /* (in)  name of TIM */
+tim_quit(char   myTimName[])            /* (in)  name of TIM */
 {
-    int   i, status;
+    int     status = SUCCESS;           /* (out) return status */
+
+    int     i;
 
     /* --------------------------------------------------------------- */
 
+    if (SHOW_STATES) printf("tim_quit(%s)\n", myTimName);
+
+    /* skip this TIM if spawned from pyscript while in continuation mode */
+    if (OverlayInContMode("tim_quit", myTimName) == 1) {
+        goto cleanup;
+    }
+
     /* determine if dynamic library is already loaded */
-    i = timDLoaded(timName);
+    i = timDLoaded(myTimName);
 
     /* if not loaded, return an error */
     if (i == -1) {
-        printf("ERROR:: tim_quit(%s) is not currently loaded\n", timName);
-        status = EGADS_NOTFOUND;
+        printf("ERROR:: tim_quit(%s) is not currently loaded\n", myTimName);
+//$$$        status = EGADS_NOTFOUND;
+        goto cleanup;
+    }
+
+    /* if not available, return immediately */
+    if (timState[i] == TIM_NOTAVAIL) {
         goto cleanup;
     }
 
@@ -516,24 +627,32 @@ tim_quit(char   timName[])              /* (in)  name of TIM */
         EMP_ThreadWait(timThread[i]);
     }
 
+    /* if this is called during TimLoad, simply reset the state so that
+       it can be loaded again */
+    if (timState[i] == TIM_LOADING) {
+        timState[i] = TIM_INACTIVE;
+        if (SHOW_STATES) printf("in tim_quit(%s): setting TIM_INACTIVE\n", myTimName);
+        goto cleanup;
+    }
+
     /* make sure TIM is currently ready */
     if (timState[i] != TIM_READY) {
-        printf("ERROR:: tim_quit(%s) is not in ready, state=%d\n", timName, timState[i]);
+        printf("ERROR:: tim_quit(%s) is not in ready or loading, state=%d\n", myTimName, timState[i]);
         status = EGADS_SEQUERR;
         goto cleanup;
     }
 
     timState[i] = TIM_CLOSING;
-    if (SHOW_STATES) printf("in tim_quit: setting TIM_CLOSING\n");
+    if (SHOW_STATES) printf("in tim_quit(%s): setting TIM_CLOSING\n", myTimName);
 
     /* call the quit routine in the TIM */
     status = tim_Quit[i](timEsp[i], 0);
     if (status < EGADS_SUCCESS) {
-        printf("ERROR:: tim_quit(%s) returned status=%d\n", timName, status);
+        printf("ERROR:: tim_quit(%s) returned status=%d\n", myTimName, status);
         goto cleanup;
     }
 
-    /* destroy the thread associated with this TIM and reset te parent pointer */
+    /* destroy the thread associated with this TIM and reset the parent pointer */
     if (timThread[i] != NULL) {
         EMP_ThreadDestroy(timThread[i]);
         timThread[i] = NULL;
@@ -541,7 +660,7 @@ tim_quit(char   timName[])              /* (in)  name of TIM */
 
     /* mark the TIM as being inactive */
     timState[i] = TIM_INACTIVE;
-    if (SHOW_STATES) printf("in tim_quit: setting TIM_INACTIVE\n");
+    if (SHOW_STATES) printf("in tim_quit(%s): setting TIM_INACTIVE\n", myTimName);
 
 cleanup:
     return status;
@@ -596,6 +715,8 @@ tim_free()
 
     /* --------------------------------------------------------------- */
 
+    if (SHOW_STATES) printf("tim_free()\n");
+
     /* loop through the TIMs that are currently loaded, and quit them all */
     for (i = 0; i < tim_nTim; i++) {
 
@@ -634,6 +755,61 @@ tim_free()
 
 cleanup:
     return;
+}
+
+
+/***********************************************************************/
+/*                                                                     */
+/*   update_display - update ESP after rebuilding                      */
+/*                                                                     */
+/***********************************************************************/
+
+int
+update_esp()
+{
+
+    int    i, status=EGADS_SUCCESS;
+//$$$    int    nbody, builtTo;
+    esp_T  *ESP=NULL;
+
+    /* --------------------------------------------------------------- */
+
+    /* determine if dynamic library is already loaded */
+    i = timDLoaded("pyscript");
+
+    /* if not loaded, return an error */
+    if (i == -1) {
+        printf("ERROR:: tim_bcst(%s) is not currently loaded\n", "pyscript");
+//$$$        status = EGADS_NOTFOUND;
+        goto cleanup;
+    }
+
+    ESP = (esp_T *) timEsp[i];
+
+    /* rebuild (hopefully just recycling) */
+//$$$    nbody = 0;
+//$$$    status = ocsmBuild(ESP->MODL, 0, &builtTo, &nbody, NULL);
+//$$$    if (status < EGADS_SUCCESS) goto cleanup;
+
+    /* tessellate the Bodys if not already tessellated */
+    status = ocsmTessellate(ESP->MODL, 0);
+    if (status < EGADS_SUCCESS) goto cleanup;
+
+    /* update the Cvals */
+    if (ESP->CAPS != NULL) {
+        wv_postMessage(0, "timMesg|capsMode|getCvals|");
+    }
+
+    /* update the Pmtrs */
+    wv_postMessage(0, "getPmtrs|");
+
+    /* update the Brchs */
+    if (ESP->CAPS == NULL) {
+        wv_postMessage(0, "getBrchs|");
+    }
+
+cleanup:
+    return status;
 }
 
 
@@ -777,6 +953,7 @@ timDLopen(const char *name)
     return dll;
 }
 
+
 /* ------------------------------------------------------------------------- */
 
 static void
@@ -789,6 +966,7 @@ timDLclose(/*@unused@*/ /*@only@*/ DLL dll)
 #endif
 }
 
+
 /* ------------------------------------------------------------------------- */
 
 static timDLLfunc
@@ -812,6 +990,7 @@ timDLget(DLL dll,
     return data;
 }
 
+
 /* ------------------------------------------------------------------------- */
 
 static int
@@ -830,6 +1009,7 @@ timDLoaded(const char *name)
     return -1;
 }
 
+
 /* ------------------------------------------------------------------------- */
 
 static int
@@ -888,7 +1068,7 @@ timDYNload(const char *name)
     timHold[  ret] = 0;
     tim_nTim++;
 
-    if (SHOW_STATES) printf("in timDYNload: setting TIM_INACTIVE\n");
+    if (SHOW_STATES) printf("in timDYNload(%s): setting TIM_INACTIVE\n", name);
 
     return ret;
 }
@@ -907,7 +1087,7 @@ GetToken(char   text[],                 /* (in)  full text */
          char   *token[])               /* (out) token (freeable) */
 {
     int    status = SUCCESS;
-    
+
     int    lentok, i, count, iskip;
 
     ROUTINE(GetToken);
@@ -934,7 +1114,7 @@ GetToken(char   text[],                 /* (in)  full text */
         }
     }
 
-    if (count < nskip+1) return 0;
+    if (count < nskip) return 0;
 
     /* skip over nskip tokens */
     i = 0;
@@ -952,7 +1132,7 @@ GetToken(char   text[],                 /* (in)  full text */
     }
 
     /* extract the token we are looking for */
-    while (text[i] != sep) {
+    while (text[i] != sep && text[i] != '\0') {
         (*token)[lentok++] = text[i++];
         (*token)[lentok  ] = '\0';
     }
@@ -991,4 +1171,48 @@ timExec(void *s)
     /* free up the emp_T structure (that was allocated in tim_mesg) */
     FREE(myEmp->command);
     FREE(myEmp);
+}
+
+
+/***********************************************************************/
+/*                                                                     */
+/*   OverlayInContMode - check if we are trying to execute an overlay  */
+/*                 while in continuation mode                          */
+/*                                                                     */
+/***********************************************************************/
+
+static int
+OverlayInContMode(char   command[],     /* (in)  command name */
+                  char   myTimName[])   /* (in)  name of TIM */
+{
+    int      status = 0;                /* (out) =1 if an overlay in continuation mode */
+
+    esp_T    *ESP=NULL;
+
+    ROUTINE(OverlayInContMode);
+
+    /* --------------------------------------------------------------- */
+
+    if (tim_nTim < 1) goto cleanup;
+
+    /* check to see if:
+     * the new TIM is not "pyscript"
+     * the parent is "pyscript" and
+     * the parent is currently running is "CaPsTeMpFiLe.py" */
+    if (strcmp(myTimName, "pyscript") != 0) {
+        ESP = (esp_T *)timEsp[tim_nTim-1];
+        SPLINT_CHECK_FOR_NULL(ESP);
+
+        if (ESP->nudata > 0) {
+            if (strcmp(ESP->timName[ESP->nudata-1], "pyscript") == 0) {
+                if (strcmp((char *)(ESP->udata[ESP->nudata-1]), "CaPsTeMpFiLe.py") == 0) {
+                    printf("skipping \"%s %s\" since we are in continuation mode \n", command, myTimName);
+                    status = 1;
+                }
+            }
+        }
+    }
+
+cleanup:
+    return status;
 }

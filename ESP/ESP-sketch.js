@@ -120,6 +120,12 @@
 
 
 //
+// name of TIM object
+//
+sketch.name = "sketch";
+
+
+//
 // callback when "Enter Sketcher" is pressed in editBrchForm (called by ESP.html)
 //
 sketch.launch = function () {
@@ -233,7 +239,7 @@ sketch.launch = function () {
 sketch.cmdUndo = function () {
     // alert("in cmdUndo()");
 
-    if (wv.server != "serveCSM") {
+    if (wv.server != "serveCSM" && wv.server != "serveESP") {
         alert("cmdUndo is not implemented for "+wv.server);
     } else {
         sketcherUndo();
@@ -333,7 +339,7 @@ sketch.cmdSave = function () {
         }
     }
 
-    if (wv.server != "serveCSM") {
+    if (wv.server != "serveCSM" && wv.server != "serveESP") {
         alert("cmdSave is not implemented for "+wv.server);
         return;
 
@@ -367,7 +373,7 @@ sketch.cmdQuit = function () {
     if (wv.curMode != 8) {
         alert("Command disabled.  Press 'Cancel' or 'OK' first");
         return;
-    } else if (wv.server != "serveCSM") {
+    } else if (wv.server != "serveCSM" && wv.server != "serveESP") {
         alert("cmdQuit is not implemented for "+wv.server);
         return;
     }
@@ -2738,7 +2744,7 @@ var sketcherSaveUndo = function () {
 
 
 //
-// load a Sketch from a semicolon-separated strings sent from serveCSM
+// load a Sketch from a semicolon-separated strings sent from serveCSM/serveESP
 //
 var sketcherLoad = function (begs, vars, cons, segs) {
     // alert("sketcherLoad()");

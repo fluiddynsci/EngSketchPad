@@ -1264,6 +1264,7 @@ EG_copyObject(const egObject *object, /*@null@*/ void *ptr, egObject **copy)
     for (i = 1; i <= btess->nFace; i++) {
       stat = EG_getTessFace(object, i, &npts, &xyz, &prms, &ptype, &pindex,
                             &ntri, &tris, &tric);
+      if (stat == EGADS_NODATA) continue;
       if (stat != EGADS_SUCCESS) {
         if (outLevel > 0)
           printf(" EGADS Error: EG_getTessFace %d = %d (EG_copyObject)!\n",

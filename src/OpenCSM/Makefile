@@ -15,6 +15,7 @@ ODIR  = .
 endif
 
 BINLIST =	$(BDIR)/serveCSM \
+		$(BDIR)/serveESP \
 		$(BDIR)/sensCSM
 LIBLIST =	$(LDIR)/$(OSHLIB) \
 		$(LDIR)/bezier.so \
@@ -49,6 +50,7 @@ LIBLIST =	$(LDIR)/$(OSHLIB) \
 		$(LDIR)/printBbox.so \
 		$(LDIR)/printBrep.so \
 		$(LDIR)/printEgo.so \
+		$(LDIR)/shadow.so \
 		$(LDIR)/radwaf.so \
 		$(LDIR)/sample.so \
 		$(LDIR)/sew.so \
@@ -63,7 +65,6 @@ TIMLIST  =	$(LDIR)/ereped.so \
 		$(LDIR)/mitten.so \
 		$(LDIR)/plotter.so \
 		$(LDIR)/plugs.so \
-		$(LDIR)/python.so \
 		$(LDIR)/slugs.so
 INCLIST =	$(IDIR)/OpenCSM.h \
 		$(IDIR)/common.h \
@@ -75,8 +76,11 @@ INCLIST =	$(IDIR)/OpenCSM.h \
 		$(IDIR)/udpUtilities.c
 
 #Adding the rpath is needed when compiling with Python
-PYTHONLPATH=$(filter -L%,$(PYTHONLIB))
-PYTHONRPATH=$(PYTHONLPATH:-L%=-Wl,-rpath %)
+ifdef PYTHONINC
+TIMLIST    += $(LDIR)/pyscript.so
+PYTHONLPATH = $(filter -L%,$(PYTHONLIB))
+PYTHONRPATH = $(PYTHONLPATH:-L%=-Wl,-rpath %)
+endif
 
 ifdef FCOMP
 default:	$(BINLIST) $(LIBLIST) $(LIBFLIST) $(TIMLIST) includes
@@ -92,6 +96,12 @@ $(BDIR)/serveCSM:	$(ODIR)/serveCSM.o $(LDIR)/$(OSHLIB)
 
 $(ODIR)/serveCSM.o:	serveCSM.c OpenCSM.h common.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. serveCSM.c -o $(ODIR)/serveCSM.o
+
+$(BDIR)/serveESP:	$(ODIR)/serveESP.o $(LDIR)/$(OSHLIB)
+	$(CXX) -o $(BDIR)/serveESP $(ODIR)/serveESP.o -L$(LDIR) -locsm -lwsserver -legads -ldl $(RPATH)
+
+$(ODIR)/serveESP.o:	serveESP.c OpenCSM.h common.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. serveESP.c -o $(ODIR)/serveESP.o
 
 $(BDIR)/sensCSM:	$(ODIR)/sensCSM.o $(LDIR)/$(OSHLIB)
 	$(CC) -o $(BDIR)/sensCSM $(ODIR)/sensCSM.o -L$(LDIR) -locsm -legads $(RPATH) -lm
@@ -403,6 +413,14 @@ $(LDIR)/printEgo.so:	$(ODIR)/udfPrintEgo.o $(LDIR)/$(OSHLIB)
 $(ODIR)/udfPrintEgo.o:	udfPrintEgo.c udpUtilities.c udpUtilities.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. udfPrintEgo.c -o $(ODIR)/udfPrintEgo.o
 
+$(LDIR)/shadow.so:	$(ODIR)/udfShadow.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/shadow.so
+	rm $(LDIR)/shadow.so
+	$(CC) $(SOFLGS) -o $(LDIR)/shadow.so $(ODIR)/udfShadow.o -L$(LDIR) -locsm -legads -lm
+
+$(ODIR)/udfShadow.o:	udfShadow.c udpUtilities.c udpUtilities.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. udfShadow.c -o $(ODIR)/udfShadow.o
+
 $(LDIR)/radwaf.so:	$(ODIR)/udpRadwaf.o $(LDIR)/$(OSHLIB)
 	touch $(LDIR)/radwaf.so
 	rm $(LDIR)/radwaf.so
@@ -514,13 +532,13 @@ $(LDIR)/plugs.so:	$(ODIR)/timPlugs.o $(LDIR)/$(OSHLIB)
 $(ODIR)/timPlugs.o:	timPlugs.c tim.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. timPlugs.c -o $(ODIR)/timPlugs.o
 
-$(LDIR)/python.so:	$(ODIR)/timPython.o $(LDIR)/$(OSHLIB)
-	touch $(LDIR)/python.so
-	rm $(LDIR)/python.so
-	$(CXX) $(SOFLGS) -o $(LDIR)/python.so $(ODIR)/timPython.o $(PYTHONLIB) -L$(LDIR) -locsm -lwsserver -legads -ldl $(RPATH) $(PYTHONRPATH)
+$(LDIR)/pyscript.so:	$(ODIR)/timPyscript.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/pyscript.so
+	rm $(LDIR)/pyscript.so
+	$(CXX) $(SOFLGS) -o $(LDIR)/pyscript.so $(ODIR)/timPyscript.o $(PYTHONLIB) -L$(LDIR) -locsm -lwsserver -legads -ldl $(RPATH) $(PYTHONRPATH)
 
-$(ODIR)/timPython.o:	timPython.c tim.h
-	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. -I$(PYTHONINC) timPython.c -o $(ODIR)/timPython.o
+$(ODIR)/timPyscript.o:	timPyscript.c tim.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. -I$(PYTHONINC) timPyscript.c -o $(ODIR)/timPyscript.o
 
 $(LDIR)/slugs.so:	$(ODIR)/timSlugs.o $(LDIR)/$(OSHLIB)
 	touch $(LDIR)/slugs.so
@@ -586,6 +604,9 @@ include $(IDIR)/STANALYZER.make
 lint:
 	@echo "Checking serveCSM..."
 	$(LINT) -I$(IDIR) serveCSM.c OpenCSM.c udp.c -allocmismatch -duplicatequals -macrovarprefixexclude -exportlocal -mustfreefresh -mayaliasunique -kepttrans -immediatetrans
+	@echo " "
+	@echo "Checking serveESP..."
+	$(LINT) -I$(IDIR) serveESP.c OpenCSM.c udp.c -allocmismatch -duplicatequals -macrovarprefixexclude -exportlocal -mustfreefresh -mayaliasunique -kepttrans -immediatetrans
 	@echo " "
 	@echo "Checking sensCSM..."
 	$(LINT) -I$(IDIR) sensCSM.c OpenCSM.c udp.c  -allocmismatch -duplicatequals -macrovarprefixexclude -exportlocal -mustfreefresh -mayaliasunique -kepttrans -immediatetrans
@@ -698,8 +719,8 @@ lint:
 	@echo "Checking printEgo.so..."
 	$(LINT) -I$(IDIR) udfPrintEgo.c
 	@echo " "
-	@echo "Checking printEgo.so..."
-	$(LINT) -I$(IDIR) udfPrintEgo.c
+	@echo "Checking shadow.so..."
+	$(LINT) -I$(IDIR) udfShadow.c
 	@echo " "
 	@echo "Checking slices.so..."
 	$(LINT) -I$(IDIR) udfSlices.c
@@ -737,15 +758,15 @@ lint:
 
 clean:
 	(cd $(ODIR); rm -f udpFitcurve.o udpFreeform.o udpWaffle.o udpCsm.o \
-		udpEllipse.o udpNaca.o udpHex.o udpImport.o serveCSM.o \
+		udpEllipse.o udpNaca.o udpHex.o udpImport.o serveCSM.o serveESP.o \
 		OpenCSM.o udp.o tim.o udpBezier.o udpBox.o udpNurbbody.o udpParabaloid.o udpParsec.o \
 		udpSample.o udpSew.o udpRadwaf.o udpNaca456.o naca456.o \
 		udpSupell.o udpStag.o udfSlices.o udfStiffener.o udpKulfan.o udpBiconvex.o \
 		udfCatmull.o udfCompare.o udfCreateBEM.o udfCreatePoly.o udfDroop.o \
 		udpPod.o udpPoly.o udpProp.o udfEditAttr.o udfPrintBbox.o udfPrintBrep.o \
-		udfPrintEgo.o udfFlend.o udfGanged.o udfGuide.o \
+		udfPrintEgo.o udfShadow.o udfFlend.o udfGanged.o udfGuide.o \
 		udfMatchBodys.o udfNacelle.o udfNuscale.o timEreped.o timMitten.o \
-		timPlotter.o timPlugs.o timPython.o timSlugs.o eggPDT2.o sensCSM.o )
+		timPlotter.o timPlugs.o timPyscript.o timSlugs.o eggPDT2.o sensCSM.o )
 
 cleanall:	clean
 	rm -f  $(BINLIST) $(LIBLIST) $(LIBFLIST) $(TIMLIST) $(INCLIST)

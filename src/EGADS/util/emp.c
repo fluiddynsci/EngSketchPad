@@ -415,7 +415,7 @@ __HOST_AND_DEVICE__
 void EMP_ThreadDestroy(/*@only@*/ void *vthread)
 {
 #ifndef __CUDA_ARCH__
-#if defined(DARWIN) || defined(DARWIN64)
+#if defined(DARWIN) || defined(DARWIN64) || defined(DARWINM1)
   pthread_t *thread;
 
   thread = (pthread_t *) vthread;

@@ -44,7 +44,7 @@
 //    viewer.keyUp(e)                     not provided
 //    viewer.keyPressPart1(myKeyPress)    not provided
 //    viewer.keyPressPart2(picking, gprim)not provided
-//    viewer.updateKeyWindow()
+//    viewer.updateKeyWindow()            not provided
 //
 //    viewer.timLoadCB(text)
 //    viewer.timSaveCB(text)
@@ -52,6 +52,12 @@
 //    viewer.timMesgCB(text)
 
 "use strict";
+
+
+//
+// name of TIM object
+//
+viewer.name = "viewer";
 
 
 //
@@ -228,14 +234,14 @@ viewer.keyPress = function (keyPress) {
 
     var done = 0;
 
-    if        (myKeyPress == 'r' && wv.modifier == 0 && checkIfFree()) {
+    if        (myKeyPress == 'R' && wv.modifier == 1 && checkIfFree()) {
         browserToServer("timMesg|viewer|red|");
         done = 1;
-    } else if (myKeyPress == 'b' && wv.modifier == 0 && checkIfFree()) {
-        browserToServer("timMesg|viewer|blue|");
-        done = 1;
-    } else if (myKeyPress == 'g' && wv.modifier == 0 && checkIfFree()) {
+    } else if (myKeyPress == 'G' && wv.modifier == 1 && checkIfFree()) {
         browserToServer("timMesg|viewer|green|");
+        done = 1;
+    } else if (myKeyPress == 'B' && wv.modifier == 1 && checkIfFree()) {
+        browserToServer("timMesg|viewer|blue|");
         done = 1;
     }
 
@@ -284,9 +290,9 @@ viewer.keyPressPart2 = function(picking, gprim) {
 //
 // function to update the key window
 //
-viewer.updateKeyWindow = function () {
-    // alert("in viewer.updateKeyWindow()");
-};
+//viewer.updateKeyWindow = function () {
+//    // alert("in viewer.updateKeyWindow()");
+//};
 
 
 //

@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
   
   /* output what we have */
   printf("\n");
-  caps_printObjects(pobj, 0);
+  caps_printObjects(pobj, pobj, 0);
   printf("\n");
   
   /* min and max on our dataset */

@@ -124,6 +124,7 @@ GetToken(char text[],                   /* (in)  original string */
          char *token[]);                /* (in)  token (freeable) */
 
 // values for timState[]
+#define TIM_NOTAVAIL  -1
 #define TIM_INACTIVE   0
 #define TIM_LOADING    1
 #define TIM_READY      2

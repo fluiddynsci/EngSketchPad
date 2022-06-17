@@ -55,6 +55,12 @@
 
 
 //
+// name of TIM object
+//
+mitten.name = "mitten";
+
+
+//
 // callback when Mitten is launched
 //
 mitten.launch = function () {

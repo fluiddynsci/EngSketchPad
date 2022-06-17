@@ -82,8 +82,6 @@
 // functions associated with menu selections (and associated button presses)
 //    addCval()
 //    editCval(e)
-//       editCvalOk()
-//       editCvalCancel()
 //    addPmtr()
 //    editPmtr(e)
 //       addRow()
@@ -92,9 +90,9 @@
 //       compTessSens()
 //       setVel(e)
 //       clrVels()
-//       editPmtrOk()
-//       editPmtrCancel()
-//    delPmtr()
+//    editValuOk()
+//    editValuCancel()
+//    delValu()
 //    showOutpmtrs()
 //       showOutpmtrsOk()
 //    addBrch()
@@ -178,12 +176,12 @@
 //    resizeFrames()            called by ESP.html
 //    browserClosing()          called by ESP.html
 //    changeMode(newMode)
-//    rebuildTreeWindow()
+//    rebuildTreeWindow(x)
 //    checkIfWithBall()
 //    checkIfFree()
 //    postMessage(mesg)
 //    setupEditBrchForm()
-//    setupEditPmtrForm()
+//    setupEditValuForm()
 //    browserToServer(text)
 //    numberOfPmtrChanges()
 //    numberOfBrchChanges()
@@ -192,6 +190,7 @@
 //    cmdEditCopy(cm)
 //    cmdEditCut(cm)
 //    cmdEditPaste(cm)
+//    cmdEditInsert(cm)
 //    cmdEditFind(cm)
 //    cmdEditFindNext(cm)
 //    cmdEditFindPrev(cm)
@@ -203,6 +202,7 @@
 //    cmdEditDebug()
 //    printObject(obj)
 //    sprintf()
+//    sleep(milliseconds)
 //    CodeMirror.defineSimpleMode(mode, options)
 
 "use strict";
@@ -229,9 +229,11 @@ var cmdSolve = function() {
         return;
     }
 
-    // if my*Menu is currently posted, delete it/them now
+    // if my*Menu is currently posted, hide it/them now
     document.getElementById("myFileMenu"  ).classList.remove("showFileMenu"  );
+    document.getElementById("myCapsMenu"  ).classList.remove("showCapsMenu"  );
     document.getElementById("myToolMenu"  ).classList.remove("showToolMenu"  );
+    document.getElementById("myDoneMenu"  ).classList.remove("showDoneMenu"  );
     document.getElementById("myCollabMenu").classList.remove("showCollabMenu");
 
     if        (wv.overlay !== undefined && wv.overlay.cmdSolve !== undefined) {
@@ -529,12 +531,16 @@ var wvInitUI = function () {
     wv.picking   =  0;             // keycode of command that turned picking on
     wv.locating  =  0;             // keycode of command that turned locating on
     wv.focus     = [0, 0, 0, 1];   // focus data needed in locating
+    wv.buildTree =  0;             // =1 if tree is being rebuilt
     wv.bodynames = undefined;      // list of current Body names
     wv.wireframe = undefined;      // corners of each wireframe
     wv.debugUI   =  0;             // set to 1 for console messages
     wv.idntStat  =  0;             // -1 server is identified
                                    //  0 need to identify server
                                    // >0 waiting for server to identify
+    wv.prefStat  =  0;             // -1 server is identified
+                                   //  0 need to get esp_prefix
+                                   // >0 waiting for esp_prefix
     wv.cvalStat  =  0;             // -2 latest Caps Values are in Tree
                                    // -1 latest Caps Values not in Tree (yet)
                                    //  0 need to request CapsValues
@@ -550,12 +556,13 @@ var wvInitUI = function () {
     wv.builtTo   = 99999;          // last Branch in previous successful build
     wv.menuEvent = undefined;      // event associated with click in Tree
     wv.server    = undefined;      // string passed back from "identify;"
+    wv.espPrefix = undefined;      // value of ESP_PREFIX environment variable
     wv.myRole    = 0;              // =0 hasBall, =1 sync'd, =2 unsync'd
     wv.numUsers  = 1;              // number of users
     wv.userNames = "";             // bar-separatede list of userNames
     wv.myName    = "*host*";       // my username
     wv.lastXform = null;           // last xfrom received while not sync'd
-    wv.plotType  =  0;             // =0 mono, =1 ubar, =2 vbar, =3 cmin, =4 cmax, =5 gc, =6 normals, =10 erep, =11 plugs, =12 python, =13 mitten
+    wv.plotType  =  0;             // =0 mono, =1 ubar, =2 vbar, =3 cmin, =4 cmax, =5 gc, =6 normals, =10 erep, =11 plugs, =12 pyscript, =13 mitten
     wv.loLimit   = -1;             // lower limit in key
     wv.upLimit   = +1;             // upper limit in key
     wv.nchanges  = 0;              // number of Branch or Parameter changes by browser
@@ -574,21 +581,25 @@ var wvInitUI = function () {
                                    // 1 show addBrchForm
                                    // 2 show editBrchForm with addBrchHeader
                                    // 3 show editBrchForm with editBrchHeader
-                                   // 4 show editPmtrForm with addPmtrHeader
-                                   // 5 show editPmtrForm with editPmtrHeader
+                                   // 4 show editValuForm with addValuHeader
+                                   // 5 show editValuForm with editValuHeader
                                    // 6 show showOutpmtrsForm
                                    // 7 show editorForm
                                    // 8 show sketcherForm and run sketch
-                                   // 9 show glovesForm
+                                   // 9 show WebViewer and glovesText in canvas and run gloves
                                    // 10 show WebViewer in canvas and run ereped
                                    // 11 show WebViewer in canvas and run plugs
-                                   // 12 show WebViewer in canvas and run python
+                                   // 12 show WebViewer in canvas and run pyscript
                                    // 13 show WebViewer in canvas and run mitten
                                    // 14 show sketcherForm and run plotter
+                                   // 15 show WebViewer in canvas and run capsMode
     wv.curTool   = main;           // current tool
     wv.timName   = "";             // name of TIM being held
     wv.overlay   = undefined;      // name of process that overlays the current mode
     wv.usingMain =  1;             // =1 if using 3D graphics window
+    wv.capsProj  = undefined;      // name of CAPS Project
+    wv.capsPhase = undefined;      // name of CAPS Phase
+    wv.capsIntent = undefined;     // intent of current CAPS session
     wv.curStep   =  0;             // >0 if in StepThru mode
     wv.curCval   = -1;             // Caps Value being editted (or -1)
     wv.curPmtr   = -1;             // Parameter being editted (or -1)
@@ -599,6 +610,7 @@ var wvInitUI = function () {
     wv.scale     =  1;             // scale factor for axes
     wv.getFocus  = undefined;      // entry to get first focus
     wv.lastPoint = undefined;      // array of xyz at last @ command
+    wv.helpIsOpen=  0;             // =1 if help is open
 //  wv.centerV                     // set to 1 to center view and rotation
 //  wv.pick                        // set to 1 to turn picking on
 //  wv.locate                      // set to 1 to turn locating on
@@ -614,34 +626,34 @@ var wvInitUI = function () {
 //  wv.socketUt.send(text)         // function to send text to server
 //  wv.plotAttrs                   // plot attributes
 
-    window.addEventListener('beforeunload',  browserClosing,      false);
+    window.addEventListener('beforeunload',  browserClosing,  false);
 
-    document.addEventListener('keypress',   keyPress,             false);
-    document.addEventListener('keydown',    keyDown,              false);
-    document.addEventListener('keyup',      keyUp,                false);
+    document.addEventListener('keypress',   keyPress,         false);
+    document.addEventListener('keydown',    keyDown,          false);
+    document.addEventListener('keyup',      keyUp,            false);
 
     var canvas = document.getElementById(wv.canvasID);
-    canvas.addEventListener(  'mousedown',  mouseDown,            false);
-    canvas.addEventListener(  'mousemove',  mouseMove,            false);
-    canvas.addEventListener(  'mouseup',    mouseUp,              false);
-    canvas.addEventListener(  "wheel",      mouseWheel,           false);
-    canvas.addEventListener(  'mouseout',   mouseLeftCanvas,      false);
+    canvas.addEventListener(  'mousedown',  mouseDown,        false);
+    canvas.addEventListener(  'mousemove',  mouseMove,        false);
+    canvas.addEventListener(  'mouseup',    mouseUp,          false);
+    canvas.addEventListener(  "wheel",      mouseWheel,       false);
+    canvas.addEventListener(  'mouseout',   mouseLeftCanvas,  false);
 
     var sketcher = document.getElementById("sketcher");
-    sketcher.addEventListener('mousedown',  sketch.mouseDown,       false);
-    sketcher.addEventListener('mousemove',  sketch.mouseMove,       false);
-    sketcher.addEventListener('mouseup',    sketch.mouseUp,         false);
+    sketcher.addEventListener('mousedown',  sketch.mouseDown, false);
+    sketcher.addEventListener('mousemove',  sketch.mouseMove, false);
+    sketcher.addEventListener('mouseup',    sketch.mouseUp,   false);
 
-    var gloves = document.getElementById("gloves");
-    gloves.addEventListener(  'mousedown',  gloves.mouseDown,       false);
-    gloves.addEventListener(  'mousemove',  gloves.mouseMove,       false);
-    gloves.addEventListener(  'mouseup',    gloves.mouseUp,         false);
+    var glovesText = document.getElementById("glovesText");
+    glovesText.addEventListener(  'mousedown',  gloves.mouseDown, false);
+    glovesText.addEventListener(  'mousemove',  gloves.mouseMove, false);
+    glovesText.addEventListener(  'mouseup',    gloves.mouseUp,   false);
 
     var keycan = document.getElementById(wv.canvasKY);
-    keycan.addEventListener(  'mouseup',    setKeyLimits,         false);
+    keycan.addEventListener(  'mouseup',    setKeyLimits,     false);
 
     var msgwin = document.getElementById("brframe");
-    msgwin.addEventListener(  'dblclick',   gotoCsmError,         false);
+    msgwin.addEventListener(  'dblclick',   gotoCsmError,     false);
 
     document.getElementById("exitOlayBtn").hidden = true;
 };
@@ -658,7 +670,7 @@ var wvUpdateUI = function () {
         var temp = wv.pyname;
         wv.pyname = "";
 
-        python.launch(temp);
+        pyscript.launch(temp);
 
         return;
     }
@@ -975,14 +987,31 @@ var wvUpdateUI = function () {
        }
     }
 
+    // get the prefix if not currently defined
+    if (wv.espPrefix === undefined) {
+        if (wv.prefStat > 0) {
+            wv.prefStat--;
+        } else if (wv.prefStat == 0) {
+            try {
+                browserToServer("getEspPrefix|");
+                wv.prefStat = -1;
+            } catch (e) {
+                // could not send command, so try again after 10 cycles
+                wv.prefStat = 10;
+            }
+        }
+    }
+
     // if the Caps Values are scheduled to be updated, send a message to
     //    get the Caps Values now
     if (wv.cvalStat > 0) {
         wv.cvalStat--;
-    } else if (wv.server === undefined && wv.server != "serveCAPS") {
+    } else if (wv.server === undefined) {
+    } else if (wv.server != "serveCAPS") {
+        wv.cvalStat = -2;
     } else if (wv.cvalStat == 0) {
         try {
-            browserToServer("getCvals|1|");
+            browserToServer("timMesg|capsMode|getCvals|0|");
             wv.cvalStat = -1;
         } catch (e) {
             // could not send command, so try again after 10 cycles
@@ -1008,7 +1037,9 @@ var wvUpdateUI = function () {
     //    get the Branches now
     if (wv.brchStat > 0) {
         wv.brchStat--;
-    } else if (wv.server === undefined || wv.server == "serveCAPS") {
+    } else if (wv.server === undefined) {
+    } else if (wv.server == "serveCAPS") {
+        wv.brchStat = -2;
     } else if (wv.brchStat == 0) {
         try {
             browserToServer("getBrchs|1|");
@@ -1019,16 +1050,23 @@ var wvUpdateUI = function () {
         }
     }
 
-    // if the scene graph and Parameters have been updated, (re-)build the Tree
-    if ((wv.sgUpdate == 1 && wv.pmtrStat <= -1 && wv.brchStat <= -1) ||
-        (                    wv.pmtrStat == -1 && wv.brchStat == -2) ||
-        (                    wv.pmtrStat == -2 && wv.brchStat == -1)   ) {
+    // if the scene graph has been updated, (re-)build the Tree
+    if (wv.sgUpdate == 1) {
 
         if (wv.sceneGraph === undefined) {
             alert("wv.sceneGraph is undefined --- but we need it");
         }
 
-        rebuildTreeWindow();
+        rebuildTreeWindow(1);
+
+    // if the Caps Values, Parameters, or Branches have been updated, (re-) build the Tree
+    } else if (wv.cvalStat == -1 || wv.pmtrStat == -1 || wv.brchStat == -1) {
+
+        if (wv.sceneGraph === undefined) {
+            alert("wv.sceneGraph is undefined --- but we need it");
+        }
+
+        rebuildTreeWindow(2);
     }
 
     // deal with key presses
@@ -1135,11 +1173,11 @@ var wvUpdateUI = function () {
             if (wv.wireframe === undefined || wv.wireMatrix === undefined) {
                 postMessage("\""+myKeyPress+"\" is only valid with wireframes");
             } else {
-//                postMessage("wv.cursorX    "+wv.cursorX);
-//                postMessage("wv.cursorY    "+wv.cursorY);
-//                postMessage("wv.width      "+wv.width);
-//                postMessage("wv.height     "+wv.height);
-//                postMessage("wv.focus      "+wv.focus[0]+" "+wv.focus[1]+" "+wv.focus[2]+" "+wv.focus[3])
+//$$$                postMessage("wv.cursorX    "+wv.cursorX);
+//$$$                postMessage("wv.cursorY    "+wv.cursorY);
+//$$$                postMessage("wv.width      "+wv.width);
+//$$$                postMessage("wv.height     "+wv.height);
+//$$$                postMessage("wv.focus      "+wv.focus[0]+" "+wv.focus[1]+" "+wv.focus[2]+" "+wv.focus[3])
 
                 // get location of key press (between -1 and +1)
                 var scrX = 2.0 * wv.cursorX / (wv.width  - 1.0) - 1.0;
@@ -1150,10 +1188,10 @@ var wvUpdateUI = function () {
                 var ibest   = -1;
                 var myMatrix = wv.wireMatrix.getAsArray();
 
-//                postMessage("mvpMatrix  "+myMatrix[ 0]+" "+myMatrix[ 4]+" "+myMatrix[ 8]+" "+myMatrix[12]);
-//                postMessage("           "+myMatrix[ 1]+" "+myMatrix[ 5]+" "+myMatrix[ 9]+" "+myMatrix[13]);
-//                postMessage("           "+myMatrix[ 2]+" "+myMatrix[ 6]+" "+myMatrix[10]+" "+myMatrix[14]);
-//                postMessage("           "+myMatrix[ 3]+" "+myMatrix[ 7]+" "+myMatrix[11]+" "+myMatrix[15]);
+//$$$                postMessage("mvpMatrix  "+myMatrix[ 0]+" "+myMatrix[ 4]+" "+myMatrix[ 8]+" "+myMatrix[12]);
+//$$$                postMessage("           "+myMatrix[ 1]+" "+myMatrix[ 5]+" "+myMatrix[ 9]+" "+myMatrix[13]);
+//$$$                postMessage("           "+myMatrix[ 2]+" "+myMatrix[ 6]+" "+myMatrix[10]+" "+myMatrix[14]);
+//$$$                postMessage("           "+myMatrix[ 3]+" "+myMatrix[ 7]+" "+myMatrix[11]+" "+myMatrix[15]);
 
                 for (var i = 0; i < wv.wireframe.length/3; i++) {
                     var Xtemp = (wv.wireframe[3*i  ] - wv.focus[0]) / wv.focus[3];
@@ -1167,7 +1205,7 @@ var wvUpdateUI = function () {
                     var dx = scrX - Xscr / Wscr;
                     var dy = scrY - Yscr / Wscr;
 
-//                    postMessage(wv.wireframe[3*i]+" "+wv.wireframe[3*i+1]+" "+wv.wireframe[3*i+2]+"->"+(Xscr/Wscr+1)*(wv.width-1)/2+" "+(Yscr/Wscr+1)*(wv.height-1)/2);
+//$$$                    postMessage(wv.wireframe[3*i]+" "+wv.wireframe[3*i+1]+" "+wv.wireframe[3*i+2]+"->"+(Xscr/Wscr+1)*(wv.width-1)/2+" "+(Yscr/Wscr+1)*(wv.height-1)/2);
 
                     var dxytest = dx * dx + dy * dy;
                     if (dxytest < dxybest) {
@@ -1256,8 +1294,8 @@ var wvUpdateUI = function () {
             }
 
         // '<esc>' -- not used
-//      } else if (wv.keyPress == 0 && wv.keyCode == 27) {
-//          postMessage("<Esc> is not supported.  Use '?' for help");
+//$$$      } else if (wv.keyPress == 0 && wv.keyCode == 27) {
+//$$$          postMessage("<Esc> is not supported.  Use '?' for help");
 
         // '<Home>' -- initial view
         } else if (wv.keyPress == 0 && wv.keyCode == 36 && checkIfFree()) {
@@ -1547,8 +1585,8 @@ var wvServerMessage = function (text) {
             postMessage("ESP has been initialized and is attached to '"+wv.server+"'");
 
             /* get the Cvals, Pmtrs, and Brchs */
-            if (wv.Server == "serveCAPS") {
-                browserToServer("getCvals|0|");
+            if (wv.server == "serveCAPS") {
+                browserToServer("timMesg|capsMode|getCvals|1|");
                 wv.cvalStat = -1;
             }
 
@@ -1576,7 +1614,27 @@ var wvServerMessage = function (text) {
             if (textList[3].length > 0) {
                 wv.pyname = textList[3];
             }
+
+            if (wv.server == "serveCAPS") {
+                wv.capsProj  = textList[4];
+                wv.capsPhase = textList[5];
+
+                wv.capsIntent = prompt("Working on Phase "+wv.capsPhase+" of Project \""+wv.capsProj+"\"\n"+
+                                       "What is the intent of the Phase?");
+                if (wv.capsIntent === null) {
+                    wv.capsIntent = "<none>";
+                }
+                browserToServer("timMesg|capsMode|intent|"+wv.capsIntent+"|");
+            }
+
+            document.getElementById("capsMenuBtn").hidden = true;
         }
+
+    // if it starts with "getEspPrefix|" store the prefix
+    } else if (text.substring(0,13) == "getEspPrefix|") {
+        var textList    = text.split("|");
+
+        wv.espPrefix = textList[1];
 
     // if it starts with "userName|" store the list of current users
     } else if (text.substring(0,9) == "userName|") {
@@ -1690,10 +1748,6 @@ var wvServerMessage = function (text) {
             wv.focus = [];
         }
 
-//        if (wv.curTool.redraw !== undefined) {
-//            wv.curTool.redraw();
-//        }
-
         wv.sceneUpd = 1;
 
     // if it starts with "getCvals|" build the (global) cval array
@@ -1706,7 +1760,7 @@ var wvServerMessage = function (text) {
             }
             wv.cvalStat = -1;
 
-            rebuildTreeWindow();
+            rebuildTreeWindow(3);
         }
 
     // if it starts with "newCval|" do nothing
@@ -1717,7 +1771,7 @@ var wvServerMessage = function (text) {
         if (text.substring(0,15) == "setCval|ERROR::") {
             alert("value(s) not changed because error was detected");
 
-            browserToServer("getCvals|2|");
+            browserToServer("timMesg|capsMode|getCvals|2|");
             wv.cvalStat = 6000;
         }
 
@@ -1730,7 +1784,7 @@ var wvServerMessage = function (text) {
         }
         wv.pmtrStat = -1;
 
-        rebuildTreeWindow();
+        rebuildTreeWindow(4);
 
     // if it starts with "newPmtr|" do nothing
     } else if (text.substring(0,8) == "newPmtr|") {
@@ -1747,8 +1801,8 @@ var wvServerMessage = function (text) {
             wv.pmtrStat = 6000;
         }
 
-    // if it starts with "delPmtr|" do nothing
-    } else if (text.substring(0,8) == "delPmtr|") {
+    // if it starts with "delValu|" do nothing
+    } else if (text.substring(0,8) == "delValu|") {
 
     // if it starts with "setVel|" do nothing
     } else if (text.substring(0,7) == "setVel|") {
@@ -1763,7 +1817,7 @@ var wvServerMessage = function (text) {
             }
             wv.brchStat = -1;
 
-            rebuildTreeWindow();
+            rebuildTreeWindow(5);
         }
 
     // if it starts with "newBrch|" do nothing (except possibly post warning)
@@ -1795,7 +1849,7 @@ var wvServerMessage = function (text) {
         wv.sgUpdate = 1;
         wv.brchStat = 0;
         wv.pmtrStat = 0;
-        wv.capsStat = 0;
+        wv.cvalStat = 0;
 
         postMessage("Undoing '"+cmd+"' ====> Re-build is needed <====");
 
@@ -1814,16 +1868,33 @@ var wvServerMessage = function (text) {
         pmtr = new Array();
         brch = new Array();
 
-        rebuildTreeWindow();
+        rebuildTreeWindow(6);
 
     // if it starts with "save|" do nothing
     } else if (text.substring(0,5) == "save|") {
+
+    // if it starts with "load|ERROR|", display error for user
+    } else if (text.substring(0,11) == "load|ERROR|") {
+        alert(text.substring(11));
+
+        wv.filenames = wv.savenames;
+
+        var button = document.getElementById("solveButton");
+        button["innerHTML"] = "Up to date";
+        button.style.backgroundColor = null;
+
+        changeMode(0);
+
+    // if it starts with "insert|", add to CodeMirror
+    } else if (text.substring(0,7) == "insert|") {
+
+        wv.codeMirror.replaceRange(text.substring(7), wv.codeMirror.getCursor("start"), wv.codeMirror.getCursor("end"));
 
     // if it starts with "load|", ask for a build
     } else if (text.substring(0,5) == "load|") {
 
         // if only one file, inform the user that a rebuild is in process
-        if (wv.filenames.split("|").length <= 3) {
+        if (wv.filenames.split("|").length <= 3 || wv.server == "serveCAPS") {
             var button = document.getElementById("solveButton");
             button["innerHTML"] = "Re-building...";
             button.style.backgroundColor = "#FFFF3F";
@@ -1835,7 +1906,7 @@ var wvServerMessage = function (text) {
             browserToServer("build|0|");
 
             if (wv.server == "serveCAPS") {
-                browserToServer("getCvals|3|");
+                browserToServer("timMesg|capsMode|getCvals|3|");
                 wv.cvalStat = 6000;
             }
 
@@ -1877,22 +1948,9 @@ var wvServerMessage = function (text) {
 
         if (textList[1].substring(0,7) == "ERROR::") {
             alert("how did we get here???");
-//            postMessage(textList[1]);
-//
-//            var ibrch    = Number(textList[2]);
-//            var nbody    = Number(textList[3]);
-//
-//            wv.builtTo = ibrch;
-//
-//            if (nbody > 0) {
-//                postMessage("Build complete through ibrch="+ibrch+
-//                            ", which generated "+nbody+" Body(s)");
-//            } else {
-//                alert("No Bodys were produced");
-//            }
         } else {
-            var ibrch    = Number(textList[1]);
-            var nbody    = Number(textList[2]);
+            var ibrch  = Number(textList[1]);
+            var nbody  = Number(textList[2]);
 
             wv.builtTo = ibrch;
 
@@ -1901,19 +1959,20 @@ var wvServerMessage = function (text) {
             } else if (ibrch == brch.length || brch.length == 0) {
                 postMessage("\nEntire build complete, which generated "+nbody+
                             " Body(s)");
+                changeMode(0);
             } else if (ibrch >= brch.length) {
                 postMessage("\nBuild complete through ibrch="+ibrch+
                             ", which generated "+nbody+" Body(s)");
+                changeMode(0);
             } else if (ibrch > 0) {
                 postMessage("\nPartial build (through "+brch[ibrch-1].name+
                             ") complete, which generated "+nbody+" Body(s)");
+                changeMode(0);
             } else {
-//                postMessage("ibrch="+ibrch+"   brch.length="+brch.length);
                 postMessage("Build failed before first Branch");
+                changeMode(0);
             }
         }
-
-        changeMode(0);
 
     // if it starts with "loadSketch|" initialize the Sketcher
     } else if (text.substring(0,11) == "loadSketch|") {
@@ -1970,9 +2029,45 @@ var wvServerMessage = function (text) {
         postMessage(textList[3]);
         postMessage(" ");
 
+    // if it starts with "caps|list|" post a message */
+    } else if (text.substring(0,9) == "caps|list") {
+        var textList = text.split("|");
+
+        postMessage(textList[2]);
+        postMessage(" ");
+
+    // if it starts with "caps|override|, post the alert
+    } else if (text.substring(0,14) == "caps|override|") {
+        var textList = text.split("|");
+
+        alert(textList[2]);
+
+    // if it starts with "caps|phase|" initialize the Phase */
+    } else if (text.substring(0,5) == "caps|") {
+        var textList = text.split("|");
+
+        /* get the Cvals and Pmtrs */
+        browserToServer("timMesg|capsMode|getCvals|4|");
+        wv.cvalStat = -1;
+
+        browserToServer("getPmtrs|");
+        wv.pmtrStat = -1;
+
+        wv.capsPhase = textList[1];
+
+        wv.capsIntent = prompt("Working on Phase "+wv.capsPhase+" of Project \""+wv.capsProj+"\"\n"+
+                               "What is the intent of the Phase?");
+        if (wv.capsIntent === null) {
+            wv.capsIntent = "<none>";
+            return;
+        }
+        browserToServer("timMesg|capsMode|intent|"+wv.capsIntent+"|");
+
     // if it starts with "timLoad|" pass to curTool or postMessage
     } else if (text.substring(0,8) == "timLoad|") {
-        if (wv.curTool.timLoadCB !== undefined) {
+        if (wv.overlay !== undefined && wv.overlay.timLoadCB !== undefined) {
+            wv.overlay.timLoadCB(text.substring(8));
+        } else if (wv.curTool.timLoadCB !== undefined) {
             wv.curTool.timLoadCB(text.substring(8));
         } else {
             postMessage(text);
@@ -1980,7 +2075,9 @@ var wvServerMessage = function (text) {
 
     // if it starts with "timSave|" pass to curTool or postMessage
     } else if (text.substring(0,8) == "timSave|") {
-        if (wv.curTool.timSaveCB !== undefined) {
+        if (wv.overlay !== undefined && wv.overlay.timSaveCB !== undefined) {
+            wv.overlay.timSaveCB(text.substring(8));
+        } else if (wv.curTool.timSaveCB !== undefined) {
             wv.curTool.timSaveCB(text.substring(8));
         } else {
             postMessage(text);
@@ -1988,15 +2085,19 @@ var wvServerMessage = function (text) {
 
     // if it starts with "timQuit|" pass to curTool or postMessage
     } else if (text.substring(0,8) == "timQuit|") {
-        if (wv.curTool.timQuitCB !== undefined) {
+        if (wv.overlay !== undefined && wv.overlay.timQuitCB !== undefined) {
+            wv.overlay.timQuitCB(text.substring(8));
+        } else if (wv.curTool.timQuitCB !== undefined) {
             wv.curTool.timQuitCB(text.substring(8));
-        } else {
-            postMessage(text);
+//        } else {
+//            postMessage(text);
         }
 
     // if it starts with "timMesg|" pass to curTool or postMessage
     } else if (text.substring(0,8) == "timMesg|") {
-        if (wv.curTool.timMesgCB !== undefined) {
+        if (wv.overlay !== undefined && wv.overlay.timMesgCB !== undefined) {
+            wv.overlay.timMesgCB(text.substring(8));
+        } else if (wv.curTool.timMesgCB !== undefined) {
             wv.curTool.timMesgCB(text.substring(8));
         } else {
             postMessage(text);
@@ -2004,15 +2105,27 @@ var wvServerMessage = function (text) {
 
     // if it starts with "timDraw|" do nothing
     } else if (text.substring(0,8) == "timDraw|") {
+        browserToServer("timDraw|");
 
     // if it starts with "overlayBeg|" start overlay mode
     } else if (text.substring(0,11) == "overlayBeg|") {
 
         cmdOverlayBeg(text.substring(11));
 
+    // if it starts with "overlayEnd}" do nothing
+    } else if (text.substring(0,11) == "overlayEnd|") {
+
     // if it starts with "postMessage|", post the message
     } else if (text.substring(0,12) == "postMessage|") {
         postMessage(text.substring(12));
+
+    // if it starts with "alertMessage|", post an alert
+    } else if (text.substring(0,13) == "alertMessage|") {
+        alert(text.substring(13));
+
+    // if it starts with "returnMessage|", send the message to the server
+    } else if (text.substring(0,14) == "returnMessage|") {
+        browserToServer(text.substring(14));
 
     // if it starts with "setLims|" do nothing
     } else if (text.substring(0,8) == "setLims|") {
@@ -2035,11 +2148,28 @@ var wvServerMessage = function (text) {
         var oldName = "";
         if (wv.filenames.length != 1) {
             var foo = wv.filenames.split("|");
-            oldName = foo[1];
+            oldName = foo[0];
         }
 
         wv.filenames = text.substring(12);
+        if (wv.filenames[0] != '|') {
+            wv.filenames = '|' + wv.filenames;
+        }
         var textList = text.split("|");
+
+        // if in CAPS mode, change reference from capsRestart.cpc to capsProj.csm
+        if (wv.server == "serveCAPS") {
+            var newText = textList[1].replace("/"+wv.capsPhase+"/capsRestart.cpc",
+                                              "/"+wv.capsProj+".csm");
+            textList[1]  = newText;
+            wv.filenames = textList[1];
+            if (wv.filenames[0] != '|') {
+                wv.filenames = '|' + wv.filenames;
+            }
+            for (var i = 2; i < textList.length-1; i++) {
+                wv.filenames += "|" + textList[i];
+            }
+        }
 
         if (textList[1].length > 0 && textList[1] == oldName) {
             var mesg = "";
@@ -2059,30 +2189,6 @@ var wvServerMessage = function (text) {
     // if it starts with "getCsmFile|" store the results in wv.curFile and change to mode 7
     } else if (text.substring(0,11) == "getCsmFile|") {
         wv.curFile = text.substring(11);
-
-        // special treatment if entering Gloves
-        if (wv.curMode == 9) {
-
-            // load Gloves from wv.curFile
-            glovesLoad();
-
-            // if wv.curFile does not have a Gloves section, ask for a component
-            if (gloves.comp.length == 0) {
-                gloves.cmdSolve();
-            }
-
-            // if there are still no Gloves components, quit Gloves
-            if (gloves.comp.length == 0) {
-                gloves.cmdQuit();
-
-            // if there is at least one component, show it/them
-            } else {
-                glovesDraw();
-                gloves.cmdHome();
-            }
-
-            return;
-        }
 
         // remove former editor
         if (wv.codeMirror !== undefined && wv.myRole != 0) {
@@ -2198,7 +2304,7 @@ var wvServerMessage = function (text) {
 
     // if it starts with "setWvKey|" turn key or logo on
     } else if (text.substring(0,9) == "setWvKey|") {
-        if (wv.curMode == 0) {
+        if (wv.curMode == 0 || wv.curMode == 12) {
             if (text.substring(9,11) == "on") {
                 document.getElementById("WVkey"  ).hidden = false;
                 document.getElementById("ESPlogo").hidden = true;
@@ -2262,16 +2368,6 @@ var wvServerMessage = function (text) {
                 wv.uiMatrix.load(matrix);
                 wv.scale    = parseFloat(textList[3]);
                 wv.sceneUpd = 1;
-
-//                // account for different aspect ratios in browsers
-//                var xscale = wv.width  / masterWidth;
-//                var yscale = wv.height / masterHeight;
-//
-//                if (xscale < yscale) {
-//                    wv.uiMatrix.scale(xscale, xscale, xscale);
-//                } else {
-//                    wv.uiMatrix.scale(yscale, yscale, yscale);
-//                }
             }
             wv.lastXform = text;
         } else if (wv.myRole == 2) {
@@ -2293,7 +2389,11 @@ var wvServerMessage = function (text) {
     // if it starts with "resetMode|" and we do not have the ball,
     // reset the mode to 0
     } else if (text.substring(0,10) == "resetMode|") {
-        changeMode(0);
+        if (wv.server != "serveCAPS") {
+            changeMode(0);
+        } else {
+            changeMode(15);
+        }
 
     // if it starts with "toggle|" and we are syncd, update the graphic attribute
     } else if (text.substring(0,7) == "toggle|") {
@@ -2408,14 +2508,15 @@ var wvServerMessage = function (text) {
 
     // if it starts with "ERROR::" post the error
     } else if (text.substring(0,7) == "ERROR::") {
-        var textList = text.split("|");
+//        var textList = text.split("|");
 
-        // post messages sent from OpenCSM
-        if (textList[1].length > 0) {
-            postMessage(textList[1]);
-        }
+//        // post messages sent from OpenCSM
+//        if (textList[1].length > 0) {
+//            postMessage(textList[1]);
+//        }
 
-        postMessage(textList[0]);
+        //        postMessage(textList[0]);
+        postMessage(text.substring(7));
 
         // turn the background of the message window back to light-yellow
         var botm = document.getElementById("brframe");
@@ -2431,6 +2532,9 @@ var wvServerMessage = function (text) {
     // if it starts with "message|" post the message
     } else if (text.substring(0,8) == "message|") {
         postMessage(text.substring(8,text.length-1));
+
+    // if it starts with ">>> browser2server" do nothing
+    } else if (text.substring(0,18) == ">>> browser2server") {
 
     // default is to post the message
     } else {
@@ -2462,6 +2566,9 @@ var wvUpdateCanvas = function (gl) {
 
     // draw the lastPoint if it has been defined
     drawLastPoint(gl);
+
+    /* remember the wire matrix */
+    wv.wireMatrix.load(wv.mvpMatrix);
 
     // draw any wireframes that might exist
     drawWireframes(gl);
@@ -2638,10 +2745,10 @@ var cmdFile = function () {
     // toggle between hiding and showing the File menu contents
     document.getElementById("myFileMenu").classList.toggle("showFileMenu");
 
-    // if myToolMenu is currently posted, delete it now
-    document.getElementById("myToolMenu").classList.remove("showToolMenu");
-
-    // if myCollabMenu is currently posted, delete it now
+    // if my*Menu is currently posted, hide it/them now
+    document.getElementById("myCapsMenu"  ).classList.remove("showCapsMenu"  );
+    document.getElementById("myToolMenu"  ).classList.remove("showToolMenu"  );
+    document.getElementById("myDoneMenu"  ).classList.remove("showDoneMenu"  );
     document.getElementById("myCollabMenu").classList.remove("showCollabMenu");
 
     /* remove previous menu entries */
@@ -2719,6 +2826,11 @@ var cmdFileNew = function () {
         }
     }
 
+    if (wv.server == "serveCAPS") {
+        alert("This option is not available in Caps mode");
+        return;
+    }
+
     if (wv.nchanges > 0) {
         if (confirm(wv.nchanges+" change(s) will be lost.  Continue?") !== true) {
             return;
@@ -2768,7 +2880,11 @@ var cmdFileOpen = function () {
         }
     }
 
-    if (wv.nchanges > 0) {
+    if (wv.server == "serveCAPS") {
+        if (confirm("Are you sure you want to commit the current phase?") !== true) {
+            return;
+        }
+    } else if (wv.nchanges > 0) {
         if (confirm(wv.nchanges+" change(s) will be lost.  Continue?") !== true) {
             return;
         }
@@ -2776,7 +2892,11 @@ var cmdFileOpen = function () {
 
     if (wv.curMode == 0) {
         var filelist = wv.filenames.split("|");
-        var filename = prompt("Enter filename to open:", filelist[1]);
+        if (wv.server != "serveCAPS") {
+            var filename = prompt("Enter filename to open:", filelist[1]);
+        } else {
+            filename = prompt("Enter filename to open:", wv.espPrefix);
+        }
         if (filename !== null) {
             if (filename.length == 0) {
                 alert("empty filename given");
@@ -2792,10 +2912,15 @@ var cmdFileOpen = function () {
                 filename += ".csm";
             }
 
+            if (wv.server == "serveCAPS") {
+                alert("we should not get here");
+            }
+
             postMessage("Opening \""+filename+"\" ...");
 
             browserToServer("open|"+filename+"|");
 
+            wv.savenames = wv.filenames;
             wv.filenames = filename;
             wv.nchanges  = 0;
 
@@ -2806,8 +2931,8 @@ var cmdFileOpen = function () {
             }
 
             if (wv.server == "serveCAPS") {
-                browserToServer("getCvals|4|");
-                wv.capsStat = 6000;
+                browserToServer("timMesg|capsMode|getCvals|5|");
+                wv.cvalStat = 6000;
             }
 
             browserToServer("getPmtrs|");
@@ -2897,7 +3022,7 @@ var cmdFileEdit = function (e, indx) {
 
     var index;
     if (e !== null) {
-        index = e.srcElement.fileindx;
+        index = e.target.fileindx;
     } else {
         index = indx;
     }
@@ -2911,7 +3036,7 @@ var cmdFileEdit = function (e, indx) {
         }
     }
 
-    if (wv.curMode != 0 && e !== null) {
+    if (wv.curMode != 0 && wv.curMode != 15 && e !== null) {
         alert("Command disabled.  Press 'Cancel' or 'OK' first");
         return;
     } else if (wv.curMode != 0 && indx != wv.fileIndx) {
@@ -2968,6 +3093,23 @@ var editorOk = function () {
         return;
     }
 
+    var newFile = wv.codeMirror.getDoc().getValue();
+
+    if (wv.server == "serveCAPS") {
+        if (wv.curFile != newFile) {
+            alert("Changes to .csm or .udc files cannot be made in CAPS mode\nUse \"Cancel\" instead.");
+            return;
+        } else {
+            if (wv.codeMirror !== undefined) {
+                wv.codeMirror.toTextArea();
+                wv.codeMirror = undefined;
+            }
+
+            changeMode(15);
+            return;
+        }
+    }
+
     // remember what file we are editting and which line we were on
     var myLastline = wv.codeMirror.getCursor()["line"] + 1;
 
@@ -2981,8 +3123,6 @@ var editorOk = function () {
     }
 
     // tell user if no changes were made
-    var newFile = wv.codeMirror.getDoc().getValue();
-
     if (wv.curFile == newFile && wv.nchanges == 0 &&
         confirm("No changes were made.  Reload file anyway?") !== true) {
 
@@ -2999,7 +3139,7 @@ var editorOk = function () {
 
     // get filename
     } else if (wv.fileindx < 0 || wv.filenames.length == 0) {
-        wv.filenames = prompt("Enter filename");
+        wv.filenames = prompt("Enter filename", wv.espPrefix);
         if (wv.filenames !== null) {
             if (wv.filenames.search(/\.csm$/) <= 0 &&
                 wv.filenames.search(/\.udc$/) <= 0   ) {
@@ -3047,14 +3187,13 @@ var editorOk = function () {
 
     browserToServer("setCsmFileEnd|");
 
-    // remember the edited .csm file
-    wv.curFile = newFile;
-
-    postMessage("'"+myFilename+"' file has been changed.");
-    wv.fileindx = -1;
+    if (wv.server != "serveCAPS") {
+        postMessage("'"+myFilename+"' file has been changed.");
+        wv.fileindx = -1;
+    }
 
     // get an updated version of the Parameters and Branches
-    wv.capsStat = 0;
+    wv.cvalStat = 0;
     wv.pmtrStat = 0;
     wv.brchStat = 0;
 
@@ -3070,8 +3209,16 @@ var editorOk = function () {
     // reset the number of changes
     wv.nchanges = 0;
 
+    // if we are in CAPS mode, change back to base mode
+    if (wv.server == "serveCAPS") {
+        var button = document.getElementById("solveButton");
+        button["innerHTML"] = "Up to date";
+        button.style.backgroundColor = null;
+
+        changeMode(0);
+
     // if only one file, inform the user that a rebuild is in process
-    if (wv.filenames.split("|").length <= 3) {
+    } else if (wv.filenames.split("|").length <= 3) {
         var button = document.getElementById("solveButton");
         button["innerHTML"] = "Re-building...";
         button.style.backgroundColor = "#FFFF3F";
@@ -3090,97 +3237,6 @@ var editorOk = function () {
         activateBuildButton();
         postMessage("====> Re-build is needed <====");
     }
-}
-
-var editorOk_old = function () {
-    // alert("in editorOk()");
-
-    // tell user if no changes were made
-    var newFile = wv.codeMirror.getDoc().getValue();
-
-    if (wv.curFile == newFile && wv.nchanges == 0) {
-        alert("No changes were made");
-        changeMode(0);
-        return;
-
-    // get filename
-    } else if (wv.fileindx < 0 || wv.filenames.length == 0) {
-        wv.filenames = prompt("Enter filename");
-        if (wv.filenames !== null) {
-            if (wv.filenames.search(/\.csm$/) <= 0 &&
-                wv.filenames.search(/\.udc$/) <= 0   ) {
-                // add .csm extension if no extension is given
-                wv.filenames += ".csm";
-            }
-        } else {
-            alert("NOT saving since no filename specified");
-            return;
-        }
-
-    // check for overwrite
-    } else if (confirm("This may overwrite an existing file. " +
-                       "Continue?") !== true) {
-        return;
-    }
-
-    // because of an apparent limit on the size of text
-    //    messages that can be sent from the browser to the
-    //    server, we need to send the new file back in
-    //    pieces and then reassemble on the server
-    var maxMessageSize = 800;
-
-    var ichar    = 0;
-    var part     = newFile.substring(ichar, ichar+maxMessageSize);
-
-    if (wv.fileindx < 0) {
-        var myFilename = wv.filenames;
-    } else {
-        var filelist = wv.filenames.split("|");
-        var myFilename = filelist[wv.fileindx];
-    }
-
-    browserToServer("setCsmFileBeg|"+myFilename+"|"+part);
-    ichar += maxMessageSize;
-
-    while (ichar < newFile.length) {
-        part = newFile.substring(ichar, ichar+maxMessageSize);
-        browserToServer("setCsmFileMid|"+part);
-        ichar += maxMessageSize;
-    }
-
-    browserToServer("setCsmFileEnd|");
-
-    // remember the edited .csm file
-    wv.curFile = newFile;
-
-    postMessage("'"+myFilename+"' file has been changed.");
-    wv.fileindx = -1;
-
-    // get an updated version of the Parameters and Branches
-    wv.capsStat = 0;
-    wv.pmtrStat = 0;
-    wv.brchStat = 0;
-
-    // remove the contents of the file from memory
-    wv.curFile = "";
-
-    // remove from editor
-    if (wv.codeMirror !== undefined) {
-        wv.codeMirror.toTextArea();
-        wv.codeMirror = undefined;
-    }
-
-    // reset the number of changes
-    wv.nchanges = 0;
-
-    // inform the user that a rebuild is in process
-    var button = document.getElementById("solveButton");
-    button["innerHTML"] = "Re-building...";
-    button.style.backgroundColor = "#FFFF3F";
-
-    // inactivate buttons until build is done
-    changeMode( 0);
-    changeMode(-1);
 };
 
 
@@ -3217,9 +3273,6 @@ var editorCancel = function () {
     if (wv.myRole == 0) {
         browserToServer("resetMode|");
     }
-
-    // return to the WebViewer
-    changeMode(0);
 };
 
 
@@ -3236,10 +3289,10 @@ var cmdTool = function () {
     // toggle between hiding and showing the File menu contents
     document.getElementById("myToolMenu").classList.toggle("showToolMenu");
 
-    // if myFileMenu is currently posted, delete it now
-    document.getElementById("myFileMenu").classList.remove("showFileMenu");
-
-    // if myCollabMenu is currently posted, delete it now
+    // if my*Menu is currently posted, hide it/them now
+    document.getElementById("myFileMenu"  ).classList.remove("showFileMenu"  );
+    document.getElementById("myCapsMenu"  ).classList.remove("showCapsMenu"  );
+    document.getElementById("myDoneMenu"  ).classList.remove("showDoneMenu"  );
     document.getElementById("myCollabMenu").classList.remove("showCollabMenu");
 
     /* remove previous menu entries */
@@ -3261,17 +3314,24 @@ var cmdTool = function () {
     if (wv.server == "serveESP" || wv.server == "serveCAPS") {
         button = document.createElement("input");
         button.type    = "button";
+        button.title   = "Launch CapsMode";
+        button.value   = "Caps";
+        button.onclick = capsMode.launch;
+        menu.appendChild(button);
+
+        button = document.createElement("input");
+        button.type    = "button";
         button.title   = "Launch ErepEd";
         button.value   = "ErepEd";
         button.onclick = ereped.launch;
         menu.appendChild(button);
 
-        button = document.createElement("input");
-        button.type    = "button";
-        button.title   = "Launch Gloves";
-        button.value   = "Gloves";
-        button.onclick = gloves.launch;
-        menu.appendChild(button);
+//        button = document.createElement("input");
+//        button.type    = "button";
+//        button.title   = "Launch Gloves";
+//        button.value   = "Gloves";
+//        button.onclick = gloves.launch;
+//        menu.appendChild(button);
 
         button = document.createElement("input");
         button.type    = "button";
@@ -3282,17 +3342,17 @@ var cmdTool = function () {
 
         button = document.createElement("input");
         button.type    = "button";
-        button.title   = "Launch Python";
-        button.value   = "Python";
-        button.onclick = python.launch;
+        button.title   = "Launch Pyscript";
+        button.value   = "Pyscript";
+        button.onclick = pyscript.launch;
         menu.appendChild(button);
 
-        button = document.createElement("input");
-        button.type    = "button";
-        button.title   = "Launch Mitten";
-        button.value   = "Mitten";
-        button.onclick = mitten.launch;
-        menu.appendChild(button);
+//        button = document.createElement("input");
+//        button.type    = "button";
+//        button.title   = "Launch Mitten";
+//        button.value   = "Mitten";
+//        button.onclick = mitten.launch;
+//        menu.appendChild(button);
     }
 };
 
@@ -3303,8 +3363,14 @@ var cmdTool = function () {
 var cmdDone = function () {
     // alert("in cmdDone()");
 
-    // toggle between hiding and showing the File menu contents
+    // toggle between hiding and showing the Done menu contents
     document.getElementById("myDoneMenu").classList.toggle("showDoneMenu");
+
+    // if my*Menu is currently posted, hide it/them now
+    document.getElementById("myFileMenu"  ).classList.remove("showFileMenu"  );
+    document.getElementById("myCapsMenu"  ).classList.remove("showCapsMenu"  );
+    document.getElementById("myToolMenu"  ).classList.remove("showToolMenu"  );
+    document.getElementById("myCollabMenu").classList.remove("showCollabMenu");
 };
 
 
@@ -3318,9 +3384,11 @@ var cmdStepThru = function (direction) {
         return;
     }
 
-    // if my*Menu is currently posted, delet it/them now
+    // if my*Menu is currently posted, delete it/them now
     document.getElementById("myFileMenu"  ).classList.remove("showFileMenu"  );
+    document.getElementById("myCapsMenu"  ).classList.remove("showCapsMenu"  );
     document.getElementById("myToolMenu"  ).classList.remove("showToolMenu"  );
+    document.getElementById("myDoneMenu"  ).classList.remove("showDoneMenu"  );
     document.getElementById("myCollabMenu").classList.remove("showCollabMenu");
 
     if        (wv.curMode >= 8) {
@@ -3347,11 +3415,27 @@ var cmdHelp = function () {
 
     // if my*Menu is currently posted, delet it/them now
     document.getElementById("myFileMenu"  ).classList.remove("showFileMenu"  );
+    document.getElementById("myCapsMenu"  ).classList.remove("showCapsMenu"  );
     document.getElementById("myToolMenu"  ).classList.remove("showToolMenu"  );
+    document.getElementById("myDoneMenu"  ).classList.remove("showDoneMenu"  );
     document.getElementById("myCollabMenu").classList.remove("showCollabMenu");
 
-    // open help in another tab
-    window.open("ESP-help.html");
+//    if (wv.helpIsOpen == 1) {
+        // open help in another tab
+        var helpWin = window.open("ESP-help.html");
+        wv.helpIsOpen = 1;
+//    } else {
+//        alert("Dummy. Help is already open");
+//        return;
+//    }
+
+    // post a message when the Help tab has been closed (checking every 500 milliseconds)
+//    var timer = setInterval(function() {
+//        if (helpWin.closed) {
+//            wv.helpIsOpen = 0;
+//            clearInterval(timer);
+//        }
+//    }, 500);
 };
 
 
@@ -3373,11 +3457,11 @@ var cmdCollab = function () {
     // toggle between hiding and showing the Collab menu contents
     document.getElementById("myCollabMenu").classList.toggle("showCollabMenu");
 
-    // if myFileMenu is currently posted, delete it now
+    // if my*Menu is currently posted, hide it/them now
     document.getElementById("myFileMenu").classList.remove("showFileMenu");
-
-    // if myToolMenu is currently posted, delete it now
+    document.getElementById("myCapsMenu").classList.remove("showCapsMenu");
     document.getElementById("myToolMenu").classList.remove("showToolMenu");
+    document.getElementById("myDoneMenu").classList.remove("showDoneMenu");
 
     /* remove previous menu entries */
     var menu = document.getElementById("myCollabMenu");
@@ -3509,7 +3593,7 @@ var cmdCollabPass = function (e, indx) {
 
     var index;
     if (e !== null) {
-        index = e.srcElement.userindx;
+        index = e.target.userindx;
     } else {
         index = indx;
     }
@@ -3610,7 +3694,7 @@ var cmdCollabMessage = function () {
         }
     }
 
-    var message = prompt("Enter message to be sent to al users:");
+    var message = prompt("Enter message to be sent to all users:");
     if (message !== null && message.length > 0) {
         browserToServer("message|"+wv.myName+" says: "+message+"|");
     }
@@ -3621,17 +3705,26 @@ var cmdCollabMessage = function () {
 // callback when "overlayBeg|timName|olayName|" message is received
 //
 var cmdOverlayBeg = function (text) {
-    // alert("in cmdOverlayBeg(text="+text+")");
+    //alert("in cmdOverlayBeg(text="+text+")");
+
+    var textList = text.split("|");
 
     if (wv.overlay !== undefined) {
-        alert("cannot have recursive overlays");
+        if        (textList[1] == "viewer"    && wv.overlay == viewer   ) {
+        } else if (textList[1] == "plotter"   && wv.overlay == plotter  ) {
+        } else if (textList[1] == "flowchart" && wv.overlay == flowchart) {
+        } else {
+            alert("cannot have recursive overlays");
+        }
     } else {
-        var textList = text.split('|');
-
         wv.timName = textList[0];
 
-        if (textList[1] == "viewer") {
+        if        (textList[1] == "viewer") {
             wv.overlay = viewer;
+        } else if (textList[1] == "plotter") {
+            wv.overlay = plotter;
+        } else if (textList[1] == "flowchart") {
+            wv.overlay = flowchart;
         }
 
         // hide done menu button
@@ -3686,7 +3779,7 @@ var cmdOverlayEnd = function () {
 var addCval = function () {
     // alert("in addCval()");
 
-    if (wv.curMode != 0) {
+    if (wv.curMode != 0 && wv.curMode != 15) {
         alert("Command disabled.  Press 'Cancel' or 'OK' first");
         return;
     }
@@ -3705,27 +3798,42 @@ var addCval = function () {
         return;
     }
 
-    var nrow = 1;
-    var ncol = 1;
-
-    var units = prompt("Enter units for "+name+" (or \".\" for none):");
-    var value = prompt("Enter value for "+name+":");
-
-    browserToServer("newCval|"+name+"|1|1|"+units+"|"+value+"|");
+    // check that the name does not exist already
+    for (var icval = 0; icval < cval.length; icval++) {
+        if (name == cval[icval].name) {
+            alert("'"+name+"' already exists");
+            return;
+        }
+    }
 
     // store the values locally
     var newCval = cval.length;
 
     cval[newCval] = new Array();
 
-    cval[newCval].name =  name;
-    cval[newCval].nrow  = nrow;
-    cval[newCval].ncol  = ncol;
+    cval[newCval].name = name;
+    cval[newCval].nrow = 1;
+    cval[newCval].ncol = 1;
     cval[newCval].value = new Array(1);
 
-    cval[newCval].value[0] = value;
+    cval[newCval].value[0] = "";
 
-    browserToServer("getCvals|5|");
+    // remember info for Parameter
+    wv.curCval = newCval;
+
+    // set up editValuForm
+    if (setupEditValuForm() > 0) {
+        return;
+    }
+
+    // hide the buttons associated with sensitivities
+    document.getElementById("computeGeomSens").hidden = true;
+    document.getElementById("computeTessSens").hidden = true;
+    document.getElementById("clearVelocities").hidden = true;
+    document.getElementById("deleteValue"    ).hidden = true;
+
+    // post the editCval form (with the addValu header)
+    changeMode(4);
 };
 
 
@@ -3735,13 +3843,24 @@ var addCval = function () {
 var editCval = function (e) {
     // alert("in editCval(e="+e+")");
 
+    if        (wv.curMode == 5) {
+        // currently editting another Parameter or Caps Value, so cancel (throwing away changes)
+        editValuCancel();
+    } else if (wv.curMode == 3) {
+        // currently editting a Branch,          so cancel (throwing away changes)
+        editBrchCancel();
+    } else if (wv.curMode != 0 && wv.curMode != 15) {
+        alert("Command disabled.  Press 'Cancel' or 'OK' first");
+        return;
+    }
+
     wv.menuEvent = e;
 
     // get the Tree Node
     var id    = wv.menuEvent["target"].id;
     var inode = Number(id.substring(4,id.length-4));
 
-    // get the Caps value name
+    // get the Caps Value name
     var name = myTree.name[inode].replace(/\u00a0/g, "");
     name = name.replace(/\^/g, "");
 
@@ -3753,7 +3872,7 @@ var editCval = function (e) {
     }
     name = newName.replace(/\u00a0/g, "");
 
-    // get the Caps value index
+    // get the Caps Value index
     var icval = -1;      // 0-bias
     var jcval;           // 1-bias (and temp)
     for (jcval = 0; jcval < cval.length; jcval++) {
@@ -3770,16 +3889,43 @@ var editCval = function (e) {
         jcval = icval + 1;
     }
 
-    // get the new value
-    var newval = prompt("Enter new value for "+cval[icval].name+"[1]:");
-    if (newval === null) {
-        return;
-    } else {
-        cval[icval].value[0] = newval;
+    // highlight this Parameter in the Tree
+    var myElem = document.getElementById("node"+inode+"col1");
+    myElem.className = "currentTD";
 
-        browserToServer("setCval|"+cval[icval].name+"|1|1|"+newval+"|");
-        browserToServer("getCvals|6|");
+    // highlight all Branches that explicitly mention this Caps Value
+    var re = RegExp("[\\][)(+\\-*/^.,;]"+cval[icval].name+"[\\][)(+\\-*/^.,;]");
+    for (var ibrch = 0; ibrch < brch.length; ibrch++) {
+        for (var iarg = 0; iarg < brch[ibrch].args.length; iarg++) {
+            if (("("+brch[ibrch].args[iarg]+")").match(re) !== null) {
+                for (jnode = 0; jnode < myTree.name.length; jnode++) {
+                    var parent = myTree.parent[jnode];
+                    while (parent > 0) {
+                        if (parent == 3 &&
+                            myTree.name[jnode].replace(/\u00a0/g, "").replace(/>/g, "") == brch[ibrch].name) {
+                            document.getElementById("node"+jnode+"col1").className = "childTD";
+                        }
+                        parent = myTree.parent[parent];
+                    }
+                }
+            }
+        }
     }
+
+    // remember info for the current Parameter
+    wv.curCval = icval;
+
+    // set up editValuForm
+    setupEditValuForm();
+
+    // hide the buttons associated with sensitivities
+    document.getElementById("computeGeomSens").hidden = true;
+    document.getElementById("computeTessSens").hidden = true;
+    document.getElementById("clearVelocities").hidden = true;
+    document.getElementById("deleteValue"    ).hidden = true;
+
+    // post the editCval form (with the editCval header)
+    changeMode(5);
 };
 
 
@@ -3789,7 +3935,10 @@ var editCval = function (e) {
 var addPmtr = function () {
     // alert("in addPmtr()");
 
-    if (wv.curMode != 0) {
+    if (wv.server == "serveCAPS") {
+        alert("Design Parameters can only be added via the .csm file when in CAPS mode");
+        return;
+    } else if (wv.curMode != 0) {
         alert("Command disabled.  Press 'Cancel' or 'OK' first");
         return;
     }
@@ -3834,10 +3983,16 @@ var addPmtr = function () {
     // remember info for Parameter
     wv.curPmtr = newPmtr;
 
-    // set up editPmtrForm
-    if (setupEditPmtrForm() > 0) {
+    // set up editValuForm
+    if (setupEditValuForm() > 0) {
         return;
     }
+
+    // unhide the buttons associated with sensitivities
+    document.getElementById("computeGeomSens").hidden = false;
+    document.getElementById("computeTessSens").hidden = false;
+    document.getElementById("clearVelocities").hidden = false;
+    document.getElementById("deleteValue"    ).hidden = false;
 
     // post the editPmtr form (with the addPmtr header)
     changeMode(4);
@@ -3852,11 +4007,11 @@ var editPmtr = function (e) {
 
     if        (wv.curMode == 5) {
         // currently editting another Parameter, so cancel (throwing away changes)
-        editPmtrCancel();
+        editValuCancel();
     } else if (wv.curMode == 3) {
         // currently editting a Branch,          so cancel (throwing away changes)
         editBrchCancel();
-    } else if (wv.curMode != 0) {
+    } else if (wv.curMode != 0 && wv.curMode != 15) {
         alert("Command disabled.  Press 'Cancel' or 'OK' first");
         return;
     }
@@ -3922,8 +4077,21 @@ var editPmtr = function (e) {
     // remember info for the current Parameter
     wv.curPmtr = ipmtr;
 
-    // set up editPmtrForm
-    setupEditPmtrForm();
+    // set up editValuForm
+    setupEditValuForm();
+
+    // unhide the buttons associated with sensitivities
+    if (wv.server != "serveCAPS") {
+        document.getElementById("computeGeomSens").hidden = false;
+        document.getElementById("computeTessSens").hidden = false;
+        document.getElementById("clearVelocities").hidden = false;
+        document.getElementById("deleteValue"    ).hidden = false;
+    } else {
+        document.getElementById("computeGeomSens").hidden = true;
+        document.getElementById("computeTessSens").hidden = true;
+        document.getElementById("clearVelocities").hidden = true;
+        document.getElementById("deleteValue"    ).hidden = true;
+    }
 
     // post the editPmtr form (with the editPmtr header)
     changeMode(5);
@@ -3931,23 +4099,42 @@ var editPmtr = function (e) {
 
 
 //
-// callback when "Add row" is pressed in editPmtrForm (called by ESP.html)
+// callback when "Add row" is pressed in editValuForm (called by ESP.html)
 //
 var addRow = function () {
     // alert("in addRow()");
 
-    // adjust the number of rows
-    pmtr[wv.curPmtr].nrow++;
-    pmtr[wv.curPmtr].value = new Array(pmtr[wv.curPmtr].nrow*pmtr[wv.curPmtr].ncol);
-    pmtr[wv.curPmtr].dot   = new Array(pmtr[wv.curPmtr].nrow*pmtr[wv.curPmtr].ncol);
+    // adding Paramater
+    if (wv.curPmtr >= 0) {
 
-    for (var i = 0; i < pmtr[wv.curPmtr].value.length; i++) {
-        pmtr[wv.curPmtr].value[i] = "";
-        pmtr[wv.curPmtr].dot[  i] = "0";
+        // adjust the number of rows
+        pmtr[wv.curPmtr].nrow++;
+        pmtr[wv.curPmtr].value = new Array(pmtr[wv.curPmtr].nrow*pmtr[wv.curPmtr].ncol);
+        pmtr[wv.curPmtr].dot   = new Array(pmtr[wv.curPmtr].nrow*pmtr[wv.curPmtr].ncol);
+
+        for (var i = 0; i < pmtr[wv.curPmtr].value.length; i++) {
+            pmtr[wv.curPmtr].value[i] = "";
+            pmtr[wv.curPmtr].dot[  i] = "0";
+        }
+
+    // adding Caps Value
+    } else if (wv.curCval >= 0) {
+
+        // adjust the number of rows
+        cval[wv.curCval].nrow++;
+        cval[wv.curCval].value = new Array(cval[wv.curCval].nrow*cval[wv.curCval].ncol);
+
+        for (var i = 0; i < cval[wv.curCval].value.length; i++) {
+            cval[wv.curCval].value[i] = "";
+        }
+
+    // ooops, problem
+    } else {
+        alert("we have a problem: curPmtr="+wv.curPmtr+" curCval="+wv.curCval);
     }
 
-    // set up editPmtrForm
-    if (setupEditPmtrForm() > 0) {
+    // set up editValuForm
+    if (setupEditValuForm() > 0) {
         return;
     }
 
@@ -3957,23 +4144,42 @@ var addRow = function () {
 
 
 //
-// callback when "Add column" is pressed in editPmtrForm (called by ESP.html)
+// callback when "Add column" is pressed in editValuForm (called by ESP.html)
 //
 var addColumn = function () {
     // alert("in addColumn()");
 
-    // adjust the number of columns
-    pmtr[wv.curPmtr].ncol++;
-    pmtr[wv.curPmtr].value = new Array(pmtr[wv.curPmtr].nrow*pmtr[wv.curPmtr].ncol);
-    pmtr[wv.curPmtr].dot   = new Array(pmtr[wv.curPmtr].nrow*pmtr[wv.curPmtr].ncol);
+    // adding Parameter
+    if (wv.curPmtr >= 0) {
 
-    for (var i = 0; i < pmtr[wv.curPmtr].value.length; i++) {
-        pmtr[wv.curPmtr].value[i] = "";
-        pmtr[wv.curPmtr].dot[  i] = "0";
+        // adjust the number of columns
+        pmtr[wv.curPmtr].ncol++;
+        pmtr[wv.curPmtr].value = new Array(pmtr[wv.curPmtr].nrow*pmtr[wv.curPmtr].ncol);
+        pmtr[wv.curPmtr].dot   = new Array(pmtr[wv.curPmtr].nrow*pmtr[wv.curPmtr].ncol);
+
+        for (var i = 0; i < pmtr[wv.curPmtr].value.length; i++) {
+            pmtr[wv.curPmtr].value[i] = "";
+            pmtr[wv.curPmtr].dot[  i] = "0";
+        }
+
+    // adding Caps Value
+    } else if (wv.curCval >= 0) {
+
+        // adjust the number of columns
+        cval[wv.curCval].ncol++;
+        cval[wv.curCval].value = new Array(cval[wv.curCval].nrow*cval[wv.curCval].ncol);
+
+        for (var i = 0; i < cval[wv.curCval].value.length; i++) {
+            cval[wv.curCval].value[i] = "";
+        }
+
+    // ooops, problem
+    } else {
+        alert("we have a problem: curPmtr="+wv.curPmtr+" curCval="+wv.curCval);
     }
 
-    // set up editPmtrForm
-    if (setupEditPmtrForm() > 0) {
+    // set up editValuForm
+    if (setupEditValuForm() > 0) {
         return;
     }
 
@@ -3983,7 +4189,7 @@ var addColumn = function () {
 
 
 //
-// callback when "Compute Geom Sens" is pressed in editPmtrForm (called by ESP.html)
+// callback when "Compute Geom Sens" is pressed in editValuForm (called by ESP.html)
 //
 var compGeomSens = function () {
     // alert("in compGeomSens()");
@@ -3992,11 +4198,17 @@ var compGeomSens = function () {
         return;
     }
 
-//    // disable this command if there were any changes to the Parameter
-//    if (numberOfPmtrChanges() > 0) {
-//        alert("Changes were made.  Press 'Cancel' or 'OK' first");
-//        return;
-//    }
+    // sensitivities cannot be computed for Caps Values
+    if (wv.curCval >= 0) {
+        alert("Sensitivities cannot be computed for a Caps Value");
+        return;
+    }
+
+//$$$    // disable this command if there were any changes to the Parameter
+//$$$    if (numberOfPmtrChanges() > 0) {
+//$$$        alert("Changes were made.  Press 'Cancel' or 'OK' first");
+//$$$        return;
+//$$$    }
 
     // get the Tree Node
     var id    = wv.menuEvent["target"].id;
@@ -4008,7 +4220,7 @@ var compGeomSens = function () {
 
     var jnode   = inode;
     var newName = name;
-    while (myTree.parent[jnode] != 1) {
+    while (myTree.parent[jnode] > 4) {
         jnode   = myTree.parent[jnode];
         newName = myTree.name[jnode] + newName;
     }
@@ -4055,7 +4267,7 @@ var compGeomSens = function () {
 
     // if multi-valued, only compute if there is a non-zero velocity...
     } else {
-        var editPmtrForm = document.getElementById("editPmtrForm");
+        var editValuForm = document.getElementById("editValuForm");
 
         // count non-zero velocities
         var nonzero = 0;
@@ -4066,7 +4278,7 @@ var compGeomSens = function () {
             for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
                 index++;
 
-                var myInput = editPmtrForm["row"+irow+"col"+icol+"dot"];
+                var myInput = editValuForm["row"+irow+"col"+icol+"dot"];
                 var value   = myInput.value.replace(/\s/g, "");
 
                 if (value.length <= 0) {
@@ -4097,7 +4309,7 @@ var compGeomSens = function () {
             for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
                 index++;
 
-                var myInput = editPmtrForm["row"+irow+"col"+icol+"dot"];
+                var myInput = editValuForm["row"+irow+"col"+icol+"dot"];
                 var value   = myInput.value.replace(/\s/g, "");
 
                 browserToServer("setVel|"+pmtr[ipmtr].name+"|"+irow+"|"+icol+"|"+value+"|");
@@ -4109,7 +4321,7 @@ var compGeomSens = function () {
     browserToServer("build|0|");
 
     if (wv.server == "serveCAPS") {
-        browserToServer("getCvals|7|");
+        browserToServer("timMesg|capsMode|getCvals|6|");
         wv.cvalStat = 6000;
     }
 
@@ -4132,7 +4344,7 @@ var compGeomSens = function () {
 
 
 //
-// callback when "Compute Tess Sens" is pressed in editPmtrForm (called by ESP.html)
+// callback when "Compute Tess Sens" is pressed in editValuForm (called by ESP.html)
 //
 var compTessSens = function () {
     // alert("in compTessSens()");
@@ -4141,11 +4353,17 @@ var compTessSens = function () {
         return;
     }
 
-//    // disable this command if there were any changes to the Parameter
-//    if (numberOfPmtrChanges() > 0) {
-//        alert("Changes were made.  Press 'Cancel' or 'OK' first");
-//        return;
-//    }
+    // sensitivities cannot be computed for Caps Values
+    if (wv.curCval >= 0) {
+        alert("Sensitivities cannot be computed for a Caps Value");
+        return;
+    }
+
+//$$$    // disable this command if there were any changes to the Parameter
+//$$$    if (numberOfPmtrChanges() > 0) {
+//$$$        alert("Changes were made.  Press 'Cancel' or 'OK' first");
+//$$$        return;
+//$$$    }
 
     // get the Tree Node
     var id    = wv.menuEvent["target"].id;
@@ -4157,7 +4375,7 @@ var compTessSens = function () {
 
     var jnode   = inode;
     var newName = name;
-    while (myTree.parent[jnode] != 1) {
+    while (myTree.parent[jnode] > 4) {
         jnode   = myTree.parent[jnode];
         newName = myTree.name[jnode] + newName;
     }
@@ -4204,7 +4422,7 @@ var compTessSens = function () {
 
     // if multi-valued, only compute if there is a non-zero velocity...
     } else {
-        var editPmtrForm = document.getElementById("editPmtrForm");
+        var editValuForm = document.getElementById("editValuForm");
 
         // count non-zero velocities
         var nonzero = 0;
@@ -4215,7 +4433,7 @@ var compTessSens = function () {
             for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
                 index++;
 
-                var myInput = editPmtrForm["row"+irow+"col"+icol+"dot"];
+                var myInput = editValuForm["row"+irow+"col"+icol+"dot"];
                 var value   = myInput.value.replace(/\s/g, "");
 
                 if (value.length <= 0) {
@@ -4246,7 +4464,7 @@ var compTessSens = function () {
             for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
                 index++;
 
-                var myInput = editPmtrForm["row"+irow+"col"+icol+"dot"];
+                var myInput = editValuForm["row"+irow+"col"+icol+"dot"];
                 var value   = myInput.value.replace(/\s/g, "");
 
                 browserToServer("setVel|"+pmtr[ipmtr].name+"|"+irow+"|"+icol+"|"+value+"|");
@@ -4258,10 +4476,10 @@ var compTessSens = function () {
     browserToServer("build|0|");
 
     if (wv.server == "serveCAPS") {
-        browserToServer("getCvals|");
+        browserToServer("timMesg|capsMode|getCvals|7|");
         wv.cvalStat = 6000;
     }
-    
+
     browserToServer("getPmtrs|");
     wv.pmtrStat = 6000;
 
@@ -4281,7 +4499,7 @@ var compTessSens = function () {
 
 
 //
-// callback when "Set Design Velocity" is pressed in editPmtrForm (called by ESP.html)
+// callback when "Set Design Velocity" is pressed in editValuForm (called by ESP.html)
 //
 var setVel = function () {
     // alert("in setVel()");
@@ -4292,7 +4510,7 @@ var setVel = function () {
 
 
 //
-// callback when "Clear Design Velocities" is pressed in editPmtrForm (called by ESP.html)
+// callback when "Clear Design Velocities" is pressed in editValuForm (called by ESP.html)
 //
 var clrVels = function () {
     // alert("in clrVels()");
@@ -4318,7 +4536,7 @@ var clrVels = function () {
                 for (var icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
                     index++;
 
-                    var myInput = editPmtrForm["row"+irow+"col"+icol+"dot"];
+                    var myInput = editValuForm["row"+irow+"col"+icol+"dot"];
                     myInput.value = 0;
 
                     pmtr[ipmtr].dot[index] = 0;
@@ -4334,200 +4552,408 @@ var clrVels = function () {
 
 
 //
-// callback when "OK" is pressed in editPmtrForm (called by ESP.html)
+// callback when "OK" is pressed in editValuForm (called by ESP.html)
 //
-var editPmtrOk = function () {
-    // alert("in editPmtrOk()");
+var editValuOk = function () {
+    // alert("in editValuOk()");
 
     if (checkIfWithBall() === false) {
         return;
     }
 
-    var editPmtrForm = document.getElementById("editPmtrForm");
+    var editValuForm = document.getElementById("editValuForm");
 
-    var ipmtr = wv.curPmtr;
-    var name  = pmtr[ipmtr].name;
-    var nrow  = pmtr[ipmtr].nrow;
-    var ncol  = pmtr[ipmtr].ncol;
-    var irow;
-    var icol;
+    // saving Parameter (not in CAPS mode)
+    if (wv.curPmtr >= 0 && wv.server != "serveCAPS") {
+        var ipmtr = wv.curPmtr;
+        var name  = pmtr[ipmtr].name;
+        var nrow  = pmtr[ipmtr].nrow;
+        var ncol  = pmtr[ipmtr].ncol;
+        var irow;
+        var icol;
 
-    // make sure that all entries have valid values
-    var nchange = 0;
+        // make sure that all entries have valid values
+        var nchange = 0;
 
-    var index   = -1;
-    for (irow = 1; irow <= pmtr[ipmtr].nrow; irow++) {
-        for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
-            index++;
-
-            // get the new value
-            var myInput = editPmtrForm["row"+irow+"col"+icol+"val"];
-            var value   = myInput.value.replace(/\s/g, "");
-
-            if (value.length <= 0) {
-                alert("Value at (row "+irow+", col "+icol+") is blank");
-                return;
-            } else if (isNaN(value)) {
-                alert("Illegal number format in value at (row "+irow+", col "+icol+")");
-                return;
-            }
-        }
-    }
-
-    if (pmtr[ipmtr].type == OCSM_DESPMTR) {
-        index   = -1;
+        var index   = -1;
         for (irow = 1; irow <= pmtr[ipmtr].nrow; irow++) {
             for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
                 index++;
 
                 // get the new value
-                var myInput = editPmtrForm["row"+irow+"col"+icol+"dot"];
+                var myInput = editValuForm["row"+irow+"col"+icol+"val"];
                 var value   = myInput.value.replace(/\s/g, "");
 
                 if (value.length <= 0) {
-                    alert("Velocity at (row "+irow+", col "+icol+") is blank");
+                    alert("Value at (row "+irow+", col "+icol+") is blank");
                     return;
                 } else if (isNaN(value)) {
-                    alert("Illegal number format in velocity at (row "+irow+", col "+icol+")");
+                    alert("Illegal number format in value at (row "+irow+", col "+icol+")");
                     return;
                 }
             }
         }
-    }
 
-    // send the new Parameter to the server if in add Pmtr mode
-    if (wv.curMode == 4) {
-        var mesg = "newPmtr|"+name+"|"+nrow+"|"+ncol+"|";
+        if (pmtr[ipmtr].type == OCSM_DESPMTR) {
+            index   = -1;
+            for (irow = 1; irow <= pmtr[ipmtr].nrow; irow++) {
+                for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
+                    index++;
 
-        index = -1;
-        for (irow = 1; irow <= nrow; irow++) {
-            for (icol = 1; icol <= ncol; icol++) {
-                index++;
-                mesg = mesg+"|";
+                    // get the new value
+                    var myInput = editValuForm["row"+irow+"col"+icol+"dot"];
+                    var value   = myInput.value.replace(/\s/g, "");
+
+                    if (value.length <= 0) {
+                        alert("Velocity at (row "+irow+", col "+icol+") is blank");
+                        return;
+                    } else if (isNaN(value)) {
+                        alert("Illegal number format in velocity at (row "+irow+", col "+icol+")");
+                        return;
+                    }
+                }
             }
         }
 
-        browserToServer(mesg);
-    }
+        // send the new Parameter to the server if in add Pmtr mode
+        if (wv.curMode == 4) {
+            var mesg = "newPmtr|"+name+"|"+nrow+"|"+ncol+"|";
 
-    // get each of the values
-    index = -1;
-    for (irow = 1; irow <= pmtr[ipmtr].nrow; irow++) {
-        for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
-            index++;
-
-            // get the new value
-            var myInput = editPmtrForm["row"+irow+"col"+icol+"val"];
-            var value = myInput.value.replace(/\s/g, "");
-
-            if (value != pmtr[ipmtr].value[index]) {
-                postMessage("Parameter '"+pmtr[ipmtr].name+"["+irow+","+icol+
-                            "]' has been changed to "+value+
-                            " ====> Re-build is needed <====");
-                nchange++;
-
-                // store the value locally
-                pmtr[ipmtr].value[index] = Number(value);
-
-                // send the new value to the server
-                browserToServer("setPmtr|"+pmtr[ipmtr].name+"|"+irow+"|"+icol+"|"+value+"|");
+            index = -1;
+            for (irow = 1; irow <= nrow; irow++) {
+                for (icol = 1; icol <= ncol; icol++) {
+                    index++;
+                    mesg = mesg+"|";
+                }
             }
-        }
-    }
 
-    // get each of the velocities
-    if (pmtr[ipmtr].type == OCSM_DESPMTR) {
+            browserToServer(mesg);
+        }
+
+        // get each of the values
         index = -1;
         for (irow = 1; irow <= pmtr[ipmtr].nrow; irow++) {
             for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
                 index++;
 
                 // get the new value
-                var myInput = editPmtrForm["row"+irow+"col"+icol+"dot"];
+                var myInput = editValuForm["row"+irow+"col"+icol+"val"];
                 var value = myInput.value.replace(/\s/g, "");
 
-                if (value != pmtr[ipmtr].dot[index]) {
-                    postMessage("Velocity of parameter '"+pmtr[ipmtr].name+"["+irow+","+icol+
+                if (value != pmtr[ipmtr].value[index]) {
+                    postMessage("Parameter '"+pmtr[ipmtr].name+"["+irow+","+icol+
                                 "]' has been changed to "+value+
                                 " ====> Re-build is needed <====");
                     nchange++;
 
                     // store the value locally
-                    pmtr[ipmtr].dot[index] = Number(value);
+                    pmtr[ipmtr].value[index] = Number(value);
 
                     // send the new value to the server
-                    browserToServer("setVel|"+pmtr[ipmtr].name+"|"+irow+"|"+icol+"|"+value+"|");
+                    browserToServer("setPmtr|"+pmtr[ipmtr].name+"|"+irow+"|"+icol+"|"+value+"|");
                 }
             }
         }
-    }
 
-    // update the UI
-    if (nchange > 0) {
-        wv.nchanges += nchange;
+        // get each of the velocities
+        if (pmtr[ipmtr].type == OCSM_DESPMTR) {
+            index = -1;
+            for (irow = 1; irow <= pmtr[ipmtr].nrow; irow++) {
+                for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
+                    index++;
 
-        if (wv.curMode != 4) {
-            var id     = wv.menuEvent["target"].id;
-            var myElem = document.getElementById(id);
-            myElem.className = "fakelinkoff";
+                    // get the new value
+                    var myInput = editValuForm["row"+irow+"col"+icol+"dot"];
+                    var value = myInput.value.replace(/\s/g, "");
 
-        // get an updated Parameter list (so that added Pmtr is listed)
-        } else {
-            browserToServer("getPmtrs|");
+                    if (value != pmtr[ipmtr].dot[index]) {
+                        postMessage("Velocity of parameter '"+pmtr[ipmtr].name+"["+irow+","+icol+
+                                    "]' has been changed to "+value+
+                                    " ====> Re-build is needed <====");
+                        nchange++;
+
+                        // store the value locally
+                        pmtr[ipmtr].dot[index] = Number(value);
+
+                        // send the new value to the server
+                        browserToServer("setVel|"+pmtr[ipmtr].name+"|"+irow+"|"+icol+"|"+value+"|");
+                    }
+                }
+            }
         }
 
-        activateBuildButton();
+        // update the UI
+        if (nchange > 0) {
+            wv.nchanges += nchange;
+
+            if (wv.curMode != 4) {
+                var id     = wv.menuEvent["target"].id;
+                var myElem = document.getElementById(id);
+                myElem.className = "fakelinkoff";
+
+                // get an updated Parameter list (so that added Pmtr is listed)
+            } else {
+                browserToServer("getPmtrs|");
+            }
+
+            activateBuildButton();
+        }
+
+        wv.curPmtr = -1;
+
+        // unhighlight the first column of the Tree
+        unhighlightColumn1();
+
+        // return to the WebViewer
+        changeMode(0);
+
+    // saving Parameter (in CAPS mode)
+    } else if (wv.curPmtr >= 0 && wv.curMode != 4) {
+        var ipmtr = wv.curPmtr;
+        var name  = pmtr[ipmtr].name;
+        var nrow  = pmtr[ipmtr].nrow;
+        var ncol  = pmtr[ipmtr].ncol;
+        var irow;
+        var icol;
+
+        // make sure that all entries have valid values
+        var index   = -1;
+        var nchange = 0;
+        for (irow = 1; irow <= pmtr[ipmtr].nrow; irow++) {
+            for (icol = 1; icol <= pmtr[ipmtr].ncol; icol++) {
+                index++;
+
+                // get the new value
+                var myInput = editValuForm["row"+irow+"col"+icol+"val"];
+                var value   = myInput.value.replace(/\s/g, "");
+
+                if (value.length <= 0) {
+                    alert("Value at (row "+irow+", col "+icol+") is blank");
+                    return;
+                } else if (isNaN(value)) {
+                    alert("Illegal number format in value at (row "+irow+", col "+icol+")");
+                    return;
+                }
+
+                if (value != pmtr[ipmtr].value[index]) {
+                    nchange++;
+                }
+            }
+        }
+
+        // if editing and no changes, return now
+        if (nchange == 0) {
+
+            // unhighlight the first column of the Tree
+            unhighlightColumn1();
+
+            changeMode(15);
+
+            return;
+        }
+
+        // send the updated Parameter to the server if updating a Pmtr
+        var mesg = "timMesg|capsMode|setPmtr|"+name+"|"+nrow+"|"+ncol+"|.|";
+
+        index = -1;
+        for (irow = 1; irow <= nrow; irow++) {
+            for (icol = 1; icol <= ncol; icol++) {
+                index++;
+
+                // get the new value
+                var myInput = editValuForm["row"+irow+"col"+icol+"val"];
+                var value   = myInput.value.replace(/\s/g, "");
+
+                // add the value to the message to be send, and update the
+                //    local pmtr table
+                mesg += value + "|";
+                pmtr[ipmtr].value[index] = value;
+            }
+        }
+
+        browserToServer(mesg);
+        wv.curPmtr = -1;
+
+        if (nchange > 0) {
+            rebuildTreeWindow(96);
+        }
+
+        // return to CAPS mode
+        changeMode(15);
+
+    // saving Caps Value
+    } else if (wv.curCval >= 0) {
+        var icval = wv.curCval;
+        var name  = cval[icval].name;
+        var nrow  = cval[icval].nrow;
+        var ncol  = cval[icval].ncol;
+        var irow;
+        var icol;
+
+        // make sure that all entries have valid values
+        var index   = -1;
+        var nchange = 0;
+        for (irow = 1; irow <= cval[icval].nrow; irow++) {
+            for (icol = 1; icol <= cval[icval].ncol; icol++) {
+                index++;
+
+                // get the new value
+                var myInput = editValuForm["row"+irow+"col"+icol+"val"];
+                var value   = myInput.value.replace(/\s/g, "");
+
+                if (value.length <= 0) {
+                    alert("Value at (row "+irow+", col "+icol+") is blank");
+                    return;
+                } else if (isNaN(value)) {
+                    alert("Illegal number format in value at (row "+irow+", col "+icol+")");
+                    return;
+                }
+
+                if (value != cval[icval].value[index]) {
+                    nchange++;
+                }
+            }
+        }
+
+        // send the new Parameter to the server if adding a new Cval
+        if (wv.curMode == 4) {
+            var mesg = "timMesg|capsMode|newCval|"+name+"|"+nrow+"|"+ncol+"|.|";
+
+        // if editing and no changes, return now
+        } else if (nchange == 0) {
+
+            // unhighlight the first column of the Tree
+            unhighlightColumn1();
+
+            changeMode(15);
+
+            return;
+
+        // send the updated Parameter to the server if updating a Cval
+        } else {
+            var mesg = "timMesg|capsMode|setCval|"+name+"|"+nrow+"|"+ncol+"|.|";
+        }
+
+        index = -1;
+        for (irow = 1; irow <= nrow; irow++) {
+            for (icol = 1; icol <= ncol; icol++) {
+                index++;
+
+                // get the new value
+                var myInput = editValuForm["row"+irow+"col"+icol+"val"];
+                var value   = myInput.value.replace(/\s/g, "");
+
+                // add the value to the message to be send, and update the
+                //    local cval table
+                mesg += value + "|";
+                cval[icval].value[index] = value;
+            }
+        }
+
+        browserToServer(mesg);
+        wv.curCval = -1;
+
+        if (nchange > 0) {
+            rebuildTreeWindow(96);
+        }
+
+        // return to CAPS mode
+        changeMode(15);
+
+    // ooops, problem
+    } else {
+        alert("we have a problem: curPmtr="+wv.curPmtr+" curCval="+wv.curCval);
     }
-
-    // unhighlight the first column of the Tree
-    unhighlightColumn1();
-
-    // return to the WebViewer
-    changeMode(0);
 };
 
 
 //
-// callback when "Cancel" is pressed in editPmtrForm (called by ESP.html)
+// callback when "Cancel" is pressed in editValuForm (called by ESP.html)
 //
-var editPmtrCancel = function () {
-    // alert("in editPmtrCancel()");
+var editValuCancel = function () {
+    // alert("in editValuCancel()");
 
-    // if we are in process of adding a Parameter, remove it now
+    // if we are in process of adding a Parameter or Caps Value, remove it now
     if (wv.curMode == 4) {
-        pmtr.splice(pmtr.length-1, 1);
+
+        // canceling Parameter
+        if (wv.curPmtr >= 0) {
+            pmtr.splice(pmtr.length-1, 1);
+
+            wv.curPmtr = -1;
+
+        //canceling Caps Value
+        } else if (wv.curCval >= 0) {
+            cval.splice(cval.length-1, 1);
+
+            wv.curCval = -1;
+
+        // ooops, problem
+        } else {
+            alert("we have a problem: curPmtr="+wv.curPmtr+" curCval="+wv.curCval);
+        }
     }
 
     // unhighlight the first column of the Tree
     unhighlightColumn1();
 
     // return to the WebViewer
-    changeMode(0);
+    if (wv.server == "serveCAPS") {
+        changeMode(15);
+    } else if ((isNaN(gloves.mode)            ) ||
+               (      gloves.mode == null     ) ||
+               (      gloves.mode == undefined) ){
+        changeMode(0);
+    } else {
+        changeMode( 9);
+    }
 };
 
 
 //
-// callback when "Delete Parameter" is pressed in editPmtrForm (called by ESP.html)
+// callback when "Delete Parameter" or "Delete Caps Value" is pressed in editValuForm (called by ESP.html)
 //
-var delPmtr = function () {
-    // alert("in delPmtr()");
+var delValu = function () {
+    // alert("in delValu()");
 
     if (checkIfWithBall() === false) {
         return;
     }
 
-    var ipmtr = wv.curPmtr + 1;
+    // deleting Parameter
+    if (wv.curPmtr >= 0) {
+        var ipmtr = wv.curPmtr + 1;
 
-    // send message to the server
-    browserToServer("delPmtr|"+pmtr[wv.curPmtr].name+"|");
+        // send message to the server
+        browserToServer("delPmtr|"+pmtr[wv.curPmtr].name+"|");
 
-    // get updated Parameters
-    browserToServer("getPmtrs|");
-    wv.pmtrStat = 0;
+        // get updated Parameters
+        browserToServer("getPmtrs|");
+        wv.pmtrStat = 0;
 
-    // update the UI
-    postMessage("Deleting Parameter "+name+" ====> Re-build is needed <====");
-    activateBuildButton();
+        // update the UI
+        postMessage("Deleting Parameter "+name+" ====> Re-build is needed <====");
+        activateBuildButton();
+
+    // deleting Caps Value
+    } else if (wv.curCval >= 0) {
+        var icval = wv.curCval + 1;
+
+        // send message to the server
+        browserToServer("delCval|"+cval[wv.curCval].name+"|");
+
+        // get updated Parameters
+        browserToServer("timMesg|capsMode|getCvals|9|");
+        wv.cvalStat = 0;
+
+        // update the UI
+        postMessage("Deleting Caps Value "+name+" ====> Re-build is needed <====");
+        activateBuildButton();
+
+    // ooops, problem
+    } else {
+        alert("we have a problem: curPmtr="+wv.curPmtr+" curCval="+wv.curCval);
+    }
 
     // return to the WebViewer
     changeMode(0);
@@ -4540,7 +4966,7 @@ var delPmtr = function () {
 var showOutpmtrs = function () {
     // alert("in showOutpmtrs()");
 
-    if (wv.curMode != 0) {
+    if (wv.curMode != 0 && wv.curMode != 15) {
         alert("Command disabled.  Press 'Cancel' or 'OK' first");
         return;
     }
@@ -4732,7 +5158,7 @@ var editBrch = function (e) {
         editBrchCancel();
     } else if (wv.curMode == 5) {
         // currently editting a Parameter,    so cancel (throwing away changes)
-        editPmtrCancel();
+        editValuCancel();
     } else if (wv.curMode != 0) {
         alert("Command disabled.  Press 'Cancel' or 'OK' first");
         return;
@@ -5079,7 +5505,7 @@ var buildTo = function () {
     browserToServer("build|"+ibrch+"|");
 
     if (wv.server == "serveCAPS") {
-        browserToServer("getCvals|8|");
+        browserToServer("timMesg|capsMode|getCvals|10|");
         wv.cvalStat = 6000;
     }
 
@@ -5145,19 +5571,19 @@ var editBrchOk = function () {
         return;
     }
 
-//    // make sure that we are not adding or changing a Branch associated with a UDC
-//    if (brch[ibrch].type == "udparg" || brch[ibrch].type == "udprim") {
-//        var value = editBrchForm.argValu1.value.replace(/\s/g, "");
-//        if (value.charAt(0) == "/" || value.charAt(0) == "$") {
-//            if (wv.curMode == 2) {
-//                alert("Cannot add a \""+brch[ibrch].type+"\" that calls a UDC\nUse File->Edit instead.");
-//                return;
-//            } else if (brch[ibrch].args[0] != "$"+value) {
-//                alert("Cannot change primtype to a UDC\nUse File->Edit instead.");
-//                return;
-//            }
-//        }
-//    }
+//$$$    // make sure that we are not adding or changing a Branch associated with a UDC
+//$$$    if (brch[ibrch].type == "udparg" || brch[ibrch].type == "udprim") {
+//$$$        var value = editBrchForm.argValu1.value.replace(/\s/g, "");
+//$$$        if (value.charAt(0) == "/" || value.charAt(0) == "$") {
+//$$$            if (wv.curMode == 2) {
+//$$$                alert("Cannot add a \""+brch[ibrch].type+"\" that calls a UDC\nUse File->Edit instead.");
+//$$$                return;
+//$$$            } else if (brch[ibrch].args[0] != "$"+value) {
+//$$$                alert("Cannot change primtype to a UDC\nUse File->Edit instead.");
+//$$$                return;
+//$$$            }
+//$$$        }
+//$$$    }
 
     if (newBrchName != brch[ibrch].name) {
         // make sure that name does not start with "Brch_"
@@ -5491,7 +5917,7 @@ var allCvals = function () {
             } else {
                 //      myTree.prop1[jnode] = "ExpandAll";   // automagically done by rebuildTreeWindow();
                 myTree.opened[jnode] = 0;
-                rebuildTreeWindow();
+                rebuildTreeWindow(7);
             }
             break;
         }
@@ -5529,7 +5955,7 @@ var allPmtrs = function () {
             } else {
                 //      myTree.prop1[jnode] = "ExpandAll";   // automagically done by rebuildTreeWindow();
                 myTree.opened[jnode] = 0;
-                rebuildTreeWindow();
+                rebuildTreeWindow(8);
             }
             break;
         }
@@ -5567,7 +5993,7 @@ var allLocals = function () {
             } else {
                 //      myTree.prop1[jnode] = "ExpandAll";   // automagically done by rebuildTreeWindow();
                 myTree.opened[jnode] = 0;
-                rebuildTreeWindow();
+                rebuildTreeWindow(9);
             }
             break;
         }
@@ -5605,7 +6031,7 @@ var allBrchs = function () {
             } else {
                 //      myTree.prop1[jnode] = "ExpandAll";   // automagically done by rebuildTreeWindow();
                 myTree.opened[jnode] = 0;
-                rebuildTreeWindow();
+                rebuildTreeWindow(10);
             }
             break;
         }
@@ -6009,13 +6435,13 @@ main.keyPress = function(e) {
             return true;
         }
 
-    // if editPmtrForm is posted, press OK when <return> is pressed
+    // if editValuForm is posted, press OK when <return> is pressed
     } else if (wv.curMode == 4 || wv.curMode == 5) {
         wv.keyPress = e.charCode;
         wv.keyCode  = e.keyCode;
 
         if (wv.keyCode == 13) {
-            editPmtrOk();
+            editValuOk();
             return false;
         } else {
             return true;
@@ -6088,7 +6514,7 @@ main.cmdSolve = function () {
             browserToServer("build|-1|");
 
             if (wv.server == "serveCAPS") {
-                browserToServer("getCvals|9|");
+                browserToServer("timMesg|capsMode|getCvals|11|");
                 wv.cvalStat = 6000;
             }
 
@@ -6121,7 +6547,7 @@ main.cmdSolve = function () {
         browserToServer("build|0|");
 
         if (wv.server == "serveCAPS") {
-            browserToServer("getCvals|10|");
+            browserToServer("timMesg|capsMode|getCvals|12|");
             wv.cvalStat = 6000;
         }
 
@@ -6173,7 +6599,9 @@ main.cmdUndo = function () {
 
     // if my*Menu is currently posted, delet it/them now
     document.getElementById("myFileMenu"  ).classList.remove("showFileMenu"  );
+    document.getElementById("myCapsMenu"  ).classList.remove("showCapsMenu"  );
     document.getElementById("myToolMenu"  ).classList.remove("showToolMenu"  );
+    document.getElementById("myDoneMenu"  ).classList.remove("showDoneMenu"  );
     document.getElementById("myCollabMenu").classList.remove("showCollabMenu");
 
     if (wv.curMode != 0) {
@@ -6189,6 +6617,10 @@ main.cmdUndo = function () {
 // callback when the mouse is pressed in key window
 //
 var setKeyLimits = function (e) {
+    if (wv.curMode != 0) {
+        alert("KeyLimits can only be currrently set in main mode");
+        return;
+    }
 
     // get new limits
     var templo = prompt("Enter new lower limit", wv.loLimit);
@@ -6226,9 +6658,10 @@ var gotoCsmError = function (e) {
     var botm = document.getElementById("brframe");
 
     // look for [[filename:linenum]] at the cursor
-    var thisLine = e.rangeParent.data;
-    var beg = thisLine.substring(0,e.rangeOffset).lastIndexOf("[[");
-    var end = thisLine.indexOf("]]", e.rangeOffset);
+    var selRange = window.getSelection();
+    var thisLine = selRange.focusNode.textContent;
+    var beg = thisLine.substring(0,selRange.focusOffset).lastIndexOf("[[");
+    var end = thisLine.indexOf("]]", selRange.focusOffset);
 
     if (beg >= 0 && end > beg) {
         var foo = thisLine.slice(beg+2, end).split(":");
@@ -7122,89 +7555,99 @@ var TreeBuild = function () {
     var inode = 1;
     while (inode > 0) {
 
-        // table row "node"+inode
-        var newTR = doc.createElement("TR");
-        newTR.setAttribute("id", "node"+inode);
-        newTable.appendChild(newTR);
+        // do not show this Node if it is in Display and it
+        //    contains no children
+        if (this.child[inode] >= 0 ||
+            (this.name[inode] != "\u00a0\u00a0\u00a0\u00a0Nodes"    &&
+             this.name[inode] != "\u00a0\u00a0\u00a0\u00a0Edges"    &&
+             this.name[inode] != "\u00a0\u00a0\u00a0\u00a0Faces"    &&
+             this.name[inode] != "\u00a0\u00a0\u00a0\u00a0Csystems" &&
+             this.name[inode] != "\u00a0\u00a0\u00a0\u00a0Pips"       )) {
 
-        // table data "node"+inode+"col1"
-        var newTDcol1 = doc.createElement("TD");
-        newTDcol1.setAttribute("id", "node"+inode+"col1");
-        newTR.appendChild(newTDcol1);
+            // table row "node"+inode
+            var newTR = doc.createElement("TR");
+            newTR.setAttribute("id", "node"+inode);
+            newTable.appendChild(newTR);
 
-        var newTexta = doc.createTextNode("");
-        newTDcol1.appendChild(newTexta);
+            // table data "node"+inode+"col1"
+            var newTDcol1 = doc.createElement("TD");
+            newTDcol1.setAttribute("id", "node"+inode+"col1");
+            newTR.appendChild(newTDcol1);
 
-        // table data "node"+inode+"col2"
-        var newTDcol2 = doc.createElement("TD");
-        newTDcol2.setAttribute("id", "node"+inode+"col2");
-        if (this.click[inode] != null) {
-            newTDcol2.className = "fakelinkcmenu";
-            if (this.tooltip[inode].length > 0) {
-                newTDcol2.title = this.tooltip[inode];
-            }
-        }
-        newTR.appendChild(newTDcol2);
+            var newTexta = doc.createTextNode("");
+            newTDcol1.appendChild(newTexta);
 
-        var newTextb = doc.createTextNode(this.name[inode]);
-        newTDcol2.appendChild(newTextb);
-
-        var name = this.name[inode].replace(/\u00a0/g, "").replace(/>/g, "");
-
-        for (var jbrch = 0; jbrch < brch.length; jbrch++) {
-            if (brch[jbrch].name == name) {
-                if (brch[jbrch].ileft == -3) {
-                    newTDcol2.className = "errorTD";
+            // table data "node"+inode+"col2"
+            var newTDcol2 = doc.createElement("TD");
+            newTDcol2.setAttribute("id", "node"+inode+"col2");
+            if (this.click[inode] != null) {
+                newTDcol2.className = "fakelinkcmenu";
+                if (this.tooltip[inode].length > 0) {
+                    newTDcol2.title = this.tooltip[inode];
                 }
-                break;
             }
-        }
+            newTR.appendChild(newTDcol2);
 
-        // table data "node"+inode+"col3"
-        if (this.nprop[inode] > 0) {
-            var newTDcol3 = doc.createElement("TD");
-            newTDcol3.setAttribute("id", "node"+inode+"col3");
-            if (this.cbck1[inode] != "") {
-                newTDcol3.className = "fakelinkon";
-            }
-            newTR.appendChild(newTDcol3);
+            var newTextb = doc.createTextNode(this.name[inode]);
+            newTDcol2.appendChild(newTextb);
 
-            if (this.nprop[inode] == 1) {
-                newTDcol3.setAttribute("colspan", "3");
-            }
+            var name = this.name[inode].replace(/\u00a0/g, "").replace(/>/g, "");
 
-            var newTextc = doc.createTextNode(this.prop1[inode]);
-            newTDcol3.appendChild(newTextc);
-        }
-
-        // table data "node"+inode+"col4"
-        if (this.nprop[inode] > 1) {
-            var newTDcol4 = doc.createElement("TD");
-            newTDcol4.setAttribute("id", "node"+inode+"col4");
-            if (this.cbck2[inode] != "") {
-                newTDcol4.className = "fakelinkoff";
-            }
-            newTR.appendChild(newTDcol4);
-
-            if (this.nprop[inode] == 2) {
-                newTDcol4.setAttribute("colspan", "2");
+            for (var jbrch = 0; jbrch < brch.length; jbrch++) {
+                if (brch[jbrch].name == name) {
+                    if (brch[jbrch].ileft == -3) {
+                        newTDcol2.className = "errorTD";
+                    }
+                    break;
+                }
             }
 
-            var newTextd = doc.createTextNode(this.prop2[inode]);
-            newTDcol4.appendChild(newTextd);
-        }
+            // table data "node"+inode+"col3"
+            if (this.nprop[inode] > 0) {
+                var newTDcol3 = doc.createElement("TD");
+                newTDcol3.setAttribute("id", "node"+inode+"col3");
+                if (this.cbck1[inode] != "") {
+                    newTDcol3.className = "fakelinkon";
+                }
+                newTR.appendChild(newTDcol3);
 
-        // table data "node"+inode+"col5"
-        if (this.nprop[inode] > 2) {
-            var newTDcol5 = doc.createElement("TD");
-            newTDcol5.setAttribute("id", "node"+inode+"col5");
-            if (this.cbck3[inode] != "") {
-                newTDcol5.className = "fakelinkoff";
+                if (this.nprop[inode] == 1) {
+                    newTDcol3.setAttribute("colspan", "3");
+                }
+
+                var newTextc = doc.createTextNode(this.prop1[inode]);
+                newTDcol3.appendChild(newTextc);
             }
-            newTR.appendChild(newTDcol5);
 
-            var newTextd = doc.createTextNode(this.prop3[inode]);
-            newTDcol5.appendChild(newTextd);
+            // table data "node"+inode+"col4"
+            if (this.nprop[inode] > 1) {
+                var newTDcol4 = doc.createElement("TD");
+                newTDcol4.setAttribute("id", "node"+inode+"col4");
+                if (this.cbck2[inode] != "") {
+                    newTDcol4.className = "fakelinkoff";
+                }
+                newTR.appendChild(newTDcol4);
+
+                if (this.nprop[inode] == 2) {
+                    newTDcol4.setAttribute("colspan", "2");
+                }
+
+                var newTextd = doc.createTextNode(this.prop2[inode]);
+                newTDcol4.appendChild(newTextd);
+            }
+
+            // table data "node"+inode+"col5"
+            if (this.nprop[inode] > 2) {
+                var newTDcol5 = doc.createElement("TD");
+                newTDcol5.setAttribute("id", "node"+inode+"col5");
+                if (this.cbck3[inode] != "") {
+                    newTDcol5.className = "fakelinkoff";
+                }
+                newTR.appendChild(newTDcol5);
+
+                var newTextd = doc.createTextNode(this.prop3[inode]);
+                newTDcol5.appendChild(newTextd);
+            }
         }
 
         // go to next row
@@ -7389,7 +7832,7 @@ var TreeProp = function (inode, iprop, onoff) {
     }
 
     // update fakelinks in TreeWindow (needed when .attrs do not exist)
-    if (thisNode != "") {
+    if (thisNode !== null && thisNode != "") {
         if (onoff == "on") {
             thisNode.setAttribute("class", "fakelinkon");
             thisNode.title = "Toggle Orientation off";
@@ -7426,6 +7869,9 @@ var TreeUpdate = function () {
     // traverse the Nodes using depth-first search
     for (var inode = 1; inode < this.opened.length; inode++) {
         var element = doc.getElementById("node"+inode);
+        if (element === null) {
+            continue;
+        }
 
         // unhide the row
         element.style.display = "table-row";
@@ -7578,7 +8024,7 @@ var resizeFrames = function () {
     var botrite = document.getElementById("brframe");
     var canvas  = document.getElementById(wv.canvasID);
     var sketch  = document.getElementById("sketcher");
-    var gloves  = document.getElementById("gloves");
+    var gloves  = document.getElementById("glovesText");
 
     // compute and set the widths of the frames
     //    (do not make tlframe larger than 250px)
@@ -7672,13 +8118,13 @@ var changeMode = function (newMode) {
     var editBrchForm     = document.getElementById("editBrchForm");
     var addBrchHeader    = document.getElementById("addBrchHeader");
     var editBrchHeader   = document.getElementById("editBrchHeader");
-    var editPmtrForm     = document.getElementById("editPmtrForm");
+    var editValuForm     = document.getElementById("editValuForm");
     var showOutpmtrsForm = document.getElementById("showOutpmtrsForm");
-    var addPmtrHeader    = document.getElementById("addPmtrHeader");
-    var editPmtrHeader   = document.getElementById("editPmtrHeader");
+    var addValuHeader    = document.getElementById("addValuHeader");
+    var editValuHeader   = document.getElementById("editValuHeader");
     var editorForm       = document.getElementById("editorForm");
     var sketcherForm     = document.getElementById("sketcherForm");
-    var glovesForm       = document.getElementById("glovesForm");
+    var glovesText       = document.getElementById("glovesText");
 
     var wvKey            = document.getElementById("WVkey");
     var sketcherStatus   = document.getElementById("sketcherStatus");
@@ -7701,11 +8147,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = false;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = true;
@@ -7726,11 +8172,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = true;
         addBrchForm.hidden      = false;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = true;
@@ -7750,11 +8196,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = true;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = false;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = true;
@@ -7777,11 +8223,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = true;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = false;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = true;
@@ -7806,18 +8252,18 @@ var changeMode = function (newMode) {
         webViewer.hidden        = true;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = false;
+        editValuForm.hidden     = false;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = true;
         ESPlogo.hidden          = false;
 
-        addPmtrHeader.hidden    = false;
-        editPmtrHeader.hidden   = true;
+        addValuHeader.hidden    = false;
+        editValuHeader.hidden   = true;
 
         if (wv.getFocus !== undefined) {
             wv.getFocus.focus();
@@ -7833,18 +8279,18 @@ var changeMode = function (newMode) {
         webViewer.hidden        = true;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = false;
+        editValuForm.hidden     = false;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         ESPlogo.hidden          = false;
 
-        addPmtrHeader.hidden    = true;
+        addValuHeader.hidden    = true;
         timStatus.hidden        = true;
-        editPmtrHeader.hidden   = false;
+        editValuHeader.hidden   = false;
 
         if (wv.getFocus !== undefined) {
             wv.getFocus.focus();
@@ -7860,11 +8306,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = true;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = false;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         ESPlogo.hidden          = false;
@@ -7877,11 +8323,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = true;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = false;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = true;
@@ -7895,11 +8341,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = true;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = false;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = false;
         timStatus.hidden        = true;
@@ -7908,16 +8354,16 @@ var changeMode = function (newMode) {
         wv.curTool = sketch;
         wv.curMode = 8;
     } else if (newMode == 9) {
-        wv.usingMain = 0;
+        wv.usingMain = 1;
 
-        webViewer.hidden        = true;
+        webViewer.hidden        = false;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = false;
+        glovesText.hidden       = false;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = false;
@@ -7931,11 +8377,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = false;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = false;
@@ -7949,11 +8395,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = false;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = false;
@@ -7967,17 +8413,17 @@ var changeMode = function (newMode) {
         webViewer.hidden        = false;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = false;
         ESPlogo.hidden          = true;
 
-        wv.curTool = python;
+        wv.curTool = pyscript;
         wv.curMode = 12;
     } else if (newMode == 13) {
         wv.usingMain = 1;
@@ -7985,11 +8431,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = false;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = true;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = true;
         timStatus.hidden        = false;
@@ -8003,11 +8449,11 @@ var changeMode = function (newMode) {
         webViewer.hidden        = true;
         addBrchForm.hidden      = true;
         editBrchForm.hidden     = true;
-        editPmtrForm.hidden     = true;
+        editValuForm.hidden     = true;
         showOutpmtrsForm.hidden = true;
         editorForm.hidden       = true;
         sketcherForm.hidden     = false;
-        glovesForm.hidden       = true;
+        glovesText.hidden       = true;
         wvKey.hidden            = true;
         sketcherStatus.hidden   = false;
         timStatus.hidden        = true;
@@ -8015,6 +8461,29 @@ var changeMode = function (newMode) {
 
         wv.curTool = plotter;
         wv.curMode = 14;
+    } else if (newMode == 15) {
+        wv.usingMain = 1;
+
+        webViewer.hidden        = false;
+        addBrchForm.hidden      = true;
+        editBrchForm.hidden     = true;
+        editValuForm.hidden     = true;
+        showOutpmtrsForm.hidden = true;
+        editorForm.hidden       = true;
+        sketcherForm.hidden     = true;
+        glovesText.hidden       = true;
+        wvKey.hidden            = true;
+        sketcherStatus.hidden   = true;
+        timStatus.hidden        = true;
+        ESPlogo.hidden          = false;
+
+        wv.curMode   = 15;
+        wv.curTool   = capsMode;
+        wv.curPmtr   = -1;
+        wv.curBrch   = -1;
+        wv.afterBrch = -1;
+        wv.menuEvent = undefined;
+        wv.keyPress  = -1;
     } else {
         alert("Bad new mode = "+newMode);
     }
@@ -8022,6 +8491,9 @@ var changeMode = function (newMode) {
     if        (wv.curMode == 0) {
         document.getElementById("toolMenuBtn").hidden = false;
         document.getElementById("doneMenuBtn").hidden = true;
+    } else if (wv.curMode == 15) {
+        document.getElementById("toolMenuBtn").hidden = false;
+        document.getElementById("doneMenuBtn").hidden = false;
     } else if (wv.curMode >= 8) {
         document.getElementById("toolMenuBtn").hidden = true;
         document.getElementById("doneMenuBtn").hidden = false;
@@ -8032,8 +8504,15 @@ var changeMode = function (newMode) {
 //
 // rebuild the Tree Window
 //
-var rebuildTreeWindow = function () {
-    // alert("in rebuildTreeWindow()");
+var rebuildTreeWindow = function (x) {
+    // alert("in rebuildTreeWindow("+x+")");
+
+    // do not let this routine be executed more than once at a time
+    if (wv.buildTree > 0) {
+        return;
+    } else {
+        wv.buildTree = 1;
+    }
 
     // if there was a previous Tree, keep track of whether or not
     //    the Parameters, Branches, and Display was open
@@ -8098,60 +8577,62 @@ var rebuildTreeWindow = function () {
     var atAtParameters = myTree.name.length - 1;
 
     // put the Caps Variables into the Tree
-    for (var icval = 0; icval < cval.length; icval++) {
-        var name   = "\u00a0\u00a0"+cval[icval].name;
-        var nrow   =                cval[icval].nrow;
-        var ncol   =                cval[icval].ncol;
-        var value  =                cval[icval].value[0];
-        var parent = capsValues;
+    if (wv.server == "serveCAPS") {
+        for (var icval = 0; icval < cval.length; icval++) {
+            var name   = "\u00a0\u00a0"+cval[icval].name;
+            var nrow   =                cval[icval].nrow;
+            var ncol   =                cval[icval].ncol;
+            var value  =                cval[icval].value[0];
+            var parent = capsValues;
 
-        if (cval[icval].name.search(/^:.*/)   >= 0 ||
-            cval[icval].name.search(/.*:$/)   >= 0 ||
-            cval[icval].name.search(/.*::.*/) >= 0 ||
-            cval[icval].name.indexOf(":")     <= 0   ) {
-            parent = capsValues;
-        } else {
-            var parts = cval[icval].name.split(":");
+            if (cval[icval].name.search(/^:.*/)   >= 0 ||
+                cval[icval].name.search(/.*:$/)   >= 0 ||
+                cval[icval].name.search(/.*::.*/) >= 0 ||
+                cval[icval].name.indexOf(":")     <= 0   ) {
+                parent = capsValues;
+            } else {
+                var parts = cval[icval].name.split(":");
 
-            // make sure all prefixes are in Tree
-            for (var iii = 0; iii < parts.length-1; iii++) {
-                var found = 0;
-                for (var jjj = 0; jjj < myTree.name.length; jjj++) {
-                    if (myTree.name[jjj].replace(/\u00a0/g, "") == parts[iii]+":" &&
-                        myTree.parent[jjj]                      == parent            ) {
-                        parent = jjj;
-                        found = 1;
-                        break;
+                // make sure all prefixes are in Tree
+                for (var iii = 0; iii < parts.length-1; iii++) {
+                    var found = 0;
+                    for (var jjj = 0; jjj < myTree.name.length; jjj++) {
+                        if (myTree.name[jjj].replace(/\u00a0/g, "") == parts[iii]+":" &&
+                            myTree.parent[jjj]                      == parent            ) {
+                            parent = jjj;
+                            found = 1;
+                            break;
+                        }
+                    }
+                    if (found == 0) {
+                        var temp = parts[iii] + ":";
+                        for (jjj = 0; jjj <= iii; jjj++) {
+                            temp = "\u00a0\u00a0" + temp;
+                        }
+                        myTree.addNode(parent, temp, "", null);
+                        parent = myTree.name.length - 1;
                     }
                 }
-                if (found == 0) {
-                    var temp = parts[iii] + ":";
-                    for (jjj = 0; jjj <= iii; jjj++) {
-                        temp = "\u00a0\u00a0" + temp;
-                    }
-                    myTree.addNode(parent, temp, "", null);
-                    parent = myTree.name.length - 1;
+                name = parts[parts.length-1];
+                for (iii = 0; iii < parts.length; iii++) {
+                    name = "\u00a0\u00a0" + name;
                 }
             }
-            name = parts[parts.length-1];
-            for (iii = 0; iii < parts.length; iii++) {
-                name = "\u00a0\u00a0" + name;
+
+            if (nrow > 1 || ncol > 1) {
+                value = "["+nrow+"x"+ncol+"]";
             }
+
+            myTree.addNode(parent, name, "Edit Caps Value", "", editCval,
+                           ""+value, "");
         }
 
-        if (nrow > 1 || ncol > 1) {
-            value = "["+nrow+"x"+ncol+"]";
+        wv.cvalStat = -2;
+
+        // open the Caps Values (if they were open before the Tree was rebuilt)
+        if (cvalsOpen == 1) {
+            myTree.opened[capsValues] = 1;
         }
-
-        myTree.addNode(parent, name, "Edit Caps Value", "", editCval,
-                       ""+value, "");
-    }
-
-    wv.cvalStat = -2;
-
-    // open the Caps Values (if they were open before the Tree was rebuilt)
-    if (cvalsOpen == 1) {
-        myTree.opened[capsValues] = 1;
     }
 
     // put the Design Parameters into the Tree
@@ -8403,6 +8884,8 @@ var rebuildTreeWindow = function () {
                 var inode = matches[2];
             } else if (matches[1] == "Csys") {
                 var icsys = matches[2];
+            } else if (matches[1] == "Pip" ) {
+                var ipip  = matches[2];
             }
 
         // processing when Body is not explicitly named: "Body m Edge n"
@@ -8416,6 +8899,8 @@ var rebuildTreeWindow = function () {
                 var inode = matches[3];
             } else if (matches[2] == "Csys") {
                 var icsys  = matches[3];
+            } else if (matches[2] == "Pip" ) {
+                var ipip  = matches[3];
             }
         }
 
@@ -8438,7 +8923,7 @@ var rebuildTreeWindow = function () {
 
         // if Body does not exist, create it and its Face, Edge, Node, and Csystem lists
         //    subnodes now
-        var kface, kedge, knode, kcsys;
+        var kface, kedge, knode, kcsys, kpip;
         if (kbody < 0) {
             myTree.addNode(display, "\u00a0\u00a0"+bodyName, "Show Body Attributes", "", showBodyAttrs,
                            "Viz", toggleViz,
@@ -8467,12 +8952,17 @@ var rebuildTreeWindow = function () {
                            "Viz", toggleViz);
             kcsys = myTree.name.length - 1;
 
+            myTree.addNode(kbody, "\u00a0\u00a0\u00a0\u00a0Pips", "", "", null,
+                           "Viz", toggleViz);
+            kpip  = myTree.name.length - 1;
+
         // otherwise, get pointers to the face-group, edge-group, or node-group Nodes
         } else {
             kface = myTree.child[kbody];
             kedge = kface + 1;
             knode = kedge + 1;
             kcsys = knode + 1;
+            kpip  = kcsys + 1;
         }
 
         // make the Tree Node
@@ -8492,6 +8982,9 @@ var rebuildTreeWindow = function () {
         } else if (icsys !== undefined) {
             myTree.addNode(kcsys, "\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0"+icsys, "", gprim, null,
                            "Viz", toggleViz);
+        } else if (ipip  !== undefined) {
+            myTree.addNode(kpip , "\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0pip "+ipip, "", gprim, null,
+                           "Viz", toggleViz);
         }
     }
 
@@ -8506,6 +8999,8 @@ var rebuildTreeWindow = function () {
 
     // convert the abstract Tree Nodes into an HTML table
     myTree.build();
+
+    wv.buildTree = 0;
 };
 
 
@@ -8554,7 +9049,6 @@ var postMessage = function (mesg) {
 
     if (wv.debugUI) {
         console.log("postMessage: "+mesg.substring(0,40));
-        console.trace();
     }
 
     var botm = document.getElementById("brframe");
@@ -9095,98 +9589,28 @@ var setupEditBrchForm = function () {
 
 
 //
-// load info into editPmtrForm
+// load info into editValuForm
 //
-var setupEditPmtrForm = function () {
-    // alert("in setupEditPmtrForm()");
+var setupEditValuForm = function () {
+    // alert("in setupEditValuForm()");
 
-    var ipmtr = wv.curPmtr;
-    var name  = pmtr[ipmtr].name;
-    var nrow  = pmtr[ipmtr].nrow;
-    var ncol  = pmtr[ipmtr].ncol;
+    // setting up for a Parameter
+    if (wv.curPmtr >= 0) {
+        var ipmtr = wv.curPmtr;
+        var name  = pmtr[ipmtr].name;
+        var nrow  = pmtr[ipmtr].nrow;
+        var ncol  = pmtr[ipmtr].ncol;
 
-    var editPmtrForm = document.getElementById("editPmtrForm");
+        var editValuForm = document.getElementById("editValuForm");
 
-    // fill in the Parameter name
-    document.getElementById("pmtrName").firstChild["data"] = name;
+        // fill in the Parameter name
+        document.getElementById("valuName").firstChild["data"] = name;
 
-    var pmtrValTable = document.getElementById("editPmtrValTable");
-
-    // remove old table entries
-    if (pmtrValTable) {
-        var child1 = pmtrValTable.lastChild;
-        while (child1) {
-            var child2 = child1.lastChild;
-            while (child2) {
-
-                var child3 = child2.lastChild;
-                while (child3) {
-                    child2.removeChild(child3);
-                    child3 = child2.lastChild;
-                }
-                child1.removeChild(child2);
-                child2 = child1.lastChild;
-            }
-            pmtrValTable.removeChild(child1);
-            child1 = pmtrValTable.lastChild;
-        }
-    }
-
-    // build the table that will contain values
-    for (var irow = 0; irow <= nrow; irow++) {
-        var newTR = document.createElement("TR");
-        pmtrValTable.appendChild(newTR);
-
-        // fill the row
-        if (irow == 0) {
-            var newTD = document.createElement("TD");
-            newTR.appendChild(newTD);
-
-            var newText = document.createTextNode("");
-            newTD.appendChild(newText);
-
-            for (var icol = 1; icol <= ncol; icol++) {
-                newTD = document.createElement("TD");
-                newTR.appendChild(newTD);
-
-                newText = document.createTextNode("col\u00a0"+icol);
-                newTD.appendChild(newText);
-            }
-        } else{
-            var newTD = document.createElement("TD");
-            newTR.appendChild(newTD);
-
-            var newText = document.createTextNode("row\u00a0"+irow);
-            newTD.appendChild(newText);
-
-            for (var icol = 1; icol <= ncol; icol++) {
-                var indx = icol-1 + (irow-1)*pmtr[ipmtr].ncol;
-
-                newTD = document.createElement("TD");
-                newTR.appendChild(newTD);
-
-                var newInput = document.createElement("input");
-                newInput.type  = "text";
-                newInput.name  = "row"+irow+"col"+icol+"val";
-                newInput.size  = 12;
-                newInput.value = pmtr[ipmtr].value[indx];
-                newTD.appendChild(newInput);
-
-                if (irow == 1 && icol == 1) {
-                    wv.getFocus = newInput;
-                }
-            }
-        }
-    }
-
-    if (pmtr[ipmtr].type == OCSM_DESPMTR) {
-        document.getElementById("editPmtrDot").hidden = false;
-
-        var pmtrDotTable = document.getElementById("editPmtrDotTable");
+        var valuValTable = document.getElementById("editValuValTable");
 
         // remove old table entries
-        if (pmtrDotTable) {
-            var child1 = pmtrDotTable.lastChild;
+        if (valuValTable) {
+            var child1 = valuValTable.lastChild;
             while (child1) {
                 var child2 = child1.lastChild;
                 while (child2) {
@@ -9199,15 +9623,15 @@ var setupEditPmtrForm = function () {
                     child1.removeChild(child2);
                     child2 = child1.lastChild;
                 }
-                pmtrDotTable.removeChild(child1);
-                child1 = pmtrDotTable.lastChild;
+                valuValTable.removeChild(child1);
+                child1 = valuValTable.lastChild;
             }
         }
 
-        // build the table that will contain velocities
+        // build the table that will contain values
         for (var irow = 0; irow <= nrow; irow++) {
             var newTR = document.createElement("TR");
-            pmtrDotTable.appendChild(newTR);
+            valuValTable.appendChild(newTR);
 
             // fill the row
             if (irow == 0) {
@@ -9239,15 +9663,175 @@ var setupEditPmtrForm = function () {
 
                     var newInput = document.createElement("input");
                     newInput.type  = "text";
-                    newInput.name  = "row"+irow+"col"+icol+"dot";
+                    newInput.name  = "row"+irow+"col"+icol+"val";
                     newInput.size  = 12;
-                    newInput.value = pmtr[ipmtr].dot[indx];
+                    newInput.value = pmtr[ipmtr].value[indx];
                     newTD.appendChild(newInput);
+
+                    if (irow == 1 && icol == 1) {
+                        wv.getFocus = newInput;
+                    }
                 }
             }
         }
+
+        if (wv.server != "serveCAPS" && pmtr[ipmtr].type == OCSM_DESPMTR) {
+            document.getElementById("editValuDot").hidden = false;
+
+            var valuDotTable = document.getElementById("editValuDotTable");
+
+            // remove old table entries
+            if (valuDotTable) {
+                var child1 = valuDotTable.lastChild;
+                while (child1) {
+                    var child2 = child1.lastChild;
+                    while (child2) {
+
+                        var child3 = child2.lastChild;
+                        while (child3) {
+                            child2.removeChild(child3);
+                            child3 = child2.lastChild;
+                        }
+                        child1.removeChild(child2);
+                        child2 = child1.lastChild;
+                    }
+                    valuDotTable.removeChild(child1);
+                    child1 = valuDotTable.lastChild;
+                }
+            }
+
+            // build the table that will contain velocities
+            for (var irow = 0; irow <= nrow; irow++) {
+                var newTR = document.createElement("TR");
+                valuDotTable.appendChild(newTR);
+
+                // fill the row
+                if (irow == 0) {
+                    var newTD = document.createElement("TD");
+                    newTR.appendChild(newTD);
+
+                    var newText = document.createTextNode("");
+                    newTD.appendChild(newText);
+
+                    for (var icol = 1; icol <= ncol; icol++) {
+                        newTD = document.createElement("TD");
+                        newTR.appendChild(newTD);
+
+                        newText = document.createTextNode("col\u00a0"+icol);
+                        newTD.appendChild(newText);
+                    }
+                } else{
+                    var newTD = document.createElement("TD");
+                    newTR.appendChild(newTD);
+
+                    var newText = document.createTextNode("row\u00a0"+irow);
+                    newTD.appendChild(newText);
+
+                    for (var icol = 1; icol <= ncol; icol++) {
+                        var indx = icol-1 + (irow-1)*pmtr[ipmtr].ncol;
+
+                        newTD = document.createElement("TD");
+                        newTR.appendChild(newTD);
+
+                        var newInput = document.createElement("input");
+                        newInput.type  = "text";
+                        newInput.name  = "row"+irow+"col"+icol+"dot";
+                        newInput.size  = 12;
+                        newInput.value = pmtr[ipmtr].dot[indx];
+                        newTD.appendChild(newInput);
+                    }
+                }
+            }
+        } else {
+            document.getElementById("editValuDot").hidden = true;
+        }
+
+    // setting up for a Caps Value
+    } else if (wv.curCval >= 0) {
+        var icval = wv.curCval;
+        var name  = cval[icval].name;
+        var nrow  = cval[icval].nrow;
+        var ncol  = cval[icval].ncol;
+
+        var editValuForm = document.getElementById("editValuForm");
+
+        // fill in the Parameter name
+        document.getElementById("valuName").firstChild["data"] = name;
+
+        var valuValTable = document.getElementById("editValuValTable");
+
+        // remove old table entries
+        if (valuValTable) {
+            var child1 = valuValTable.lastChild;
+            while (child1) {
+                var child2 = child1.lastChild;
+                while (child2) {
+
+                    var child3 = child2.lastChild;
+                    while (child3) {
+                        child2.removeChild(child3);
+                        child3 = child2.lastChild;
+                    }
+                    child1.removeChild(child2);
+                    child2 = child1.lastChild;
+                }
+                valuValTable.removeChild(child1);
+                child1 = valuValTable.lastChild;
+            }
+        }
+
+        // build the table that will contain values
+        for (var irow = 0; irow <= nrow; irow++) {
+            var newTR = document.createElement("TR");
+            valuValTable.appendChild(newTR);
+
+            // fill the row
+            if (irow == 0) {
+                var newTD = document.createElement("TD");
+                newTR.appendChild(newTD);
+
+                var newText = document.createTextNode("");
+                newTD.appendChild(newText);
+
+                for (var icol = 1; icol <= ncol; icol++) {
+                    newTD = document.createElement("TD");
+                    newTR.appendChild(newTD);
+
+                    newText = document.createTextNode("col\u00a0"+icol);
+                    newTD.appendChild(newText);
+                }
+            } else{
+                var newTD = document.createElement("TD");
+                newTR.appendChild(newTD);
+
+                var newText = document.createTextNode("row\u00a0"+irow);
+                newTD.appendChild(newText);
+
+                for (var icol = 1; icol <= ncol; icol++) {
+                    var indx = icol-1 + (irow-1)*cval[icval].ncol;
+
+                    newTD = document.createElement("TD");
+                    newTR.appendChild(newTD);
+
+                    var newInput = document.createElement("input");
+                    newInput.type  = "text";
+                    newInput.name  = "row"+irow+"col"+icol+"val";
+                    newInput.size  = 12;
+                    newInput.value = cval[icval].value[indx];
+                    newTD.appendChild(newInput);
+
+                    if (irow == 1 && icol == 1) {
+                        wv.getFocus = newInput;
+                    }
+                }
+            }
+        }
+
+        document.getElementById("editValuDot").hidden = true;
+
+    // ooops, problem
     } else {
-        document.getElementById("editPmtrDot").hidden = true;
+        alert("we have a problem: curPmtr="+wv.curPmtr+" curCval="+wv.curCval);
     }
 
     return 0;
@@ -9277,7 +9861,7 @@ var numberOfPmtrChanges = function () {
 
     var nchange = 0;
 
-    var editPmtrForm = document.getElementById("editPmtrForm");
+    var editValuForm = document.getElementById("editValuForm");
 
     var ipmtr = wv.curPmtr;
     var irow;
@@ -9290,7 +9874,7 @@ var numberOfPmtrChanges = function () {
             index++;
 
             // get the new value
-            var myInput = editPmtrForm["row"+irow+"col"+icol+"val"];
+            var myInput = editValuForm["row"+irow+"col"+icol+"val"];
             var value   = myInput.value.replace(/\s/g, "");
 
             if (value != pmtr[ipmtr].value[index]) {
@@ -9307,7 +9891,7 @@ var numberOfPmtrChanges = function () {
                 index++;
 
                 // get the new value
-                var myInput = editPmtrForm["row"+irow+"col"+icol+"dot"];
+                var myInput = editValuForm["row"+irow+"col"+icol+"dot"];
                 var value   = myInput.value.replace(/\s/g, "");
 
                 if (value != pmtr[ipmtr].dot[index]) {
@@ -9509,6 +10093,27 @@ var cmdEditPaste = function (cm) {
 
     // focus back to textarea
     cm.focus();
+};
+
+
+//
+// callback from "Insert" button in .csm editor
+//
+var cmdEditInsert = function (cm) {
+    // alert("in cmdEditInsert(cm="+cm+")");
+
+    if (checkIfWithBall() === false) {
+        return;
+    }
+
+    var filename = prompt("Enter filename to insert");
+    if (filename === null) {
+        return;
+    } else if (filename.length == 0) {
+        return;
+    }
+
+    browserToServer("insert|"+filename+"|");
 };
 
 
@@ -9903,6 +10508,17 @@ var sprintf = function () {
     }
 
     return answer;
+};
+
+
+//
+// sleep for given time
+//
+var sleep = function(miliseconds) {
+   var currentTime = new Date().getTime();
+
+   while (currentTime + miliseconds >= new Date().getTime()) {
+   }
 };
 
 
