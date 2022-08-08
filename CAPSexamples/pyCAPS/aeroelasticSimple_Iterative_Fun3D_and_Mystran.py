@@ -155,22 +155,20 @@ for iter in range(numTransferIteration):
 
     #------------------------------
     print ("\n\nRunning FUN3D......")
-    currentDirectory = os.getcwd() # Get our current working directory
-
-    os.chdir(myProblem.analysis["fun3d"].analysisDir) # Move into test directory
+    analysisDir = myProblem.analysis["fun3d"].analysisDir
 
     #--write_aero_loads_to_file --aeroelastic_external
     cmdLineOpt = "--write_aero_loads_to_file --animation_freq -1"
     if iter != 0:
         cmdLineOpt = cmdLineOpt + " --read_surface_from_file"
 
-    os.system("mpirun -np 1 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
+    myProblem.analysis["fun3d"].system("mpirun -np 1 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
 
     if os.path.getsize("Info.out") == 0: #
         raise SystemError("FUN3D excution failed\n")
 
-    shutil.copy(projectName + "_tec_boundary.plt", projectName + "_tec_boundary" + "_Iteration_" + str(iter) + ".plt")
-    os.chdir(currentDirectory) # Move back to top directory
+    shutil.copy(ps.path.join(analysisDir, projectName + "_tec_boundary.plt"), 
+                os.path.join(analysisDir, projectName + "_tec_boundary" + "_Iteration_" + str(iter) + ".plt"))
     #------------------------------
 
     print ("\nRunning PostAnalysis ......", "fun3d")
@@ -184,16 +182,12 @@ for iter in range(numTransferIteration):
 
     #------------------------------
     print ("\n\nRunning Mystran......")
-    currentDirectory = os.getcwd() # Get our current working directory
+    analysisDir = myProblem.analysis["mystran"].analysisDir
 
-    os.chdir(myProblem.analysis["mystran"].analysisDir) # Move into test directory
+    myProblem.analysis["mystran"].system("mystran.exe " + projectName +  ".dat > Info.out") # Run mystran via system call
 
-    os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run mystran via system call
-
-    if os.path.getsize("Info.out") == 0:
+    if os.path.getsize(os.path.join(analysisDir,"Info.out")) == 0:
         raise SystemError("Mystran excution failed\n")
-
-    os.chdir(currentDirectory) # Move back to top directory
     #------------------------------
 
     print ("\nRunning PostAnalysis ......", "mystran")

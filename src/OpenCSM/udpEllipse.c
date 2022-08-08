@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -78,6 +78,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     ROUTINE(udpExecute);
 
+    /* --------------------------------------------------------------- */
+
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
     printf("rx(0)     = %f\n", RX(    0));
@@ -139,11 +141,6 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         status  = EGADS_RANGERR;
         goto cleanup;
 
-    } else if (NEDGE(0) > 8) {
-        snprintf(message, 100, "nedge = %d > 8\n", NEDGE(0));
-        status  = EGADS_RANGERR;
-        goto cleanup;
-
     } else if (udps[0].arg[5].size > 1) {
         nedge = udps[0].arg[5].size;
         for (i = 1; i < nedge; i++) {
@@ -161,7 +158,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     }
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(NULL);
     CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
@@ -424,6 +421,8 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
     ego    eref, *echilds, *enodes, *eedges, *efaces, eent;
 
     ROUTINE(udpSensitivity);
+
+    /* --------------------------------------------------------------- */
 
 #ifdef DEBUG
     printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f %f)\n",

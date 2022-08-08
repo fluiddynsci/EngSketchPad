@@ -11,29 +11,51 @@ TDIR  = .
 endif
 
 # locations for openssl (MAC) & certificate directory
-OSSINC = /usr/local/Cellar/openssl@1.1/1.1.1k/include
-OSSLIB = /usr/local/Cellar/openssl@1.1/1.1.1k/lib
+OSSINC = /usr/local/Cellar/openssl@1.1/1.1.1l_1/include
+OSSLIB = /usr/local/Cellar/openssl@1.1/1.1.1l_1/lib
 CRTDIR = -DLWS_OPENSSL_CLIENT_CERTS=\"@clientcertdir@\"
 
+ifeq ("$(ESP_ARCH)","LINUX64")
+default:	$(TDIR)/server $(LDIR)/libwsserver.so
+else
+default:	$(TDIR)/server $(LDIR)/libwsserver.dylib
+endif
 
 VPATH = $(ODIR)
 
 OBJS  = base64-decode.o handshake.o client-handshake.o libwebsockets.o \
         extension-deflate-stream.o md5.o extension-x-google-mux.o parsers.o \
-        extension.o sha-1.o browserMessage.o server.o wv.o fwv.o
+        extension.o sha-1.o browserMessage.o server.o wv.o
 
 $(TDIR)/server:	$(LDIR)/libwsserver.a $(ODIR)/servertest.o
-	$(CXX) -o $(TDIR)/server $(ODIR)/servertest.o -L$(LDIR) -lwsserver \
+	$(CXX) -o $(TDIR)/server $(ODIR)/servertest.o $(LDIR)/libwsserver.a \
 		-lpthread -lz -L$(OSSLIB) -lssl -lcrypto -lm
 
 $(ODIR)/servertest.o:	server.c 
 	$(CC) -c $(COPTS) -DLWS_OPENSSL_SUPPORT -DLWS_NO_FORK -DSTANDALONE \
 		server.c -I$(IDIR) -I$(OSSINC) -I. -o $(ODIR)/servertest.o
 
-$(LDIR)/libwsserver.a:	map.o $(OBJS)
+$(LDIR)/libwsserver.a:	map.o $(OBJS) $(ODIR)/fwv.o
 	touch $(LDIR)/libwsserver.a
 	rm $(LDIR)/libwsserver.a
-	(cd $(ODIR); ar $(LOPTS) $(LDIR)/libwsserver.a map.o $(OBJS); $(RANLB) )
+	(cd $(ODIR); ar $(LOPTS) $(LDIR)/libwsserver.a map.o $(OBJS) \
+		$(ODIR)/fwv.o; $(RANLB) )
+
+$(LDIR)/libwsserver.so:	$(OBJS) map.o
+	touch $(LDIR)/libwsserver.so
+	rm $(LDIR)/libwsserver.so
+	(cd $(ODIR); $(CXX) -shared -Wl,-no-undefined \
+		-o $(LDIR)/libwsserver.so $(OBJS) map.o -lz -lpthread \
+		-L$(OSSLIB) -lssl -lcrypto -lm)
+
+$(LDIR)/libwsserver.dylib: $(OBJS) map.o
+	touch $(LDIR)/libwsserver.dylib
+	rm $(LDIR)/libwsserver.dylib
+	(cd $(ODIR); $(CXX) -dynamiclib -o $(LDIR)/libwsserver.dylib \
+		$(OBJS) map.o -lz -L$(OSSLIB) -lssl -lcrypto -lm \
+		-undefined error -install_name '@rpath/libwsserver.dylib' \
+		-compatibility_version $(CASREV) \
+		-current_version $(EGREV) )
 
 $(OBJS):	extension-deflate-stream.h libwebsockets.h \
 		extension-x-google-mux.h private-libwebsockets.h \
@@ -41,6 +63,9 @@ $(OBJS):	extension-deflate-stream.h libwebsockets.h \
 .c.o:
 	$(CC) -c $(COPTS) -DLWS_OPENSSL_SUPPORT -DLWS_NO_FORK $(CRTDIR) \
 		-I$(IDIR) -I$(OSSINC) $< -o $(ODIR)/$@
+
+$(ODIR)/fwv.o:	fwv.c
+	$(CC) -c $(COPTS) -DLWS_NO_FORK -I$(IDIR) fwv.c -o $(ODIR)/fwv.o
 
 map.o:		map.cpp
 	$(CXX) -c $(CPPOPT) map.cpp -o $(ODIR)/map.o
@@ -57,3 +82,8 @@ clean:
 
 cleanall:	clean
 	-rm $(TDIR)/server $(LDIR)/libwsserver.a
+ifeq ("$(ESP_ARCH)","LINUX64")
+	-rm $(LDIR)/libwsserver.so
+else
+	-rm $(LDIR)/libwsserver.dylib
+endif

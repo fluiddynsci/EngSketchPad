@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -123,6 +123,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     ego     enodes[5], eedges[4], ecurve[4], eloop, eface, enew;
 
     ROUTINE(udpExecute);
+
+    /* --------------------------------------------------------------- */
 
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
@@ -240,7 +242,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     }
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(NULL);
     CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
@@ -1100,6 +1102,8 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
     ego    eref, *echilds, *enodes, *eedges, *efaces, eent;
 
     ROUTINE(udpSensitivity);
+
+    /* --------------------------------------------------------------- */
 
 #ifdef DEBUG
     printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f %f)\n",

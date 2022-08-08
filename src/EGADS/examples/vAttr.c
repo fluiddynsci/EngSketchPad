@@ -3,7 +3,7 @@
  *
  *             EGADS Tessellation using wv w/ Attribute reporting
  *
- *      Copyright 2011-2021, Massachusetts Institute of Technology
+ *      Copyright 2011-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -46,6 +46,56 @@ typedef struct {
   static wvContext *cntxt;
   static bodyData  *bodydata;
 
+
+/* call-back invoked when a message arrives from the browser */
+
+void browserMessage(/*@unused@*/ void *uPtr, /*@unused@*/ void *wsi,
+                    char *text, /*@unused@*/ int lena)
+{
+  int          i, j, iBody, ient, stat, nattr, atype, alen, oclass, mtype;
+  int          *senses;
+  const int    *pints;
+  char         tag[5];
+  const char   *name, *pstr;
+  const double *preals;
+  ego          obj, geom, *objs;
+
+  if (strncmp(text,"Picked: ", 8) == 0) {
+    iBody = 0;
+    sscanf(&text[12], "%d %s %d", &iBody, tag, &ient);
+    if (iBody != 0) {
+      printf(" Picked: iBody = %d, type = %s, index = %d\n", iBody, tag, ient);
+      if (strcmp(tag,"Face") == 0) {
+        obj = bodydata[iBody-1].faces[ient-1];
+      } else {
+        obj = bodydata[iBody-1].edges[ient-1];
+      }
+      stat = EG_getTopology(obj, &geom, &oclass, &mtype, NULL, &i, &objs,
+                            &senses);
+      if ((stat == EGADS_SUCCESS) && (geom != NULL))
+        printf("         Geom type = %d\n", geom->mtype);
+      nattr = 0;
+      stat  = EG_attributeNum(obj, &nattr);
+      if ((stat == EGADS_SUCCESS) && (nattr != 0)) {
+        for (i = 1; i <= nattr; i++) {
+          stat = EG_attributeGet(obj, i, &name, &atype, &alen,
+                                 &pints, &preals, &pstr);
+          if (stat != EGADS_SUCCESS) continue;
+          printf("   %s: ", name);
+          if ((atype == ATTRREAL) || (atype == ATTRCSYS)) {
+            for (j = 0; j < alen; j++) printf("%lf ", preals[j]);
+          } else if (atype == ATTRSTRING) {
+            printf("%s", pstr);
+          } else {
+            for (j = 0; j < alen; j++) printf("%d ", pints[j]);
+          }
+          printf("\n");
+        }
+      }
+    }
+  }
+
+}
 
 
 int main(int argc, char *argv[])
@@ -390,6 +440,7 @@ int main(int argc, char *argv[])
   /* start the server code */
 
   stat = 0;
+  wv_setCallBack(cntxt, browserMessage);
   if (wv_startServer(7681, NULL, NULL, NULL, 0, cntxt) == 0) {
 
     /* we have a single valid server -- stay alive a long as we have a client */
@@ -415,54 +466,4 @@ int main(int argc, char *argv[])
   printf(" EG_deleteObject   = %d\n", EG_deleteObject(model));
   printf(" EG_close          = %d\n", EG_close(context));
   return 0;
-}
-
-
-/* call-back invoked when a message arrives from the browser */
-
-void browserMessage(/*@unused@*/ void *wsi, char *text, /*@unused@*/ int lena)
-{
-  int          i, j, iBody, ient, stat, nattr, atype, alen, oclass, mtype;
-  int          *senses;
-  const int    *pints;
-  char         tag[5];
-  const char   *name, *pstr;
-  const double *preals;
-  ego          obj, geom, *objs;
-
-  if (strncmp(text,"Picked: ", 8) == 0) {
-    iBody = 0;
-    sscanf(&text[12], "%d %s %d", &iBody, tag, &ient);
-    if (iBody != 0) {
-      printf(" Picked: iBody = %d, type = %s, index = %d\n", iBody, tag, ient);
-      if (strcmp(tag,"Face") == 0) {
-        obj = bodydata[iBody-1].faces[ient-1];
-      } else {
-        obj = bodydata[iBody-1].edges[ient-1];
-      }
-      stat = EG_getTopology(obj, &geom, &oclass, &mtype, NULL, &i, &objs,
-                            &senses);
-      if ((stat == EGADS_SUCCESS) && (geom != NULL))
-        printf("         Geom type = %d\n", geom->mtype);
-      nattr = 0;
-      stat  = EG_attributeNum(obj, &nattr);
-      if ((stat == EGADS_SUCCESS) && (nattr != 0)) {
-        for (i = 1; i <= nattr; i++) {
-          stat = EG_attributeGet(obj, i, &name, &atype, &alen,
-                                 &pints, &preals, &pstr);
-          if (stat != EGADS_SUCCESS) continue;
-          printf("   %s: ", name);
-          if ((atype == ATTRREAL) || (atype == ATTRCSYS)) {
-            for (j = 0; j < alen; j++) printf("%lf ", preals[j]);
-          } else if (atype == ATTRSTRING) {
-            printf("%s", pstr);
-          } else {
-            for (j = 0; j < alen; j++) printf("%d ", pints[j]);
-          }
-          printf("\n");
-        }
-      }
-    }
-  }
-
 }

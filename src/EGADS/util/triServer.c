@@ -17,6 +17,15 @@
 #endif
 
 
+/* call-back invoked when a message arrives from the browser */
+
+void browserMessage(/*@unused@*/ void *uPtr, /*@unused@*/ void *wsi,
+                    /*@unused@*/ char *text, /*@unused@*/ int  lena)
+{
+
+}
+
+
 int main(int argc, char *argv[])
 {
   int       i, j, k, n, nf, stat, nvert, mvert, ntri, mtri, tri[3], *segs, *tris;
@@ -166,6 +175,7 @@ int main(int argc, char *argv[])
   /* start the server code */
 
   stat = 0;
+  wv_setCallBack(cntxt, browserMessage);
   if (wv_startServer(7681, NULL, NULL, NULL, 0, cntxt) == 0) {
 
     /* we have a single valid server -- stay alive a long as we have a client */
@@ -184,13 +194,4 @@ int main(int argc, char *argv[])
   free(tris);
   free(segs);
   return 0;
-}
-
-
-/* call-back invoked when a message arrives from the browser */
-
-void browserMessage(/*@unused@*/ void *wsi, /*@unused@*/ char *text,
-                    /*@unused@*/ int  lena)
-{
-
 }

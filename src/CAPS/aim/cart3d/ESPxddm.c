@@ -21,14 +21,6 @@
 #include "common.h"
 #include "OpenCSM.h"
 
-/* external functions not declared in OpenCSM.h */
-extern int velocityOfNode(modl_T *modl, int ibody, int inode, double dxyz[]);
-extern int velocityOfEdge(modl_T *modl, int ibody, int iedge, int npnt,
-                          /*@null@*/double t[], double dxyz[]);
-extern int velocityOfFace(modl_T *modl, int ibody, int iface, int npnt,
-                          /*@null@*/double uv[], double dxyz[]);
-
-
 
 static int
 parsePmtr(char *name, char *pname, int *irow, int *icol)
@@ -58,19 +50,19 @@ parsePmtr(char *name, char *pname, int *irow, int *icol)
 int
 main(int argc, char *argv[])
 {
-  int          i, j, k, m, ipmtr, stat, major, minor, type, nrow, ncol, opts;
-  int          irow, icol, buildTo, builtTo, ibody, nvert, ntri, noI;
-  int          nbody, nface, nedge, plen, tlen, kb, nb, *tris;
+  int          stat = EGADS_SUCCESS;
+  int          i, j, k, ipmtr, major, minor, type, nrow, ncol, opts;
+  int          irow, icol, buildTo, builtTo, ibody, nvert, noI;
+  int          nbody=0, nface, kb, nb, iglobal, iface, outLevel;
   char         *filename, name[MAX_NAME_LEN], pname[129];
   double       value, dot, size, lower, upper;
-  double       global[3], tparam[3], box[6], **dvar, *xyzs, *psens;
+  double       global[3], tparam[3], box[6], ***dvar=NULL, *psens=NULL;
   const char   *occ_rev;
-  const int    *tri, *tric, *ptype, *pindex;
-  const double *points, *uv, *pcsens;
-  ego          context, body;
-  void         *modl;
-  modl_T       *MODL;
-  verTags      *vtags;
+  const double *pcsens;
+  ego          context=NULL, body, *tess=NULL;
+  void         *modl = NULL;
+  modl_T       *MODL = NULL;
+  verTags      *vtags = NULL;
   p_tsXddm     p_xddm = NULL;
   p_tsXmParent p_p;
   
@@ -89,7 +81,7 @@ main(int argc, char *argv[])
   p_xddm = xddm_readFile(argv[1], argv[2], opts);
   if (NULL == p_xddm) {
     printf("xddm_readFile failed to parse\n");
-    return 1;
+    goto cleanup;
   }
   xddm_echo(p_xddm);
   
@@ -106,24 +98,21 @@ main(int argc, char *argv[])
   }
   if (filename == NULL) {
     printf("ID not found!\n");
-    xddm_free(p_xddm);
-    return 1;
+    stat = 1;
+    goto cleanup;
   }
   
   stat = EG_open(&context);
   if (stat != EGADS_SUCCESS) {
     printf(" EGADS failed to Open: %d\n", stat);
-    xddm_free(p_xddm);
-    return 1;
+    goto cleanup;
   }
 
   /* do an OpenCSM load */
   stat = ocsmLoad(filename, &modl);
-  if (stat < SUCCESS) {
+  if (stat < SUCCESS || modl == NULL) {
     printf(" ocsmLoad failed: %d\n", stat);
-    EG_close(context);
-    xddm_free(p_xddm);
-    return 1;
+    goto cleanup;
   }
   MODL = (modl_T *) modl;
   MODL->context   = context;
@@ -133,11 +122,7 @@ main(int argc, char *argv[])
   stat = ocsmCheck(modl);
   if (stat < SUCCESS) {
     printf(" ocsmCheck failed: %d\n", stat);
-    ocsmFree(modl);
-    ocsmFree(NULL);
-    EG_close(context);
-    xddm_free(p_xddm);
-    return 1;
+    goto cleanup;
   }
 
   printf("\n");
@@ -149,11 +134,7 @@ main(int argc, char *argv[])
       stat = ocsmGetPmtr(modl, j+1, &type, &nrow, &ncol, name);
       if (stat != SUCCESS) {
         printf(" ocsmGetPmtr %d failed: %d\n", ipmtr, stat);
-        ocsmFree(modl);
-        ocsmFree(NULL);
-        EG_close(context);
-        xddm_free(p_xddm);
-        return 1;
+        goto cleanup;
       }
       if (type != OCSM_DESPMTR) continue;
       if (strcmp(pname, name) == 0) {
@@ -164,20 +145,12 @@ main(int argc, char *argv[])
     if (ipmtr != 0) {
       if ((noI == 0) && ((ncol > 1) || (nrow > 1))) {
         printf(" Variable %s not indexed!\n", pname);
-        ocsmFree(modl);
-        ocsmFree(NULL);
-        EG_close(context);
-        xddm_free(p_xddm);
-        return 1;
+        goto cleanup;
       }
       if ((irow < 1) || (irow > nrow) || (icol < 1) || (icol > ncol)) {
         printf(" Variable %s not in range [%d,%d]!\n",
                p_xddm->a_v[i].p_id, nrow, ncol);
-        ocsmFree(modl);
-        ocsmFree(NULL);
-        EG_close(context);
-        xddm_free(p_xddm);
-        return 1;
+        goto cleanup;
       }
       stat = ocsmGetValu( modl, ipmtr, irow, icol, &value, &dot);
       stat = ocsmSetValuD(modl, ipmtr, irow, icol, p_xddm->a_v[i].val);
@@ -190,11 +163,7 @@ main(int argc, char *argv[])
       }
     } else {
       printf(" Variable %s not found!\n", pname);
-      ocsmFree(modl);
-      ocsmFree(NULL);
-      EG_close(context);
-      xddm_free(p_xddm);
-      return 1;
+      goto cleanup;
     }
   }
   
@@ -207,11 +176,7 @@ main(int argc, char *argv[])
       stat = ocsmGetPmtr(modl, j+1, &type, &nrow, &ncol, name);
       if (stat != SUCCESS) {
         printf(" ocsmGetPmtr %d failed: %d\n", ipmtr, stat);
-        ocsmFree(modl);
-        ocsmFree(NULL);
-        EG_close(context);
-        xddm_free(p_xddm);
-        return 1;
+        goto cleanup;
       }
       if (type != OCSM_DESPMTR) continue;
       if (strcmp(pname, name) == 0) {
@@ -222,20 +187,12 @@ main(int argc, char *argv[])
     if (ipmtr != 0) {
       if ((noI == 0) && ((ncol > 1) || (nrow > 1))) {
         printf(" Constant %s not indexed!\n", pname);
-        ocsmFree(modl);
-        ocsmFree(NULL);
-        EG_close(context);
-        xddm_free(p_xddm);
-        return 1;
+        goto cleanup;
       }
       if ((irow < 1) || (irow > nrow) || (icol < 1) || (icol > ncol)) {
         printf(" Constant %s not in range [%d,%d]!\n",
                p_xddm->a_c[i].p_id, nrow, ncol);
-        ocsmFree(modl);
-        ocsmFree(NULL);
-        EG_close(context);
-        xddm_free(p_xddm);
-        return 1;
+        goto cleanup;
       }
       stat = ocsmGetValu( modl, ipmtr, irow, icol, &value, &dot);
       stat = ocsmSetValuD(modl, ipmtr, irow, icol, p_xddm->a_c[i].val);
@@ -243,11 +200,7 @@ main(int argc, char *argv[])
              p_xddm->a_c[i].p_id, value, p_xddm->a_c[i].val, stat);
     } else {
       printf(" Constant %s not found!\n", pname);
-      ocsmFree(modl);
-      ocsmFree(NULL);
-      EG_close(context);
-      xddm_free(p_xddm);
-      return 1;
+      goto cleanup;
     }
   }
   printf("\n");
@@ -255,15 +208,8 @@ main(int argc, char *argv[])
   buildTo = 0;                          /* all */
   nbody   = 0;
   stat    = ocsmBuild(modl, buildTo, &builtTo, &nbody, NULL);
-  EG_deleteObject(context);             /* clean up after build */
-  if (stat != SUCCESS) {
-    printf(" ocsmBuild failed: %d\n", stat);
-    ocsmFree(modl);
-    ocsmFree(NULL);
-    EG_close(context);
-    xddm_free(p_xddm);
-    return 1;
-  }
+  if (stat != SUCCESS) goto cleanup;
+
   nbody = 0;
   for (ibody = 1; ibody <= MODL->nbody; ibody++) {
     if (MODL->body[ibody].onstack != 1) continue;
@@ -272,21 +218,16 @@ main(int argc, char *argv[])
   }
   printf("\n nBody = %d\n\n", nbody);
   if (nbody <= 0) {
-    ocsmFree(modl);
-    ocsmFree(NULL);
-    EG_close(context);
-    xddm_free(p_xddm);
-    return 1;
+    stat = 1;
+    goto cleanup;
   }
-  /* NOTE: currently will only work for a single body! */
-  if (nbody != 1) {
-    printf(" ESPxddm: currently functions for a single body!\n");
-    ocsmFree(modl);
-    ocsmFree(NULL);
-    EG_close(context);
-    xddm_free(p_xddm);
-    return 1;
+  tess = (ego*)EG_alloc(nbody*sizeof(ego));
+  if (tess == NULL) {
+    printf(" Memory allocation failed!\n");
+    stat = 1;
+    goto cleanup;
   }
+  for (i = 0; i < nbody; i++) tess[i] = NULL;
   
   /* set analysis values */
   
@@ -294,14 +235,8 @@ main(int argc, char *argv[])
     if (p_xddm->a_ap[i].p_id == NULL)  continue;
     for (ipmtr = j = 0; j < MODL->npmtr; j++) {
       stat = ocsmGetPmtr(modl, j+1, &type, &nrow, &ncol, name);
-      if (stat != SUCCESS) {
-        printf(" ocsmGetPmtr %d failed: %d\n", ipmtr, stat);
-        ocsmFree(modl);
-        ocsmFree(NULL);
-        EG_close(context);
-        xddm_free(p_xddm);
-        return 1;
-      }
+      if (stat != SUCCESS) goto cleanup;
+
       if (name[0] != '@') continue;
       if (strcmp(p_xddm->a_ap[i].p_id, &name[1]) == 0) {
         ipmtr = j+1;
@@ -315,11 +250,7 @@ main(int argc, char *argv[])
              value);
     } else {
       printf(" Analysis Parameter %s not found!\n", p_xddm->a_ap[i].p_id);
-      ocsmFree(modl);
-      ocsmFree(NULL);
-      EG_close(context);
-      xddm_free(p_xddm);
-      return 1;
+      goto cleanup;
     }
   }
   printf("\n");
@@ -338,11 +269,7 @@ main(int argc, char *argv[])
       } else {
         printf(" Tessellation (global) Attribute %s not Understood!\n",
                p_xddm->a_tess[i].p_attr[j].p_name);
-        ocsmFree(modl);
-        ocsmFree(NULL);
-        EG_close(context);
-        xddm_free(p_xddm);
-        return 1;
+        goto cleanup;
       }
   }
   if ((global[0] == 0.0) && (global[1] == 0.0) && (global[2] == 0.0)) {
@@ -351,7 +278,27 @@ main(int argc, char *argv[])
     global[2] = 12.0;
   }
 
-  /* tessellate */
+  /* allocate sensitvity arrays */
+  if (p_xddm->nv > 0) {
+    dvar = (double ***) EG_alloc(nbody*sizeof(double **));
+    if (dvar == NULL) {
+      printf(" sensitivity allocation failed!\n");
+      goto cleanup;
+    }
+    for (i = 0; i < nbody; i++) dvar[i] = NULL;
+
+    for (i = 0; i < nbody; i++) {
+      dvar[i] = (double**)EG_alloc(p_xddm->nv*sizeof(double*));
+      if (dvar[i] == NULL) {
+        printf(" sensitivity %d allocation failed!\n", i+1);
+        goto cleanup;
+      }
+      for (j = 0; j < p_xddm->nv; j++) dvar[i][j] = NULL;
+    }
+  }
+
+
+  /* tessellate all bodies */
   kb = 0;
   for (ibody = 1; ibody <= MODL->nbody; ibody++) {
     if (MODL->body[ibody].onstack != 1) continue;
@@ -375,11 +322,7 @@ main(int argc, char *argv[])
         } else {
           printf(" Tessellation (ID=%d) Attribute %s not Understood!\n",
                  kb, p_xddm->a_tess[i].p_attr[j].p_name);
-          ocsmFree(modl);
-          ocsmFree(NULL);
-          EG_close(context);
-          xddm_free(p_xddm);
-          return 1;
+          goto cleanup;
         }
     }
     printf(" Tessellating %d with  MaxEdge = %lf   Sag = %lf   Angle = %lf\n",
@@ -387,11 +330,7 @@ main(int argc, char *argv[])
     stat = EG_getBoundingBox(body, box);
     if (stat != EGADS_SUCCESS) {
       printf(" EG_getBoundingBox failed: %d!\n", stat);
-      ocsmFree(modl);
-      ocsmFree(NULL);
-      EG_close(context);
-      xddm_free(p_xddm);
-      return 1;
+      goto cleanup;
     }
     size = sqrt((box[3]-box[0])*(box[3]-box[0]) +
                 (box[4]-box[1])*(box[4]-box[1]) +
@@ -401,302 +340,135 @@ main(int argc, char *argv[])
     stat = EG_makeTessBody(body, tparam, &MODL->body[ibody].etess);
     if (stat != EGADS_SUCCESS) {
       printf(" EG_makeTessBody failed: %d!\n", stat);
-      ocsmFree(modl);
-      ocsmFree(NULL);
-      EG_close(context);
-      xddm_free(p_xddm);
-      return 1;
+      goto cleanup;
     }
-    stat = bodyTess(MODL->body[ibody].etess, &nface, &nedge, &nvert, &xyzs,
-                    &vtags, &ntri, &tris);
-    if (stat != EGADS_SUCCESS) {
-      printf(" bodyTess failed: %d!\n", stat);
-      ocsmFree(modl);
-      ocsmFree(NULL);
-      EG_close(context);
-      xddm_free(p_xddm);
-      return 1;
-    }
-    printf("    nVerts = %d   nTris = %d\n", nvert, ntri);
+    tess[kb] = MODL->body[ibody].etess;
     
-    dvar = NULL;
+    stat = EG_statusTessBody(tess[kb], &body, &i, &nvert);
+    if (stat != EGADS_SUCCESS) goto cleanup;
+
     if (p_xddm->nv > 0) {
-      dvar = (double **) EG_alloc(p_xddm->nv*sizeof(double *));
-      if (dvar == NULL) {
-        printf(" sensitivity allocation failed!\n");
-        EG_free(tris);
-        EG_free(vtags);
-        EG_free(xyzs);
-        ocsmFree(modl);
-        ocsmFree(NULL);
-        EG_close(context);
-        xddm_free(p_xddm);
-        return 1;
-      }
+      if (dvar     == NULL) { stat = EGADS_MALLOC; goto cleanup; }
+      if (dvar[kb] == NULL) { stat = EGADS_MALLOC; goto cleanup; }
       for (i = 0; i < p_xddm->nv; i++) {
-        dvar[i] = EG_alloc(3*nvert*sizeof(double));
+        dvar[kb][i] = EG_alloc(3*nvert*sizeof(double));
         if (dvar[i] == NULL) {
           printf(" sensitivity %d allocation failed!\n", i+1);
-          for (j = 0; j < i; j++) EG_free(dvar[j]);
-          EG_free(dvar);
-          EG_free(tris);
-          EG_free(vtags);
-          EG_free(xyzs);
-          ocsmFree(modl);
-          ocsmFree(NULL);
-          EG_close(context);
-          xddm_free(p_xddm);
-          return 1;
+          goto cleanup;
         }
-        for (j = 0; j < 3*nvert; j++) dvar[i][j] = 0.0;
+        for (j = 0; j < 3*nvert; j++) dvar[kb][i][j] = 0.0;
       }
     }
-    if (dvar == NULL) goto write;
+  }
     
-    /* compute the sensitivities */
-    printf("\n");
-    for (i = 0; i < p_xddm->nv; i++) {
-      if (p_xddm->a_v[i].p_id == NULL)  continue;
-      if (p_xddm->a_v[i].val  == UNSET) continue;
-      noI = parsePmtr(p_xddm->a_v[i].p_id, pname, &irow, &icol);
-      for (ipmtr = j = 0; j < MODL->npmtr; j++) {
-        stat = ocsmGetPmtr(modl, j+1, &type, &nrow, &ncol, name);
-        if (strcmp(pname, name) == 0) {
-          ipmtr = j+1;
-          break;
-        }
+  /* compute the sensitivities */
+  printf("\n");
+  for (i = 0; i < p_xddm->nv; i++) {
+    if (p_xddm->a_v[i].p_id == NULL)  continue;
+    if (p_xddm->a_v[i].val  == UNSET) continue;
+    noI = parsePmtr(p_xddm->a_v[i].p_id, pname, &irow, &icol);
+    for (ipmtr = j = 0; j < MODL->npmtr; j++) {
+      stat = ocsmGetPmtr(modl, j+1, &type, &nrow, &ncol, name);
+      if (strcmp(pname, name) == 0) {
+        ipmtr = j+1;
+        break;
       }
-      /* clear all then set */
-      ocsmSetDtime(modl, 0);
-      ocsmSetVelD(modl, 0,     0,    0,    0.0);
-      ocsmSetVelD(modl, ipmtr, irow, icol, 1.0);
-      buildTo = 0;
-      nb      = 0;
-      stat    = ocsmBuild(modl, buildTo, &builtTo, &nb, NULL);
-      if (noI == 0) {
-        printf("\n*** compute parameter %d (%s) sensitivity status = %d (%d)***\n",
-               ipmtr, p_xddm->a_v[i].p_id, stat, nb);
-      } else {
-        printf("\n*** compute parameter %d [%d,%d] (%s) sensitivity = %d (%d)***\n",
-               ipmtr, irow, icol, p_xddm->a_v[i].p_id, stat, nb);
+    }
+    /* clear all then set */
+    ocsmSetDtime(modl, 0);
+    ocsmSetVelD(modl, 0,     0,    0,    0.0);
+    ocsmSetVelD(modl, ipmtr, irow, icol, 1.0);
+    if (p_xddm->a_v[i].p_comment != NULL) {
+      if (strcmp(p_xddm->a_v[i].p_comment, "FD") == 0) {
+        stat = ocsmSetDtime(MODL, 0.001);
+        printf("\n*** forced finite differencing for %s (%d) ***\n",
+               pname, stat);
       }
-      if (MODL->perturb == NULL) {
-        if (p_xddm->a_v[i].p_comment != NULL) {
-          if (strcmp(p_xddm->a_v[i].p_comment, "FD") == 0) {
-            stat = ocsmSetDtime(MODL, 0.001);
-            printf("\n*** forced finite differencing for %s (%d) ***\n",
-                   pname, stat);
-          }
-          if (strcmp(p_xddm->a_v[i].p_comment, "oFD") == 0) {
-            stat = ocsmSetDtime(MODL, 0.001);
-            printf("\n*** forcing OpenCSM finite differencing for %s (%d) ***\n",
-                   pname, stat);
-          }
-        }
+      if (strcmp(p_xddm->a_v[i].p_comment, "oFD") == 0) {
+        stat = ocsmSetDtime(MODL, 0.001);
+        printf("\n*** forcing OpenCSM finite differencing for %s (%d) ***\n",
+               pname, stat);
       }
-      
-      /* do we need to do a full vertex-based Finite Difference? */
-      if (MODL->perturb != NULL)
-        if (p_xddm->a_v[i].p_comment != NULL)
-          if (strcmp(p_xddm->a_v[i].p_comment, "FD") == 0) {
-            /* fill in the Nodes */
-            for (j = 0; j < nvert; j++) {
-              if (vtags[j].ptype != 0) continue;
-              stat = velocityOfNode(modl, ibody, vtags[j].pindex, &dvar[i][3*j]);
-              if (stat != EGADS_SUCCESS) {
-                printf(" velocityOfNode Parameter %d vert %d failed: %d  (Node = %d)!\n",
-                       i+1, j+1, stat, vtags[j].pindex);
-                for (k = 0; k < p_xddm->nv; k++) EG_free(dvar[k]);
-                EG_free(dvar);
-                EG_free(tris);
-                EG_free(vtags);
-                EG_free(xyzs);
-                ocsmFree(modl);
-                ocsmFree(NULL);
-                EG_close(context);
-                xddm_free(p_xddm);
-                return 1;
-              }
-/*            printf(" Node %d: %lf %lf %lf\n", vtags[j].pindex, dvar[i][3*j  ],
-                     dvar[i][3*j+1], dvar[i][3*j+2]);  */
-            }
-            /* do the edges */
-            for (j = 1; j <= nedge; j++) {
-              EG_getTessEdge(MODL->body[ibody].etess, j, &plen, &points, &uv);
-              if (plen <= 2) continue;
-              psens = (double *) EG_alloc(3*plen*sizeof(double));
-              if (psens == NULL) {
-                printf(" Can not get sens vec for Edge %d (%d)!\n", j, plen);
-                continue;
-              }
-              stat = velocityOfEdge(modl, ibody, j, plen, NULL, psens);
-              if (stat != EGADS_SUCCESS) {
-                printf(" velocityOfEdge Parameter %d Edge %d failed: %d!\n",
-                       i+1, j, stat);
-                EG_free(psens);
-                for (k = 0; k < p_xddm->nv; k++) EG_free(dvar[k]);
-                EG_free(dvar);
-                EG_free(tris);
-                EG_free(vtags);
-                EG_free(xyzs);
-                ocsmFree(modl);
-                ocsmFree(NULL);
-                EG_close(context);
-                xddm_free(p_xddm);
-                return 1;
-              }
-              for (k = 0; k < nvert; k++)
-                if ((vtags[k].ptype > 0) && (vtags[k].pindex == j)) {
-                  m              = vtags[k].ptype - 1;
-                  dvar[i][3*k  ] = psens[3*m  ];
-                  dvar[i][3*k+1] = psens[3*m+1];
-                  dvar[i][3*k+2] = psens[3*m+2];
-/*                printf(" Edge %d: %d %lf %lf %lf\n", j, m,
-                         psens[3*m  ], psens[3*m+1], psens[3*m+2]);  */
-                }
-              EG_free(psens);
-            }
-            /* do the faces */
-            for (j = 1; j <= nface; j++) {
-              EG_getTessFace(MODL->body[ibody].etess, j, &plen, &points, &uv,
-                             &ptype, &pindex, &tlen, &tri, &tric);
-              if (plen <= 2) continue;
-              psens = (double *) EG_alloc(3*plen*sizeof(double));
-              if (psens == NULL) {
-                printf(" Can not get sens vec for Face %d (%d)!\n", j, plen);
-                continue;
-              }
-              stat = velocityOfFace(modl, ibody, j, plen, NULL, psens);
-              if (stat != EGADS_SUCCESS) {
-                printf(" velocityOfFace Parameter %d Face %d failed: %d!\n",
-                       i+1, j, stat);
-                EG_free(psens);
-                for (k = 0; k < p_xddm->nv; k++) EG_free(dvar[k]);
-                EG_free(dvar);
-                EG_free(tris);
-                EG_free(vtags);
-                EG_free(xyzs);
-                ocsmFree(modl);
-                ocsmFree(NULL);
-                EG_close(context);
-                xddm_free(p_xddm);
-                return 1;
-              }
-              for (k = 0; k < nvert; k++)
-                if ((vtags[k].ptype < 0) && (vtags[k].pindex == j)) {
-                  m              = -vtags[k].ptype - 1;
-                  dvar[i][3*k  ] = psens[3*m  ];
-                  dvar[i][3*k+1] = psens[3*m+1];
-                  dvar[i][3*k+2] = psens[3*m+2];
-                }
-              EG_free(psens);
-            }
-            printf("\n");
-            continue;
-          }
-  
-      /* fill in the Nodes */
-      for (j = 0; j < nvert; j++) {
-        if (vtags[j].ptype != 0) continue;
-        stat = ocsmGetTessVel(modl, ibody, OCSM_NODE, vtags[j].pindex, &pcsens);
-        if (stat != EGADS_SUCCESS) {
-          printf(" ocsmGetTessVel Parameter %d vert %d failed: %d  (Node = %d)!\n",
-                 i+1, j+1, stat, vtags[j].pindex);
-          for (k = 0; k < p_xddm->nv; k++) EG_free(dvar[k]);
-          EG_free(dvar);
-          EG_free(tris);
-          EG_free(vtags);
-          EG_free(xyzs);
-          ocsmFree(modl);
-          ocsmFree(NULL);
-          EG_close(context);
-          xddm_free(p_xddm);
-          return 1;
-        }
-/*      printf(" Node %d: %lf %lf %lf\n", vtags[j].pindex, pcsens[0], pcsens[1],
-               pcsens[2]);  */
-        dvar[i][3*j  ] = pcsens[0];
-        dvar[i][3*j+1] = pcsens[1];
-        dvar[i][3*j+2] = pcsens[2];
-      }
+    }
+    buildTo = 0;
+    nb      = 0;
+    outLevel = ocsmSetOutLevel(0);
+    printf(" CAPS Info: Building sensitivity information for: %s[%d,%d]\n", name, irow, icol);
+    stat    = ocsmBuild(modl, buildTo, &builtTo, &nb, NULL);
+    ocsmSetOutLevel(outLevel);
+    if (noI == 0) {
+      printf("\n*** compute parameter %d (%s) sensitivity status = %d (%d)***\n",
+             ipmtr, p_xddm->a_v[i].p_id, stat, nb);
+    } else {
+      printf("\n*** compute parameter %d [%d,%d] (%s) sensitivity = %d (%d)***\n",
+             ipmtr, irow, icol, p_xddm->a_v[i].p_id, stat, nb);
+    }
 
-      /* next do all of the edges */
-      for (j = 1; j <= nedge; j++) {
-        stat = ocsmGetTessVel(modl, ibody, OCSM_EDGE, j, &pcsens);
-        if (stat != EGADS_SUCCESS) {
-          printf(" ocsmGetTessVel Parameter %d Edge %d failed: %d!\n",
-                 i+1, j, stat);
-          for (k = 0; k < p_xddm->nv; k++) EG_free(dvar[k]);
-          EG_free(dvar);
-          EG_free(tris);
-          EG_free(vtags);
-          EG_free(xyzs);
-          ocsmFree(modl);
-          ocsmFree(NULL);
-          EG_close(context);
-          xddm_free(p_xddm);
-          return 1;
-        }
-        for (k = 0; k < nvert; k++)
-          if ((vtags[k].ptype > 0) && (vtags[k].pindex == j)) {
-            m              = vtags[k].ptype - 1;
-            dvar[i][3*k  ] = pcsens[3*m  ];
-            dvar[i][3*k+1] = pcsens[3*m+1];
-            dvar[i][3*k+2] = pcsens[3*m+2];
-/*          printf(" Edge %d: %d %lf %lf %lf\n", j, m,
-                   pcsens[3*m  ], pcsens[3*m+1], pcsens[3*m+2]);  */
-          }
-      }
-      
+    kb = 0;
+    for (ibody = 1; ibody <= MODL->nbody; ibody++) {
+      if (MODL->body[ibody].onstack != 1) continue;
+      if (MODL->body[ibody].botype  == OCSM_NULL_BODY) continue;
+      kb++;
+      body = MODL->body[ibody].ebody;
+
+      stat = EG_getBodyTopos(body, NULL, FACE, &nface, NULL);
+      if (stat != EGADS_SUCCESS) goto cleanup;
+
       /* do all of the faces */
-      for (j = 1; j <= nface; j++) {
-        stat = ocsmGetTessVel(modl, ibody, OCSM_FACE, j, &pcsens);
+      for (iface = 1; iface <= nface; iface++) {
+        outLevel = ocsmSetOutLevel(0);
+        stat = ocsmGetTessVel(modl, ibody, OCSM_FACE, iface, &pcsens);
+        ocsmSetOutLevel(outLevel);
         if (stat != EGADS_SUCCESS) {
           printf(" ocsmGetTessVel Parameter %d Face %d failed: %d!\n",
                  i+1, j, stat);
-          for (k = 0; k < p_xddm->nv; k++) EG_free(dvar[k]);
-          EG_free(dvar);
-          EG_free(tris);
-          EG_free(vtags);
-          EG_free(xyzs);
-          ocsmFree(modl);
-          ocsmFree(NULL);
-          EG_close(context);
-          xddm_free(p_xddm);
-          return 1;
+          goto cleanup;
         }
-        for (k = 0; k < nvert; k++)
-          if ((vtags[k].ptype < 0) && (vtags[k].pindex == j)) {
-            m              = -vtags[k].ptype - 1;
-            dvar[i][3*k  ] = pcsens[3*m  ];
-            dvar[i][3*k+1] = pcsens[3*m+1];
-            dvar[i][3*k+2] = pcsens[3*m+2];
-          }
-      }
+        if (dvar        == NULL) { stat = EGADS_MALLOC; goto cleanup; }
+        if (dvar[kb]    == NULL) { stat = EGADS_MALLOC; goto cleanup; }
+        if (dvar[kb][i] == NULL) { stat = EGADS_MALLOC; goto cleanup; }
+        for (k = 1; k <= nvert; k++) {
+          stat = EG_localToGlobal(tess[kb], iface, k, &iglobal);
+          if (stat != EGADS_SUCCESS) goto cleanup;
 
-      printf("\n");
+          dvar[kb][i][3*iglobal-3] = pcsens[3*k-3];
+          dvar[kb][i][3*iglobal-2] = pcsens[3*k-2];
+          dvar[kb][i][3*iglobal-1] = pcsens[3*k-1];
+        }
+      }
     }
-    
-write:
-    /* write trix files -- Note: move out of body loop for multiple bodies */
-    stat = writeTrix("Components.i.tri", p_xddm, kb, nvert, xyzs, p_xddm->nv,
-                     dvar, ntri, tris);
-    if (dvar != NULL) {
-      for (j = 0; j < p_xddm->nv; j++) EG_free(dvar[j]);
-      EG_free(dvar);
-    }
-    EG_free(tris);
-    EG_free(vtags);
-    EG_free(xyzs);
   }
+  printf("\n");
+
+  /* write tri file */
+  stat = writeTrix("Components.i.tri", nbody, tess,
+                   p_xddm, p_xddm->nv, dvar);
+
   printf("\n");
 
   xddm_updateAnalysisParams(argv[1], p_xddm, opts);
   
+cleanup:
+
+  if (dvar != NULL && p_xddm != NULL) {
+    for (i = 0; i < nbody; i++) {
+      if (dvar[i] != NULL) {
+        for (j = 0; j < p_xddm->nv; j++) EG_free(dvar[i][j]);
+        EG_free(dvar[i]);
+      }
+    }
+  }
+  EG_free(dvar);
+  EG_free(tess);
+  EG_free(vtags);
+  EG_free(psens);
   ocsmFree(modl);
   ocsmFree(NULL);
-  EG_close(context);
+  if (context != NULL) EG_close(context);
   xddm_free(p_xddm);
 
-  return 0;
+  if (stat == EGADS_SUCCESS)
+    return EXIT_SUCCESS;
+  else
+    return EXIT_FAILURE;
 }

@@ -299,7 +299,7 @@ static int mesh_edgeVertexTFI( ego ebody,
 /*                     API functions                    */
 
 
-int mesh_addTess2Dbc(void *aimInfo, meshStruct *surfaceMesh, mapAttrToIndexStruct *attrMap)
+int mesh_addTess2Dbc(void *aimInfo, meshStruct *surfaceMesh, const mapAttrToIndexStruct *attrMap)
 {
     /*
      * Extracts boundary regions for a 2D egads tessellation mesh
@@ -326,7 +326,7 @@ int mesh_addTess2Dbc(void *aimInfo, meshStruct *surfaceMesh, mapAttrToIndexStruc
 
     const char *groupName = NULL;
 
-    ego tess = surfaceMesh->bodyTessMap.egadsTess;
+    ego tess = surfaceMesh->egadsTess;
 
     // Check arrays
     if (surfaceMesh->meshQuickRef.numLine != 0) {
@@ -472,13 +472,13 @@ int mesh_addTess2Dbc(void *aimInfo, meshStruct *surfaceMesh, mapAttrToIndexStruc
 
 
 
-int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap,
+int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *attrMap,
                           int *numNodes, double *xyzCoord[],
                           int *numTriFace, int *triFaceConn[], int *triFaceCompID[], int *triFaceTopoID[],
                           int *numBndEdge, int *bndEdgeConn[], int *bndEdgeCompID[], int *bndEdgeTopoID[],
                           int *numNodeEle, int *nodeEleConn[], int *nodeEleCompID[], int *nodeEleTopoID[],
                           int *twoDMesh,
-                          int *tessFaceQuadMap,
+                          const int *tessFaceQuadMap,
                           int *numQuadFace, int *quadFaceConn[], int *quadFaceCompID[], int *quadFaceTopoID[])
 {
 
@@ -577,58 +577,43 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
 
     // Get body from tessellation and total number of global points
     status = EG_statusTessBody(tess, &body, &tessStatus, &numPoints);
-    if (tessStatus != 1) { status = EGADS_TESSTATE; goto cleanup; }
-    if (status != EGADS_SUCCESS) goto cleanup;
-
-
+    if (tessStatus != 1) {
+      AIM_ERROR(aimInfo, "Tessellation state: %d", tessStatus);
+      status = EGADS_TESSTATE;
+      goto cleanup;
+    }
+    AIM_STATUS(aimInfo, status);
 
     // Allocate memory associated with the nodes
 
-    xyzs = (double *) EG_alloc(3*numPoints*sizeof(double));
-    if (xyzs == NULL) {
-        printf(" Error: Can not allocate XYZs (bodyTessellation)!\n");
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    AIM_ALLOC(xyzs, 3*numPoints, double, aimInfo, status);
 
     //  and retrieve the nodes
     for ( j = 0; j < numPoints; j++ ) {
         status = EG_getGlobal(tess, j+1, &pointType, &pointIndex, xyzs + 3*j);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
     }
 
     // Get faces, edges, and nodes so we can check for attributes on them
     status = EG_getBodyTopos(body, NULL, FACE, &numFace, &faces);
-    if (status != EGADS_SUCCESS) {
-        printf(" Error: EG_getBodyTopos = %d!\n", status);
-        goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status);
 
     status = EG_getBodyTopos(body, NULL, EDGE, &numEdge, &edges);
-    if (status != EGADS_SUCCESS) {
-        printf(" Error: EG_getBodyTopos = %d!\n", status);
-        goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status);
+
     // Overwrite number of edges for node bodies
     if (aim_isNodeBody(body, coord) == CAPS_SUCCESS) {
         numEdge = 0;
     }
 
     status = EG_getBodyTopos(body, NULL, NODE, &numNode, &nodes);
-    if (status != EGADS_SUCCESS) {
-        printf(" Error: EG_getBodyTopos = %d!\n", status);
-        goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status);
 
     numTri = 0;
     for (face = 1; face <= numFace; face++) {
         status = EG_getTessFace(tess, face, &plen, &points, &uv, &ptype, &pindex,
                                 &tlen, &tris, &triNeighbor);
-
-        if (status != EGADS_SUCCESS) {
-            printf(" Face %d: EG_getTessFace status = %d (bodyTessellation)!\n", face, status);
-            goto cleanup;
-        }
+        AIM_STATUS(aimInfo, status);
 
         numTri += tlen;
     }
@@ -648,55 +633,21 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
     // Allocate memory associated with triangles
 
     if (numTri != 0) {
-        triConn = (int *) EG_alloc(3*numTri*sizeof(int));
-        if (triConn == NULL) {
-            printf(" Error: Can not allocate triangles (bodyTessellation)!\n");
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-
-        triCompID = (int *) EG_alloc(numTri*sizeof(int));
-        if (triCompID == NULL) {
-            printf(" Error: Can not allocate components (bodyTessellation)!\n");
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-
-        triTopoID = (int *) EG_alloc(numTri*sizeof(int));
-        if (triTopoID == NULL) {
-            printf(" Error: Can not allocate topology (bodyTessellation)!\n");
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        AIM_ALLOC(triConn  , 3*numTri, int, aimInfo, status);
+        AIM_ALLOC(triCompID,   numTri, int, aimInfo, status);
+        AIM_ALLOC(triTopoID,   numTri, int, aimInfo, status);
     }
 
     // Allocate memory associated with quads
 
     if (numQuad != 0) {
-        quadConn = (int *) EG_alloc(4*numQuad*sizeof(int));
-        if (quadConn == NULL) {
-            printf(" Error: Can not allocate quadrilaterals (bodyTessellation)!\n");
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-
-        quadCompID = (int *) EG_alloc(numQuad*sizeof(int));
-        if (quadCompID == NULL) {
-            printf(" Error: Can not allocate quad components (bodyTessellation)!\n");
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-
-        quadTopoID = (int *) EG_alloc(numQuad*sizeof(int));
-        if (quadTopoID == NULL) {
-            printf(" Error: Can not allocate quad topology (bodyTessellation)!\n");
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        AIM_ALLOC(quadConn  , 4*numQuad, int, aimInfo, status);
+        AIM_ALLOC(quadCompID,   numQuad, int, aimInfo, status);
+        AIM_ALLOC(quadTopoID,   numQuad, int, aimInfo, status);
     }
 
     //Set default value for compID
-    for (i = 0; i < numTri; i++) triCompID[i] = 1;
+    for (i = 0; i < numTri ; i++) triCompID[i]  = 1;
     for (i = 0; i < numQuad; i++) quadCompID[i] = 1;
 
     // Loop through faces and build global xyz and connectivity
@@ -710,10 +661,8 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
         if (status == CAPS_SUCCESS) {
 
             status = get_mapAttrToIndexIndex(attrMap, groupName, &cID);
-            if (status != CAPS_SUCCESS) {
-              AIM_ERROR(aimInfo, "Unable to retrieve boundary index from capsGroup %s", groupName);
-              goto cleanup;
-            }
+            AIM_STATUS(aimInfo, status, "Unable to retrieve boundary index from capsGroup %s", groupName);
+
             status = retrieve_CAPSIgnoreAttr(faces[face-1], &groupName);
             if (status == CAPS_SUCCESS) {
                 AIM_ERROR(aimInfo, "Both capsGroup and capsIgnore attribute found for face - %d!!", face);
@@ -736,7 +685,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
 
         status = EG_getTessFace(tess, face, &plen, &points, &uv, &ptype, &pindex,
                                 &tlen, &tris, &triNeighbor);
-        if (status != EGADS_SUCCESS) continue;
+        AIM_STATUS(aimInfo, status);
 
         // Do we possibly have quads?
         if (tessFaceQuadMap != NULL) {
@@ -753,22 +702,22 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
             // Get quad connectivity in global sense
             for (i = 0; i < qlen; i++){
                 status = EG_localToGlobal(tess, face, tris[6*i + offSetIndex + 0], &gID);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 quadConn[4*numQuad + 0] = gID;
 
                 status = EG_localToGlobal(tess, face, tris[6*i + offSetIndex + 1], &gID);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 quadConn[4*numQuad + 1] = gID;
 
                 status = EG_localToGlobal(tess, face, tris[6*i + offSetIndex + 2], &gID);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 quadConn[4*numQuad + 2] = gID;
 
                 status = EG_localToGlobal(tess, face, tris[6*i + offSetIndex + 5], &gID);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 quadConn[4*numQuad + 3] = gID;
 
@@ -785,17 +734,17 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
         for (i = 0; i < tlen; i++) {
 
             status = EG_localToGlobal(tess, face, tris[3*i + 0], &gID);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             triConn[3*numTri + 0] = gID;
 
             status = EG_localToGlobal(tess, face, tris[3*i + 1], &gID);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             triConn[3*numTri + 1] = gID;
 
             status = EG_localToGlobal(tess, face, tris[3*i + 2], &gID);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             triConn[3*numTri + 2] = gID;
 
@@ -808,48 +757,24 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
 
     // Resize triConn and compId (triFace) if we ended up have some quad faces
     if (numQuad != 0 && numTri != 0) {
-
-        triConn = (int *) EG_reall(triConn, 3*numTri*sizeof(int));
-        if (triConn == NULL) { status = EGADS_MALLOC; goto cleanup; }
-
-        triCompID = (int *) EG_reall(triCompID, numTri*sizeof(int));
-        if (triCompID == NULL) { status = EGADS_MALLOC; goto cleanup; }
-
-        triTopoID = (int *) EG_reall(triTopoID, numTri*sizeof(int));
-        if (triTopoID == NULL) { status = EGADS_MALLOC; goto cleanup; }
+        AIM_REALL(triConn  , 3*numTri, int, aimInfo, status);
+        AIM_REALL(triCompID,   numTri, int, aimInfo, status);
+        AIM_REALL(triTopoID,   numTri, int, aimInfo, status);
     }
 
     // Get boundary edge information no matter what
     for (edge = 1; edge <= numEdge; edge++) {
 
         status = EG_getTessEdge(tess, edge, &plen, &points, &uv);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         numLine += plen-1;
     }
 
     if (numLine != 0) {
-
-        lineConn = (int *) EG_alloc(2*numLine*sizeof(int));
-        if (lineConn == NULL) {
-            printf(" Error: Can not allocate components (bodyTessellation)!\n");
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-
-        lineCompID = (int *) EG_alloc(numLine*sizeof(int));
-        if (lineCompID == NULL) {
-            printf(" Error: Can not allocate components (bodyTessellation)!\n");
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-
-        lineTopoID = (int *) EG_alloc(numLine*sizeof(int));
-        if (lineTopoID == NULL) {
-            printf(" Error: Can not allocate topology (bodyTessellation)!\n");
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        AIM_ALLOC(lineConn  , 2*numLine, int, aimInfo, status);
+        AIM_ALLOC(lineCompID,   numLine, int, aimInfo, status);
+        AIM_ALLOC(lineTopoID,   numLine, int, aimInfo, status);
     }
 
     if (numFace == 0 && numEdge != 0){
@@ -868,10 +793,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
         if (status == CAPS_SUCCESS) {
 
             status = get_mapAttrToIndexIndex(attrMap, groupName, &cID);
-            if (status != CAPS_SUCCESS) {
-                AIM_ERROR(aimInfo, "Unable to retrieve edge index from capsGroup %s", groupName);
-                goto cleanup;
-            }
+            AIM_STATUS(aimInfo, status, "Unable to retrieve edge index from capsGroup %s", groupName);
 
             status = retrieve_CAPSIgnoreAttr(edges[edge-1], &groupName);
             if (status == CAPS_SUCCESS) {
@@ -901,19 +823,19 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
         }
 
         status = EG_getTessEdge(tess, edge, &plen, &points, &uv);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 #ifdef __clang_analyzer__
         if (plen-1 > 0 && lineConn == NULL) goto cleanup;
 #endif
         for (i = 0; i < plen-1; i++) {
 
             status = EG_localToGlobal(tess, -edge, i+1, &gID);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             lineConn[2*numEdgeSeg + 0] = gID;
 
             status = EG_localToGlobal(tess, -edge, i+2, &gID);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             lineConn[2*numEdgeSeg + 1] = gID;
 
@@ -926,50 +848,22 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
 
     if (numEdgeSeg == 0) {// hardFail = False and no capsGroups where found on edges
         numLine = 0;
-        if (lineConn != NULL) EG_free(lineConn);
-        lineConn = NULL;
-        if (lineCompID != NULL) EG_free(lineCompID);
-        lineCompID = NULL;
-        if (lineTopoID != NULL) EG_free(lineTopoID);
-        lineTopoID = NULL;
+        AIM_FREE(lineConn);
+        AIM_FREE(lineCompID);
+        AIM_FREE(lineTopoID);
 
     } else if (numLine != numEdgeSeg) {
-
         numLine = numEdgeSeg;
-
-        lineConn = (int *) EG_reall(lineConn, 2*numEdgeSeg*sizeof(int));
-        if (lineConn == NULL) { status = EGADS_MALLOC; goto cleanup; }
-
-        lineCompID = (int *) EG_reall(lineCompID, numEdgeSeg*sizeof(int));
-        if (lineCompID == NULL) { status = EGADS_MALLOC; goto cleanup; }
-
-        lineTopoID = (int *) EG_reall(lineTopoID, numEdgeSeg*sizeof(int));
-        if (lineTopoID == NULL) { status = EGADS_MALLOC; goto cleanup; }
+        AIM_REALL(lineConn  , 2*numEdgeSeg, int, aimInfo, status);
+        AIM_REALL(lineCompID,   numEdgeSeg, int, aimInfo, status);
+        AIM_REALL(lineTopoID,   numEdgeSeg, int, aimInfo, status);
     }
 
     // Get node elements
     if (numNode != 0) {
-
-       nodeConn = (int *) EG_alloc(numNode*sizeof(int));
-       if (nodeConn == NULL) {
-           printf(" Error: Can not allocate components (bodyTessellation)!\n");
-           status = EGADS_MALLOC;
-           goto cleanup;
-       }
-
-       nodeCompID = (int *) EG_alloc(numNode*sizeof(int));
-       if (nodeCompID == NULL) {
-           printf(" Error: Can not allocate components (bodyTessellation)!\n");
-           status = EGADS_MALLOC;
-           goto cleanup;
-       }
-
-       nodeTopoID = (int *) EG_alloc(numNode*sizeof(int));
-       if (nodeTopoID == NULL) {
-           printf(" Error: Can not allocate topology (bodyTessellation)!\n");
-           status = EGADS_MALLOC;
-           goto cleanup;
-       }
+       AIM_ALLOC(nodeConn  , numNode, int, aimInfo, status);
+       AIM_ALLOC(nodeCompID, numNode, int, aimInfo, status);
+       AIM_ALLOC(nodeTopoID, numNode, int, aimInfo, status);
     }
 
     // Fill up node element edge list
@@ -979,10 +873,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
         if (status == CAPS_SUCCESS) {
 
             status = get_mapAttrToIndexIndex(attrMap, groupName, &cID);
-            if (status != CAPS_SUCCESS) {
-                AIM_ERROR(aimInfo, "Unable to retrieve node index from capsGroup %s", groupName);
-                goto cleanup;
-            }
+            AIM_STATUS(aimInfo, status, "Unable to retrieve node index from capsGroup %s", groupName);
 
             status = retrieve_CAPSIgnoreAttr(nodes[node-1], &groupName);
             if (status == CAPS_SUCCESS) {
@@ -1002,13 +893,13 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
         }
 
         status = EG_localToGlobal(tess, 0, node, &gID);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         nodeConn[numNodesEle] =gID;
         nodeCompID[numNodesEle] = cID;
 
         status = EG_indexBodyTopo(body, nodes[node-1]);
-        if (status < EGADS_SUCCESS) goto cleanup;
+        if (status < EGADS_SUCCESS) AIM_STATUS(aimInfo, status);
 
         nodeTopoID[numNodesEle] = status;
 
@@ -1016,23 +907,14 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
     }
 
     if (numNodesEle == 0) {
-        if (nodeConn != NULL) EG_free(nodeConn);
-        nodeConn = NULL;
-        if (nodeCompID != NULL) EG_free(nodeCompID);
-        nodeCompID = NULL;
-        if (nodeTopoID != NULL) EG_free(nodeTopoID);
-        nodeTopoID = NULL;
-
+        AIM_FREE(nodeConn);
+        AIM_FREE(nodeCompID);
+        AIM_FREE(nodeTopoID);
     } else if (numNodesEle != numNode) {
-
-        nodeConn = (int *) EG_reall(nodeConn, numNodesEle*sizeof(int));
-        if (nodeConn == NULL) { status = EGADS_MALLOC; goto cleanup; }
-
-        nodeCompID = (int *) EG_reall(nodeCompID, numNodesEle*sizeof(int));
-        if (nodeCompID == NULL) { status = EGADS_MALLOC; goto cleanup; }
-
-        nodeTopoID = (int *) EG_reall(nodeTopoID, numNodesEle*sizeof(int));
-        if (nodeTopoID == NULL) { status = EGADS_MALLOC; goto cleanup; }
+        numNode = numNodesEle;
+        AIM_REALL(nodeConn  , numNodesEle, int, aimInfo, status);
+        AIM_REALL(nodeCompID, numNodesEle, int, aimInfo, status);
+        AIM_REALL(nodeTopoID, numNodesEle, int, aimInfo, status);
     }
 
     *numNodes      = numPoints;
@@ -1060,34 +942,34 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, mapAttrToIndexStruct *attrMap
 
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) {
-            printf("Error: Premature exit in mesh_bodyTessellation status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS) {
+        printf("Error: Premature exit in mesh_bodyTessellation status = %d\n", status);
 
-            EG_free(xyzs);
-            EG_free(triConn);
-            EG_free(triCompID);
-            EG_free(triTopoID);
+        AIM_FREE(xyzs);
+        AIM_FREE(triConn);
+        AIM_FREE(triCompID);
+        AIM_FREE(triTopoID);
 
-            EG_free(quadConn);
-            EG_free(quadCompID);
-            EG_free(quadTopoID);
+        AIM_FREE(quadConn);
+        AIM_FREE(quadCompID);
+        AIM_FREE(quadTopoID);
 
-            if (lineConn != NULL) EG_free(lineConn);
-            if (lineCompID != NULL) EG_free(lineCompID);
-            if (lineTopoID != NULL) EG_free(lineTopoID);
+        AIM_FREE(lineConn);
+        AIM_FREE(lineCompID);
+        AIM_FREE(lineTopoID);
 
-            if (nodeConn != NULL) EG_free(nodeConn);
-            if (nodeCompID != NULL) EG_free(nodeCompID);
-            if (nodeTopoID != NULL) EG_free(nodeTopoID);
+        AIM_FREE(nodeConn);
+        AIM_FREE(nodeCompID);
+        AIM_FREE(nodeTopoID);
 
-        }
+    }
 
-        EG_free(faces);
-        EG_free(edges);
-        EG_free(nodes);
+    AIM_FREE(faces);
+    AIM_FREE(edges);
+    AIM_FREE(nodes);
 
-        return status;
+    return status;
 }
 
 
@@ -1127,8 +1009,20 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
     int *nodeMarkList = NULL;
     int *nodeTopoList = NULL;
 
+    const int *tessFaceQuadMap = NULL;
+    int alen, atype;
+    const double *reals = NULL;
+    const char *string = NULL;
+
+    // check if the tessellation has a mixture of quad and tess
+    status = EG_attributeRet(surfMesh->egadsTess, ".mixed",
+                             &atype, &alen, &tessFaceQuadMap, &reals, &string);
+    if (status != EGADS_SUCCESS &&
+        status != EGADS_NOTFOUND) AIM_STATUS(aimInfo, status);
+
+
     status = mesh_bodyTessellation(aimInfo,
-                                   surfMesh->bodyTessMap.egadsTess,
+                                   surfMesh->egadsTess,
                                    &surfMesh->groupMap,
                                    &numNode,
                                    &xyz,
@@ -1145,7 +1039,7 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
                                    &nodeMarkList,
                                    &nodeTopoList,
                                    &twoDMesh,
-                                   surfMesh->bodyTessMap.tessFaceQuadMap,
+                                   tessFaceQuadMap,
                                    &numQuadFace,
                                    &localQuadFaceList,
                                    &quadFaceMarkList,
@@ -1205,7 +1099,7 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
     }
 
     // Get body from tessellation and total number of global points
-    status = EG_statusTessBody(surfMesh->bodyTessMap.egadsTess, &body, &tessStatus, &numPoints);
+    status = EG_statusTessBody(surfMesh->egadsTess, &body, &tessStatus, &numPoints);
     if (tessStatus != 1) { status = EGADS_TESSTATE; goto cleanup; }
     if (status != EGADS_SUCCESS) goto cleanup;
 
@@ -1375,9 +1269,9 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
 int mesh_surfaceMeshEGADSBody(void *aimInfo,
                               ego body,
                               double refLen,
-                              double tessParams[3],
+                              const double tessParams[3],
                               int quadMesh,
-                              meshStruct *surfMesh) {
+                              ego *tess) {
 
     int status; // Function return integer
 
@@ -1386,26 +1280,24 @@ int mesh_surfaceMeshEGADSBody(void *aimInfo,
     double    box[6], params[3];
     egTessel *btess;
 
+    int atype, alen;
+    const int    *ints;
+    const double *reals;
+    const char   *string;
+
     // Quading variables
     int face, numFace, numPoint, numPatch;
-    ego tess, *faces = NULL;
+    ego qtess;
     double coord[3];
 
-    int           plen = 0, tlen = 0;
     const double *points = NULL, *uv = NULL;
-    const int    *ptype = NULL, *pindex = NULL, *tris = NULL, *triNeighbor = NULL;
-
-    // Get Tessellation
-    printf("\tTessellating body\n");
+    const int    *ptype = NULL, *pindex = NULL;
 
     if (refLen <= 0) {
 
-      // Get bounding box for the body
-      status = EG_getBoundingBox(body, box);
-      if (status != EGADS_SUCCESS) {
-        printf(" EG_getBoundingBox = %d\n\n", status);
-        return status;
-      }
+        // Get bounding box for the body
+        status = EG_getBoundingBox(body, box);
+        AIM_STATUS(aimInfo, status);
 
         // use the body size if refLen not given
         refLen =  sqrt((box[0]-box[3])*(box[0]-box[3]) +
@@ -1423,100 +1315,73 @@ int mesh_surfaceMeshEGADSBody(void *aimInfo,
 
     //printf("params[0] = %lf; params[1] = %lf; params[2] = %lf;\n", params[0], params[1], params[2]);
 
-    status = EG_makeTessBody(body, params, &surfMesh->bodyTessMap.egadsTess);
-    if (status != EGADS_SUCCESS) {
-        printf(" EG_makeTessBody = %d\n", status);
-        goto cleanup;
-    }
+    status = EG_makeTessBody(body, params, tess);
+    AIM_STATUS(aimInfo, status);
 
     isNodeBody = aim_isNodeBody(body, coord);
 
-    status = EG_getBodyTopos(body, NULL, FACE, &numFace, &faces);
+    status = EG_getBodyTopos(body, NULL, FACE, &numFace, NULL);
     if (status != EGADS_SUCCESS) goto cleanup;
 
     // generate regularized quads
     if ( quadMesh == REGULARIZED_QUAD && (isNodeBody != CAPS_SUCCESS) && numFace > 0) {
-        tess = surfMesh->bodyTessMap.egadsTess;
-        status = EG_quadTess(tess, &surfMesh->bodyTessMap.egadsTess);
+        status = EG_quadTess(*tess, &qtess);
         if (status < EGADS_SUCCESS) {
             printf(" EG_quadTess = %d  -- reverting...\n", status);
-            surfMesh->bodyTessMap.egadsTess = tess;
             quadMesh = MIXED_QUAD;
         } else {
-
-            // mark all faces as quadded
-            surfMesh->bodyTessMap.tessFaceQuadMap = (int *) EG_alloc(numFace*sizeof(int));
-            if (surfMesh->bodyTessMap.tessFaceQuadMap == NULL) { status = EGADS_MALLOC; goto cleanup; }
-
-            for (face = 0; face < numFace; face++) {
-
-                surfMesh->bodyTessMap.tessFaceQuadMap[face] = 0;
-
-                status = EG_getTessFace(surfMesh->bodyTessMap.egadsTess, face+1, &plen, &points, &uv, &ptype, &pindex,
-                                        &tlen, &tris, &triNeighbor);
-                if (status != EGADS_SUCCESS) goto cleanup;
-
-                surfMesh->bodyTessMap.tessFaceQuadMap[face] = tlen/2;
-            }
+            EG_deleteObject(*tess);
+            *tess = qtess;
         }
+    }
+
+    if (quadMesh != MIXED_QUAD && quadMesh != REGULARIZED_QUAD) {
+      status = EG_attributeRet(*tess, ".tessType", &atype, &alen, &ints, &reals, &string);
+      if (status == EGADS_SUCCESS) {
+          status = EG_attributeDel(*tess, ".tessType");
+          AIM_STATUS(aimInfo, status);
+      }
+      status = EG_attributeRet(*tess, ".mixed", &atype, &alen, &ints, &reals, &string);
+      if (status == EGADS_SUCCESS) {
+          status = EG_attributeDel(*tess, ".mixed");
+          AIM_STATUS(aimInfo, status);
+      }
     }
 
     // generate quad patches
     if ( quadMesh == MIXED_QUAD && (isNodeBody != CAPS_SUCCESS) && numFace > 0 ) {
 
-        btess = (egTessel *) surfMesh->bodyTessMap.egadsTess->blind;
-
-        surfMesh->bodyTessMap.numTessFace = numFace;
-        EG_free(surfMesh->bodyTessMap.tessFaceQuadMap);
-
-        surfMesh->bodyTessMap.tessFaceQuadMap = (int *) EG_alloc(numFace*sizeof(int));
-        if (surfMesh->bodyTessMap.tessFaceQuadMap == NULL) { status = EGADS_MALLOC; goto cleanup; }
-
-        // Set default to 0
-        for (face = 0; face < numFace; face++) surfMesh->bodyTessMap.tessFaceQuadMap[face] = 0;
+        btess = (egTessel *) (*tess)->blind;
 
         // compute how many quad faces there are on each tfi face
         for (face = 0; face < numFace; face++) {
             if (btess->tess2d[face].tfi == 0) continue;
 
-            status = EG_getTessFace(surfMesh->bodyTessMap.egadsTess, face+1, &plen, &points, &uv, &ptype, &pindex,
-                                    &tlen, &tris, &triNeighbor);
-            if (status != EGADS_SUCCESS) goto cleanup;
-
-            surfMesh->bodyTessMap.tessFaceQuadMap[face] = tlen/2;
-
             // Also tag the face with the EG_makeQuads HACK. Really need to get rid of this!
             params[0] = 0.0;
             params[1] = 0.0;
             params[2] = 0.0;
-            status = EG_makeQuads(surfMesh->bodyTessMap.egadsTess, params, face+1);
+            status = EG_makeQuads(*tess, params, face+1);
             if (status < EGADS_SUCCESS) {
                 printf("Face = %d, failed to make quads\n", face);
                 continue;
             }
 
-            status = EG_getQuads(surfMesh->bodyTessMap.egadsTess, face+1, &numPoint, &points, &uv, &ptype, &pindex, &numPatch);
-            if (status < EGADS_SUCCESS) goto cleanup;
+            status = EG_getQuads(*tess, face+1, &numPoint, &points, &uv, &ptype, &pindex, &numPatch);
+            AIM_STATUS(aimInfo, status);
 
             if (numPatch != 1) {
+                AIM_ERROR(aimInfo, "EG_localToGlobal accidentally only works for a single quad patch! This needs to go away!\n");
                 status = CAPS_NOTIMPLEMENT;
-                printf("EG_localToGlobal accidentally only works for a single quad patch! This needs to go away!\n");
                 goto cleanup;
             }
         }
     }
 
-    status = mesh_surfaceMeshEGADSTess(aimInfo, surfMesh);
-    if (status != CAPS_SUCCESS) goto cleanup;
-
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in mesh_surfaceMeshEGADSBody, status = %d\n", status);
-
-        EG_free(faces);
-
-        return status;
+cleanup:
+    return status;
 
 }
 
@@ -1924,21 +1789,22 @@ int mesh_modifyBodyTess(int numMeshProp,
 
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in mesh_modifyBodyTess, status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS) printf("Error: Premature exit in mesh_modifyBodyTess, status = %d\n", status);
 
-        EG_deleteObject(tess);
+    EG_deleteObject(tess);
 
-        EG_free(points);
-        EG_free(userSet);
-        EG_free(faces);
-        EG_free(edges);
-        EG_free(rPos);
+    EG_free(points);
+    EG_free(userSet);
+    EG_free(faces);
+    EG_free(edges);
+    EG_free(rPos);
 
-        return status;
+    return status;
 }
 // Populate bndCondStruct boundary condition information - Boundary condition values get filled with 99
-int populate_bndCondStruct_from_bcPropsStruct(cfdBoundaryConditionStruct *bcProps, bndCondStruct *bndConds)
+int populate_bndCondStruct_from_bcPropsStruct(const cfdBoundaryConditionStruct *bcProps,
+                                              bndCondStruct *bndConds)
 {
 
     // *bcProps [IN]
@@ -2011,33 +1877,6 @@ int populate_bndCondStruct_from_mapAttrToIndexStruct(mapAttrToIndexStruct *attrM
 
     // Fill in rest of bcVal  with dummy values
     for (i = 0; i < bndConds->numBND; i++) bndConds->bcVal[i] = 99;
-
-    return CAPS_SUCCESS;
-}
-
-// Initiate (0 out all values and NULL all pointers) a bodyTessMapping in the bodyTessMappingStruct structure format
-int initiate_bodyTessMappingStruct (bodyTessMappingStruct *bodyTessMapping) {
-    // EGADS body tessellation storage
-    bodyTessMapping->egadsTess = NULL;
-
-    bodyTessMapping->numTessFace = 0; // Number of faces in the tessellation
-
-    bodyTessMapping->tessFaceQuadMap = NULL; // List to keep track of whether or not the tessObj has quads that have been split into tris
-                                             // size = [numTessFace]. In general if the quads have been split they should be added to the end
-                                             // of the tri list in the face tessellation
-
-    return CAPS_SUCCESS;
-}
-
-// Destroy (0 out all values and NULL all pointers) a bodyTessMapping in the bodyTessMappingStruct structure format
-int destroy_bodyTessMappingStruct (bodyTessMappingStruct *bodyTessMapping) {
-
-    bodyTessMapping->numTessFace = 0; // Number of faces in the tessellation
-
-    // List to keep track of whether or not the tessObj has quads that have been split into tris
-    // size = [numTessFace]. In general if the quads have been split they should be added to the end
-    // of the tri list in the face tessellation
-    AIM_FREE(bodyTessMapping->tessFaceQuadMap);
 
     return CAPS_SUCCESS;
 }
@@ -2379,14 +2218,12 @@ int destroy_meshInputStruct(meshInputStruct *meshInput) {
 
     meshInput->preserveSurfMesh = (int) false; // 0 = False , anything else True - Use the body tessellation as the surface mesh
 
-    meshInput->quiet = (int) false; // 0 = False , anything else True - No output from mesh generator
-    if (meshInput->outputFormat != NULL) EG_free(meshInput->outputFormat);
-    meshInput->outputFormat = NULL;   // Mesh output formats - AFLR3, TECPLOT, VTK, SU2
+    meshInput->quiet = (int) false;    // 0 = False , anything else True - No output from mesh generator
+    AIM_FREE(meshInput->outputFormat); // Mesh output formats - AFLR3, TECPLOT, VTK, SU2
 
-    if (meshInput->outputFileName != NULL) EG_free(meshInput->outputFileName);
-    meshInput->outputFileName = NULL; // Filename prefix for mesh
+    AIM_FREE(meshInput->outputFileName); // Filename prefix for mesh
 
-    meshInput->outputASCIIFlag = (int) true;  // 0 = Binary output, anything else for ASCII
+    meshInput->outputASCIIFlag = (int) true; // 0 = Binary output, anything else for ASCII
 
     status = destroy_bndCondStruct(&meshInput->bndConds);
     if (status != CAPS_SUCCESS) return status;
@@ -2440,11 +2277,7 @@ int write_MAPBC(void *aimInfo,
 
     for (i = 0; i < numBnds; i++) wroteBnd[i] = (int) false;
 
-    filename = (char *) EG_alloc((strlen(fname) + 1 + strlen(fileExt)) *sizeof(char));
-    if (filename == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    AIM_ALLOC(filename, (strlen(fname) + 1 + strlen(fileExt)), char, aimInfo, status);
 
     sprintf(filename,"%s%s",fname, fileExt);
 
@@ -2482,14 +2315,13 @@ int write_MAPBC(void *aimInfo,
 
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (filename != NULL) EG_free(filename);
+  cleanup:
+      AIM_FREE(filename);
+      AIM_FREE(wroteBnd);
 
-        if (fp != NULL) fclose(fp);
+      if (fp != NULL) fclose(fp);
 
-        if (wroteBnd != NULL) EG_free(wroteBnd);
-
-        return status;
+      return status;
 }
 
 #ifdef DEFINED_BUT_NOT_USED /* Function isn't used, but retained for reference */
@@ -2641,7 +2473,7 @@ int destroy_meshSizingStruct (meshSizingStruct *meshProp) {
 int mesh_getSizingProp(void *aimInfo,
                        int numTuple,
                        capsTuple meshBCTuple[],
-                       mapAttrToIndexStruct *attrMap,
+                       const mapAttrToIndexStruct *attrMap,
                        int *numMeshProp,
                        meshSizingStruct *meshProps[]) {
 
@@ -2656,7 +2488,6 @@ int mesh_getSizingProp(void *aimInfo,
     int status; //Function return
 
     int i; // Indexing
-    int stringLen = 0;
 
     char *keyValue = NULL;
     char *keyWord = NULL;
@@ -2666,9 +2497,7 @@ int mesh_getSizingProp(void *aimInfo,
         status = destroy_meshSizingStruct(&(*meshProps)[i]);
         AIM_STATUS(aimInfo, status);
     }
-
-    if (*meshProps != NULL) EG_free(*meshProps);
-    *meshProps = NULL;
+    AIM_FREE(*meshProps);
     *numMeshProp = 0;
 
     printf("\nGetting mesh sizing parameters\n");
@@ -3184,12 +3013,9 @@ int mesh_getSizingProp(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 // remove "" from the keyValue
-                stringLen = strlen(keyValue);
-                if (stringLen > 2) {
-                    (*meshProps)[i].bcType = (char*)EG_alloc(stringLen-1);
-                    memcpy((*meshProps)[i].bcType, keyValue+1, stringLen-2);
-                    (*meshProps)[i].bcType[stringLen-2] = '\0';
-                } else {
+                (*meshProps)[i].bcType = string_removeQuotation(keyValue);
+                AIM_NOTNULL((*meshProps)[i].bcType, aimInfo, status);
+                if (strlen((*meshProps)[i].bcType) == 0) {
                     AIM_ERROR(aimInfo, "'bcType' cannot be an empty string\n");
                     status = CAPS_BADVALUE;
                     goto cleanup;
@@ -3203,7 +3029,7 @@ int mesh_getSizingProp(void *aimInfo,
              *
              * <ul>
              * <li>  <B>scaleFactor = (no default) </B> </li> <br>
-             * scaleFactor sets the AFLR4_Scale_Factor attribute on faces.<br>
+             * scaleFactor sets the AFLR4_Scale_Factor attribute on faces/edges.<br>
              * <br>
              * See AFLR4_Scale_Factor in \ref attributeAFLR4 for additional details.
              * </ul>
@@ -3918,7 +3744,7 @@ int initiate_meshStruct(meshStruct *mesh) {
 
     (void) initiate_meshQuickRefStruct(&mesh->meshQuickRef);
 
-    (void) initiate_bodyTessMappingStruct(&mesh->bodyTessMap);
+    mesh->egadsTess = NULL;
 
     (void) initiate_mapAttrToIndexStruct(&mesh->groupMap);
 
@@ -3946,7 +3772,8 @@ int destroy_meshStruct(meshStruct *mesh) {
 
     (void) destroy_meshQuickRefStruct(&mesh->meshQuickRef);
 
-    (void) destroy_bodyTessMappingStruct(&mesh->bodyTessMap);
+    // Do not delete the tessellation, that is managed by CAPS
+    mesh->egadsTess = NULL;
 
     (void) destroy_mapAttrToIndexStruct(&mesh->groupMap);
 
@@ -4331,30 +4158,6 @@ int mesh_copyQuickRef(meshQuickRefStruct *in,  meshQuickRefStruct *out){
     return CAPS_SUCCESS;
 }
 
-// Make a copy bodyTessMapping structure
-int mesh_copyBodyTessMappingStruct(bodyTessMappingStruct *in, bodyTessMappingStruct *out) {
-
-    int i;
-
-    out->egadsTess = in->egadsTess;
-    out->numTessFace = in->numTessFace;
-
-    out->tessFaceQuadMap = NULL;
-
-    if (out->numTessFace != 0) {
-
-        out->tessFaceQuadMap = (int *) EG_alloc(out->numTessFace*sizeof(int));
-
-        if (out->tessFaceQuadMap == NULL) return EGADS_MALLOC;
-
-        for (i = 0; i < out->numTessFace; i++) {
-            out->tessFaceQuadMap[i] = in->tessFaceQuadMap[i];
-        }
-    }
-
-    return CAPS_SUCCESS;
-}
-
 // Make a copy of the analysis Data
 int mesh_copyMeshAnalysisData(void *in, meshAnalysisTypeEnum analysisType, void *out) {
 
@@ -4525,8 +4328,7 @@ int mesh_copyMeshStruct( meshStruct *in, meshStruct *out ) {
     out->meshType = in->meshType;
 
     // shallow copy of egads tessellations
-    status = mesh_copyBodyTessMappingStruct(&in->bodyTessMap, &out->bodyTessMap);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    out->egadsTess = in->egadsTess;
 
     // Nodes
     out->numNode = in->numNode;
@@ -6246,7 +6048,7 @@ int mesh_writeSU2(void *aimInfo,
 
         if (numMarkerList[i] == 0) continue;
 
-        fprintf(fp,"MARKER_TAG= %d\n", bndID[i]); // Probably eventually want to change this to a string tag
+        fprintf(fp,"MARKER_TAG= BC_%d\n", bndID[i]); // Probably eventually want to change this to a string tag
         // see note at the beginning of function
 
         fprintf(fp,"MARKER_ELEMS= %d\n", numMarkerList[i]); //Number of elements with a particular ID
@@ -6349,7 +6151,7 @@ int mesh_writeSU2(void *aimInfo,
 int mesh_writeNASTRAN(void *aimInfo,
                       char *fname,
                       int asciiFlag, // 0 for binary, anything else for ascii
-                      meshStruct *nasMesh,
+                      const meshStruct *nasMesh,
                       feaFileTypeEnum gridFileType,
                       double scaleFactor) // Scale factor for coordinates
 {
@@ -6727,7 +6529,7 @@ int mesh_writeNASTRAN(void *aimInfo,
 int mesh_writeAstros(void *aimInfo,
                      char *fname,
                      int asciiFlag, // 0 for binary, anything else for ascii
-                     meshStruct *mesh,
+                     const meshStruct *mesh,
                      feaFileTypeEnum gridFileType,
                      int numDesignVariable, feaDesignVariableStruct feaDesignVariable[],
                      double scaleFactor) // Scale factor for coordinates
@@ -8725,7 +8527,7 @@ int mesh_createIgnoreMesh(meshStruct *mesh, meshStruct *meshIgnore) {
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Get body from tessellation
-    status = EG_statusTessBody(mesh->bodyTessMap.egadsTess, &body, &dummy, &dummy);
+    status = EG_statusTessBody(mesh->egadsTess, &body, &dummy, &dummy);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Determine the number of nodes
@@ -8827,8 +8629,7 @@ int mesh_createIgnoreMesh(meshStruct *mesh, meshStruct *meshIgnore) {
         meshIgnore->meshType = mesh->meshType;
 
         // shallow copy of egads tessellations
-        status = mesh_copyBodyTessMappingStruct(&mesh->bodyTessMap, &meshIgnore->bodyTessMap);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        meshIgnore->egadsTess = mesh->egadsTess;
 
         // Allocate nodes
         meshIgnore->numNode = mesh->numNode;
@@ -9241,6 +9042,7 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
 
     // Find any faces with our boundary marker and get how many points and triangles there are
     for (ibody = 0; ibody < numBody; ibody++) {
+        if (tess[ibody] == NULL) continue;
 
         numFaceFound = 0;
         numTri = numQuad = 0;
@@ -9323,7 +9125,7 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
               for (patch = 1; patch <= numPatch; patch++) {
                 status = EG_getPatch(tess[ibody], iface+1, patch, &n1, &n2, &pvindex, &pbounds);
                 AIM_STATUS(discr->aInfo, status);
-                
+
                 // sum the number of elements
                 numQuad += (n1-1)*(n2-1);
               }

@@ -4,7 +4,7 @@
  */
 
 /*
- * Copyright (C) 2010/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -58,6 +58,10 @@ static        udpI  udpInit[ MAXPRIM];
 // udpNumB[]      udpNumBodys()     udp_numBodys()      number of Bodys expecte in first arg to udpExecute
 typedef int (*udpN) ();
 static        udpN  udpNumB[ MAXPRIM];
+
+// udpBodyL[]     udpBodyList()     udp_bodyList()      list of Bodys input to a UDF
+typedef int (*udpB) (ego, /*@null@*/const int**);
+static        udpB  udpBodyL[MAXPRIM];
 
 // udpReset[]     udpReset(0)       udp_clrArguments()  reset the argument to their defaults
 //                udpReset(1)       udp_cleanupAll()    close all UDPs
@@ -279,6 +283,7 @@ static int udpDYNload(const char *name)
     ret = udp_nPrim;
     udpInit[ ret] = (udpI) udpDLget(dll, "udpInitialize",  name);
     udpNumB[ ret] = (udpN) udpDLget(dll, "udpNumBodys",    name);
+    udpBodyL[ret] = (udpB) udpDLget(dll, "udpBodyList",    name);
     udpReset[ret] = (udpR) udpDLget(dll, "udpReset",       name);
     udpClean[ret] = (udpC) udpDLget(dll, "udpClean",       name);
     udpSet[  ret] = (udpS) udpDLget(dll, "udpSet",         name);
@@ -289,6 +294,7 @@ static int udpDYNload(const char *name)
     udpSens[ ret] = (udpP) udpDLget(dll, "udpSensitivity", name);
     if ((udpInit[ ret] == NULL) ||
         (udpNumB[ ret] == NULL) ||
+        (udpBodyL[ret] == NULL) ||
         (udpReset[ret] == NULL) ||
         (udpClean[ret] == NULL) ||
         (udpSet[  ret] == NULL) ||
@@ -345,6 +351,21 @@ int udp_numBodys(const char primName[])
 
 /*@-nullpass@*/
     return udpNumB[i](0);
+/*@+nullpass@*/
+}
+
+
+int udp_bodyList(const char primName[],
+                 ego        body,
+                 const int  **bodyList)
+{
+    int i;
+
+    i = udpDLoaded(primName);
+    if (i == -1) return EGADS_NOTFOUND;
+
+/*@-nullpass@*/
+    return udpBodyL[i](body, bodyList);
 /*@+nullpass@*/
 }
 

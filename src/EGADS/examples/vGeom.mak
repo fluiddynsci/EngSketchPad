@@ -12,9 +12,9 @@ TDIR  = $(ESP_ROOT)\bin
 !ENDIF
 
 $(TDIR)\vGeom.exe:	$(ODIR)\vGeom.obj $(LDIR)\egads.lib \
-			$(LDIR)\wsserver.lib $(LDIR)\z.lib
+			$(LDIR)\wsserver.lib
 	cl /Fe$(TDIR)\vGeom.exe $(ODIR)\vGeom.obj /link /LIBPATH:$(LDIR) \
-		wsserver.lib z.lib egads.lib ws2_32.lib
+		wsserver.lib egads.lib
 	$(MCOMP) /manifest $(TDIR)\vGeom.exe.manifest \
 		/outputresource:$(TDIR)\vGeom.exe;1
 

@@ -1,6 +1,6 @@
 #MAC OS X 10.5 & up -- 64 bit (clang):
 #
-EGREV   = 1.0.20
+EGREV   = 1.0.21
 
 LIBPATH = -L$(CASROOT)/$(CASARCH)/lib -L$(ESP_ROOT)/lib
 ifeq ($(CASREV),7.3)
@@ -11,17 +11,17 @@ else ifeq ($(CASREV),7.4)
 CPDS    = -std=c++11
 INCS    = -I$(CASROOT)/inc -I$(CASROOT)/include/opencascade -I$(CASROOT)
 LIBS    = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet
-else ifeq ($(CASREV),7.5)
+else ifeq ($(CASREV),7.6)
 CPDS    = -std=c++11
 INCS    = -I$(CASROOT)/inc -I$(CASROOT)/include/opencascade -I$(CASROOT)
 LIBS    = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet
 else 
-$(error Unsupported CASREV=$(CASREV) -- Must be one of: 7.3 7.4)
+$(error Unsupported CASREV=$(CASREV) -- Must be one of: 7.3 7.4 7.6)
 endif
 
 DEFINE = -DREVISION=$(CASREV)
 CXX    = clang++ -m64 -g $(ESPFLAGS)
-CPPOPT = -O -fPIC -DOCC_CONVERT_SIGNALS -DCSFDB -DHAVE_WOK_CONFIG_H -DHAVE_CONFIG_H  -DNDEBUG -DNo_Exception -D_OCC64 -Wall -Wno-write-strings -Wno-dangling-else -Wno-unused-result $(CPDS)
+CPPOPT = -O -fPIC -DOCC_CONVERT_SIGNALS -DNDEBUG -DNo_Exception -D_OCC64 -Wall -Wno-write-strings -Wno-dangling-else -Wno-unused-result $(CPDS)
 CC     = clang -m64 -g $(ESPFLAGS)
 COPTS  = -O -Wall -Wno-dangling-else -Wno-unused-result
 OCOPT  = -O -Wall -Wno-dangling-else -Wno-unused-result
@@ -31,7 +31,7 @@ FOPTS  = -O -frecursive -fcray-pointer
 FSOFLG = -bundle -undefined error
 endif
 ifeq ($(EFCOMP),ifort)
-FCOMP  = ifort -m64 -g -traceback
+FCOMP  = ifort -m64 -g -traceback -L$(shell xcrun --show-sdk-path)/usr/lib
 FOPTS  = -O -recursive
 FSOFLG = -nofor-main -Wl,-bundle,-undefined,error
 endif

@@ -12,7 +12,7 @@ endif
 
 $(TDIR)/vEffect:	$(ODIR)/vEffect.o $(LDIR)/libwsserver.a
 	$(CXX) -o $(TDIR)/vEffect $(ODIR)/vEffect.o \
-		-L$(LDIR) -lwsserver -legads -lpthread -lz $(RPATH) -lm
+		-L$(LDIR) -lwsserver -legads $(RPATH)
 
 $(ODIR)/vEffect.o:	vEffect.c $(IDIR)/egads.h $(IDIR)/egadsTypes.h \
 			$(IDIR)/egadsErrors.h $(IDIR)/wsserver.h

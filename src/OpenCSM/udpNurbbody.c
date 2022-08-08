@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -113,6 +113,8 @@ udpExecute(ego  context_in,             /* (in)  Egads context (or model) */
 
     ROUTINE(udpExecute);
 
+    /* --------------------------------------------------------------- */
+
 #ifdef DEBUG
     printf("udpExecute(context_in=%llx)\n", (long long)context_in);
     printf("filename(0) = %s\n", FILENAME(0));
@@ -129,7 +131,7 @@ udpExecute(ego  context_in,             /* (in)  Egads context (or model) */
     /* check arguments */
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(NULL);
     CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
@@ -386,6 +388,10 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
    /*@unused@*/double vels[])           /* (out) velocities */
 {
     int    iudp, judp;
+
+    ROUTINE(udpSensitivity);
+
+    /* --------------------------------------------------------------- */
 
 #ifdef DEBUG
     printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f %f)\n",

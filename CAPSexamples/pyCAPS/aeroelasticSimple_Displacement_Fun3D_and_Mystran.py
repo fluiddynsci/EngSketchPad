@@ -147,16 +147,10 @@ mystran.preAnalysis()
 
 # Run mystran
 print ("\n\nRunning Mystran......")
-currentDirectory = os.getcwd() # Get our current working directory
+mystran.system("mystran.exe " + projectName +  ".dat > Info.out") # Run fun3d via system call
 
-os.chdir(mystran.analysisDir) # Move into test directory
-
-os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run fun3d via system call
-
-if os.path.getsize("Info.out") == 0:
+if os.path.getsize(os.path.join(mystran.analysisDir,"Info.out")) == 0:
     raise SystemError("Mystran excution failed\n")
-
-os.chdir(currentDirectory) # Move back to top directory
 
 print ("\nRunning PostAnalysis ......", "mystran")
 mystran.postAnalysis()
@@ -179,18 +173,12 @@ print ("\nRunning PreAnalysis ......", "fun3d")
 fun3d.preAnalysis()
 
 print ("\n\nRunning FUN3D......")  
-currentDirectory = os.getcwd() # Get our current working directory 
-
-os.chdir(myProblem.analysis[i].analysisDir) # Move into test directory
-
 cmdLineOpt = "--read_surface_from_file --animation_freq -1"
 
-os.system("mpirun -np 5 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
+fun3d.system("mpirun -np 5 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
     
-if os.path.getsize("Info.out") == 0: # 
+if os.path.getsize(os.path.join(fun3d.analysisDir,"Info.out")) == 0: # 
     raise SystemError("FUN3D excution failed\n")
-
-os.chdir(currentDirectory) # Move back to top directory
 
 print ("\nRunning PostAnalysis ......", "fun3d")
 # Run AIM post-analysis

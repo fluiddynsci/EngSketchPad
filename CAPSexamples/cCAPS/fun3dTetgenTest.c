@@ -3,7 +3,7 @@
  *
  *             fun3d/tetgen AIM tester
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -72,6 +72,7 @@ int main(int argc, char *argv[])
     // Input values
     capsTuple        *tupleVal = NULL;
     int               tupleSize = 3;
+    int               intVal;
     double            doubleVal;
     enum capsBoolean  boolVal;
 
@@ -96,6 +97,20 @@ int main(int argc, char *argv[])
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
+    status = caps_childByName(problemObj, VALUE, GEOMETRYIN, "wake", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
+    if (status != CAPS_SUCCESS) {
+      printf("problemObj childByName for wake = %d\n", status);
+      goto cleanup;
+    }
+
+    intVal  = 0;
+    status = caps_setValue(tempObj, Integer, 1, 1, (void *) &intVal, NULL,
+                           NULL, &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
+    if (status != CAPS_SUCCESS) goto cleanup;
+
     // Load the EGADS Tess AIM */
     exec   = 1;
     status = caps_makeAnalysis(problemObj, "egadsTessAIM", NULL, NULL, NULL,
@@ -113,14 +128,16 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS)  goto cleanup;
 
     // Link surface mesh from EGADS to TetGen
-    status = caps_childByName(surfMeshObj, VALUE, ANALYSISOUT, "Surface_Mesh",
-                              &source);
+    status = caps_childByName(surfMeshObj, VALUE, ANALYSISOUT, "Surface_Mesh", &source,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
       printf("surfMeshObj childByName for Surface_Mesh = %d\n", status);
       goto cleanup;
     }
-    status = caps_childByName(meshObj, VALUE, ANALYSISIN, "Surface_Mesh",
-                              &target);
+    status = caps_childByName(meshObj, VALUE, ANALYSISIN, "Surface_Mesh", &target,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
       printf("meshObj childByName for tessIn = %d\n", status);
       goto cleanup;
@@ -142,8 +159,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set Boundary_Conditions
-    status = caps_childByName(fun3dObj, VALUE, ANALYSISIN, "Boundary_Condition",
-                              &tempObj);
+    status = caps_childByName(fun3dObj, VALUE, ANALYSISIN, "Boundary_Condition", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     tupleVal = (capsTuple *) EG_alloc(tupleSize*sizeof(capsTuple));
@@ -162,7 +180,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set Mach number input
-    status = caps_childByName(fun3dObj, VALUE, ANALYSISIN, "Mach", &tempObj);
+    status = caps_childByName(fun3dObj, VALUE, ANALYSISIN, "Mach", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     doubleVal  = 0.4;
@@ -172,8 +192,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set Overwrite_NML */
-    status = caps_childByName(fun3dObj, VALUE, ANALYSISIN, "Overwrite_NML",
-                              &tempObj);
+    status = caps_childByName(fun3dObj, VALUE, ANALYSISIN, "Overwrite_NML", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     boolVal = true;
@@ -183,13 +204,16 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Link the volume mesh from TetGen to Fun3D
-    status = caps_childByName(meshObj, VALUE, ANALYSISOUT, "Volume_Mesh",
-                              &source);
+    status = caps_childByName(meshObj, VALUE, ANALYSISOUT, "Volume_Mesh", &source,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
       printf("meshObj childByName for Volume_Mesh = %d\n", status);
       goto cleanup;
     }
-    status = caps_childByName(fun3dObj, VALUE, ANALYSISIN, "Mesh",  &target);
+    status = caps_childByName(fun3dObj, VALUE, ANALYSISIN, "Mesh",  &target,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) {
       printf("fun3dObj childByName for Mesh = %d\n", status);
       goto cleanup;

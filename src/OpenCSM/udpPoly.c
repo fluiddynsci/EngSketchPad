@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2019/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2019/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -100,6 +100,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     ego    enodes[8], eedges[12], eloop, efaces[6], eshell, emodel, eref, *echilds;
 
     ROUTINE(udpExecute);
+
+    /* --------------------------------------------------------------- */
     
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
@@ -125,7 +127,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     }
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(NULL);
     CHECK_STATUS(cacheUdp);
 
     /* put POINTS into full array */
@@ -673,6 +675,10 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
    /*@unused@*/double vels[])           /* (out) velocities */
 {
     int iudp, judp, ipnt;
+
+    ROUTINE(udpSensitivity);
+
+    /* --------------------------------------------------------------- */
 
     /* check that ebody matches one of the ebodys */
     iudp = 0;

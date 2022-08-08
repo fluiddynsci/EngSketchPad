@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -34,14 +34,14 @@
 #include "udpUtilities.h"
 
 /* shorthands for accessing argument values and velocities */
-#define NXSECT(IUDP)     ((int    *) (udps[IUDP].arg[0].val))[0]
+#define NXSECT(IUDP)     ((double *) (udps[IUDP].arg[0].val))[0]
 #define ORIGIN(IUDP,I)   ((double *) (udps[IUDP].arg[1].val))[I]
 #define AXIS(  IUDP,I)   ((double *) (udps[IUDP].arg[2].val))[I]
 
 static char  *argNames[NUMUDPARGS] = {"nxsect", "origin", "axis",   };
-static int    argTypes[NUMUDPARGS] = {ATTRINT,  ATTRREAL, ATTRREAL, };
-static int    argIdefs[NUMUDPARGS] = {5,        0,        0,        };
-static double argDdefs[NUMUDPARGS] = {0.,       0.,       0.,       };
+static int    argTypes[NUMUDPARGS] = {ATTRREAL, ATTRREAL, ATTRREAL, };
+static int    argIdefs[NUMUDPARGS] = {0,        0,        0,        };
+static double argDdefs[NUMUDPARGS] = {5.,       0.,       0.,       };
 
 /* get utility routines: udpErrorStr, udpInitialize, udpReset, udpSet,
                          udpGet, udpVel, udpClean, udpMesh */
@@ -65,16 +65,19 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 {
     int     status = EGADS_SUCCESS;
 
-    int     i, oclass, mtype, nchild, *senses, periodic, nloop, nedge;
+    int     i, oclass, mtype, nchild, *senses, periodic, nedge, nloop, nface;
     double  origin[3], data[18], trange[4], tt, theta, xform[16];
-    ego     context, eref, *ebodys, *echilds, *eloops, *eedges;
-    ego     eface, eloop, exform, *exsects=NULL;
+    char    *message=NULL;
+    ego     context, eref, *ebodys, *echilds, *eedges=NULL, *eloops=NULL, *efaces=NULL;
+    ego     exform, *exsects=NULL;
 
     ROUTINE(udpExecute);
-    
+
+    /* --------------------------------------------------------------- */
+
 #ifdef DEBUG
     printf("udpExecute(emodel=%llx)\n", (long long)emodel);
-    printf("nxsect    = %d\n", NXSECT(0));
+    printf("nxsect    = %d\n", NINT(NXSECT(0)));
     printf("origin(0) = ");
     for (i = 0; i < udps[0].arg[1].size; i++) {
         printf("%f ", ORIGIN(0,i));
@@ -92,21 +95,24 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     *nMesh  = 0;
     *string = NULL;
 
+    MALLOC(message, char, 100);
+    message[0] = '\0';
+
     /* check/process arguments */
     if (udps[0].arg[0].size > 1) {
-        printf(" udpExecute: nxsect should be a scalar\n");
+        snprintf(message, 100, "nxsect should be a scalar");
         status  = EGADS_RANGERR;
         goto cleanup;
 
-    } else if (NXSECT(0) <= 0) {
-        printf(" udpExecute: nxsect = %d <= 0\n", NXSECT(0));
+    } else if (NINT(NXSECT(0)) <= 0) {
+        snprintf(message, 100, "nxsect = %d <= 0", NINT(NXSECT(0)));
         status  = EGADS_RANGERR;
         goto cleanup;
 
     } else if (udps[0].arg[2].size == 1 && AXIS(0,0) == 0) {
     } else if (udps[0].arg[2].size == 6) {
     } else {
-        printf(" udpExecute: axis must be blank or have 6 elements\n");
+        snprintf(message, 100, "axis must be blank or have 6 elements");
         status = EGADS_RANGERR;
         goto cleanup;
     }
@@ -128,11 +134,11 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     CHECK_STATUS(EG_getTopology);
 
     if (oclass != MODEL) {
-        printf(" udpExecute: expecting a Model\n");
+        snprintf(message, 100, "expecting a Model");
         status = EGADS_NOTMODEL;
         goto cleanup;
     } else if (nchild != 2) {
-        printf(" udpExecute: expecting Model to contain one Body (not %d)\n", nchild);
+        snprintf(message, 100, "Model has %d Bodys (not 2)", nchild);
         status = EGADS_NOTBODY;
         goto cleanup;
     }
@@ -142,34 +148,56 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     ocsmPrintEgo(emodel);
 #endif
 
-    /* make sure first Body (the cross-section) is a FaceBody, SheetBody, or WireBody
-       and the second Body (the path) is a WireBody */
-    status = EG_getTopology(ebodys[0], &eref, &oclass, &mtype,
-                            data, &nchild, &echilds, &senses);
-    CHECK_STATUS(EG_getTopology);
+    /* extract Loop and Face from left Body */
+    status = EG_getBodyTopos(ebodys[0], NULL, LOOP, &nloop, &eloops);
+    CHECK_STATUS(EG_getBodyTopos);
 
-    if (oclass != BODY || (mtype != WIREBODY && mtype != FACEBODY && mtype != SHEETBODY)) {
-            printf(" udpExecute: left Body must be WireBody or SheetBody\n");
-            status = EGADS_NOTBODY;
-            goto cleanup;
+    SPLINT_CHECK_FOR_NULL(eloops);
+
+    if (nloop != 1) {
+        snprintf(message, 100, "left Body has %d loops (not 1)", nloop);
+        status = EGADS_RANGERR;
+        goto cleanup;
     }
 
+    status = EG_getBodyTopos(ebodys[0], NULL, FACE, &nface, &efaces);
+    if (status == SUCCESS) {
+        if (nface == 0) {
+            if (efaces != NULL) EG_free(efaces);
+
+            MALLOC(efaces, ego, 1);
+
+            efaces[0] = eloops[0];
+        } else if (nface != 1) {
+            snprintf(message, 100, "left Body has %d faces (not 0 or 1)", nloop);
+            status = EGADS_RANGERR;
+            goto cleanup;
+        }
+    } else {
+        MALLOC(efaces, ego, 1);
+
+        efaces[0] = eloops[0];
+    }
+
+    SPLINT_CHECK_FOR_NULL(efaces);
+
+    /* make sure rite Body is a WireBody */
     status = EG_getTopology(ebodys[1], &eref, &oclass, &mtype,
                             data, &nchild, &echilds, &senses);
     CHECK_STATUS(EG_getTopology);
 
     if (oclass != BODY || mtype != WIREBODY) {
-            printf(" udpExecute: RITE Body must be WireBody\n");
+            snprintf(message, 100, "rite Body must be WireBody");
             status = EGADS_NOTBODY;
             goto cleanup;
     }
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(emodel);
     CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
-    printf("nxsect(%d) = %d\n", numUdp, NXSECT(numUdp));
+    printf("nxsect(%d) = %d\n", numUdp, NINT(NXSECT(numUdp)));
     printf("origin(%d) = ", numUdp);
     for (i = 0; i < udps[numUdp].arg[1].size; i++) {
         printf("%f ", ORIGIN(numUdp,i));
@@ -186,40 +214,26 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     CHECK_STATUS(EG_getContext);
 
     /* get an array to hold the cross-sections */
-    MALLOC(exsects, ego, NXSECT(numUdp));
+    MALLOC(exsects, ego, NINT(NXSECT(numUdp)));
 
     /* for now, make sure guide curve is comprised of a single Edge */
-    status = EG_getTopology(ebodys[1], &eref, &oclass, &mtype,
-                            data, &nloop, &eloops, &senses);
-    CHECK_STATUS(EG_getTopology);
-    if (nloop != 1) {status = -990; goto cleanup;}
+    status = EG_getBodyTopos(ebodys[1], NULL, EDGE, &nedge, &eedges);
+    CHECK_STATUS(EG_getBodyTopos);
 
-    status = EG_getTopology(eloops[0], &eref, &oclass, &mtype,
-                            data, &nedge, &eedges, &senses);
-    CHECK_STATUS(EG_getTopology);
-    if (nedge != 1) {status = -991; goto cleanup;}
+    SPLINT_CHECK_FOR_NULL(eedges);
+
+    if (nedge != 1) {
+        snprintf(message, 100, "rite Body has %d Edges (not 1, as required now)", nedge);
+        status = -991;
+        goto cleanup;
+    }
 
     status = EG_getRange(eedges[0], trange, &periodic);
     CHECK_STATUS(EG_getRange);
 
-    /* extract Face and Loop from ebodys[0] */
-    status = EG_getTopology(ebodys[0], &eref, &oclass, &mtype,
-                            data, &nchild, &echilds, &senses);
-    CHECK_STATUS(EG_getTopology);
-    eface = echilds[0];
-
-    if        (mtype == WIREBODY) {
-        eloop = eface;
-    } else {
-        status = EG_getTopology(eface, &eref, &oclass, &mtype,
-                                data, &nchild, &echilds, &senses);
-        CHECK_STATUS(EG_getTopology);
-        eloop = echilds[0];
-    }
-
     /* create nxsect Faces/Loops */
-    for (i = 0; i < NXSECT(0); i++) {
-        tt = trange[0] + (trange[1] - trange[0]) * (double)(i) / (double)(NXSECT(0)-1);
+    for (i = 0; i < NINT(NXSECT(0)); i++) {
+        tt = trange[0] + (trange[1] - trange[0]) * (double)(i) / (double)(NINT(NXSECT(0))-1);
         status = EG_evaluate(eedges[0], &tt, data);
         CHECK_STATUS(EG_evaluate);
 
@@ -244,7 +258,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
             xform[ 4] =  sin(theta); xform[ 5] =  cos(theta); xform[ 6] =  0;          xform[ 7] = data[1]-origin[1];
             xform[ 8] =  0;          xform[ 9] =  0;          xform[10] =  1;          xform[11] = data[2]-origin[2];
         } else {
-            printf(" udpExecute: axis must be aligned with x-, y-, or z-axis\n");
+            snprintf(message, 100, "axis must be aligned with x-, y-, or z-axis");
             status = EGADS_RANGERR;
             goto cleanup;
         }
@@ -252,19 +266,24 @@ udpExecute(ego  emodel,                 /* (in)  input model */
         status = EG_makeTransform(context, xform, &exform);
         CHECK_STATUS(EG_makeTransform);
 
-        if (i == 0 || i == NXSECT(0)-1) {
-            status = EG_copyObject(eface, exform, &exsects[i]);
+        if (i == 0 || i == NINT(NXSECT(0))-1) {
+            status = EG_copyObject(efaces[0], exform, &exsects[i]);
         } else {
-            status = EG_copyObject(eloop, exform, &exsects[i]);
+            status = EG_copyObject(eloops[0], exform, &exsects[i]);
         }
         CHECK_STATUS(EG_copyObject);
 
         status = EG_deleteObject(exform);
         CHECK_STATUS(EG_deleteObject);
+
+#ifdef DEBUG
+        printf("exsects[%d]\n", i);
+        ocsmPrintEgo(exsects[i]);
+#endif
     }
 
     /* create the blend */
-    status = EG_blend(NXSECT(0), exsects, NULL, NULL, ebody);
+    status = EG_blend(NINT(NXSECT(0)), exsects, NULL, NULL, ebody);
     CHECK_STATUS(EG_blend);
     if (*ebody == NULL) goto cleanup;   // needed fro splint
 
@@ -293,10 +312,19 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 #endif
 
 cleanup:
+    if (eedges  != NULL) EG_free(eedges );
+    if (eloops  != NULL) EG_free(eloops );
+    if (efaces  != NULL) EG_free(efaces );
     if (exsects != NULL) EG_free(exsects);
 
-    if (status != EGADS_SUCCESS) {
+    if (strlen(message) > 0) {
+        *string = message;
+        printf("%s\n", message);
+    } else if (status != EGADS_SUCCESS) {
+        FREE(message);
         *string = udpErrorStr(status);
+    } else {
+        FREE(message);
     }
 
     return status;

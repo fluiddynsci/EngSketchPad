@@ -166,16 +166,10 @@ structure.preAnalysis()
 
 # Run mystran
 print ("\n\nRunning Mystran......")  
-currentDirectory = os.getcwd() # Get our current working directory 
+structure.system("mystran.exe " + projectName +  ".dat > Info.out") # Run fun3d via system call
 
-os.chdir(structure.analysisDir) # Move into test directory
-
-os.system("mystran.exe " + projectName +  ".dat > Info.out") # Run fun3d via system call
-
-if os.path.getsize("Info.out") == 0: # 
+if os.path.getsize(os.path.join(structure.analysisDir,"Info.out")) == 0: # 
     print ("Mystran excution possibly failed\n")
-
-os.chdir(currentDirectory) # Move back to top directory 
 
 print ("\nRunning PostAnalysis ......", "mystran")
 
@@ -212,20 +206,14 @@ fluid.preAnalysis()
 
 ####### Run fun3d ####################
 print ("\n\nRunning FUN3D......")  
-currentDirectory = os.getcwd() # Get our current working directory 
-
-os.chdir(fluid.analysisDir) # Move into test directory
-
 cmdLineOpt = "--moving_grid --aeroelastic_internal --animation_freq -1"
 
-os.system("mpirun -np 5 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
+fluid.system("mpirun -np 5 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
     
-if os.path.getsize("Info.out") == 0: # 
+if os.path.getsize(os.path.join(fluid.analysisDir,"Info.out")) == 0: # 
     print ("FUN3D excution failed\n")
     myProblem.closeCAPS()
     raise SystemError
-
-os.chdir(currentDirectory) # Move back to top directory
 
 print ("\nRunning PostAnalysis ......", "fun3d")
 # Run AIM post-analysis

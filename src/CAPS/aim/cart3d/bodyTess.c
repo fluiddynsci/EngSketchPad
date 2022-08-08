@@ -3,30 +3,29 @@
 
 #include "bodyTess.h"
 
-
 /*
- * 	calculates and returns a complete Body tessellation
+ *     calculates and returns a complete Body tessellation
  *
- * 	where:	body	- ego of a body tessellation
+ *     where:   body    - ego of a body tessellation
  *              nfaca   - number of faces in the body (returned)
  *              nedga   - number of edges in the body (returned)
- * 		nvert	- Number of vertices (returned)
- * 		verts	- coordinates (returned) 3*nverts in len -- freeable
+ *              nvert   - Number of vertices (returned)
+ *              verts   - coordinates (returned) 3*nverts in len -- freeable
  *              tags    - type/index/parameter tags (returned)
  *                        nverts in len -- freeable
- * 		ntriang	- number of triangles (returned)
- * 		triang	- triangle indices (returned) 4*ntriang in len
- *			  freeable
+ *              ntriang - number of triangles (returned)
+ *              triang  - triangle indices (returned) 4*ntriang in len
+ *                        -- freeable
  */
 
 int
 bodyTess(ego tess, int *nfaca, int *nedga, int *nvert, double **verts,
          verTags **vtags, int *ntriang, int **triang)
 {
-  int          status, i, j, ntri, sta, *tri, nface, nedge, plen, tlen, nGlobal;
+  int          status, i, j, ntri, sta, *tri=NULL, nface, nedge, plen, tlen, nGlobal;
   const int    *tris, *tric, *ptype, *pindex;
-  double       *xyzs;
-  verTags      *tags;
+  double       *xyzs=NULL;
+  verTags      *tags=NULL;
   const double *points, *uv;
   egTessel     *btess;
   ego          ref;
@@ -67,13 +66,14 @@ bodyTess(ego tess, int *nfaca, int *nedga, int *nvert, double **verts,
   xyzs = (double *) EG_alloc(3*nGlobal*sizeof(double));
   if (xyzs == NULL) {
     printf(" Error: Can not allocate %d XYZs (bodyTess)!\n", nGlobal);
-    return EGADS_MALLOC;
+    status = EGADS_MALLOC;
+    goto cleanup;
   }
   tags = (verTags *) EG_alloc(nGlobal*sizeof(verTags));
   if (tags == NULL) {
     printf(" Error: Can not allocate %d tags (bodyTess)!\n", nGlobal);
-    EG_free(xyzs);
-    return EGADS_MALLOC;
+    status = EGADS_MALLOC;
+    goto cleanup;
   }
   /* get the global data */
   for (i = 0; i < nGlobal; i++) {
@@ -82,9 +82,7 @@ bodyTess(ego tess, int *nfaca, int *nedga, int *nvert, double **verts,
     if (status != EGADS_SUCCESS) {
       printf(" Error: EG_getGlobal %d status = %d (bodyTessellation)!\n",
              i+1, status);
-      EG_free(tags);
-      EG_free(xyzs);
-      return status;
+      goto cleanup;
     }
   }
 
@@ -93,9 +91,8 @@ bodyTess(ego tess, int *nfaca, int *nedga, int *nvert, double **verts,
   tri = (int *) EG_alloc(4*ntri*sizeof(int));
   if (tri == NULL) {
     printf(" Error: Can not allocate triangles (bodyTess)!\n");
-    EG_free(tags);
-    EG_free(xyzs);
-    return EGADS_MALLOC;
+    status = EGADS_MALLOC;
+    goto cleanup;
   }
   ntri = 0;
   for (j = 1; j <= nface; j++) {
@@ -108,40 +105,38 @@ bodyTess(ego tess, int *nfaca, int *nedga, int *nvert, double **verts,
       if (status != EGADS_SUCCESS) {
         printf(" Face %d  %d/0 Error: EG_localToGlobal = %d (bodyTess)!\n",
                j, i+1, status);
-        EG_free(tri);
-        EG_free(tags);
-        EG_free(xyzs);
-        return status;
+        goto cleanup;
       }
       status = EG_localToGlobal(tess, j, tris[3*i+1], &tri[4*ntri+1]);
       if (status != EGADS_SUCCESS) {
         printf(" Face %d  %d/1 Error: EG_localToGlobal = %d (bodyTess)!\n",
                j, i+1, status);
-        EG_free(tri);
-        EG_free(tags);
-        EG_free(xyzs);
-        return status;
+        goto cleanup;
       }
       status = EG_localToGlobal(tess, j, tris[3*i+2], &tri[4*ntri+2]);
       if (status != EGADS_SUCCESS) {
         printf(" Face %d  %d/2 Error: EG_localToGlobal = %d (bodyTess)!\n",
                j, i+1, status);
-        EG_free(tri);
-        EG_free(tags);
-        EG_free(xyzs);
-        return status;
+        goto cleanup;
       }
       tri[4*ntri+3] = j;
     }
   }
   
+  status = EGADS_SUCCESS;
+
   *nfaca   = nface;
   *nedga   = nedge;
   *nvert   = nGlobal;
-  *vtags   = tags;
-  *verts   = xyzs;
+  *vtags   = tags;   tags = NULL;
+  *verts   = xyzs;   xyzs = NULL;
   *ntriang = ntri;
-  *triang  = tri;
+  *triang  = tri;    tri = NULL;
 /*@-mustfreefresh@*/
-  return EGADS_SUCCESS;
+
+cleanup:
+  EG_free(tags);
+  EG_free(xyzs);
+  EG_free(tri);
+  return status;
 }

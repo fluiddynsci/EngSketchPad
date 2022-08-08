@@ -41,13 +41,25 @@ all:
 	cd hsm
 	nmake -f NMakefile
 	cd ..
+	cd skeleton
+	nmake -f NMakefile
+	cd ..
 	cd su2
+	nmake -f NMakefile
+	cd ..
+	cd tacs
 	nmake -f NMakefile
 	cd ..
 #	cd tsfoil
 #	nmake -f NMakefile
 #	cd ..
 	cd xfoil
+	nmake -f NMakefile
+	cd ..
+	cd mses
+	nmake -f NMakefile
+	cd ..
+	cd interference
 	nmake -f NMakefile
 	cd ..
 !IFDEF AFLR
@@ -112,13 +124,25 @@ clean:
 	cd hsm
 	nmake -f NMakefile clean
 	cd ..
+	cd skeleton
+	nmake -f NMakefile clean
+	cd ..
 	cd su2
+	nmake -f NMakefile clean
+	cd ..
+	cd tacs
 	nmake -f NMakefile clean
 	cd ..
 #	cd tsfoil
 #	nmake -f NMakefile clean
 #	cd ..
 	cd xfoil
+	nmake -f NMakefile clean
+	cd ..
+	cd mses
+	nmake -f NMakefile clean
+	cd ..
+	cd interference
 	nmake -f NMakefile clean
 	cd ..
 !IFDEF AFLR
@@ -183,13 +207,25 @@ cleanall:
 	cd hsm
 	nmake -f NMakefile cleanall
 	cd ..
+	cd skeleton
+	nmake -f NMakefile cleanall
+	cd ..
 	cd su2
+	nmake -f NMakefile cleanall
+	cd ..
+	cd tacs
 	nmake -f NMakefile cleanall
 	cd ..
 #	cd tsfoil
 #	nmake -f NMakefile cleanall
 #	cd ..
 	cd xfoil
+	nmake -f NMakefile cleanall
+	cd ..
+	cd mses
+	nmake -f NMakefile cleanall
+	cd ..
+	cd interference
 	nmake -f NMakefile cleanall
 	cd ..
 !IFDEF AFLR

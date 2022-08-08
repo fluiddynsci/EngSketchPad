@@ -293,11 +293,15 @@ fast_expansion_sum_zeroelim(int elen, REAL *e, int flen, REAL *f, REAL *h)
       Fast_Two_Sum(enow, Q, Qnew, hh);
 #ifndef __clang_analyzer__
       enow = e[++eindex];
+#else
+      enow = e[eindex++];
 #endif
     } else {
       Fast_Two_Sum(fnow, Q, Qnew, hh);
 #ifndef __clang_analyzer__
       fnow = f[++findex];
+#else
+      fnow = f[findex++];
 #endif
     }
     Q = Qnew;
@@ -309,11 +313,15 @@ fast_expansion_sum_zeroelim(int elen, REAL *e, int flen, REAL *f, REAL *h)
         Two_Sum(Q, enow, Qnew, hh);
 #ifndef __clang_analyzer__
         enow = e[++eindex];
+#else
+        enow = e[eindex++];
 #endif
       } else {
         Two_Sum(Q, fnow, Qnew, hh);
 #ifndef __clang_analyzer__
         fnow = f[++findex];
+#else
+        fnow = f[findex++];
 #endif
       }
       Q = Qnew;
@@ -324,7 +332,11 @@ fast_expansion_sum_zeroelim(int elen, REAL *e, int flen, REAL *f, REAL *h)
   }
   while (eindex < elen) {
     Two_Sum(Q, enow, Qnew, hh);
+#ifndef __clang_analyzer__
     enow = e[++eindex];
+#else
+    enow = e[eindex++];
+#endif
     Q = Qnew;
     if (hh != 0.0) {
       h[hindex++] = hh;
@@ -332,7 +344,11 @@ fast_expansion_sum_zeroelim(int elen, REAL *e, int flen, REAL *f, REAL *h)
   }
   while (findex < flen) {
     Two_Sum(Q, fnow, Qnew, hh);
+#ifndef __clang_analyzer__
     fnow = f[++findex];
+#else
+    fnow = f[findex++];
+#endif
     Q = Qnew;
     if (hh != 0.0) {
       h[hindex++] = hh;

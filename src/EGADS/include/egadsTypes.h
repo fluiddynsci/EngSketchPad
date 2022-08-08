@@ -5,7 +5,7 @@
  *
  *             General Object Header
  *
- *      Copyright 2011-2021, Massachusetts Institute of Technology
+ *      Copyright 2011-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -15,8 +15,8 @@
 
 
 #define EGADSMAJOR     1
-#define EGADSMINOR    20
-#define EGADSPROP     EGADSprop: Revision 1.20
+#define EGADSMINOR    21
+#define EGADSPROP     EGADSprop: Revision 1.21
 
 #define MAGIC      98789
 #define MTESSPARAM     2

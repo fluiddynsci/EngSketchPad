@@ -12,7 +12,7 @@ endif
 
 $(TDIR)/vTessInp:	$(ODIR)/vTessInp.o $(LDIR)/libwsserver.a
 	$(CXX) -o $(TDIR)/vTessInp $(ODIR)/vTessInp.o \
-		-L$(LDIR) -lwsserver -legads -lpthread -lz $(RPATH) -lm
+		-L$(LDIR) -lwsserver -legads $(RPATH)
 
 $(ODIR)/vTessInp.o:	vTessInp.c $(IDIR)/egads.h $(IDIR)/wsserver.h \
 			$(IDIR)/egadsTypes.h $(IDIR)/egadsErrors.h

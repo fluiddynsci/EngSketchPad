@@ -12,9 +12,9 @@ TDIR  = $(ESP_ROOT)\bin
 !ENDIF
 
 $(TDIR)\vCurvature.exe:	$(ODIR)\vCurvature.obj $(LDIR)\egads.lib \
-			$(LDIR)\wsserver.lib $(LDIR)\z.lib
-	cl /Fe$(TDIR)\vCurvature.exe $(ODIR)\vCurvature.obj /link /LIBPATH:$(LDIR) \
-		wsserver.lib z.lib egads.lib ws2_32.lib
+			$(LDIR)\wsserver.lib
+	cl /Fe$(TDIR)\vCurvature.exe $(ODIR)\vCurvature.obj \
+		/link /LIBPATH:$(LDIR) wsserver.lib egads.lib
 	$(MCOMP) /manifest $(TDIR)\vCurvature.exe.manifest \
 		/outputresource:$(TDIR)\vCurvature.exe;1
 

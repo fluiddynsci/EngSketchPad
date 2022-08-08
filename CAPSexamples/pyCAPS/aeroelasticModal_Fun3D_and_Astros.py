@@ -172,21 +172,15 @@ structure.input.Constraint = {"edgeConstraint": constraint}
 print ("\nRunning PreAnalysis ......", "astros")
 structure.preAnalysis()
 
-currentDirectory = os.getcwd() # Get our current working directory 
-
-os.chdir(structure.analysisDir) # Move into test directory
-
 # Copy files needed to run astros
 astros_files = ["ASTRO.D01",  # *.DO1 file
                 "ASTRO.IDX"]  # *.IDX file
 for file in astros_files: 
     if not os.path.isfile(file):
-        shutil.copy(ASTROS_ROOT + os.sep + file, file)
+        shutil.copy(ASTROS_ROOT + os.sep + file, os.path.join(structure.analysisDir, file))
 
 # Run Astros via system call
-os.system("astros.exe < " + projectName +  ".dat > " + projectName + ".out"); 
-
-os.chdir(currentDirectory) # Move back to top directory 
+structure.system("astros.exe < " + projectName +  ".dat > " + projectName + ".out"); 
 
 print ("\nRunning PostAnalysis ......", "astros")
 structure.postAnalysis()
@@ -221,20 +215,15 @@ fluid.preAnalysis()
 
 ####### Run fun3d ####################
 print ("\n\nRunning FUN3D......")  
-currentDirectory = os.getcwd() # Get our current working directory 
-
-os.chdir(fluid.analysisDir) # Move into test directory
 
 cmdLineOpt = "--moving_grid --aeroelastic_internal --animation_freq -1"
 
-os.system("mpirun -np 5 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
+fluid.system("mpirun -np 5 nodet_mpi " + cmdLineOpt + " > Info.out"); # Run fun3d via system call
     
-if os.path.getsize("Info.out") == 0: # 
+if os.path.getsize(os.path.join(fluid.analysisDir,"Info.out")) == 0: # 
     print ("FUN3D excution failed\n")
     myProblem.closeCAPS()
     raise SystemError
-
-os.chdir(currentDirectory) # Move back to top directory
 
 print ("\nRunning PostAnalysis ......", "fun3d")
 # Run AIM post-analysis

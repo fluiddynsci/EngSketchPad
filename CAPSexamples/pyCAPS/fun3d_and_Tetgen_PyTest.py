@@ -34,6 +34,8 @@ myProblem = pyCAPS.Problem(problemName=workDir,
 # Change a design parameter - area in the geometry
 ## [setGeom]
 myProblem.geometry.despmtr.area = 50
+# TetGen does not support wakes
+myProblem.geometry.cfgpmtr.wake = 0
 ## [setGeom]
 
 # Write out a new egads file for the geometry
@@ -119,14 +121,8 @@ fun3dAIM.preAnalysis()
 
 ####### Run fun3d ####################
 print ("\n\nRunning FUN3D......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(fun3dAIM.analysisDir) # Move into test directory
-
 if (args.noAnalysis == False):
-    os.system("nodet_mpi --animation_freq -1 --write_aero_loads_to_file> Info.out"); # Run fun3d via system call
-
-os.chdir(currentDirectory) # Move back to top directory
+    fun3dAIM.system("nodet_mpi --animation_freq -1 --write_aero_loads_to_file> Info.out"); # Run fun3d via system call
 #######################################
 
 # Run AIM post-analysis

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -106,6 +106,7 @@ typedef struct {
 typedef struct {
     ego        ebody;
     udparg_T   arg[NUMUDPARGS];
+    int        *bodyList;
     void       *data;         /* private data */
 } udp_T;
 

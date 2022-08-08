@@ -25,7 +25,9 @@ from .treeUtils import writeTreeHTML
 from .geometryUtils import _viewGeometryMatplotlib
 from .openmdao import createOpenMDAOComponent
 
-from pyEGADS import egads
+from   pyEGADS import egads
+from   pyOCSM  import ocsm
+import ctypes
 import os
 import functools
 import re
@@ -358,6 +360,7 @@ def createTree(dataItem, showAnalysisGeom, showInternalGeomAttr, reverseMap):
 # \param Problem.parameter \ref ParamSequence of \ref ValueIn parameters
 # \param Problem.bound     \ref BoundSequence of \ref Bound instances
 # \param Problem.attr      \ref AttrSequence of \ref ValueIn attributes
+#
 class Problem(object):
 
     __slots__ = ['_problemObj', 'geometry', 'parameter', 'analysis', 'bound', 'attr', '_name']
@@ -365,11 +368,13 @@ class Problem(object):
     ## Initialize the problem.
     # \param problemName CAPS problem name that serves as the root directory for all file I/O.
     # \param phaseName the current phase name (None is equivalent to 'Scratch')
+    # \param phaseStart name of the phase used to start the new phase 
     # \param capsFile CAPS file to load. Options: *.csm or *.egads.
     # \param outLevel Level of output verbosity. See \ref setOutLevel .
-    # \param useJournal Use Journaling to continue execution of an interrupted script.
+    # \param phaseContinuation use continuation for a open phase, otherwise the phase is first deleted on disk
+    # \param phaseReadOnly open a closed Phase in Read Only mode
     #
-    def __init__(self, problemName, phaseName=None, capsFile=None, outLevel=1, useJournal=False):
+    def __init__(self, problemName, phaseName=None, phaseStart=None, capsFile=None, outLevel=1, phaseContinuation=True, phaseReadOnly=False):
 
         verbosity = {"minimal"  : 0,
                      "standard" : 1,
@@ -382,15 +387,75 @@ class Problem(object):
         if int(outLevel) not in verbosity.values():
             raise caps.CAPSError(caps.CAPS_BADVALUE, msg = "invalid verbosity level! outLevel={!r}".format(outLevel))
 
-        problemObj = caps.open(problemName, phaseName, capsFile, outLevel, useJournal)
+        if isinstance(problemName,caps.capsObj):
+            problemObj = problemName
+            problemName, otype, stype, link, parent, last = problemObj.info()
+        elif ocsm.GetAuxPtr():
+            problemObj = caps.capsObj(ctypes.cast(ocsm.GetAuxPtr(),caps.c_capsObj), None, deleteFunction=None)
+            problemName, otype, stype, link, parent, last = problemObj.info()
+        else:
+            ptr = None
+            if phaseName is not None:
+                state = caps.phaseState(problemName, phaseName if phaseName != "Scratch" else None)
+                if state >= 0:
+                    # The phase already exists
+
+                    if state%2 == 1: # Phase is locked by someone else
+                        msg = "Problem with problemName={!r} and phaseName={!r} is being used by someone else".format(problemName,phaseName)
+                        raise caps.CAPSError(caps.CAPS_STATEERR, msg)
+
+                    if state == 2 or state == 6:
+                        if phaseReadOnly: # Phase is closed, so start in read only mode
+                            flag = caps.oFlag.oReadOnly
+                        else:
+                            msg = "Problem with problemName={!r} and phaseName={!r} is closed and readOnly=False".format(problemName,phaseName)
+                            raise caps.CAPSError(caps.CAPS_STATEERR, msg)
+                    else:
+                        # Phase is open
+                        if phaseContinuation:
+                            # use Phase continuation
+                            flag = caps.oFlag.oContinue
+                        else:
+                            # Remove the Phase
+                            shutil.rmtree(os.path.join(problemName, phaseName))
+                            if phaseStart is not None:
+                                flag = caps.oFlag.oPhaseName
+                                ptr = phaseStart
+                            else:
+                                ptr = capsFile
+                                flag = caps.oFlag.oFileName
+
+                else:
+                    # The phase does not exist
+                    if phaseStart is not None:
+                        # Start the phase from an existing phase
+                        flag = caps.oFlag.oPhaseName
+                        ptr = phaseStart
+                        
+                        # use a new CSM file for this new phase
+                        if capsFile is not None:
+                            flag = caps.oFlag.oPNewCSM 
+                            caps.phaseNewCSM(problemName, phaseName, capsFile)
+                    else:
+                        # Start a new clean phase
+                        ptr = capsFile
+                        flag = caps.oFlag.oFileName
+            else:
+                # No phaseName, using Scratch
+                ptr = capsFile
+                flag = caps.oFlag.oFileName
+
+            if phaseName == "Scratch": phaseName = None
+            problemObj = caps.open(problemName, phaseName, flag, ptr, outLevel)
+        
         super(Problem, self).__setattr__("_problemObj", problemObj)
+        super(Problem, self).__setattr__("_name",     problemName)
 
         super(Problem, self).__setattr__("geometry",  ProblemGeometry(problemObj))
         super(Problem, self).__setattr__("parameter", ParamSequence(problemObj))
         super(Problem, self).__setattr__("analysis",  AnalysisSequence(self))
         super(Problem, self).__setattr__("bound",     BoundSequence(problemObj))
         super(Problem, self).__setattr__("attr",      AttrSequence(problemObj))
-        super(Problem, self).__setattr__("_name",     problemName)
 
     def __setattr__(self, name, data):
         raise AttributeError("Cannot set attribute: {!r}".format(name))
@@ -398,18 +463,43 @@ class Problem(object):
     def __delattr__(self, name):
         raise AttributeError("Cannot del attribute: {!r}".format(name))
 
+
+    # delete all references to _problemObj after closing the problem
+    def _clean(self):
+        super(Problem, self).__delattr__("geometry")
+        super(Problem, self).__delattr__("parameter")
+        super(Problem, self).__delattr__("analysis")
+        super(Problem, self).__delattr__("bound")
+        super(Problem, self).__delattr__("attr")
+
     ## Exlicitly closes CAPS Problem Object
+    #
+    # This method is mainly useful for testing purposes
+    #
     def close(self):
         self._problemObj.close()
+        self._clean()
+
+    ## Completes the Phase and closes the CAPS Problem Object
+    # \param phaseName Phase Name of the Scratch phase is closed as complete
+    #
+    def closePhase(self, phaseName=None):
+        self._problemObj.close(1, phaseName)
+        self._clean()
+
+    ## Set the current intent phrase
+    # \param lines String or list of strings describing the intent
+    def intentPhrase(self, lines):
+        return self._problemObj.intentPhrase(lines)
 
     ## Property returns the name of the CAPS Problem Object
     @property
     def name(self):
         return self._name
 
-    ## Indicates if the CAPS Problem Object is currently journaling
+    ## Boolean indicator if the CAPS Problem Object is currently journaling
     def journaling(self):
-        return self._problemObj.journalState()
+        return self._problemObj.journalState() == caps.oFlag.oContinue
 
     ## Set the verbosity level of the CAPS output.
     # See \ref problem5.py for a representative use case.
@@ -621,7 +711,7 @@ class capsProblem(Problem):
 
         return dirtyAnalysis
 
-    @deprecated("'None'")
+    @deprecated("'close'")
     def closeCAPS(self):
 
         # delete all references to _problemObj
@@ -778,9 +868,12 @@ class ProblemGeometry(object):
 
     def _viewGeometryCAPSViewer(self, **kwargs):
 
-        name, otype, stype, link, parent, last = self._problemObj.info()
+        egadsFile = os.path.join(self._problemObj.getRootPath(), "viewProblemGeometry.egads")
+        relFile = os.path.relpath(egadsFile, os.getcwd())
 
-        egadsFile = os.path.join(name, "viewProblemGeometry.egads")
+        # use the shortest filename
+        if len(relFile) < len(egadsFile):
+            egadsFile = relFile
 
         self.save( egadsFile )
 
@@ -790,7 +883,7 @@ class ProblemGeometry(object):
             return
 
         egadsFile = _ocsmPath(egadsFile)
-        os.system("serveCSM -port " + str(kwargs.pop("portNumber", 7681)) + " -outLevel 0 " + egadsFile)
+        os.system("serveESP -port " + str(kwargs.pop("portNumber", 7681)) + " -outLevel 0 " + egadsFile)
         os.remove(egadsFile)
         os.remove("autoEgads.csm")
 
@@ -1087,7 +1180,7 @@ class capsGeometry(ProblemGeometry):
                 iProj += 1
                 projectName = base + str(iProj)
 
-        super(capsProblem, problem).__init__(projectName, None, capsFile, verbosity)
+        super(capsProblem, problem).__init__(projectName, None, None, capsFile, verbosity)
         super(capsGeometry, self).__init__(problem._problemObj)
 
         super(Problem, problem).__setattr__("geometry", self)
@@ -1331,6 +1424,57 @@ class _capsValue(object):
         return caps.Quantity(self.value, self.units)/caps.Unit(toUnits)
 
 #==============================================================================
+## History information for a CAPS Object
+class History(object):
+
+    __slots__ = ["_own"]
+
+    @classmethod
+    def getHistory(cls, obj):
+        hist = obj.getHistory()
+        return [History(i) for i in hist]
+
+    def __init__(self, own):
+        super(History, self).__setattr__('_own', own)
+
+    ## The process Name
+    @property
+    def processName(self):
+        pname, pID, userID, lines, datetime, sNum = self._own.info()
+        return pname
+
+    ## The process ID
+    @property
+    def processID(self):
+        pname, pID, userID, lines, datetime, sNum = self._own.info()
+        return pID
+
+    ## The user ID
+    @property
+    def userID(self):
+        pname, pID, userID, lines, datetime, sNum = self._own.info()
+        return userID
+
+    ## Line-by-line list of inten phrases
+    @property
+    def intentPhrase(self):
+        pname, pID, userID, lines, datetime, sNum = self._own.info()
+        return lines
+
+    ## The filled date/time stamp info - 6 in length:
+    #  year, month, day, hour, minute, second
+    @property
+    def datetime(self):
+        pname, pID, userID, lines, datetime, sNum = self._own.info()
+        return datetime
+
+    ## The sequence number (always increasing)
+    @property
+    def sNum(self):
+        pname, pID, userID, lines, datetime, sNum = self._own.info()
+        return sNum
+
+#==============================================================================
 ## Base class for all CAPS Sequence classes
 #
 # A CAPS Sequence only contains instances of a single type
@@ -1427,6 +1571,11 @@ class ValueIn(object):
     def name(self):
         return self._name
 
+    ## Returns the history list of the CAPS Value Object
+    def history(self):
+        return History.getHistory(self._valObj)
+
+    ## Returns the CAPS Value Object properties
     def props(self):
         dim, pmtr, lfix, sfix, ntype = self._valObj.getValueProps()
         return {"dim":dim, "pmtr":pmtr, "lfix":lfix, "sfix":sfix, "ntype":ntype}
@@ -1461,6 +1610,17 @@ class ValueIn(object):
             raise caps.CAPSError(caps.CAPS_BADVALUE, "source must be a Value Object")
 
         self._valObj.transferValues(tmethod, source._valObj)
+
+#==============================================================================
+## Defines a CAPS parameter Value Object
+class ValueInParam(ValueIn):
+
+    def __init__(self, valObj):
+        super(ValueInParam,self).__init__(valObj)
+
+    ## Mark a parameter CAPS Value Object for deletion on the next Phase.
+    def markForDelete(self):
+        self._valObj.markForDelete()
 
 #==============================================================================
 
@@ -1616,7 +1776,7 @@ class ParamSequence(Sequence):
         for i in range(nParam):
             valObj = problemObj.childByIndex(caps.oType.VALUE, caps.sType.PARAMETER, i+1)
             name, otype, stype, link, parent, last = valObj.info()
-            self._capsItems[name] = ValueIn(valObj)
+            self._capsItems[name] = ValueInParam(valObj)
 
     ## Create an parameter CAPS Value Object.
     #
@@ -1658,7 +1818,7 @@ class ParamSequence(Sequence):
         if limits:
             valObj.setLimits(limits)
 
-        self._capsItems[name] = ValueIn(valObj)
+        self._capsItems[name] = ValueInParam(valObj)
         return self._capsItems[name]
 
     def __getattr__(self, name):
@@ -1702,6 +1862,10 @@ class ValueOut(object):
     def name(self):
         return self._name
 
+    ## Returns the history list of the CAPS Value Object
+    def history(self):
+        return History.getHistory(self._valObj)
+
     ## Property getter returns a copy the values stored in the CAPS Value Object
     def props(self):
         dim, pmtr, lfix, sfix, ntype = self._valObj.getValueProps()
@@ -1720,11 +1884,11 @@ class ValueOut(object):
             return self._valObj.getDeriv(name)
         else:
             names = self._valObj.hasDeriv()
-            dots = {}
+            derivs = {}
             for name in names:
-                dots[name] = self._valObj.getDeriv(name)
-    
-            return dots
+                derivs[name] = self._valObj.getDeriv(name)
+
+            return derivs
 
 #==============================================================================
 ## Defines a Sequence of CAPS output Value Objects
@@ -1785,6 +1949,136 @@ class ValueOutSequence(Sequence):
 
 
 #==============================================================================
+## Defines a CAPS dynamic output Value Object
+# Not a standalone class.
+class ValueDynOut(object):
+
+    __slots__ = ["_analysisObj", "_name"]
+
+    def __init__(self, analysisObj, name):
+        self._analysisObj = analysisObj
+        self._name = name
+
+    ## Property getter returns a copy the values stored in the CAPS Value Object
+    @property
+    def value(self):
+        valObj = self._analysisObj.childByName(caps.oType.VALUE, caps.sType.ANALYSISDYNO, self._name)
+        return valObj.getValue()
+
+    @value.setter
+    def value(self, val):
+        raise caps.CAPSError(caps.CAPS_BADVALUE, "Cannot assign Out Value")
+
+    ## Property returns the name of the CAPS Value Object
+    @property
+    def name(self):
+        return self._name
+
+    ## Returns the history list of the CAPS Value Object
+    def history(self):
+        return History.getHistory(self._analysisObj)
+
+    ## Property getter returns a copy the values stored in the CAPS Value Object
+    def props(self):
+        valObj = self._analysisObj.childByName(caps.oType.VALUE, caps.sType.ANALYSISDYNO, self._name)
+        dim, pmtr, lfix, sfix, ntype = valObj.getValueProps()
+        return {"dim":dim, "pmtr":pmtr, "lfix":lfix, "sfix":sfix, "ntype":ntype}
+
+    ## Returns a string list of of the input Value Object names that can be used in \ref deriv
+    def hasDeriv(self):
+        valObj = self._analysisObj.childByName(caps.oType.VALUE, caps.sType.ANALYSISDYNO, self._name)
+        return valObj.hasDeriv()
+
+    ## Returns derivatives of the output Value Object
+    #
+    # \param name Name of the input Value Object to take derivative w.r.t.
+    #        if name is None then a dictionary with all dervatives from \ref hasDeriv are returned
+    def deriv(self, name=None):
+        valObj = self._analysisObj.childByName(caps.oType.VALUE, caps.sType.ANALYSISDYNO, self._name)
+        if name is not None:
+            return valObj.getDeriv(name)
+        else:
+            names = valObj.hasDeriv()
+            if names is None: return {}
+            derivs = {}
+            for name in names:
+                derivs[name] = valObj.getDeriv(name)
+
+            return derivs
+
+#==============================================================================
+## Defines a Sequence of CAPS dynamic output Value Objects
+class ValueDynOutSequence(object):
+
+    __slots__ = ["_analysisObj"]
+
+    def __init__(self, analysisObj):
+        super(self.__class__, self).__setattr__('_analysisObj', analysisObj)
+
+    def __getattr__(self, name):
+        return ValueDynOut(self._analysisObj, name).value
+
+    def __setattr__(self, name, value):
+        raise caps.CAPSError(caps.CAPS_BADVALUE, "Cannot set DynOut Value: {!r}".format(self._typeName, key))
+
+    def __delattr__(self, name):
+        raise caps.CAPSError(caps.CAPS_BADVALUE, "Cannot del DynOut Value: {!r}".format(self._typeName, key))
+
+    def __getitem__(self, name):
+        return ValueDynOut(self._analysisObj, name)
+
+    def __setitem__(self, key, value):
+        raise caps.CAPSError(caps.CAPS_BADVALUE, "Cannot set DynOut Value: {!r}".format(self._typeName, key))
+
+    def __delitem__(self, key):
+        raise caps.CAPSError(caps.CAPS_BADVALUE, "Cannot del DynOut Value: {!r}".format(self._typeName, key))
+
+    def _keys(self):
+        size = self._analysisObj.size(caps.oType.VALUE, caps.sType.ANALYSISDYNO)
+        keys = [None]*size
+        for i in range(size):
+            valObj = self._analysisObj.childByIndex(caps.oType.VALUE, caps.sType.ANALYSISDYNO, i+1)
+            keys[i], otype, stype, link, parent, last = valObj.info()
+        return keys
+
+    def _capsItems(self):
+        keys = self._keys()
+        capsItems = {}
+        for key in keys:
+            capsItems[key] = ValueDynOut(self._analysisObj, key)
+        return capsItems
+
+    def __contains__(self, item):
+        return item in self._keys()
+
+    def __len__(self):
+        return self._analysisObj.size(caps.oType.VALUE, caps.sType.ANALYSISDYNO)
+
+    def __iter__(self):
+        return self._capsItems().__iter__()
+
+    def __reversed__(self):
+        return self._capsItems().__reversed__()
+
+    def __bool__(self):
+        return bool(self._capsItems())
+
+    ## Returns the keys of the ValueDynOutSequence
+    def keys(self):
+        return self._keys()
+
+    ## Returns the values of the ValueDynOutSequence
+    def values(self):
+        keys = self._keys()
+        for key in keys:
+            values[i] = ValueDynOut(self._analysisObj, key)
+        return values
+
+    ## Returns the items of the ValueDynOutSequence
+    def items(self):
+        return self._capsItems().items()
+
+#==============================================================================
 ## Defines a CAPS Analysis Object.
 # Created via Problem.analysis.create().
 #
@@ -1794,7 +2088,7 @@ class ValueOutSequence(Sequence):
 # \param Analysis.attr   \ref AttrSequence of \ref ValueIn attributes
 class Analysis(object):
 
-    __slots__ = ["_analysisObj", "input", "output", "geometry", "attr", "_analysisDir", "_name"]
+    __slots__ = ["_analysisObj", "input", "output", "dynout", "geometry", "attr", "_analysisDir", "_name"]
 
     def __init__(self, analysisObj):
         self._analysisObj = analysisObj
@@ -1802,6 +2096,7 @@ class Analysis(object):
         self.attr     = AttrSequence(self._analysisObj)
         self.input    = ValueInSequence (_values(self._analysisObj, caps.sType.ANALYSISIN ))
         self.output   = ValueOutSequence(_values(self._analysisObj, caps.sType.ANALYSISOUT))
+        self.dynout   = ValueDynOutSequence(self._analysisObj)
         self.geometry = AnalysisGeometry(self._analysisObj)
 
         self._name, otype, stype, link, parent, last = self._analysisObj.info()
@@ -1823,7 +2118,7 @@ class Analysis(object):
         self._analysisObj.execute()
 
     ## Execute the Command Line String
-    #    Notes: 
+    #    Notes:
     #    1. only needed when explicitly executing the appropriate analysis solver (i.e., not using the AIM)
     #    2. should be invoked after caps_preAnalysis and before caps_postAnalysis
     #    3. this must be used instead of the OS system call to ensure that journaling properly functions
@@ -1847,6 +2142,14 @@ class Analysis(object):
     def name(self):
         return self._name
 
+    ## Returns the history list of the CAPS Analysis Object
+    def history(self):
+        return History.getHistory(self._analysisObj)
+
+    ## Mark a CAPS Analysis Object for deletion on the next Phase.
+    def markForDelete(self):
+        self._analysisObj.markForDelete()
+
     ## Returns linked analyses that are dirty.
     #
     # \return A list of dirty analyses that need to be exeuted before executing this analysis. An empty list is returned if no
@@ -1861,15 +2164,22 @@ class Analysis(object):
 
     ## Gets analysis information for the analysis object.
     #
-    # \param printInfo Print information to sceen if True.
+    # \param printInfo Print information to sceen (default - False).
     # \param **kwargs See below.
     #
     # \return Cleanliness state of analysis object or a dictionary containing analysis
-    # information (infoDict must be set to True)
+    # information (infoDict must be set to True). For cleanliness state:
+    # 0 = "Up to date",
+    # 1 = "Dirty analysis inputs",
+    # 2 = "Dirty geometry inputs",
+    # 3 = "Both analysis and geometry inputs are dirty",
+    # 4 = "New geometry",
+    # 5 = "Post analysis required",
+    # 6 = "Execution and Post analysis required"
     #
     # Valid keywords:
     # \param infoDict Return a dictionary containing analysis information instead
-    # of just the cleanliness state (default - False)
+    # of just the cleanliness state (default - False).
     def info(self, printInfo=False, **kwargs):
 
         dirtyInfo = {0 : "Up to date",
@@ -1923,7 +2233,7 @@ class Analysis(object):
 
         return cleanliness
 
-    ## Create a HTML dendrogram/tree of the current state of the analysis. 
+    ## Create a HTML dendrogram/tree of the current state of the analysis.
     # The HTML file relies on the open-source JavaScript library, D3, to visualize the data.
     # This library is freely available from https://d3js.org/ and is dynamically loaded within the HTML file.
     # If running on a machine without internet access a (miniaturized) copy of the library may be written to
@@ -2148,6 +2458,11 @@ class AnalysisGeometry(object):
         analysisDir, unitSystem, major, minor, capsIntent, fnames, franks, fInOut, execution, cleanliness = self._analysisObj.analysisInfo()
 
         egadsFile = os.path.join(analysisDir, "viewAnalysisGeometry.egads")
+        relFile = os.path.relpath(egadsFile, os.getcwd())
+
+        # use the shortest filename
+        if len(relFile) < len(egadsFile):
+            egadsFile = relFile
 
         self.save( egadsFile )
 
@@ -2157,7 +2472,7 @@ class AnalysisGeometry(object):
             return
 
         egadsFile = _ocsmPath(egadsFile)
-        os.system("serveCSM -port " + str(kwargs.pop("portNumber", 7681)) + " -outLevel 0 " + egadsFile)
+        os.system("serveESP -port " + str(kwargs.pop("portNumber", 7681)) + " -outLevel 0 " + egadsFile)
         os.remove(egadsFile)
         os.remove("autoEgads.csm")
 
@@ -2844,12 +3159,20 @@ class Bound(object):
     def name(self):
         return self._name
 
+    ## Returns the history list of the CAPS Analysis Object
+    def history(self):
+        return History.getHistory(self._boundObj)
+
     ## Closes the bound indicating it's complete
     def close(self):
         self._boundObj.closeBound()
 
     def complete(self):
         self._boundObj.closeBound()
+
+    ## Mark a CAPS Bound Object for deletion on the next Phase.
+    def markForDelete(self):
+        self._boundObj.markForDelete()
 
     ## Gets information for the bound object.
     #
@@ -3363,14 +3686,18 @@ class VertexSet(object):
     def name(self):
         return self._name
 
-    ## Executes caps_triangulate on data set's vertex set to retrieve the connectivity (triangles only) information
+    ## Returns the history list of the CAPS VertexSet Object
+    def history(self):
+        return History.getHistory(self._vertexSetObj)
+
+    ## Executes caps_getTriangles on data set's vertex set to retrieve the connectivity (triangles only) information
     # for the data set.
     # \return Optionally returns a list of lists of connectivity values
     # (e.g. [ [node1, node2, node3], [node2, node3, node7], etc. ] ) and a list of lists of data connectivity (not this is
     # an empty list if the data is node-based) (eg. [ [node1, node2, node3], [node2, node3, node7], etc. ]
     def getDataConnect(self):
-        triConn, dataConn = self._vertexSetObj.triangulate()
-        return (triConn, dataConn)
+        Gtris, Gsegs, Dtris, Dsegs = self._vertexSetObj.getTriangles()
+        return Gtris, Gsegs, Dtris, Dsegs
 
 #==============================================================================
 ## Defines a Sequence of CAPS Bound Objects
@@ -3438,6 +3765,10 @@ class DataSet(object):
     def name(self):
         return self._name
 
+    ## Returns the history list of the CAPS DataSet Object
+    def history(self):
+        return History.getHistory(self._dataSetObj)
+
     ## Executes caps_getData on data set object to retrieve data set variable.
     # \return Optionally returns a list of data values. Data with a rank greater than 1 returns a list of lists (e.g.
     # data representing a displacement would return [ [Node1_xDisplacement, Node1_yDisplacement, Node1_zDisplacement],
@@ -3460,19 +3791,19 @@ class DataSet(object):
     def getDataXYZ(self):
         return self.xyz()
 
-    ## Executes caps_triangulate on data set's vertex set to retrieve the connectivity (triangles only) information
+    ## Executes caps_getTriangles on data set's vertex set to retrieve the connectivity (triangles only) information
     # for the data set.
     # \return Optionally returns a list of lists of connectivity values
     # (e.g. [ [node1, node2, node3], [node2, node3, node7], etc. ] ) and a list of lists of data connectivity (not this is
     # an empty list if the data is node-based) (eg. [ [node1, node2, node3], [node2, node3, node7], etc. ]
     def connectivity(self):
-        triConn, dataConn = self._vertexSetObj.triangulate()
-        return (triConn, dataConn)
+        Gtris, Gsegs, Dtris, Dsegs = self._vertexSetObj.getTriangles()
+        return Gtris, Gsegs, Dtris, Dsegs
 
     @deprecated("'DataSet.connectivity'")
     def getDataConnect(self):
-        triConn, dataConn = self._vertexSetObj.triangulate()
-        return (triConn, dataConn)
+        Gtris, Gsegs, Dtris, Dsegs = self._vertexSetObj.getTriangles()
+        return Gtris, Gsegs, Dtris, Dsegs
 
     ## Link this DataSet to an other CAPS DataSet Object
     # \param source The source DataSEt Object
@@ -3565,11 +3896,11 @@ class DataSet(object):
         data = self.data()
         xyz = self.xyz()
 
-        triConn, dataConn = self._vertexSetObj.triangulate()
+        triConn, Gsegs, Dtris, dataConn = self._vertexSetObj.getTriangles()
 
         numData = len(data)
         numTri = len(triConn)
-        
+
         try:
             dataRank = len(data[0])
         except TypeError:
@@ -3714,7 +4045,6 @@ class DataSet(object):
 
             if filename == None:
                 raise caps.CAPSError(caps.CAPS_BADVALUE, msg = "while writing Tecplot file for data set - " + str(self.dataSetName)
-                                                             + " (during a call to caps_triangulate)"
                                                              + "\nNo file name or open file object provided" )
 
             if "." not in filename:
@@ -3742,7 +4072,7 @@ class DataSet(object):
 
         xyz = self.xyz()
 
-        connectivity, dconnectivity = self.connectivity()
+        connectivity, Gsegs, dconnectivity, Dsegs = self.connectivity()
 
         #TODO: dconnectivity does not appear to indicate a cell centered data set?
         if dconnectivity:

@@ -3,7 +3,7 @@
  *
  *             EGADS HO Tessellation using wv (from vTess)
  *
- *      Copyright 2011-2021, Massachusetts Institute of Technology
+ *      Copyright 2011-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -405,7 +405,8 @@ int main(int argc, char *argv[])
 
 /* call-back invoked when a message arrives from the browser */
 
-void browserMessage(/*@unused@*/ void *wsi, char *text, /*@unused@*/ int lena)
+void browserMessage(/*@unused@*/ void *uPtr, /*@unused@*/ void *wsi,
+                    char *text, /*@unused@*/ int lena)
 {
   int          i, j, iBody, ient, stat, nattr, atype, alen;
   const int    *pints;

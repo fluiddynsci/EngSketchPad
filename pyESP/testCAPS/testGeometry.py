@@ -77,7 +77,7 @@ class TestGeometry(unittest.TestCase):
         self.assertEqual(sorted(myGeometry.despmtr.keys()), sorted(['wing:dihedral', 'taper', 'wing:lesweep', 'wing:chord:root', 'despMat', 'despRow', 'despCol', 'area', 'twist', 'aspect', 'v@1:d_name', 'htail', 'htail:chord', 'vtail', 'vtail:chord', 'sphereR']))
         self.assertEqual(sorted(myGeometry.cfgpmtr.keys()), sorted(['VIEW:CFD', 'nrow', 'ncol', 'series2', 'series']))
         self.assertEqual(sorted(myGeometry.conpmtr.keys()), sorted(['nConst']))
-        self.assertEqual(sorted(myGeometry.outpmtr.keys()), sorted(['dummyRow', 'dummyRow3', 'dummyRow2', 'span', 'cmean', 'dummyCol', 'dummyMat', 'sphereVol']))
+        self.assertEqual(sorted(myGeometry.outpmtr.keys()), sorted(['dummyRow', 'dummyRow3', 'dummyRow2', 'span', 'cmean', 'dummyCol', 'dummyMat', 'sphereVol', 'boxVol', 'boxCG']))
 
         # Access despmtr Value Object
         taperObj = myGeometry.despmtr["taper"]
@@ -212,7 +212,7 @@ class TestGeometry(unittest.TestCase):
         with self.assertRaises(AttributeError):
             myGeometry.outpmtr.series3 = 1212
 
-        # Check outpmtr matrix access
+        # Check despmtr matrix access
         self.assertEqual(myGeometry.despmtr.despMat, [[11.0, 12.0], [13.0, 14.0], [15.0, 16.0]])
         myGeometry.despmtr.despMat = [[11.0, 12.0], [13.0, 14.0], [30.0, 32.0]]
         self.assertEqual(myGeometry.despmtr.despMat, [[11.0, 12.0], [13.0, 14.0], [30.0, 32.0]])
@@ -463,7 +463,7 @@ class TestGeometry(unittest.TestCase):
     def test_viewGeometry(self):
 
         try:
-            self.myGeometry.viewGeometry(filename = "geomView", showImage =False)
+            self.myGeometry.view(filename = "geomView", showImage =False)
 
             self.assertTrue(os.path.isfile("geomView_0.png"))
             self.assertTrue(os.path.isfile("geomView_1.png"))
@@ -504,7 +504,7 @@ class TestGeometry(unittest.TestCase):
             self.assertIsInstance(bodies[key], egads.ego)
         self.assertEqual(units, pyCAPS.Unit("ft"))
 
-        self.assertEqual(sorted(bodies.keys()), sorted(["Farfield", "Wing1", "Wing2"]))
+        self.assertEqual(sorted(bodies.keys()), sorted(["Farfield", "Wing1", "Wing2", "aBox"]))
 
         boundingBox = {}
         for name, body in bodies.items():
@@ -562,24 +562,24 @@ class TestGeometry(unittest.TestCase):
 
         for fac in [1.1, 1.2]:
             problem.geometry.despmtr.area *= fac
-
+        
             aspect = problem.geometry.despmtr.aspect
             area   = problem.geometry.despmtr.area
-
+        
             cmean            = (area/aspect)**0.5
             cmean_areaTrue   = 0.5/cmean * 1/aspect
             cmean_aspectTrue = 0.5/cmean * -area/aspect**2
-
+        
             # Compute derivative w.r.t. area and aspect
             cmean_area   = problem.geometry.outpmtr["cmean"].deriv("area")
             cmean_aspect = problem.geometry.outpmtr["cmean"].deriv("aspect")
-
+        
             self.assertAlmostEqual(cmean_areaTrue  , cmean_area  , 5)
             self.assertAlmostEqual(cmean_aspectTrue, cmean_aspect, 5)
 
         for fac in [1.1, 1.2]:
             problem.geometry.despmtr.area *= fac
-
+        
             self.assertEqual(problem.geometry.outpmtr["dummyRow"].deriv("taper"), [0.0, 0.0, 0.0])
             self.assertEqual(problem.geometry.outpmtr["dummyRow"].deriv("twist"), [0.0, 0.0, 0.0])
 
@@ -593,6 +593,52 @@ class TestGeometry(unittest.TestCase):
         #self.assertAlmostEqual(sphereVol    , problem.geometry.outpmtr.sphereVol, 3)
         #self.assertAlmostEqual(0.94, sphereVol_sphereR/sphereVol_sphereRTrue, 2)
 
+        despMat = problem.geometry.despmtr.despMat
+        nrow = len(despMat)
+        ncol = len(despMat[0])
+
+        boxVolTrue = despMat[0][1] * despMat[1][1] * despMat[2][1]
+        boxCGTrue = [despMat[0][0] + despMat[0][1]/2,
+                     despMat[1][0] + despMat[1][1]/2,
+                     despMat[2][0] + despMat[2][1]/2]
+                  
+        boxVol_despMatTrue = [0,
+                                          1 * despMat[1][1] * despMat[2][1],
+                              0,
+                              despMat[0][1] *             1 * despMat[2][1],
+                              0,
+                              despMat[0][1] * despMat[1][1] *             1]
+
+        #  despMat indexes:   00  01  10  11  20  21
+        boxCG_despMatTrue = [[ 1, .5,  0,  0,  0,  0],
+                             [ 0,  0,  1, .5,  0,  0],
+                             [ 0,  0,  0,  0,  1, .5]]
+
+        # Compute derivative w.r.t. despMat
+        boxVol_despMat = problem.geometry.outpmtr["boxVol"].deriv("despMat")
+        boxCG_despMat  = problem.geometry.outpmtr["boxCG"].deriv("despMat")
+
+        self.assertAlmostEqual(boxVolTrue, problem.geometry.outpmtr.boxVol, 5)
+
+        self.assertAlmostEqual(boxCGTrue[0], problem.geometry.outpmtr.boxCG[0], 5)
+        self.assertAlmostEqual(boxCGTrue[1], problem.geometry.outpmtr.boxCG[1], 5)
+        self.assertAlmostEqual(boxCGTrue[2], problem.geometry.outpmtr.boxCG[2], 5)
+
+        self.assertAlmostEqual(boxVol_despMatTrue[0], boxVol_despMat[0], 5)
+        self.assertAlmostEqual(boxVol_despMatTrue[1], boxVol_despMat[1], 5)
+        self.assertAlmostEqual(boxVol_despMatTrue[2], boxVol_despMat[2], 5)
+        self.assertAlmostEqual(boxVol_despMatTrue[3], boxVol_despMat[3], 5)
+        self.assertAlmostEqual(boxVol_despMatTrue[4], boxVol_despMat[4], 5)
+        self.assertAlmostEqual(boxVol_despMatTrue[5], boxVol_despMat[5], 5)
+
+        for irow in range(nrow):
+            for icol in range(ncol):
+                self.assertAlmostEqual(boxCG_despMatTrue[irow][icol], boxCG_despMat[irow][icol], 5)
+
+        for irow in range(nrow):
+            for icol in range(ncol):
+                boxVol_despMat = problem.geometry.outpmtr["boxVol"].deriv("despMat[{},{}]".format(irow+1, icol+1))
+                self.assertAlmostEqual(boxVol_despMatTrue[ncol*irow + icol], boxVol_despMat, 5)
 
 #==============================================================================
     # Test value derivatives bug in OpenCSM. Remove this whenthe bug is fixed.

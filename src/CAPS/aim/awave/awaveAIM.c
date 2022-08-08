@@ -3,7 +3,7 @@
  *
  *             Awave AIM
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -917,9 +917,15 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     return CAPS_SUCCESS;
 }
 
+// ********************** AIM Function Break *****************************
+int aimUpdateState(/*@unused@*/void *instStore, /*@unused@*/void *aimInfo,
+                   /*@unused@*/capsValue *aimInputs)
+{
+    return CAPS_SUCCESS;
+}
 
 // ********************** AIM Function Break *****************************
-int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
+int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo,
                    /*@null@*/ capsValue *inputs)
 {
     int status; // Function status return
@@ -2136,7 +2142,7 @@ cleanup:
 
 
 // ********************** AIM Function Break *****************************
-int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+int aimExecute(/*@unused@*/ const void *instStore, /*@unused@*/ void *aimInfo,
                int *state)
 {
   /*! \page aimExecuteAwave AIM Execution
@@ -2165,12 +2171,7 @@ int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
    * awave.preAnalysis()
    *
    * print ("\n\nRunning......")
-   * currentDirectory = os.getcwd() # Get our current working directory
-   *
-   * os.chdir(dealundo.analysisDir) # Move into test directory
-   * os.system("awave awaveInput.txt > awaveOutput.txt"); # Run via system call
-   *
-   * os.chdir(currentDirectory) # Move back to top directory
+   * awave.system("awave awaveInput.txt > awaveOutput.txt"); # Run via system call
    *
    * print ("\n\postAnalysis......")
    * awave.postAnalysis()
@@ -2283,8 +2284,7 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     // Open the Awave output file
     fp = aim_fopen(aimInfo, "cdwave.txt", "r"); // EJA mod specific
     if (fp == NULL) {
-        printf(" awaveAIM/aimCalcOutput Cannot open Output file!\n");
-
+        AIM_ERROR(aimInfo, " awaveAIM/aimCalcOutput Cannot open Output file!\n");
         status = CAPS_IOERR;
         goto cleanup;
     }
@@ -2319,7 +2319,8 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                 status = sscanf(line,"%*s %lf", &tmp);
 
                 if (status == 0) {
-                    status = CAPS_NOTFOUND;
+                    AIM_ERROR(aimInfo, "Failed to parse: %s\n", line);
+                    status = CAPS_IOERR;
                     goto cleanup;
                 }
 
@@ -2337,7 +2338,8 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
                 status = sscanf(line,"%*s %lf", &tmp);
                 if (status == 0) {
-                    status = CAPS_NOTFOUND;
+                    AIM_ERROR(aimInfo, "Failed to parse: %s\n", line);
+                    status = CAPS_IOERR;
                     goto cleanup;
                 }
 
@@ -2355,7 +2357,8 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
                 status = sscanf(line,"%*s %lf", &tmp);
                 if (status == 0) {
-                    status = CAPS_NOTFOUND;
+                    AIM_ERROR(aimInfo, "Failed to parse: %s\n", line);
+                    status = CAPS_IOERR;
                     goto cleanup;
                 }
 
@@ -2373,10 +2376,7 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     }
 
     if (cnt < 1) {
-#ifdef DEBUG
-        printf(" awaveAIM/aimCalcOutput Cannot find %s in Output file!\n", str);
-#endif
-
+        AIM_ERROR(aimInfo, "Cannot find '%s' in Output file!\n", str);
         status = CAPS_NOTFOUND;
         goto cleanup;
     }
@@ -2391,12 +2391,7 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
     } else if (cnt > 1) {
 
-        val->vals.reals = (double *) EG_alloc(val->nrow*sizeof(double));
-
-        if (val->vals.reals == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        AIM_ALLOC(val->vals.reals, val->nrow, double, aimInfo, status);
 
         for (i = 0; i < cnt; i++) {
 
@@ -2410,12 +2405,8 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     status = CAPS_SUCCESS;
 
 cleanup:
-    if (status != CAPS_SUCCESS)
-      printf("Premature exit in AwaveAIM aimCalcOutput status = %d\n", status);
-
     if (fp != NULL) fclose(fp);
-
-    if (line != NULL) EG_free(line);
+    if (line != NULL) free(line); // must use free
 
     return status;
 }

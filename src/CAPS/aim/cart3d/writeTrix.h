@@ -1,9 +1,8 @@
 #include "xddm.h"
+#include "egads.h"
 
+extern int writeTrix(const char *fname, int nbody, ego *tess,
+                     /*@null@*/ p_tsXddm p_xddm, int nv, /*@null@*/ double ***dvar);
 
-extern int writeTrix(const char *fname, /*@null@*/ p_tsXddm p_xddm, int ibody,
-                     int nvert, double *xyzs, int nv, /*@null@*/ double **dvar,
-                     int ntri, int *tris);
-
-extern int readTrix(const char *fname, const char *tag, int nvert, int dim,
-                    double *data);
+extern int readTrix(const char *fname, const char *tag, int *dim,
+                    double ***data_out);

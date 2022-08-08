@@ -3,7 +3,7 @@
  *
  *             hsm AIM tester
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -113,7 +113,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Set HSM inputs - Materials
-    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Material", &tempObj);
+    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Material", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     material = (capsTuple *) EG_alloc(numMaterial*sizeof(capsTuple));
@@ -126,7 +128,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     //                       - Properties
-    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Property", &tempObj);
+    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Property", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     property = (capsTuple *) EG_alloc(numProperty*sizeof(capsTuple));
@@ -139,7 +143,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     //                       - Constraints
-    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Constraint", &tempObj);
+    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Constraint", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     constraint = (capsTuple *) EG_alloc(numConstraint*sizeof(capsTuple));
@@ -152,7 +158,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     //                       - Analysis
-    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Load", &tempObj);
+    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Load", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     load = (capsTuple *) EG_alloc(numLoad*sizeof(capsTuple));
@@ -164,8 +172,9 @@ int main(int argc, char *argv[])
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Edge_Point_Max",
-                              &tempObj);
+    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Edge_Point_Max", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     intVal = 10;
@@ -174,8 +183,9 @@ int main(int argc, char *argv[])
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Edge_Point_Min",
-                              &tempObj);
+    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Edge_Point_Min", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     intVal = 10;
@@ -184,7 +194,9 @@ int main(int argc, char *argv[])
     if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Quad_Mesh", &tempObj);
+    status = caps_childByName(hsmObj, VALUE, ANALYSISIN, "Quad_Mesh", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     boolVal = (int) false;

@@ -3,7 +3,7 @@
  *
  *             Display the Curvature using wv (the WebViewer)
  *
- *      Copyright 2011-2021, Massachusetts Institute of Technology
+ *      Copyright 2011-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -48,6 +48,7 @@ typedef struct {
   static int        nbody, key = -1;
   static double     params[3];
   static float      focus[4], lims[2] = {-1.0, +1.0};
+  static ego        context;
   static wvContext *cntxt;
   static bodyData  *bodydata;
   static int        sides[3][2] = {{1,2}, {2,0}, {0,1}};
@@ -220,6 +221,337 @@ static void spec_col(float scalar, float color[])
 }
 
 
+/* call-back invoked when a message arrives from the browser */
+
+void browserMessage(/*@unused@*/ void *uPtr, /*@unused@*/ void *wsi,
+                    char *text, /*@unused@*/ int lena)
+{
+  int          i, j, k, m, n, ibody, stat, sum, len, ntri, index, oclass, mtype;
+  int          nloops, nseg, nledges, *segs, *lsenses, *esenses;
+  int          nh, *heads;
+  const int    *tris, *tric, *ptype, *pindex;
+  char         gpname[43];
+  float        *lsegs, *colrs, val, color[3];
+  double       rc[8], rmin, rmax, result[18], dot, norm[3], *norms, *pu, *pv;
+  const double *xyzs, *uvs, *ts;
+  ego          geom, *ledges, *loops;
+  wvData       items[4];
+
+  printf(" RX: %s\n", text);
+
+  if ((strcmp(text,"finer") != 0) && (strcmp(text,"coarser") != 0) &&
+      (strcmp(text,"next")  != 0) && (strcmp(text,"limits")  != 0)) return;
+  (void) EG_updateThread(context);
+
+  /* just change the color mapping */
+  if ((strcmp(text,"next") == 0) || (strcmp(text,"limits") == 0)) {
+    if (strcmp(text,"next") == 0) {
+      key++;
+      if (key > 2) key = 0;
+    } else {
+      printf(" Enter new limits [old = %e, %e]:", lims[0], lims[1]);
+      scanf("%f %f", &lims[0], &lims[1]);
+      printf(" new limits = %e %e\n", lims[0], lims[1]);
+    }
+    stat = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], keys[key]);
+    if (stat < 0) printf(" wv_setKey = %d!\n", stat);
+
+    for (ibody = 0; ibody < nbody; ibody++) {
+      /* get faces */
+      for (i = 0; i < bodydata[ibody].nfaces; i++) {
+        stat = EG_getTessFace(bodydata[ibody].tess, i+1, &len,
+                              &xyzs, &uvs, &ptype, &pindex, &ntri,
+                              &tris, &tric);
+        if (stat != EGADS_SUCCESS) continue;
+        sprintf(gpname, "Body %d Face %d", ibody+1, i+1);
+        index = wv_indexGPrim(cntxt, gpname);
+        if (index < 0) {
+          printf(" wv_indexGPrim = %d for %s (%d)!\n", i, gpname, index);
+          continue;
+        }
+        if (len == 0) continue;
+        colrs = (float *) malloc(3*len*sizeof(float));
+        if (colrs == NULL) continue;
+        for (j = 0; j < len; j++) {
+          rc[0] = rc[4] = 0.0;
+          stat = EG_curvature(bodydata[ibody].faces[i], &uvs[2*j], rc);
+          if (stat != EGADS_SUCCESS)
+            printf(" Face %d: %d EG_curvature = %d\n", i+1, j, stat);
+          if (key == 0) {
+            val = 0.0;
+            if (rc[0]*rc[4] > 0.0) val =  1.0;
+            if (rc[0]*rc[4] < 0.0) val = -1.0;
+            val *= pow(fabs(rc[0]*rc[4]*focus[3]*focus[3]),0.25);
+          } else if (key == 1) {
+            val = rc[0];
+            if (rc[4] < rc[0]) val = rc[4];
+            val *= focus[3];
+          } else {
+            val = rc[0];
+            if (rc[4] > rc[0]) val = rc[4];
+            val *= focus[3];
+          }
+          spec_col(val, &colrs[3*j]);
+        }
+        stat = wv_setData(WV_REAL32, len, (void *) colrs, WV_COLORS, &items[0]);
+        if (stat < 0) printf(" wv_setData = %d for %s/item color!\n", i, gpname);
+        free(colrs);
+        stat = wv_modGPrim(cntxt, index, 1, items);
+        if (stat < 0)
+          printf(" wv_modGPrim = %d for %s (%d)!\n", stat, gpname, index);
+      }
+    }
+    return;
+  }
+
+  if (strcmp(text,"finer")   == 0) params[0] *= 0.5;
+  if (strcmp(text,"coarser") == 0) params[0] *= 2.0;
+  printf(" Using angle = %lf,  relSide = %lf,  relSag = %lf,  key = %d\n",
+         params[2], params[0], params[1], key);
+  if (key == -1) {
+    key  = 0;
+    stat = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], keys[key]);
+    if (stat < 0) printf(" wv_setKey = %d!\n", stat);
+  }
+
+  for (ibody = 0; ibody < nbody; ibody++) {
+    EG_deleteObject(bodydata[ibody].tess);
+    bodydata[ibody].tess = NULL;
+    stat = EG_makeTessBody(bodydata[ibody].body, params, &bodydata[ibody].tess);
+    if (stat != EGADS_SUCCESS)
+      printf(" EG_makeTessBody %d = %d\n", ibody, stat);
+  }
+
+  /* make the scene */
+  for (sum = stat = ibody = 0; ibody < nbody; ibody++) {
+
+    /* get faces */
+    for (i = 0; i < bodydata[ibody].nfaces; i++) {
+      stat = EG_getTessFace(bodydata[ibody].tess, i+1, &len,
+                            &xyzs, &uvs, &ptype, &pindex, &ntri,
+                            &tris, &tric);
+      if (stat != EGADS_SUCCESS) continue;
+      sprintf(gpname, "Body %d Face %d", ibody+1, i+1);
+      index = wv_indexGPrim(cntxt, gpname);
+      if (index < 0) {
+        printf(" wv_indexGPrim = %d for %s (%d)!\n", i, gpname, index);
+        continue;
+      }
+      stat = wv_setData(WV_REAL64, len, (void *) xyzs,  WV_VERTICES, &items[0]);
+      if (stat < 0) printf(" wv_setData = %d for %s/item 0!\n", i, gpname);
+      wv_adjustVerts(&items[0], focus);
+      stat = wv_setData(WV_INT32, 3*ntri, (void *) tris, WV_INDICES, &items[1]);
+      if (stat < 0) printf(" wv_setData = %d for %s/item 1!\n", i, gpname);
+      for (nseg = j = 0; j < ntri; j++)
+        for (k = 0; k < 3; k++)
+          if (tric[3*j+k] < j+1) nseg++;
+      segs = (int *) malloc(2*nseg*sizeof(int));
+      if (segs == NULL) {
+        printf(" Can not allocate %d Sides!\n", nseg);
+        continue;
+      }
+      for (nseg = j = 0; j < ntri; j++)
+        for (k = 0; k < 3; k++)
+          if (tric[3*j+k] < j+1) {
+            segs[2*nseg  ] = tris[3*j+sides[k][0]];
+            segs[2*nseg+1] = tris[3*j+sides[k][1]];
+            nseg++;
+          }
+      stat = wv_setData(WV_INT32, 2*nseg, (void *) segs, WV_LINDICES, &items[2]);
+      if (stat < 0) printf(" wv_setData = %d for %s/item 2!\n", i, gpname);
+      free(segs);
+      colrs = (float *) malloc(3*len*sizeof(float));
+      if (colrs == NULL) continue;
+      for (j = 0; j < len; j++) {
+        rc[0] = rc[4] = 0.0;
+        stat = EG_curvature(bodydata[ibody].faces[i], &uvs[2*j], rc);
+        if (stat != EGADS_SUCCESS)
+          printf(" Face %d: %d EG_curvature = %d\n", i+1, j, stat);
+        if (key == 0) {
+          val  = 0.0;
+          rmin = rmax = fabs(rc[0]);
+          if (fabs(rc[4]) < rmin) rmin = fabs(rc[4]);
+          if (fabs(rc[4]) > rmax) rmax = fabs(rc[4]);
+          if (rmax != 0.0) {
+            if (rc[0]*rc[4] > 0.0) val =  1.0;
+            if (rc[0]*rc[4] < 0.0) val = -1.0;
+            if (rmin/rmax < 1.e-5) val =  0.0;
+          }
+          val *= pow(fabs(rc[0]*rc[4]*focus[3]*focus[3]),0.25);
+        } else if (key == 1) {
+          val = rc[0];
+          if (rc[4] < rc[0]) val = rc[4];
+          val *= focus[3];
+        } else {
+          val = rc[0];
+          if (rc[4] > rc[0]) val = rc[4];
+          val *= focus[3];
+        }
+        spec_col(val, &colrs[3*j]);
+      }
+      stat = wv_setData(WV_REAL32, len, (void *) colrs, WV_COLORS, &items[3]);
+      if (stat < 0) printf(" wv_setData = %d for %s/item color!\n", i, gpname);
+      free(colrs);
+      stat = wv_modGPrim(cntxt, index, 4, items);
+      if (stat < 0)
+        printf(" wv_modGPrim = %d for %s (%d)!\n", stat, gpname, index);
+      sum += ntri;
+    }
+
+    /* put normals of faces in "edge" slot */
+    for (i = 0; i < bodydata[ibody].nfaces; i++) {
+      stat = EG_getTessFace(bodydata[ibody].tess, i+1, &len,
+                            &xyzs, &uvs, &ptype, &pindex, &ntri,
+                            &tris, &tric);
+      if (stat != EGADS_SUCCESS) continue;
+      if (len == 0) continue;
+      norms = (double *) malloc(6*len*sizeof(double));
+      if (norms == NULL) continue;
+      sprintf(gpname, "Body %d Edge %d", ibody+1, i+1);
+
+      pu = &result[3];
+      pv = &result[6];
+      for (j = 0; j < len; j++) {
+        norms[6*j  ] = norms[6*j+3] = xyzs[3*j  ];
+        norms[6*j+1] = norms[6*j+4] = xyzs[3*j+1];
+        norms[6*j+2] = norms[6*j+5] = xyzs[3*j+2];
+        stat = EG_evaluate(bodydata[ibody].faces[i], &uvs[2*j], result);
+        if (stat != EGADS_SUCCESS) continue;
+        CROSS(norm, pu, pv);
+        dot = sqrt(DOT(norm, norm))*bodydata[ibody].faces[i]->mtype;
+        if (dot == 0.0) continue;
+        norm[0]      *= 0.025*focus[3]/dot;
+        norm[1]      *= 0.025*focus[3]/dot;
+        norm[2]      *= 0.025*focus[3]/dot;
+        norms[6*j+3] += norm[0];
+        norms[6*j+4] += norm[1];
+        norms[6*j+5] += norm[2];
+      }
+      stat = wv_setData(WV_REAL64, 2*len, (void *) norms,  WV_VERTICES,
+                        &items[0]);
+      if (stat < 0) printf(" wv_setData = %d for %s/item 0!\n", i, gpname);
+      wv_adjustVerts(&items[0], focus);
+      free(norms);
+      color[0] = 0.0;
+      color[1] = 0.0;
+      color[2] = 0.0;
+      stat = wv_setData(WV_REAL32, 1, (void *) color,  WV_COLORS, &items[1]);
+      if (stat < 0) printf(" wv_setData = %d for %s/item 1!\n", i, gpname);
+      stat = wv_addGPrim(cntxt, gpname, WV_LINE, 0, 2, items);
+      if (stat < 0)
+        printf(" wv_addGPrim = %d for %s!\n", stat, gpname);
+    }
+
+    /* get loops */
+    for (i = 0; i < bodydata[ibody].nfaces; i++) {
+      stat = EG_getTopology(bodydata[ibody].faces[i], &geom, &oclass,
+                            &mtype, NULL, &nloops, &loops, &lsenses);
+      if (stat != EGADS_SUCCESS) continue;
+      for (nh = j = 0; j < nloops; j++) {
+        stat = EG_getTopology(loops[j], &geom, &oclass, &mtype, NULL,
+                              &nledges, &ledges, &esenses);
+        if (stat != EGADS_SUCCESS) continue;
+
+        /* count */
+        for (ntri = nseg = k = 0; k < nledges; k++) {
+          m = 0;
+          while (ledges[k] != bodydata[ibody].edges[m]) {
+            m++;
+            if (m == bodydata[ibody].nedges) break;
+          }
+          /* assume that the edge is degenerate and removed */
+          if (m == bodydata[ibody].nedges) continue;
+          stat = EG_getTessEdge(bodydata[ibody].tess, m+1, &len,
+                                &xyzs, &ts);
+          if (stat != EGADS_SUCCESS) {
+            printf(" EG_getTessEdge %d = %d!\n", m+1, stat);
+            nseg = 0;
+            break;
+          }
+          if (len == 2)
+            if ((xyzs[0] == xyzs[3]) && (xyzs[1] == xyzs[4]) &&
+                (xyzs[2] == xyzs[5])) continue;
+          nh++;
+          nseg += len;
+          ntri += 2*(len-1);
+        }
+        if (nseg == 0) continue;
+        lsegs = (float *) malloc(3*nseg*sizeof(float));
+        if (lsegs == NULL) {
+          printf(" Can not allocate %d Segments!\n", nseg);
+          continue;
+        }
+        segs = (int *) malloc(ntri*sizeof(int));
+        if (segs == NULL) {
+          printf(" Can not allocate %d Line Segments!\n", ntri);
+          free(lsegs);
+          continue;
+        }
+        heads = (int *) malloc(nh*sizeof(int));
+        if (heads == NULL) {
+          printf(" Can not allocate %d Heads!\n", nh);
+          free(segs);
+          free(lsegs);
+          continue;
+        }
+
+        /* fill */
+        for (nh = ntri = nseg = k = 0; k < nledges; k++) {
+          m = 0;
+          while (ledges[k] != bodydata[ibody].edges[m]) {
+            m++;
+            if (m == bodydata[ibody].nedges) break;
+          }
+          /* assume that the edge is degenerate and removed */
+          if (m == bodydata[ibody].nedges) continue;
+          EG_getTessEdge(bodydata[ibody].tess, m+1, &len, &xyzs, &ts);
+          if (len == 2)
+            if ((xyzs[0] == xyzs[3]) && (xyzs[1] == xyzs[4]) &&
+                (xyzs[2] == xyzs[5])) continue;
+          if (esenses[k] == -1) heads[nh] = -ntri/2 - 1;
+          for (n = 0; n < len-1; n++) {
+            segs[ntri] = n+nseg+1;
+            ntri++;
+            segs[ntri] = n+nseg+2;
+            ntri++;
+          }
+          if (esenses[k] ==  1) heads[nh] = ntri/2;
+          for (n = 0; n < len; n++) {
+            lsegs[3*nseg  ] = xyzs[3*n  ];
+            lsegs[3*nseg+1] = xyzs[3*n+1];
+            lsegs[3*nseg+2] = xyzs[3*n+2];
+            nseg++;
+          }
+          nh++;
+        }
+        sprintf(gpname, "Body %d Loop %d/%d", ibody+1, i+1, j+1);
+        index = wv_indexGPrim(cntxt, gpname);
+        if (index < 0) {
+          printf(" wv_indexGPrim = %d for %s (%d)!\n", i, gpname, index);
+          continue;
+        }
+        stat = wv_setData(WV_REAL32, nseg, (void *) lsegs,  WV_VERTICES, &items[0]);
+        if (stat < 0) printf(" wv_setData = %d for %s/item 0!\n", i, gpname);
+        wv_adjustVerts(&items[0], focus);
+        free(lsegs);
+        stat = wv_setData(WV_INT32, ntri, (void *) segs, WV_INDICES, &items[1]);
+        if (stat < 0) printf(" wv_setData = %d for %s/item 1!\n", i, gpname);
+        free(segs);
+        stat = wv_modGPrim(cntxt, index, 2, items);
+        if (stat < 0) {
+          printf(" wv_modGPrim = %d for %s!\n", stat, gpname);
+        } else {
+          n = wv_addArrowHeads(cntxt, index, 0.05, nh, heads);
+          if (n != 0) printf(" wv_addArrowHeads = %d\n", n);
+        }
+        free(heads);
+      }
+    }
+  }
+  printf(" **  now with %d triangles **\n\n", sum);
+}
+
+
 int main(int argc, char *argv[])
 {
   int          i, j, k, m, n, ibody, stat, oclass, mtype, len, ntri, sum;
@@ -231,7 +563,7 @@ int main(int argc, char *argv[])
   const double *xyzs, *uvs, *ts;
   char         gpname[46], *startapp;
   const char   *OCCrev;
-  ego          context, model, geom, *bodies, *dum, *ledges, *loops;
+  ego          model, geom, *bodies, *dum, *ledges, *loops;
   wvData       items[5];
   float        eye[3]    = {0.0, 0.0, 7.0};
   float        center[3] = {0.0, 0.0, 0.0};
@@ -558,6 +890,7 @@ int main(int argc, char *argv[])
   /* start the server code */
 
   stat = 0;
+  wv_setCallBack(cntxt, browserMessage);
   if (wv_startServer(7681, NULL, NULL, NULL, 0, cntxt) == 0) {
 
     /* we have a single valid server -- stay alive a long as we have a client */
@@ -583,333 +916,4 @@ int main(int argc, char *argv[])
   printf(" EG_deleteObject   = %d\n", EG_deleteObject(model));
   printf(" EG_close          = %d\n", EG_close(context));
   return 0;
-}
-
-
-/* call-back invoked when a message arrives from the browser */
-
-void browserMessage(/*@unused@*/ void *wsi, char *text, /*@unused@*/ int lena)
-{
-  int          i, j, k, m, n, ibody, stat, sum, len, ntri, index, oclass, mtype;
-  int          nloops, nseg, nledges, *segs, *lsenses, *esenses;
-  int          nh, *heads;
-  const int    *tris, *tric, *ptype, *pindex;
-  char         gpname[43];
-  float        *lsegs, *colrs, val, color[3];
-  double       rc[8], rmin, rmax, result[18], dot, norm[3], *norms, *pu, *pv;
-  const double *xyzs, *uvs, *ts;
-  ego          geom, *ledges, *loops;
-  wvData       items[4];
-
-  printf(" RX: %s\n", text);
-
-  if ((strcmp(text,"finer") != 0) && (strcmp(text,"coarser") != 0) &&
-      (strcmp(text,"next")  != 0) && (strcmp(text,"limits")  != 0)) return;
-
-  /* just change the color mapping */
-  if ((strcmp(text,"next") == 0) || (strcmp(text,"limits") == 0)) {
-    if (strcmp(text,"next") == 0) {
-      key++;
-      if (key > 2) key = 0;
-    } else {
-      printf(" Enter new limits [old = %e, %e]:", lims[0], lims[1]);
-      scanf("%f %f", &lims[0], &lims[1]);
-      printf(" new limits = %e %e\n", lims[0], lims[1]);
-    }
-    stat = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], keys[key]);
-    if (stat < 0) printf(" wv_setKey = %d!\n", stat);
-
-    for (ibody = 0; ibody < nbody; ibody++) {
-      /* get faces */
-      for (i = 0; i < bodydata[ibody].nfaces; i++) {
-        stat = EG_getTessFace(bodydata[ibody].tess, i+1, &len,
-                              &xyzs, &uvs, &ptype, &pindex, &ntri,
-                              &tris, &tric);
-        if (stat != EGADS_SUCCESS) continue;
-        sprintf(gpname, "Body %d Face %d", ibody+1, i+1);
-        index = wv_indexGPrim(cntxt, gpname);
-        if (index < 0) {
-          printf(" wv_indexGPrim = %d for %s (%d)!\n", i, gpname, index);
-          continue;
-        }
-        if (len == 0) continue;
-        colrs = (float *) malloc(3*len*sizeof(float));
-        if (colrs == NULL) continue;
-        for (j = 0; j < len; j++) {
-          rc[0] = rc[4] = 0.0;
-          stat = EG_curvature(bodydata[ibody].faces[i], &uvs[2*j], rc);
-          if (stat != EGADS_SUCCESS)
-            printf(" Face %d: %d EG_curvature = %d\n", i+1, j, stat);
-          if (key == 0) {
-            val = 0.0;
-            if (rc[0]*rc[4] > 0.0) val =  1.0;
-            if (rc[0]*rc[4] < 0.0) val = -1.0;
-            val *= pow(fabs(rc[0]*rc[4]*focus[3]*focus[3]),0.25);
-          } else if (key == 1) {
-            val = rc[0];
-            if (rc[4] < rc[0]) val = rc[4];
-            val *= focus[3];
-          } else {
-            val = rc[0];
-            if (rc[4] > rc[0]) val = rc[4];
-            val *= focus[3];
-          }
-          spec_col(val, &colrs[3*j]);
-        }
-        stat = wv_setData(WV_REAL32, len, (void *) colrs, WV_COLORS, &items[0]);
-        if (stat < 0) printf(" wv_setData = %d for %s/item color!\n", i, gpname);
-        free(colrs);
-        stat = wv_modGPrim(cntxt, index, 1, items);
-        if (stat < 0)
-          printf(" wv_modGPrim = %d for %s (%d)!\n", stat, gpname, index);
-      }
-    }
-    return;
-  }
-
-  if (strcmp(text,"finer")   == 0) params[0] *= 0.5;
-  if (strcmp(text,"coarser") == 0) params[0] *= 2.0;
-  printf(" Using angle = %lf,  relSide = %lf,  relSag = %lf,  key = %d\n",
-         params[2], params[0], params[1], key);
-  if (key == -1) {
-    key  = 0;
-    stat = wv_setKey(cntxt, 256, color_map, lims[0], lims[1], keys[key]);
-    if (stat < 0) printf(" wv_setKey = %d!\n", stat);
-  }
-
-  for (ibody = 0; ibody < nbody; ibody++) {
-    EG_deleteObject(bodydata[ibody].tess);
-    bodydata[ibody].tess = NULL;
-    stat = EG_makeTessBody(bodydata[ibody].body, params, &bodydata[ibody].tess);
-    if (stat != EGADS_SUCCESS)
-      printf(" EG_makeTessBody %d = %d\n", ibody, stat);
-  }
-
-  /* make the scene */
-  for (sum = stat = ibody = 0; ibody < nbody; ibody++) {
-
-    /* get faces */
-    for (i = 0; i < bodydata[ibody].nfaces; i++) {
-      stat = EG_getTessFace(bodydata[ibody].tess, i+1, &len,
-                            &xyzs, &uvs, &ptype, &pindex, &ntri,
-                            &tris, &tric);
-      if (stat != EGADS_SUCCESS) continue;
-      sprintf(gpname, "Body %d Face %d", ibody+1, i+1);
-      index = wv_indexGPrim(cntxt, gpname);
-      if (index < 0) {
-        printf(" wv_indexGPrim = %d for %s (%d)!\n", i, gpname, index);
-        continue;
-      }
-      stat = wv_setData(WV_REAL64, len, (void *) xyzs,  WV_VERTICES, &items[0]);
-      if (stat < 0) printf(" wv_setData = %d for %s/item 0!\n", i, gpname);
-      wv_adjustVerts(&items[0], focus);
-      stat = wv_setData(WV_INT32, 3*ntri, (void *) tris, WV_INDICES, &items[1]);
-      if (stat < 0) printf(" wv_setData = %d for %s/item 1!\n", i, gpname);
-      for (nseg = j = 0; j < ntri; j++)
-        for (k = 0; k < 3; k++)
-          if (tric[3*j+k] < j+1) nseg++;
-      segs = (int *) malloc(2*nseg*sizeof(int));
-      if (segs == NULL) {
-        printf(" Can not allocate %d Sides!\n", nseg);
-        continue;
-      }
-      for (nseg = j = 0; j < ntri; j++)
-        for (k = 0; k < 3; k++)
-          if (tric[3*j+k] < j+1) {
-            segs[2*nseg  ] = tris[3*j+sides[k][0]];
-            segs[2*nseg+1] = tris[3*j+sides[k][1]];
-            nseg++;
-          }
-      stat = wv_setData(WV_INT32, 2*nseg, (void *) segs, WV_LINDICES, &items[2]);
-      if (stat < 0) printf(" wv_setData = %d for %s/item 2!\n", i, gpname);
-      free(segs);
-      colrs = (float *) malloc(3*len*sizeof(float));
-      if (colrs == NULL) continue;
-      for (j = 0; j < len; j++) {
-        rc[0] = rc[4] = 0.0;
-        stat = EG_curvature(bodydata[ibody].faces[i], &uvs[2*j], rc);
-        if (stat != EGADS_SUCCESS)
-          printf(" Face %d: %d EG_curvature = %d\n", i+1, j, stat);
-        if (key == 0) {
-          val  = 0.0;
-          rmin = rmax = fabs(rc[0]);
-          if (fabs(rc[4]) < rmin) rmin = fabs(rc[4]);
-          if (fabs(rc[4]) > rmax) rmax = fabs(rc[4]);
-          if (rmax != 0.0) {
-            if (rc[0]*rc[4] > 0.0) val =  1.0;
-            if (rc[0]*rc[4] < 0.0) val = -1.0;
-            if (rmin/rmax < 1.e-5) val =  0.0;
-          }
-          val *= pow(fabs(rc[0]*rc[4]*focus[3]*focus[3]),0.25);
-        } else if (key == 1) {
-          val = rc[0];
-          if (rc[4] < rc[0]) val = rc[4];
-          val *= focus[3];
-        } else {
-          val = rc[0];
-          if (rc[4] > rc[0]) val = rc[4];
-          val *= focus[3];
-        }
-        spec_col(val, &colrs[3*j]);
-      }
-      stat = wv_setData(WV_REAL32, len, (void *) colrs, WV_COLORS, &items[3]);
-      if (stat < 0) printf(" wv_setData = %d for %s/item color!\n", i, gpname);
-      free(colrs);
-      stat = wv_modGPrim(cntxt, index, 4, items);
-      if (stat < 0)
-        printf(" wv_modGPrim = %d for %s (%d)!\n", stat, gpname, index);
-      sum += ntri;
-    }
-
-    /* put normals of faces in "edge" slot */
-    for (i = 0; i < bodydata[ibody].nfaces; i++) {
-      stat = EG_getTessFace(bodydata[ibody].tess, i+1, &len,
-                            &xyzs, &uvs, &ptype, &pindex, &ntri,
-                            &tris, &tric);
-      if (stat != EGADS_SUCCESS) continue;
-      if (len == 0) continue;
-      norms = (double *) malloc(6*len*sizeof(double));
-      if (norms == NULL) continue;
-      sprintf(gpname, "Body %d Edge %d", ibody+1, i+1);
-
-      pu = &result[3];
-      pv = &result[6];
-      for (j = 0; j < len; j++) {
-        norms[6*j  ] = norms[6*j+3] = xyzs[3*j  ];
-        norms[6*j+1] = norms[6*j+4] = xyzs[3*j+1];
-        norms[6*j+2] = norms[6*j+5] = xyzs[3*j+2];
-        stat = EG_evaluate(bodydata[ibody].faces[i], &uvs[2*j], result);
-        if (stat != EGADS_SUCCESS) continue;
-        CROSS(norm, pu, pv);
-        dot = sqrt(DOT(norm, norm))*bodydata[ibody].faces[i]->mtype;
-        if (dot == 0.0) continue;
-        norm[0]      *= 0.025*focus[3]/dot;
-        norm[1]      *= 0.025*focus[3]/dot;
-        norm[2]      *= 0.025*focus[3]/dot;
-        norms[6*j+3] += norm[0];
-        norms[6*j+4] += norm[1];
-        norms[6*j+5] += norm[2];
-      }
-      stat = wv_setData(WV_REAL64, 2*len, (void *) norms,  WV_VERTICES,
-                        &items[0]);
-      if (stat < 0) printf(" wv_setData = %d for %s/item 0!\n", i, gpname);
-      wv_adjustVerts(&items[0], focus);
-      free(norms);
-      color[0] = 0.0;
-      color[1] = 0.0;
-      color[2] = 0.0;
-      stat = wv_setData(WV_REAL32, 1, (void *) color,  WV_COLORS, &items[1]);
-      if (stat < 0) printf(" wv_setData = %d for %s/item 1!\n", i, gpname);
-      stat = wv_addGPrim(cntxt, gpname, WV_LINE, 0, 2, items);
-      if (stat < 0)
-        printf(" wv_addGPrim = %d for %s!\n", stat, gpname);
-    }
-
-    /* get loops */
-    for (i = 0; i < bodydata[ibody].nfaces; i++) {
-      stat = EG_getTopology(bodydata[ibody].faces[i], &geom, &oclass,
-                            &mtype, NULL, &nloops, &loops, &lsenses);
-      if (stat != EGADS_SUCCESS) continue;
-      for (nh = j = 0; j < nloops; j++) {
-        stat = EG_getTopology(loops[j], &geom, &oclass, &mtype, NULL,
-                              &nledges, &ledges, &esenses);
-        if (stat != EGADS_SUCCESS) continue;
-
-        /* count */
-        for (ntri = nseg = k = 0; k < nledges; k++) {
-          m = 0;
-          while (ledges[k] != bodydata[ibody].edges[m]) {
-            m++;
-            if (m == bodydata[ibody].nedges) break;
-          }
-          /* assume that the edge is degenerate and removed */
-          if (m == bodydata[ibody].nedges) continue;
-          stat = EG_getTessEdge(bodydata[ibody].tess, m+1, &len,
-                                &xyzs, &ts);
-          if (stat != EGADS_SUCCESS) {
-            printf(" EG_getTessEdge %d = %d!\n", m+1, stat);
-            nseg = 0;
-            break;
-          }
-          if (len == 2)
-            if ((xyzs[0] == xyzs[3]) && (xyzs[1] == xyzs[4]) &&
-                (xyzs[2] == xyzs[5])) continue;
-          nh++;
-          nseg += len;
-          ntri += 2*(len-1);
-        }
-        if (nseg == 0) continue;
-        lsegs = (float *) malloc(3*nseg*sizeof(float));
-        if (lsegs == NULL) {
-          printf(" Can not allocate %d Segments!\n", nseg);
-          continue;
-        }
-        segs = (int *) malloc(ntri*sizeof(int));
-        if (segs == NULL) {
-          printf(" Can not allocate %d Line Segments!\n", ntri);
-          free(lsegs);
-          continue;
-        }
-        heads = (int *) malloc(nh*sizeof(int));
-        if (heads == NULL) {
-          printf(" Can not allocate %d Heads!\n", nh);
-          free(segs);
-          free(lsegs);
-          continue;
-        }
-
-        /* fill */
-        for (nh = ntri = nseg = k = 0; k < nledges; k++) {
-          m = 0;
-          while (ledges[k] != bodydata[ibody].edges[m]) {
-            m++;
-            if (m == bodydata[ibody].nedges) break;
-          }
-          /* assume that the edge is degenerate and removed */
-          if (m == bodydata[ibody].nedges) continue;
-          EG_getTessEdge(bodydata[ibody].tess, m+1, &len, &xyzs, &ts);
-          if (len == 2)
-            if ((xyzs[0] == xyzs[3]) && (xyzs[1] == xyzs[4]) &&
-                (xyzs[2] == xyzs[5])) continue;
-          if (esenses[k] == -1) heads[nh] = -ntri/2 - 1;
-          for (n = 0; n < len-1; n++) {
-            segs[ntri] = n+nseg+1;
-            ntri++;
-            segs[ntri] = n+nseg+2;
-            ntri++;
-          }
-          if (esenses[k] ==  1) heads[nh] = ntri/2;
-          for (n = 0; n < len; n++) {
-            lsegs[3*nseg  ] = xyzs[3*n  ];
-            lsegs[3*nseg+1] = xyzs[3*n+1];
-            lsegs[3*nseg+2] = xyzs[3*n+2];
-            nseg++;
-          }
-          nh++;
-        }
-        sprintf(gpname, "Body %d Loop %d/%d", ibody+1, i+1, j+1);
-        index = wv_indexGPrim(cntxt, gpname);
-        if (index < 0) {
-          printf(" wv_indexGPrim = %d for %s (%d)!\n", i, gpname, index);
-          continue;
-        }
-        stat = wv_setData(WV_REAL32, nseg, (void *) lsegs,  WV_VERTICES, &items[0]);
-        if (stat < 0) printf(" wv_setData = %d for %s/item 0!\n", i, gpname);
-        wv_adjustVerts(&items[0], focus);
-        free(lsegs);
-        stat = wv_setData(WV_INT32, ntri, (void *) segs, WV_INDICES, &items[1]);
-        if (stat < 0) printf(" wv_setData = %d for %s/item 1!\n", i, gpname);
-        free(segs);
-        stat = wv_modGPrim(cntxt, index, 2, items);
-        if (stat < 0) {
-          printf(" wv_modGPrim = %d for %s!\n", stat, gpname);
-        } else {
-          n = wv_addArrowHeads(cntxt, index, 0.05, nh, heads);
-          if (n != 0) printf(" wv_addArrowHeads = %d\n", n);
-        }
-        free(heads);
-      }
-    }
-  }
-  printf(" **  now with %d triangles **\n\n", sum);
 }

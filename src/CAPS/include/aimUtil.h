@@ -5,7 +5,7 @@
  *
  *             AIM Utility Function Prototypes
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -50,6 +50,9 @@ __ProtoExt__ int
   aim_getRootPath( void *aimInfo, const char **fullPath );
 
 __ProtoExt__ int
+  aim_fileLink( void *aimStruc, /*@null@*/ char *srcPath );
+
+__ProtoExt__ int
   aim_file( void *aimInfo, const char *file, char *aimFile );
 
 __ProtoExt__ /*@null@*/ /*@out@*/ /*@only@*/ FILE *
@@ -57,6 +60,9 @@ __ProtoExt__ /*@null@*/ /*@out@*/ /*@only@*/ FILE *
 
 __ProtoExt__ int
   aim_isFile(void *aimStruc, const char *file);
+
+__ProtoExt__ int
+  aim_rmFile(void *aimStruc, const char *file);
 
 __ProtoExt__ int
   aim_cpFile(void *aimStruc, const char *src, const char *dst);
@@ -73,6 +79,9 @@ __ProtoExt__ int
 
 __ProtoExt__ int
   aim_mkDir(void *aimStruc, const char *path);
+
+__ProtoExt__ int
+  aim_rmDir(void *aimStruc, const char *path);
 
 __ProtoExt__ int
   aim_system( void *aimInfo, /*@null@*/ const char *rpath,
@@ -128,6 +137,16 @@ __ProtoExt__ int
 __ProtoExt__ int
   aim_getValue( void *aimInfo, int index, enum capssType subtype,
                 capsValue **value );
+
+__ProtoExt__ int
+  aim_initValue( capsValue *value );
+
+__ProtoExt__ void
+  aim_freeValue(capsValue *value);
+
+__ProtoExt__ int
+  aim_makeDynamicOutput( void *aimInfo, const char *dynObjName,
+                         capsValue *value );
   
 __ProtoExt__ int
   aim_getName( void *aimInfo, int index, enum capssType subtype,
@@ -356,20 +375,22 @@ extern ssize_t getline(char ** restrict linep, size_t * restrict linecapp,
       aim_status(aimInfo, status, __FILE__, __LINE__, __func__, 1, "AIM_ALLOC: %s != NULL", #ptr); \
       goto cleanup; \
    } \
-   ptr = (type *) EG_alloc((size)*sizeof(type)); \
+   size_t memorysize = size; \
+   ptr = (type *) EG_alloc(memorysize*sizeof(type)); \
    if (ptr == NULL) { \
      status = EGADS_MALLOC; \
-     aim_status(aimInfo, status, __FILE__, __LINE__, __func__, 3, "AIM_ALLOC: %s size %zu type %s", #ptr, size, #type); \
+     aim_status(aimInfo, status, __FILE__, __LINE__, __func__, 3, "AIM_ALLOC: %s size %zu type %s", #ptr, memorysize, #type); \
      goto cleanup; \
    } \
  }
 
 #define AIM_REALL(ptr, size, type, aimInfo, status) \
  { \
-   ptr = (type *) EG_reall(ptr, (size)*sizeof(type)); \
+   size_t memorysize = size;\
+   ptr = (type *) EG_reall(ptr, memorysize*sizeof(type)); \
    if (ptr == NULL) { \
      status = EGADS_MALLOC; \
-     aim_status(aimInfo, status, __FILE__, __LINE__, __func__, 3, "AIM_REALL: %s size %zu type %s", #ptr, size, #type); \
+     aim_status(aimInfo, status, __FILE__, __LINE__, __func__, 3, "AIM_REALL: %s size %zu type %s", #ptr, memorysize, #type); \
      goto cleanup; \
    } \
  }
@@ -417,10 +438,13 @@ aimOutputs( /*@null@*/ void *instStore, void *aimInfo, int index, char **aoname,
             capsValue *form );
 
 int
-aimPreAnalysis( void *instStore, void *aimInfo, /*@null@*/ capsValue *inputs );
+aimUpdateState( void *instStore, void *aimInfo, /*@null@*/ capsValue *inputs );
 
 int
-aimExecute( void *instStore, void *aimInfo, int *state );
+aimPreAnalysis( const void *instStore, void *aimInfo, /*@null@*/ capsValue *inputs );
+
+int
+aimExecute( const void *instStore, void *aimInfo, int *state );
 
 int
 aimPostAnalysis( void *instStore, void *aimInfo, int restart,

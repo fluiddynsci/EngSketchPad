@@ -3,7 +3,7 @@
  *
  *             awave AIM tester
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -105,7 +105,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set Mach number
-    status = caps_childByName(awaveObj, VALUE, ANALYSISIN, "Mach", &tempObj);
+    status = caps_childByName(awaveObj, VALUE, ANALYSISIN, "Mach", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     doubleVal[0] = 1.2;
@@ -116,7 +118,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set AoA
-    status = caps_childByName(awaveObj, VALUE, ANALYSISIN, "Alpha", &tempObj);
+    status = caps_childByName(awaveObj, VALUE, ANALYSISIN, "Alpha", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     doubleVal[0] = 0.0;
@@ -129,7 +133,9 @@ int main(int argc, char *argv[])
     // Awave analysis executes automatically
 
     // Get total CdWave
-    status = caps_childByName(awaveObj, VALUE, ANALYSISOUT, "CDwave", &tempObj);
+    status = caps_childByName(awaveObj, VALUE, ANALYSISOUT, "CDwave", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     status = caps_getValue(tempObj, &vtype, &nrow, &ncol, &data, &partial,

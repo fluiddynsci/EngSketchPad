@@ -12,7 +12,7 @@ endif
 
 $(TDIR)/vCurvature:	$(ODIR)/vCurvature.o $(LDIR)/libwsserver.a
 	$(CXX) -o $(TDIR)/vCurvature $(ODIR)/vCurvature.o \
-		-L$(LDIR) -lwsserver -legads -lpthread -lz $(RPATH) -lm
+		-L$(LDIR) -lwsserver -legads $(RPATH)
 
 $(ODIR)/vCurvature.o:	vCurvature.c $(IDIR)/egads.h $(IDIR)/egadsTypes.h \
 			$(IDIR)/egadsErrors.h $(IDIR)/wsserver.h

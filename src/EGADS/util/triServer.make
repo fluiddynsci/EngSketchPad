@@ -12,7 +12,7 @@ endif
 
 $(TDIR)/triServer:	$(ODIR)/triServer.o
 	$(CXX) -o $(TDIR)/triServer $(ODIR)/triServer.o \
-		-L$(LDIR) -lwsserver -lpthread -lz $(RPATH) -lm
+		-L$(LDIR) -lwsserver $(RPATH)
 
 $(ODIR)/triServer.o:	triServer.c $(IDIR)/egads.h $(IDIR)/egadsTypes.h \
 			$(IDIR)/egadsErrors.h $(IDIR)/wsserver.h

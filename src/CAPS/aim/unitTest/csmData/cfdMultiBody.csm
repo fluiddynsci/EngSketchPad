@@ -6,29 +6,39 @@ ATTRIBUTE capsLength $ft
 # Design Parameters:
 despmtr   area         40.00000
 despmtr   aspect       5.00000
+dimension taper 2 2
 despmtr   taper        0.50000
+dimension twist 2 1
 despmtr   twist        15.00000
 despmtr   lesweep      30.00000
 despmtr   dihedral     1.00000
+
+LBOUND    area      10.00
+UBOUND    area    1000.00
+
+LBOUND    aspect     2.00
+UBOUND    aspect    10.00
 
 # Integer configuration parameters
 cfgpmtr   series            8412
 cfgpmtr   series2           0020
 cfgpmtr   sharpte           0
+cfgpmtr   aerosystem        1
+cfgpmtr   wake              1
 
 # Output Parameters:
 outpmtr  cmean
 
 # Specify Euler equations
 attribute capsIntent $CFD #CFD Analysis
-attribute capsAIM $fun3dAIM;su2AIM;egadsTessAIM;aflr4AIM;pointwiseAIM;tetgenAIM;aflr3AIM #CFD Analysis
+set capsAIM $fun3dAIM;su2AIM;egadsTessAIM;aflr4AIM;pointwiseAIM;tetgenAIM;aflr3AIM #CFD Analysis
 
 # Branches:
 set       cmean     sqrt(area/aspect)
 set       span      cmean*aspect
 set       sspan     span/2
-set       croot     2*cmean/(1+taper)
-set       ctip      croot*taper
+set       croot     2*cmean/(1+taper[1,1])
+set       ctip      croot*taper[1,1]
 set       xtip      sspan*tand(lesweep)
 set       ytip      sspan*tand(dihedral)
 set       ybot      -0.1*croot
@@ -40,7 +50,7 @@ mark
       scale     croot
    udprim    naca   Series   series2
       scale     ctip
-      rotatez   -twist   0   0
+      rotatez   -twist[1]   0   0
       translate xtip   ytip   -sspan
 rule      0
 
@@ -58,8 +68,10 @@ restore   HalfWing 0
 # Combine halfs into a whole
 join     0
 
-# Get body into a typical aero-system 
-rotatex 90 0 0
+# Get body into a typical aero-system
+ifthen aerosystem eq 1
+    rotatex 90 0 0
+endif
 
 # Store the wing 
 store     Wing 0 0
@@ -68,14 +80,23 @@ store     Wing 0 0
 restore   Wing 0
     attribute capsGroup $Wing1
     attribute capsMesh $Wing1
+    attribute capsAIM $!capsAIM+$;cart3dAIM
     attribute _name $Wing1
     attribute AFLR4_Cmp_ID 1
     attribute AFLR4_Edge_Refinement_Weight 1
+
+# Set reference values on the wing
+    attribute capsReferenceArea     area
+    attribute capsReferenceChord    cmean
+    attribute capsReferenceSpan     span
+    attribute capsReferenceX        0.0
+    attribute capsMeshLength        cmean
 
 # Wing 2 -  Restore and scale, translate
 restore   Wing 0
     attribute capsGroup $Wing2
     attribute capsMesh $Wing2
+    attribute capsAIM $!capsAIM #+$;cart3dAIM
     attribute _name             $Wing2
     attribute AFLR4_Scale_Factor 10
     attribute AFLR4_Cmp_ID 2
@@ -83,18 +104,25 @@ restore   Wing 0
     scale     0.4
     translate 10   0   0
 
+IFTHEN wake EQ 1
+   # Create a wake sheet for mesh clustering
+   BOX 13   -sspan   0    5  2*sspan  0
+       ATTRIBUTE capsGroup   $Wake
+       ATTRIBUTE capsMesh    $Wake
+       attribute capsAIM     capsAIM
+       ATTRIBUTE _name       $Wake
+       ATTRIBUTE AFLR_GBC    $TRANSP_UG3_GBC
+       ATTRIBUTE AFLR4_Cmp_ID 3
+       ATTRIBUTE PW:Baffle   $Baffle
+ENDIF
+
 # Create a bounding box as a farfied 
 sphere    0   0   0   80
     attribute capsGroup $Farfield
     attribute capsMesh $Farfield
+    attribute capsAIM capsAIM
     attribute _name       $Farfield
     attribute AFLR_GBC $FARFIELD_UG3_GBC
-    attribute AFLR4_Cmp_ID 3
-
-# Set reference values on the farfield
-    attribute capsReferenceArea     area
-    attribute capsReferenceChord    cmean
-    attribute capsReferenceSpan     span
-    attribute capsMeshLength        cmean
+    attribute AFLR4_Cmp_ID 4
 
 end

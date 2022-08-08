@@ -53,25 +53,26 @@ pointwise.preAnalysis()
 #     PW_HOME/pointwise -b $CAPS_GLYPH/GeomToMesh.glf caps.egads capsUserDefaults.glf
 
 # Attempt to run pointwise repeatedly in case a licensce is not readily available
-currentDir = os.getcwd()
-os.chdir(pointwise.analysisDir)
-
 CAPS_GLYPH = os.environ["CAPS_GLYPH"]
 for i in range(30):
-    if platform.system() == "Windows":
-        PW_HOME = os.environ["PW_HOME"]
-        os.system(PW_HOME + "\win64\bin\tclsh.exe " + CAPS_GLYPH + "\\GeomToMesh.glf caps.egads capsUserDefaults.glf")
-    elif "CYGWIN" in platform.system():
-        PW_HOME = os.environ["PW_HOME"]
-        os.system(PW_HOME + "/win64/bin/tclsh.exe " + CAPS_GLYPH + "/GeomToMesh.glf caps.egads capsUserDefaults.glf")
-    else:
-        os.system("pointwise -b " + CAPS_GLYPH + "/GeomToMesh.glf caps.egads capsUserDefaults.glf")
-    
-    time.sleep(1) # let the harddrive breathe
-    if os.path.isfile('caps.GeomToMesh.gma') and os.path.isfile('caps.GeomToMesh.ugrid'): break
-    time.sleep(10) # wait and try again
+    try:
+        if platform.system() == "Windows":
+            PW_HOME = os.environ["PW_HOME"]
+            pointwise.system(PW_HOME + "\win64\bin\tclsh.exe " + CAPS_GLYPH + "\\GeomToMesh.glf caps.egads capsUserDefaults.glf")
+        elif "CYGWIN" in platform.system():
+            PW_HOME = os.environ["PW_HOME"]
+            pointwise.system(PW_HOME + "/win64/bin/tclsh.exe " + CAPS_GLYPH + "/GeomToMesh.glf caps.egads capsUserDefaults.glf")
+        else:
+            pointwise.system("pointwise -b " + CAPS_GLYPH + "/GeomToMesh.glf caps.egads capsUserDefaults.glf")
+    except pyCAPS.CAPSError:
+        time.sleep(10) # wait and try again
+        continue
 
-os.chdir(currentDir)
+    time.sleep(1) # let the harddrive breathe
+    if os.path.isfile(os.path.join(pointwise.analysisDir,'caps.GeomToMesh.gma')) and \
+      (os.path.isfile(os.path.join(pointwise.analysisDir,'caps.GeomToMesh.ugrid')) or \
+       os.path.isfile(os.path.join(pointwise.analysisDir,'caps.GeomToMesh.lb8.ugrid'))): break
+    time.sleep(10) # wait and try again
 
 # Run AIM post-analysis
 pointwise.postAnalysis()

@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -98,14 +98,16 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     char    *message=NULL;
     ego     enodes[4], eedges[3], ecurve, eline, eloop, eface, enew;
 
-    ROUTINE(udpExecute);
-
 #ifdef GRAFIC
     float   xplot[1203], yplot[1203];
     int     io_kbd=5, io_scr=6, indgr=1+2+4+16+64;
     int     nline=0, nplot=0, ilin[3], isym[3], nper[3];
     char    pltitl[80];
 #endif
+
+    ROUTINE(udpExecute);
+    
+    /* --------------------------------------------------------------- */
 
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
@@ -186,7 +188,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     }
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(NULL);
     CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
@@ -711,6 +713,8 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
     ego    eref, *echilds, *enodes, *eedges, *efaces, eent;
 
     ROUTINE(udpSensitivity);
+
+    /* --------------------------------------------------------------- */
 
 #ifdef DEBUG
     printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f %f)\n",

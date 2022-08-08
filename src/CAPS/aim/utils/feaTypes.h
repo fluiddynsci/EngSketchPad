@@ -60,7 +60,7 @@ typedef struct {
 
     vlmSurfaceStruct vlmSurface; // VLM surface structure
 
-}feaAeroStruct;
+} feaAeroStruct;
 
 // Structure to hold connection information
 typedef struct {
@@ -96,7 +96,7 @@ typedef struct {
     double *masterWeighting; // [numMaster]
     int *masterComponent; // [numMaster]
 
-}feaConnectionStruct;
+} feaConnectionStruct;
 
 // Structure to hold coordinate system information
 typedef struct {
@@ -115,7 +115,7 @@ typedef struct {
     double normal2[3]; // Second normal direction
     double normal3[3]; // Third normal direction - found from normal1 x normal2
 
-}feaCoordSystemStruct;
+} feaCoordSystemStruct;
 
 // Structure to hold design variable relation information
 typedef struct {

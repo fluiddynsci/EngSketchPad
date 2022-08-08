@@ -185,18 +185,7 @@ myProblem.analysis["fun3d"].preAnalysis()
 
 ####### Run fun3d ####################
 print ("\n\nRunning FUN3D......")
-currentDirectory = os.getcwd() # Get our current working directory
-
-os.chdir(myProblem.analysis["fun3d"].analysisDir) # Move into test directory
-
-os.system("nodet_mpi --animation_freq -1 > Info.out"); # Run fun3d via system call
-
-haveFUN3D = True # See if FUN3D ran
-if os.path.getsize("Info.out") == 0: #
-    print ("FUN3D excution failed\n")
-    haveFUN3D = False
-
-os.chdir(currentDirectory) # Move back to top directory
+myProblem.analysis["fun3d"].system("nodet_mpi --animation_freq -1 > Info.out"); # Run fun3d via system call
 #######################################
 
 # Run AIM post-analysis

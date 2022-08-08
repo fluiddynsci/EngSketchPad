@@ -11,8 +11,8 @@ TDIR = $(ESP_ROOT)/bin
 endif
 
 $(TDIR)/vQuad:	$(ODIR)/vQuad.o $(LDIR)/libwsserver.a
-	$(CXX) -o $(TDIR)/vQuad $(ODIR)/vQuad.o \
-		-L$(LDIR) -lwsserver -legads -lpthread -lz $(RPATH) -lm
+	$(CXX) -o $(TDIR)/vQuad $(ODIR)/vQuad.o -L$(LDIR) -lwsserver \
+		-legads $(RPATH)
 
 $(ODIR)/vQuad.o:	vQuad.c $(IDIR)/egads.h $(IDIR)/egadsTypes.h \
 			$(IDIR)/egadsErrors.h $(IDIR)/wsserver.h

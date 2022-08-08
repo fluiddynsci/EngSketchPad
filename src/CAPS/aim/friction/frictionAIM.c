@@ -3,7 +3,7 @@
  *
  *             FRICTION AIM
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -442,7 +442,15 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
 
 // ********************** AIM Function Break *****************************
-int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
+int aimUpdateState(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+                   /*@unused@*/ capsValue *aimInputs)
+{
+    return CAPS_SUCCESS;
+}
+
+
+// ********************** AIM Function Break *****************************
+int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo,
                    /*@null@*/ capsValue *inputs)
 {
 
@@ -491,10 +499,7 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
 
     // Get EGADS bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
-    if (status != CAPS_SUCCESS) {
-        printf(" frictionAIM/aimPreAnalysis getBodies = %d!\n", status);
-        return status;
-    }
+    AIM_STATUS(aimInfo, status);
 
     if (inputs == NULL) {
 #ifdef DEBUG
@@ -523,14 +528,14 @@ int aimPreAnalysis(/*@unused@*/ void *instStore, void *aimInfo,
     if (inputs[inMach-1].nullVal == IsNull ||
         inputs[inAltitude-1].nullVal == IsNull) {
 
-        printf("Either input Mach or Altitude has not been set!\n");
+        AIM_ERROR(aimInfo, "Either input Mach or Altitude has not been set!\n");
         status = CAPS_NULLVALUE;
         goto cleanup;
     }
 
     if (inputs[inMach-1].length != inputs[inAltitude-1].length) {
 
-        printf("Inputs Mach and Altitude must be the same length\n");
+        AIM_ERROR(aimInfo, "Inputs Mach and Altitude must be the same length\n");
         status = CAPS_MISMATCH;
         goto cleanup;
     }
@@ -1065,7 +1070,7 @@ cleanup:
 
 
 // ********************** AIM Function Break *****************************
-int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
+int aimExecute(/*@unused@*/ const void *instStore, /*@unused@*/ void *aimInfo,
                int *state)
 {
   /*! \page aimExecuteFRICTION AIM Execution
@@ -1094,12 +1099,7 @@ int aimExecute(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
    * friction.preAnalysis()
    *
    * print ("\n\nRunning......")
-   * currentDirectory = os.getcwd() # Get our current working directory
-   *
-   * os.chdir(friction.analysisDir) # Move into test directory
-   * os.system("friction frictionInput.txt frictionOutput.txt > Info.out"); # Run via system call
-   *
-   * os.chdir(currentDirectory) # Move back to top directory
+   * friction.system("friction frictionInput.txt frictionOutput.txt > Info.out"); # Run via system call
    *
    * print ("\n\postAnalysis......")
    * friction.postAnalysis()

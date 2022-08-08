@@ -11,7 +11,7 @@
  */
 
 /*
- * Copyright (C) 2013/2021  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -99,6 +99,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     ego     enodes[5], ecurve, eedges[8], eloop, eface;
 
     ROUTINE(udpExecute);
+
+    /* --------------------------------------------------------------- */
     
 #ifdef DEBUG
     printf("udpExecute(context=%llx)\n", (long long)context);
@@ -196,7 +198,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     }
 
     /* cache copy of arguments for future use */
-    status = cacheUdp();
+    status = cacheUdp(NULL);
     CHECK_STATUS(cacheUdp);
 
 #ifdef DEBUG
@@ -401,14 +403,11 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
    /*@unused@*/double uvs[],            /* (in)  parametric coordinates for evaluation */
    /*@unused@*/double vels[])           /* (out) velocities */
 {
-//$$$    int    status = EGADS_SUCCESS;
-
     int    iudp, judp;
 
-#ifdef DEBUG
-    printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f %f)\n",
-           (long long)ebody, npnt, entType, entIndex, uvs[0], uvs[1]);
-#endif
+    ROUTINE(udpSensitivity);
+
+    /* --------------------------------------------------------------- */
 
     /* check that ebody matches one of the ebodys */
     iudp = 0;

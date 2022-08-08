@@ -1,0 +1,11 @@
+LIBRARY interferenceAIM
+EXPORTS
+aimInitialize
+aimInputs
+aimUpdateState
+aimPreAnalysis
+aimExecute
+aimPostAnalysis
+aimOutputs
+aimCalcOutput
+aimCleanup

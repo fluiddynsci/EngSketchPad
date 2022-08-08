@@ -12,7 +12,7 @@ endif
 
 $(TDIR)/vAttr:	$(ODIR)/vAttr.o $(LDIR)/libwsserver.a
 	$(CXX) -o $(TDIR)/vAttr $(ODIR)/vAttr.o \
-		-L$(LDIR) -lwsserver -legads -lpthread -lz $(RPATH) -lm
+		-L$(LDIR) -lwsserver -legads $(RPATH)
 
 $(ODIR)/vAttr.o:	vAttr.c $(IDIR)/egads.h $(IDIR)/egadsTypes.h \
 			$(IDIR)/egadsErrors.h $(IDIR)/wsserver.h

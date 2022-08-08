@@ -11,7 +11,7 @@ extern "C" {
 
 // Retrieves a mesh via linkage or generates a mesh with fea_bodyToBEM
 int fea_createMesh(void *aimInfo,
-                   double paramTess[3],                 // (in)  Tessellation parameters
+        /*@null@*/ double paramTess[3],                 // (in)  Tessellation parameters
                    int    edgePointMin,                 // (in)  minimum points along any Edge
                    int    edgePointMax,                 // (in)  maximum points along any Edge
                    int    quadMesh,                     // (in)  only do tris-for faces
@@ -112,7 +112,9 @@ int fea_getLoad(int numLoadTuple,
                 feaProblemStruct *feaProblem);
 
 // Get the design variables from a capsTuple
-int fea_getDesignVariable(int numDesignVariableTuple,
+int fea_getDesignVariable(void *aimInfo,
+                          int requireGroup,
+                          int numDesignVariableTuple,
                           capsTuple designVariableTuple[],
                           int numDesignVariableRelationTuple,
                           capsTuple designVariableRelationTuple[],
@@ -182,7 +184,7 @@ int fea_findMaterialsByNames(feaProblemStruct *feaProblem,
 
 // Find feaDesignVariableStructs with given names in feaProblem
 // Returns array of borrowed pointers
-int fea_findDesignVariablesByNames(feaProblemStruct *feaProblem, 
+int fea_findDesignVariablesByNames(const feaProblemStruct *feaProblem,
                                    int numDesignVariableNames,
                                    char **designVariableNames, 
                                    int *numDesignVariables,
@@ -190,7 +192,7 @@ int fea_findDesignVariablesByNames(feaProblemStruct *feaProblem,
 
 // Find feaDesignResponseStructs with given names in feaProblem
 // Returns array of borrowed pointers
-int fea_findDesignResponsesByNames(feaProblemStruct *feaProblem, 
+int fea_findDesignResponsesByNames(const feaProblemStruct *feaProblem,
                                    int numDesignResponseNames,
                                    char **designResponseNames, 
                                    int *numDesignResponses,
@@ -198,15 +200,15 @@ int fea_findDesignResponsesByNames(feaProblemStruct *feaProblem,
 
 // Find feaDesignEquationResponseStructs with given names in feaProblem
 // Returns array of borrowed pointers
-int fea_findEquationResponsesByNames(feaProblemStruct *feaProblem, 
-                                   int numEquationResponseNames,
-                                   char **equationResponseNames, 
-                                   int *numEquationResponses,
-                                   feaDesignEquationResponseStruct ***equationResponses);
+int fea_findEquationResponsesByNames(const feaProblemStruct *feaProblem,
+                                     int numEquationResponseNames,
+                                     char **equationResponseNames,
+                                     int *numEquationResponses,
+                                     feaDesignEquationResponseStruct ***equationResponses);
 
 // Find feaDesignEquationStruct with given equationName in feaProblem
 // Returns borrowed pointer
-int fea_findEquationByName(feaProblemStruct *feaProblem, 
+int fea_findEquationByName(const feaProblemStruct *feaProblem,
                            char *equationName, 
                            feaDesignEquationStruct **equation);
 
@@ -242,6 +244,10 @@ int destroy_feaSupportStruct(feaSupportStruct *feaSupport);
 
 // Initiate (0 out all values and NULL all pointers) of feaLoad in the feaLoadStruct structure format
 int initiate_feaLoadStruct(feaLoadStruct *feaLoad);
+
+// Copy feaLoad in the feaLoadStruct structure format
+// assumes that copy has been initialized with initiate_feaLoadStruct
+int copy_feaLoadStruct(void *aimInfo, feaLoadStruct *feaLoad, feaLoadStruct *copy);
 
 // Destroy (0 out all values and free and NULL all pointers) of feaLoad in the feaLoadStruct structure format
 int destroy_feaLoadStruct(feaLoadStruct *feaLoad);
@@ -337,7 +343,7 @@ int initiate_feaDesignVariableRelationStruct(feaDesignVariableRelationStruct *re
 int destroy_feaDesignVariableRelationStruct(feaDesignVariableRelationStruct *relation);
 
 // Transfer external pressure from the discrObj into the feaLoad structure
-int fea_transferExternalPressure(void *aimInfo, meshStruct *feaMesh, feaLoadStruct *feaLoad);
+int fea_transferExternalPressure(void *aimInfo, const meshStruct *feaMesh, feaLoadStruct *feaLoad);
 
 // Retrieve aerodynamic reference quantities from bodies
 int fea_retrieveAeroRef(int numBody, ego *bodies, feaAeroRefStruct *feaAeroRef);
@@ -360,7 +366,7 @@ int fea_glueMesh(meshStruct *mesh,
                  feaConnectionStruct *feaConnectOut[]);
 
 // Create a default analysis structure based on previous inputs
-int fea_createDefaultAnalysis(feaProblemStruct *feaProblem, char *analysisType);
+int fea_createDefaultAnalysis(feaProblemStruct *feaProblem, const char *analysisType);
 
 #ifdef __cplusplus
 }

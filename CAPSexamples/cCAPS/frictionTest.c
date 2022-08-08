@@ -3,7 +3,7 @@
  *
  *             Friction AIM tester
  *
- *      Copyright 2014-2021, Massachusetts Institute of Technology
+ *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -114,7 +114,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Find & set Mach number
-    status = caps_childByName(frictionObj, VALUE, ANALYSISIN, "Mach", &tempObj);
+    status = caps_childByName(frictionObj, VALUE, ANALYSISIN, "Mach", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     doubleVal[0] = 0.5;
@@ -126,8 +128,9 @@ int main(int argc, char *argv[])
 
 
     // Find & set Altitude
-    status = caps_childByName(frictionObj, VALUE, ANALYSISIN, "Altitude",
-                              &tempObj);
+    status = caps_childByName(frictionObj, VALUE, ANALYSISIN, "Altitude", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     doubleVal[0] = 29.52756; // kft
@@ -168,8 +171,9 @@ int main(int argc, char *argv[])
     if (status != CAPS_SUCCESS) goto cleanup;
 
     // Get  total Cl
-    status = caps_childByName(frictionObj, VALUE, ANALYSISOUT, "CDfric",
-                              &tempObj);
+    status = caps_childByName(frictionObj, VALUE, ANALYSISOUT, "CDfric", &tempObj,
+                              &nErr, &errors);
+    if (nErr != 0) printErrors(nErr, errors);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     status = caps_getValue(tempObj, &vtype, &nrow, &ncol, &data, &partial,

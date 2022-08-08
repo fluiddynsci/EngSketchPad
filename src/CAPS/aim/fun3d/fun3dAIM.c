@@ -22,12 +22,11 @@
  * module (AIM), but features can easily be included as future needs arise.
  *
  * Current issues include:
- *  - A thorough bug testing needs to be undertaken.
  *  - Not all parameters/variables in fun3d.nml are currently available.
- *  .
  *
  * An outline of the AIM's inputs and outputs are provided in \ref aimInputsFUN3D and \ref aimOutputsFUN3D, respectively.
  *
+ * Details on the use of units are outlined in \ref aimUnitsFUN3D.
  *
  * Details of the AIM's automated data transfer capabilities are outlined in \ref dataTransferFUN3D
  *
@@ -84,6 +83,8 @@ static int fun3dNamelist_Initialized = (int)false;
 #include "cfdUtils.h"
 #include "miscUtils.h"
 #include "fun3dUtils.h"
+#include "fun3dInputs.h"
+
 #include "ugridWriter.h"
 
 #ifdef WIN32
@@ -98,15 +99,44 @@ static int fun3dNamelist_Initialized = (int)false;
 #define DOT(a,b)         (a[0]*b[0] + a[1]*b[1] + a[2]*b[2])
  */
 
-#define NUMOUTPUT  25
+enum aimOutputs
+{
+  // Total forces
+  CLtot = 1,                   /* index is 1-based */
+  CDtot ,
+  CMXtot,
+  CMYtot,
+  CMZtot,
+  CXtot ,
+  CYtot ,
+  CZtot ,
+  // Pressure Forces
+  CLtot_p ,
+  CDtot_p ,
+  CMXtot_p,
+  CMYtot_p,
+  CMZtot_p,
+  CXtot_p ,
+  CYtot_p ,
+  CZtot_p ,
+  // Viscous Forces
+  CLtot_v ,
+  CDtot_v ,
+  CMXtot_v,
+  CMYtot_v,
+  CMZtot_v,
+  CXtot_v ,
+  CYtot_v ,
+  CZtot_v ,
+  // Other
+  Forces,
+  NUMOUTPUT = Forces /* Total number of outputs */
+};
 
 //#define DEBUG
 
 
 typedef struct {
-
-    // Fun3d project name
-    char *projectName;
 
     // Attribute to index map
     mapAttrToIndexStruct groupMap;
@@ -117,8 +147,14 @@ typedef struct {
     // Pointer to CAPS input value for offset pressure during data transfer
     capsValue *pressureScaleOffset;
 
+    // Boundary/surface properties
+    cfdBoundaryConditionStruct bcProps;
+
     // Design information
     cfdDesignStruct design;
+
+    // Units structure
+    cfdUnitsStruct units;
 
 } aimStorage;
 
@@ -135,6 +171,11 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *a
 
     int  *ints=NULL, i;
     char **strs=NULL;
+
+    const char *keyWord;
+    char *keyValue = NULL;
+    double real = 1;
+    cfdUnitsStruct *units=NULL;
 
     aimStorage *fun3dInstance=NULL;
 
@@ -197,9 +238,6 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *a
     AIM_ALLOC(fun3dInstance, 1, aimStorage, aimInfo, status);
     *instStore = fun3dInstance;
 
-    // Set initial values for fun3dInstance
-    fun3dInstance->projectName = NULL;
-
     // Container for attribute to index map
     status = initiate_mapAttrToIndexStruct(&fun3dInstance->groupMap);
     AIM_STATUS(aimInfo, status);
@@ -210,9 +248,55 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *a
     // Pointer to caps input value for off setting pressure during data transfer
     fun3dInstance->pressureScaleOffset = NULL;
 
+    // BC properties
+    status = initiate_cfdBoundaryConditionStruct(&fun3dInstance->bcProps);
+    AIM_STATUS(aimInfo, status);
+
     // Design information
     status = initiate_cfdDesignStruct(&fun3dInstance->design);
     AIM_STATUS(aimInfo, status);
+
+    initiate_cfdUnitsStruct(&fun3dInstance->units);
+
+    /*! \page aimUnitsFUN3D AIM Units
+     *  A unit system may be optionally specified during AIM instance initiation. If
+     *  a unit system is provided, all AIM  input values which have associated units must be specified as well.
+     *  If no unit system is used, AIM inputs, which otherwise would require units, will be assumed
+     *  unit consistent. A unit system may be specified via a JSON string dictionary for example:
+     *  unitSys = "{"temperature": "Kelvin"}"
+     */
+    if (unitSys != NULL) {
+       units = &fun3dInstance->units;
+
+       // Do we have a json string?
+       if (strncmp( unitSys, "{", 1) != 0) {
+         AIM_ERROR(aimInfo, "unitSys ('%s') is expected to be a JSON string dictionary", unitSys);
+         return CAPS_BADVALUE;
+       }
+
+       /*! \page aimUnitsFUN3D
+        *  <ul>
+        *  <li> <B>temperature = "None"</B> </li> <br>
+        *  Temperature units - e.g. "Kelvin", "Rankin" ...
+        *  </ul>
+        */
+       keyWord = "temperature";
+       status  = search_jsonDictionary(unitSys, keyWord, &keyValue);
+       if (status == CAPS_SUCCESS) {
+         units->temperature = string_removeQuotation(keyValue);
+         AIM_FREE(keyValue);
+         real = 1;
+         status = aim_convert(aimInfo, 1, units->temperature, &real, "Kelvin", &real);
+         AIM_STATUS(aimInfo, status, "unitSys ('%s'): %s is not a %s unit", unitSys, units->temperature, keyWord);
+       } else {
+         AIM_ERROR(aimInfo, "unitSys ('%s') does not contain '%s'", unitSys, keyWord);
+         status = CAPS_BADVALUE;
+         goto cleanup;
+       }
+
+//       status = cfd_cfdDerivedUnits(aimInfo, units);
+//       AIM_STATUS(aimInfo, status);
+     }
 
 cleanup:
     if (status != CAPS_SUCCESS) {
@@ -242,6 +326,7 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
 
     int status = CAPS_SUCCESS;
     aimStorage *fun3dInstance;
+    cfdUnitsStruct *units=NULL;
 
 #ifdef DEBUG
     printf(" fun3dAIM/aimInputs index = %d!\n", index);
@@ -249,8 +334,10 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
     fun3dInstance = (aimStorage *) instStore;
     if (fun3dInstance == NULL) return CAPS_NULLVALUE;
 
+    units = &fun3dInstance->units;
+
     *ainame = NULL;
-  
+
     // FUN3D Inputs
     if (index == Proj_Name) {
         *ainame              = EG_strdup("Proj_Name");
@@ -288,6 +375,23 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
          * - <B> Re = NULL </B> <br>
          *  This corresponds to the reynolds\_number variable in the \&reference\_physical\_properties
          *  namelist of fun3d.nml.
+         */
+    } else if (index == Reference_Temperature) {
+        *ainame              = EG_strdup("Temperature"); //
+        defval->type         = Double;
+        defval->nullVal      = IsNull;
+        defval->units        = NULL;
+        defval->lfixed       = Change;
+        defval->dim          = Scalar;
+        if (units != NULL && units->temperature != NULL) {
+            AIM_STRDUP(defval->units, units->temperature, aimInfo, status);
+        }
+
+
+        /*! \page aimInputsFUN3D
+         * - <B> Temperature = NULL </B> <br>
+         *  This corresponds to the temperature variable in the \&reference\_physical\_properties
+         *  namelist of fun3d.nml. Note if no temperature units are set, units of Kelvin are assumed (see \ref aimUnitsFUN3D)
          */
     } else if (index == Viscoux) {
         *ainame              = EG_strdup("Viscous"); // Viscous term
@@ -732,30 +836,56 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
          */
     } else if (index == Design_Variable) {
         *ainame              = EG_strdup("Design_Variable");
-         defval->type         = Tuple;
-         defval->nullVal      = IsNull;
-         //defval->units        = NULL;
-         defval->lfixed       = Change;
-         defval->vals.tuple   = NULL;
-         defval->dim          = Vector;
+        defval->type         = Tuple;
+        defval->nullVal      = IsNull;
+        defval->lfixed       = Change;
+        defval->vals.tuple   = NULL;
+        defval->dim          = Vector;
 
-         /*! \page aimInputsFUN3D
-          * - <B> Design_Variable = NULL</B> <br>
-          * The design variable tuple is used to input design variable information for optimization, see \ref cfdDesignVariable for additional details.
-          */
-    } else if (index == Design_Objective) {
-        *ainame              = EG_strdup("Design_Objective");
-         defval->type         = Tuple;
-         defval->nullVal      = IsNull;
-         //defval->units        = NULL;
-         defval->lfixed       = Change;
-         defval->vals.tuple   = NULL;
-         defval->dim          = Vector;
+        /*! \page aimInputsFUN3D
+         * - <B> Design_Variable = NULL</B> <br>
+         * List of AnalysisIn and/or GeometryIn variable names used to compute sensitivities of Design_Functional for optimization, see \ref cfdDesignVariable for additional details.
+         */
+    } else if (index == Design_Functional) {
+        *ainame              = EG_strdup("Design_Functional");
+        defval->type         = Tuple;
+        defval->nullVal      = IsNull;
+        defval->lfixed       = Change;
+        defval->vals.tuple   = NULL;
+        defval->dim          = Vector;
 
-         /*! \page aimInputsFUN3D
-          * - <B> Design_Objective = NULL</B> <br>
-          * The design objective tuple is used to input objective information for optimization, see \ref cfdDesignObjective for additional details.
-          */
+        /*! \page aimInputsFUN3D
+         * - <B> Design_Functional = NULL</B> <br>
+         * The design functional tuple is used to input functional information for optimization, see \ref cfdDesignFunctional for additional details.
+         * Using this requires Design_SensFile = False.
+         */
+    } else if (index == Design_SensFile) {
+        *ainame              = EG_strdup("Design_SensFile");
+        defval->type         = Boolean;
+        defval->lfixed       = Fixed;
+        defval->vals.integer = (int)false;
+        defval->dim          = Scalar;
+        defval->nullVal      = NotNull;
+
+        /*! \page aimInputsFUN3D
+         * - <B> Design_SensFile = False</B> <br>
+         * Read <Proj_Name>.sens file to compute functional sensitivities w.r.t Design_Variable.
+         * Using this requires Design_Functional = NULL.
+         */
+    } else if (index == Design_Sensitivity) {
+        *ainame              = EG_strdup("Design_Sensitivity");
+        defval->type         = Boolean;
+        defval->lfixed       = Fixed;
+        defval->vals.integer = (int)false;
+        defval->dim          = Scalar;
+        defval->nullVal      = NotNull;
+
+        /*! \page aimInputsFUN3D
+         * - <B> Design_Sensitivity = False</B> <br>
+         * If True and Design_Functional is set, create geometric sensitivities Fun3D input files needed to compute Design_Functional sensitivities w.r.t Design_Variable.
+         * If True and Design_SensFile = True, read functional sensitivities from <Proj_Name>.sens and compute sensitivities w.r.t Design_Variable.
+         * The value of the design functionals become available as Dynamic Output Value Objects using the "name" of the functionals.
+         */
     } else if (index == Mesh) {
         *ainame             = AIM_NAME(Mesh);
         defval->type        = PointerMesh;
@@ -783,7 +913,121 @@ cleanup:
 }
 
 
-int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
+// ********************** AIM Function Break *****************************
+int aimUpdateState(void *instStore, void *aimInfo,
+                   capsValue *aimInputs)
+{
+    int status; // Function return status
+
+    // AIM input bodies
+    int  numBody;
+    ego *bodies = NULL;
+    const char *intents;
+
+    // Mesh reference obtained from meshing AIM
+    aimMeshRef *meshRef = NULL;
+
+    aimStorage *fun3dInstance;
+
+    fun3dInstance = (aimStorage *) instStore;
+    AIM_NOTNULL(fun3dInstance, aimInfo, status);
+    AIM_NOTNULL(aimInputs, aimInfo, status);
+
+    if (aimInputs[Design_Functional-1].nullVal == NotNull &&
+        aimInputs[Design_SensFile-1].vals.integer == (int)true) {
+        AIM_ERROR(aimInfo, "Cannot set both 'Design_Functional' and 'Design_SensFile'!");
+        status = CAPS_BADVALUE;
+        goto cleanup;
+    }
+
+    // Get AIM bodies
+    status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
+    AIM_STATUS(aimInfo, status);
+
+    if (aimInputs[Mesh-1].nullVal == IsNull) {
+        AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to an output 'Area_Mesh' or 'Volume_Mesh'");
+        status = CAPS_BADVALUE;
+        goto cleanup;
+    }
+
+    // Get mesh
+    meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
+    AIM_NOTNULL(meshRef, aimInfo, status);
+
+    // Get attribute to index mapping
+    status = create_MeshRefToIndexMap(aimInfo, meshRef, &fun3dInstance->groupMap);
+    AIM_STATUS(aimInfo, status);
+
+    if (aimInputs[Boundary_Condition-1].nullVal ==  IsNull) {
+        AIM_ANALYSISIN_ERROR(aimInfo, Boundary_Condition, "No boundary conditions provided!");
+        status = CAPS_BADVALUE;
+        goto cleanup;
+    }
+
+    // Get boundary conditions
+    if (fun3dInstance->bcProps.numSurfaceProp == 0 ||
+        aim_newAnalysisIn(aimInfo, Boundary_Condition) == CAPS_SUCCESS ||
+        aim_newAnalysisIn(aimInfo, Two_Dimensional   ) == CAPS_SUCCESS ) {
+        status = cfd_getBoundaryCondition( aimInfo,
+                                           aimInputs[Boundary_Condition-1].length,
+                                           aimInputs[Boundary_Condition-1].vals.tuple,
+                                           &fun3dInstance->groupMap,
+                                           &fun3dInstance->bcProps);
+        AIM_STATUS(aimInfo, status);
+
+        if (aimInputs[Two_Dimensional-1].vals.integer == (int) true) {
+            status = fun3d_2DBC(aimInfo, &fun3dInstance->bcProps);
+            AIM_STATUS(aimInfo, status);
+        }
+    }
+
+    // Get design variables
+    if (aimInputs[Design_Variable-1].nullVal == NotNull &&
+        (fun3dInstance->design.numDesignVariable == 0 ||
+         aim_newAnalysisIn(aimInfo, Design_Variable) == CAPS_SUCCESS)) {
+
+        if (aimInputs[Design_Functional-1].nullVal == IsNull &&
+            aimInputs[Design_SensFile-1].vals.integer == (int)false) {
+            AIM_ERROR(aimInfo, "\"Design_Variable\" has been set, but no values have been provided for \"Design_Functional\" and \"Design_SensFile\" is False!");
+            status = CAPS_BADVALUE;
+            goto cleanup;
+        }
+/*@-nullpass@*/
+        status = cfd_getDesignVariable(aimInfo,
+                                       aimInputs[Design_Variable-1].length,
+                                       aimInputs[Design_Variable-1].vals.tuple,
+                                       &fun3dInstance->design.numDesignVariable,
+                                       &fun3dInstance->design.designVariable);
+/*@+nullpass@*/
+        AIM_STATUS(aimInfo, status);
+    }
+
+    // Get design functionals
+    if ( aimInputs[Design_Functional-1].nullVal == NotNull &&
+        (fun3dInstance->design.numDesignFunctional == 0 ||
+         aim_newAnalysisIn(aimInfo, Boundary_Condition) == CAPS_SUCCESS ||
+         aim_newAnalysisIn(aimInfo, Design_Functional ) == CAPS_SUCCESS ||
+         aim_newAnalysisIn(aimInfo, Design_Variable   ) == CAPS_SUCCESS)) {
+
+        status = cfd_getDesignFunctional(aimInfo,
+                                         aimInputs[Design_Functional-1].length,
+                                         aimInputs[Design_Functional-1].vals.tuple,
+                                         &fun3dInstance->bcProps,
+                                         fun3dInstance->design.numDesignVariable,
+                                         fun3dInstance->design.designVariable,
+                                         &fun3dInstance->design.numDesignFunctional,
+                                         &fun3dInstance->design.designFunctional);
+        AIM_STATUS(aimInfo, status);
+    }
+
+cleanup:
+
+    return status;
+}
+
+
+// ********************** AIM Function Break *****************************
+int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 {
     // Function return flag
     int status;
@@ -795,8 +1039,6 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     // Indexing
     int i, body;
 
-    int attrLevel = 0;
-
     // EGADS return values
     int          atype, alen;
     const int    *ints;
@@ -806,6 +1048,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     // Output filename
     char filename[PATH_MAX];
     char gridfile[PATH_MAX];
+    const char *projectName=NULL;
 
     // AIM input bodies
     int  numBody;
@@ -816,12 +1059,6 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // FUN3D Version
     double fun3dVersion;
-
-    // Optimization/Design
-    int optimization = (int) false;
-
-    // Boundary/surface properties
-    cfdBoundaryConditionStruct   bcProps;
 
     // Modal Aeroelastic properties
     cfdModalAeroelasticStruct   modalAeroelastic;
@@ -844,21 +1081,19 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 #endif
 #endif
 
-    aimStorage *fun3dInstance;
+    const aimStorage *fun3dInstance;
 
-    fun3dInstance = (aimStorage *) instStore;
-    if ((fun3dInstance == NULL) || (aimInputs == NULL)) return CAPS_NULLVALUE;
+    fun3dInstance = (const aimStorage *) instStore;
+    AIM_NOTNULL(fun3dInstance, aimInfo, status);
+    AIM_NOTNULL(aimInputs, aimInfo, status);
 
     // Initiate structures variables - will be destroyed during cleanup
-    status = initiate_cfdBoundaryConditionStruct(&bcProps);
-    if (status != CAPS_SUCCESS) return status;
-
     status = initiate_cfdModalAeroelasticStruct(&modalAeroelastic);
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
     status = initiate_bndCondStruct(&bndConds);
-    if (status != CAPS_SUCCESS) return status;
-  
+    AIM_STATUS(aimInfo, status);
+
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
     AIM_STATUS(aimInfo, status);
@@ -868,9 +1103,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 #endif
 
     if ((numBody <= 0) || (bodies == NULL)) {
-#ifdef DEBUG
-        printf(" fun3dAIM/aimPreAnalysis No Bodies!\n");
-#endif
+        AIM_ERROR(aimInfo, "No Bodies!");
         return CAPS_SOURCEERR;
     }
 
@@ -995,52 +1228,11 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
     }
 
     // Get project name
-    fun3dInstance->projectName = aimInputs[Proj_Name-1].vals.string;
+    projectName = aimInputs[Proj_Name-1].vals.string;
 
-    // Get intent
-/* Ryan -- please fix
-    status = check_CAPSIntent(numBody, bodies, &currentIntent);
-    if (status != CAPS_SUCCESS) goto cleanup;
-
-    if (currentIntent != CAPSMAGIC) {
-        if(currentIntent != CFD)  {
-            printf("All bodies must have the same capsIntent of CFD!\n");
-            status = CAPS_BADVALUE;
-            goto cleanup;
-        }
-    }  */
-
-    // Get attribute to index mapping
-    if (aim_newGeometry(aimInfo) == CAPS_SUCCESS) {
-        if (aimInputs[Two_Dimensional-1].vals.integer == (int) true) {
-          attrLevel = 2; // Only search down to the edge level of the EGADS body
-        } else {
-          attrLevel = 1; // Only search down to the face level of the EGADS body
-        }
-
-        // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
-        status = create_CAPSGroupAttrToIndexMap(numBody,
-                                                bodies,
-                                                attrLevel,
-                                                &fun3dInstance->groupMap);
-        AIM_STATUS(aimInfo, status);
-    }
-
-    // Get boundary conditions - Only if the boundary condition has been set
-    if (aimInputs[Boundary_Condition-1].nullVal ==  NotNull) {
-
-        status = cfd_getBoundaryCondition( aimInfo,
-                                           aimInputs[Boundary_Condition-1].length,
-                                           aimInputs[Boundary_Condition-1].vals.tuple,
-                                           &fun3dInstance->groupMap,
-                                           &bcProps);
-        AIM_STATUS(aimInfo, status);
-
-    } else {
-        AIM_ANALYSISIN_ERROR(aimInfo, Boundary_Condition, "No boundary conditions provided!");
-        status = CAPS_BADVALUE;
-        goto cleanup;
-    }
+    // Get mesh
+    meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
+    AIM_NOTNULL(meshRef, aimInfo, status);
 
     // Get modal aeroelastic information - only get modal aeroelastic inputs if they have be set
     if (aimInputs[Modal_Aeroelastic-1].nullVal ==  NotNull) {
@@ -1055,55 +1247,6 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         modalAeroelastic.freestreamDynamicPressure = aimInputs[Modal_Ref_Dynamic_Pressure-1].vals.real;
         modalAeroelastic.lengthScaling = aimInputs[Modal_Ref_Length-1].vals.real;
     }
-
-    // Get design variables
-    if (aimInputs[Design_Variable-1].nullVal == NotNull) {
-/*@-nullpass@*/
-        status = cfd_getDesignVariable(aimInfo,
-                                       aimInputs[Design_Variable-1].length,
-                                       aimInputs[Design_Variable-1].vals.tuple,
-                                       NUMINPUT, aimInputs,
-                                       &fun3dInstance->design.numDesignVariable,
-                                       &fun3dInstance->design.designVariable);
-/*@+nullpass@*/
-        AIM_STATUS(aimInfo, status);
-
-        optimization = (int) true;
-    }
-
-    // Get design objectives
-    if (aimInputs[Design_Objective-1].nullVal == NotNull) {
-
-        if (optimization == (int) false) {
-            printf("\"Design_Objective\" has been set, but no values have been provided for \"Design_Variable\"!\n");
-            status = CAPS_BADVALUE;
-            goto cleanup;
-        }
-        status = cfd_getDesignObjective(aimInputs[Design_Objective-1].length,
-                                        aimInputs[Design_Objective-1].vals.tuple,
-                                        &fun3dInstance->design.numDesignObjective,
-                                        &fun3dInstance->design.designObjective);
-        AIM_STATUS(aimInfo, status);
-
-    } else {
-
-        if (optimization == (int) true) { // Create a default objective
-
-            AIM_ERROR(aimInfo, "Creation of a default objective functions is not supported yet, user must provide an input for \"Design_Objective\"!\n");
-            status = CAPS_NOTIMPLEMENT;
-            goto cleanup;
-        }
-    }
-
-    if (aimInputs[Mesh-1].nullVal == IsNull) {
-        AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to an output 'Area_Mesh' or 'Volume_Mesh'");
-        status = CAPS_BADVALUE;
-        goto cleanup;
-    }
-
-    // Get mesh
-    meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
-    AIM_NOTNULL(meshRef, aimInfo, status);
 
     // Are we running in two-mode
     if (aimInputs[Two_Dimensional-1].vals.integer == (int) true) {
@@ -1133,46 +1276,68 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
         // WARNING: This will modify bcProps!
         status = fun3d_2DMesh(aimInfo,
                               meshRef,
-                              fun3dInstance->projectName,
-                              &fun3dInstance->groupMap,
-                              &bcProps);
+                              projectName,
+                              &fun3dInstance->groupMap);
         AIM_STATUS(aimInfo, status);
      }
 
 
-    // Optimization - variable must be set at a minimum
-    if (optimization == (int) true) {
+    // Optimization - functional must be set at a minimum
+    if (aimInputs[Design_Functional-1].nullVal == NotNull ||
+        aimInputs[Design_SensFile-1].vals.integer == (int)true) {
 
         if (meshRef->nmap > 0) {
 
             status = fun3d_makeDirectory(aimInfo);
             AIM_STATUS(aimInfo, status);
 
-            status = fun3d_writeParameterization(aimInfo,
-                                                 fun3dInstance->design.numDesignVariable,
-                                                 fun3dInstance->design.designVariable,
-                                                 meshRef);
-            AIM_STATUS(aimInfo, status);
+            if (aimInputs[Design_Functional-1].nullVal == NotNull) {
 
-            status = fun3d_writeRubber(aimInfo,
-                                       fun3dInstance->design,
-                                       aimInputs[FUN3D_Version-1].vals.real,
-                                       meshRef);
-            AIM_STATUS(aimInfo, status);
+                // Do we need sensitivities? - if so only check for shape sensitivities
+                // if something is new or changed.
+                if (aimInputs[Design_Sensitivity-1].vals.integer == (int) true) {
 
+                    if ( aim_newGeometry(aimInfo) == CAPS_SUCCESS ||
+                         aim_newAnalysisIn(aimInfo, Design_Sensitivity) == CAPS_SUCCESS ||
+                         aim_newAnalysisIn(aimInfo, Design_Variable   ) == CAPS_SUCCESS) {
+
+                        // Will not calculate shape sensitivities if there are no geometry design variable; will
+                        // simple check and dump out the body meshes in model.tec files
+                        status = fun3d_writeParameterization(aimInfo,
+                                                             fun3dInstance->design.numDesignVariable,
+                                                             fun3dInstance->design.designVariable,
+                                                             meshRef);
+                        AIM_STATUS(aimInfo, status);
+                    }
+                }
+
+                //Only write rubber.data file if inputs have changed
+                if (aim_newAnalysisIn(aimInfo, Design_Functional ) == CAPS_SUCCESS ||
+                    aim_newAnalysisIn(aimInfo, Design_Sensitivity) == CAPS_SUCCESS ||
+                    aim_newAnalysisIn(aimInfo, Design_Variable   ) == CAPS_SUCCESS) {
+
+                    // Will not write shape entries unless explicitly told to check if they are need
+                    status = fun3d_writeRubber(aimInfo,
+                                               fun3dInstance->design,
+                                               aimInputs[Design_Sensitivity-1].vals.integer, // checkGeomShape
+                                               aimInputs[FUN3D_Version-1].vals.real,
+                                               meshRef);
+                    AIM_STATUS(aimInfo, status);
+                }
+            }
 #ifdef WIN32
-            snprintf(filename, PATH_MAX, "Flow\\%s%s", fun3dInstance->projectName, MESHEXTENSION);
+            snprintf(filename, PATH_MAX, "Flow\\%s%s", projectName, MESHEXTENSION);
 #else
-            snprintf(filename, PATH_MAX, "Flow/%s%s", fun3dInstance->projectName, MESHEXTENSION);
+            snprintf(filename, PATH_MAX, "Flow/%s%s", projectName, MESHEXTENSION);
 #endif
         } else {
             AIM_ERROR(aimInfo, "The volume is not suitable for sensitivity input generation - possibly the volume mesher "
-                               "added unaccounted for points\n");
+                               "added unaccounted points on the surface mesh");
             status = CAPS_BADVALUE;
             goto cleanup;
         }
     } else {
-      snprintf(filename, PATH_MAX, "%s%s", fun3dInstance->projectName, MESHEXTENSION);
+        snprintf(filename, PATH_MAX, "%s%s", projectName, MESHEXTENSION);
     }
 
     if (aimInputs[Two_Dimensional-1].vals.integer == (int) false) {
@@ -1182,50 +1347,51 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
       AIM_STATUS(aimInfo, status);
     }
 
-    status = populate_bndCondStruct_from_bcPropsStruct(&bcProps, &bndConds);
+    status = populate_bndCondStruct_from_bcPropsStruct(&fun3dInstance->bcProps, &bndConds);
     AIM_STATUS(aimInfo, status);
 
     // Replace dummy values in bcVal with FUN3D specific values
-    for (i = 0; i < bcProps.numSurfaceProp ; i++) {
+    for (i = 0; i < fun3dInstance->bcProps.numSurfaceProp ; i++) {
 
         // {UnknownBoundary, Inviscid, Viscous, Farfield, Extrapolate, Freestream,
         //  BackPressure, Symmetry, SubsonicInflow, SubsonicOutflow,
         //  MassflowIn, MassflowOut, FixedInflow, FixedOutflow}
 
+        if      (fun3dInstance->bcProps.surfaceProp[i].surfaceType == Inviscid       ) bndConds.bcVal[i] = 3000;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == Viscous        ) bndConds.bcVal[i] = 4000;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == Farfield       ) bndConds.bcVal[i] = 5000;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == Extrapolate    ) bndConds.bcVal[i] = 5026;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == Freestream     ) bndConds.bcVal[i] = 5050;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == BackPressure   ) bndConds.bcVal[i] = 5051;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == SubsonicInflow ) bndConds.bcVal[i] = 7011;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == SubsonicOutflow) bndConds.bcVal[i] = 7012;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == MassflowIn     ) bndConds.bcVal[i] = 7036;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == MassflowOut    ) bndConds.bcVal[i] = 7031;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == FixedInflow    ) bndConds.bcVal[i] = 7100;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == FixedOutflow   ) bndConds.bcVal[i] = 7105;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == MachOutflow    ) bndConds.bcVal[i] = 5052;
+        else if (fun3dInstance->bcProps.surfaceProp[i].surfaceType == Symmetry       ) {
 
-        if      (bcProps.surfaceProp[i].surfaceType == Inviscid       ) bndConds.bcVal[i] = 3000;
-        else if (bcProps.surfaceProp[i].surfaceType == Viscous        ) bndConds.bcVal[i] = 4000;
-        else if (bcProps.surfaceProp[i].surfaceType == Farfield       ) bndConds.bcVal[i] = 5000;
-        else if (bcProps.surfaceProp[i].surfaceType == Extrapolate    ) bndConds.bcVal[i] = 5026;
-        else if (bcProps.surfaceProp[i].surfaceType == Freestream     ) bndConds.bcVal[i] = 5050;
-        else if (bcProps.surfaceProp[i].surfaceType == BackPressure   ) bndConds.bcVal[i] = 5051;
-        else if (bcProps.surfaceProp[i].surfaceType == SubsonicInflow ) bndConds.bcVal[i] = 7011;
-        else if (bcProps.surfaceProp[i].surfaceType == SubsonicOutflow) bndConds.bcVal[i] = 7012;
-        else if (bcProps.surfaceProp[i].surfaceType == MassflowIn     ) bndConds.bcVal[i] = 7036;
-        else if (bcProps.surfaceProp[i].surfaceType == MassflowOut    ) bndConds.bcVal[i] = 7031;
-        else if (bcProps.surfaceProp[i].surfaceType == FixedInflow    ) bndConds.bcVal[i] = 7100;
-        else if (bcProps.surfaceProp[i].surfaceType == FixedOutflow   ) bndConds.bcVal[i] = 7105;
-        else if (bcProps.surfaceProp[i].surfaceType == MachOutflow    ) bndConds.bcVal[i] = 5052;
-        else if (bcProps.surfaceProp[i].surfaceType == Symmetry       ) {
-
-            if      (bcProps.surfaceProp[i].symmetryPlane == 1) bndConds.bcVal[i] = 6661;
-            else if (bcProps.surfaceProp[i].symmetryPlane == 2) bndConds.bcVal[i] = 6662;
-            else if (bcProps.surfaceProp[i].symmetryPlane == 3) bndConds.bcVal[i] = 6663;
+            if      (fun3dInstance->bcProps.surfaceProp[i].symmetryPlane == 1) bndConds.bcVal[i] = 6661;
+            else if (fun3dInstance->bcProps.surfaceProp[i].symmetryPlane == 2) bndConds.bcVal[i] = 6662;
+            else if (fun3dInstance->bcProps.surfaceProp[i].symmetryPlane == 3) bndConds.bcVal[i] = 6663;
             else {
-                printf("Unknown symmetryPlane for boundary %d - Defaulting to y-Symmetry\n", bcProps.surfaceProp[i].bcID);
-                bndConds.bcVal[i] = 6662;
+                AIM_ERROR(aimInfo, "Unknown symmetryPlane for boundary %d", fun3dInstance->bcProps.surfaceProp[i].bcID);
+                status = CAPS_BADVALUE;
+                goto cleanup;
             }
         }
     }
 
-    if (optimization == (int) true) {
+    if (aimInputs[Design_Functional-1].nullVal == NotNull ||
+        aimInputs[Design_SensFile-1].vals.integer == (int)true) {
 #ifdef WIN32
-        snprintf(filename, PATH_MAX, "Flow\\%s", fun3dInstance->projectName);
+        snprintf(filename, PATH_MAX, "Flow\\%s", projectName);
 #else
-        snprintf(filename, PATH_MAX, "Flow/%s", fun3dInstance->projectName);
+        snprintf(filename, PATH_MAX, "Flow/%s", projectName);
 #endif
     } else {
-        strcpy(filename, fun3dInstance->projectName);
+        strcpy(filename, projectName);
     }
 
     // Write *.mapbc file
@@ -1234,6 +1400,19 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
                          bndConds.bndID,
                          bndConds.bcVal);
     AIM_STATUS(aimInfo, status);
+
+    // Remove old *.forces file (Fun3D appends to the file)
+    if (aimInputs[Design_Functional-1].nullVal == NotNull ||
+        aimInputs[Design_SensFile-1].vals.integer == (int)true) {
+#ifdef WIN32
+        snprintf(filename, PATH_MAX, "Flow\\%s%s", projectName, ".forces");
+#else
+        snprintf(filename, PATH_MAX, "Flow/%s%s", projectName, ".forces");
+#endif
+    } else {
+        snprintf(filename, PATH_MAX, "%s%s", projectName, ".forces");
+    }
+    remove(filename);
 
     //////////////////////////////////////////////////////////
     // Open and write the fun3d.nml input file using Python //
@@ -1274,15 +1453,16 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
                 initfun3dNamelist();
             #elif CYTHON_PEP489_MULTI_PHASE_INIT
                    if (fun3dNamelist_Initialized == (int)false || initPy == (int)true) {
-                    fun3dNamelist_Initialized = (int)true;
+                       fun3dNamelist_Initialized = (int)true;
                        mobj = PyInit_fun3dNamelist();
+
                        if (!PyModule_Check(mobj)) {
                         mdef = (PyModuleDef *) mobj;
                         modname = PyUnicode_FromString("fun3dNamelist");
                         mobj = NULL;
                         if (modname) {
                             mobj = PyModule_NewObject(modname);
-                            Py_DECREF(modname);
+                            Py_CLEAR(modname);
                             if (mobj) PyModule_ExecDef(mobj, mdef);
                           }
                     }
@@ -1290,7 +1470,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
             #else
                 mobj = PyInit_fun3dNamelist();
             #endif
-            
+
             if (PyErr_Occurred()) {
                 PyErr_Print();
                 #if PY_MAJOR_VERSION < 3
@@ -1301,15 +1481,15 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
                 status = CAPS_BADVALUE;
                 goto cleanup;
             }
-            
-            Py_XDECREF(mobj);
 
-            status = fun3d_writeNMLPython(aimInfo, aimInputs, bcProps);
+            status = fun3d_writeNMLPython(aimInfo, aimInputs, fun3dInstance->bcProps);
             if (status == -1) {
                 printf("\tError: Python error occurred while writing namelist file\n");
             } else {
                 printf("\tDone writing nml file with Python\n");
             }
+
+            Py_CLEAR(mobj);
 
             if (PyErr_Occurred()) {
                 PyErr_Print();
@@ -1351,7 +1531,7 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
             printf("Warning: The fun3d.nml file will be overwritten!\n");
 
-            status = fun3d_writeNML(aimInfo, aimInputs, bcProps);
+            status = fun3d_writeNML(aimInfo, aimInputs, fun3dInstance->bcProps);
             AIM_STATUS(aimInfo, status);
 
         }
@@ -1366,27 +1546,29 @@ int aimPreAnalysis(void *instStore, void *aimInfo, capsValue *aimInputs)
 
             if (aimInputs[Modal_Aeroelastic-1].nullVal ==  NotNull) {
                 status = fun3d_dataTransfer(aimInfo,
-                                            fun3dInstance->projectName,
+                                            projectName,
                                             &fun3dInstance->groupMap,
-                                            bcProps,
+                                            fun3dInstance->bcProps,
                                             meshRef,
                                             &modalAeroelastic);
                 if (status == CAPS_SUCCESS) {
-                    status = fun3d_writeMovingBody(aimInfo, fun3dVersion, bcProps, &modalAeroelastic);
+                    status = fun3d_writeMovingBody(aimInfo, fun3dVersion, fun3dInstance->bcProps, &modalAeroelastic);
                 }
 
             } else{
                 status = fun3d_dataTransfer(aimInfo,
-                                            fun3dInstance->projectName,
+                                            projectName,
                                             &fun3dInstance->groupMap,
-                                            bcProps,
+                                            fun3dInstance->bcProps,
                                             meshRef,
                                             NULL);
             }
-            if (status != CAPS_SUCCESS && status != CAPS_NOTFOUND) goto cleanup;
+            if (status != CAPS_SUCCESS && status != CAPS_NOTFOUND) {
+              AIM_ERROR(aimInfo, "Failure in data transfer!");
+              goto cleanup;
+            }
         }
     } // End if data transfer ok
-
 
     status = CAPS_SUCCESS;
 
@@ -1394,7 +1576,6 @@ cleanup:
 
     AIM_FREE(boundName);
 
-    (void) destroy_cfdBoundaryConditionStruct(&bcProps);
     (void) destroy_cfdModalAeroelasticStruct(&modalAeroelastic);
 
     (void) destroy_bndCondStruct(&bndConds);
@@ -1403,11 +1584,399 @@ cleanup:
 }
 
 
-/* no longer optional and needed for restart */
-int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
-                    /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
+// ********************** AIM Function Break *****************************
+int aimPostAnalysis(void *instStore, void *aimInfo,
+                    /*@unused@*/ int restart, capsValue *aimInputs)
 {
-  return CAPS_SUCCESS;
+    int status = CAPS_SUCCESS;
+
+    int i, j, k, idv, irow, icol, ibody; // Indexing
+    int index, offset, state;
+
+    char tmp[128], filename[PATH_MAX];
+    int numFunctional=0, nGeomIn = 0, numDesignVariable = 0;
+    int found;
+    int **functional_map=NULL, *vol2tess=NULL;
+    double **functional_xyz=NULL;
+    double functional_dvar;
+
+    ego body;
+
+    int numNode = 0, *numPoint=NULL, numVolNode;
+
+    const char *name;
+    char **names=NULL;
+    double **dxyz = NULL;
+
+    capsValue *ProjName=NULL;
+    const char *projectName =NULL;
+
+    FILE *fp=NULL;
+    capsValue *values=NULL, *geomInVal;
+    capsValue value;
+
+    cfdDesignVariableStruct *dvar=NULL;
+
+    // Mesh reference obtained from meshing AIM
+    aimMeshRef *meshRef = NULL;
+
+    aimStorage *fun3dInstance;
+
+    fun3dInstance = (aimStorage*)instStore;
+
+    AIM_NOTNULL(aimInputs, aimInfo, status);
+
+    // Get mesh
+    meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
+    AIM_NOTNULL(meshRef, aimInfo, status);
+
+    if (aimInputs[Design_Functional-1].nullVal == NotNull) {
+        status = fun3d_readRubber(aimInfo,
+                                  fun3dInstance->design,
+                                  aimInputs[Design_Sensitivity-1].vals.integer, // checkGeomShape
+                                  aimInputs[FUN3D_Version-1].vals.real,
+                                  meshRef);
+        AIM_STATUS(aimInfo, status);
+
+        aim_initValue(&value);
+
+        for (i = 0; i < fun3dInstance->design.numDesignFunctional; i++) {
+
+            /* allocate derivatives */
+            AIM_ALLOC(value.derivs, fun3dInstance->design.designFunctional[i].numDesignVariable, capsDeriv, aimInfo, status);
+            for (j = 0; j < fun3dInstance->design.designFunctional[i].numDesignVariable; j++) {
+              value.derivs[j].name  = NULL;
+              value.derivs[j].deriv = NULL;
+              value.derivs[j].len_wrt  = 0;
+            }
+            value.nderiv = fun3dInstance->design.designFunctional[i].numDesignVariable;
+
+            value.vals.real = fun3dInstance->design.designFunctional[i].value;
+            value.type = DoubleDeriv;
+
+            for (j = 0; j < fun3dInstance->design.designFunctional[i].numDesignVariable; j++) {
+
+                dvar = &fun3dInstance->design.designFunctional[i].dvar[j];
+
+                AIM_STRDUP(value.derivs[j].name, dvar->name, aimInfo, status);
+                AIM_ALLOC(value.derivs[j].deriv, dvar->var->length, double, aimInfo, status);
+                value.derivs[j].len_wrt = dvar->var->length;
+
+                for (k = 0; k < dvar->var->length; k++) {
+                    value.derivs[j].deriv[k] = dvar->value[k];
+                }
+            }
+
+            /* create the dynamic output */
+            status = aim_makeDynamicOutput(aimInfo, fun3dInstance->design.designFunctional[i].name, &value);
+            AIM_STATUS(aimInfo, status);
+        }
+    }
+
+    if (aimInputs[Design_SensFile-1].vals.integer == (int)true) {
+
+      /* check for GeometryIn variables*/
+      nGeomIn = 0;
+      for (i = 0; i < fun3dInstance->design.numDesignVariable; i++) {
+
+        name = fun3dInstance->design.designVariable[i].name;
+
+        // Loop over the geometry in values and compute sensitivities for all bodies
+        index = aim_getIndex(aimInfo, name, GEOMETRYIN);
+        if (index == CAPS_NOTFOUND) continue;
+        if (index < CAPS_SUCCESS ) {
+          status = index;
+          AIM_STATUS(aimInfo, status);
+        }
+
+        if(aim_getGeomInType(aimInfo, index) != 0) {
+            AIM_ERROR(aimInfo, "GeometryIn value %s is a configuration parameter and not a valid design parameter - can't get sensitivity\n",
+                      name);
+            status = CAPS_BADVALUE;
+            goto cleanup;
+        }
+
+        nGeomIn++;
+      }
+
+      status = aim_getValue(aimInfo, Proj_Name, ANALYSISIN, &ProjName);
+      AIM_STATUS(aimInfo, status);
+      AIM_NOTNULL(ProjName, aimInfo, status);
+      projectName = ProjName->vals.string;
+
+      // Read the number of volume nodes from the mesh
+#ifdef WIN32
+      snprintf(filename, PATH_MAX, "Flow\\%s%s", projectName, MESHEXTENSION);
+#else
+      snprintf(filename, PATH_MAX, "Flow/%s%s", projectName, MESHEXTENSION);
+#endif
+      fp = aim_fopen(aimInfo, filename, "rb");
+      if (fp == NULL) {
+        AIM_ERROR(aimInfo, "Unable to open: %s", filename);
+        status = CAPS_IOERR;
+        goto cleanup;
+      }
+      status = fread(&numVolNode, sizeof(int), 1, fp);
+      if (status != 1) status = CAPS_IOERR; else status = CAPS_SUCCESS;
+      AIM_STATUS(aimInfo, status);
+      fclose(fp); fp = NULL;
+
+      AIM_ALLOC(vol2tess, 2*numVolNode, int, aimInfo, status);
+      for (i = 0; i < 2*numVolNode; i++) vol2tess[i] = 0;
+
+      numNode = 0;
+      for (ibody = 0; ibody < meshRef->nmap; ibody++) {
+        if (meshRef->maps[ibody].tess == NULL) continue;
+
+        status = EG_statusTessBody(meshRef->maps[ibody].tess, &body, &state, &offset);
+        AIM_STATUS(aimInfo, status);
+        numNode += offset;
+
+        for (i = 0; i < offset; i++) {
+          j = meshRef->maps[ibody].map[i];
+          vol2tess[2*(j-1)+0] = ibody;
+          vol2tess[2*(j-1)+1] = i;
+        }
+      }
+
+      // Read <Proj_Name>.sens
+      snprintf(tmp, 128, "%s%s", projectName, ".sens");
+      fp = aim_fopen(aimInfo, tmp, "r");
+      if (fp == NULL) {
+        AIM_ERROR(aimInfo, "Unable to open: %s", tmp);
+        status = CAPS_IOERR;
+        goto cleanup;
+      }
+
+      // Number of nodes and functionals and AnalysIn design variables in the file
+      status = fscanf(fp, "%d %d", &numFunctional, &numDesignVariable);
+      if (status == EOF || status != 2) {
+        AIM_ERROR(aimInfo, "Failed to read sens file number of functionals and analysis design variables");
+        status = CAPS_IOERR; goto cleanup;
+      }
+      if (fun3dInstance->design.numDesignVariable != numDesignVariable+nGeomIn) {
+        AIM_ERROR(aimInfo, "Incorrect number of design variables in sens file. Expected %d and found %d",
+                  fun3dInstance->design.numDesignVariable-nGeomIn, numDesignVariable);
+        status = CAPS_IOERR; goto cleanup;
+      }
+
+      AIM_ALLOC(numPoint, numFunctional, int, aimInfo, status);
+      for (i = 0; i < numFunctional; i++) numPoint[i] = 0;
+
+      AIM_ALLOC(functional_map, numFunctional, int*, aimInfo, status);
+      for (i = 0; i < numFunctional; i++) functional_map[i] = NULL;
+
+      AIM_ALLOC(functional_xyz, numFunctional, double*, aimInfo, status);
+      for (i = 0; i < numFunctional; i++) functional_xyz[i] = NULL;
+
+      AIM_ALLOC(names, numFunctional, char*, aimInfo, status);
+      for (i = 0; i < numFunctional; i++) names[i] = NULL;
+
+      AIM_ALLOC(values, numFunctional, capsValue, aimInfo, status);
+      for (i = 0; i < numFunctional; i++) aim_initValue(&values[i]);
+
+      for (i = 0; i < numFunctional; i++) {
+        values[i].type = DoubleDeriv;
+
+        /* allocate derivatives */
+        AIM_ALLOC(values[i].derivs, fun3dInstance->design.numDesignVariable, capsDeriv, aimInfo, status);
+        for (idv = 0; idv < fun3dInstance->design.numDesignVariable; idv++) {
+          values[i].derivs[idv].name  = NULL;
+          values[i].derivs[idv].deriv = NULL;
+          values[i].derivs[idv].len_wrt = 0;
+        }
+        values[i].nderiv = fun3dInstance->design.numDesignVariable;
+      }
+
+      // Read in Functional name, value and dFunctinoal/dxyz
+      for (i = 0; i < numFunctional; i++) {
+
+        status = fscanf(fp, "%s", tmp);
+        if (status == EOF) {
+          AIM_ERROR(aimInfo, "Failed to read sens file functional name");
+          status = CAPS_IOERR; goto cleanup;
+        }
+
+        AIM_STRDUP(names[i], tmp, aimInfo, status);
+
+        status = fscanf(fp, "%lf", &values[i].vals.real);
+        if (status == EOF || status != 1) {
+          AIM_ERROR(aimInfo, "Failed to read sens file functional value");
+          status = CAPS_IOERR; goto cleanup;
+        }
+
+        status = fscanf(fp, "%d", &numPoint[i]);
+        if (status == EOF || status != 1) {
+          AIM_ERROR(aimInfo, "Failed to read sens file number of points");
+          status = CAPS_IOERR; goto cleanup;
+        }
+
+        AIM_ALLOC(functional_map[i],   numPoint[i], int   , aimInfo, status);
+        AIM_ALLOC(functional_xyz[i], 3*numPoint[i], double, aimInfo, status);
+
+        for (j = 0; j < numPoint[i]; j++) {
+          status = fscanf(fp, "%d %lf %lf %lf", &functional_map[i][j],
+                                                &functional_xyz[i][3*j+0],
+                                                &functional_xyz[i][3*j+1],
+                                                &functional_xyz[i][3*j+2]);
+          if (status == EOF || status != 4) {
+            AIM_ERROR(aimInfo, "Failed to read sens file data");
+            status = CAPS_IOERR; goto cleanup;
+          }
+
+          if (functional_map[i][j] < 1 || functional_map[i][j] > numVolNode) {
+            AIM_ERROR(aimInfo, "sens file volume mesh vertex index: %d out-of-range [1-%d]", functional_map[i][j], numVolNode);
+            status = CAPS_IOERR; goto cleanup;
+          }
+        }
+
+
+        /* read additional derivatives from .sens file */
+        for (k = nGeomIn; k < fun3dInstance->design.numDesignVariable; k++) {
+
+          /* get derivative name */
+          status = fscanf(fp, "%s", tmp);
+          if (status == EOF) {
+            AIM_ERROR(aimInfo, "Failed to read sens file design variable name");
+            status = CAPS_IOERR; goto cleanup;
+          }
+
+          found = (int)false;
+          for (idv = 0; idv < fun3dInstance->design.numDesignVariable; idv++)
+            if ( strcasecmp(fun3dInstance->design.designVariable[idv].name, tmp) == 0) {
+              found = (int)true;
+              break;
+            }
+          if (found == (int)false) {
+            AIM_ERROR(aimInfo, "Design variable '%s' in sens file not in Design_Varible input", tmp);
+            status = CAPS_IOERR; goto cleanup;
+          }
+
+          AIM_STRDUP(values[i].derivs[idv].name, tmp, aimInfo, status);
+
+          status = fscanf(fp, "%d", &values[i].derivs[idv].len_wrt);
+          if (status == EOF || status != 1) {
+            AIM_ERROR(aimInfo, "Failed to read sens file number of design variable derivatives");
+            status = CAPS_IOERR; goto cleanup;
+          }
+
+          AIM_ALLOC(values[i].derivs[idv].deriv, values[i].derivs[idv].len_wrt, double, aimInfo, status);
+          for (j = 0; j < values[i].derivs[idv].len_wrt; j++) {
+
+            status = fscanf(fp, "%lf", &values[i].derivs[idv].deriv[j]);
+            if (status == EOF || status != 1) {
+              AIM_ERROR(aimInfo, "Failed to read sens file design variable derivative");
+              status = CAPS_IOERR; goto cleanup;
+            }
+          }
+        }
+      }
+
+      AIM_ALLOC(dxyz, meshRef->nmap, double*, aimInfo, status);
+      for (ibody = 0; ibody < meshRef->nmap; ibody++) dxyz[ibody] = NULL;
+
+      /* set derivatives */
+      for (idv = 0; idv < fun3dInstance->design.numDesignVariable; idv++) {
+
+        name = fun3dInstance->design.designVariable[idv].name;
+
+        // Loop over the geometry in values and compute sensitivities for all bodies
+        index = aim_getIndex(aimInfo, name, GEOMETRYIN);
+        status = aim_getValue(aimInfo, index, GEOMETRYIN, &geomInVal);
+        if (status == CAPS_BADINDEX) continue;
+        AIM_STATUS(aimInfo, status);
+
+        for (i = 0; i < numFunctional; i++) {
+          AIM_STRDUP(values[i].derivs[idv].name, name, aimInfo, status);
+
+          AIM_ALLOC(values[i].derivs[idv].deriv, geomInVal->length, double, aimInfo, status);
+          values[i].derivs[idv].len_wrt  = geomInVal->length;
+          for (j = 0; j < geomInVal->length; j++)
+            values[i].derivs[idv].deriv[j] = 0;
+        }
+
+        for (irow = 0; irow < geomInVal->nrow; irow++) {
+          for (icol = 0; icol < geomInVal->ncol; icol++) {
+
+            // get the sensitvity for each body
+            for (ibody = 0; ibody < meshRef->nmap; ibody++) {
+              if (meshRef->maps[ibody].tess == NULL) continue;
+              status = aim_tessSensitivity(aimInfo,
+                                           name,
+                                           irow+1, icol+1, // row, col
+                                           meshRef->maps[ibody].tess,
+                                           &numNode, &dxyz[ibody]);
+              AIM_STATUS(aimInfo, status, "Sensitivity for: %s\n", name);
+              AIM_NOTNULL(dxyz[ibody], aimInfo, status);
+            }
+
+            for (i = 0; i < numFunctional; i++) {
+              functional_dvar = values[i].derivs[idv].deriv[geomInVal->ncol*irow + icol];
+
+              for (j = 0; j < numPoint[i]; j++) {
+                k = functional_map[i][j]-1; // 1-based indexing into volume
+
+                ibody = vol2tess[2*k];   // body index
+                k     = vol2tess[2*k+1]; // 0-based surface index
+                if (k == -1) {
+                  AIM_ERROR(aimInfo, "Volume mesh vertex %d is not on a surface!", functional_map[i][j]);
+                  status = CAPS_IOERR;
+                  goto cleanup;
+                }
+                if ( ibody < 0 || ibody >= meshRef->nmap ) {
+                  AIM_ERROR(aimInfo, "Inconsistent surface node body index: %d should be in [0-%d]", vol2tess[2*k], meshRef->nmap-1);
+                  status = CAPS_IOERR;
+                  goto cleanup;
+                }
+
+                functional_dvar += functional_xyz[i][3*j+0]*dxyz[ibody][3*k + 0]  // dx/dGeomIn
+                                 + functional_xyz[i][3*j+1]*dxyz[ibody][3*k + 1]  // dy/dGeomIn
+                                 + functional_xyz[i][3*j+2]*dxyz[ibody][3*k + 2]; // dz/dGeomIn
+              }
+              values[i].derivs[idv].deriv[geomInVal->ncol*irow + icol] = functional_dvar;
+            }
+
+            for (ibody = 0; ibody < meshRef->nmap; ibody++)
+              AIM_FREE(dxyz[ibody]);
+          }
+        }
+      }
+
+      /* create the dynamic output */
+      for (i = 0; i < numFunctional; i++) {
+        status = aim_makeDynamicOutput(aimInfo, names[i], &values[i]);
+        AIM_STATUS(aimInfo, status);
+      }
+    }
+
+cleanup:
+    if (fp != NULL) fclose(fp);
+
+    if (functional_xyz != NULL)
+      for (i = 0; i < numFunctional; i++)
+        AIM_FREE(functional_xyz[i]);
+
+    if (functional_map != NULL)
+      for (i = 0; i < numFunctional; i++)
+        AIM_FREE(functional_map[i]);
+
+    if (names != NULL)
+      for (i = 0; i < numFunctional; i++)
+        AIM_FREE(names[i]);
+
+    if (dxyz != NULL && meshRef != NULL)
+      for (ibody = 0; ibody < meshRef->nmap; ibody++)
+        AIM_FREE(dxyz[ibody]);
+
+    AIM_FREE(functional_xyz);
+    AIM_FREE(functional_map);
+    AIM_FREE(vol2tess);
+    AIM_FREE(names);
+    AIM_FREE(values);
+    AIM_FREE(dxyz);
+    AIM_FREE(numPoint);
+
+    return status;
 }
 
 
@@ -1420,21 +1989,19 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
      * correspond to values for all boundaries (total) found in the *.forces file
      */
 
-    int numOutVars = 8; // Grouped
-
 #ifdef DEBUG
     printf(" fun3dAIM/aimOutputs index = %d!\n", index);
 #endif
 
     // Total Forces - Pressure + Viscous
-    if      (index == 1) *aoname = EG_strdup("CLtot");
-    else if (index == 2) *aoname = EG_strdup("CDtot");
-    else if (index == 3) *aoname = EG_strdup("CMXtot");
-    else if (index == 4) *aoname = EG_strdup("CMYtot");
-    else if (index == 5) *aoname = EG_strdup("CMZtot");
-    else if (index == 6) *aoname = EG_strdup("CXtot");
-    else if (index == 7) *aoname = EG_strdup("CYtot");
-    else if (index == 8) *aoname = EG_strdup("CZtot");
+    if      (index == CLtot ) *aoname = EG_strdup("CLtot");
+    else if (index == CDtot ) *aoname = EG_strdup("CDtot");
+    else if (index == CMXtot) *aoname = EG_strdup("CMXtot");
+    else if (index == CMYtot) *aoname = EG_strdup("CMYtot");
+    else if (index == CMZtot) *aoname = EG_strdup("CMZtot");
+    else if (index == CXtot ) *aoname = EG_strdup("CXtot");
+    else if (index == CYtot ) *aoname = EG_strdup("CYtot");
+    else if (index == CZtot ) *aoname = EG_strdup("CZtot");
 
     /*! \page aimOutputsFUN3D
      * Net Forces - Pressure + Viscous:
@@ -1451,14 +2018,14 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
      */
 
     // Pressure Forces
-    else if (index == 1 + numOutVars) *aoname = EG_strdup("CLtot_p");
-    else if (index == 2 + numOutVars) *aoname = EG_strdup("CDtot_p");
-    else if (index == 3 + numOutVars) *aoname = EG_strdup("CMXtot_p");
-    else if (index == 4 + numOutVars) *aoname = EG_strdup("CMYtot_p");
-    else if (index == 5 + numOutVars) *aoname = EG_strdup("CMZtot_p");
-    else if (index == 6 + numOutVars) *aoname = EG_strdup("CXtot_p");
-    else if (index == 7 + numOutVars) *aoname = EG_strdup("CYtot_p");
-    else if (index == 8 + numOutVars) *aoname = EG_strdup("CZtot_p");
+    else if (index == CLtot_p ) *aoname = EG_strdup("CLtot_p");
+    else if (index == CDtot_p ) *aoname = EG_strdup("CDtot_p");
+    else if (index == CMXtot_p) *aoname = EG_strdup("CMXtot_p");
+    else if (index == CMYtot_p) *aoname = EG_strdup("CMYtot_p");
+    else if (index == CMZtot_p) *aoname = EG_strdup("CMZtot_p");
+    else if (index == CXtot_p ) *aoname = EG_strdup("CXtot_p");
+    else if (index == CYtot_p ) *aoname = EG_strdup("CYtot_p");
+    else if (index == CZtot_p ) *aoname = EG_strdup("CZtot_p");
 
     /*! \page aimOutputsFUN3D
      * Pressure Forces:
@@ -1475,14 +2042,14 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
      */
 
     // Viscous Forces
-    else if (index == 1 + 2*numOutVars) *aoname = EG_strdup("CLtot_v");
-    else if (index == 2 + 2*numOutVars) *aoname = EG_strdup("CDtot_v");
-    else if (index == 3 + 2*numOutVars) *aoname = EG_strdup("CMXtot_v");
-    else if (index == 4 + 2*numOutVars) *aoname = EG_strdup("CMYtot_v");
-    else if (index == 5 + 2*numOutVars) *aoname = EG_strdup("CMZtot_v");
-    else if (index == 6 + 2*numOutVars) *aoname = EG_strdup("CXtot_v");
-    else if (index == 7 + 2*numOutVars) *aoname = EG_strdup("CYtot_v");
-    else if (index == 8 + 2*numOutVars) *aoname = EG_strdup("CZtot_v");
+    else if (index == CLtot_v ) *aoname = EG_strdup("CLtot_v");
+    else if (index == CDtot_v ) *aoname = EG_strdup("CDtot_v");
+    else if (index == CMXtot_v) *aoname = EG_strdup("CMXtot_v");
+    else if (index == CMYtot_v) *aoname = EG_strdup("CMYtot_v");
+    else if (index == CMZtot_v) *aoname = EG_strdup("CMZtot_v");
+    else if (index == CXtot_v ) *aoname = EG_strdup("CXtot_v");
+    else if (index == CYtot_v ) *aoname = EG_strdup("CYtot_v");
+    else if (index == CZtot_v ) *aoname = EG_strdup("CZtot_v");
 
     /*! \page aimOutputsFUN3D
      * Viscous Forces:
@@ -1495,7 +2062,7 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
      * - <B>CYtot_v</B> = The force coefficient about the y-axis - viscous contribution only.
      * - <B>CZtot_v</B> = The force coefficient about the z-axis - viscous contribution only.
      */
-    else if (index == 25) {
+    else if (index == Forces) {
         *aoname = EG_strdup("Forces");
         form->type         = Tuple;
         form->nullVal      = IsNull;
@@ -1518,7 +2085,7 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
         return CAPS_NOTFOUND;
     }
 
-    if (index <= 3*numOutVars) {
+    if (index < Forces) {
         form->type    = Double;
         form->dim     = Vector;
         form->nrow    = 1;
@@ -1534,7 +2101,8 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
 }
 
 
-static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap,
+static int fun3d_readForcesJSON(void *aimInfo,
+                                FILE *fp, mapAttrToIndexStruct *attrMap,
                                 capsValue *val)
 {
     int status = CAPS_SUCCESS; // Function return status
@@ -1556,8 +2124,6 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap,
     int nameIndex;
 
     int i = 7, j = 30, k = 53;
-
-    capsTuple *tempTuple=NULL;
 
     if (fp == NULL) {
         status = CAPS_NULLVALUE;
@@ -1594,16 +2160,10 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap,
 
                 sprintf(name, "%s", "Total");
             }
-            val->nrow   += 1;
 
-            tempTuple = EG_reall(val->vals.tuple, val->nrow*sizeof(capsTuple));
-            if (tempTuple == NULL) {
-                status = EGADS_MALLOC;
-                val->nrow -= 1;
-                goto cleanup;
-            }
+            AIM_REALL(val->vals.tuple, val->nrow+1, capsTuple, aimInfo, status);
+            val->nrow += 1;
 
-            val->vals.tuple = tempTuple;
             val->nullVal = NotNull;
             val->vals.tuple[val->nrow -1 ].name = NULL;
             val->vals.tuple[val->nrow -1 ].value = NULL;
@@ -1734,13 +2294,12 @@ static int fun3d_readForcesJSON(FILE *fp, mapAttrToIndexStruct *attrMap,
 
             status = get_mapAttrToIndexKeyword(attrMap, nameIndex, &keyWord);
             if (status == CAPS_SUCCESS) {
-                val->vals.tuple[val->nrow-1].name  = EG_strdup(keyWord);
+                AIM_STRDUP(val->vals.tuple[val->nrow-1].name, keyWord, aimInfo, status);
             } else {
-
-                val->vals.tuple[val->nrow-1].name  = EG_strdup(name);
+                AIM_STRDUP(val->vals.tuple[val->nrow-1].name, name, aimInfo, status);
             }
 
-            val->vals.tuple[val->nrow-1].value = EG_strdup(json);
+            AIM_STRDUP(val->vals.tuple[val->nrow-1].value, json, aimInfo, status);
 
             // Reset name index value in case we have totals next
             nameIndex = 0;
@@ -1760,7 +2319,7 @@ cleanup:
 }
 
 
-static int fun3d_readForces(FILE *fp, int index, capsValue *val)
+static int fun3d_readForces(void *aimInfo, FILE *fp, int index, capsValue *val)
 {
 
     int status; // Function return
@@ -1775,8 +2334,6 @@ static int fun3d_readForces(FILE *fp, int index, capsValue *val)
     int bndSectionFound = (int) false;
     int bndSubSectionFound = (int) false;
 
-    int numOutVars = 8; // Grouped
-
     if (fp == NULL) {
         status = CAPS_NULLVALUE;
         goto cleanup;
@@ -1788,34 +2345,38 @@ static int fun3d_readForces(FILE *fp, int index, capsValue *val)
     }
 
     // Set the "search" string(s)
-    if (index <= numOutVars) {
+    if (index <= CZtot) {
 
         bndSectionKeyword  = (char *) " FORCE TOTALS FOR ALL BOUNDARIES\n";
         bndSubSectionKeyword = (char *) " Total forces\n";
 
-    } else if (index > numOutVars && index <= 2*numOutVars) {
+    } else if (index <= CZtot_p) {
 
         bndSectionKeyword  = (char *) " FORCE TOTALS FOR ALL BOUNDARIES\n";
         bndSubSectionKeyword = (char *) " Pressure forces\n";
 
-    } else if (index > 2*numOutVars && index <= 3*numOutVars) {
+    } else if (index <= CZtot_v) {
 
         bndSectionKeyword  = (char *) " FORCE TOTALS FOR ALL BOUNDARIES\n";
         bndSubSectionKeyword = (char *) " Viscous forces\n";
-    } else {
+    } else if (index == Forces) {
         bndSectionKeyword  = (char *) "FORCE SUMMARY FOR BOUNDARY";
+    } else {
+      AIM_ERROR(aimInfo, "Developer error: Bad index %d", index);
+      status = CAPS_NOTIMPLEMENT;
+      goto cleanup;
     }
 
-    if      (index == 1 || index == 1 + numOutVars || index == 1 + 2*numOutVars) strKeyword = (char *) "Cl  =";
-    else if (index == 2 || index == 2 + numOutVars || index == 2 + 2*numOutVars) strKeyword = (char *) "Cd  =";
-    else if (index == 3 || index == 3 + numOutVars || index == 3 + 2*numOutVars) strKeyword = (char *) "Cmx =";
-    else if (index == 4 || index == 4 + numOutVars || index == 4 + 2*numOutVars) strKeyword = (char *) "Cmy =";
-    else if (index == 5 || index == 5 + numOutVars || index == 5 + 2*numOutVars) strKeyword = (char *) "Cmz =";
-    else if (index == 6 || index == 6 + numOutVars || index == 6 + 2*numOutVars) strKeyword = (char *) "Cx  =";
-    else if (index == 7 || index == 7 + numOutVars || index == 7 + 2*numOutVars) strKeyword = (char *) "Cy  =";
-    else if (index == 8 || index == 8 + numOutVars || index == 8 + 2*numOutVars) strKeyword = (char *) "Cz  =";
+    if      (index == CLtot  || index == CLtot_p  || index == CLtot_v ) strKeyword = (char *) "Cl  =";
+    else if (index == CDtot  || index == CDtot_p  || index == CDtot_v ) strKeyword = (char *) "Cd  =";
+    else if (index == CMXtot || index == CMXtot_p || index == CMXtot_v) strKeyword = (char *) "Cmx =";
+    else if (index == CMYtot || index == CMYtot_p || index == CMYtot_v) strKeyword = (char *) "Cmy =";
+    else if (index == CMZtot || index == CMZtot_p || index == CMZtot_v) strKeyword = (char *) "Cmz =";
+    else if (index == CXtot  || index == CXtot_p  || index == CXtot_v ) strKeyword = (char *) "Cx  =";
+    else if (index == CYtot  || index == CYtot_p  || index == CYtot_v ) strKeyword = (char *) "Cy  =";
+    else if (index == CZtot  || index == CZtot_p  || index == CZtot_v ) strKeyword = (char *) "Cz  =";
     else {
-        printf("Unrecognized output variable index - %d\n", index);
+        AIM_ERROR(aimInfo, "Unrecognized output variable index - %d\n", index);
         return CAPS_BADINDEX;
     }
 
@@ -1861,6 +2422,7 @@ static int fun3d_readForces(FILE *fp, int index, capsValue *val)
     }
 
     if (strValue == NULL) {
+        AIM_ERROR(aimInfo, "Failed to find %s in .forces file", bndSectionKeyword);
         status = CAPS_NOTFOUND;
         goto cleanup;
     }
@@ -1868,9 +2430,6 @@ static int fun3d_readForces(FILE *fp, int index, capsValue *val)
     status = CAPS_SUCCESS;
 
 cleanup:
-    if (status != CAPS_SUCCESS)
-        printf("Premature exit in fun3dAIM fun3d_readForces status = %d\n",
-               status);
 
     if (line != NULL) EG_free(line);
 
@@ -1878,64 +2437,84 @@ cleanup:
 }
 
 
-// Calculate FUN3D output
+// ********************** AIM Function Break *****************************
 int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                   capsValue *val)
 {
-    int status;
+    int status = CAPS_SUCCESS;
 
-    char *filename = NULL; // File to open
+    char filename[PATH_MAX]; // File to open
     char fileExtension[] = ".forces";
+    capsValue *ProjName=NULL;
+    const char *projectName =NULL;
 
     FILE *fp = NULL; // File pointer
-  
+    capsValue *design_functional=NULL, *design_sensfile=NULL;
     aimStorage *fun3dInstance;
 
     fun3dInstance = (aimStorage *) instStore;
 
+    status = aim_getValue(aimInfo, Proj_Name, ANALYSISIN, &ProjName);
+    AIM_STATUS(aimInfo, status);
+    AIM_NOTNULL(ProjName, aimInfo, status);
+    projectName = ProjName->vals.string;
+
     val->vals.real = 0.0; // Set default value
 
-    // Open fun3d *.force file
-    filename = (char *) EG_alloc((strlen(fun3dInstance->projectName) +
-                                  strlen(fileExtension) +1)*sizeof(char));
-    if (filename == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
-
-    sprintf(filename, "%s%s", fun3dInstance->projectName, fileExtension);
-
-    fp = aim_fopen(aimInfo, filename, "r");
-
-    if (fp == NULL) {
-
-        AIM_ERROR(aimInfo, "Could not open file: %s\n", filename);
-        status = CAPS_IOERR;
-        goto cleanup;
-    }
-
-    if (index == 25) {
-        status = fun3d_readForcesJSON(fp, &fun3dInstance->groupMap, val);
+    if (index <= Forces) {
+        // Open fun3d *.force file
+        status = aim_getValue(aimInfo, Design_Functional, ANALYSISIN, &design_functional);
         AIM_STATUS(aimInfo, status);
+        AIM_NOTNULL(design_functional, aimInfo, status);
+
+        status = aim_getValue(aimInfo, Design_SensFile, ANALYSISIN, &design_sensfile);
+        AIM_STATUS(aimInfo, status);
+        AIM_NOTNULL(design_sensfile, aimInfo, status);
+
+        if (design_functional->nullVal == NotNull ||
+            design_sensfile->vals.integer == (int) true) {
+#ifdef WIN32
+          snprintf(filename, PATH_MAX, "Flow\\%s%s", projectName, fileExtension);
+#else
+          snprintf(filename, PATH_MAX, "Flow/%s%s", projectName, fileExtension);
+#endif
+        } else {
+          snprintf(filename, PATH_MAX, "%s%s", projectName, fileExtension);
+        }
+
+        fp = aim_fopen(aimInfo, filename, "r");
+        if (fp == NULL) {
+            AIM_ERROR(aimInfo, "Could not open file: %s", filename);
+            status = CAPS_IOERR;
+            goto cleanup;
+        }
+
+        if (index < Forces) {
+            status = fun3d_readForces(aimInfo, fp, index, val);
+            AIM_STATUS(aimInfo, status);
+
+        } else if (index == Forces) {
+            status = fun3d_readForcesJSON(aimInfo, fp, &fun3dInstance->groupMap, val);
+            AIM_STATUS(aimInfo, status);
+        }
 
     } else {
-        status = fun3d_readForces(fp, index, val);
-        AIM_STATUS(aimInfo, status);
+        AIM_ERROR(aimInfo, "Unknown output index %d", index);
+        status = CAPS_BADINDEX;
+        goto cleanup;
     }
 
     status = CAPS_SUCCESS;
 
 cleanup:
-    if (status != CAPS_SUCCESS)
-        printf("Premature exit in fun3dAIM calcOutput status = %d\n", status);
 
     if (fp != NULL) fclose(fp);
-    if (filename != NULL) EG_free(filename); // Free filename allocation
 
     return status;
 }
 
 
+// ********************** AIM Function Break *****************************
 void aimCleanup(void *instStore)
 {
     aimStorage *fun3dInstance;
@@ -1945,7 +2524,7 @@ void aimCleanup(void *instStore)
 
 #endif
     fun3dInstance = (aimStorage *) instStore;
-  
+
     // Clean up fun3dInstance data
 
     // Attribute to index map
@@ -1953,19 +2532,22 @@ void aimCleanup(void *instStore)
     //status = destroy_mapAttrToIndexStruct(&fun3dInstance->attrMap);
     //if (status != CAPS_SUCCESS) return status;
 
-    // FUN3D project name
-    fun3dInstance->projectName = NULL;
-
     // Pointer to caps input value for scaling pressure during data transfer
     fun3dInstance->pressureScaleFactor = NULL;
 
     // Pointer to caps input value for offset pressure during data transfer
     fun3dInstance->pressureScaleOffset = NULL;
 
+    // BC properties
+    (void) destroy_cfdBoundaryConditionStruct(&fun3dInstance->bcProps);
+
     // Design information
     (void) destroy_cfdDesignStruct(&fun3dInstance->design);
 
-    EG_free(fun3dInstance);
+    // Cleanup units
+    destroy_cfdUnitsStruct(&fun3dInstance->units);
+
+    AIM_FREE(fun3dInstance);
 }
 
 
@@ -1983,6 +2565,7 @@ void aimFreeDiscrPtr(void *ptrm)
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimDiscr(char *tname, capsDiscr *discr)
 {
 
@@ -2086,6 +2669,7 @@ cleanup:
 }
 
 
+// ********************** AIM Function Break *****************************
 int
 aimLocateElement(capsDiscr *discr, double *params, double *param,
                  int *bIndex, int *eIndex, double *bary)
@@ -2094,10 +2678,11 @@ aimLocateElement(capsDiscr *discr, double *params, double *param,
 }
 
 
+// ********************** AIM Function Break *****************************
 int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
                 int dataRank, double *dataVal, /*@unused@*/ char **units)
 {
-    /*! \page dataTransferFUN3D AIM Data Transfer
+    /*! \page dataTransferFUN3D FUN3D Data Transfer
      *
      * The FUN3D AIM has the ability to transfer surface data (e.g. pressure distributions) to and from the AIM
      * using the conservative and interpolative data transfer schemes in CAPS. Currently these transfers may only
@@ -2117,12 +2702,14 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
      */ // Rest of this block comes from fun3dUtil.c
 
     int status, status2; // Function return status
-    int i, j, dataPoint, capsGroupIndex, bIndex; // Indexing
+    int i, j, dataPoint, capsGroupIndex, bIndex, iglobal; // Indexing
     aimStorage *fun3dInstance;
+    aimMeshRef *meshRef = NULL;
+    capsValue *valMeshRef = NULL;
 
     // Aero-Load data variables
-    int numVariable;
-    int numDataPoint;
+    int numVariable=0;
+    int numDataPoint=0;
     char **variableName = NULL;
     double **dataMatrix = NULL;
     double dataScaleFactor = 1.0;
@@ -2141,6 +2728,8 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
     // Filename stuff
     int *capsGroupList;
     char *filename = NULL; //"pyCAPS_FUN3D_Tetgen_ddfdrive_bndry1.dat";
+    capsValue *ProjName=NULL;
+    const char *projectName =NULL;
 
 #ifdef DEBUG
     printf(" fun3dAIM/aimTransfer name = %s  npts = %d/%d!\n",
@@ -2158,6 +2747,11 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
         return CAPS_NOTFOUND;
     }
 
+    status = aim_getValue(discr->aInfo, Proj_Name, ANALYSISIN, &ProjName);
+    AIM_STATUS(discr->aInfo, status);
+    AIM_NOTNULL(ProjName, discr->aInfo, status);
+    projectName = ProjName->vals.string;
+
     //Get the appropriate parts of the tessellation to data
     storage = (int *) discr->ptrm;
     capsGroupList = &storage[0]; // List of boundary ID (attrMap) in the transfer
@@ -2169,13 +2763,20 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
         }
     }
 
+    // Get mesh
+    status = aim_getValue(discr->aInfo, Mesh, ANALYSISIN, &valMeshRef);
+    AIM_STATUS(discr->aInfo, status);
+    AIM_NOTNULL(valMeshRef, discr->aInfo, status);
+
+    meshRef = (aimMeshRef *)valMeshRef->vals.AIMptr;
+    AIM_NOTNULL(meshRef, discr->aInfo, status);
+
     for (capsGroupIndex = 0; capsGroupIndex < capsGroupList[0]; capsGroupIndex++) {
 
-        filename = (char *) EG_alloc((strlen(fun3dInstance->projectName) +
-                                      strlen("_ddfdrive_bndry.dat")+7)*sizeof(char));
-        if (filename == NULL) return EGADS_MALLOC;
+        AIM_ALLOC(filename, strlen(projectName) +
+                            strlen("_ddfdrive_bndry.dat")+7, char, discr->aInfo, status);
 
-        sprintf(filename,"%s%s%d%s",fun3dInstance->projectName,
+        sprintf(filename,"%s%s%d%s",projectName,
                                     "_ddfdrive_bndry",
                                     capsGroupList[capsGroupIndex+1],
                                     ".dat");
@@ -2188,11 +2789,10 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
         // Try body file
         if (status == CAPS_IOERR) {
 
-            filename = (char *) EG_reall(filename,
-                                         (strlen(fun3dInstance->projectName) +
-                                          strlen("_ddfdrive_body1.dat")+5)*sizeof(char));
+            AIM_REALL(filename, strlen(projectName) +
+                                strlen("_ddfdrive_body1.dat")+7, char, discr->aInfo, status);
 
-            sprintf(filename,"%s%s%s",fun3dInstance->projectName,
+            sprintf(filename,"%s%s%s",projectName,
                                       "_ddfdrive_body1",
                                       ".dat");
 
@@ -2205,10 +2805,8 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
                                         &dataMatrix);
         }
 
-        if (filename != NULL) EG_free(filename);
-        filename = NULL;
-
-        if (status != CAPS_SUCCESS) return status;
+        AIM_FREE(filename);
+        AIM_STATUS(discr->aInfo, status);
 
         printf("Number of variables %d\n", numVariable);
         // Output some of the first row of the data
@@ -2256,21 +2854,22 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
         }
 
         if (variableIndex == -99) {
-            printf("Variable %s not found in data file\n", dataName);
+            AIM_ERROR(discr->aInfo, "Variable %s not found in data file\n", dataName);
             status = CAPS_NOTFOUND;
             goto cleanup;
         }
         if (dataMatrix == NULL) {
-            printf("Variable %s daata mtrix is NULL!\n", dataName);
+            AIM_ERROR(discr->aInfo, "Variable %s daata mtrix is NULL!\n", dataName);
             status = CAPS_NULLVALUE;
             goto cleanup;
         }
 
         for (i = 0; i < numPoint; i++) {
 
-            bIndex       = discr->tessGlobal[2*i  ];
-            globalNodeID = discr->tessGlobal[2*i+1] +
-                           discr->bodys[bIndex-1].globalOffset;
+            bIndex  = discr->tessGlobal[2*i  ];
+            iglobal = discr->tessGlobal[2*i+1];
+
+            globalNodeID = meshRef->maps[bIndex-1].map[iglobal-1];
 
             found = (int) false;
             for (dataPoint = 0; dataPoint < numDataPoint; dataPoint++) {
@@ -2291,37 +2890,36 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
                     //dataVal[dataRank*i+j] = 99;
 
                 }
+            } else {
+                AIM_ERROR(discr->aInfo, "Unable to find node %d!\n", globalNodeID);
+                status = CAPS_BADVALUE;
+                goto cleanup;
             }
         }
 
         // Free data matrix
         if (dataMatrix != NULL) {
             for (i = 0; i < numVariable; i++) {
-                if (dataMatrix[i] != NULL) EG_free(dataMatrix[i]);
+                AIM_FREE(dataMatrix[i]);
             }
-
-            EG_free(dataMatrix);
+            AIM_FREE(dataMatrix);
         }
 
         // Free variable list
         status = string_freeArray(numVariable, &variableName);
-        if (status != CAPS_SUCCESS) return status;
+        AIM_STATUS(discr->aInfo, status);
 
     }
 
-    return CAPS_SUCCESS;
+    status = CAPS_SUCCESS;
 
 cleanup:
-    if (status != CAPS_SUCCESS)
-        printf("Premature exit in fun3dAIM transfer status = %d\n", status);
-
     // Free data matrix
     if (dataMatrix != NULL) {
         for (i = 0; i < numVariable; i++) {
-            if (dataMatrix[i] != NULL) EG_free(dataMatrix[i]);
+            AIM_FREE(dataMatrix[i]);
         }
-
-        EG_free(dataMatrix);
+        AIM_FREE(dataMatrix);
     }
 
     // Free variable list
@@ -2332,6 +2930,7 @@ cleanup:
 }
 
 
+// ********************** AIM Function Break *****************************
 int
 aimInterpolation(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
                  int eIndex, double *bary, int rank,
@@ -2345,6 +2944,7 @@ aimInterpolation(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
 }
 
 
+// ********************** AIM Function Break *****************************
 int
 aimInterpolateBar(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
                   int eIndex, double *bary, int rank,
@@ -2358,6 +2958,7 @@ aimInterpolateBar(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
 }
 
 
+// ********************** AIM Function Break *****************************
 int
 aimIntegration(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
                int eIndex, int rank, double *data, double *result)
@@ -2370,6 +2971,7 @@ aimIntegration(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
 }
 
 
+// ********************** AIM Function Break *****************************
 int
 aimIntegrateBar(capsDiscr *discr, /*@unused@*/ const char *name, int bIndex,
                 int eIndex, int rank, double *r_bar, double *d_bar)
