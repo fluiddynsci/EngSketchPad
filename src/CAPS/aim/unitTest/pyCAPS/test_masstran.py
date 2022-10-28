@@ -12,25 +12,27 @@ import pyCAPS
 
 class TestMasstran(unittest.TestCase):
 
-    def setUp(self):
-        self.problemName = "workDir_masstranTest"
-        self.cleanUp()
+    @classmethod
+    def setUpClass(cls):
+        cls.problemName = "workDir_masstranTest"
+        cls.iProb = 1
+        cls.cleanUp()
 
         # Initialize Problem object
         file = os.path.join("..","csmData","masstran.csm")
-        self.myProblem = pyCAPS.Problem(self.problemName, capsFile=file, outLevel=0)
+        cls.myProblem = pyCAPS.Problem(cls.problemName, capsFile=file, outLevel=0)
 
         # Load masstran aim
-        self.masstran = self.myProblem.analysis.create(aim = "masstranAIM")
+        cls.masstran = cls.myProblem.analysis.create(aim = "masstranAIM")
 
         # Min/Max number of points on an edge for quadding
-        self.masstran.input.Edge_Point_Min = 2
-        self.masstran.input.Edge_Point_Max = 20
+        cls.masstran.input.Edge_Point_Min = 20
+        cls.masstran.input.Edge_Point_Max = 20
 
-        #self.masstran.input.Tess_Params", [0.25, 0.001, 15.0])
+        #cls.masstran.input.Tess_Params = [1/64, 0.001, 15.0]
 
         # Generate quad meshes
-        self.masstran.input.Quad_Mesh = True
+        cls.masstran.input.Quad_Mesh = True
 
         # Set materials
         madeupium    = {"materialType" : "isotropic",
@@ -38,27 +40,93 @@ class TestMasstran(unittest.TestCase):
         unobtainium  = {"materialType" : "isotropic",
                         "density"      : 20}
 
-        self.masstran.input.Material = {"madeupium" : madeupium, "unobtainium" : unobtainium}
+        cls.masstran.input.Material = {"madeupium" : madeupium, "unobtainium" : unobtainium}
 
         # Set properties
-        self.shell1 = {"propertyType"      : "Shell",
-                       "membraneThickness" : 2.0,
-                       "material"          : "madeupium"}
+        cls.shell1 = {"propertyType"      : "Shell",
+                      "membraneThickness" : 2.0,
+                      "material"          : "madeupium"}
 
-        self.shell2 = {"propertyType"      : "Shell",
-                       "membraneThickness" : 3.0,
-                       "material"          : "unobtainium"}
+        cls.shell2 = {"propertyType"      : "Shell",
+                      "membraneThickness" : 3.0,
+                      "material"          : "unobtainium"}
 
-    def tearDown(self):
-        del self.myProblem
-        del self.masstran
-        self.cleanUp()
+    @classmethod
+    def tearDownClass(cls):
+        del cls.myProblem
+        del cls.masstran
+        cls.cleanUp()
 
-    def cleanUp(self):
-        # Remove problemName directory
-        if os.path.isdir(self.problemName):
-            shutil.rmtree(self.problemName)
+    @classmethod
+    def cleanUp(cls):
+        # Remove problem directories
+        dirs = glob.glob( cls.problemName + '*')
+        for dir in dirs:
+            if os.path.isdir(dir):
+                shutil.rmtree(dir)
 
+#==============================================================================
+    def check_derivs(self):
+
+        for pmtr in ["L", "W", "H"]:
+            print("===>", pmtr)
+            self.masstran.input.Design_Variable = {pmtr : {}}
+    
+            # derivatives of 1 box w.r.t L
+            Area_pmtr     = self.masstran.output["Area"].deriv(pmtr)
+            Mass_pmtr     = self.masstran.output["Mass"].deriv(pmtr)
+            Centroid_pmtr = self.masstran.output["Centroid"].deriv(pmtr)
+            CG_pmtr       = self.masstran.output["CG"].deriv(pmtr)
+            I_pmtr        = self.masstran.output["I_Vector"].deriv(pmtr)
+            IU_pmtr       = self.masstran.output["I_Upper"].deriv(pmtr)
+            IL_pmtr       = self.masstran.output["I_Lower"].deriv(pmtr)
+            II_pmtr       = self.masstran.output["I_Tensor"].deriv(pmtr)
+    
+            self.masstran.input.Design_Variable = None
+
+            # perturbed properties of 1 box
+            eps = 1e-4
+            self.myProblem.geometry.despmtr[pmtr].value += eps
+    
+            AreaP     = self.masstran.output.Area
+            MassP     = self.masstran.output.Mass
+            CentroidP = self.masstran.output.Centroid
+            CGP       = self.masstran.output.CG
+            IP        = self.masstran.output.I_Vector
+            IUP       = self.masstran.output.I_Upper
+            ILP       = self.masstran.output.I_Lower
+            IIP       = self.masstran.output.I_Tensor
+            
+            self.myProblem.geometry.despmtr[pmtr].value -= 2*eps
+            
+            AreaM     = self.masstran.output.Area
+            MassM     = self.masstran.output.Mass
+            CentroidM = self.masstran.output.Centroid
+            CGM       = self.masstran.output.CG
+            IM        = self.masstran.output.I_Vector
+            IUM       = self.masstran.output.I_Upper
+            ILM       = self.masstran.output.I_Lower
+            IIM       = self.masstran.output.I_Tensor
+
+            self.myProblem.geometry.despmtr[pmtr].value += eps
+
+            self.assertAlmostEqual((AreaP-AreaM)/(2*eps), Area_pmtr, 6)
+            self.assertAlmostEqual((MassP-MassM)/(2*eps), Mass_pmtr, 6)
+            for i in range(len(CentroidP)):
+                self.assertAlmostEqual((CentroidP[i]-CentroidM[i])/(2*eps), Centroid_pmtr[i], 6)
+            for i in range(len(CGP)):
+                self.assertAlmostEqual((CGP[i]-CGM[i])/(2*eps), CG_pmtr[i], 6)
+            for i in range(len(IP)):
+                self.assertAlmostEqual((IP[i]-IM[i])/(2*eps), I_pmtr[i], 5)
+            for i in range(len(IUP)):
+                self.assertAlmostEqual((IUP[i]-IUM[i])/(2*eps), IU_pmtr[i], 5)
+            for i in range(len(ILP)):
+                self.assertAlmostEqual((ILP[i]-ILM[i])/(2*eps), IL_pmtr[i], 5)
+            for i in range(3):
+                for j in range(3):
+                    self.assertAlmostEqual((IIP[i][j]-IIM[i][j])/(2*eps), II_pmtr[3*i+j], 5)
+
+#==============================================================================
     def test_plate(self):
 
         # set the propery for this analysis
@@ -70,16 +138,14 @@ class TestMasstran(unittest.TestCase):
         self.myProblem.geometry.cfgpmtr["VIEW:box2" ].value = 0
         self.myProblem.geometry.cfgpmtr["VIEW:box3" ].value = 0
 
-        # compute Mass properties
-        #self.masstran.preAnalysis()
-        #self.masstran.postAnalysis()
-
         # properties of 1 plate
         Area     = self.masstran.output.Area
         Mass     = self.masstran.output.Mass
         Centroid = self.masstran.output.Centroid
         CG       = self.masstran.output.CG
         I        = self.masstran.output.I_Vector
+        IU       = self.masstran.output.I_Upper
+        IL       = self.masstran.output.I_Lower
         II       = self.masstran.output.I_Tensor
         MassProp = self.masstran.output.MassProp
 
@@ -125,6 +191,20 @@ class TestMasstran(unittest.TestCase):
         self.assertAlmostEqual(Ixz, self.masstran.output.Ixz, 9)
         self.assertAlmostEqual(Iyz, self.masstran.output.Iyz, 9)
 
+        self.assertAlmostEqual( Ixx, IU[0], 9)
+        self.assertAlmostEqual(-Ixy, IU[1], 9)
+        self.assertAlmostEqual(-Ixz, IU[2], 9)
+        self.assertAlmostEqual( Iyy, IU[3], 9)
+        self.assertAlmostEqual(-Iyz, IU[4], 9)
+        self.assertAlmostEqual( Izz, IU[5], 9)
+
+        self.assertAlmostEqual( Ixx, IL[0], 9)
+        self.assertAlmostEqual(-Ixy, IL[1], 9)
+        self.assertAlmostEqual( Iyy, IL[2], 9)
+        self.assertAlmostEqual(-Ixz, IL[3], 9)
+        self.assertAlmostEqual(-Iyz, IL[4], 9)
+        self.assertAlmostEqual( Izz, IL[5], 9)
+
         self.assertAlmostEqual( Ixx, II[0][0], 9)
         self.assertAlmostEqual(-Ixy, II[0][1], 9)
         self.assertAlmostEqual(-Ixz, II[0][2], 9)
@@ -145,7 +225,10 @@ class TestMasstran(unittest.TestCase):
         #self.assertAlmostEqual(Ixy, MassProp["massInertia"][3], 9)
         #self.assertAlmostEqual(Ixz, MassProp["massInertia"][4], 9)
         #self.assertAlmostEqual(Iyz, MassProp["massInertia"][5], 9)
+        
+        self.check_derivs()
 
+#==============================================================================
     def test_box1(self):
 
         # set the propery for this analysis
@@ -157,16 +240,14 @@ class TestMasstran(unittest.TestCase):
         self.myProblem.geometry.cfgpmtr["VIEW:box2" ].value = 0
         self.myProblem.geometry.cfgpmtr["VIEW:box3" ].value = 0
 
-        # compute Mass properties
-        #self.masstran.preAnalysis()
-        #self.masstran.postAnalysis()
-
         # properties of 1 box
         Area     = self.masstran.output.Area
         Mass     = self.masstran.output.Mass
         Centroid = self.masstran.output.Centroid
         CG       = self.masstran.output.CG
         I        = self.masstran.output.I_Vector
+        IU       = self.masstran.output.I_Upper
+        IL       = self.masstran.output.I_Lower
         II       = self.masstran.output.I_Tensor
         MassProp = self.masstran.output.MassProp
 
@@ -233,6 +314,20 @@ class TestMasstran(unittest.TestCase):
         self.assertAlmostEqual(Ixz, self.masstran.output.Ixz, 9)
         self.assertAlmostEqual(Iyz, self.masstran.output.Iyz, 9)
 
+        self.assertAlmostEqual( Ixx, IU[0], 9)
+        self.assertAlmostEqual(-Ixy, IU[1], 9)
+        self.assertAlmostEqual(-Ixz, IU[2], 9)
+        self.assertAlmostEqual( Iyy, IU[3], 9)
+        self.assertAlmostEqual(-Iyz, IU[4], 9)
+        self.assertAlmostEqual( Izz, IU[5], 9)
+
+        self.assertAlmostEqual( Ixx, IL[0], 9)
+        self.assertAlmostEqual(-Ixy, IL[1], 9)
+        self.assertAlmostEqual( Iyy, IL[2], 9)
+        self.assertAlmostEqual(-Ixz, IL[3], 9)
+        self.assertAlmostEqual(-Iyz, IL[4], 9)
+        self.assertAlmostEqual( Izz, IL[5], 9)
+
         self.assertAlmostEqual( Ixx, II[0][0], 9)
         self.assertAlmostEqual(-Ixy, II[0][1], 9)
         self.assertAlmostEqual(-Ixz, II[0][2], 9)
@@ -254,7 +349,9 @@ class TestMasstran(unittest.TestCase):
         #self.assertAlmostEqual(Ixz, MassProp["massInertia"][4], 9)
         #self.assertAlmostEqual(Iyz, MassProp["massInertia"][5], 9)
 
+        self.check_derivs()
 
+#==============================================================================
     def test_box2(self):
  
         # set the propery for this analysis
@@ -265,17 +362,15 @@ class TestMasstran(unittest.TestCase):
         self.myProblem.geometry.cfgpmtr["VIEW:box1" ].value = 0
         self.myProblem.geometry.cfgpmtr["VIEW:box2" ].value = 1
         self.myProblem.geometry.cfgpmtr["VIEW:box3" ].value = 0
- 
-        # compute Mass properties
-        #self.masstran.preAnalysis()
-        #self.masstran.postAnalysis()
- 
+
         # properties of 1 box lacking 1 face
         Area     = self.masstran.output.Area
         Mass     = self.masstran.output.Mass
         Centroid = self.masstran.output.Centroid
         CG       = self.masstran.output.CG
         I        = self.masstran.output.I_Vector
+        IU       = self.masstran.output.I_Upper
+        IL       = self.masstran.output.I_Lower
         II       = self.masstran.output.I_Tensor
         MassProp = self.masstran.output.MassProp
  
@@ -345,6 +440,20 @@ class TestMasstran(unittest.TestCase):
         self.assertAlmostEqual(Ixz, self.masstran.output.Ixz, 9)
         self.assertAlmostEqual(Iyz, self.masstran.output.Iyz, 9)
 
+        self.assertAlmostEqual( Ixx, IU[0], 9)
+        self.assertAlmostEqual(-Ixy, IU[1], 9)
+        self.assertAlmostEqual(-Ixz, IU[2], 9)
+        self.assertAlmostEqual( Iyy, IU[3], 9)
+        self.assertAlmostEqual(-Iyz, IU[4], 9)
+        self.assertAlmostEqual( Izz, IU[5], 9)
+
+        self.assertAlmostEqual( Ixx, IL[0], 9)
+        self.assertAlmostEqual(-Ixy, IL[1], 9)
+        self.assertAlmostEqual( Iyy, IL[2], 9)
+        self.assertAlmostEqual(-Ixz, IL[3], 9)
+        self.assertAlmostEqual(-Iyz, IL[4], 9)
+        self.assertAlmostEqual( Izz, IL[5], 9)
+
         self.assertAlmostEqual( Ixx, II[0][0], 9)
         self.assertAlmostEqual(-Ixy, II[0][1], 9)
         self.assertAlmostEqual(-Ixz, II[0][2], 9)
@@ -366,6 +475,10 @@ class TestMasstran(unittest.TestCase):
         #self.assertAlmostEqual(Ixz, MassProp["massInertia"][4], 9)
         #self.assertAlmostEqual(Iyz, MassProp["massInertia"][5], 9)
 
+        # The triangular meshing messes with the finite difference
+        #self.check_derivs()
+
+#==============================================================================
     def test_box3(self):
  
         # set the propery for this analysis
@@ -376,10 +489,6 @@ class TestMasstran(unittest.TestCase):
         self.myProblem.geometry.cfgpmtr["VIEW:box1" ].value = 0
         self.myProblem.geometry.cfgpmtr["VIEW:box2" ].value = 0
         self.myProblem.geometry.cfgpmtr["VIEW:box3" ].value = 1
- 
-        # compute Mass properties
-        #self.masstran.preAnalysis()
-        #self.masstran.postAnalysis()
  
         # properties of 1 box lacking 1 face
         Area     = self.masstran.output.Area
@@ -502,6 +611,120 @@ class TestMasstran(unittest.TestCase):
         #self.assertAlmostEqual(Ixy, MassProp["massInertia"][3], 9)
         #self.assertAlmostEqual(Ixz, MassProp["massInertia"][4], 9)
         #self.assertAlmostEqual(Iyz, MassProp["massInertia"][5], 9)
+
+        self.check_derivs()
+
+#==============================================================================
+    def run_journal(self, myProblem, line_exit):
+
+        verbose = False
+
+        line = 0
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        # Only work with 2 boxes
+        if verbose: print(6*"-","VIEW:plate", line)
+        myProblem.geometry.cfgpmtr["VIEW:plate"].value = 0; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","VIEW:box3", line)
+        myProblem.geometry.cfgpmtr["VIEW:box3" ].value = 0; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        # Load masstran AIM
+        if verbose: print(6*"-","Load masstranAIM", line)
+        masstran = myProblem.analysis.create(aim = "masstranAIM"); line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        # Set edge points
+        if verbose: print(6*"-","Modify Edge_Point_Min", line)
+        masstran.input.Edge_Point_Min = 20; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","Modify Edge_Point_Max", line)
+        masstran.input.Edge_Point_Max = 20; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        # set the Property for this analysis
+        if verbose: print(6*"-","Modify Property", line)
+        masstran.input.Property = {"box1" : self.shell1}; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        # set the Material for this analysis
+        if verbose: print(6*"-","Modify Material", line)
+        masstran.input.Material = self.masstran.input.Material; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        # properties
+        if verbose: print(6*"-","Area_1", line)
+        Area_1 = masstran.output.Area; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","Mass_1", line)
+        Mass_1 = masstran.output.Mass; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","L", line)
+        myProblem.geometry.despmtr.L *= 2; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+       # properties
+        if verbose: print(6*"-","Area_2", line)
+        Area_2 = masstran.output.Area; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+        if verbose: print(6*"-","Mass_2", line)
+        Mass_2 = masstran.output.Mass; line += 1
+        if line == line_exit: return line
+        if line_exit > 0: self.assertTrue(myProblem.journaling())
+
+
+        # Check that the counts have decreased
+        self.assertGreater(Area_2, Area_1)
+        self.assertGreater(Mass_2, Mass_1)
+
+        # make sure the last call journals everything
+        return line+2
+
+#==============================================================================
+    def test_journal(self):
+
+        capsFile = os.path.join("..","csmData","masstran.csm")
+        problemName = self.problemName+str(self.iProb)
+        
+        myProblem = pyCAPS.Problem(problemName, capsFile=capsFile, outLevel=0)
+
+        # Run once to get the total line count
+        line_total = self.run_journal(myProblem, -1)
+        
+        myProblem.close()
+        shutil.rmtree(problemName)
+        
+        #print(80*"=")
+        #print(80*"=")
+        # Create the problem to start journaling
+        myProblem = pyCAPS.Problem(problemName, capsFile=capsFile, outLevel=0)
+        myProblem.close()
+        
+        for line_exit in range(line_total):
+            #print(80*"=")
+            myProblem = pyCAPS.Problem(problemName, phaseName="Scratch", capsFile=capsFile, outLevel=0)
+            self.run_journal(myProblem, line_exit)
+            myProblem.close()
+            
+        self.__class__.iProb += 1
 
 if __name__ == '__main__':
     unittest.main()

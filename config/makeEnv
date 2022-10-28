@@ -94,11 +94,13 @@ if [ "$ARCH" = Darwin ]; then
 	20.4.*) MACOSX=11.3 ;;
 	20.5.*) MACOSX=11.4 ;;
 	20.6.*) MACOSX=11.5 ;;
-	20.7.*) MACOSX=11.6 ;;
 	21.0.*) MACOSX=12.0 ;;
 	21.1.*) MACOSX=12.0 ;;
 	21.2.*) MACOSX=12.1 ;;
 	21.3.*) MACOSX=12.2 ;;
+	21.4.*) MACOSX=12.3 ;;
+	21.5.*) MACOSX=12.4 ;;
+	21.6.*) MACOSX=12.5 ;;
 	21.*)   MACOSX=12.x ;;
 	esac
 fi

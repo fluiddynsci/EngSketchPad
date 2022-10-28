@@ -82,7 +82,7 @@ $(BDIR)/pxplot:			Executables/DARWIN64/pxplot
 	/bin/cp Executables/DARWIN64/pxplot $(BDIR)/pxplot
 
 $(BDIR)/xfoil:			Executables/DARWIN64/xfoil
-	/bin/cp Executables/DARWIN64/xfoil $(BDIR)/xfoil
+	/bin/cp Executables/DARWINM1/xfoil $(BDIR)/xfoil
 
 $(BDIR)/ASTRO.D01:		Executables/DARWINM1/ASTRO.D01
 	/bin/cp Executables/DARWINM1/ASTRO.D01 $(BDIR)/ASTRO.D01

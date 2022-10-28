@@ -34,9 +34,7 @@
 #include <math.h>
 #include <assert.h>
 
-#include "egads.h"
 #include "OpenCSM.h"
-#include "common.h"
 #include "tim.h"
 #include "wsserver.h"
 
@@ -150,7 +148,7 @@ timLoad(esp_T *ESP,                     /* (in)  pointer to ESP structure */
 
     fclose(plot_fp);
 
-    /* add the cloud points to te display */
+    /* add the cloud points to the display */
     plotPointCloud(ESP);
 
     /* set up the table of DESPMTRs */
@@ -262,9 +260,11 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
 
     /* "draw|" */
     } else if (strncmp(command, "draw|", 5) == 0) {
-        plotPointCloud(ESP);
+        if (ESP->batch == 0) {
+            plotPointCloud(ESP);
 
-        tim_bcst("plugs", "timMesg|plugs|draw");
+            tim_bcst("plugs", "timMesg|plugs|draw");
+        }
     }
 
 //cleanup:

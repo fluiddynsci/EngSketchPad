@@ -32,6 +32,8 @@
 #define NUMUDPARGS 9
 #include "udpUtilities.h"
 
+#include "OpenCSM.h"
+
 /* shorthands for accessing argument values and velocities */
 #ifdef UDP
    #define WIDTH(IUDP)      ((double *) (udps[IUDP].arg[0].val))[0]
@@ -145,7 +147,7 @@ periodicSeam(ego eedge,                 /* (in)  Edge associated with seam */
     if (status != EGADS_SUCCESS) goto cleanup;
 
     /* set up u and v at ends */
-    data[0] = TWOPI;
+    data[0] = 2 * PI;
     data[1] = range[0];
     data[2] = 0;
     data[3] = sense;

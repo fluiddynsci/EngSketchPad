@@ -81,8 +81,6 @@ extern int EG_spline2dAppx(      ego    context,      // EGADS context
                                  double tol,          // tolerance (or 0)
                                  ego    *esurf);
 
-#define   HUGEQ   1.0e+20
-
 
 /*
  ************************************************************************
@@ -240,7 +238,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
         status = EG_copyObject(ebodys[1], NULL, &ebodyB);
         CHECK_STATUS(EG_copyObject);
-        
+
         /* make a list of the exposed Loops in BodyA (when Faces with the
            _flend=remove attribute are removed) */
         status = exposedLoops(ebodyA, &nloopA, eloopsA);
@@ -268,7 +266,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
         snprintf(message, 100, "FLEND found Model contains %d Bodys (expecting 1 or 2)", nchild);
         status = -999;
         goto cleanup;
-    }    
+    }
 
     /* make sure both Loops have the same number of Edges */
     status = EG_getTopology(eloopsA[0], &eref, &oclass, &mtype,
@@ -363,7 +361,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 
     /* get arrays to hold the west and east points and slopes */
     npnt = NPNT(0);
-    
+
     MALLOC(tA,   double,   npnt*nedgeA);
     MALLOC(pntA, double, 3*npnt*nedgeA);
     MALLOC(slpA, double, 3*npnt*nedgeA);
@@ -380,12 +378,12 @@ udpExecute(ego  emodel,                 /* (in)  input model */
         status = EG_getTopology(efacesA[iedge], &eref, &oclass, &mtype,
                                 data, &nloop, &eloops, &senses);
         CHECK_STATUS(EG_getTopology);
-        
+
         for (iloop = 0; iloop < nloop; iloop++) {
             status = EG_getTopology(eloops[iloop], &eref, &oclass, &mtype,
                                     data, &ntemp, &etemps, &senses);
             CHECK_STATUS(EG_getTopology);
-            
+
             for (itemp = 0; itemp < ntemp; itemp++) {
                 if (eedgesA[iedge] == etemps[itemp]) {
                     senseA = senses[itemp];
@@ -398,12 +396,12 @@ udpExecute(ego  emodel,                 /* (in)  input model */
         status = EG_getTopology(efacesB[iedge], &eref, &oclass, &mtype,
                                 data, &nloop, &eloops, &senses);
         CHECK_STATUS(EG_getTopology);
-        
+
         for (iloop = 0; iloop < nloop; iloop++) {
             status = EG_getTopology(eloops[iloop], &eref, &oclass, &mtype,
                                     data, &ntemp, &etemps, &senses);
             CHECK_STATUS(EG_getTopology);
-            
+
             for (itemp = 0; itemp < ntemp; itemp++) {
                 if (eedgesB[iedge] == etemps[itemp]) {
                     senseB = senses[itemp];
@@ -412,7 +410,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
             }
             if (senseB != 0) break;
         }
-        
+
         /* get the (initial) Points from the Loops */
         status = fillPointsFromEdge(eedgesA[iedge], sensesA[iedge],
                                     eedgesB[iedge], sensesB[iedge], npnt,
@@ -439,7 +437,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
                                     npnt, &tB[npnt*iedge], &slpB[3*npnt*iedge]);
         CHECK_STATUS(fillSlopesFromEdge);
     }
-    
+
     /* find the slope at the Nodes and ajust the slopes for
        the adjacent Edges */
     for (iedge = 0; iedge < nedgeA; iedge++) {
@@ -486,7 +484,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
             slpA[3*(ipnt+jedge*npnt)+1] += (  fraci) * (newSlope[1] - oldSlope[1]);
             slpA[3*(ipnt+jedge*npnt)+2] += (  fraci) * (newSlope[2] - oldSlope[2]);
         }
-        
+
         /* find B slope at corner */
         if (efacesB[iedge] != efacesB[jedge]) {
             status = slopeAtNode(eedgesB[iedge], sensesB[iedge], efacesB[iedge], efacesB[jedge],
@@ -529,7 +527,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
             slpB[3*(ipnt+jedge*npnt)+2] += (  fraci) * (newSlope[2] - oldSlope[2]);
         }
     }
-    
+
     /* plot the slope directions */
     if (PLOT(0) != 0) {
         FILE *fp;
@@ -713,7 +711,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
 cleanup:
     if (efacesA2 != NULL) EG_free(efacesA2);
     if (efacesB2 != NULL) EG_free(efacesB2);
-    
+
     FREE(efacelist);
     FREE(spln     );
     FREE(west     );
@@ -730,7 +728,6 @@ cleanup:
 
     if (strlen(message) > 0) {
         *string = message;
-        printf("%s\n", message);
     } else if (status != EGADS_SUCCESS) {
         FREE(message);
         *string = udpErrorStr(status);
@@ -890,7 +887,7 @@ exposedLoops(ego    ebody,              /* (in)  Body */
 
 cleanup:
     FREE(elist);
-    
+
     return status;
 }
 
@@ -919,7 +916,7 @@ fillPointsFromEdge(ego    eedgeA,       /* (in)  Edge in BodyA */
     int     periodic, ipnt;
     double  trangeA[2], trangeB[2], lenA, lenB, data[18];
     double  fraci, stgt, tleft, trite, tt, ss;
-    
+
     ROUTINE(fillPointsFromEdge);
 
     /* --------------------------------------------------------------- */
@@ -1151,9 +1148,9 @@ fillSlopesFromEdge(ego    eedge,
     int     ipnt, oclass, mtype;
     double  edata[18], uv[2], fdata[18], vec[4];
     ego     topRef, prev, next;
-    
+
     ROUTINE(fillSlopesFromEdge);
-    
+
     /* --------------------------------------------------------------- */
 
     status = EG_getInfo(eface, &oclass, &mtype, &topRef, &prev, &next);
@@ -1183,7 +1180,7 @@ fillSlopesFromEdge(ego    eedge,
                - edata[3] * (fdata[3] * fdata[7] - fdata[4] * fdata[6]);
         vec[2] = edata[3] * (fdata[5] * fdata[6] - fdata[3] * fdata[8])
                - edata[4] * (fdata[4] * fdata[8] - fdata[5] * fdata[7]);
-        
+
         vec[3] = sense * mtype * sqrt(vec[0]*vec[0] + vec[1]*vec[1] + vec[2]*vec[2]);
 
         slp[3*ipnt  ] = vec[0] / vec[3];
@@ -1518,11 +1515,11 @@ slopeAtNode(ego    eedge,               /* (in)  Edge starting at Node */
     double  tang[18], uv[2], trange[2], tt, data[18];
     double  tlen;
     ego     eref, enode, *enodes, eedge2, *eedges2=NULL, *eefaces2=NULL;
-    
+
     ROUTINE(fixSlopeAtNode);
-    
+
     /* --------------------------------------------------------------- */
-    
+
     status = EG_getRange(eedge, trange, &periodic);
     CHECK_STATUS(EG_getRange);
 

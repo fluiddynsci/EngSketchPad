@@ -1641,7 +1641,11 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
         if (i == 0) printf("\tWriting design variable cards\n");
 
-        status = nastran_writeDesignVariableCard(fp,
+        // skip geometry design variables
+        if (aim_getIndex(aimInfo, tacsInstance->feaProblem.feaDesignVariable[i].name , GEOMETRYIN) ==
+            CAPS_SUCCESS) continue;
+
+        status = nastran_writeDesignVariableCard(aimInfo, fp,
                                                  &tacsInstance->feaProblem.feaDesignVariable[i],
                                                  &tacsInstance->feaProblem.feaFileFormat);
         AIM_STATUS(aimInfo, status);

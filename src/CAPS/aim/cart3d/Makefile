@@ -40,6 +40,12 @@ else
 default:	$(LDIR)/cart3dAIM.so $(TDIR)/cart3dTest $(BDIR)/ESPxddm
 endif
 
+# Suppress ld: warning: could not create compact unwind
+# Remove this when it's no longer necessary...
+ifeq ("$(ESP_ARCH)","DARWINM1")
+XMLIB += -Wl,-no_compact_unwind
+endif
+
 
 $(BDIR)/ESPxddm:	$(ODIR)/ESPxddm.o $(ODIR)/writeTrix.o $(ODIR)/surfTrix.o $(ODIR)/xddm.o \
 			$(ODIR)/bodyTess.o

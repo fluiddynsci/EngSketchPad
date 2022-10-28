@@ -54,15 +54,13 @@
 #define CCHAR   const char
 
 #define STRNCPY(A, B, LEN) strncpy(A, B, LEN); A[LEN-1] = '\0';
+#define STRNCAT(A, B, LEN) strncat(A, B, LEN); A[LEN-1] = '\0';
 
-#include "common.h"
 #include "OpenCSM.h"
-
 #include "emp.h"
 #include "udp.h"
 #include "esp.h"
 #include "egg.h"
-
 #include "tim.h"
 
 /***********************************************************************/
@@ -299,6 +297,11 @@ static char       *skbuff = NULL;
 /* global variables associated with StepThru mode */
 static int        curStep = 0;
 
+/* global variables associated with the text buffer */
+static int        max_textbuff = 0;     // allocated size
+static int        seq_textbuff = 0;     // last seen sequence number
+static char       *textbuff    = NULL;  // buffer
+
 /* global variables associated with the response buffer */
 static int        max_resp_len = 0;
 static int        response_len = 0;
@@ -327,6 +330,7 @@ static FILE       *jrnl_out = NULL;    /* output journal file */
 static void       addToResponse(char text[]);
 static void       addToSgMetaData(char format[], ...);
 static int        applyDisplacement(esp_T *ESP, int ipmtr);
+       void       bcstCallbackFromOpenCSM(char mesg[]);
        void       browserMessage(void *esp, void *wsi, char text[],int lena);
 static int        buildBodys(esp_T *ESP, int buildTo, int *builtTo, int *buildStatus, int *nwarn);
 static int        buildSceneGraph(esp_T *ESP);
@@ -366,7 +370,6 @@ main(int       argc,                    /* (in)  number of arguments */
     float     center[3] = {0.0, 0.0, 0.0};
     float     up[3]     = {0.0, 1.0, 0.0};
     double    data[18], bbox[6], value, dot, *values=NULL, dist;
-    double    *cloud=NULL;
     char      *casename=NULL, *jrnlname=NULL, *tempname=NULL, *pmtrname=NULL;
     char      *dirname=NULL, *basename=NULL;
     char      pname[MAX_NAME_LEN], strval[MAX_STRVAL_LEN];
@@ -451,7 +454,7 @@ main(int       argc,                    /* (in)  number of arguments */
         } else if (strcmp(argv[i], "-allVels") == 0) {
             allVels = 1;
         } else if (strcmp(argv[i], "-batch") == 0) {
-            batch = 1;
+            batch   = 1;
         } else if (strcmp(argv[i], "-despmtrs") == 0) {
             if (i < argc-1) {
                 STRNCPY(despname, argv[++i], MAX_FILENAME_LEN);
@@ -667,6 +670,7 @@ main(int       argc,                    /* (in)  number of arguments */
     ESP->MODL       = NULL;
     ESP->MODLorig   = NULL;
     ESP->CAPS       = NULL;
+    ESP->batch      = batch;
     ESP->cntxt      = NULL;
     ESP->sgFocus[0] = 0;
     ESP->sgFocus[1] = 0;
@@ -834,6 +838,9 @@ main(int       argc,                    /* (in)  number of arguments */
         status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
         if (status < SUCCESS) goto cleanup;
 
+        status = ocsmRegBcstCB(MODL, bcstCallbackFromOpenCSM);
+        if (status < SUCCESS) goto cleanup;
+        
         status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
         if (status < SUCCESS) goto cleanup;
     }
@@ -1803,8 +1810,7 @@ cleanup:
     FREE(irows );
     FREE(ipmtrs);
 
-    FREE(cloud);
-
+    FREE(textbuff);
     FREE(response);
     FREE(messages);
     FREE(skbuff  );
@@ -2068,6 +2074,31 @@ cleanup:
 
 /***********************************************************************/
 /*                                                                     */
+/*   bcstCallbackFromOpenCSM - broadcast a message from OpenCSM        */
+/*                                                                     */
+/***********************************************************************/
+
+void
+bcstCallbackFromOpenCSM(char mesg[])    /* (in)  message */
+{
+//    int  status=SUCCESS;
+
+    ROUTINE(bcstCallbackFromOpenCSM);
+
+    /* --------------------------------------------------------------- */
+
+    if (wv_nClientServer(0) >= 1) {
+        TRACE_BROADCAST( mesg);
+        wv_broadcastText(mesg);
+    }
+
+//cleanup:
+    return;
+}
+
+
+/***********************************************************************/
+/*                                                                     */
 /*   browserMessage - called when client sends a message to the server */
 /*                                                                     */
 /***********************************************************************/
@@ -2076,11 +2107,11 @@ void
 browserMessage(void    *esp,
    /*@unused@*/void    *wsi,
                char    text[],
-   /*@unused@*/int     lena)
+               int     lena)
 {
     int       status;
 
-    int       sendKeyData, ibody, onstack;
+    int       sendKeyData, ibody, onstack, test;
     char      message2[MAX_LINE_LEN];
 
     esp_T     *ESP   = (esp_T *)esp;
@@ -2100,6 +2131,58 @@ browserMessage(void    *esp,
         goto cleanup;
     }
 
+    /* allocate nominal textbuff */
+    if (max_textbuff == 0) {
+        max_textbuff = 5000;
+        seq_textbuff =   -1;
+        MALLOC(textbuff, char, max_textbuff);
+    }
+
+    /* if this is a short simple text, just copy text into textbuff */
+    if (strncmp(text,          "#!", 2) != 0 &&
+        strncmp(text+(lena-2), "!#", 2) != 0   ) {
+        strcpy(textbuff, text);
+        seq_textbuff = -1;
+
+    /* if this is the beginning of a continued text, copy into textbuff */
+    } else if (strncmp(text, "#!", 2) != 0) {
+        strcpy(textbuff, text);
+
+        /* get the sequence number at the end of the text */
+        seq_textbuff = atoi(text+(strlen(textbuff)-5));
+        textbuff[strlen(textbuff)-7] = '\0';
+
+        /* we have to delay processing until we get the whole text */
+        goto cleanup;
+
+    /* if this is a continuation, make sure it matches the sequence number */
+    } else {
+        test = atoi(text+2);
+        if (test != seq_textbuff) {
+            printf("ERROR:: test=%d, seq_textbuff=%d\n", test, seq_textbuff);
+            goto cleanup;
+        }
+
+        /* extend textbuff and append text into textbuff */
+        if (strlen(textbuff)+lena > max_textbuff-3) {
+            max_textbuff += lena;
+            RALLOC(textbuff, char, max_textbuff);
+        }
+
+        strcat(textbuff, text+7);
+
+        /* if it is also continued, get the new sequence number */
+        if (strncmp(textbuff+(strlen(textbuff)-2), "!#", 2) == 0) {
+            seq_textbuff = atoi(textbuff+(strlen(textbuff)-5));
+            textbuff[strlen(textbuff)-7] = '\0';
+
+            /* delay processing because we dp not have the end f the text yet */
+            goto cleanup;
+        }
+    }
+
+    seq_textbuff = -1;
+
     /* update the thread using the context */
     if (MODL->context != NULL) {
         status = EG_updateThread(MODL->context);
@@ -2114,7 +2197,7 @@ browserMessage(void    *esp,
     }
 
     /* process the Message */
-    (void) processBrowserToServer(ESP, text);
+    (void) processBrowserToServer(ESP, textbuff);
 
     /* make sure we have the latest MODL */
     MODL = ESP->MODL;
@@ -5831,14 +5914,16 @@ processBrowserToServer(esp_T   *ESP,
 {
     int       status = SUCCESS;
 
-    int       i, ibrch, itype, nlist, builtTo, buildStatus, ichar, iundo;
+    int       i, ibrch, itype, nlist, builtTo, buildStatus, ichar, iundo, nbody;
     int       ipmtr, jpmtr, nrow, ncol, irow, icol, index, iattr, actv, itemp, linenum;
     int       itoken1, itoken2, itoken3, ibody, onstack, direction=1, nwarn;
     int       nclient;
     CINT      *tempIlist;
     double    scale, value, dot;
+    double    toler, value1, dot1, value2, dot2;
     CDOUBLE   *tempRlist;
     char      *pEnd, bname[MAX_NAME_LEN+1], *bodyinfo=NULL, *tempEnv;
+    char      str1[MAX_STRVAL_LEN], str2[MAX_STRVAL_LEN];
     CCHAR     *tempClist;
 
     char      *name=NULL,   *type=NULL, *valu=NULL;
@@ -5952,8 +6037,8 @@ processBrowserToServer(esp_T   *ESP,
 
                 /* user still exists */
                 } else {
-                    strncat(usernames, arg3, 1023);
-                    strncat(usernames, "|",  1023);
+                    STRNCAT(usernames, arg3, 1023);
+                    STRNCAT(usernames, "|",  1023);
                 }
             }
 
@@ -5961,8 +6046,8 @@ processBrowserToServer(esp_T   *ESP,
         } else {
             snprintf(temp, MAX_EXPR_LEN,  "|%s|", arg1);
             if (strstr(usernames, temp) == 0) {
-                strncat(usernames, arg1, 1023);
-                strncat(usernames, "|",  1023);
+                STRNCAT(usernames, arg1, 1023);
+                STRNCAT(usernames, "|",  1023);
             }
         }
 
@@ -7184,7 +7269,7 @@ processBrowserToServer(esp_T   *ESP,
         updatedFilelist = 0;
 
         /* remember the first name in the filelist */
-        strncpy(filename, filelist, MAX_FILENAME_LEN);
+        STRNCPY(filename, filelist, MAX_FILENAME_LEN);
         for (i = 0; i < strlen(filename); i++) {
             if (filename[i] == '|') {
                 filename[i] = '\0';
@@ -7230,7 +7315,112 @@ processBrowserToServer(esp_T   *ESP,
         }
 
     /* "setCsmFileBeg|" */
-    } else if (strncmp(text, "setCsmFileBeg|", 14) == 0) {
+//$$$    } else if (strncmp(text, "setCsmFileBeg|", 14) == 0) {
+//$$$        char subfilename[MAX_FILENAME_LEN];
+//$$$
+        /* extract argument */
+//$$$        getToken(text, 1, '|', subfilename);
+//$$$
+        /* over-writing the .csm file means that everything that was
+           done previous cannot be re-done (since the original input
+           file no longer exists).  therefore, start a new journal file */
+//$$$        if (jrnl_out != NULL) {
+//$$$            rewind(jrnl_out);
+//$$$            response_len = 0;
+//$$$            response[0]  = '\0';
+//$$$
+//$$$            fprintf(jrnl_out, "open|%s|\n", subfilename);
+//$$$        }
+//$$$
+        /* open the casefile and overwrite */
+//$$$        fp = fopen(subfilename, "w");
+//$$$        SPLINT_CHECK_FOR_NULL(fp);
+//$$$
+//$$$        ichar = 14;
+//$$$        while (text[ichar++] != '|') {
+//$$$        }
+//$$$        while (text[ichar] != '\0') {
+//$$$            fprintf(fp, "%c", text[ichar++]);
+//$$$        }
+//$$$
+        /* update filename if file was the .csm file */
+//$$$        if (strstr(subfilename, ".csm") != NULL) {
+//$$$            strcpy(filename, subfilename);
+//$$$        }
+//$$$
+    /* "setCsmFileMid|" */
+//$$$    } else if (strncmp(text, "setCsmFileMid|", 14) == 0) {
+//$$$        SPLINT_CHECK_FOR_NULL(fp);
+//$$$
+//$$$        ichar = 14;
+//$$$        while (text[ichar] != '\0') {
+//$$$            fprintf(fp, "%c", text[ichar++]);
+//$$$        }
+//$$$
+    /* "setCsmFileEnd|" */
+//$$$    } else if (strncmp(text, "setCsmFileEnd|", 14) == 0) {
+//$$$        SPLINT_CHECK_FOR_NULL(fp);
+//$$$
+//$$$        fclose(fp);
+//$$$        fp = NULL;
+//$$$
+        /* save the current MODL (to be deleted below) */
+//$$$        saved_MODL = MODL;
+//$$$
+        /* load the new MODL */
+//$$$        status = ocsmLoad(filename, (void **)&(MODL));
+//$$$        ESP->MODL     = MODL;
+//$$$        ESP->MODLorig = MODL;
+//$$$
+//$$$        if (status != SUCCESS) {
+//$$$            snprintf(response, max_resp_len, "%s||",
+//$$$                     MODL->sigMesg);
+//$$$
+            /* clear any previous builds from the scene graph */
+//$$$            buildSceneGraph(ESP);
+//$$$        } else {
+//$$$            status = ocsmLoadDict(MODL, dictname);
+//$$$            if (status != SUCCESS) {
+//$$$                SPRINT1(0, "ERROR:: ocsmLoadDict -> status=%d", status);
+//$$$            }
+//$$$
+//$$$            status = ocsmRegMesgCB(MODL, mesgCallbackFromOpenCSM);
+//$$$            CHECK_STATUS(ocsmRegMesgCB);
+//$$$
+//$$$            status = ocsmRegSizeCB(MODL, sizeCallbackFromOpenCSM);
+//$$$            CHECK_STATUS(ocsmRegSizeCB);
+//$$$
+//$$$            if (strlen(despname) > 0) {
+//$$$                status = ocsmUpdateDespmtrs(MODL, despname);
+//$$$                CHECK_STATUS(ocsmUpdateDespmtrs);
+//$$$            }
+//$$$
+//$$$            status = updateModl(saved_MODL, MODL);
+//$$$            CHECK_STATUS(updateModl);
+//$$$
+//$$$            snprintf(response, max_resp_len, "load|");
+//$$$        }
+//$$$
+//$$$        if (filelist != NULL) EG_free(filelist);
+//$$$        status = ocsmGetFilelist(MODL, &filelist);
+//$$$        if (status != SUCCESS) {
+//$$$            SPRINT1(0, "ERROR:: ocsmGetFilelist -> status=%d", status);
+//$$$        }
+//$$$        updatedFilelist = 1;
+//$$$
+        /* free up the saved MODL */
+//$$$        status = ocsmFree(saved_MODL);
+//$$$        if (status != SUCCESS) {
+//$$$            SPRINT1(0, "ERROR:: ocsmFree -> status=%d", status);
+//$$$        }
+//$$$
+        /* disable -loadEgads */
+//$$$        loadEgads = 0;
+//$$$
+//$$$        response_len = STRLEN(response);
+
+    /* "setCsmFile|" */
+    } else if (strncmp(text, "setCsmFile|", 11) == 0) {
         char subfilename[MAX_FILENAME_LEN];
 
         /* extract argument */
@@ -7254,7 +7444,7 @@ processBrowserToServer(esp_T   *ESP,
         ichar = 14;
         while (text[ichar++] != '|') {
         }
-        while (text[ichar] != '\0') {
+        while (text[ichar] != '\0' && text[ichar] != '|') {
             fprintf(fp, "%c", text[ichar++]);
         }
 
@@ -7262,19 +7452,6 @@ processBrowserToServer(esp_T   *ESP,
         if (strstr(subfilename, ".csm") != NULL) {
             strcpy(filename, subfilename);
         }
-
-    /* "setCsmFileMid|" */
-    } else if (strncmp(text, "setCsmFileMid|", 14) == 0) {
-        SPLINT_CHECK_FOR_NULL(fp);
-
-        ichar = 14;
-        while (text[ichar] != '\0') {
-            fprintf(fp, "%c", text[ichar++]);
-        }
-
-    /* "setCsmFileEnd|" */
-    } else if (strncmp(text, "setCsmFileEnd|", 14) == 0) {
-        SPLINT_CHECK_FOR_NULL(fp);
 
         fclose(fp);
         fp = NULL;
@@ -7529,7 +7706,7 @@ processBrowserToServer(esp_T   *ESP,
         }
 
         /* start saving into a buffer */
-        strncpy(skbuff, &(text[14]), MAX_STR_LEN);
+        STRNCPY(skbuff, &(text[14]), MAX_STR_LEN);
 
     /* "saveSketchMid|" */
     } else if (strncmp(text, "saveSketchMid|", 14) == 0) {
@@ -7540,7 +7717,7 @@ processBrowserToServer(esp_T   *ESP,
             fflush( jrnl_out);
         }
 
-        strncat(skbuff, &(text[14]), MAX_STR_LEN);
+        STRNCAT(skbuff, &(text[14]), MAX_STR_LEN);
 
     /* "saveSketchEnd|" */
     } else if (strncmp(text, "saveSketchEnd|", 11) == 0) {
@@ -7551,7 +7728,7 @@ processBrowserToServer(esp_T   *ESP,
             fflush( jrnl_out);
         }
 
-        strncat(skbuff, &(text[14]), MAX_STR_LEN);
+        STRNCAT(skbuff, &(text[14]), MAX_STR_LEN);
 
         /* extract arguments */
         ibrch = 0;
@@ -7798,6 +7975,53 @@ processBrowserToServer(esp_T   *ESP,
         getToken(text, 1, '|', arg1);
 
         tim_lift(arg1);
+
+    /* "showErep|" */
+    } else if (strncmp(text, "makeErep|", 9) == 0) {
+        MODL->erepAtEnd = 1;
+
+        nbody  = 0;
+        status = ocsmBuild(MODL, 0, &builtTo, &nbody, NULL);
+        CHECK_STATUS(ocsmBuild);
+
+        MODL->erepAtEnd = 0;
+
+    /* "assert|val1|val2|toler|" */
+    } else if (strncmp(text, "assert|", 7) == 0) {
+
+        /* extract arguments */
+        getToken(text, 1, '|', arg1);
+        getToken(text, 2, '|', arg2);
+
+        if (getToken(text, 3, '|', arg3)) {
+            toler = strtod(arg1, &pEnd);
+        } else {
+            toler = 0;
+        }
+
+        status = ocsmEvalExpr(MODL, arg1, &value1, &dot1, str1);
+        if (status < 0) {
+            status = OCSM_ASSERT_FAILED;
+            goto cleanup;
+        }
+
+        status = ocsmEvalExpr(MODL, arg2, &value2, &dot2, str2);
+        if (status < 0) {
+            status = OCSM_ASSERT_FAILED;
+            goto cleanup;
+        }
+
+        if (toler == 0) {
+            toler = EPS06;
+        } else if (toler < 0) {
+            toler = fabs(value1 * toler);
+        }
+
+        if (fabs(value1-value2) > toler) {
+            printf("ERROR:: assert(%.8f, %.8f, %.8f) failed\n", value1, value2, toler);
+            status = OCSM_ASSERT_FAILED;
+            goto cleanup;
+        }
     }
 
     status = SUCCESS;
@@ -8014,8 +8238,10 @@ sizeCallbackFromOpenCSM(void   *modl,   /* (in)  pointer to MODL */
     }
 
     /* send to browsers */
-    TRACE_BROADCAST( response);
-    wv_broadcastText(response);
+    if (batch == 0) {
+        TRACE_BROADCAST( response);
+        wv_broadcastText(response);
+    }
 
     response[0]  = '\0';
     response_len = 0;

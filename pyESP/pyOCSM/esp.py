@@ -88,10 +88,10 @@ def SetCaps(problem, esp):
     outputs:
         (None}
     """
-    _esp.timSetCaps.argtypes = [ctypes.c_void_p]
+    _esp.timSetCaps.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
     _esp.timSetCaps.restype  =  ctypes.c_int
 
-    status = _esp.timSetCaps(ctypes.cast(problem._obj,caps.c_void_p))
+    status = _esp.timSetCaps(ctypes.cast(problem._obj,caps.c_void_p), esp)
     _processStatus(status, "SetCaps")
 
     # make sure problem is not cleaned up when python exits

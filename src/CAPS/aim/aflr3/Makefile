@@ -30,7 +30,7 @@ AFLR3_LIB += -lrt
 endif
 
 # CAPS compiles egads_aflr4 library to use the latest egads.h file
-VPATH             = $(AFLR)/src/egads_aflr4
+VPATH             = $(AFLR)/src/egads_aflr4:$(AFLR)/src/aflr43
 EGADS_INC_FILES   = $(wildcard $(IDIR)/egads*.h)
 # EGADS_AFLR4_FILES = $(wildcard $(AFLR)/src/egads_aflr4/*.c)
 # EGADS_AFLR4_OBJS  = $(subst $(AFLR)/src/egads_aflr4,$(ODIR),$(EGADS_AFLR4_FILES:.c=.o))
@@ -79,7 +79,9 @@ egads_eval_xyz_at_u.c             \
 egads_eval_xyz_at_uv.c            \
 egads_face_node_map.c             \
 egads_get_model.c                 \
-egads_set_ext_cad_data.c
+egads_set_ext_cad_data.c          \
+aflr43_bc_mod.c                   \
+aflr43_bc_reset.c
 
 EGADS_AFLR4_OBJS  = $(addprefix $(ODIR)/,$(EGADS_AFLR4_FILES:.c=.o))
 

@@ -110,8 +110,9 @@
                                    /*@null@*/ egObject *refGeo, const int *ivec,
                                    const double *rvec, egObject **geom );
   extern "C" int  EG_makeGeometry_dot( egObject *context, int oclass, int mtype,
-                                      /*@null@*/ egObject *refGeo, const int *ivec,
-                                      const double *rvec, const double *rvec_dot, egObject **geom );
+                                       /*@null@*/ egObject *refGeo, const int *ivec,
+                                       const double *rvec, const double *rvec_dot,
+                                       egObject **geom );
   DllExport  int  EG_makeGeometry( egObject *context, int oclass, int mtype,
                                    /*@null@*/ egObject *refGeo, const int *ivec,
                                    const SurrealS<1> *rvec, egObject **geom );
@@ -172,6 +173,7 @@
   extern "C" void EG_mapTessTs( egTess1D src, egTess1D dst );
   extern "C" int  EG_relPosTs( egObject *geom, int n, const double *rel,
                                double *ts, double *xyzs );
+  extern "C" int  EG_sampleSame( const egObject *obj1, const egObject *obj2 );
 
 
 int
@@ -7381,19 +7383,29 @@ EG_approximate(egObject *context, int maxdeg, double tol, const int *sizes,
   outLevel = EG_outLevel(context);
   fixed    = EG_fixedKnots(context);
 
-  if ((maxdeg < 0) || (maxdeg > 8)) {
+  if ((maxdeg < -3) || (maxdeg > 8)) {
     if (outLevel > 0)
       printf(" EGADS Warning: maxDeg = %d (EG_approximate)!\n", maxdeg);
     return EGADS_RANGERR;
   }
 
-  if (sizes[1] == -1)
+  if (sizes[1] == -1) {
+    if (maxdeg < -1) {
+      if (outLevel > 0)
+        printf(" EGADS Warning: maxDeg curve = %d (EG_approximate)!\n", maxdeg);
+      return EGADS_RANGERR;
+    }
     if ((maxdeg < 3) && (sizes[0] > 2))
       return EG_spline1d(context, maxdeg, -sizes[0], data, tol, bspline);
+  }
 
   if (sizes[1] == 0) {
-
     if ((maxdeg < 3) && (sizes[0] > 2)) {
+      if (maxdeg < -1) {
+        if (outLevel > 0)
+          printf(" EGADS Warning: maxDeg curve = %d (EG_approximate)!\n", maxdeg);
+        return EGADS_RANGERR;
+      }
       imax = sizes[0];
       if (fixed != 0) imax = -imax;
       return EG_spline1d(context, maxdeg, imax, data, tol, bspline);
@@ -7538,27 +7550,32 @@ int
 EG_approximate_dot(egObject *bspline, int maxdeg, double tol, const int *sizes,
                    const SurrealS<1> *data)
 {
-  int      outLevel, stat, imax, fixed, header[7];
+  int         outLevel, stat, imax, fixed, header[7];
   SurrealS<1> *rdata=NULL;
-  egObject *context;
+  egObject    *context;
 
   if (bspline == NULL)               return EGADS_NULLOBJ;
   if (bspline->magicnumber != MAGIC) return EGADS_NOTOBJ;
   if (bspline->mtype != BSPLINE)     return EGADS_NOTGEOM;
   if (data == NULL)                  return EGADS_NODATA;
-  context  = EG_context(bspline);
+  context = EG_context(bspline);
   if (context == NULL)               return EGADS_NOTCNTX;
   if (EG_sameThread(context))        return EGADS_CNTXTHRD;
   outLevel = EG_outLevel(context);
   fixed    = EG_fixedKnots(context);
 
-  if ((maxdeg < 0) || (maxdeg > 8)) {
+  if ((maxdeg < -3) || (maxdeg > 8)) {
     if (outLevel > 0)
       printf(" EGADS Warning: maxDeg = %d (EG_approximate_dot)!\n", maxdeg);
     return EGADS_RANGERR;
   }
 
-  if (sizes[1] == -1)
+  if (sizes[1] == -1) {
+    if (maxdeg < -1) {
+      if (outLevel > 0)
+        printf(" EGADS Warning: maxDeg curve = %d (EG_approximate)!\n", maxdeg);
+      return EGADS_RANGERR;
+    }
     if ((maxdeg < 3) && (sizes[0] > 2)) {
 
       stat = EG_spline1dFit< SurrealS<1> >(maxdeg, -sizes[0], data,
@@ -7571,9 +7588,14 @@ EG_approximate_dot(egObject *bspline, int maxdeg, double tol, const int *sizes,
 
       goto cleanup;
     }
+  }
 
   if (sizes[1] == 0) {
-
+    if (maxdeg < -1) {
+      if (outLevel > 0)
+        printf(" EGADS Warning: maxDeg curve = %d (EG_approximate)!\n", maxdeg);
+      return EGADS_RANGERR;
+    }
     if ((maxdeg < 3) && (sizes[0] > 2)) {
 
       imax = sizes[0];
@@ -7605,7 +7627,6 @@ EG_approximate_dot(egObject *bspline, int maxdeg, double tol, const int *sizes,
   } else {
 
     if (maxdeg < 3) {
-
       stat = EG_spline2dAppr< SurrealS<1> >(maxdeg, sizes[0], sizes[1], data,
                                             NULL, NULL, NULL, NULL, NULL,
                                             NULL, NULL, NULL, NULL,
@@ -9539,4 +9560,30 @@ EG_relPosTs(egObject *geom, int n, const double *rel, double *ts, double *xyzs)
   }
 
   return EGADS_SUCCESS;
+}
+
+
+int
+EG_sampleSame(const egObject *geom1, const egObject *geom2)
+{
+  int    i, stat;
+  double uv[2], result[18], xyz[3], dist;
+  
+  if (geom1->mtype == PLANE) {
+    double uvs[4][2] = {{-1.0, -1.0}, {-1.0, 1.0}, {1.0, -1.0}, {1.0, 1.0}};
+    
+    for (i = 0; i < 4; i++) {
+      stat = EG_evaluate(geom1, uvs[i], result);
+      if (stat != EGADS_SUCCESS) return EGADS_OUTSIDE;
+      stat = EG_invEvaluate(geom2, result, uv, xyz);
+      if (stat != EGADS_SUCCESS) return EGADS_OUTSIDE;
+      dist = sqrt((xyz[0]-result[0])*(xyz[0]-result[0]) +
+                  (xyz[1]-result[1])*(xyz[1]-result[1]) +
+                  (xyz[2]-result[2])*(xyz[2]-result[2]));
+      if (dist > 1.e-7) return EGADS_OUTSIDE;
+    }
+    return EGADS_SUCCESS;
+  }
+  
+  return EGADS_OUTSIDE;
 }

@@ -40,8 +40,6 @@
     #define  SLEEP(msec)  usleep(1000*msec)
 #endif
 
-#include "egads.h"
-#include "common.h"
 #include "OpenCSM.h"
 #include "tim.h"
 #include "wsserver.h"

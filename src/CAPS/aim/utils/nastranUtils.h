@@ -69,7 +69,7 @@ int nastran_writeDesignConstraintADDCard(FILE *fp, int constraintID, int numSetI
 int nastran_writeDesignConstraintCard(FILE *fp, const feaDesignConstraintStruct *feaDesignConstraint, const feaFileFormatStruct *feaFileFormat);
 
 // Write design variable/optimization information from a feaDesignVariable structure
-int nastran_writeDesignVariableCard(FILE *fp, const feaDesignVariableStruct *feaDesignVariable, const feaFileFormatStruct *feaFileFormat);
+int nastran_writeDesignVariableCard(void *aimInfo, FILE *fp, const feaDesignVariableStruct *feaDesignVariable, const feaFileFormatStruct *feaFileFormat);
 
 // Write design variable relation information from a feaDesignVariableRelation structure
 int nastran_writeDesignVariableRelationCard(void *aimInfo, FILE *fp, const feaDesignVariableRelationStruct *feaDesignVariableRelation, const feaProblemStruct *feaProblem, const feaFileFormatStruct *feaFileFormat);

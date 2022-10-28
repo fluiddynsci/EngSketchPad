@@ -62,6 +62,9 @@ int fun3d_readRubber(void *aimInfo,
 // Make FUN3D directory structure/tree
 int fun3d_makeDirectory(void *aimInfo);
 
+// Map the old surface tessellation on to the new bodies
+int fun3d_morphMeshUpdate(void *aimInfo,  aimMeshRef *meshRef, int numBody, ego *body);
+
 #ifdef __cplusplus
 }
 #endif

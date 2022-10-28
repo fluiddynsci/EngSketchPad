@@ -66,7 +66,7 @@ int aflr4_Surface_Mesh(void *aimInfo,
     egads_struct *ptr = NULL;
 
 
-    // Do some additional anity checks on the attributes
+    // Do some additional sanity checks on the attributes
     for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++) {
 
         status = EG_getBodyTopos (bodies[bodyIndex], NULL, FACE, &numFace,

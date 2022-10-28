@@ -64,8 +64,8 @@ for boundName in boundNames:
     mystranVset = bound.vertexSet.create(mystran)
 
     # Create displacement data sets
-    fun3d_Displacement   = fun3dVset.dataSet.create("Displacement", pyCAPS.fType.FieldIn)
-    mystran_Displacement = mystranVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+    fun3d_Displacement   = fun3dVset.dataSet.create("Displacement")
+    mystran_Displacement = mystranVset.dataSet.create("Displacement")
 
     # Link the data set
     fun3d_Displacement.link(mystran_Displacement, "Interpolate")

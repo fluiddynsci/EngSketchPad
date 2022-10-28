@@ -51,6 +51,7 @@ ocsmPrintBrep
 ocsmPrintEgo
 ocsmPrintPmtrs
 ocsmPrintProfile
+ocsmRegBcstCB
 ocsmRegMesgCB
 ocsmRegSizeCB
 ocsmRetAttr

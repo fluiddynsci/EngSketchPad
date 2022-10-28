@@ -80,12 +80,12 @@ for boundName in boundNames:
     astrosVset = bound.vertexSet.create(myProblem.analysis["astros"])
     
     # Create pressure data sets
-    su2_Pressure    = su2Vset.dataSet.create("Pressure", pyCAPS.fType.FieldOut)
-    astros_Pressure = astrosVset.dataSet.create("Pressure", pyCAPS.fType.FieldIn)
+    su2_Pressure    = su2Vset.dataSet.create("Pressure")
+    astros_Pressure = astrosVset.dataSet.create("Pressure")
 
     # Create displacement data sets
-    su2_Displacement    = su2Vset.dataSet.create("Displacement", pyCAPS.fType.FieldIn, init=[0,0,0])
-    astros_Displacement = astrosVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+    su2_Displacement    = su2Vset.dataSet.create("Displacement", init=[0,0,0])
+    astros_Displacement = astrosVset.dataSet.create("Displacement")
 
     # Link the data sets
     astros_Pressure.link(su2_Pressure, "Conserve")

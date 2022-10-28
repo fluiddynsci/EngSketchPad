@@ -114,7 +114,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 {
     int     status = EGADS_SUCCESS;
 
-    int     npnt, sense[4], sizes[2], periodic, i, add=1;
+    int     npnt, sense[4], sizes[2], periodic, i;
     double  rx_w, rx_e, ry_s, ry_n, n_sw, n_se, n_nw, n_ne, theta;
     double  *pnt_ne=NULL, *pnt_nw=NULL, *pnt_sw=NULL, *pnt_se=NULL, *pnt_save=NULL;
     double  data[18], tdata[2], result[3], range[4], eval[18], norm[3], dx, dy, ds;
@@ -1013,12 +1013,6 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     /* make Face from the loop */
     status = EG_makeFace(eloop, SFORWARD, NULL, &eface);
     CHECK_STATUS(EG_makeFace);
-
-    /* since this will make a PLANE, we need to add an Attribute
-       to tell OpenCSM to scale the UVs when computing sensitivities */
-    status = EG_attributeAdd(eface, "_scaleuv", ATTRINT, 1,
-                             &add, NULL, NULL);
-    CHECK_STATUS(EG_attributeAdd);
 
     /* find the direction of the Face normal */
     status = EG_getRange(eface, range, &periodic);

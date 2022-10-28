@@ -62,6 +62,7 @@ extern int   caps_rmCLink(const char *path);
 extern int   caps_mkCLink(const char *path, const char *srcPhase);
 extern void  caps_getAIMerrs(capsAnalysis *analy, int *nErr, capsErrs **errs);
 extern int   caps_updateState(capsObject *aobject, int *nErr, capsErrs **errors);
+extern int   capsInputSum(int nargs, capsJrnl *args, CAPSLONG *md5);
 
 
 
@@ -259,6 +260,7 @@ caps_freeValue(capsValue *value)
 
   if (value == NULL) return;
 
+  if (value->lims       != NULL) EG_free(value->lims);
   if (value->units      != NULL) EG_free(value->units);
   if (value->meshWriter != NULL) EG_free(value->meshWriter);
   if ((value->type == Boolean) || (value->type == Integer)) {
@@ -876,7 +878,9 @@ caps_writeValue(FILE *fp, capsOwn writer, capsObject *obj)
 
   n = fwrite(&value->type,    sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
-  n = fwrite(&value->length,  sizeof(int), 1, fp);
+  j = value->length;
+  if (value->lims != NULL) j = -value->length;
+  n = fwrite(&j,              sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
   n = fwrite(&value->dim,     sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
@@ -902,9 +906,19 @@ caps_writeValue(FILE *fp, capsOwn writer, capsObject *obj)
   if (value->type == Integer) {
     n = fwrite(value->limits.ilims, sizeof(int),    2, fp);
     if (n != 2) return CAPS_IOERR;
+    if (value->lims != NULL) {
+      j = 2*value->length;
+      n = fwrite(value->lims,       sizeof(int),    j, fp);
+      if (n != j) return CAPS_IOERR;
+    }
   } else if ((value->type == Double) || (value->type == DoubleDeriv)) {
     n = fwrite(value->limits.dlims, sizeof(double), 2, fp);
     if (n != 2) return CAPS_IOERR;
+    if (value->lims != NULL) {
+      j = 2*value->length;
+      n = fwrite(value->lims,       sizeof(double), j, fp);
+      if (n != j) return CAPS_IOERR;
+    }
   }
 
   stat = caps_writeString(fp, value->units);
@@ -1940,8 +1954,9 @@ caps_writeErrs(FILE *fp, capsErrs *errs)
 
 
 void
-caps_jrnlWrite(int funID, capsProblem *problem, capsObject *obj, int status,
-               int nargs, capsJrnl *args, CAPSLONG sNum0, CAPSLONG sNum)
+caps_jrnlWrite(int funID, CAPSLONG *chkSum, capsProblem *problem,
+               capsObject *obj, int status, int nargs, capsJrnl *args,
+               CAPSLONG sNum0, CAPSLONG sNum)
 {
   int       i, j, stat;
   char      filename[PATH_MAX], *full;
@@ -1960,6 +1975,8 @@ caps_jrnlWrite(int funID, capsProblem *problem, capsObject *obj, int status,
 
   n = fwrite(&problem->funID, sizeof(int),      1, problem->jrnl);
   if (n != 1) goto jwrterr;
+  n = fwrite(chkSum,          sizeof(CAPSLONG), 2, problem->jrnl);
+  if (n != 2) goto jwrterr;
   n = fwrite(&sNum0,          sizeof(CAPSLONG), 1, problem->jrnl);
   if (n != 1) goto jwrterr;
   n = fwrite(&status,         sizeof(int),      1, problem->jrnl);
@@ -2157,11 +2174,46 @@ jwrterr:
 }
 
 
+static int
+caps_perElementBnds(void *modl, capsValue *value)
+{
+  int    j, k, n, status;
+  double lower, upper, *dlims;
+  
+  if (value->length == 1) return CAPS_SUCCESS;
+  
+  for (n = k = 0; k < value->nrow; k++)
+    for (j = 0; j < value->ncol; j++) {
+      status = ocsmGetBnds(modl, value->pIndex, k+1, j+1, &lower, &upper);
+      if (status != SUCCESS) continue;
+      if ((lower != -HUGEQ) || (upper != HUGEQ)) n++;
+    }
+  if (n == 0) return CAPS_SUCCESS;
+  
+  dlims = (double *) EG_alloc(2*value->length*sizeof(double));
+  if (dlims == NULL) return EGADS_MALLOC;
+  
+  for (n = k = 0; k < value->nrow; k++)
+    for (j = 0; j < value->ncol; j++, n++) {
+      status = ocsmGetBnds(modl, value->pIndex, k+1, j+1, &lower, &upper);
+      if (status != SUCCESS) continue;
+      dlims[2*n] = dlims[2*n+1] = 0.0;
+      if ((lower != -HUGEQ) || (upper != HUGEQ)) {
+        dlims[2*n  ] = lower;
+        dlims[2*n+1] = upper;
+      }
+    }
+  
+  value->lims = dlims;
+  return CAPS_SUCCESS;
+}
+
+
 static void
 caps_sizeCB(void *modl, int ipmtr, int nrow, int ncol)
 {
   int         index, j, k, n, status;
-  double      *reals, dot;
+  double      *reals, dot, lower, upper;
   modl_T      *MODL;
   capsObject  *object;
   capsValue   *value;
@@ -2220,7 +2272,22 @@ caps_sizeCB(void *modl, int ipmtr, int nrow, int ncol)
   for (n = k = 0; k < nrow; k++)
     for (j = 0; j < ncol; j++, n++)
       ocsmGetValu(problem->modl, ipmtr, k+1, j+1, &reals[n], &dot);
-
+  
+  value->limits.dlims[0] = value->limits.dlims[1] = 0.0;
+  status = ocsmGetBnds(problem->modl, ipmtr, 1, 1, &lower, &upper);
+  if (status == SUCCESS)
+    if ((lower != -HUGEQ) || (upper != HUGEQ)) {
+      value->limits.dlims[0] = lower;
+      value->limits.dlims[1] = upper;
+    }
+  if (value->lims != NULL) {
+    EG_free(value->lims);
+    value->lims = NULL;
+    status = caps_perElementBnds(problem->modl, value);
+    if (status != CAPS_SUCCESS)
+      printf(" CAPS Warning: caps_perElementBnds = %d\n", status);
+  }
+  
   value->dim = Scalar;
   if ((ncol > 1) && (nrow > 1)) {
     value->dim = Array2D;
@@ -2584,7 +2651,7 @@ caps_readAttrs(FILE *fp, egAttrs **attrx)
 static int
 caps_readValue(FILE *fp, capsProblem *problem, capsObject *obj)
 {
-  int       i, j, stat;
+  int       i, j, stat, perElement = 0;
   char      *name;
   size_t    n;
   capsValue *value;
@@ -2607,6 +2674,10 @@ caps_readValue(FILE *fp, capsProblem *problem, capsObject *obj)
   if (n != 1) return CAPS_IOERR;
   n = fread(&value->length,  sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
+  if (value->length < 0) {
+    value->length = -value->length;
+    perElement    = 1;
+  }
   n = fread(&value->dim,     sizeof(int), 1, fp);
   if (n != 1) return CAPS_IOERR;
   n = fread(&value->nrow,    sizeof(int), 1, fp);
@@ -2631,9 +2702,23 @@ caps_readValue(FILE *fp, capsProblem *problem, capsObject *obj)
   if (value->type == Integer) {
     n = fread(value->limits.ilims, sizeof(int),    2, fp);
     if (n != 2) return CAPS_IOERR;
+    if (perElement != 0) {
+      j = 2*value->length;
+      value->lims = (int *) EG_alloc(j*sizeof(int));
+      if (value->lims == NULL) return EGADS_MALLOC;
+      n = fread(value->lims,       sizeof(int),    j, fp);
+      if (n != j) return CAPS_IOERR;
+    }
   } else if ((value->type == Double) || (value->type == DoubleDeriv)) {
     n = fread(value->limits.dlims, sizeof(double), 2, fp);
     if (n != 2) return CAPS_IOERR;
+    if (perElement != 0) {
+      j = 2*value->length;
+      value->lims = (double *) EG_alloc(j*sizeof(double));
+      if (value->lims == NULL) return EGADS_MALLOC;
+      n = fread(value->lims,       sizeof(double), j, fp);
+      if (n != j) return CAPS_IOERR;
+    }
   }
 
   stat = caps_readString(fp, &value->units);
@@ -2681,7 +2766,7 @@ caps_readValue(FILE *fp, capsProblem *problem, capsObject *obj)
         if (stat != CAPS_SUCCESS) return stat;
       }
     } else {
-      value->vals.integers = EG_alloc(value->length*sizeof(int));
+      value->vals.integers = (int *) EG_alloc(value->length*sizeof(int));
       if (value->vals.integers == NULL) return EGADS_MALLOC;
       n = fread(value->vals.integers, sizeof(int), value->length, fp);
       if (n != value->length) return CAPS_IOERR;
@@ -2689,7 +2774,7 @@ caps_readValue(FILE *fp, capsProblem *problem, capsObject *obj)
   }
 
   if (value->nullVal == IsPartial) {
-    value->partial = EG_alloc(value->length*sizeof(int));
+    value->partial = (int *) EG_alloc(value->length*sizeof(int));
     if (value->partial == NULL) return EGADS_MALLOC;
     n = fread(value->partial, sizeof(int), value->length, fp);
     if (n != value->length) return CAPS_IOERR;
@@ -2824,12 +2909,13 @@ caps_jrnlEnd(capsProblem *problem)
 
 
 int
-caps_jrnlRead(int funID, capsProblem *problem, capsObject *obj, int nargs,
-              capsJrnl *args, CAPSLONG *serial, int *status)
+caps_jrnlRead(int funID, CAPSLONG *chkSum, capsProblem *problem,
+              capsObject *obj, int nargs, capsJrnl *args, CAPSLONG *serial,
+              int *status)
 {
   int       i, j, k, stat;
   char      filename[PATH_MAX], *full;
-  CAPSLONG  sNum0, sNum, objSN;
+  CAPSLONG  sNum0, sNum, objSN, md5[2];
   capsFList *flist;
   size_t    n;
 #ifdef WIN32
@@ -2886,6 +2972,13 @@ caps_jrnlRead(int funID, capsProblem *problem, capsObject *obj, int nargs,
            caps_funID[problem->funID]);
     goto jreadfatal;
   }
+  n = fread(md5,      sizeof(CAPSLONG), 2, problem->jrnl);
+  if (n != 2) goto jreaderr;
+  if ((md5[0] != chkSum[0]) || (md5[1] != chkSum[1])) {
+    printf(" CAPS Fatal: Input chksum mismatch for %s!\n", caps_funID[funID]);
+    goto jreadfatal;
+  }
+  
   n = fread(&sNum0,   sizeof(CAPSLONG), 1, problem->jrnl);
   if (n != 1) goto jreaderr;
   n = fread(status,   sizeof(int),      1, problem->jrnl);
@@ -2899,35 +2992,189 @@ caps_jrnlRead(int funID, capsProblem *problem, capsObject *obj, int nargs,
            caps_funID[funID], *status, ftell(problem->jrnl));
 #endif
   }
-  if (*status >= CAPS_SUCCESS) {
-    n = fread(&objSN, sizeof(CAPSLONG), 1, problem->jrnl);
-    if (n != 1) goto jreaderr;
-    /* cleanup? */
-    if (obj != NULL)
-      if (obj->flist != NULL) {
-        flist = (capsFList *) obj->flist;
-        if (objSN > flist->sNum) caps_freeFList(obj);
-      }
 
-    for (i = 0; i < nargs; i++)
-      switch (args[i].type) {
+  n = fread(&objSN, sizeof(CAPSLONG), 1, problem->jrnl);
+  if (n != 1) goto jreaderr;
+  /* cleanup? */
+  if (obj != NULL)
+    if (obj->flist != NULL) {
+      flist = (capsFList *) obj->flist;
+      if (objSN > flist->sNum) caps_freeFList(obj);
+    }
 
-        case jInteger:
-          n = fread(&args[i].members.integer, sizeof(int), 1, problem->jrnl);
-          if (n != 1) goto jreaderr;
-          break;
+  for (i = 0; i < nargs; i++) {
+    switch (args[i].type) {
 
-        case jDouble:
-          n = fread(&args[i].members.real, sizeof(double), 1, problem->jrnl);
-          if (n != 1) goto jreaderr;
-          break;
+      case jInteger:
+        n = fread(&args[i].members.integer, sizeof(int), 1, problem->jrnl);
+        if (n != 1) goto jreaderr;
+        break;
 
-        case jString:
-          stat = caps_readString(problem->jrnl, &args[i].members.string);
-          if (stat == CAPS_IOERR) goto jreaderr;
+      case jDouble:
+        n = fread(&args[i].members.real, sizeof(double), 1, problem->jrnl);
+        if (n != 1) goto jreaderr;
+        break;
+
+      case jString:
+        stat = caps_readString(problem->jrnl, &args[i].members.string);
+        if (stat == CAPS_IOERR) goto jreaderr;
+        if (stat != CAPS_SUCCESS) {
+          printf(" CAPS Warning: Journal caps_readString = %d!\n", stat);
+          goto jreadfatal;
+        }
+        if (obj != NULL) {
+          flist = (capsFList *) EG_alloc(sizeof(capsFList));
+          if (flist == NULL) {
+            printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
+          } else {
+            flist->type           = jPointer;
+            flist->num            = 1;
+            flist->member.pointer = args[i].members.string;
+            flist->sNum           = objSN;
+            flist->next           = NULL;
+            if (obj->flist != NULL) flist->next = obj->flist;
+            obj->flist            = flist;
+          }
+        }
+        break;
+
+      case jStrings:
+        n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
+        if (n != 1) goto jreaderr;
+        args[i].members.strings = (char **) EG_alloc(args[i].num*
+                                                     sizeof(char *));
+        if (args[i].members.strings == NULL) {
+          printf(" CAPS Warning: Journal strings Malloc Error!\n");
+          goto jreadfatal;
+        }
+        for (j = 0; j < args[i].num; j++) {
+          stat = caps_readString(problem->jrnl, &args[i].members.strings[j]);
           if (stat != CAPS_SUCCESS) {
-            printf(" CAPS Warning: Journal caps_readString = %d!\n", stat);
+            printf(" CAPS Warning: Jrnl %d caps_readString Str = %d!\n",
+                   j, stat);
+            for (k = 0; k < j; k++) EG_free(args[i].members.strings[k]);
+            EG_free(args[i].members.strings);
+            args[i].members.strings = NULL;
+            goto jreaderr;
+          }
+        }
+        if (obj != NULL) {
+          flist = (capsFList *) EG_alloc(sizeof(capsFList));
+          if (flist == NULL) {
+            printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
+          } else {
+            flist->type           = jStrings;
+            flist->num            = args[i].num;
+            flist->member.strings = args[i].members.strings;
+            flist->sNum           = objSN;
+            flist->next           = NULL;
+            if (obj->flist != NULL) flist->next = obj->flist;
+            obj->flist            = flist;
+          }
+        }
+        break;
+
+      case jTuple:
+        n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
+        if (n != 1) goto jreaderr;
+        stat = caps_readTuple(problem->jrnl, args[i].num, NotNull,
+                              &args[i].members.tuple);
+        if (stat != CAPS_SUCCESS) {
+          printf(" CAPS Warning: Journal caps_readTuple = %d!\n", stat);
+          goto jreaderr;
+        }
+        if (obj != NULL) {
+          flist = (capsFList *) EG_alloc(sizeof(capsFList));
+          if (flist == NULL) {
+            printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
+          } else {
+            flist->type         = jTuple;
+            flist->num          = args[i].num;
+            flist->member.tuple = args[i].members.tuple;
+            flist->sNum         = objSN;
+            flist->next         = NULL;
+            if (obj->flist != NULL) flist->next = obj->flist;
+            obj->flist          = flist;
+          }
+        }
+        break;
+
+      case jPointer:
+      case jPtrFree:
+        n = fread(&args[i].length, sizeof(size_t), 1, problem->jrnl);
+        if (n != 1) goto jreaderr;
+        args[i].members.pointer = NULL;
+        if (args[i].length != 0) {
+          args[i].members.pointer = (char *) EG_alloc(args[i].length*
+                                                      sizeof(char));
+          if (args[i].members.pointer == NULL) {
+            printf(" CAPS Warning: Journal Pointer Malloc Error!\n");
             goto jreadfatal;
+          }
+          n = fread(args[i].members.pointer, sizeof(char), args[i].length,
+                    problem->jrnl);
+          if (n != args[i].length) {
+            EG_free(args[i].members.pointer);
+            args[i].members.pointer = NULL;
+            goto jreaderr;
+          }
+          if ((obj != NULL) && (args[i].type == jPointer)) {
+            flist = (capsFList *) EG_alloc(sizeof(capsFList));
+            if (flist == NULL) {
+              printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
+            } else {
+              flist->type           = jPointer;
+              flist->num            = 1;
+              flist->member.pointer = args[i].members.pointer;
+              flist->sNum           = objSN;
+              flist->next           = NULL;
+              if (obj->flist != NULL) flist->next = obj->flist;
+              obj->flist            = flist;
+            }
+          }
+        }
+        break;
+
+      case jObject:
+        stat = caps_readString(problem->jrnl, &full);
+        if (stat != CAPS_SUCCESS) {
+          printf(" CAPS Warning: Jrnl caps_readString Obj = %d!\n", stat);
+          goto jreaderr;
+        }
+        stat = caps_string2obj(problem, full, &args[i].members.obj);
+        EG_free(full);
+        if (stat != CAPS_SUCCESS) {
+          printf(" CAPS Warning: Journal caps_string2obj = %d!\n", stat);
+          goto jreaderr;
+        }
+        break;
+
+      case jObjs:
+        n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
+        if (n != 1) goto jreaderr;
+        if (args[i].num != 0) {
+          args[i].members.objs = (capsObject **) EG_alloc(args[i].num*
+                                                        sizeof(capsObject *));
+          if (args[i].members.objs == NULL) {
+            printf(" CAPS Warning: Journal Objects Malloc Error!\n");
+            goto jreadfatal;
+          }
+          for (j = 0; j < args[i].num; j++) {
+            stat = caps_readString(problem->jrnl, &full);
+            if (stat != CAPS_SUCCESS) {
+              printf(" CAPS Warning: Jrnl caps_readString Obj = %d!\n", stat);
+              EG_free(args[i].members.objs);
+              args[i].members.objs = NULL;
+              goto jreaderr;
+            }
+            stat = caps_string2obj(problem, full, &args[i].members.objs[j]);
+            EG_free(full);
+            if (stat != CAPS_SUCCESS) {
+              printf(" CAPS Warning: Journal caps_string2obj = %d!\n", stat);
+              EG_free(args[i].members.objs);
+              args[i].members.objs = NULL;
+              goto jreaderr;
+            }
           }
           if (obj != NULL) {
             flist = (capsFList *) EG_alloc(sizeof(capsFList));
@@ -2936,32 +3183,61 @@ caps_jrnlRead(int funID, capsProblem *problem, capsObject *obj, int nargs,
             } else {
               flist->type           = jPointer;
               flist->num            = 1;
-              flist->member.pointer = args[i].members.string;
+              flist->member.pointer = args[i].members.objs;
               flist->sNum           = objSN;
               flist->next           = NULL;
               if (obj->flist != NULL) flist->next = obj->flist;
               obj->flist            = flist;
             }
           }
-          break;
+        }
+        break;
 
-        case jStrings:
-          n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
-          if (n != 1) goto jreaderr;
-          args[i].members.strings = (char **) EG_alloc(args[i].num*
-                                                       sizeof(char *));
-          if (args[i].members.strings == NULL) {
-            printf(" CAPS Warning: Journal strings Malloc Error!\n");
+      case jErr:
+        stat = caps_readErrs(problem, &args[i].members.errs);
+        if (stat != CAPS_SUCCESS) {
+          printf(" CAPS Warning: Journal caps_readErrs = %d!\n", stat);
+          goto jreaderr;
+        }
+        break;
+
+      case jOwn:
+        stat = caps_readOwn(problem->jrnl, &args[i].members.own);
+        if (stat != CAPS_SUCCESS) {
+          printf(" CAPS Warning: Journal caps_Own = %d!\n", stat);
+          goto jreaderr;
+        }
+        if (obj != NULL) {
+          flist = (capsFList *) EG_alloc(sizeof(capsFList));
+          if (flist == NULL) {
+            printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
+          } else {
+            flist->type       = jOwn;
+            flist->member.own = args[i].members.own;
+            flist->sNum       = objSN;
+            flist->next       = NULL;
+            if (obj->flist != NULL) flist->next = obj->flist;
+            obj->flist        = flist;
+          }
+        }
+        break;
+
+      case jOwns:
+        n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
+        if (n != 1) goto jreaderr;
+        if (args[i].num != 0) {
+          args[i].members.owns = (capsOwn *) EG_alloc(args[i].num*
+                                                      sizeof(capsOwn));
+          if (args[i].members.owns == NULL) {
+            printf(" CAPS Warning: Journal Owner Malloc Error!\n");
             goto jreadfatal;
           }
           for (j = 0; j < args[i].num; j++) {
-            stat = caps_readString(problem->jrnl, &args[i].members.strings[j]);
+            stat = caps_readOwn(problem->jrnl, &args[i].members.owns[j]);
             if (stat != CAPS_SUCCESS) {
-              printf(" CAPS Warning: Jrnl %d caps_readString Str = %d!\n",
-                     j, stat);
-              for (k = 0; k < j; k++) EG_free(args[i].members.strings[k]);
-              EG_free(args[i].members.strings);
-              args[i].members.strings = NULL;
+              printf(" CAPS Warning: Journal caps_Owns %d = %d!\n", j, stat);
+              EG_free(args[i].members.owns);
+              args[i].members.owns = NULL;
               goto jreaderr;
             }
           }
@@ -2970,24 +3246,35 @@ caps_jrnlRead(int funID, capsProblem *problem, capsObject *obj, int nargs,
             if (flist == NULL) {
               printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
             } else {
-              flist->type           = jStrings;
-              flist->num            = args[i].num;
-              flist->member.strings = args[i].members.strings;
-              flist->sNum           = objSN;
-              flist->next           = NULL;
+              flist->type        = jOwns;
+              flist->num         = args[i].num;
+              flist->member.owns = args[i].members.owns;
+              flist->sNum        = objSN;
+              flist->next        = NULL;
               if (obj->flist != NULL) flist->next = obj->flist;
-              obj->flist            = flist;
+              obj->flist         = flist;
             }
           }
-          break;
+        }
+        break;
 
-        case jTuple:
-          n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
-          if (n != 1) goto jreaderr;
-          stat = caps_readTuple(problem->jrnl, args[i].num, NotNull,
-                                &args[i].members.tuple);
+      case jEgos:
+        args[i].members.model = NULL;
+        n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
+        if (n != 1) goto jreaderr;
+        if (args[i].num != -1) {
+#ifdef WIN32
+          snprintf(filename, PATH_MAX, "%s\\capsRestart\\model%4.4d.egads",
+                   problem->root, args[i].num);
+#else
+          snprintf(filename, PATH_MAX, "%s/capsRestart/model%4.4d.egads",
+                   problem->root, args[i].num);
+#endif
+          stat = EG_loadModel(problem->context, 1, filename,
+                              &args[i].members.model);
           if (stat != CAPS_SUCCESS) {
-            printf(" CAPS Warning: Journal caps_readTuple = %d!\n", stat);
+            printf(" CAPS Warning: EG_loadModel = %d (caps_jrnlRead)!\n",
+                   stat);
             goto jreaderr;
           }
           if (obj != NULL) {
@@ -2995,212 +3282,18 @@ caps_jrnlRead(int funID, capsProblem *problem, capsObject *obj, int nargs,
             if (flist == NULL) {
               printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
             } else {
-              flist->type         = jTuple;
+              flist->type         = jEgos;
               flist->num          = args[i].num;
-              flist->member.tuple = args[i].members.tuple;
+              flist->member.model = args[i].members.model;
               flist->sNum         = objSN;
               flist->next         = NULL;
               if (obj->flist != NULL) flist->next = obj->flist;
               obj->flist          = flist;
             }
           }
-          break;
+        }
 
-        case jPointer:
-        case jPtrFree:
-          n = fread(&args[i].length, sizeof(size_t), 1, problem->jrnl);
-          if (n != 1) goto jreaderr;
-          args[i].members.pointer = NULL;
-          if (args[i].length != 0) {
-            args[i].members.pointer = (char *) EG_alloc(args[i].length*
-                                                        sizeof(char));
-            if (args[i].members.pointer == NULL) {
-              printf(" CAPS Warning: Journal Pointer Malloc Error!\n");
-              goto jreadfatal;
-            }
-            n = fread(args[i].members.pointer, sizeof(char), args[i].length,
-                      problem->jrnl);
-            if (n != args[i].length) {
-              EG_free(args[i].members.pointer);
-              args[i].members.pointer = NULL;
-              goto jreaderr;
-            }
-            if ((obj != NULL) && (args[i].type == jPointer)) {
-              flist = (capsFList *) EG_alloc(sizeof(capsFList));
-              if (flist == NULL) {
-                printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
-              } else {
-                flist->type           = jPointer;
-                flist->num            = 1;
-                flist->member.pointer = args[i].members.pointer;
-                flist->sNum           = objSN;
-                flist->next           = NULL;
-                if (obj->flist != NULL) flist->next = obj->flist;
-                obj->flist            = flist;
-              }
-            }
-          }
-          break;
-
-        case jObject:
-          stat = caps_readString(problem->jrnl, &full);
-          if (stat != CAPS_SUCCESS) {
-            printf(" CAPS Warning: Jrnl caps_readString Obj = %d!\n", stat);
-            goto jreaderr;
-          }
-          stat = caps_string2obj(problem, full, &args[i].members.obj);
-          EG_free(full);
-          if (stat != CAPS_SUCCESS) {
-            printf(" CAPS Warning: Journal caps_string2obj = %d!\n", stat);
-            goto jreaderr;
-          }
-          break;
-
-        case jObjs:
-          n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
-          if (n != 1) goto jreaderr;
-          if (args[i].num != 0) {
-            args[i].members.objs = (capsObject **) EG_alloc(args[i].num*
-                                                          sizeof(capsObject *));
-            if (args[i].members.objs == NULL) {
-              printf(" CAPS Warning: Journal Objects Malloc Error!\n");
-              goto jreadfatal;
-            }
-            for (j = 0; j < args[i].num; j++) {
-              stat = caps_readString(problem->jrnl, &full);
-              if (stat != CAPS_SUCCESS) {
-                printf(" CAPS Warning: Jrnl caps_readString Obj = %d!\n", stat);
-                EG_free(args[i].members.objs);
-                args[i].members.objs = NULL;
-                goto jreaderr;
-              }
-              stat = caps_string2obj(problem, full, &args[i].members.objs[j]);
-              EG_free(full);
-              if (stat != CAPS_SUCCESS) {
-                printf(" CAPS Warning: Journal caps_string2obj = %d!\n", stat);
-                EG_free(args[i].members.objs);
-                args[i].members.objs = NULL;
-                goto jreaderr;
-              }
-            }
-            if (obj != NULL) {
-              flist = (capsFList *) EG_alloc(sizeof(capsFList));
-              if (flist == NULL) {
-                printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
-              } else {
-                flist->type           = jPointer;
-                flist->num            = 1;
-                flist->member.pointer = args[i].members.objs;
-                flist->sNum           = objSN;
-                flist->next           = NULL;
-                if (obj->flist != NULL) flist->next = obj->flist;
-                obj->flist            = flist;
-              }
-            }
-          }
-          break;
-
-        case jErr:
-          stat = caps_readErrs(problem, &args[i].members.errs);
-          if (stat != CAPS_SUCCESS) {
-            printf(" CAPS Warning: Journal caps_readErrs = %d!\n", stat);
-            goto jreaderr;
-          }
-          break;
-
-        case jOwn:
-          stat = caps_readOwn(problem->jrnl, &args[i].members.own);
-          if (stat != CAPS_SUCCESS) {
-            printf(" CAPS Warning: Journal caps_Own = %d!\n", stat);
-            goto jreaderr;
-          }
-          if (obj != NULL) {
-            flist = (capsFList *) EG_alloc(sizeof(capsFList));
-            if (flist == NULL) {
-              printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
-            } else {
-              flist->type       = jOwn;
-              flist->member.own = args[i].members.own;
-              flist->sNum       = objSN;
-              flist->next       = NULL;
-              if (obj->flist != NULL) flist->next = obj->flist;
-              obj->flist        = flist;
-            }
-          }
-          break;
-
-        case jOwns:
-          n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
-          if (n != 1) goto jreaderr;
-          if (args[i].num != 0) {
-            args[i].members.owns = (capsOwn *) EG_alloc(args[i].num*
-                                                        sizeof(capsOwn));
-            if (args[i].members.owns == NULL) {
-              printf(" CAPS Warning: Journal Owner Malloc Error!\n");
-              goto jreadfatal;
-            }
-            for (j = 0; j < args[i].num; j++) {
-              stat = caps_readOwn(problem->jrnl, &args[i].members.owns[j]);
-              if (stat != CAPS_SUCCESS) {
-                printf(" CAPS Warning: Journal caps_Owns %d = %d!\n", j, stat);
-                EG_free(args[i].members.owns);
-                args[i].members.owns = NULL;
-                goto jreaderr;
-              }
-            }
-            if (obj != NULL) {
-              flist = (capsFList *) EG_alloc(sizeof(capsFList));
-              if (flist == NULL) {
-                printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
-              } else {
-                flist->type        = jOwns;
-                flist->num         = args[i].num;
-                flist->member.owns = args[i].members.owns;
-                flist->sNum        = objSN;
-                flist->next        = NULL;
-                if (obj->flist != NULL) flist->next = obj->flist;
-                obj->flist         = flist;
-              }
-            }
-          }
-          break;
-
-        case jEgos:
-          args[i].members.model = NULL;
-          n = fread(&args[i].num, sizeof(int), 1, problem->jrnl);
-          if (n != 1) goto jreaderr;
-          if (args[i].num != -1) {
-#ifdef WIN32
-            snprintf(filename, PATH_MAX, "%s\\capsRestart\\model%4.4d.egads",
-                     problem->root, args[i].num);
-#else
-            snprintf(filename, PATH_MAX, "%s/capsRestart/model%4.4d.egads",
-                     problem->root, args[i].num);
-#endif
-            stat = EG_loadModel(problem->context, 1, filename,
-                                &args[i].members.model);
-            if (stat != CAPS_SUCCESS) {
-              printf(" CAPS Warning: EG_loadModel = %d (caps_jrnlRead)!\n",
-                     stat);
-              goto jreaderr;
-            }
-            if (obj != NULL) {
-              flist = (capsFList *) EG_alloc(sizeof(capsFList));
-              if (flist == NULL) {
-                printf(" CAPS Warning: Cannot Allocate Journal Free List!\n");
-              } else {
-                flist->type         = jEgos;
-                flist->num          = args[i].num;
-                flist->member.model = args[i].members.model;
-                flist->sNum         = objSN;
-                flist->next         = NULL;
-                if (obj->flist != NULL) flist->next = obj->flist;
-                obj->flist          = flist;
-              }
-            }
-          }
-
-      }
+    }
   }
 
   n = fread(&sNum,  sizeof(CAPSLONG), 1, problem->jrnl);
@@ -3962,6 +4055,7 @@ caps_readAnalysis(capsProblem *problem, capsObject *aobject)
       value->index           = j+1;
       value->lfixed          = value->sfixed = Fixed;
       value->nullVal         = NotAllowed;
+      value->lims            = NULL;
       value->units           = NULL;
       value->meshWriter      = NULL;
       value->link            = NULL;
@@ -4205,6 +4299,7 @@ caps_readState(capsObject *pobject)
             value[j].index           = j+1;
             value[j].lfixed          = value[j].sfixed = Fixed;
             value[j].nullVal         = NotAllowed;
+            value[j].lims            = NULL;
             value[j].units           = NULL;
             value[j].meshWriter      = NULL;
             value[j].link            = NULL;
@@ -4258,6 +4353,7 @@ caps_readState(capsObject *pobject)
             value[j].index           = j+1;
             value[j].lfixed          = value[j].sfixed = Fixed;
             value[j].nullVal         = NotAllowed;
+            value[j].lims            = NULL;
             value[j].units           = NULL;
             value[j].meshWriter      = NULL;
             value[j].link            = NULL;
@@ -4419,6 +4515,7 @@ caps_readState(capsObject *pobject)
       value[i].pIndex          = 0;
       value[i].lfixed          = value[i].sfixed = Fixed;
       value[i].nullVal         = NotAllowed;
+      value[i].lims            = NULL;
       value[i].units           = NULL;
       value[i].meshWriter      = NULL;
       value[i].link            = NULL;
@@ -4465,6 +4562,7 @@ caps_readState(capsObject *pobject)
       value[i].pIndex          = 0;
       value[i].lfixed          = value[i].sfixed = Change;
       value[i].nullVal         = IsNull;
+      value[i].lims            = NULL;
       value[i].units           = NULL;
       value[i].meshWriter      = NULL;
       value[i].link            = NULL;
@@ -5779,7 +5877,7 @@ caps_phaseCSMreload(capsObject *object, const char *fname, int *nErr,
   int          nrow, ncol, type, npts, state;
   char         filename[PATH_MAX], current[PATH_MAX], temp[PATH_MAX], *env;
   char         name[MAX_NAME_LEN], *units;
-  double       dot, lower, upper, real, *reals;
+  double       dot, lower, upper, real, *reals, *rlims;
   void         *modl;
   ego          body;
   capsObject   *objs, *link, **geomIn = NULL, **geomOut = NULL;
@@ -5883,6 +5981,7 @@ caps_phaseCSMreload(capsObject *object, const char *fname, int *nErr,
       value[i].pIndex          = j+1;
       value[i].lfixed          = value[i].sfixed = Fixed;
       value[i].nullVal         = NotAllowed;
+      value[i].lims            = NULL;
       value[i].units           = NULL;
       value[i].meshWriter      = NULL;
       value[i].link            = NULL;
@@ -5974,6 +6073,9 @@ caps_phaseCSMreload(capsObject *object, const char *fname, int *nErr,
           value[i].limits.dlims[0] = lower;
           value[i].limits.dlims[1] = upper;
         }
+        status = caps_perElementBnds(modl, &value[i]);
+        if (status != CAPS_SUCCESS)
+          printf(" CAPS Warning: perElementBnds = %d (caps_open)!\n", status);
       } else {
         /* found the variable -- update the value */
         state = 0;
@@ -5987,11 +6089,19 @@ caps_phaseCSMreload(capsObject *object, const char *fname, int *nErr,
         if (value[i].length > 1) {
           value[i].vals.reals = val->vals.reals;
           val->vals.reals = NULL;
+          if (val->lims != NULL) {
+            value[i].lims = val->lims;
+            val->lims = NULL;
+          }
           reals = value[i].vals.reals;
+          rlims = value[i].lims;
         } else {
-          value[i].vals.real  = val->vals.real;
+          value[i].vals.real = val->vals.real;
           reals = &value[i].vals.real;
+          rlims = NULL;
         }
+        value[i].limits.dlims[0] = val->limits.dlims[0];
+        value[i].limits.dlims[1] = val->limits.dlims[1];
         if (type != OCSM_CONPMTR) {
           /* flip storage
           for (m = j = 0; j < value[i].ncol; j++)
@@ -6020,7 +6130,7 @@ caps_phaseCSMreload(capsObject *object, const char *fname, int *nErr,
               }
               status = ocsmSetValuD(modl, value[i].pIndex, k+1, j+1, reals[m]);
               if (status != SUCCESS) {
-                snprintf(temp, PATH_MAX, "%d ocsmSetValuD[%d,%d] fails with %d!",
+                snprintf(temp, PATH_MAX, "%d OcsmSetValuD[%d,%d] fails with %d!",
                          value->pIndex, k+1, j+1, status);
                 caps_makeSimpleErr(NULL, CERROR, temp, NULL, NULL, errors);
                 if (*errors != NULL) *nErr = (*errors)->nError;
@@ -6034,7 +6144,31 @@ caps_phaseCSMreload(capsObject *object, const char *fname, int *nErr,
 /*@+kepttrans@*/
                 return status;
               }
+              if (type == OCSM_DESPMTR) {
+                if (rlims == NULL) {
+                  if (value[i].limits.dlims[0] == value[i].limits.dlims[1]) {
+                    status = ocsmSetBnds(modl, value[i].pIndex, k+1, j+1,
+                                         -HUGEQ, HUGEQ);
+                  } else {
+                    status = ocsmSetBnds(modl, value[i].pIndex, k+1, j+1,
+                                         value[i].limits.dlims[0],
+                                         value[i].limits.dlims[1]);
+                  }
+                } else {
+                  if (rlims[2*m  ] == rlims[2*m+1]) {
+                    status = ocsmSetBnds(modl, value[i].pIndex, k+1, j+1,
+                                         -HUGEQ, HUGEQ);
+                  } else {
+                    status = ocsmSetBnds(modl, value[i].pIndex, k+1, j+1,
+                                         rlims[2*m  ], rlims[2*m+1]);
+                  }
+                }
+                if (status != SUCCESS)
+                  printf(" CAPS Warning: %d OcsmSetBnds[%d,%d] fails with %d!\n",
+                         value->pIndex, k+1, j+1, status);
+              }
             }
+          
           if (state == 1) {
             problem->desPmtr[problem->nDesPmtr] = value[i].pIndex;
             problem->nDesPmtr += 1;
@@ -6096,6 +6230,7 @@ caps_phaseCSMreload(capsObject *object, const char *fname, int *nErr,
       value[i].pIndex          = j+1;
       value[i].lfixed          = value[i].sfixed = Change;
       value[i].nullVal         = IsNull;
+      value[i].lims            = NULL;
       value[i].units           = NULL;
       value[i].meshWriter      = NULL;
       value[i].link            = NULL;
@@ -6605,7 +6740,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
   char          filename[PATH_MAX], temp[PATH_MAX], **tmp, line[129];
   short         datim[6];
   CAPSLONG      fileLen, ret;
-  double        dot, lower, upper, data[4], *reals;
+  double        dot, lower, upper, data[4], *reals, *rlims;
   ego           model, ref, *childs;
   capsObject    *object, *objs;
   capsProblem   *problem;
@@ -7244,6 +7379,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
   problem->outLevel       = outLevel;
   problem->funID          = CAPS_OPEN;
   problem->modl           = NULL;
+  problem->DTime          = 0.0;
   problem->iPhrase        = -1;
   problem->nPhrase        = 0;
   problem->phrases        = NULL;
@@ -7417,13 +7553,14 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
             return CAPS_MISMATCH;
           }
           if (type != OCSM_CONPMTR) {
+            rlims = (double *) value->lims;
             /* flip storage
             for (n = j = 0; j < ncol; j++)
               for (k = 0; k < nrow; k++, n++) {  */
             for (n = k = 0; k < nrow; k++)
               for (j = 0; j < ncol; j++, n++) {
-                status = ocsmSetValuD(problem->modl, value->pIndex,
-                                      k+1, j+1, reals[n]);
+                status = ocsmSetValuD(problem->modl, value->pIndex, k+1, j+1,
+                                      reals[n]);
                 if (status != SUCCESS) {
                   snprintf(temp, PATH_MAX, "%d ocsmSetValuD[%d,%d] fails with %d!",
                            value->pIndex, k+1, j+1, status);
@@ -7431,6 +7568,29 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
                   if (*errors != NULL) *nErr = (*errors)->nError;
                   caps_close(object, close, NULL);
                   return status;
+                }
+                if (type == OCSM_DESPMTR) {
+                  if (rlims == NULL) {
+                    if (value->limits.dlims[0] == value->limits.dlims[1]) {
+                      status = ocsmSetBnds(problem->modl, value->pIndex, k+1, j+1,
+                                           -HUGEQ, HUGEQ);
+                    } else {
+                      status = ocsmSetBnds(problem->modl, value->pIndex, k+1, j+1,
+                                           value->limits.dlims[0],
+                                           value->limits.dlims[1]);
+                    }
+                  } else {
+                    if (rlims[2*n  ] == rlims[2*n+1]) {
+                      status = ocsmSetBnds(problem->modl, value->pIndex, k+1, j+1,
+                                           -HUGEQ, HUGEQ);
+                    } else {
+                      status = ocsmSetBnds(problem->modl, value->pIndex, k+1, j+1,
+                                           rlims[2*n  ], rlims[2*n+1]);
+                    }
+                  }
+                  if (status != SUCCESS)
+                    printf(" CAPS Warning: %d ocsmSetBnds[%d,%d] fails with %d!\n",
+                           value->pIndex, k+1, j+1, status);
                 }
               }
           }
@@ -7796,6 +7956,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
         value[i].pIndex          = j+1;
         value[i].lfixed          = value[i].sfixed = Fixed;
         value[i].nullVal         = NotAllowed;
+        value[i].lims            = NULL;
         value[i].units           = NULL;
         value[i].meshWriter      = NULL;
         value[i].link            = NULL;
@@ -7872,6 +8033,9 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
           value[i].limits.dlims[0] = lower;
           value[i].limits.dlims[1] = upper;
         }
+        status = caps_perElementBnds(problem->modl, &value[i]);
+        if (status != CAPS_SUCCESS)
+          printf(" CAPS Warning: perElementBnds = %d (caps_open)!\n", status);
       }
     }
 
@@ -7902,6 +8066,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
         value[i].pIndex          = j+1;
         value[i].lfixed          = value[i].sfixed = Change;
         value[i].nullVal         = IsNull;
+        value[i].lims            = NULL;
         value[i].units           = NULL;
         value[i].meshWriter      = NULL;
         value[i].link            = NULL;
@@ -8003,6 +8168,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
         if (strncmp(aname, "_outpmtr_", 9) == 0) ngOut++;
         if (strncmp(aname, "_despmtr_", 9) == 0) ngIn++;
         if (strncmp(aname, "_cfgpmtr_", 9) == 0) ngIn++;
+        if (strncmp(aname, "_conpmtr_", 9) == 0) ngIn++;
       }
 
       /* allocate the objects for the geometry inputs */
@@ -8024,7 +8190,8 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
           if (status != EGADS_SUCCESS) continue;
           if (type   != ATTRREAL)      continue;
           if ((strncmp(aname, "_despmtr_", 9) != 0) &&
-              (strncmp(aname, "_cfgpmtr_", 9) != 0)) continue;
+              (strncmp(aname, "_cfgpmtr_", 9) != 0) &&
+              (strncmp(aname, "_conpmtr_", 9) != 0)) continue;
           value[i].nrow             = len;
           value[i].ncol             = 1;
           value[i].type             = Double;
@@ -8032,6 +8199,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
           value[i].index            = value[i].pIndex = j+1;
           value[i].lfixed           = value[i].sfixed = Fixed;
           value[i].nullVal          = NotAllowed;
+          value[i].lims             = NULL;
           value[i].units            = NULL;
           value[i].meshWriter       = NULL;
           value[i].link             = NULL;
@@ -8039,6 +8207,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
           value[i].limits.dlims[0]  = value[i].limits.dlims[1] = 0.0;
           value[i].linkMethod       = Copy;
           value[i].gInType          = (strncmp(aname, "_cfgpmtr_", 9) == 0) ? 1 : 0;
+          value[i].gInType          = (strncmp(aname, "_conpmtr_", 9) == 0) ? 2 : value[i].gInType;
           value[i].partial          = NULL;
           value[i].nderiv           = 0;
           value[i].derivs           = NULL;
@@ -8110,6 +8279,7 @@ caps_open(const char *prPath, /*@null@*/ const char *phName, int flag,
           value[i].index            = value[i].pIndex = j+1;
           value[i].lfixed           = value[i].sfixed = Fixed;
           value[i].nullVal          = NotAllowed;
+          value[i].lims             = NULL;
           value[i].units            = NULL;
           value[i].meshWriter       = NULL;
           value[i].link             = NULL;
@@ -8665,8 +8835,8 @@ caps_intentPhrase(capsObject *pobject, int nLines, /*@null@*/const char **lines)
 {
   int         stat, ret;
   capsProblem *problem;
-  CAPSLONG    sNum;
-  capsJrnl    args[1];     /* not really used */
+  CAPSLONG    sNum, md5[2];
+  capsJrnl    args[1];
 
   if (pobject == NULL)                   return CAPS_NULLOBJ;
   if (pobject->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
@@ -8674,8 +8844,13 @@ caps_intentPhrase(capsObject *pobject, int nLines, /*@null@*/const char **lines)
   if (pobject->blind == NULL)            return CAPS_NULLBLIND;
   problem = (capsProblem *) pobject->blind;
   
-  args[0].type = jString;
-  stat         = caps_jrnlRead(CAPS_INTENTPHRASE, problem, pobject, 0, args,
+  args[0].type            = jStrings;
+  args[0].num             = nLines;
+  args[0].members.strings = (char **) lines;
+  stat = capsInputSum(1, args, md5);
+  if (stat != CAPS_SUCCESS) return stat;
+
+  stat = caps_jrnlRead(CAPS_INTENTPHRASE, md5, problem, pobject, 0, args,
                                &sNum, &ret);
   if (stat == CAPS_JOURNALERR) return stat;
   if (stat == CAPS_JOURNAL)    return ret;
@@ -8691,7 +8866,7 @@ caps_intentPhrase(capsObject *pobject, int nLines, /*@null@*/const char **lines)
              stat);
   }
   
-  caps_jrnlWrite(CAPS_INTENTPHRASE, problem, pobject, ret, 0, args, sNum,
+  caps_jrnlWrite(CAPS_INTENTPHRASE, md5, problem, pobject, ret, 0, args, sNum,
                  problem->sNum);
   
   return ret;

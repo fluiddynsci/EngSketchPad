@@ -34,8 +34,6 @@
 #include <math.h>
 #include <assert.h>
 
-#include "egads.h"
-#include "common.h"
 #include "OpenCSM.h"
 #include "caps.h"
 #include "tim.h"
@@ -939,7 +937,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
             addToResponse(entry, response, &max_resp_len, &response_len);
         }
 
-        /* unset caps_debug mode */
+        /* unset caps debug mode */
         status = caps_debug(capsMode->projObj);
         assert(status == 0);
 
@@ -1451,7 +1449,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
         FREE(brchUsed);
         FREE(revUsed );
 
-        /* unset caps_debug mode */
+        /* unset caps debug mode */
         status = caps_debug(capsMode->projObj);
         assert(status == 0);
 
@@ -1518,7 +1516,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
             addToResponse("  <none>\n", response, &max_resp_len, &response_len);
         }
 
-        /* unset caps_debug mode */
+        /* unset caps debug mode */
         status = caps_debug(capsMode->projObj);
         assert(status == 0);
 
@@ -1579,7 +1577,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
             addToResponse("  <none>\n", response, &max_resp_len, &response_len);
         }
 
-        /* unset caps_debug mode */
+        /* unset caps debug mode */
         status = caps_debug(capsMode->projObj);
         assert(status == 0);
 
@@ -1722,7 +1720,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
             }
         }
 
-        /* unset caps_debug mode */
+        /* unset caps debug mode */
         status = caps_debug(capsMode->projObj);
         assert(status == 0);
 

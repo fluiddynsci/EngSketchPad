@@ -78,8 +78,8 @@ for boundName in boundNames:
     astrosVset = bound.vertexSet.create(astros)
 
     # Create displacement data sets
-    su2_Displacement    = su2Vset.dataSet.create("Displacement", pyCAPS.fType.FieldIn)
-    astros_Displacement = astrosVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+    su2_Displacement    = su2Vset.dataSet.create("Displacement")
+    astros_Displacement = astrosVset.dataSet.create("Displacement")
 
     # Link the data set
     su2_Displacement.link(astros_Displacement, "Interpolate")

@@ -33,8 +33,6 @@
 #include <string.h>
 #include <math.h>
 
-#include "egads.h"
-#include "common.h"
 #include "OpenCSM.h"
 #include "caps.h"
 #include "tim.h"

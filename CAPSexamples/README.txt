@@ -1,27 +1,27 @@
                  CAPS: Computational Aircraft Prototype Syntheses
-                              Rev 1.15 -- May 2019
+                           Rev 1.21 -- January 2022
                                    Examples
                                 
 
 1. Prerequisites
 
-    All the examples assume that the appropriate executables can be invoked 
-    via a system call (i.e. they are in the PATH environment variable). The 
-    one exception is the Astros examples, which use use the environment 
-    variable ASTROS_ROOT (set to the path where the Astros executable can 
-    be found). The analysis tools xfoil and avl are provided with the 
-    distribution, and all other software must be obtained elsewhere.
+    All the examples assume that the appropriate executables
+    can be invoked via a system call (i.e. they are in the PATH
+    environment variable). The one exception is the Astros
+    examples, which use use the environment variable ASTROS_ROOT 
+    (set to the path where Astros can be found) to locate Astros.
+    The analysis tools xfoil and avl are provided with the distribution,
+    and all other analysis software must be obtained elsewhere.
     
     The examples are provided in the cCAPS and pyCAPS sub-directories.
     File names indicate the analysis tools executed within the example.
     
     The bash scripts regressionTest/execute_CTestRegression.sh and
-    regressionTest/execute_PyTestRegression.sh can be used to test the 
-    CAPS installation on OSX and Linux. Only examples where the analysis 
-    software is found in the path are executed. These scripts must be 
-    executed from within the regressionTest directory.
-
-
+    regressionTest/execute_PyTestRegression.sh can be used to test
+    the CAPS installation on OSX and Linux. Only examples where 
+    the analysis software is found in the path are executed. 
+    The scripts must be executed in the regressionTest directory.
+    
 2.  C-code examples
 
     2.1 Low Fidelity CFD
@@ -39,7 +39,6 @@
 
     2.5 Aeroelastic data transfer
         aeroelasticSimple_Iterative_SU2_and_MystranTest - Iterative aeroelastic
-
 
 3.  pyCAPS examples
 
@@ -102,4 +101,3 @@
         aeroelasticSimple_Iterative_*    - Iterative data transfer between CFD and FEA
                                          
         aeroelastic_Iterative_*          - Iterative data transfer between CFD and FEA
-

@@ -28,7 +28,7 @@ myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript, 
                            outLevel=args.outLevel)
 
-# Load AFLR4 aim
+# Load pointwise aim
 pointwise = myProblem.analysis.create(aim = "pointwiseAIM", name = "pointwise")
 
 # Set project name so a mesh file is generated

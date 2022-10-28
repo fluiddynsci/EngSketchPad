@@ -2107,7 +2107,7 @@ static char * _getElementTypeIdentifier(int elementType, int elementSubType) {
 }
 
 // Write design variable/optimization information from a feaDesignVariable structure
-int nastran_writeDesignVariableCard(FILE *fp, const feaDesignVariableStruct *feaDesignVariable, const feaFileFormatStruct *feaFileFormat) {
+int nastran_writeDesignVariableCard(void *aimInfo, FILE *fp, const feaDesignVariableStruct *feaDesignVariable, const feaFileFormatStruct *feaFileFormat) {
 
     // int  i;
 
@@ -2145,7 +2145,7 @@ int nastran_writeDesignVariableCard(FILE *fp, const feaDesignVariableStruct *fea
         ddval, // ddval
         feaFileFormat->fileType
     );
-    if (status != CAPS_SUCCESS) return status;
+    AIM_STATUS(aimInfo, status);
 
     if (ddval != NULL) {
 
@@ -2157,7 +2157,7 @@ int nastran_writeDesignVariableCard(FILE *fp, const feaDesignVariableStruct *fea
             feaDesignVariable->discreteValue, // dval
             feaFileFormat->fileType
         );
-        if (status != CAPS_SUCCESS) return status;
+        AIM_STATUS(aimInfo, status);
     }
 
     if (feaDesignVariable->numIndependVariable > 0) {
@@ -2175,10 +2175,11 @@ int nastran_writeDesignVariableCard(FILE *fp, const feaDesignVariableStruct *fea
             feaDesignVariable->independVariableWeight, // c
             feaFileFormat->fileType
         );
-        if (status != CAPS_SUCCESS) return status;
+        AIM_STATUS(aimInfo, status);
     }
 
-    return CAPS_SUCCESS;
+cleanup:
+    return status;
 }
 
 // Write design variable relation information from a feaDesignVariableRelation structure

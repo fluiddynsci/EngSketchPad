@@ -132,7 +132,7 @@ if args.plotFunctional:
         lns2 = ax2.plot(cambers, CD_camber, 's-', label = r"$\partial C_D/\partial \mathrm{camber}$", color='red')
 
         # Plot plot the FD derivative
-        lns3 = ax2.plot(cambers[1:-1], dCD_camber, '.--', label = r"$\Delta C_D/\Delta \mathrm{camber}$", color='orange')
+        lns3 = ax2.plot(cambers[1:-1], dCD_camber, '.--', label = r"$\Delta C_D/\Delta \mathrm{camber}$", color='black')
 
         ax2.axhline(0., linewidth=1, linestyle=":", color='r')
         #ax2.axvline(0., linewidth=1, linestyle=":", color='k')

@@ -2092,6 +2092,11 @@ var wvServerMessage = function (text) {
 //            postMessage(text);
         }
 
+    // if it starts with "timMesg|" and contains "|ERROR::", post the error
+    } else if (text.substring(0,8) == "timMesg|" && text.indexOf("|ERROR::") > 0) {
+
+        alert(text.substring(text.indexOf("|ERROR::")+1));
+
     // if it starts with "timMesg|" pass to curTool or postMessage
     } else if (text.substring(0,8) == "timMesg|") {
         if (wv.overlay !== undefined && wv.overlay.timMesgCB !== undefined) {
@@ -2292,14 +2297,8 @@ var wvServerMessage = function (text) {
         // post the editorForm
         changeMode(7);
 
-    // if it starts with "setCsmFileBeg|" do nothing
-    } else if (text.substring(0,14) == "setCsmFileBeg|") {
-
-    // if it starts with "setCsmFileMid|" do nothing
-    } else if (text.substring(0,14) == "setCsmFileMid|") {
-
-    // if it starts with "setCsmFileEnd|" do nothing
-    } else if (text.substring(0,14) == "setCsmFileEnd|") {
+    // if it starts with "setCsmFile|" do nothing
+    } else if (text.substring(0,11) == "setCsmFile|") {
 
     // if it starts with "setWvKey|" turn key or logo on
     } else if (text.substring(0,9) == "setWvKey|") {
@@ -2531,6 +2530,21 @@ var wvServerMessage = function (text) {
         button.style.backgroundColor = "#FF3F3F";
 
         changeMode(0);
+
+    // if it starts with "updateSolveBtn|" update the solve button
+    } else if (text.substring(0,15) == "updateSolveBtn|") {
+        var textList = text.split("|");
+
+        var button = document.getElementById("solveButton");
+
+        if        (textList[1] == "0") {                    // needs to be built
+            button.style.backgroundColor = "#3FFF3F";
+        } else if (textList[1] == "1") {                    // building
+            button.style.backgroundColor = "#FFFF3F";
+        } else {
+            button.style.backgroundColor = null;            // done
+        }
+        button["innerHTML"] = textList[2];
 
     // if it starts with "message|" post the message
     } else if (text.substring(0,8) == "message|") {
@@ -3163,15 +3177,6 @@ var editorOk = function () {
 //$$$        return;
     }
 
-    // because of an apparent limit on the size of text
-    //    messages that can be sent from the browser to the
-    //    server, we need to send the new file back in
-    //    pieces and then reassemble on the server
-    var maxMessageSize = 800;
-
-    var ichar    = 0;
-    var part     = newFile.substring(ichar, ichar+maxMessageSize);
-
     if (wv.fileindx < 0) {
         var myFilename = wv.filenames;
     } else {
@@ -3179,16 +3184,7 @@ var editorOk = function () {
         var myFilename = filelist[wv.fileindx];
     }
 
-    browserToServer("setCsmFileBeg|"+myFilename+"|"+part);
-    ichar += maxMessageSize;
-
-    while (ichar < newFile.length) {
-        part = newFile.substring(ichar, ichar+maxMessageSize);
-        browserToServer("setCsmFileMid|"+part);
-        ichar += maxMessageSize;
-    }
-
-    browserToServer("setCsmFileEnd|");
+    browserToServer("setCsmFile|"+myFilename+"|"+newFile+"|");
 
     if (wv.server != "serveCAPS") {
         postMessage("'"+myFilename+"' file has been changed.");
@@ -3329,12 +3325,12 @@ var cmdTool = function () {
         button.onclick = ereped.launch;
         menu.appendChild(button);
 
-//        button = document.createElement("input");
-//        button.type    = "button";
-//        button.title   = "Launch Gloves";
-//        button.value   = "Gloves";
-//        button.onclick = gloves.launch;
-//        menu.appendChild(button);
+        button = document.createElement("input");
+        button.type    = "button";
+        button.title   = "Launch Gloves";
+        button.value   = "Gloves";
+        button.onclick = gloves.launch;
+        menu.appendChild(button);
 
         button = document.createElement("input");
         button.type    = "button";
@@ -9178,9 +9174,6 @@ var setupEditBrchForm = function () {
     } else if (type == "cirarc") {
         argList  = ["xon", "yon", "zon", "xend", "yend", "zend"];
         defValue = ["",    "",    "",    "",     "",     ""    ];
-    } else if (type == "combine") {
-        argList  = ["toler"];
-        defValue = ["0"    ];
     } else if (type == "cone") {
         argList  = ["xvrtx", "yvrtx", "zvrtx", "xbase", "ybase", "zbase", "radius"];
         defValue = ["",      "",      "",      "",      "",      "",      ""      ];
@@ -9198,6 +9191,9 @@ var setupEditBrchForm = function () {
     } else if (type == "dump") {
         argList  = ["$filename", "remove", "tomark"];
         defValue = ["",          "0",      "0"     ];
+    } else if (type == "elevate") {
+        argList  = ["toler"];
+        defValue = ["0"    ];
     } else if (type == "else") {
         argList  = [];
         defValue = [];
@@ -9871,7 +9867,39 @@ var browserToServer = function (text) {
         console.log("("+date.toTimeString().substring(0,8)+") browser-->server: "+text.substring(0,40));
     }
 
-    wv.socketUt.send(text);
+//    wv.socketUt.send(text);
+
+    // because to a limit on the size of messages that can be sent
+    //   from te browser to the server, send the message in
+    //   chunks of chunkSize or less
+    var firstChar = 0;
+    var lastChar  = text.length - 1;
+    var chunkSize = 4000;
+    var chunkNum  = 1;
+    var prolog    = "";
+    var epilog    = "";
+
+    // send chunks if not the last
+    while (lastChar > firstChar+chunkSize) {
+        if (chunkNum.toString().length == 1) {
+            epilog = "#!00" + chunkNum + "!#";
+        } else if (chunkNum.toString().length == 2) {
+            epilog = "#!0"  + chunkNum + "!#";
+        } else {
+            epilog = "#!"   + chunkNum + "!#";
+        }
+
+        wv.socketUt.send(prolog + text.substring(firstChar, firstChar+chunkSize) + epilog);
+
+        firstChar += chunkSize;
+        chunkNum  ++;
+        prolog     = epilog;
+    }
+
+    // send the last chunk
+    if (lastChar > firstChar) {
+        wv.socketUt.send(prolog + text.substring(firstChar));
+    }
 };
 
 
@@ -10293,8 +10321,6 @@ var cmdEditHint = function () {
         hintText =        "hint:: CHAMFER   radius edgeList=0 listStyle=0";
     } else if (curLine.match(/^\s*cirarc/i) !== null) {
         hintText =        "hint:: CIRARC    xon yon zon xend yend zend";
-    } else if (curLine.match(/^\s*combine/i) !== null) {
-        hintText =        "hint:: COMBINE   toler=0";
     } else if (curLine.match(/^\s*cone/i) !== null) {
         hintText =        "hint:: CONE      xvrtx yvrtx zvrtx xbase ybase zbase radius";
     } else if (curLine.match(/^\s*connect/i) !== null) {
@@ -10311,6 +10337,8 @@ var cmdEditHint = function () {
         hintText =        "hint:: DIMENSION $pmtrName nrow ncol despmtr=0";
     } else if (curLine.match(/^\s*dump/i) !== null) {
         hintText =        "hint:: DUMP      $filename remove=0 toMark=0 withTess=0";
+    } else if (curLine.match(/^\s*elevate/i) !== null) {
+        hintText =        "hint:: ELEVATE toler=0";
     } else if (curLine.match(/^\s*elseif/i) !== null) {
         hintText =        "hint:: ELSEIF    val1 $op1 val2 $op2=and val3=0 $op3=eq val4=0";
     } else if (curLine.match(/^\s*else/i) !== null) {
@@ -10342,7 +10370,7 @@ var cmdEditHint = function () {
     } else if (curLine.match(/^\s*intersect/i) !== null) {
         hintText =        "hint:: INTERSECT $order=none index=1 maxtol=0";
     } else if (curLine.match(/^\s*join/i) !== null) {
-        hintText =        "hint:: JOIN      toler=0";
+        hintText =        "hint:: JOIN      toler=0 toMark=0";
     } else if (curLine.match(/^\s*lbound/i) !== null) {
         hintText =        "hint:: LBOUND    $pmtrName bounds";
     } else if (curLine.match(/^\s*linseg/i) !== null) {
@@ -10356,7 +10384,7 @@ var cmdEditHint = function () {
     } else if (curLine.match(/^\s*mark/i) !== null) {
         hintText =        "hint:: MARK";
     } else if (curLine.match(/^\s*message/i) !== null) {
-        hintText =        "hint:: MESSAGE   $text $schar=_";
+        hintText =        "hint:: MESSAGE   $text $schar=_ $fileName=. $openType=a";
     } else if (curLine.match(/^\s*mirror/i) !== null) {
         hintText =        "hint:: MIRROR    nx ny nz dist=0";
     } else if (curLine.match(/^\s*name/i) !== null) {
@@ -10578,6 +10606,7 @@ CodeMirror.defineSimpleMode("csm_mode", {
     {token: "keyword", regex: /\s*(despmtr|DESPMTR)\b/,     sol: true},
     {token: "keyword", regex: /\s*(dimension|DIMENSION)\b/, sol: true},
     {token: "keyword", regex: /\s*(dump|DUMP)\b/,           sol: true},
+    {token: "keyword", regex: /\s*(elevate|ELEVATE)\b/,     sol: true},
     {token: "keyword", regex: /\s*(else|ELSE)\b/,           sol: true, indent: true, dedent: true},
     {token: "keyword", regex: /\s*(elseif|ELSEIF)\b/,       sol: true, indent: true, dedent: true},
     {token: "keyword", regex: /\s*(end|END)\b/,             sol: true,               dedent: true},

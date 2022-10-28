@@ -59,12 +59,12 @@ for boundName in boundNames:
     mystranVset = bound.vertexSet.create(myProblem.analysis["mystran"])
     
     # Create pressure data sets
-    cart3d_Pressure  = cart3dVset.dataSet.create("Pressure", pyCAPS.fType.FieldOut)
-    mystran_Pressure = mystranVset.dataSet.create("Pressure", pyCAPS.fType.FieldIn)
+    cart3d_Pressure  = cart3dVset.dataSet.create("Pressure")
+    mystran_Pressure = mystranVset.dataSet.create("Pressure")
 
     # Create displacement data sets
-    cart3d_Displacement  = cart3dVset.dataSet.create("Displacement", pyCAPS.fType.FieldIn, init=[0,0,0])
-    mystran_Displacement = mystranVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+    cart3d_Displacement  = cart3dVset.dataSet.create("Displacement", init=[0,0,0])
+    mystran_Displacement = mystranVset.dataSet.create("Displacement")
 
     # Link the data sets
     mystran_Pressure.link(cart3d_Pressure, "Conserve")

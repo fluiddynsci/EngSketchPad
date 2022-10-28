@@ -2722,7 +2722,7 @@ int fun3d_readRubber(void *aimInfo,
           AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
 
           // Skip reading rigid motion design variables for now
-          
+
           // Read shape design variables
           status = findHeader("Current derivatives of", &line, &nline, &iline, fp);
           AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
@@ -2795,4 +2795,73 @@ int fun3d_makeDirectory(void *aimInfo)
 
 cleanup:
     return status;
+}
+
+
+// Map the old surface tessellation on to the new bodies
+int fun3d_morphMeshUpdate(void *aimInfo,  aimMeshRef *meshRef, int numBody, ego *bodies)
+{
+    int status = CAPS_SUCCESS;
+    int i=0;
+    int state, numVert;
+    ego bodyMapping;
+    ego body, tessbody;
+    ego tess;
+
+    // Have the number of bodies changed?
+    if (meshRef->nmap != numBody) {
+        AIM_ERROR(aimInfo, "The number of original surface meshes does NOT equal the number of current bodies!\n");
+        status = CAPS_MISMATCH;
+        goto cleanup;
+    }
+
+    // Are the bodies topological equivalent?
+    for (i = 0; i < meshRef->nmap; i++) {
+
+        status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &numVert);
+        AIM_STATUS(aimInfo, status);
+
+        status = EG_mapBody(body, bodies[i], "_faceID",  &bodyMapping); // "_faceID" - same as in OpenCSM
+        if (status != EGADS_SUCCESS || bodyMapping != NULL) {
+
+            AIM_ERROR(aimInfo, "New and old body %d (of %d) do not appear to be topologically equivalent!", i+1, meshRef->nmap);
+
+            if (bodyMapping != NULL) {
+                AIM_ADDLINE(aimInfo, "Body mapping isn't NULL!");
+            }
+
+            status = CAPS_MISMATCH;
+            goto cleanup;
+        }
+    }
+
+    // Now lets "tweak" the surface tessellation - map the old tessellation to the new bodies
+    for (i = 0; i < meshRef->nmap; i++) {
+
+        status = EG_statusTessBody(meshRef->maps[i].tess, &tessbody, &state, &numVert);
+        AIM_STATUS(aimInfo, status);
+
+        // nothing to do if bodies are the same
+        if (tessbody == bodies[i]) continue;
+
+        printf("Projecting tessellation %d (of %d) on to new body\n", i+1, meshRef->nmap);
+
+        status = EG_mapTessBody(meshRef->maps[i].tess,
+                                bodies[i],
+                                &tess);
+        AIM_STATUS(aimInfo, status);
+
+        if (meshRef->_delTess == (int)true) {
+            EG_deleteObject(meshRef->maps[i].tess);
+            EG_deleteObject(tessbody);
+        }
+        meshRef->maps[i].tess = tess;
+        status = aim_newTess(aimInfo, tess);
+        AIM_STATUS(aimInfo, status);
+    }
+
+    meshRef->_delTess = (int)false;
+
+    cleanup:
+        return status;
 }

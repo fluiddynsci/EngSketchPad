@@ -293,7 +293,8 @@ static int setAFLR4Attr(void *aimInfo,
                         bcType = "-STD_UG3_GBC";
                     else if (strncasecmp(meshProp[propIndex].bcType, "Inviscid"  ,  8) == 0)
                         bcType = "STD_UG3_GBC";
-                    else if (strncasecmp(meshProp[propIndex].bcType, "Symmetry"  ,  8) == 0)
+                    else if (strncasecmp(meshProp[propIndex].bcType, "Symmetry"  ,  8) == 0 ||
+                             strncasecmp(meshProp[propIndex].bcType, "BoundaryLayerIntersect",22) == 0)
                         bcType = "BL_INT_UG3_GBC";
 
                     // add the BC attribute
@@ -829,7 +830,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     } else if (index == Mesh_Length_Factor) {
 
       /* There is no reasonable default for the ref_len parameter,
-       * the user must always set it via capsMeshLength andd Mesh_Length_Factor
+       * the user must always set it via capsMeshLength and Mesh_Length_Factor
        *
         status = ug_get_double_param ((char*)"ref_len", &ref_len, AFLR4_Param_Struct_Ptr);
         if (status == 1) status = CAPS_SUCCESS;

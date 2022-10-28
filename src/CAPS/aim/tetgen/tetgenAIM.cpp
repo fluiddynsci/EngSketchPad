@@ -124,6 +124,7 @@ static int destroy_aimStorage(aimStorage *tetgenInstance)
     for (i = 0; i < tetgenInstance->numMeshRef; i++)
       aim_freeMeshRef(&tetgenInstance->meshRef[i]);
     AIM_FREE(tetgenInstance->meshRef);
+    tetgenInstance->numMeshRef = 0;
 
     return CAPS_SUCCESS;
 }

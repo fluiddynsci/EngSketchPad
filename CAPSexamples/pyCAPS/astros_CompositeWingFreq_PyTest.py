@@ -55,7 +55,7 @@ for boundName in boundNames:
     
     # Create eigenVector data sets
     for eigenVector in eigenVectors:
-        astros_eigenVector = astrosVset.dataSet.create(eigenVector, pyCAPS.fType.FieldOut)
+        astros_eigenVector = astrosVset.dataSet.create(eigenVector)
 
     # Close the bound as complete (cannot create more vertex or data sets)
     bound.close()

@@ -17,14 +17,21 @@
 #define strcasecmp stricmp
 #define access     _access
 #define F_OK       0
+#define SLASH     '\\'
 #else
 #include <dirent.h>
 #include <dlfcn.h>
 #include <unistd.h>
+#define SLASH     '/'
 #endif
 
 #include "aimUtil.h"
 #include "aimMesh.h"
+
+/* used to preserve the indexing order when there is a mixture of
+ * solid/sheet/wire bodies
+ */
+#define CAPS_BODY_INDX "--CAPS-BODY-INDX--"
 
 
 static /*@null@*/ DLL writerDLopen(const char *name)
@@ -492,6 +499,7 @@ aim_initMeshRef(aimMeshRef *meshRef)
   meshRef->nbnd     = 0;
   meshRef->bnds     = NULL;
   meshRef->fileName = NULL;
+  meshRef->_delTess = (int)false;
 
   return CAPS_SUCCESS;
 }
@@ -500,12 +508,24 @@ aim_initMeshRef(aimMeshRef *meshRef)
 int
 aim_freeMeshRef(/*@null@*/ aimMeshRef *meshRef)
 {
-  int i;
+  int status = CAPS_SUCCESS;
+  int i, state, nvert;
+  ego body;
+
   if (meshRef == NULL) return CAPS_NULLOBJ;
 
   if (meshRef->maps != NULL)
-    for (i = 0; i < meshRef->nmap; i++)
+    for (i = 0; i < meshRef->nmap; i++) {
       AIM_FREE(meshRef->maps[i].map);
+
+      if (meshRef->_delTess == (int)true) {
+        status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &nvert);
+        if (status != CAPS_SUCCESS) return status;
+
+        EG_deleteObject(meshRef->maps[i].tess);
+        EG_deleteObject(body);
+      }
+    }
 
   if (meshRef->bnds != NULL)
      for (i = 0; i < meshRef->nbnd; i++)
@@ -1095,6 +1115,296 @@ cleanup:
   if (fp   != NULL) fclose(fp);
   if (fpID != NULL) fclose(fpID);
 /*@+dependenttrans@*/
+
+  return status;
+}
+
+
+int
+aim_storeMeshRef(void *aimStruc, const aimMeshRef *meshRef,
+                 const char *meshextension)
+{
+  int    status = CAPS_SUCCESS;
+
+  int         imap, ibnd, state, nvert;
+  int         i;
+  char        filename_src[PATH_MAX];
+  char        filename_dst[PATH_MAX];
+  char        aimFile[PATH_MAX];
+  const char  *meshRefFile = "meshRef.dat";
+  const char  *meshRefegads = "meshRef.egads";
+  FILE        *fp = NULL;
+  aimInfo     *aInfo;
+  size_t      len, strLen;
+  ego         model, body, *bodies = NULL;
+
+  aInfo = (aimInfo *) aimStruc;
+  if (aInfo == NULL)                    return CAPS_NULLOBJ;
+  if (aInfo->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
+
+  if (meshRef == NULL)           return CAPS_NULLOBJ;
+  if (meshRef->fileName == NULL) return CAPS_NULLOBJ;
+
+  if (meshextension == NULL)     return CAPS_NULLOBJ;
+
+  // create the full filename to the mesh in the meshing AIM directory
+  snprintf(filename_src, PATH_MAX, "%s%s", meshRef->fileName, meshextension);
+
+  // get the mesh filename without the directory
+  i = strlen(filename_src);
+  while(i > 0 && filename_src[i] != SLASH) { i--; }
+  if (i < 0) { status = CAPS_IOERR; goto cleanup; }
+  strcpy(filename_dst, filename_src+i+1);
+
+  // copy the mesh from the meshing AIM directory to the current AIM directory
+  status = aim_cpFile(aimStruc, filename_src, filename_dst);
+  AIM_STATUS(aimStruc, status);
+
+  // open the file to store the meshRef structure
+  status = aim_file(aimStruc, meshRefFile, aimFile);
+  AIM_STATUS(aimStruc, status);
+
+  fp = fopen(aimFile, "wb");
+  if (fp == NULL) {
+    AIM_ERROR(aimStruc, "Cannot open file: %s\n", aimFile);
+    status = CAPS_IOERR;
+    goto cleanup;
+  }
+
+  len = fwrite(&meshRef->nmap, sizeof(int), 1, fp);
+  if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+  AIM_ALLOC(bodies, 2*meshRef->nmap, ego, aimStruc, status);
+
+  for (imap = 0; imap < meshRef->nmap; imap++) {
+    status = EG_statusTessBody(meshRef->maps[imap].tess, &body, &state, &nvert);
+    AIM_STATUS(aimStruc, status);
+
+    // construct an egads file to write out the tessellation and the body
+    status = EG_copyObject(body, NULL, &bodies[imap]);
+    AIM_STATUS(aimStruc, status);
+    status = EG_copyObject(meshRef->maps[imap].tess, bodies[imap], &bodies[imap+meshRef->nmap]);
+    AIM_STATUS(aimStruc, status);
+
+    // store the body index
+    status = EG_attributeAdd(bodies[imap], CAPS_BODY_INDX, ATTRINT, 1, &imap, NULL, NULL);
+    AIM_STATUS(aimStruc, status);
+  }
+
+  status = EG_makeTopology(aInfo->problem->context, NULL, MODEL, 2*meshRef->nmap,
+                           NULL, meshRef->nmap, bodies, NULL, &model);
+  AIM_STATUS(aimStruc, status);
+
+  status = aim_file(aimStruc, meshRefegads, aimFile);
+  AIM_STATUS(aimStruc, status);
+
+  remove(aimFile);
+  status = EG_saveModel(model, aimFile);
+  AIM_STATUS(aimStruc, status);
+
+  EG_deleteObject(model);
+
+  for (imap = 0; imap < meshRef->nmap; imap++) {
+    status = EG_statusTessBody(meshRef->maps[imap].tess, &body, &state, &nvert);
+    AIM_STATUS(aimStruc, status);
+
+    // write the surface to volume map
+    len = fwrite(meshRef->maps[imap].map, sizeof(int), nvert, fp);
+    if (len != nvert) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+  }
+
+  len = fwrite(&meshRef->nbnd, sizeof(int), 1, fp);
+  if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+  for (ibnd = 0; ibnd < meshRef->nbnd; ibnd++) {
+
+    strLen = strlen(meshRef->bnds[ibnd].groupName)+1;
+
+    len = fwrite(&strLen, sizeof(size_t), 1, fp);
+    if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+    len = fwrite(meshRef->bnds[ibnd].groupName, sizeof(char), strLen, fp);
+    if (len != strLen) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+    len = fwrite(&meshRef->bnds[ibnd].ID, sizeof(int), 1, fp);
+    if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+  }
+
+  // write meshRef->filename (i.e. filename_dst without the extension)
+  strLen = strlen(filename_dst);
+  filename_dst[strLen - strlen(meshextension)] = '\0';
+  status = aim_file(aimStruc, filename_dst, aimFile);
+  AIM_STATUS(aimStruc, status);
+
+  strLen = strlen(aimFile)+1;
+
+  len = fwrite(&strLen, sizeof(size_t), 1, fp);
+  if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+  len = fwrite(aimFile, sizeof(char), strLen, fp);
+  if (len != strLen) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+cleanup:
+  /*@-dependenttrans@*/
+  if (fp != NULL) fclose(fp);
+  /*@+dependenttrans@*/
+  AIM_FREE(bodies);
+
+  return status;
+}
+
+
+int
+aim_loadMeshRef(void *aimStruc, aimMeshRef *meshRef)
+{
+  int    status = CAPS_SUCCESS;
+
+  int         j, imap, ibnd, state, nvert, nbody;
+  int         oclass, mtype, *senses, alen, atype;
+  char        aimFile[PATH_MAX];
+  double      limits[4];
+  const int   *aints=NULL;
+  const double *areals=NULL;
+  const char  *astring=NULL;
+  const char  *meshRefFile = "meshRef.dat";
+  const char  *meshRefegads = "meshRef.egads";
+  FILE        *fp = NULL;
+  aimInfo     *aInfo;
+  size_t      len, strLen;
+  ego         geom, model, body, tessbody, *bodies;
+
+  aInfo = (aimInfo *) aimStruc;
+  if (aInfo == NULL)                    return CAPS_NULLOBJ;
+  if (aInfo->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
+
+  if (meshRef == NULL)           return CAPS_NULLOBJ;
+  if (meshRef->nmap != 0 ||
+      meshRef->maps != NULL ||
+      meshRef->nbnd != 0 ||
+      meshRef->bnds != NULL ||
+      meshRef->fileName != NULL ) {
+    AIM_ERROR(aimStruc, "meshRef members not initialized to NULL values!");
+    status = CAPS_NULLOBJ;
+    goto cleanup;
+  }
+
+  // open the file to read the meshRef structure
+  status = aim_file(aimStruc, meshRefFile, aimFile);
+  AIM_STATUS(aimStruc, status);
+
+  fp = fopen(aimFile, "rb");
+  if (fp == NULL) {
+    AIM_ERROR(aimStruc, "Cannot open file: %s\n", aimFile);
+    status = CAPS_IOERR;
+    goto cleanup;
+  }
+
+  len = fread(&meshRef->nmap, sizeof(int), 1, fp);
+  if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+  AIM_ALLOC(meshRef->maps, meshRef->nmap, aimMeshTessMap, aimStruc, status);
+  for (imap = 0; imap < meshRef->nmap; imap++) {
+    meshRef->maps[imap].tess = NULL;
+    meshRef->maps[imap].map = NULL;
+  }
+
+  status = aim_file(aimStruc, meshRefegads, aimFile);
+  AIM_STATUS(aimStruc, status);
+
+  status = EG_loadModel(aInfo->problem->context, 0, aimFile, &model);
+  AIM_STATUS(aimStruc, status);
+
+  status = EG_getTopology(model, &geom, &oclass, &mtype, limits,
+                          &nbody, &bodies, &senses);
+  AIM_STATUS(aimStruc, status);
+  
+  if (nbody != meshRef->nmap) {
+    AIM_ERROR(aimStruc, "Missmatch between %s and %s!", meshRefFile, meshRefegads);
+    status = CAPS_IOERR;
+    goto cleanup;
+  }
+
+  // copy the body and tessellatoin out of the model
+  for (imap = 0; imap < meshRef->nmap; imap++) {
+    status = EG_copyObject(bodies[imap], NULL, &body);
+    AIM_STATUS(aimStruc, status);
+
+    // get the original body index
+    status = EG_attributeRet(body, CAPS_BODY_INDX, &atype, &alen, &aints, &areals, &astring);
+    AIM_STATUS(aimStruc, status);
+    AIM_NOTNULL(aints, aimStruc, status);
+
+    status = EG_attributeDel(body, CAPS_BODY_INDX);
+    AIM_STATUS(aimStruc, status);
+
+    // find the tessellation for this body
+    for (j = 0; j < meshRef->nmap; j++) {
+      status = EG_statusTessBody(bodies[j+meshRef->nmap], &tessbody, &state, &nvert);
+      AIM_STATUS(aimStruc, status);
+
+      if (tessbody == bodies[imap]) {
+        // copy the tessellation with the copied body
+        status = EG_copyObject(bodies[j+meshRef->nmap], body, &meshRef->maps[aints[0]].tess);
+        AIM_STATUS(aimStruc, status);
+        break;
+      }
+    }
+  }
+
+  // delete the model
+  EG_deleteObject(model);
+
+  for (imap = 0; imap < meshRef->nmap; imap++) {
+    // read the surface to volume map
+    status = EG_statusTessBody(meshRef->maps[imap].tess, &body, &state, &nvert);
+    AIM_STATUS(aimStruc, status);
+
+    AIM_ALLOC(meshRef->maps[imap].map, nvert, int, aimStruc, status);
+
+    len = fread(meshRef->maps[imap].map, sizeof(int), nvert, fp);
+    if (len != nvert) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+  }
+
+  // read the bounds
+  len = fread(&meshRef->nbnd, sizeof(int), 1, fp);
+  if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+  AIM_ALLOC(meshRef->bnds, meshRef->nbnd, aimMeshBnd, aimStruc, status);
+  for (ibnd = 0; ibnd < meshRef->nbnd; ibnd++) {
+    meshRef->bnds[ibnd].groupName = NULL;
+    meshRef->bnds[ibnd].ID = 0;
+  }
+
+  for (ibnd = 0; ibnd < meshRef->nbnd; ibnd++) {
+
+    len = fread(&strLen, sizeof(size_t), 1, fp);
+    if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+    AIM_ALLOC(meshRef->bnds[ibnd].groupName, strLen, char, aimStruc, status);
+
+    len = fread(meshRef->bnds[ibnd].groupName, sizeof(char), strLen, fp);
+    if (len != strLen) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+    len = fread(&meshRef->bnds[ibnd].ID, sizeof(int), 1, fp);
+    if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+  }
+
+  // read meshRef->filename
+  len = fread(&strLen, sizeof(size_t), 1, fp);
+  if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+  AIM_ALLOC(meshRef->fileName, strLen, char, aimStruc, status);
+
+  len = fread(meshRef->fileName, sizeof(char), strLen, fp);
+  if (len != strLen) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+  // indicate that the tessellation and body should be deleted
+  meshRef->_delTess = (int)true;
+
+cleanup:
+  /*@-dependenttrans@*/
+  if (fp != NULL) fclose(fp);
+  /*@+dependenttrans@*/
 
   return status;
 }

@@ -296,6 +296,9 @@ __ProtoExt__ int
                   capsErrs **errors );
 
 __ProtoExt__ int
+  caps_getValueSize(capsObj object, int *nrow, int *ncol);
+
+__ProtoExt__ int
   caps_getValueProps( capsObj object, int *dim, int *gInType,
                       enum capsFixed *lfix, enum capsFixed *sfix,
                       enum capsNull *ntype );

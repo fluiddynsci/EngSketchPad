@@ -125,6 +125,9 @@ class TestFUN3D(unittest.TestCase):
         self.myAnalysis.preAnalysis()
         self.myAnalysis.postAnalysis()
 
+        # Extract all the input values
+        valDict = {key:inVal.value for key, inVal in self.myAnalysis.input.items()}
+
         self.assertEqual(os.path.isfile(os.path.join(self.myAnalysis.analysisDir, self.configFile)), True)
 
         os.remove(os.path.join(self.myAnalysis.analysisDir, self.configFile))
@@ -134,6 +137,9 @@ class TestFUN3D(unittest.TestCase):
                                                     "Farfield":"farfield"}
         self.myAnalysis.preAnalysis()
         self.myAnalysis.postAnalysis()
+
+        # Extract all the input values
+        valDict = {key:inVal.value for key, inVal in self.myAnalysis.input.items()}
 
         self.assertEqual(os.path.isfile(os.path.join(self.myAnalysis.analysisDir, self.configFile)), True)
 
@@ -363,6 +369,86 @@ class TestFUN3D(unittest.TestCase):
 
         self.assertEqual(Func2, 21)
         self.assertEqual(Func2_Mach, 14)
+        
+        del self.fun3d
+
+#==============================================================================
+    # Create sensitvities
+    def test_Design_Morph_Sensitivity(self):
+
+        # Create a new instance
+        self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
+
+        self.fun3d.input["Mesh"].link(self.myProblem.analysis["tetgen"].output["Volume_Mesh"])
+
+        self.fun3d.input.Boundary_Condition = {"Wing1": {"bcType" : "Viscous"},
+                                               "Wing2": {"bcType" : "Inviscid"},
+                                               "Farfield":"farfield"}
+
+        self.fun3d.input.Design_Functional = {"Composite": [{"function":"ClCd", "weight": 1.0, "target": 2.7, "power": 1.0, "capsGroup":"Wing1"},
+                                                            {"function":"Cd"  , "weight": 1.0, "target": 0.0, "power": 2.0}],
+                                              "Lift^2": {"function":"Cl", "weight": 1.0, "target": 0.0, "power": 2.0}}
+
+        self.fun3d.input.Design_Sensitivity = True
+        self.fun3d.input.Design_Variable = {"Alpha":"",
+                                            "Beta":{},
+                                            "area":{},
+                                            "aspect":{},
+                                            "taper":"",
+                                            "twist":"",
+                                           }
+
+        # Set flag to indicate mesh morphing is desired
+        self.fun3d.input.Design_Morph = True
+
+        self.fun3d.input.Alpha = 1
+        self.fun3d.input.Use_Python_NML = False
+        self.fun3d.input.Overwrite_NML = True
+
+        self.fun3d.preAnalysis()
+        self.fun3d.postAnalysis()
+
+        Objective_Value  = self.fun3d.dynout["Composite"].value
+        Objective_Alpha  = self.fun3d.dynout["Composite"].deriv("Alpha")
+        Objective_Beta   = self.fun3d.dynout["Composite"].deriv("Beta")
+        Objective_area   = self.fun3d.dynout["Composite"].deriv("area")
+        Objective_aspect = self.fun3d.dynout["Composite"].deriv("aspect")
+        Objective_taper  = self.fun3d.dynout["Composite"].deriv("taper")
+        Objective_twist  = self.fun3d.dynout["Composite"].deriv("twist")
+
+        # Extract all the output values
+        valDict = {key:outVal.value for key, outVal in self.fun3d.dynout.items()}
+
+        # Unlink the mesh to change to morphing
+        self.fun3d.input["Mesh"].unlink()
+
+        self.myProblem.geometry.despmtr.area *= 0.9
+
+        self.fun3d.preAnalysis()
+        self.fun3d.postAnalysis()
+
+        Objective_Value  = self.fun3d.dynout["Composite"].value
+        Objective_Alpha  = self.fun3d.dynout["Composite"].deriv("Alpha")
+        Objective_Beta   = self.fun3d.dynout["Composite"].deriv("Beta")
+        Objective_area   = self.fun3d.dynout["Composite"].deriv("area")
+        Objective_aspect = self.fun3d.dynout["Composite"].deriv("aspect")
+        Objective_taper  = self.fun3d.dynout["Composite"].deriv("taper")
+        Objective_twist  = self.fun3d.dynout["Composite"].deriv("twist")
+
+        self.myProblem.geometry.despmtr.area /= 0.9
+
+        self.fun3d.preAnalysis()
+        self.fun3d.postAnalysis()
+
+        Objective_Value  = self.fun3d.dynout["Composite"].value
+        Objective_Alpha  = self.fun3d.dynout["Composite"].deriv("Alpha")
+        Objective_Beta   = self.fun3d.dynout["Composite"].deriv("Beta")
+        Objective_area   = self.fun3d.dynout["Composite"].deriv("area")
+        Objective_aspect = self.fun3d.dynout["Composite"].deriv("aspect")
+        Objective_taper  = self.fun3d.dynout["Composite"].deriv("taper")
+        Objective_twist  = self.fun3d.dynout["Composite"].deriv("twist")
+
+        del self.fun3d
 
 #==============================================================================
     # Test using Cython to write and modify the *.nml file

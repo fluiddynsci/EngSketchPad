@@ -9,7 +9,6 @@
  */
 
 #define UDP    1
-#define EPS06  1.0e-6
 
 /*
  * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)

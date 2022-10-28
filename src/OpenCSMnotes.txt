@@ -9340,12 +9340,234 @@
 15jul22  fix sensitivity bug whan a RULE/BLEND xsect is RESTOREd after
              being used
 
-&&&&&&&
+18jul22  uprev to v1.22
 
-         implement Caps->ListAttachments, Caps->AttachFile, and
-             Caps->OpenAttachment for .png .pdf and .txt files
+19jul22  implement udpEqn2body for WireBodys
 
-         write script to convert existing Project to IDE
+19jul22  modify inflatedBody2b to use the replicate.udc
+
+20jul22  implement udfOffset; create offset* test cases
+
+20jul22  improve error handling associated with SELECT SORT
+
+20jul22  modify flend5* test cases to use udfOffset
+
+21jul22  fix hint associated with JOIN
+
+22jul22  change COMBINE so that it only increases the topological
+             order of its input WireBody or SheetBody
+
+22jul22  change JOIN so that it can make non-manifold WireBodys;
+             modify numWireBody* test cases
+
+27jul22  create ELEVATE command, which only elevates WireBody to
+            SheetBody and SheetBody to SolidBody;  remove COMBINE
+            command and instruct user to use JOIN and ELEVATE instead
+
+28jul22  update UNION and JOIN such that if toMark is set but the
+             operation fails, the stack is left unaltered; add
+             unionSolids* test cases
+
+28jul22  fix typos in ESP-help (and OpenCSM.h)
+
+ 1aug22  update udfOffset for negative distance
+
+ 2aug22  add udfDumpPmtrs and associated test case
+
+ 2aug22  implement RESTORE .. (dot dot) to duplicate all Bodys (and
+             Mark) back to the Mark and RESTORE ... (dot dot dot) to
+             duplicate entire stack; add restore3 test case
+
+ 3aug22  allow UDF to not return a Body or Bodys
+
+ 3aug22  update udfOffset so that it can handle concave corners (but
+             not case where Edges disappear)
+
+ 4aug22  allow very long message to be sent from browser to server;
+             add setCsmFile instead of setScmFileBeg/Mid/End
+
+ 8aug22  if error occurs when processing a timMesg, put the tim back
+             into READY mode
+
+ 8aug22  post message when erep is successfully generated
+
+ 8aug22  implement udpEqn2body for SheetBodys; update frustrum3 test
+             case
+
+21aug22  use __usedBodys__ attribute when computing velocity of Faces
+             or Edges for RULE and BLEND
+
+21aug22  fix bug in sensCSM that did not reset maximum errors for
+             Bodys when in -tess mode
+
+21aug22  fix big that did not copy .hasdots during RESTORE . (dot)
+
+21aug22  remove use of _scaleuv Attribute
+
+25aug22  fix bug that caused ereped to not work for a named Body
+
+25aug22  fix bug that added bar at end of file that was being editted
+            in ESP
+
+25aug22  extend ereped so that it can be applied if there are multiple
+             Bodys on the stack; add ereped8 test case
+
+28aug22  fix ESP hint associated with ELEVATE command
+
+29aug22  fix bug when SELECT EGDE with a bounding box was applied to a
+             Body with degenerate Edges
+
+30aug22  add extractBodys test case
+
+30aug22  fix array bounds error in udpEqn2body
+
+31aug22  fix bug in ereped initializations for a single Body
+
+31aug22  add assert in udfOffset to eliminate warnings on gcc
+
+ 2sep22  allow OFFSET to function properly when the number of Edges in
+             the offset is fewer than the original Body
+
+ 2sep22  fix escape-close-parenthesis in ESP_QuickReference
+
+ 3sep22  add ability to create periodic SPLINE in sketcher by using
+             SSLOPE(0); add sslope6* test cases
+
+ 4sep22  fix memory leak when a UDF returns an error
+
+ 4sep22  remove extra prints when udfFlend or udfOffset detect an error
+
+ 4sep22  update sanitize targets in Makefile.LINUX
+
+ 5sep22  extend MESSAGE to optionally write to a file; modify message
+             test case
+
+ 5sep22  update ESP-help and ESP_QuickReference
+
+ 5sep22  fix test_pyOCSM to account for updated MESSAGE statement
+
+11sep22  initial version of udfDroop2
+
+14sep22  next (still incomplete) version of udfDroop2
+
+15sep22  next version of udfDroop2; first version of udfDroop3
+
+16sep22  fix recently added bug in ereped that only allowed 9 colors
+
+16sep22  remove timHold from viewBodys.py
+
+16sep22  add batch flag to ESP structure
+
+16sep22  add assert command in browserToServer
+
+16sep22  add method of verifying ereped and plugs if running from
+             journal and in -batch mode
+
+16sep22  next versions of udfDroop2 and udfDroop3
+
+16sep22  migrate testing in Makefile.DARWIN64 and Makefile.LINUX64
+             from serveCSM to serveESP
+
+17sep22  fix bug in esp.SetCaps() in pyESP
+
+18sep22  move building of pyscript from Makefile to serveESP.make
+
+20sep22  clean up usage of include files
+
+20sep22  update dependencies in Makefile and NMakefile
+
+21sep22  protect against string overflows in strncpy and strncat
+
+22sep22  fix mesgCallbackFromOpenCSM so that it does not try to
+             broadcast text when in batch mode
+
+22sep22  initial version of udpNaca6mc
+
+22sep22  fix DUMP x.sens for degenerate Edges
+
+22sep22  add combine.udc so that old .csm scripts that used the (now
+             deprecated) COMBINE command still work; add combine* test
+             cases
+
+24sep22  add makeErep journal entry so that ereped can be tested
+
+24sep22  modify at-itype, at-nface, and at-nedge if there is an erep
+
+24sep22  add POWLE and POWTE arguments to udfDroop; add new droop*
+             test cases
+
+24sep22  add udfNaca6mc to warp the input thickness distribution with
+             the sum of multiple NACA 6-series meanlines; add naca6mc*
+             test cases
+
+27sep22  update Building button to show progress of build in ESP
+
+28sep22  fix memory leak when ELEVATE command fails (like it often
+             does in the combine.udc)
+
+30sep22  extend SELECT command to SELECT all Faces/Edges/Nodes in
+            current Body that match a Face in another Body
+
+30sep22  add SELECT NOT to SELECT the Faces/Edges/Nodes not selected
+             and vice versa
+
+ 2oct22  fix bug associated with determining if an Edge is a subset of
+             another
+
+ 2oct22  update to account for change in EG_isEquivalent
+
+ 2oct22  fix bug that did not copy attributes from an Edge in a
+             WireBody that was INTERSECTed with a SolidBody to the new
+             Edge
+
+ 2oct22  add PRINT_LAST_EGO compile-time flag to print the last ego
+             after every step in an ocsmBuild
+
+ 3oct22  fix bug in sensCSM when trying to remove .csm or .cpc
+             extension from the casename when it did not exist
+
+ 3oct22  extend SELECT command to SELECT all Faces/Edges/Nodes in
+            current Body that are within another Body
+
+ 4oct22  add ocsmRegBcstCB to ocsm.def
+
+ 4oct22  update to account for latest EGADS fix to EG_generalBoolean
+
+ 4oct22  clarify description of SELECT x -1 ibody1
+
+         generate .jrnl files for plugs test cases
+
+         generate .jrnl files for ereped test cases
+
+         add description of -dxdd flag to ESP-help
+
+         implement sensitivities in udpWaffle
+
+         create udfSplitEdges; add splitEdges* test cases
+
+         building message in collaboration mode
+
+         sensitivities in bug.csm
+
+         attributes in scribe
+&&&&&&
+
+         update RULE reorder to work with degenerate Edges in xsects
+
+         get basic GLOVES capability working
+
+         ereped documentation (for kleb)
+
+         implement Caps->RestartPhase
+
+         implement sensitivities in udpEqn2body
+
+         write ocsmAdjoint
+
+         add interference checks in GLOVES
+
+         create test cases to test new periodic option in
+             EG_approximate
 
          add ability to make any Branch the mainline
 
@@ -9368,18 +9590,18 @@
 
          repackage TIMs
 
+         implement Caps->ListAttachments, Caps->AttachFile, and
+             Caps->OpenAttachment for .png .pdf and .txt files
+
+         write script to convert existing Project to IDE
+
          when browser does not have ball, the 6 option does not
              display all the attributes
 
          add goto option in StepThru mode
 
-         fix tessellation sensitivities for adjTest case
-
          modify DisplayFilter to allow user to show everything except
              with the given attribute
-
-         add command to remove Faces from a SheetBody or Edges from a
-             WireBody
 
          multi-thread tessellation sensitivities
 
@@ -9387,34 +9609,14 @@
 
          apply _faceID to UDPRIM Body (and not UDPARG Body)
 
-         compute sensitivities for Sketches
-
-         fix bug that did not generate correct sensitivities for
-             scribed Edges
-
-         add ability to specify SSLOPE in ESP sketcher
-
-         same DESPMTR in multiple UDCs causes last one to be ignored
-
-         JOIN and UNION produce inconsistent results for SheetBodys
-
          apply FLENDs to wing/fuselage junctions, especially for
              fuselages with chines
-
-         update GLOVES to build configurations
-
-         modify udfFlend so that it can use the new offset curve
-             feature
-
-         modify udfFlend so that it can operate on a single Body
 
          add udfBump to modify B-spline Faces
 
          fix sensitivities generated by udpKulfan
 
          make sure recycled Bodys get updated attributes
-
-         pre-seed requests for file names with current file
 
          add ocsmCheckDirty that tells if changing a DESPMTR will
             make the Bodys dirty
@@ -9425,13 +9627,11 @@
 
          don't require defaults for UDC arguments
 
-         allow vim or emacs key bindings in editor
-
          make an included oval work in the Sketcher
 
          parse the waffle files to get variable dependency
 
-         be able to generated curved spars/rib in waffle
+         be able to generate curved spars/rib in waffle
 
          somehow specify spatial curvature to use to prescribe
              stiffness distribution over large regions
@@ -9439,48 +9639,14 @@
          add thickness attribute in waffle to create thick-walled
              waffle
 
-         compute sensitivities for udpWaffle and udpRadwaf
-             analytically
-
-         strategy for deferring Booleans until the end
+         compute sensitivities for udpRadwaf analytically
 
          support higher-order geometry for higher-order meshing
-
-         quick way to swith between image and code editor
 
          allow keyboard interrupt to prematurely stop serveCSM while
              it is building geometry
 
          auto-constrain sketches
-
-         edit sketches - remove segment
-
-         edit sketches - move points graphically
-
-         leave Bodys on stack until a new result is available (to aid
-             in debugging)
-
-         modify API for EXTRACT to be able to extract a portion of a
-             WireBody or SheetBody by specifying a list of Edges or Faces
-
-         add optional argument to EXTRACT to be able to extract all
-             except the Edges or Faces spacified in the entityList
-
-         incorporate new Fitter.c into Slugs, OpenCSM, and udp*
-
-         make recycle work on all Branches (and not stop at first
-             changed Branch)
-
-         update ESP to integrate sub-applications (GLOVES)
-             get Design Parameters into application
-             get Feature Tree into application
-             set Design Parameters from application
-             modify Feature Tree from application
-
-         allow user to use SET within Sketch solver
-
-         add function to API to tell if a specific Design Parameter
-             effects the Bodys on the stack
 
          add ability to edit included .csm files (from udpCsm)
 
@@ -9494,659 +9660,3 @@
 
          extend BLEND so that repeated sketch at beg/end sets slope to
              be normal-to-Face
-
-Known problems (that are documented in README file)
-
-         there is a memory problem in cage2
-
-         F16 test gets seg fault if outType=3
-
-         sensitivities fail in tutorial0
-
-         HOLLOW with thick>0 does not appear to work for airfoils
-             (hollow9e, 9f, 9h, 9i)
-
-         safari seems to hang when querying large model
-
-         intersection fails when two Edges are nearly coincident
-             (intersect_fail)
-
-         seg fault in EG_isoCline (SweptWing_V4.csm)
-
-         union fails (M85_E_V2.csm)
-
-         intersect fails (simplifiedModel.csm)
-
-         singular_matrix error returned at C0 edge within BLEND
-
-         blendjoin[34].csm generate lots of sliver faces
-
-         case spinner.csm writes a .step file that cannot be read by
-             SolidWorks
-
-         case data3/Heath/union_fail hangs in the union at line 155
-
-         case data3/Heath/subtraction_error fails in the tessellator
-             (since the nominal spacings are not sufficient for the
-             small features in the configuration)
-
-         hollow does not work in Windows
-
-         hollow does not work for offset Bodies (hollowC4
-            and hollowC5)
-
-         hollow does not work for hollowC6 and hollowC7
-
-         a fillet cannot be added in the wing/fuselage junction in
-             design9
-
-         case helix has wrinkles on OCC6.8
-
-         case nudge5 fails on OCC6.8
-
-         definition of UV in udpEllipse cnahges depending of ellipse's
-             aspect ratio
-
-         loft creates different results between OCC6.6 and OCC6.8
-             for cases reorder0l, reorder1l
-
-         half of fuselage missing on OCC6.8 for RM-10
-
-         bug?  define sketch clockwise, revolve 360 (get warning about
-             being flipped), then edit sketch and sketch is upside
-             down, save sketch, rebuild and body is upside down
-             (cannot duplicate)
-
-         Node/Edge tessellation sensitivities wrong for designH* test
-             cases
-
-Medium priority
-
-         test udfFlend
-
-         fix finite difference problem when trange changes
-
-         compute distance between sphere/cone and BLEND with noselist
-
-         demonstrate sensitivites through grid generation
-
-         return derivatives of at-parameters
-
-         allow trimmed surfaces in udfTile
-
-         implement code folding in ESP
-
-         hot key to/from csm editor
-
-         editor Save exits editor
-
-         sample masstran aim example  (CONM2)
-
-         crod2 to support hinge line
-
-         update udpNaca to generate sensitivities on a blunt TE
-
-         fix bug in checkForFiniteDifferences that caused FD
-             sensitivities to be computed for all UDPRIMs
-
-         make fins steerable in JMR3
-
-         add design parameters to JMR3
-
-         add angle or angled arguments to udpRadwaf to allow user
-             to specify spoke angles
-
-         implement Ric Graves' configuration
-
-         add ability to extract meanline from udpStag
-
-         modify $order and index arguments associated with INTERSECT
-             and SUBTRACT commands to allow selection of the Body to
-             be returned such as U-case
-
-         picture and edit side-by-side (2 browsers)
-
-         write ESP "basic concepts" document
-
-         include examples in ESP-help
-
-         make union of wing to chine more robust
-
-         save/restore view fails if ctrl-h in between
-
-         sometimes axes at corner of screen get very big or small
-
-         when scribing a surface, orientation of pieces should match
-             orientation of parent
-
-         centered EXTRUDE
-
-         move .stl and .bstl writer to EG_saveModel
-
-         use gmail-style modals for alert, confirm, and prompt in ESP
-
-         sample BEM-type model of wing with flaps and stringers
-
-         determine why some 1d fits in Slugs are so poor for OrionLEV
-             test case
-
-         in 1d fitter in Slugs, if there are fewer control points than
-             cloud points, try fitting with reduced number of control
-             points and then inflating to desired number
-
-         create/commit fuseBEM
-
-         determine why there are more Edges in BRep than used to build
-             it in Slugs
-
-         determine why some Faces return errors in fit2Dcloud in Slugs
-
-         in Slugs, Faces with holes sometimes have problems when
-             generating Pcurves
-
-         in ESP, picking coordinates with @ seems to give wrong
-             results in Firefox/LINUX
-
-         add abiity of dumping model via OpenCSM API (ocsmDumpBody?)
-
-         link example .csm files to documentation
-
-         add regression tests to Windoze on Jenkins
-
-         SLUGS: delete triangles, solver complains "uncolored', write
-             stl, read stl, everybody happy
-
-         SLUGS: move points associated with a color (bump out)
-
-         SLUGS: 4 color restriction is a killer (want 2, 3, 5, 6)
-
-         add .csm best practices and/or faq to ESP-help
-
-         optionally create air-solid in udpTblade
-
-         add fillet between blade and endwall in udpTblade
-
-         update sensitivity wrt maxloc in udpNaca
-
-         create/document method for seeing/setting global attributes
-             in ESP
-
-         add ability to "thicken" a SheetBody
-
-         if you pass a argname to a udc and the udc does not recognize
-             it, throw an error
-
-         apply attribute/csystem on previous branch or global
-
-         allow attrvalue argument to udfEditAttr
-
-         option in udcFlapz to just make the cutout (for CART3D)
-
-         command line option to not do backface shading
-
-         click on despmtr value in ESP open despmtr editor
-
-         import background image
-
-         if browser is resized, the graphical image should be
-             recentered in new window (MACOSX only?)
-
-         allow ESP user to revert DESPMTRs to their original values
-
-         return an array from a udc
-
-         way to show sections that were used to create BLEND
-
-         export a local variable in a udc back to a global variable
-
-         import point data
-
-         debug kulfan4 test case
-
-         allow SELECT to use an Attribute as its ID
-
-         allow UDP/UDF to return multiple Bodys
-
-         add attribute info into udpWaffle
-
-         method to thicken a Face into a solid (offset?)
-
-         add command to delete a Face from a SheetBody
-
-         BLEND is not symmetric for N=6 with repreated section at
-             middle (blend16b)
-
-         add openEnd=2 option to udcFlapz to have slots at ends of
-             flaps
-
-         add function to dump html file for use in INSPECTOR (d3.js)
-
-         add verdict measures to gmgwCSM
-
-         allow lazy builds in CAPS
-
-         add facet argument to udpFreeform
-
-         add ROTATEG statement (complex_rotn3)
-
-         allow RULE to work on Faces with holes
-
-         allow BLEND to work on Faces with holes
-
-         allow a WireBody to be connected to FaceBody and/or NodeBody
-
-         locating returns incorrect results in ESP on LINUX64
-
-         add "propagate" and "overwrite" arguments to the ATTRIBUTE
-             statement
-
-         add graphical attributer to ESP
-
-         be able to transiently color attributes in ESP
-
-         outstanding bugs
-             - compute tbeg_dot and tend_dot correctly when computing
-               BLEND sensitivities
-
-         outstanding bugs
-
-         sketcher upgrades
-             - symmetry constraint
-             - delete a segment
-               * a segment can only be deleted if
-                    - it has no constraints
-                    - its points have no P, T, or A constraints
-                    - a dangling point has any constraints
-               * if sketch is closed, any segment can be deleted
-               * if sketch is open, only beg and end segments can be deleted
-               * when a segment is deleted, drawing mode at end of segments is entered
-
-         add File options in ESP
-             - do not remove comments in ocsmSave
-
-         upgrade editor
-             - syntax coloring
-             - auto completion
-             - search/replace
-
-         sketcher upgrades
-             - add fillets
-             - add symmetry relations
-             - allow XY at origin to be deleted
-             - context-sensitive help
-
-         ESP upgrades
-             - scroll bar in list of Attributes/Csystems
-             - add location of maximum camber to NACA udp
-             - be able to add a UDPRIM (which calls a UDC)
-             - resizing of various windows in ESP
-             - add Branch before
-             - reorder Branches
-             - save graphic setting between sessions
-             - coordination between multiple browsers in same server
-               session
-             - full set of Boolean operations
-             - section cut function for geometry viewing
-             - default isometric view
-             ? add API option to skip tessellations  (_skipTess
-               global attribute)
-             ? postted Edge/Face info should include area, volume, and
-               centroid
-             ? allow absolute pathnames
-             - allow user to graphically choose Edges for
-              fillet/chamfer
-             ? visual feedback when moving over Edges and Faces
-
-         sensitivities
-             - implement for CSYSTEM/APPLYCSYS statements
-             - implement for sketches
-             - tessCSM design0m has errors that are too large with
-               MIRROR
-
-         udpApprox
-             - read file and approximate with B-splines
-
-         fun3dCSM
-             - demonstrate with MVC
-             - demonstrate with PDT2
-
-         pyOCSM
-             - complete implementation
-             - write sample python scripts
-
-         other
-
-         provide visual feedback when highlighting in Graphics window
-
-         allow user to provide "guide curves" in BLEND
-
-         provide a tool to create a Body that encloses other Bodys
-             (packaging)
-
-         add comments to example files
-
-         include pictures/descriptions of main test cases in ESP-help
-
-         add layering capability to activate/suppress groups of
-             features
-
-         allow sketchs with holes
-
-         RULE and BLEND only work for sketches with one loop
-
-         promote and rename functions in ocsm.def
-             createTessVels     ->
-             removeTessVels     ->
-             velocityOfEdge     ->
-             velocityOfFace     ->
-             velocityOfNode     ->
-
-         .ibody for Edges not correct after combine
-
-         Edge attributes are not maintained if subsequent operation
-             modifies the Edge (except transformations)
-
-         in ESP, if EDIT is chosen for case that has UDCs, give user
-             choice to edit .csm or one of the .udc
-
-         grey out skvar, skcon, linseg, etc when adding a Branch but
-             there is no sketch active
-
-         CONNECT does not work if there are 3-sided Faces
-
-         creation of sketches of airfoils generated with many points
-             causes system to slow down very much
-
-         be able to split a spline in a sketch
-
-         cannot SUBTRACT a SolidBody from a SheetBody
-
-         if multiple browsers are attached to serveCSM, the Parameter
-             and Branch lists are not broadcast to all browsers when
-             changes are made
-
-         add graphical feedback when highlighting in display window
-
-         change cursur when locating or picking
-
-         display cursor coordinates in Sketcher in key window
-
-         add sparcap and ribcap attributes in udfCreateBEM
-
-         allow Face attributes to be prescribed in udpWaffle
-
-         create catchable signals for sketch Branches
-
-         have dropdown when editing udprim statement to allow user to
-             select udp/udc/udf name
-
-         have dropdown when editing udprim statement to tell user
-             about the valid arguments for the current udp
-
-         warn if too many argments on command in .csm file
-
-         make UDPs thread-safe
-
-         determine if udpSensitivity is ever called with
-             entType==OCSM_NODE
-
-         commands to change graphical attributes based upon ego
-             attributes
-
-         allow internal parameters to contain string values
-
-         add ifmatch(str,glob,ifTrue,ifFalse) function
-
-         add length(str) function
-
-         add concat(str1,str2) function
-
-         add format(fmt, arg1, ...) function
-
-         add index(str1,str2) function
-
-         add slice(str,ibeg,iend) function
-
-         add split(str1,sep,index) function
-
-         if repeated sketches in BLEND are not identical in some
-             segments, create a Face that is C0 with the adjoining
-             Faces
-
-         add context-sensitive help when editing Branch in ESP
-
-         automatically pick sign for radius, sweep, width, depth,
-             ... based upon sketched value(s)
-
-         for primitives that have not been analytically
-             differentiated (eg. UDPs and blend), get FD sensitivities
-
-         message about worst constraint should identify the
-             constraint
-
-         add hinge location option to flapz.udc
-
-         when a Design Parameter is being editted, color the Branches
-             that directly use the Design Parameter
-
-         allow a sketch to be editted after it is completed
-
-         add a help button that jumps to the part of ESP-help that
-             describes the statement
-
-         insert a Branch before an existing Branch
-
-         change the value of a Design Parameter directly in the Tree
-             window
-
-         be able to change size of the sub-windows / sections
-
-         allow a constraint on the length of an arc
-
-         allow entity control points (radii center) be selectable for
-             constraints
-
-         S option in Sketcher should draw spline
-
-         reorderLoops does not work for Loops with only 2 Edges
-
-         write udpIcad to create Bodys from 3D data file (for ICAD)
-
-         remove "WARNING:: Edge xx has .ibody=-4  .iford=-4" after
-             restore command
-
-         apply attributes associated with a .udc to all bodys
-             generated by the .udc
-
-         persist edge attributes through rebuilds
-
-         use "Trn" toggle to toggle tufts when sensitivity is active
-
-         add optional start and stride arguments to patbeg statement
-
-         add -showProgress option to ESP
-
-         add ellarc (x, y, z, quadrant, power=2)
-
-         allow multiple splines in sketch with tangency between them
-
-         optionally set tangency at ends of splines
-
-         sketch cannot be made with all spline statements (that is, a
-             periodic spline)
-
-         add FAQ section (and answers) to ESP-help
-
-         abort in dump command if any tessellation problems were
-             detected
-
-         serveCSM tutorial1_new sometimes seg faults during
-             sensitivity calculations (OCC 6.8.0 on DARWIN64)
-
-         find Kulfan parameters that match given shape
-
-         apply attributes associated with a patbeg statement to all
-             bodys in the pattern
-
-         move buildSceneGraph to rendering loop in serveCSM
-
-         attribute Edges with scribe operation that produced it
-
-         issue warning if too few or too many values are given in
-             multi-value despmtr and set statements
-
-         allow recycling from previous build after using edit function
-
-         .iford=-4 warnings in sculpted_inlet
-
-         allow boolean operators to be deferred
-
-         change ESP editor to allow multiple (included) files
-
-         cannot modify GPrims of length 1
-
-         Edges not drawn in ESP on LINUX64 under VMware
-
-         ctrl-l (leftside view) does not work in Safari
-
-         OpenCASCADE's sew operation fails on cases with loose
-             tolerances
-
-         test case(s) demonstrating assmebly constraints (coplanar,
-             coaxial, ...)
-
-         convert macbeg/macend/recall to udprim/end in test cases
-
-         better way of identifying Edges to extract
-
-         better way of identifying Faces to extract
-
-         enhance ESP code editor with CodeMirror
-
-         allow cut/copy/paste in Tree Window in ESP
-
-         save "view" between invocations of ESP
-
-         implement boolean operators for all combinations of src and
-             tool Body types
-
-         allow spaces in stored arguments
-
-         remember comments with Branches
-
-         analytic sensitivities for LINSEGs and CIRARCs
-
-         analytic sensitivities for udpNaca456
-
-         fillet/chamfer causes finite-differece sensitivities even if
-             fillet/chamfer will not change
-
-         fix parent/child pointers for union with toMark>0
-
-         sensitivity of @-parameters
-
-Low priority
-
-         allow user to measure distances, radii, etc in ESP
-
-         analyze feature tree to determine which operations could be
-             parallelized
-
-         ability to save state (geometry and feature tree)
-
-         better/faster boolean operators (re-write?)
-
-         interactive cutting planes in ESP
-
-         allow vector operations, such as scalar*vector, min(vector),
-             flip(vector), sort(vector), read vector from file, copy a
-             vector
-
-         add fillet command in sketch?
-
-         reduce number of faces in concept100c (via udpBezier)
-
-         add sensitivities to gridCSM
-
-         find optimal dtime for finite differences
-
-         fix convergence of matchCSM (match1) which uses scale factors
-             computed implicitly from lower and upper bounds
-
-         why do knot spacings change in EG_approximate? (Bill Jones)
-
-         use ESP graphics for matchCSM
-
-         modify conjGrad to use lower and upper bounds
-
-         2D plots (such as optimization convergence) in ESP
-
-         match Face points in matchCSM
-
-         depricate macbeg, macend, and recall statements
-
-         cache velocities computed in ocsmGetVel
-
-         update udpImport to return a SolidBody (instead of multi-face
-             SheetBody) if possible
-
-         add ocsmSketch to check a sketch and return a ranked list of
-             "possible remedies" if sketch fails
-
-         generate a silohuette
-
-         write "how to write UDPs"
-
-         allow views to synchroize views in multiple browsers
-
-         maintain graphic attributes during rebuild (based upon
-             ibody/iford)
-
-         design/implement a sketch designer that automatically changes
-             design Parameters to get prescribed change at one point
-             while minimizing the changes at all other points and/or
-             area and/or perimeter
-
-         design/implement a sketch designer that automatically changes
-             design Parameters to get a prescribed sketch shape
-
-         design7 fails sensitivities for shaftDiam and finWidth
-             (caused by design velocities in buildCSM not being scaled
-             by the size of the nominal paramater)
-
-Not planned
-
-         sculpting (modify fuselage to flow smoothly into inlet)
-
-         use other back-end (eg, Parasolids)
-
-         udps for VSP3.0 primitives
-
-EGADS issues / failures
-
-         bad fillet for case fillet7.csm
-
-         hingex.csm fails (SegFault 11 in EG_FilletBody)
-
-         star5.csm fails (SBO fusion exception in EG_solidBoolean)
-
-         sweep4.fails (BRepOffsetAPI_MakePipe Exception in EG_Sweep)
-
-         import3 has fillTris=-24 error (probably error in .stp file)
-
-         sheet14 has fillTris=-24 error
-
-         analytic sensitivities for BLENDs
-
-         multi-thread EG_ruled and EG_blend
-
-Items to be done before cutting a new version
-
-         update version number and date
-
-         run test suite, including tutorials
-
-         ensure ESP-help.html is consistent with OpenCSM.h
-
-         update ESP-fig*.png files
-

@@ -55,7 +55,7 @@ main(int argc, char *argv[])
   int          irow, icol, buildTo, builtTo, ibody, nvert, noI;
   int          nbody=0, nface, kb, nb, iglobal, iface, outLevel;
   char         *filename, name[MAX_NAME_LEN], pname[129];
-  double       value, dot, size, lower, upper;
+  double       value, dot, size, lower, upper, step;
   double       global[3], tparam[3], box[6], ***dvar=NULL, *psens=NULL;
   const char   *occ_rev;
   const double *pcsens;
@@ -375,26 +375,30 @@ main(int argc, char *argv[])
       }
     }
     /* clear all then set */
-    ocsmSetDtime(modl, 0);
+    step = 0.0;
     ocsmSetVelD(modl, 0,     0,    0,    0.0);
     ocsmSetVelD(modl, ipmtr, irow, icol, 1.0);
     if (p_xddm->a_v[i].p_comment != NULL) {
       if (strcmp(p_xddm->a_v[i].p_comment, "FD") == 0) {
-        stat = ocsmSetDtime(MODL, 0.001);
+        step = 0.001;
         printf("\n*** forced finite differencing for %s (%d) ***\n",
                pname, stat);
       }
       if (strcmp(p_xddm->a_v[i].p_comment, "oFD") == 0) {
-        stat = ocsmSetDtime(MODL, 0.001);
+        step = 0.001;
         printf("\n*** forcing OpenCSM finite differencing for %s (%d) ***\n",
                pname, stat);
       }
     }
-    buildTo = 0;
-    nb      = 0;
     outLevel = ocsmSetOutLevel(0);
-    printf(" CAPS Info: Building sensitivity information for: %s[%d,%d]\n", name, irow, icol);
-    stat    = ocsmBuild(modl, buildTo, &builtTo, &nb, NULL);
+    stat = ocsmSetDtime(modl, step);
+    if (step == 0.0) {
+      buildTo = 0;
+      nb      = 0;
+      printf(" CAPS Info: Building sensitivity information for: %s[%d,%d]\n",
+             name, irow, icol);
+      stat    = ocsmBuild(modl, buildTo, &builtTo, &nb, NULL);
+    }
     ocsmSetOutLevel(outLevel);
     if (noI == 0) {
       printf("\n*** compute parameter %d (%s) sensitivity status = %d (%d)***\n",

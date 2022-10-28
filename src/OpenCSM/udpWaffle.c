@@ -114,8 +114,6 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     ego     *enodes=NULL, *eedges=NULL, *efaces=NULL, ecurve, echild[4], eloop, eshell;
     ego     *ewires=NULL;
 
-    double  EPS06 = 1.0e-6;
-
     ROUTINE(udpExecute);
 
     /* --------------------------------------------------------------- */
@@ -788,8 +786,6 @@ processSegments(int    *npnt,           /* (out) number of Points */
     pnt_T   *pnt=NULL;
     seg_T   *seg=NULL;
 
-    double  EPS06 = 1.0e-6;
-
     ROUTINE(processSegments);
 
     /* get number of Segments from size of SEGMENTS() */
@@ -921,8 +917,6 @@ processFile(ego    context,             /* (in)  EGADS context */
     char   *filename, name[MAX_NAME_LEN], str[256];
     void   *modl;
     FILE   *fp=NULL;
-
-    double  EPS06 = 1.0e-6;
 
     ROUTINE(processFile);
 

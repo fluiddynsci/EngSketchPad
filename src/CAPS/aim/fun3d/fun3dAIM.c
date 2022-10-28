@@ -156,6 +156,9 @@ typedef struct {
     // Units structure
     cfdUnitsStruct units;
 
+    // Mesh reference obtained from meshing AIM
+    aimMeshRef *meshRef, meshRefObj;
+
 } aimStorage;
 
 
@@ -257,6 +260,9 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *a
     AIM_STATUS(aimInfo, status);
 
     initiate_cfdUnitsStruct(&fun3dInstance->units);
+
+    fun3dInstance->meshRef = NULL;
+    aim_initMeshRef(&fun3dInstance->meshRefObj);
 
     /*! \page aimUnitsFUN3D AIM Units
      *  A unit system may be optionally specified during AIM instance initiation. If
@@ -886,6 +892,21 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
          * If True and Design_SensFile = True, read functional sensitivities from <Proj_Name>.sens and compute sensitivities w.r.t Design_Variable.
          * The value of the design functionals become available as Dynamic Output Value Objects using the "name" of the functionals.
          */
+
+    } else if (index == Design_Morph) {
+        *ainame              = EG_strdup("Design_Morph");
+        defval->type         = Boolean;
+        defval->lfixed       = Fixed;
+        defval->vals.integer = (int)false;
+        defval->dim          = Scalar;
+        defval->nullVal      = NotNull;
+
+        /*! \page aimInputsFUN3D
+         * - <B> Design_Morph = False</B> <br>
+         *
+         * UNDOCUMENTED - Alpha testing
+         * */
+
     } else if (index == Mesh) {
         *ainame             = AIM_NAME(Mesh);
         defval->type        = PointerMesh;
@@ -924,14 +945,14 @@ int aimUpdateState(void *instStore, void *aimInfo,
     ego *bodies = NULL;
     const char *intents;
 
-    // Mesh reference obtained from meshing AIM
-    aimMeshRef *meshRef = NULL;
-
     aimStorage *fun3dInstance;
 
     fun3dInstance = (aimStorage *) instStore;
     AIM_NOTNULL(fun3dInstance, aimInfo, status);
     AIM_NOTNULL(aimInputs, aimInfo, status);
+
+    // Free our meshRef
+    (void) aim_freeMeshRef(&fun3dInstance->meshRefObj);
 
     if (aimInputs[Design_Functional-1].nullVal == NotNull &&
         aimInputs[Design_SensFile-1].vals.integer == (int)true) {
@@ -943,19 +964,36 @@ int aimUpdateState(void *instStore, void *aimInfo,
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
     AIM_STATUS(aimInfo, status);
+    AIM_NOTNULL(bodies, aimInfo, status);
 
-    if (aimInputs[Mesh-1].nullVal == IsNull) {
+    if (aimInputs[Mesh-1].nullVal == IsNull &&
+        aimInputs[Design_Morph-1].vals.integer == (int) false) {
         AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to an output 'Area_Mesh' or 'Volume_Mesh'");
         status = CAPS_BADVALUE;
         goto cleanup;
     }
 
     // Get mesh
-    meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
-    AIM_NOTNULL(meshRef, aimInfo, status);
+    fun3dInstance->meshRef = (aimMeshRef *) aimInputs[Mesh-1].vals.AIMptr;
+
+    if ( aimInputs[Design_Morph-1].vals.integer == (int) true &&
+        fun3dInstance->meshRef == NULL) { // If we are mighty morphing
+
+        // Lets "load" the meshRef now since it's not linked
+        status = aim_loadMeshRef(aimInfo, &fun3dInstance->meshRefObj);
+        AIM_STATUS(aimInfo, status);
+
+        // Mightly Morph the mesh
+        status = fun3d_morphMeshUpdate(aimInfo, &fun3dInstance->meshRefObj, numBody, bodies);
+        AIM_STATUS(aimInfo, status);
+        /*@-immediatetrans@*/
+        fun3dInstance->meshRef = &fun3dInstance->meshRefObj;
+        /*@+immediatetrans@*/
+    }
+    AIM_NOTNULL(fun3dInstance->meshRef, aimInfo, status);
 
     // Get attribute to index mapping
-    status = create_MeshRefToIndexMap(aimInfo, meshRef, &fun3dInstance->groupMap);
+    status = create_MeshRefToIndexMap(aimInfo, fun3dInstance->meshRef, &fun3dInstance->groupMap);
     AIM_STATUS(aimInfo, status);
 
     if (aimInputs[Boundary_Condition-1].nullVal ==  IsNull) {
@@ -1029,6 +1067,7 @@ cleanup:
 // ********************** AIM Function Break *****************************
 int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 {
+
     // Function return flag
     int status;
 
@@ -1123,7 +1162,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                     aimInputs[Reference_Area-1].vals.real = (double) reals[0];
                     aimInputs[Reference_Area-1].nullVal = NotNull;
                 } else {
-                    printf("capsReferenceArea should be followed by a single real value!\n");
+                    AIM_ERROR(aimInfo, "capsReferenceArea should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
                     goto cleanup;
                 }
@@ -1155,7 +1194,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                     aimInputs[Moment_Length-1].vals.reals[1] = (double) reals[0];
                     aimInputs[Moment_Length-1].nullVal = NotNull;
                 } else {
-                    printf("capsReferenceSpan should be followed by a single real value!\n");
+                    AIM_ERROR(aimInfo, "capsReferenceSpan should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
                     goto cleanup;
                 }
@@ -1172,7 +1211,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                     aimInputs[Moment_Center-1].vals.reals[0] = (double) reals[0];
                     aimInputs[Moment_Center-1].nullVal = NotNull;
                 } else {
-                    printf("capsReferenceX should be followed by a single real value!\n");
+                    AIM_ERROR(aimInfo, "capsReferenceX should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
                     goto cleanup;
                 }
@@ -1186,7 +1225,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                     aimInputs[Moment_Center-1].vals.reals[1] = (double) reals[0];
                     aimInputs[Moment_Center-1].nullVal = NotNull;
                 } else {
-                    printf("capsReferenceY should be followed by a single real value!\n");
+                    AIM_ERROR(aimInfo, "capsReferenceY should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
                     goto cleanup;
                 }
@@ -1200,7 +1239,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                     aimInputs[Moment_Center-1].vals.reals[2] = (double) reals[0];
                     aimInputs[Moment_Center-1].nullVal = NotNull;
                 } else {
-                    printf("capsReferenceZ should be followed by a single real value!\n");
+                    AIM_ERROR(aimInfo, "capsReferenceZ should be followed by a single real value!\n");
                     status = CAPS_BADVALUE;
                     goto cleanup;
                 }
@@ -1231,8 +1270,15 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     projectName = aimInputs[Proj_Name-1].vals.string;
 
     // Get mesh
-    meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
+    meshRef = fun3dInstance->meshRef;
     AIM_NOTNULL(meshRef, aimInfo, status);
+
+    if ( aimInputs[Design_Morph-1].vals.integer == (int) true &&
+         aimInputs[Mesh-1].nullVal == NotNull) { // If we are mighty morphing
+        // store the current mesh for future iterations
+        status = aim_storeMeshRef(aimInfo, (aimMeshRef *) aimInputs[Mesh-1].vals.AIMptr, MESHEXTENSION);
+        AIM_STATUS(aimInfo, status);
+    }
 
     // Get modal aeroelastic information - only get modal aeroelastic inputs if they have be set
     if (aimInputs[Modal_Aeroelastic-1].nullVal ==  NotNull) {
@@ -1265,7 +1311,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
             if (status != EGADS_SUCCESS) goto cleanup;
 
             if (bodySubType != FACEBODY && bodySubType != SHEETBODY) {
-                printf("Body type must be either FACEBODY (%d) or a SHEETBODY (%d) when running in two mode!\n",
+                AIM_ERROR(aimInfo, "Body type must be either FACEBODY (%d) or a SHEETBODY (%d) when running in two mode!\n",
                        FACEBODY, SHEETBODY);
                 status = CAPS_BADTYPE;
                 goto cleanup;
@@ -1341,10 +1387,11 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     }
 
     if (aimInputs[Two_Dimensional-1].vals.integer == (int) false) {
-      snprintf(gridfile, PATH_MAX, "%s%s", meshRef->fileName, MESHEXTENSION);
+        snprintf(gridfile, PATH_MAX, "%s%s", meshRef->fileName, MESHEXTENSION);
 
-      status = aim_symLink(aimInfo, gridfile, filename);
-      AIM_STATUS(aimInfo, status);
+        status = aim_symLink(aimInfo, gridfile, filename);
+
+        AIM_STATUS(aimInfo, status);
     }
 
     status = populate_bndCondStruct_from_bcPropsStruct(&fun3dInstance->bcProps, &bndConds);
@@ -1608,7 +1655,6 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
     char **names=NULL;
     double **dxyz = NULL;
 
-    capsValue *ProjName=NULL;
     const char *projectName =NULL;
 
     FILE *fp=NULL;
@@ -1627,7 +1673,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
     // Get mesh
-    meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
+    meshRef = fun3dInstance->meshRef;
     AIM_NOTNULL(meshRef, aimInfo, status);
 
     if (aimInputs[Design_Functional-1].nullVal == NotNull) {
@@ -1699,10 +1745,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
         nGeomIn++;
       }
 
-      status = aim_getValue(aimInfo, Proj_Name, ANALYSISIN, &ProjName);
-      AIM_STATUS(aimInfo, status);
-      AIM_NOTNULL(ProjName, aimInfo, status);
-      projectName = ProjName->vals.string;
+      projectName = aimInputs[Proj_Name-1].vals.string;
 
       // Read the number of volume nodes from the mesh
 #ifdef WIN32
@@ -1726,7 +1769,6 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
 
       numNode = 0;
       for (ibody = 0; ibody < meshRef->nmap; ibody++) {
-        if (meshRef->maps[ibody].tess == NULL) continue;
 
         status = EG_statusTessBody(meshRef->maps[ibody].tess, &body, &state, &offset);
         AIM_STATUS(aimInfo, status);
@@ -2547,6 +2589,9 @@ void aimCleanup(void *instStore)
     // Cleanup units
     destroy_cfdUnitsStruct(&fun3dInstance->units);
 
+    aim_freeMeshRef(&fun3dInstance->meshRefObj);
+    fun3dInstance->meshRef = NULL;
+
     AIM_FREE(fun3dInstance);
 }
 
@@ -2579,7 +2624,7 @@ int aimDiscr(char *tname, capsDiscr *discr)
     ego *bodies = NULL, *tess = NULL;
 
     const char   *intents;
-    capsValue *meshVal;
+    capsValue *meshVal, *morphVal;
 
     // Volume Mesh obtained from meshing AIM
     aimMeshRef *meshRef;
@@ -2610,14 +2655,18 @@ int aimDiscr(char *tname, capsDiscr *discr)
     status = aim_getValue(discr->aInfo, Mesh, ANALYSISIN, &meshVal);
     AIM_STATUS(discr->aInfo, status);
 
-    if (meshVal->nullVal == IsNull) {
-        AIM_ANALYSISIN_ERROR(discr->aInfo, Mesh, "'Mesh' input must be linked to an output 'Area_Mesh' or 'Volume_Mesh'");
-        status = CAPS_BADVALUE;
-        goto cleanup;
-    }
+//    if (meshVal->nullVal == IsNull) {
+//        AIM_ANALYSISIN_ERROR(discr->aInfo, Mesh, "'Mesh' input must be linked to an output 'Area_Mesh' or 'Volume_Mesh'");
+//        status = CAPS_BADVALUE;
+//        goto cleanup;
+//    }
+
+    // Get the Morphing Value
+    status = aim_getValue(discr->aInfo, Design_Morph, ANALYSISIN, &morphVal);
+    AIM_STATUS(discr->aInfo, status);
 
     // Get mesh
-    meshRef = (aimMeshRef *)meshVal->vals.AIMptr;
+    meshRef = fun3dInstance->meshRef;
     AIM_NOTNULL(meshRef, discr->aInfo, status);
 
     if (meshRef->nmap == 0) {

@@ -55,9 +55,7 @@
 #include <math.h>
 #include <assert.h>
 
-#include "egads.h"
 #include "OpenCSM.h"
-#include "common.h"
 #include "tim.h"
 #include "wsserver.h"
 

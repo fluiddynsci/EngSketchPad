@@ -55,7 +55,6 @@ static double argDdefs[NUMUDPARGS] = {0.,          0.,          0.,         0., 
 
 #define           MIN(A,B)        (((A) < (B)) ? (A) : (B))
 #define           MAX(A,B)        (((A) < (B)) ? (B) : (A))
-#define           EPS06           1.0e-6
 
 /* prototype for function defined below */
 static int editAttrs(ego ebody, char attrname[], char input[], char output[],

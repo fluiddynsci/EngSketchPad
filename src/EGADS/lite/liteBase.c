@@ -736,6 +736,18 @@ EG_deleteObject(egObject *object)
 
 
 __HOST_AND_DEVICE__ int
+EG_getContext(egObject *object, egObject **context)
+{
+  if (object == NULL)               return EGADS_NULLOBJ;
+  if (object->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (object->oclass == EMPTY)      return EGADS_EMPTY;
+
+  *context = EG_context(object);
+  return EGADS_SUCCESS;
+}
+
+
+__HOST_AND_DEVICE__ int
 EG_getInfo(const egObject *object, int *oclass, int *mtype, egObject **top,
            egObject **prev, egObject **next)
 {
@@ -813,8 +825,13 @@ EG_close(egObject *context)
     attrs = (egAttrs *) obj_h->attrs;
     if (attrs != NULL) {
       egAttrs attrs_, *attrs_h = &attrs_;
-      egAttr  attr_, *attr_h = &attr_;
+      egAttr  attr_,  *attr_h  = &attr_;
       EG_GET_ATTRS(attrs_h, attrs);
+      for (i = 0; i < attrs_h->nseqs; i++) {
+        EG_FREE(attrs_h->seqs[i].root);
+        EG_FREE(attrs_h->seqs[i].attrSeq);
+      }
+      if (attrs_h->seqs != NULL) EG_FREE(attrs_h->seqs);
       for (i = 0; i < attrs_h->nattrs; i++) {
         EG_GET_ATTR(attr_h, &(attrs_h->attrs[i]));
         EG_FREE(attr_.name);

@@ -237,7 +237,10 @@ EG_matchSplitter(BRepAlgoAPI_BuilderAlgo& BSO, egObject *src,
       return EGADS_MALLOC;
     }
   }
-  if ((emap == NULL) && (fmap == NULL)) return EGADS_CONSTERR;
+  if ((emap == NULL) && (fmap == NULL)) {
+    if ((fullAttrs == 0) && (rmap.Extent() == 0)) return EGADS_SUCCESS;
+    return EGADS_CONSTERR;
+  }
 
   if (emap != NULL)
     for (i = 0; i < rmape.Extent(); i++) emap[i] = NULL;
@@ -494,7 +497,10 @@ EG_matchGeneral(BRepAlgoAPI_BooleanOperation& BSO, egObject *src,
       return EGADS_MALLOC;
     }
   }
-  if ((emap == NULL) && (fmap == NULL)) return EGADS_CONSTERR;
+  if ((emap == NULL) && (fmap == NULL)) {
+    if ((fullAttrs == 0) && (rmap.Extent() == 0)) return EGADS_SUCCESS;
+    return EGADS_CONSTERR;
+  }
 
   if (emap != NULL)
     for (i = 0; i < rmape.Extent(); i++) emap[i] = NULL;

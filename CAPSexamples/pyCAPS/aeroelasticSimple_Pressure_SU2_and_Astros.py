@@ -77,8 +77,8 @@ for boundName in boundNames:
     astrosVset = bound.vertexSet.create(astros)
 
     # Create displacement data sets
-    su2_Pressure    = su2Vset.dataSet.create("Pressure", pyCAPS.fType.FieldOut)
-    astros_Pressure = astrosVset.dataSet.create("Pressure", pyCAPS.fType.FieldIn)
+    su2_Pressure    = su2Vset.dataSet.create("Pressure")
+    astros_Pressure = astrosVset.dataSet.create("Pressure")
 
     # Link the data set
     astros_Pressure.link(su2_Pressure, "Conserve")

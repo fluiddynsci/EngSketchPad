@@ -64,8 +64,8 @@ for boundName in boundNames:
     mystranVset = bound.vertexSet.create(mystran)
 
     # Create pressure data sets
-    fun3d_Pressure   = fun3dVset.dataSet.create("Pressure", pyCAPS.fType.FieldOut)
-    mystran_Pressure = mystranVset.dataSet.create("Pressure", pyCAPS.fType.FieldIn)
+    fun3d_Pressure   = fun3dVset.dataSet.create("Pressure")
+    mystran_Pressure = mystranVset.dataSet.create("Pressure")
 
     # Link the data set
     mystran_Pressure.link(fun3d_Pressure, "Conserve")

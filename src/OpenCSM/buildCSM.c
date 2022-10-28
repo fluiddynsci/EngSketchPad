@@ -38,15 +38,12 @@
     #include <windows.h>
 #endif
 
-#include "egads.h"
-
 #define CINT    const int
 #define CDOUBLE const double
 #define CCHAR   const char
 
 #define STRNCPY(A, B, LEN) strncpy(A, B, LEN); A[LEN-1] = '\0';
 
-#include "common.h"
 #include "OpenCSM.h"
 #include "udp.h"
 

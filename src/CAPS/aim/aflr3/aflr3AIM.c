@@ -145,6 +145,7 @@ static int destroy_aimStorage(aimStorage *aflr3Instance, int inUpdate)
         (void) destroy_meshSizingStruct(&aflr3Instance->meshProp[i]);
     }
     AIM_FREE(aflr3Instance->meshProp);
+    aflr3Instance->numMeshProp = 0;
 
     return status;
 }

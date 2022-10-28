@@ -17,6 +17,7 @@
  *
  * The Pointwise AIM provides the CAPS users with the ability to generate volume meshes mostly suitable for CFD analysis.
  * This includes both inviscid analysis and viscous analysis with boundary layers using the pointwise T-Rex algorithm.
+ * 2D mesh generation is currently not available.
  *
  * An outline of the AIM's inputs, outputs and attributes are provided in \ref aimInputsPointwise and
  * \ref aimOutputsPointwise and \ref attributePointwise, respectively.

@@ -2554,7 +2554,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
         if (i == 0) printf("\tWriting design variable cards\n");
 
-        status = nastran_writeDesignVariableCard(fp,
+        status = nastran_writeDesignVariableCard(aimInfo, fp,
                                                  &nastranInstance->feaProblem.feaDesignVariable[i],
                                                  &nastranInstance->feaProblem.feaFileFormat);
         if (status != CAPS_SUCCESS) goto cleanup;

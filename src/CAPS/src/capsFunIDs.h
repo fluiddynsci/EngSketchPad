@@ -103,10 +103,11 @@
 #define CAPS_LINKVALUE       90
 #define CAPS_HASDERIV        91
 #define CAPS_GETDERIV        92
+#define CAPS_GETVALUESIZE    93
 
 /* string conversion for the funIDs */
 
-#define CAPS_NFUNID          93
+#define CAPS_NFUNID          94
 
 extern const char* caps_funID[CAPS_NFUNID];
 

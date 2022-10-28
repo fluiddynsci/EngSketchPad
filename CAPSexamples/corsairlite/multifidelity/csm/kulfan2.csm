@@ -1,0 +1,73 @@
+attribute capsIntent $LINEARAERO
+attribute capsAIM    $xfoilAIM;tsfoilAIM;msesAIM
+
+cfgpmtr   view:MSES 0
+
+dimension params 1 3 0
+set params 0.10 0.1 6
+
+despmtr   nparams 2
+dimension class 1 2
+dimension ztail 1 2
+dimension aupper 1 nparams
+dimension alower 1 nparams
+
+despmtr    class    "0.5; 1.0;"
+despmtr    ztail    "0.00; 0.00;"
+despmtr    aupper   "0.2; 0.2;"
+despmtr    alower   "-0.2; -0.2;"
+despmtr    area     30.0
+despmtr    aspect   20.0
+despmtr    taper    1.0
+
+set   span    sqrt(area*aspect)
+set   croot   area/span*2/(taper+1)
+set   ctip    croot*taper
+set   xtip    (croot-ctip)/2
+outpmtr span
+
+ifthen view:MSES NE 1
+    MARK
+        udparg kulfan class class
+        udparg kulfan ztail ztail
+        udparg kulfan aupper aupper
+        udparg kulfan alower alower
+        udprim kulfan
+        scale     ctip
+        rotatex   90
+        translate xtip -span/2 0
+        store     wing -1 1
+
+        udparg kulfan class class
+        udparg kulfan ztail ztail
+        udparg kulfan aupper aupper
+        udparg kulfan alower alower
+        udprim kulfan
+        scale     croot
+        rotatex   90
+        store     wing -1 1
+
+        udparg kulfan class class
+        udparg kulfan ztail ztail
+        udparg kulfan aupper aupper
+        udparg kulfan alower alower
+        udprim kulfan
+        scale     ctip
+        rotatex   90
+        translate xtip span/2 0
+        store     wing -1 1
+    RULE
+    
+    store tessBody
+    restore tessBody
+    attribute .tParams params
+else
+    udparg kulfan class class
+    udparg kulfan ztail ztail
+    udparg kulfan aupper aupper
+    udparg kulfan alower alower
+    udprim kulfan
+
+endif
+
+end

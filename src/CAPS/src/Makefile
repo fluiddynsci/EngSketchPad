@@ -11,9 +11,9 @@ endif
 
 VPATH = $(ODIR)
 
-OBJS  = capsBase.o  capsAnalysis.o capsApprox.o capsAttr.o  capsAIM.o \
-	capsBound.o capsProblem.o  capsValue.o  capsUnits.o conjGrad.o \
-	capsFunIDs.o printObject.o
+OBJS  = capsBase.o   capsAnalysis.o capsApprox.o capsAttr.o  capsAIM.o \
+	capsBound.o  capsProblem.o  capsValue.o  capsUnits.o conjGrad.o \
+	capsFunIDs.o capsChkInpt.o  printObject.o
 
 default:	includes $(LDIR)/libaimUtil.a $(LDIR)/$(CSHLIB) \
 		$(LDIR)/libcapsstatic.a $(LDIR)/testingAIM.so \
@@ -138,7 +138,7 @@ lint:
 	$(LINT) -I../include -I$(IDIR) phaseUtil.c capsBase.c -uniondef -exportlocal -nullpass -bufferoverflowhigh -Dclosedir=free
 	@echo " "
 	@echo "CAPS library:"
-	$(LINT) -I../include -I$(IDIR) $(patsubst %.o,%.c,$(OBJS)) -uniondef -exportlocal -nullpass -bufferoverflowhigh -Dclosedir=free
+	$(LINT) -I../include -I$(IDIR) $(patsubst %.o,%.c,$(OBJS)) -uniondef -exportlocal -nullpass -bufferoverflowhigh -evalorder -Dclosedir=free
 	@echo " "
 	@echo "AIM utility library:"
 	$(LINT) -I../include -I$(IDIR) aimUtil.c aimMesh.c aimTransferUtil.c -uniondef -exportlocal -initallelements -Dclosedir=free

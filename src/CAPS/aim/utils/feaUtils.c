@@ -10726,10 +10726,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaAnalysisStruct\n", status);
         }
     }
-
-    if (feaProblem->feaAnalysis != NULL) EG_free(feaProblem->feaAnalysis);
-    feaProblem->feaAnalysis = NULL;
-
+    AIM_FREE(feaProblem->feaAnalysis);
     feaProblem->numAnalysis = 0;
 
     // Materials
@@ -10739,9 +10736,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaMaterialStruct\n", status);
         }
     }
-    if (feaProblem->feaMaterial != NULL) EG_free(feaProblem->feaMaterial);
-    feaProblem->feaMaterial = NULL;
-
+    AIM_FREE(feaProblem->feaMaterial);
     feaProblem->numMaterial = 0;
 
     // Properties
@@ -10751,10 +10746,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaPropertyStruct\n", status);
         }
     }
-
-    if (feaProblem->feaProperty != NULL)EG_free(feaProblem->feaProperty);
-    feaProblem->feaProperty = NULL;
-
+    AIM_FREE(feaProblem->feaProperty);
     feaProblem->numProperty = 0;
 
     // Constraints
@@ -10764,11 +10756,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaConstraintStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaConstraint);
     feaProblem->numConstraint = 0;
-
-    if (feaProblem->feaConstraint != NULL) EG_free(feaProblem->feaConstraint);
-    feaProblem->feaConstraint = NULL;
 
     // Supports
     if (feaProblem->feaSupport != NULL) {
@@ -10777,11 +10766,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaSupportStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaSupport);
     feaProblem->numSupport = 0;
-
-    if (feaProblem->feaSupport != NULL) EG_free(feaProblem->feaSupport);
-    feaProblem->feaSupport = NULL;
 
     // Loads
     if (feaProblem->feaLoad != NULL) {
@@ -10790,11 +10776,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaLoadStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaLoad);
     feaProblem->numLoad = 0;
-
-    if (feaProblem->feaLoad != NULL) EG_free(feaProblem->feaLoad);
-    feaProblem->feaLoad = NULL;
 
     // Connections
     if (feaProblem->feaConnect != NULL) {
@@ -10803,11 +10786,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaConnectStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaConnect);
     feaProblem->numConnect = 0;
-
-    if (feaProblem->feaConnect != NULL) EG_free(feaProblem->feaConnect);
-    feaProblem->feaConnect = NULL;
 
     // Mesh
     status = destroy_meshStruct(&feaProblem->feaMesh);
@@ -10824,11 +10804,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaDesignVariableStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaDesignVariable);
     feaProblem->numDesignVariable = 0;
-
-    if (feaProblem->feaDesignVariable != NULL) EG_free(feaProblem->feaDesignVariable);
-    feaProblem->feaDesignVariable = NULL;
 
     // Optimization - design variable relations
     if (feaProblem->feaDesignVariableRelation != NULL) {
@@ -10836,8 +10813,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             status = destroy_feaDesignVariableRelationStruct(&feaProblem->feaDesignVariableRelation[i]);
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaDesignVariableRelationStruct\n", status);
         }
-        EG_free(feaProblem->feaDesignVariableRelation);
-        feaProblem->feaDesignVariableRelation = NULL;
+        AIM_FREE(feaProblem->feaDesignVariableRelation);
     }
     feaProblem->numDesignVariableRelation = 0;
 
@@ -10848,11 +10824,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaDesignConstraintStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaDesignConstraint);
     feaProblem->numDesignConstraint = 0;
-
-    if (feaProblem->feaDesignConstraint != NULL) EG_free(feaProblem->feaDesignConstraint);
-    feaProblem->feaDesignConstraint = NULL;
 
     // Optimization - Equations
     if (feaProblem->feaEquation != NULL) {
@@ -10860,10 +10833,9 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             status = destroy_feaDesignEquationStruct(&feaProblem->feaEquation[i]);
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaDesignEquationStruct\n", status);
         }
-        EG_free(feaProblem->feaEquation);
+        AIM_FREE(feaProblem->feaEquation);
     }
     feaProblem->numEquation = 0;
-    feaProblem->feaEquation = NULL;
 
     // Optimization - Table Constants
     status = destroy_feaDesignTableStruct(&feaProblem->feaDesignTable);
@@ -10879,10 +10851,9 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             status = destroy_feaDesignResponseStruct(&feaProblem->feaDesignResponse[i]);
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaDesignResponseStruct\n", status);
         }
-        EG_free(feaProblem->feaDesignResponse);
+        AIM_FREE(feaProblem->feaDesignResponse);
     }
     feaProblem->numDesignResponse = 0;
-    feaProblem->feaDesignResponse = NULL;
 
     // Optimization - Design Sensitivity Equation Response Quantities
     if (feaProblem->feaEquationResponse != NULL) {
@@ -10890,10 +10861,9 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             status = destroy_feaDesignEquationResponseStruct(&feaProblem->feaEquationResponse[i]);
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaEquationResponseStruct\n", status);
         }
-        EG_free(feaProblem->feaEquationResponse);
+        AIM_FREE(feaProblem->feaEquationResponse);
     }
     feaProblem->numEquationResponse = 0;
-    feaProblem->feaEquationResponse = NULL;
 
     // Coordinate Systems
     if (feaProblem->feaCoordSystem != NULL) {
@@ -10903,10 +10873,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaCoordSystemStruct\n", status);
         }
     }
-
-    if (feaProblem->feaCoordSystem != NULL) EG_free(feaProblem->feaCoordSystem);
-    feaProblem->feaCoordSystem = NULL;
-
+    AIM_FREE(feaProblem->feaCoordSystem);
     feaProblem->numCoordSystem = 0;
 
     // Aerodynamics
@@ -10917,10 +10884,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaAeroStruct\n", status);
         }
     }
-
-    if (feaProblem->feaAero != NULL) EG_free(feaProblem->feaAero);
-    feaProblem->feaAero = NULL;
-
+    AIM_FREE(feaProblem->feaAero);
     feaProblem->numAero = 0;
 
     (void) destroy_feaAeroRefStruct(&feaProblem->feaAeroRef);

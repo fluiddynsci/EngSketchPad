@@ -674,7 +674,7 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/void *aimInfo,
 
     size_t     linecap = 0;
     char       *line = NULL, *rest = NULL, *token = NULL;
-    char       headers[MAX_DATA_ENTRY][20];
+    char       headers[MAX_DATA_ENTRY][40];
     const char *valHeader;
     FILE       *fp;
 
@@ -701,12 +701,13 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/void *aimInfo,
 
     numDataEntry = 0;
     while ((token = strtok_r(rest, " ", &rest))) {
+        if (token[0] == '\n') continue;
         strcpy(headers[numDataEntry], token);
-        //printf("%s\n", headers[numDataEntry]);
+        //printf("'%s'\n", headers[numDataEntry]);
         numDataEntry++;
-        if (numDataEntry == MAX_DATA_ENTRY) {
+        if (numDataEntry > MAX_DATA_ENTRY) {
             AIM_ERROR(aimInfo, "More than %d columns in xfoilPolar.dat is not expected!",
-                      numDataEntry);
+                      MAX_DATA_ENTRY);
             status = CAPS_IOERR;
             goto cleanup;
         }

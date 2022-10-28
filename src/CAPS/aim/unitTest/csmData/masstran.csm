@@ -6,8 +6,12 @@ CFGPMTR VIEW:box1 1
 CFGPMTR VIEW:box2 1
 CFGPMTR VIEW:box3 1
 
+DESPMTR L 1
+DESPMTR W 1
+DESPMTR H 1
+
 IFTHEN VIEW:plate EQ 1
-    BOX       0.0  0.0  0.0  2.0  3.0  0.0
+    BOX       0.0  0.0  0.0  2.0*L  3.0*W  0.0
     ATTRIBUTE capsGroup $box1
     SELECT body @nbody
         ATTRIBUTE capsAIM $masstranAIM
@@ -15,7 +19,7 @@ IFTHEN VIEW:plate EQ 1
 ENDIF
 
 IFTHEN VIEW:box1 EQ 1
-    BOX       0.0  0.0  0.0  1.0  1.0  1.0
+    BOX       0.0  0.0  0.0  L  W  H
     ATTRIBUTE capsGroup $box1
     SELECT body @nbody
         ATTRIBUTE capsAIM $masstranAIM
@@ -23,7 +27,7 @@ IFTHEN VIEW:box1 EQ 1
 ENDIF
 
 IFTHEN VIEW:box2 EQ 1
-    BOX       2.0  0.0  0.0  1.0  1.0  1.0
+    BOX       2.0  0.0  0.0  L  W  H
     ATTRIBUTE capsGroup $box1
     SELECT face 1
         ATTRIBUTE capsIgnore $true # ignore one face in the mesh
@@ -37,7 +41,7 @@ IFTHEN VIEW:box2 EQ 1
 ENDIF
 
 IFTHEN VIEW:box3 EQ 1
-    BOX       4.0  0.0  0.0  1.0  1.0  1.0
+    BOX       4.0  0.0  0.0  L  W  H
     SELECT face 1
         ATTRIBUTE capsGroup $box1
     SELECT face 2

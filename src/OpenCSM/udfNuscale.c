@@ -50,8 +50,6 @@ static double argDdefs[NUMUDPARGS] = {1.,       1.,       1.,       0.,       0.
                          udpGet, udpVel, udpClean, udpMesh */
 #include "udpUtilities.c"
 
-#define  EPS06   1.0e-6
-
 /* unpublished routine in OpenCSM.c */
 extern int convertToBSplines(ego inbody, double mat[], ego *ebody);
 

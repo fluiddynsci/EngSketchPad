@@ -71,8 +71,8 @@ for boundName in boundNames:
     
     # Create eigenVector data sets
     for eigenVector in eigenVectors:
-        fluid_eigenVector     = fluidVset.dataSet.create(eigenVector, pyCAPS.fType.FieldIn)
-        structure_eigenVector = structureVset.dataSet.create(eigenVector, pyCAPS.fType.FieldOut)
+        fluid_eigenVector     = fluidVset.dataSet.create(eigenVector)
+        structure_eigenVector = structureVset.dataSet.create(eigenVector)
 
         # Link the data sets
         fluid_eigenVector.link(structure_eigenVector, "Conserve")

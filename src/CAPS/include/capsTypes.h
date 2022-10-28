@@ -33,8 +33,8 @@
 #endif
 
 #define CAPSMAJOR      1
-#define CAPSMINOR     21
-#define CAPSPROP      CAPSprop: Revision 1.21
+#define CAPSMINOR     22
+#define CAPSPROP      CAPSprop: Revision 1.22
 
 #define CAPSMAGIC     1234321
 #define MAXANAL       64
@@ -53,8 +53,8 @@ enum capsfType   {FieldIn, FieldOut, GeomSens, TessSens, User, BuiltIn};
 enum capsjType   {jInteger, jDouble, jString, jStrings, jTuple, jPointer,
                   jPtrFree, jObject, jObjs, jErr, jOwn, jOwns, jEgos};
 enum capsBoolean {False=false, True=true};
-enum capsvType   {Boolean, Integer, Double, String, Tuple, Pointer, DoubleDeriv,
-                  PointerMesh};
+enum capsvType   {Doubles=-2, Integers, Boolean, Integer, Double, String, Tuple,
+                  Pointer, DoubleDeriv, PointerMesh};
 enum capsvDim    {Scalar, Vector, Array2D};
 enum capsFixed   {Change, Fixed};
 enum capsNull    {NotAllowed, NotNull, IsNull, IsPartial};
@@ -299,8 +299,9 @@ typedef struct {
   } vals;
   union {
     int        ilims[2];        /* integer limits */
-    double     dlims[2];        /* double limits */
+    double     dlims[2];        /* double  limits */
   } limits;
+  void         *lims;           /* per element limits [2*length*sizeof()] */
   char         *units;          /* the units for the values */
   char         *meshWriter;     /* the mesh writer (linked AnalysisIn) */
   capsObject   *link;           /* the linked object (or NULL) */
@@ -456,6 +457,7 @@ typedef struct {
                                    0 none, 1 minimal, 2 verbose, 3 debug */
   int        funID;             /* active function index */
   void       *modl;             /* OpenCSM model void pointer or static ego */
+  double     DTime;             /* OpenCSM sensitivity timestep; 0.0 analytic */
   int        iPhrase;           /* the current phrase index (-1 no phrase) */
   int        nPhrase;           /* number of intent phrases */
   capsPhrase *phrases;          /* the intent phrases */

@@ -69,8 +69,8 @@ for boundName in boundNames:
     mystranVset = bound.vertexSet.create(mystran)
 
     # Create displacement data sets
-    su2_Displacement     = su2Vset.dataSet.create("Displacement", pyCAPS.fType.FieldIn)
-    mystran_Displacement = mystranVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+    su2_Displacement     = su2Vset.dataSet.create("Displacement")
+    mystran_Displacement = mystranVset.dataSet.create("Displacement")
 
     # Link the data set
     su2_Displacement.link(mystran_Displacement, "Interpolate")

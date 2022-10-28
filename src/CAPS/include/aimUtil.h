@@ -141,6 +141,9 @@ __ProtoExt__ int
 __ProtoExt__ int
   aim_initValue( capsValue *value );
 
+__ProtoExt__ int
+  aim_copyValue( capsValue *value, capsValue *copy );
+
 __ProtoExt__ void
   aim_freeValue(capsValue *value);
 
@@ -192,6 +195,12 @@ __ProtoExt__ int
 __ProtoExt__ int
   aim_tessSensitivity( void *aimInfo, const char *GIname, int irow, int icol,
                        ego tess, int *npts, double **dxyz );
+
+__ProtoExt__ int
+  aim_setStepSize( void *aimInfo, double  step );
+
+__ProtoExt__ int
+  aim_getStepSize( void *aimInfo, double *step );
 
 __ProtoExt__ int
   aim_isNodeBody( ego body, double *xyz );

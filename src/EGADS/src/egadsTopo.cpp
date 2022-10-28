@@ -6767,7 +6767,8 @@ EG_getMassProperties(const egObject *topo, /*@null@*/ double *data)
 int
 EG_isEquivalent(const egObject *topo1, const egObject *topo2)
 {
-  int          i, stat;
+  int          i, j, n, stat;
+  double       t, tol, result1[9], result2[9];
   TopoDS_Shape shape1, shape2;
 
   if (topo1 == topo2)                 return EGADS_SUCCESS;
@@ -6839,13 +6840,34 @@ EG_isEquivalent(const egObject *topo1, const egObject *topo2)
 
   } else if (topo1->oclass == EDGE) {
 
+    if (topo1->mtype != topo2->mtype) return EGADS_OUTSIDE;
     stat = EG_isSame(topo1, topo2);
     if (stat != EGADS_SUCCESS) return stat;
     egadsEdge *pedge1 = (egadsEdge *) topo1->blind;
     egadsEdge *pedge2 = (egadsEdge *) topo2->blind;
-    stat = EG_isSame(pedge1->nodes[0], pedge2->nodes[0]);
+    if (topo1->mtype != TWONODE)
+      return EG_isSame(pedge1->nodes[0], pedge2->nodes[0]);
+
+    n = 0;
+    if (EG_isSame(pedge1->nodes[0], pedge2->nodes[0]) == EGADS_SUCCESS) n++;
+    if (EG_isSame(pedge1->nodes[0], pedge2->nodes[1]) == EGADS_SUCCESS) n++;
+    if (EG_isSame(pedge1->nodes[1], pedge2->nodes[0]) == EGADS_SUCCESS) n++;
+    if (EG_isSame(pedge1->nodes[1], pedge2->nodes[1]) == EGADS_SUCCESS) n++;
+    if (n != 2) return EGADS_OUTSIDE;
+    
+    t    = 0.5*(pedge1->trange[0] + pedge1->trange[1]);
+    stat = EG_evaluate(pedge1->curve, &t, result1);
     if (stat != EGADS_SUCCESS) return stat;
-    return EG_isSame(pedge1->nodes[1], pedge2->nodes[1]);
+    t    = 0.5*(pedge2->trange[0] + pedge2->trange[1]);
+    stat = EG_evaluate(pedge2->curve, &t, result2);
+    if (stat != EGADS_SUCCESS) return stat;
+    tol = BRep_Tool::Tolerance(pedge1->edge);
+    t   = BRep_Tool::Tolerance(pedge2->edge);
+    if (tol < t) tol = t;
+    t = sqrt((result1[0]-result2[0])*(result1[0]-result2[0]) +
+             (result1[1]-result2[1])*(result1[1]-result2[1]) +
+             (result1[2]-result2[2])*(result1[2]-result2[2]));
+    if (t < tol) return EGADS_SUCCESS;
 
   } else if (topo1->oclass == LOOP) {
 
@@ -6854,9 +6876,13 @@ EG_isEquivalent(const egObject *topo1, const egObject *topo2)
 
     if (ploop1->nedges != ploop2->nedges) return EGADS_OUTSIDE;
     for (i = 0; i < ploop1->nedges; i++) {
-      if (ploop1->senses[i] != ploop2->senses[i]) return EGADS_OUTSIDE;
-      stat = EG_isEquivalent(ploop1->edges[i], ploop2->edges[i]);
-      if (stat != EGADS_SUCCESS) return stat;
+      for (n = j = 0; j < ploop2->nedges; j++)
+        if (EG_isEquivalent(ploop1->edges[i], ploop2->edges[j]) ==
+            EGADS_SUCCESS) {
+          n = j+1;
+          break;
+        }
+      if (n == 0) return EGADS_OUTSIDE;
     }
     return EGADS_SUCCESS;
 

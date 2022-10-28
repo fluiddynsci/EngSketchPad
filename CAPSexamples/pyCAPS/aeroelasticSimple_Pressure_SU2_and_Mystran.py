@@ -67,8 +67,8 @@ for boundName in boundNames:
     mystranVset = bound.vertexSet.create(mystran)
 
     # Create displacement data sets
-    su2_Pressure     = su2Vset.dataSet.create("Pressure", pyCAPS.fType.FieldOut)
-    mystran_Pressure = mystranVset.dataSet.create("Pressure", pyCAPS.fType.FieldIn)
+    su2_Pressure     = su2Vset.dataSet.create("Pressure")
+    mystran_Pressure = mystranVset.dataSet.create("Pressure")
 
     # Link the data set
     mystran_Pressure.link(su2_Pressure, "Conserve")

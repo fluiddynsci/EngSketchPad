@@ -3008,6 +3008,38 @@ int mesh_getSizingProp(void *aimInfo,
              * \endif
              *
              */
+            /*! \page meshSizingProp
+             *
+             * \if (AFLR3 || AFLR4)
+             *
+             * <ul>
+             * <li>  <B>bcType = (no default) </B> </li> <br>
+             * Sets the AFLR_GBC attribute on faces. Options:<br>
+             *  - Farfield or Freestream or FARFIELD_UG3_GBC <br>
+             *     Farfield surface same as a standard surface except w/AFLR4
+             *  - Viscous or -STD_UG3_GBC <br>
+             *     Standard BL generating surface
+             *  - Inviscid or STD_UG3_GBC <br>
+             *     Standard surface
+             *  - Symmetry or BoundaryLayerIntersect or BL_INT_UG3_GBC <br>
+             *     Standard surface that intersects BL region
+             *  - TRANSP_SRC_UG3_GBC <br>
+             *     Embedded/transparent surface converted to source nodes by AFLR
+             *  - TRANSP_BL_INT_UG3_GBC <br>
+             *     Embedded/transparent surface that intersects BL region
+             *  - TRANSP_UG3_GBC <br>
+             *     Embedded/transparent surface
+             *  - -TRANSP_UG3_GBC <br>
+             *     Embedded/transparent BL generating surface
+             *  - TRANSP_INTRNL_UG3_GBC <br>
+             *     Embedded/transparent surface converted to internal faces by AFLR
+             *  - FIXED_BL_INT_UG3_GBC <br>
+             *     Fixed surface with BL region that intersects BL region
+             * </ul>
+             *
+             * \endif
+             *
+             */
             keyWord = "bcType";
             status = search_jsonDictionary( meshBCTuple[i].value, keyWord, &keyValue);
             if (status == CAPS_SUCCESS) {
@@ -8458,7 +8490,7 @@ int mesh_nodeID2Array(const meshStruct *mesh,
 {
     int status; // Function status
 
-    int inode, j, k; // Indexing
+    int inode; // Indexing
 
     int numNodeID = 0;
     int *n2a = NULL;
@@ -8468,10 +8500,8 @@ int mesh_nodeID2Array(const meshStruct *mesh,
     *n2a_out = NULL;
 
     // get the maximum nodeID value from the elements
-    for (j = 0; j < mesh->numElement; j++) {
-        for (k = 0; k < mesh_numMeshConnectivity(mesh->element[j].elementType); k++) {
-            numNodeID = MAX(numNodeID, mesh->element[j].connectivity[k]);
-        }
+    for (inode = 0; inode < mesh->numNode; inode++) {
+        numNodeID = MAX(numNodeID, mesh->node[inode].nodeID);
     }
     numNodeID++; // change to a count rather than ID
 
@@ -8490,15 +8520,13 @@ int mesh_nodeID2Array(const meshStruct *mesh,
     *n2a_out = n2a;
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) {
-            printf("Error: Premature exit in mesh_nodeID2Array, status %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS) {
+        printf("Error: Premature exit in mesh_nodeID2Array, status %d\n", status);
+        AIM_FREE(n2a);
+    }
 
-            if (n2a != NULL) EG_free(n2a);
-            n2a = NULL;
-        }
-
-        return status;
+    return status;
 }
 
 // Create a new mesh with topology tagged with capsIgnore being removed, if capsIgnore isn't found the mesh is simply copied.

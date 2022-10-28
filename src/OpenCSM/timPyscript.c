@@ -43,11 +43,10 @@
 #include <math.h>
 #include <assert.h>
 
-#include "egads.h"
-#include "common.h"
 #include "OpenCSM.h"
 #include "tim.h"
 #include "emp.h"
+#include "caps.h"
 
 #define CINT    const int
 #define CDOUBLE const double
@@ -454,6 +453,20 @@ timQuit(esp_T *ESP,                     /* (in)  pointer to ESP structure */
         goto cleanup;
     }
 
+    /* if we entered pyscript from somewhere other than capsMode,
+       restore the original MODL */
+    if (ESP->nudata == 1 || strcmp(ESP->timName[ESP->nudata-2], "capsMode") != 0) {
+        ESP->MODL = ESP->MODLorig;
+        ESP->CAPS = NULL;
+
+        tim_bcst("pyscript", "returnMessage|build|0|");
+    }
+    
+    /* update the display to the way it was before pyscript was executed if
+       not in capsMode */
+    tim_bcst("pyscript", "returnMessage|getPmtrs|");
+    tim_bcst("pyscript", "returnMessage|getBrchs|");
+
     /* free up the filename */
     FREE(ESP->udata[ESP->nudata-1]);
     ESP->timName[   ESP->nudata-1][0] = '\0';
@@ -586,6 +599,10 @@ timSetCaps(void  *myCaps,               /* (in)  pointer to active CAPS */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
+    int         builtTo, nbody=0;
+    capsObject  *myObject;
+    capsProblem *myProblem;
+    
     ROUTINE(timSetCaps);
 
     /* --------------------------------------------------------------- */
@@ -594,9 +611,21 @@ timSetCaps(void  *myCaps,               /* (in)  pointer to active CAPS */
         printf("WARNING:: not running via serveESP\n");
     } else {
         ESP->CAPS = myCaps;
+        myObject  = (capsObject *) myCaps;
+        myProblem = (capsProblem *) myObject->blind;
+        ESP->MODL = myProblem->modl;
+
+        /* if there are no Bodys but Branches, build and tessellate now */
+        if (ESP->MODL->nbrch > 0 && ESP->MODL->nbody == 0) {
+            status = ocsmBuild(ESP->MODL, 0, &builtTo, &nbody, NULL);
+            CHECK_STATUS(ocsmBuild);
+
+            status = ocsmTessellate(ESP->MODL, 0);
+            CHECK_STATUS(ocsmTessellate);
+        }
     }
 
-//cleanup:
+cleanup:
     return status;
 }
 
@@ -870,6 +899,9 @@ void executePyscript(void *esp)
 
     PyEval_SetTrace(traceFunc, NULL);
 
+    /* inform python that we are running from pyscript */
+    PyRun_SimpleString("from pyOCSM import ocsm\nocsm.PyScRiPt = 1");
+
     /* run from the file */
     fp = fopen(filename, "r");
     PyRun_SimpleFile(fp, filename);
@@ -898,7 +930,7 @@ void executePyscript(void *esp)
 
     /* delete all modls except the last one saved */
     for (i = 0; i < nmodls; i++) {
-        if (modls[i] != ESP->MODL && modls[i] != NULL) {
+        if (modls[i] != ESP->MODL && modls[i] != ESP->MODLorig && modls[i] != NULL) {
             status = ocsmFree(modls[i]);
             if (status < EGADS_SUCCESS) {
                 printf("ERROR:: ocsmFree failed for i=%d\n", i);
