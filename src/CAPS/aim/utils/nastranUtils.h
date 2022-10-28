@@ -59,7 +59,7 @@ int nastran_writeLoadADDCard(FILE *fp, int loadID, int numSetID, int loadSetID[]
 int nastran_writeLoadCard(FILE *fp, const feaLoadStruct *feaLoad, const feaFileFormatStruct *feaFileFormat);
 
 // Write Nastran analysis card from a feaAnalysis structure
-int nastran_writeAnalysisCard(FILE *fp, const feaAnalysisStruct *feaAnalysis, const feaFileFormatStruct *feaFileFormat);
+int nastran_writeAnalysisCard(FILE *fp, feaAnalysisStruct *feaAnalysis, const feaFileFormatStruct *feaFileFormat);
 
 // Write a combined Nastran design constraint card from a set of constraint IDs.
 //  The combined design constraint ID is set through the constraint ID variable.
@@ -69,7 +69,7 @@ int nastran_writeDesignConstraintADDCard(FILE *fp, int constraintID, int numSetI
 int nastran_writeDesignConstraintCard(FILE *fp, const feaDesignConstraintStruct *feaDesignConstraint, const feaFileFormatStruct *feaFileFormat);
 
 // Write design variable/optimization information from a feaDesignVariable structure
-int nastran_writeDesignVariableCard(FILE *fp, const feaDesignVariableStruct *feaDesignVariable, const feaFileFormatStruct *feaFileFormat);
+int nastran_writeDesignVariableCard(void *aimInfo, FILE *fp, const feaDesignVariableStruct *feaDesignVariable, const feaFileFormatStruct *feaFileFormat);
 
 // Write design variable relation information from a feaDesignVariableRelation structure
 int nastran_writeDesignVariableRelationCard(void *aimInfo, FILE *fp, const feaDesignVariableRelationStruct *feaDesignVariableRelation, const feaProblemStruct *feaProblem, const feaFileFormatStruct *feaFileFormat);
@@ -107,7 +107,7 @@ int nastran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint, doub
 // Read objective values for a Nastran OP2 file  and liad it into a dataMatrix[numPoint]
 int nastran_readOP2Objective(char *filename, int *numPoint,  double **dataMatrix);
 
-int nastran_writeAeroCamberTwist(void *aimInfo, FILE *fp, int numAero, feaAeroStruct *feaAero, feaFileFormatStruct *feaFileFormat);
+int nastran_writeAeroCamberTwist(void *aimInfo, FILE *fp, int numAero, feaAeroStruct *feaAero, const feaFileFormatStruct *feaFileFormat);
 
 #ifdef __cplusplus
 }

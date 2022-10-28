@@ -17,9 +17,9 @@
   </head>
 
   <body>
-    <p><h1 align=center>Engineering Sketch Pad (ESP) Version 1.21</h1>
+    <p><h1 align=center>Engineering Sketch Pad (ESP) Version 1.22</h1>
     <p><h3>Authors: John F. Dannenhoffer, III (Syracuse University) and Bob Haimes (MIT)</h3>
-    <p><h3>Date: July 2022.</h3>
+    <p><h3>Date: December 2022.</h3>
 
     <p><h3 align=center><img src="esp_logo.png" width="400"/></h3>
 
@@ -1130,8 +1130,45 @@
          associated with the holes.  You can turn the DisplayFilter
          off by simply pressing <b>Enter</b> in one of the popups.
 
-      <p>Closing your browser will also terminate
-         the <code>ESP</code> server.
+      <p><h4>Debugging a model</h4>
+
+      <p>As models get large, it is sometimes difficult to determine
+         what is going on.  To aid in this, there are two buttons in
+         the <code>.csm</code> editor that can assist you.  To
+         demonstrate these, choose <b>File</b> and then <b>Edit:
+         ../data/tutorial1.csm</b> to open the editor.  Scroll down
+         to line 153 (which is a <code>JOIN</code> statement) and
+         press the <b>Debug</b> button.  In the MessageWindow, you
+         will see:
+        <pre>
+    Body 32                       (join       @ [[../data/tutorial1.csm:153]])
+    uses:    Body 29              (join       @ [[../data/tutorial1.csm:149]])
+    uses:    Body 31              (mirror     @ [[../data/tutorial1.csm:152]])
+    used by: Body 34              (union      @ [[../data/tutorial1.csm:167]]) 
+        </pre>
+        which says that the <code>JOIN</code> statement creates Body
+        32 by JOINing Bodys 29 and 31.  The result of
+        the <code>JOIN</code> is subsequently used in
+        the <code>UNION</code> operation on line 167.  If you
+        double-click on any of the double-bracketed text, the editor
+        will automatically jump to that line (in the proper file).
+
+      <p>If you move to line 156 (the <code>SET</code> statement) and
+        press the <b>Debug</b> button, you will get a list of all the
+        Bodys that were created, and where they were created.  (The
+        asterisk at the beginning of a line indicates that the Body is
+        on the stack.)
+
+      <p>The other useful feature is the <b>Trace</b> button, which
+        shows you everywhere a top-level Parameter is defined and
+        used.  Press the <b>Trace</b> button now and
+        enter <code>spindle:*</code> to see all the top-level
+        Parameters that have the prefix <code>spindle:</code>.  Again,
+        you can press on any of the double-bracketed text to jump to
+        the associated line in the associated file.
+
+      <p>Closing your browser will close the interactive session
+         and wil also terminate the <code>ESP</code> server.
 
       <p>Now that you have finished your tour of the <code>ESP</code>
          interface, proceed on to Tutorial 2 to start building up this
@@ -1215,6 +1252,12 @@
               with the line at the current cursor (see top of screen
               for hint);</li>
           <li><b>Undo</b>: undo the last change;</li>
+          <li><b>Debug</b>: if on a line that creates a Body, tells
+            the Bodys that are used in the operation and what other
+            operations use the Body;  if not on a line that creates a
+            Body, lists where all Bodys were made;</li>
+          <li><b>Trace</b>: traces definition and use of all
+            top-level Parameters matching the given pattern;</li>
           <li><b>Cancel</b>: exit the editor and do not save
               changes; and</li>
           <li><b>Save</b>: save the changes and exit the editor
@@ -3379,7 +3422,7 @@
         UBOUND    spindle:Cfront      2
       </pre>
        which restrict the user to consider only C0, C1, or C2
-      continuity in the <code>BLEND</code> while making the Spindle.
+       continuity in the <code>BLEND</code> while making the Spindle.
 
     <p>More (run-time) error checking is done by lines 73 through 76
       <pre>
@@ -6855,6 +6898,11 @@ serveESP ../data/legacy/tutorial3 -loadEgads
        build or in conjunction with the <code>-loadEgads</code>
        option.
 
+    <p>The <code>-dxdd despmtr</code> option generates a sensitivity
+       file named <code>despmtr.sens</code> that contains the
+       geometric sensitivities at every point in the last Body
+       generated.  It automatically runs in <code>-batch</code> mode.
+
     <p>The <code>-egg</code> option tells <code>serveESP</code> to use
        the <code>eggname</code> external grid generator instead of the
        built-in <code>EGADS</code> tessellator.
@@ -7082,7 +7130,7 @@ serveESP ../data/legacy/tutorial3 -loadEgads
 
     <p>In the descriptions below, the conventions used are:
       <ul>
-        <li>command name can eiter be UPPERCASE or lowercase, but not
+        <li>command name can either be UPPERCASE or lowercase, but not
           mixed</li>
         <li>arguments that start with a dollar-sign ($) are character
           strings.  Note that the user does not type the
@@ -7205,7 +7253,7 @@ serveESP ../data/legacy/tutorial3 -loadEgads
           <td>entList</td>
         </tr>
         <tr><td></td>
-          <td><a href="#combine">combine</a></td>
+          <td><a href="#elevate">elevate</a></td>
           <td>toler=0</td>
         </tr>
         <tr>
@@ -7522,8 +7570,8 @@ ATTRIBUTE $attrName attrValue
                   does not create a Branch
                   if before first Branch that creates a Body,
                      the Attribute is a string-valued global Attribute
-                  if after BLEND, BOX, CHAMFER, COMBINE, CONE, CONNECT,
-                        CYLINDER, EXTRUDE, FILLET, HOLLOW, IMPORT, LOFT,
+                  if after BLEND, BOX, CHAMFER, CONE, CONNECT, CYLINDER,
+                        ELEVATE, EXTRUDE, FILLET, HOLLOW, IMPORT, LOFT,
                         RESTORE, REVOLVE, RULE, SPHERE, SWEEP, TORUS,
                         or UDPRIM
                      the Attribute is added to the Body and its Faces
@@ -7692,7 +7740,7 @@ CATEND
         <!-- extract from OpenCSM.h -->
         <pre>
 CFGPMTR   $pmtrName value
-          use:    define a configuration Paramater
+          use:    define a configuration Parameter
           pops:   -
           pushes: -
           notes:  Sketch may not be open
@@ -7710,7 +7758,7 @@ CFGPMTR   $pmtrName value
       <p><h3 id="chamfer">chamfer</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-CHAMFER   radius edgeList=0
+CHAMFER   radius edgeList=0 listStyle=0
           use:    apply a chamfer to a Body
           pops:   Body
           pushes: Body
@@ -7760,30 +7808,10 @@ CIRARC    xon yon zon xend yend zend
         <!-- extract from OpenCSM.h -->
         <pre>
 COMBINE   toler=0
-          use:    combine Bodys since Mark into next higher type
-          pops:   Body1 ... Mark
-          pushes: Body
-          notes:  Sketch may not be open
-                  Solver may not be open
-                  Mark must be set
-                  if all Bodys since Mark are SheetBodys
-                     create either a SolidBody from closed Shell or an
-                     (open) SheetBody
-                  elseif there is 1 planar WireBody that is closed
-                     create SheetBody from Loop
-                  elseif there is 1 planar WireBody that is open
-                     create SheetBody from Loop after closing Loop first
-                  elseif there are multiple planar WireBodys that are closed
-                     create SheetBody from closed Loop
-                  elseif there are multiple WireBodys that have common Nodes
-                     create non-manifold WireBody
-                  endif
-                  if maxtol>0, then tolerance can be relaxed until successful
-                  sets up @-parameters
-                  signals that may be thrown/caught:
-                     $did_not_create_body
-                     $insufficient_bodys_on_stack
-                     $wrong_types_on_stack
+          use:    this command was not designed well and has been replaced
+          notes:  the equivalent capability can be obtained by replacing with:
+                     JOIN   toler  1
+                     ELEVATE
         </pre>
       <p><h3 id="cone">cone</h3>
         <!-- extract from OpenCSM.h -->
@@ -7845,7 +7873,7 @@ CONNECT   faceList1 faceList2 edgeList1=0 edgeList2=0 toler=0
       <p><h3 id="conpmtr">conpmtr</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-CONPMTR   $pmtrName values
+CONPMTR   $pmtrName value
           use:    define a constant Parameter
           pops:   -
           pushes: -
@@ -8002,6 +8030,30 @@ DUMP      $filename remove=0 toMark=0 withTess=0
                   signals that may be thrown/caught:
                      $file_not_found
                      $insufficient_bodys_on_stack
+        </pre>
+      <p><h3 id="elevate">elevate</h3>
+        <!-- extract from OpenCSM.h -->
+        <pre>
+ELEVATE   toler=0
+          use:    elevate Body into next higher type
+          pops:   Body1
+          pushes: Body
+          notes:  Sketch may not be open
+                  Solver may not be open
+                  Mark must be set
+                  if Body1 is closed SheetBody
+                     create a SolidBody from closed Shell
+                  elseif Body1 is a planar manifold WireBody that is closed
+                     create SheetBody from Loop
+                  elseif Body1 is a planar manifold WireBody that is open
+                     close Loop and then create SheetBody
+                  endif
+                  if maxtol>0, then tolerance can be relaxed until successful
+                  sets up @-parameters
+                  signals that may be thrown/caught:
+                     $did_not_create_body
+                     $insufficient_bodys_on_stack
+                     $wrong_types_on_stack
         </pre>
       <p><h3 id="else">else</h3>
         <!-- extract from OpenCSM.h -->
@@ -8471,19 +8523,16 @@ JOIN      toler=0 toMark=0
           pushes: Body
           notes:  Sketch may not be open
                   Solver may not be open
-                  if toMark=1 and all Bodys to Mark are SheetBodys
-                     create SheetBody
-                  elseif toMark=1 and all Bodys to Mark are WireBodys
-                     create WireBody
-                  elseif Body1=SolidBody and Body2=SolidBody
+                  if toMark!=0 use all Bodys since Mark
+                  if Body1=SolidBody and Body2=SolidBody
                      create SolidBody formed by joining Body1 and Body2 at
                         common Faces
                   elseif Body1=SheetBody and Body2=SheetBody
                      create SheetBody formed by joining Body1 and Body2 at
                         common Edges
                   elseif Body1=WireBody and Body2=WireBody
-                     create WireBody formed by joining Body1 and Body2 at
-                        common end Node
+                     create (possibly non-manifold) WireBody by joining
+                        Body1 and Body2 at common Nodes
                   endif
                   change in v1.19: if common Edges are not found, return
                                    $edge_not_found
@@ -8605,13 +8654,15 @@ MARK
       <p><h3 id="message">message</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-MESSAGE   $text $schar=_
+MESSAGE   $text $schar=_ $fileName=. $openType=a
           use:    generate a message to be displayed
           pops:   -
           pushes: -
           notes:  schar must contain a single character
                   any character in text that matches schar will
                      be converted to a space
+                  if fileName is not . the text is written to fileName
+                  openType should be n (new file) or a (append)
                   cannot be followed by ATTRIBUTE or CSYSTEM
         </pre>
       <p><h3 id="mirror">mirror</h3>
@@ -8771,6 +8822,8 @@ RESTORE   $name index=0
                   Solver may not be open
                   $name is used directly (without evaluation)
                   if $name is . (dot), then duplicate Body on stack
+                  if $name is .. then duplicate Bodys to Mark (incl Mark)
+                  if $name is ... then duplicate whole stack
                   if index<0, get all Bodys that match $name
                   sets up @-parameters
                   error results if nothing has been stored in name
@@ -8842,7 +8895,7 @@ ROTATEY   angDeg zaxis=0 xaxis=0
         <pre>
 ROTATEZ   angDeg xaxis=0 yaxis=0
           use:    rotates Group on top of Stack around an axis that
-                  passes tgrough (xaxis, yaxis, 0) and is parallel
+                  passes through (xaxis, yaxis, 0) and is parallel
                   to the z-axis
           pops:   any
           pushes: any
@@ -8953,6 +9006,14 @@ SELECT    $type arg1 ...
                      sets @seltype to 2
                      uses @selbody
                      sets @sellist to Faces whose bboxs are completely in given range
+                  elseif arguments are: "face -1 ibody1"
+                     sets @seltype to 2
+                     uses @selbody
+                     sets @sellist to Faces that are in common with a Face in ibody1
+                  elseif arguments are: "face -2 ibody1"
+                     sets @seltype to 2
+                     uses @selbody
+                     sets @sellist to Faces that are within SolidBody ibody1
                   elseif arguments are: "face attrName1    attrValue1
                                               attrName2=$* attrValue2=$*
                                               attrName3=$* attrValue3=$*"
@@ -8983,6 +9044,14 @@ SELECT    $type arg1 ...
                         ibody1/iford1 and ibody2/iford2
                      (note that 0 can be used as a wildcard in any numeric field)
                      (note that if any fields are 0, the default iseq=0)
+                  elseif arguments are: "edge -1 ibody1"
+                     sets @seltype to 1
+                     uses @selbody
+                     sets @sellist to Edges that are in common with an Edge in ibody1
+                  elseif arguments are: "edge -2 ibody1"
+                     sets @seltype to 1
+                     uses @selbody
+                     sets @sellist to Edges that are within SolidBody ibody1
                   elseif arguments are: "edge xmin xmax ymin ymax zmin zmax"
                      sets @seltype to 1
                      uses @selbody
@@ -9009,6 +9078,14 @@ SELECT    $type arg1 ...
                      sets @seltype to 0
                      uses @selbody
                      sets @sellist to inode
+                  elseif arguments are: "node -1 ibody1"
+                     sets @seltype to 0
+                     uses @selbody
+                     sets @sellist to Nodes that are in common with a Node in ibody1
+                  elseif arguments are: "node -2 ibody1"
+                     sets @seltype to 0
+                     uses @selbody
+                     sets @sellist to Nodes that are within SolidBody ibody1
                   elseif arguments are: "node x y z"
                      sets @seltype to 0
                      uses @selbodt
@@ -9066,6 +9143,12 @@ SELECT    $type arg1 ...
                   elseif arguments are: "sub ient" and ient is in @sellist
                      removes from @sellist ient
                      (wildcarding is not allowed)
+                  elseif arguments are: "not" and @seltype==2
+                     make @sellist contain all Faces not in previous @sellist
+                  elseif arguments are: "not" and @seltype==1
+                     make @sellist contain all Edges not in previous @sellist
+                  elseif arguments are: "not" and @seltype==0
+                     make @sellist contain all Nodes not in previous @sellist
                   elseif arguments are: "sort $key"
                      sorts @sellist based upon $key which can be: $xmin, $ymin, $zmin,
                         $xmax, $ymax, $zmax, $xcg, $ycg, $zcg, $area, or $length
@@ -9319,7 +9402,10 @@ SSLOPE    dx dy dz
                   for definiing slope at end:
                       must      follow a SPLINE statement
                       must not precede a SPLINE statement
-                  dx, dy, and dz must not all be zero
+                  if dx=dy=dz=0 and splne is closed
+                      generate periodic spline
+                  else
+                      dx, dy, and dz must not all be zero
                   sensitivity computed w.r.t. x, y, z
                   signals that may be thrown/caught:
                      $illegal_value
@@ -9571,7 +9657,7 @@ UDPRIM    $primtype $argName1 argValue1 $argName2 argValue2 ...
                               level-1
                               the values are copied into the new Parameter
                            else
-                              argValueX is evalued and stored in the new
+                              argValueX is evaluated and stored in the new
                                  Parameter
                         else
                            an error is returned
@@ -9769,8 +9855,10 @@ UDPRIM droop
        input arguments (specified as name/value pairs):
           xle        percent x at LE         [default -100]
           thetale    LE droop angle (deg)    [default    0]
+          powle      power of LE droop       [default    1]
           xte        percent x at TE         [default  100]
           thetate    TE droop angle (deg)    [default    0]
+          powte      power of TE droop       [default    1]
        output arguments:
        usage:
            droops airfoil on stack forward of xle and rearward of xte
@@ -10228,7 +10316,7 @@ UDPRIM radwaf
            Faces in frames are attributed with:
               frame[0]   frame number   (bias-1)
               frame[1]   segment number (bias-1)
-           Faces in slokes are attributed with:
+           Faces in spokes are attributed with:
               spoke[0]   spoke number   (bias-1)
               spoke[1]   segment number (bias-1)
 
@@ -10721,7 +10809,7 @@ Types:
         values can be overwritten by subsequent statements
         are only available in the .csm or .udc file in which
             it is defined or in an include-type UDC that is
-            called by the program unit in which iit was defined
+            called by the program unit in which it was defined
     SOLVER
         is a scalar defined by a SOLBEG statement
         only available between SOLBEG and SOLEND
@@ -10759,15 +10847,17 @@ Types:
 
         @nbody    x    x    x    x   number of Bodys
         @ibody    x    x    x    x   current   Body
-        @nface    x    x    x    x   number of Faces in @ibody
+        @nface    x    x    x    x   number of Faces in @ibody or
+                                     number of EFaces if @itype=4
         @iface   -1    x   -1   -1   current   Face  in @ibody (or -2)
-        @nedge    x    x    x    x   number of Edges in @ibody
+        @nedge    x    x    x    x   number of Edges in @ibody or
+                                     number of EEdges if @itype=4
         @iedge   -1   -1    x   -1   current   Edge  in @ibody (or -2)
         @nnode    x    x    x    x   number of Nodes in @ibody
         @inode   -1   -1   -1    x   current   Node  in @ibody (or -2)
         @igroup   x    x    x    x   group of @ibody
-        @itype    x    x    x    x   0=NodeBody, 1=WireBody,
-                                                 2=SheetBody, 3=SolidBody
+        @itype    x    x    x    x   0=NodeBody, 1=WireBody, 2=SheetBody,
+                                     3=SolidBody, 4=ErepBody
         @nbors   -1    x    -    x   number of incident Edges
         @nbors   -1    -    x    -   number of incident Faces
 
@@ -10828,7 +10918,7 @@ Valid operators (in order of precedence):
     * /            multiply and divide        (evaluated left to right)
     + -            add/concat and subtract    (evaluated left to right)
 
-    An expression that consists of only the name of a Parameter my be
+    An expression that consists of only the name of a Parameter may be
     prepended by a unary + or -
 
 Valid function calls:
@@ -11296,7 +11386,7 @@ end
     <p>index.lt.0 in RESTORE is now a wildcard, meaning that Bodys
        in all storages that match name are put onto the stack
 
-    <p>make INTERFACE DIM obsolete; issue WARNING to use DIMESNION
+    <p>make INTERFACE DIM obsolete; issue WARNING to use DIMENSION
        statement instead
 
     <p>do not allow non-manifold WireBodys in RULE, BLEND, LOFT, and
@@ -11355,7 +11445,7 @@ end
 
     <p><h4>ESP updates</h4>
 
-    <p>create CAPS TIM to run the new Integaretd Design Environment (IDE)
+    <p>create CAPS TIM to run the new Integrated Design Environment (IDE)
 
     <p>create pyscript TIM to asynchronously run python
 
@@ -11372,7 +11462,7 @@ end
     <p>update ESP editor so that users without the ball can see the
        edits as they happen
 
-    <p>allow non-*host* to initiate file editting
+    <p>allow non-*host* to initiate file editing
 
     <p>modify visualization of grids on Faces in serveESP
 
@@ -11381,7 +11471,7 @@ end
        last filename:linenum in MessageWindow
 
     <p>add tufts for Nodes when displaying tessellation
-       sesnitivities in serveESP
+       sensitivities in serveESP
 
     <p>only show Display table entries (Node/Edge/Face/Csystem/Pips)
        if it contains any child entities
@@ -12224,7 +12314,7 @@ end
 
     <p>allow CONNECT to connect SheetBodys
 
-    <p>allow CFGPMTR statment in include-type UDC
+    <p>allow CFGPMTR statement in include-type UDC
 
     <p>return error if nx=ny=nz=0 in MIRROR
 
@@ -14032,7 +14122,7 @@ end
        magenta.
 
     <p>If one selects another Branch or Parameter in the Tree window
-       while editting another Branch or Parameter, the current edit is
+       while editing another Branch or Parameter, the current edit is
        cancelled and the new edit started.
 
     <p>Axes are displayed in ESP.

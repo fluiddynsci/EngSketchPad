@@ -98,8 +98,7 @@ class TestTACS(unittest.TestCase):
 
         # Setup an AnalysisIn design variable
         thickness = 0.1;
-        desvar = {"groupName" : "plate",
-                  "initialValue" : thickness,
+        desvar = {"initialValue" : thickness,
                   "lowerBound" : thickness*0.5,
                   "upperBound" : thickness*1.5,
                   "maxDelta"   : thickness*0.1}
@@ -107,10 +106,11 @@ class TestTACS(unittest.TestCase):
         tacs.input.Design_Variable = {"plateLength" : {},
                                       "thick1" : desvar}
         
-        desvarR = {"variableType": "Property",
+        desvarR = {"componentType": "Property",
+                   "componentName": "plate",
                    "fieldName" : "T",
-                   "constantCoeff" : 0.0,
-                   "groupName" : "thick1",
+                   "constantCoeff" : thickness,
+                   "variableName" : "thick1",
                    "linearCoeff" : 1.0}
 
         tacs.input.Design_Variable_Relation = {"thick1" : desvarR}

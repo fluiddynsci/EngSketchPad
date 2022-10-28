@@ -993,7 +993,7 @@ int hsm_bodyToBEM(void *aimInfo,
                                          loadMap,
                                          transferMap,
                                          connectMap,
-                                         NULL,
+                                         NULL, NULL,
                                          feaMesh->node[j].geomData->type,
                                          feaMesh->node[j].geomData->topoIndex,
                                          feaData);
@@ -1633,7 +1633,7 @@ int hsm_setNodeBCParameter(feaProblemStruct feaProblem, int permutation[],
                     }
                 }
 
-                sprintf(numString, "%d", feaConstraint->dofConstraint);
+                snprintf(numString, 10, "%d", feaConstraint->dofConstraint);
 
                 // Index
                 hsmMemory->kbcnode[j] = k;

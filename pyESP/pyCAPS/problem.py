@@ -447,6 +447,10 @@ class Problem(object):
 
             if phaseName == "Scratch": phaseName = None
             problemObj = caps.open(problemName, phaseName, flag, ptr, outLevel)
+
+            if hasattr(ocsm, "PyScRiPt"):
+                from pyOCSM import esp
+                esp.SetCaps(problemObj, esp.GetEsp("pyscript"))
         
         super(Problem, self).__setattr__("_problemObj", problemObj)
         super(Problem, self).__setattr__("_name",     problemName)
@@ -867,6 +871,18 @@ class ProblemGeometry(object):
             _viewGeometryMatplotlib(bodies, **kwargs)
 
     def _viewGeometryCAPSViewer(self, **kwargs):
+
+        if hasattr(ocsm, "PyScRiPt"):
+            from pyOCSM import esp
+            esp.SetCaps(self._problemObj, esp.GetEsp("pyscript"))
+
+            # load the viewer
+            esp.TimLoad("viewer", esp.GetEsp("pyscript"), "")
+            
+            # view all Bodys on the stack
+            esp.TimMesg("viewer", "MODL")
+            esp.TimQuit("viewer")
+            return
 
         egadsFile = os.path.join(self._problemObj.getRootPath(), "viewProblemGeometry.egads")
         relFile = os.path.relpath(egadsFile, os.getcwd())
@@ -1388,7 +1404,7 @@ class _capsValue(object):
 
     @property
     def limits(self):
-        self._limits = self.valueObj.getLimits()
+        self._limits = self.valueObj.getLimitsSize()
 
         if isinstance(self._limits, caps.Quantity):
             self._limits = self._limits._value
@@ -1402,7 +1418,7 @@ class _capsValue(object):
         if not isinstance(limitsValue, caps.Quantity):
             limitsValue = caps._withUnits(limitsValue, self.units)
 
-        self.valueObj.setLimits(limitsValue)
+        self.valueObj.setLimitsSize(limitsValue)
 
     def setVal(self, data):
         self.value = data
@@ -1559,12 +1575,12 @@ class ValueIn(object):
     ## Property getter returns a copy the limits of the CAPS Value Object
     @property
     def limits(self):
-        return self._valObj.getLimits()
+        return self._valObj.getLimitsSize()
 
     ## Property setter sets the limits in the CAPS Value Object (if changable)
     @limits.setter
     def limits(self, limit):
-        self._valObj.setLimits(limit)
+        self._valObj.setLimitsSize(limit)
 
     ## Property returns the name of the CAPS Value Object
     @property
@@ -1610,6 +1626,16 @@ class ValueIn(object):
             raise caps.CAPSError(caps.CAPS_BADVALUE, "source must be a Value Object")
 
         self._valObj.transferValues(tmethod, source._valObj)
+
+    ## Property getter returns a copy the finite difference step sizes of the CAPS Value Object
+    @property
+    def stepSize(self):
+        return self._valObj.getStepSizeSize()
+
+    ## Property setter sets the finite difference step sizes in the CAPS Value Object
+    @stepSize.setter
+    def stepSize(self, sizes):
+        self._valObj.setStepSizeSize(sizes)
 
 #==============================================================================
 ## Defines a CAPS parameter Value Object
@@ -1816,7 +1842,7 @@ class ParamSequence(Sequence):
 
         # Set limits
         if limits:
-            valObj.setLimits(limits)
+            valObj.setLimitsSize(limits)
 
         self._capsItems[name] = ValueInParam(valObj)
         return self._capsItems[name]
@@ -2454,6 +2480,20 @@ class AnalysisGeometry(object):
     # Valid keywords:
     # \param portNumber Port number to start the server listening on (default - 7681).
     def view(self, **kwargs):
+
+        if hasattr(ocsm, "PyScRiPt"):
+            from pyOCSM import esp
+            esp.SetCaps(self._analysisObj.problemObj(), esp.GetEsp("pyscript"))
+
+            # load the viewer
+            esp.TimLoad("viewer", esp.GetEsp("pyscript"), "")
+            
+            name, otype, stype, link, parent, last = self._analysisObj.info()
+
+            # view all Bodys on the stack
+            esp.TimMesg("viewer", "AIM|"+name)
+            esp.TimQuit("viewer")
+            return
 
         analysisDir, unitSystem, major, minor, capsIntent, fnames, franks, fInOut, execution, cleanliness = self._analysisObj.analysisInfo()
 
@@ -3674,10 +3714,10 @@ class VertexSet(object):
 
     __slots__ = ["_vertexSetObj", "_name", "attr", "dataSet"]
 
-    def __init__(self, vertexSetObj, fieldRank):
+    def __init__(self, vertexSetObj, fieldInRank, fieldOutRank):
         self._vertexSetObj = vertexSetObj
         self.attr          = AttrSequence(self._vertexSetObj)
-        self.dataSet       = DataSetSequence(self._vertexSetObj, fieldRank)
+        self.dataSet       = DataSetSequence(self._vertexSetObj, fieldInRank, fieldOutRank)
 
         self._name, otype, stype, link, parent, last = self._vertexSetObj.info()
 
@@ -3742,7 +3782,15 @@ class VertexSetSequence(Sequence):
 
         analysisPath, unitSystem, major, minor, capsIntent, fnames, franks, fInOut, execution, cleanliness = analysis._analysisObj.analysisInfo()
 
-        self._capsItems[name] = VertexSet(vertexSetObj, dict(zip(fnames, franks)))
+        fieldInRank = {}
+        fieldOutRank = {}
+        for i in range(len(fInOut)):
+            if fInOut[i] == caps.fType.FieldIn:
+                fieldInRank[fnames[i]] = franks[i]
+            else:
+                fieldOutRank[fnames[i]] = franks[i]
+
+        self._capsItems[name] = VertexSet(vertexSetObj, fieldInRank, fieldOutRank)
         return self._capsItems[name]
 
 #==============================================================================
@@ -3854,10 +3902,24 @@ class DataSet(object):
 
             #del viewer
 
-        #else:
-            #self._viewDataMatplotLib(self,fig,numDataSet,dataSetIndex,**kwargs)
+        if hasattr(ocsm, "PyScRiPt"):
+            from pyOCSM import esp
+            esp.SetCaps(self._vertexSetObj.problemObj(), esp.GetEsp("pyscript"))
 
-    #def _viewDataMatplotLib(self, fig=None, numDataSet=1, dataSetIndex=0, **kwargs):
+            # load the viewer
+            esp.TimLoad("viewer", esp.GetEsp("pyscript"), "")
+
+            dataName = self.name
+            vertexName, otype, stype, link, parent, last = self._vertexSetObj.info()
+            boundName, otype, stype, link, parent, last = parent.info()
+
+            # view the dataSet
+            esp.TimMesg("viewer", "BOUND|"+boundName+"|"+vertexName+"|"+dataName)
+            esp.TimQuit("viewer")
+        else:
+            self._viewDataMatplotLib(fig,numDataSet,dataSetIndex,**kwargs)
+
+    def _viewDataMatplotLib(self, fig=None, numDataSet=1, dataSetIndex=0, **kwargs):
 
         try:
             import matplotlib.pyplot as plt
@@ -3887,7 +3949,7 @@ class DataSet(object):
         try:
             cMap = colorMap.get_cmap(cMap)
         except ValueError:
-            print("Colormap ",  cMap, "is not recognized. Defaulting to 'Blues'")
+            print("Colormap ", cMap, "is not recognized. Defaulting to 'Blues'")
             cMap = colorMap.get_cmap("Blues")
 
         # Initialize values
@@ -3895,6 +3957,12 @@ class DataSet(object):
 
         data = self.data()
         xyz = self.xyz()
+
+        if isinstance(data,caps.Quantity):
+            data = data.value()
+
+        if isinstance(xyz,caps.Quantity):
+            xyz = xyz.value()
 
         triConn, Gsegs, Dtris, dataConn = self._vertexSetObj.getTriangles()
 
@@ -4147,13 +4215,14 @@ class DataSet(object):
 ## Defines a Sequence of CAPS DataSet Objects
 class DataSetSequence(Sequence):
 
-    __slots__ = ['_vertexSetObj', '_fieldRank']
+    __slots__ = ['_vertexSetObj', '_fieldInRank', '_fieldOutRank']
 
-    def __init__(self, vertexSetObj, fieldRank):
+    def __init__(self, vertexSetObj, fieldInRank, fieldOutRank):
         super(self.__class__, self).__init__('DataSet')
 
         super(Sequence, self).__setattr__('_vertexSetObj', vertexSetObj)
-        super(Sequence, self).__setattr__('_fieldRank', fieldRank)
+        super(Sequence, self).__setattr__('_fieldInRank' , fieldInRank )
+        super(Sequence, self).__setattr__('_fieldOutRank', fieldOutRank)
 
         nDataSet = vertexSetObj.size(caps.oType.DATASET, caps.sType.NONE)
 
@@ -4166,27 +4235,45 @@ class DataSetSequence(Sequence):
     #
     # \param dname The name of the data set
     #
-    # \param ftype The field type (FieldIn, FieldOut, GeomSens, TessSens, User)
+    # \param ftype The field type (FieldIn, FieldOut, GeomSens, TessSens, User). Auto detected FieldIn/FieldOut if None
     #
     # \param init Inital value assiged to the DataSet. Length must be consistent with the rank.
     #
     # \param rank The rank of the data set (only needed for un-connected data set)
     #
     # \return The new DataSet Object is added to the sequence and returned
-    def create(self, dname, ftype, init=None, rank=None):
+    def create(self, dname, ftype=None, init=None, rank=None):
 
-        if dname not in self._fieldRank:
-            for key in self._fieldRank:
+        if ftype is None and dname in self._fieldInRank and dname in self._fieldOutRank:
+            raise caps.CAPSError(caps.CAPS_BADVALUE, "DataField name {!r} is both an In and Out Field, ftype cannot be None".format(dname))
+
+        if dname in self._fieldInRank:
+            ftype = caps.fType.FieldIn
+            rank  = self._fieldInRank[dname]
+        elif dname in self._fieldOutRank:
+            ftype = caps.fType.FieldOut
+            rank  = self._fieldOutRank[dname]
+        else:
+            for key in self._fieldInRank:
                 if '#' not in key: continue
                 pattern = key.replace('#',"[0-9]+")
                 if re.search(pattern, dname):
-                    rank = self._fieldRank[key]
+                    ftype = caps.fType.FieldIn
+                    rank = self._fieldInRank[key]
                     break
 
-            if rank is None:
-                raise caps.CAPSError(caps.CAPS_BADVALUE, "No DataField: {!r}\n Available fields: {!r}\n A rank must be specified.".format(dname, self.fields()))
-        else:
-            rank = self._fieldRank[dname]
+            for key in self._fieldOutRank:
+                if '#' not in key: continue
+                pattern = key.replace('#',"[0-9]+")
+                if re.search(pattern, dname):
+                    if rank is not None:
+                        raise caps.CAPSError(caps.CAPS_BADVALUE, "DataField name {!r} is both an In and Out Field, ftype cannot be None".format(dname))
+                    ftype = caps.fType.FieldOut
+                    rank = self._fieldOutRank[key]
+                    break
+
+        if rank is None:
+            raise caps.CAPSError(caps.CAPS_BADVALUE, "No DataField: {!r}\n Available fields: {!r}\n A rank must be specified.".format(dname, self.fields()))
 
         dataSetObj = self._vertexSetObj.makeDataSet(dname, ftype, rank)
 

@@ -1778,13 +1778,13 @@ int mesh_modifyBodyTess(int numMeshProp,
                                      ".rPos", ATTRREAL, numEdgePoint-2, NULL, rPos+1, NULL);
             if (status != EGADS_SUCCESS) goto cleanup;
 
-            EG_free(rPos); rPos = NULL;
+            AIM_FREE(rPos);
         }
 
-        EG_free(edges); edges = NULL;
-        EG_free(faces); faces = NULL;
-        EG_free(points); points = NULL;
-        EG_free(userSet); userSet = NULL;
+        AIM_FREE(edges);
+        AIM_FREE(faces);
+        AIM_FREE(points);
+        AIM_FREE(userSet);
     }
 
     status = CAPS_SUCCESS;
@@ -1794,11 +1794,11 @@ cleanup:
 
     EG_deleteObject(tess);
 
-    EG_free(points);
-    EG_free(userSet);
-    EG_free(faces);
-    EG_free(edges);
-    EG_free(rPos);
+    AIM_FREE(points);
+    AIM_FREE(userSet);
+    AIM_FREE(faces);
+    AIM_FREE(edges);
+    AIM_FREE(rPos);
 
     return status;
 }
@@ -1905,7 +1905,8 @@ int destroy_bndCondStruct(bndCondStruct *bndCond) {
     return CAPS_SUCCESS;
 }
 
-int populate_regions(tetgenRegionsStruct* regions,
+int populate_regions(void *aimInfo,
+                     tetgenRegionsStruct* regions,
                      int length,
                      const capsTuple* tuples)
 {
@@ -1917,21 +1918,23 @@ int populate_regions(tetgenRegionsStruct* regions,
   char* val = NULL;
   char* dict = NULL;
 
+  status = destroy_regions(regions);
+  AIM_STATUS(aimInfo, status);
+
   // Resize the regions data structure arrays.
+  AIM_ALLOC(regions->names, length, char*, aimInfo, status);
+  for (n = 0; n < length; n++) regions->names[n] = NULL;
+  AIM_ALLOC(regions->x, length, double, aimInfo, status);
+  AIM_ALLOC(regions->y, length, double, aimInfo, status);
+  AIM_ALLOC(regions->z, length, double, aimInfo, status);
+  AIM_ALLOC(regions->attribute, length, int, aimInfo, status);
+  AIM_ALLOC(regions->volume_constraint, length, double, aimInfo, status);
   regions->size = length;
-  if (regions->x != NULL) EG_free(regions->x);
-  if (regions->y != NULL) EG_free(regions->y);
-  if (regions->z != NULL) EG_free(regions->z);
-  if (regions->attribute != NULL) EG_free(regions->attribute);
-  if (regions->volume_constraint != NULL) EG_free(regions->volume_constraint);
-  regions->x = (double*) EG_alloc(length * sizeof(double));
-  regions->y = (double*) EG_alloc(length * sizeof(double));
-  regions->z = (double*) EG_alloc(length * sizeof(double));
-  regions->attribute = (int*) EG_alloc(length * sizeof(int));
-  regions->volume_constraint = (double*) EG_alloc(length * sizeof(double));
 
   for (n = 0; n < length; ++n)
   {
+    AIM_STRDUP(regions->names[n], tuples[n].name, aimInfo, status);
+
     dict = tuples[n].value;
 
     // Store the seed point that is known to lie strictly inside of the region.
@@ -1985,11 +1988,14 @@ int populate_regions(tetgenRegionsStruct* regions,
     }
   }
 
-  return CAPS_SUCCESS;
+cleanup:
+  return status;
 }
 
-int initiate_regions(tetgenRegionsStruct* regions) {
+int initiate_regions(tetgenRegionsStruct* regions)
+{
   regions->size = 0;
+  regions->names = NULL;
   regions->x = NULL;
   regions->y = NULL;
   regions->z = NULL;
@@ -1999,14 +2005,52 @@ int initiate_regions(tetgenRegionsStruct* regions) {
   return CAPS_SUCCESS;
 }
 
-int destroy_regions(tetgenRegionsStruct* regions) {
-  EG_free(regions->x);
-  EG_free(regions->y);
-  EG_free(regions->z);
-  EG_free(regions->attribute);
-  EG_free(regions->volume_constraint);
+int destroy_regions(tetgenRegionsStruct* regions)
+{
+  int i;
+  for (i = 0; i < regions->size; i++)
+    AIM_FREE(regions->names[i]);
+  AIM_FREE(regions->names);
+  AIM_FREE(regions->x);
+  AIM_FREE(regions->y);
+  AIM_FREE(regions->z);
+  AIM_FREE(regions->attribute);
+  AIM_FREE(regions->volume_constraint);
 
   return initiate_regions(regions);
+}
+
+int copy_regions(void *aimInfo,
+                 const tetgenRegionsStruct* regions,
+                 tetgenRegionsStruct* copy)
+{
+  int status = CAPS_SUCCESS;
+  int n;
+
+  status = destroy_regions(copy);
+  AIM_STATUS(aimInfo, status);
+
+  // Resize the regions data structure arrays.
+  AIM_ALLOC(copy->names, regions->size, char*, aimInfo, status);
+  for (n = 0; n < regions->size; n++) copy->names[n] = NULL;
+  AIM_ALLOC(copy->x, regions->size, double, aimInfo, status);
+  AIM_ALLOC(copy->y, regions->size, double, aimInfo, status);
+  AIM_ALLOC(copy->z, regions->size, double, aimInfo, status);
+  AIM_ALLOC(copy->attribute, regions->size, int, aimInfo, status);
+  AIM_ALLOC(copy->volume_constraint, regions->size, double, aimInfo, status);
+  copy->size = regions->size;
+
+  for (n = 0; n < regions->size; n++) {
+    AIM_STRDUP(copy->names[n], regions->names[n], aimInfo, status);
+    copy->x[n] = regions->x[n];
+    copy->y[n] = regions->y[n];
+    copy->z[n] = regions->z[n];
+    copy->attribute[n] = regions->attribute[n];
+    copy->volume_constraint[n] = regions->volume_constraint[n];
+  }
+
+cleanup:
+  return status;
 }
 
 int populate_holes(tetgenHolesStruct* holes,
@@ -2255,6 +2299,7 @@ int write_MAPBC(void *aimInfo,
     int i, j; // Indexing
 
     FILE *fp = NULL;
+    size_t stringLength;
     char *filename = NULL;
     char fileExt[] = ".mapbc";
 
@@ -2277,9 +2322,10 @@ int write_MAPBC(void *aimInfo,
 
     for (i = 0; i < numBnds; i++) wroteBnd[i] = (int) false;
 
-    AIM_ALLOC(filename, (strlen(fname) + 1 + strlen(fileExt)), char, aimInfo, status);
+    stringLength = strlen(fname) + strlen(fileExt) + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-    sprintf(filename,"%s%s",fname, fileExt);
+    snprintf(filename,stringLength,"%s%s",fname, fileExt);
 
     fp = aim_fopen(aimInfo, filename, "w");
 
@@ -3000,9 +3046,59 @@ int mesh_getSizingProp(void *aimInfo,
              *
              * <ul>
              * <li>  <B>bcType = (no default) </B> </li> <br>
-             * bcType sets the AFLR_GBC attribute on faces.<br>
-             * <br>
-             * See AFLR_GBC in \ref attributeAFLR4 for additional details.
+             * Sets the AFLR_GBC attribute on faces. Options:<br>
+             *  - Farfield or Freestream or FARFIELD_UG3_GBC <br>
+             *     Farfield surface same as a standard surface except w/AFLR4
+             *  - Viscous or -STD_UG3_GBC <br>
+             *     Standard BL generating surface
+             *  - Inviscid or STD_UG3_GBC <br>
+             *     Standard surface
+             *  - Symmetry or BL_INT_UG3_GBC or BoundaryLayerIntersect <br>
+             *     Symmetry or standard surface that intersects BL region
+             *  - TRANSP_SRC_UG3_GBC <br>
+             *     Embedded/transparent surface converted to source nodes by AFLR
+             *  - TRANSP_BL_INT_UG3_GBC <br>
+             *     Embedded/transparent surface that intersects BL region
+             *  - TRANSP_UG3_GBC <br>
+             *     Embedded/transparent surface
+             *  - -TRANSP_UG3_GBC <br>
+             *     Embedded/transparent BL generating surface
+             *  - TRANSP_INTRNL_UG3_GBC <br>
+             *     Embedded/transparent surface converted to internal faces by AFLR
+             *  - FIXED_BL_INT_UG3_GBC <br>
+             *     Fixed surface with BL region that intersects BL region
+             * </ul>
+             *
+             * \endif
+             *
+             */
+            /*! \page meshSizingProp
+             *
+             * \if (AFLR3 || AFLR4)
+             *
+             * <ul>
+             * <li>  <B>bcType = (no default) </B> </li> <br>
+             * Sets the AFLR_GBC attribute on faces. Options:<br>
+             *  - Farfield or Freestream or FARFIELD_UG3_GBC <br>
+             *     Farfield surface same as a standard surface except w/AFLR4
+             *  - Viscous or -STD_UG3_GBC <br>
+             *     Standard BL generating surface
+             *  - Inviscid or STD_UG3_GBC <br>
+             *     Standard surface
+             *  - Symmetry or BoundaryLayerIntersect or BL_INT_UG3_GBC <br>
+             *     Standard surface that intersects BL region
+             *  - TRANSP_SRC_UG3_GBC <br>
+             *     Embedded/transparent surface converted to source nodes by AFLR
+             *  - TRANSP_BL_INT_UG3_GBC <br>
+             *     Embedded/transparent surface that intersects BL region
+             *  - TRANSP_UG3_GBC <br>
+             *     Embedded/transparent surface
+             *  - -TRANSP_UG3_GBC <br>
+             *     Embedded/transparent BL generating surface
+             *  - TRANSP_INTRNL_UG3_GBC <br>
+             *     Embedded/transparent surface converted to internal faces by AFLR
+             *  - FIXED_BL_INT_UG3_GBC <br>
+             *     Fixed surface with BL region that intersects BL region
              * </ul>
              *
              * \endif
@@ -3020,6 +3116,7 @@ int mesh_getSizingProp(void *aimInfo,
                     status = CAPS_BADVALUE;
                     goto cleanup;
                 }
+
                 AIM_FREE(keyValue);
             }
 
@@ -3142,6 +3239,7 @@ int initiate_feaMeshDataStruct (feaMeshDataStruct *data) {
     data->connectLinkIndex = 0;
 
     data->responseIndex = 0;
+    data->referenceIndex = 0;
 
     data->elementSubType = UnknownMeshSubElement;
 
@@ -3166,6 +3264,7 @@ int destroy_feaMeshDataStruct (feaMeshDataStruct *data) {
     data->connectLinkIndex = 0;
 
     data->responseIndex = 0;
+    data->referenceIndex = 0;
 
     data->elementSubType = UnknownMeshSubElement;
 
@@ -3191,6 +3290,7 @@ int copy_feaMeshDataStruct (feaMeshDataStruct *dataIn, feaMeshDataStruct *dataOu
     dataOut->connectLinkIndex = dataIn->connectLinkIndex;
 
     dataOut->responseIndex = dataIn->responseIndex;
+    dataOut->referenceIndex = dataIn->referenceIndex;
 
     dataOut->elementSubType = dataIn->elementSubType;
 
@@ -4547,6 +4647,7 @@ int mesh_writeAFLR3(void *aimInfo,
 
     //int numBytes = 0; // Number bytes written (unformatted option) // Un-comment if writing an unformatted file
     int machineENDIANNESS = 99;
+    size_t stringLength;
     char *filename = NULL;
     char *postFix = NULL;
 
@@ -4586,13 +4687,11 @@ int mesh_writeAFLR3(void *aimInfo,
             goto cleanup;
         }
 
-        filename = (char *) EG_alloc((strlen(fname) + 1 + strlen(postFix)) *sizeof(char));
-        if (filename == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        stringLength = strlen(fname) + strlen(postFix) + 1;
+        AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-        sprintf(filename, "%s%s", fname, postFix);
+        snprintf(filename,stringLength,"%s%s",fname, postFix);
+
         fp = aim_fopen(aimInfo, filename, "wb");
 
         if (fp == NULL) {
@@ -4851,13 +4950,10 @@ int mesh_writeAFLR3(void *aimInfo,
     } else {
 
         postFix = ".ugrid";
-        filename = (char *) EG_alloc((strlen(fname) + 1 + strlen(postFix)) *sizeof(char));
-        if (filename == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
+        stringLength = strlen(fname) + strlen(postFix) + 1;
+        AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-        sprintf(filename, "%s%s", fname, postFix);
+        snprintf(filename, stringLength, "%s%s", fname, postFix);
 
         fp = aim_fopen(aimInfo, filename, "w");
         if (fp == NULL) {
@@ -5410,7 +5506,7 @@ int mesh_readAFLR3(void *aimInfo,
 //            goto cleanup;
 //        }
 //
-//        sprintf(filename, "%s%s", fname, postFix);
+//        snprintf(filename, "%s%s", fname, postFix);
 //
 //        fp = aim_fopen(aimInfo, filename, "w");
 //        if (fp == NULL) {
@@ -5586,6 +5682,7 @@ int mesh_writeVTK(void *aimInfo,
     int sdouble = sizeof(double);
     double tempDouble;
 
+    size_t stringLength;
     char *filename = NULL;
 
     // NEED to change if indices already start at 0
@@ -5605,8 +5702,10 @@ int mesh_writeVTK(void *aimInfo,
         scaleFactor = 1;
     }
 
-    filename = (char *) EG_alloc((strlen(fname) + 1 + 4) *sizeof(char));
-    sprintf(filename,"%s.vtk",fname);
+    stringLength = strlen(fname) + 4 + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
+
+    snprintf(filename,stringLength,"%s.vtk",fname);
 
     printf("\nWriting VTK file: %s....\n", filename);
 
@@ -5844,6 +5943,7 @@ int mesh_writeSU2(void *aimInfo,
     FILE *fp = NULL;
     int  i, j, m1 = -1, *numMarkerList = NULL;
     int  length, elementType, elementID = 0, elementIndex, markerID;
+    size_t stringLength;
     char *filename = NULL;
     char fileExt[] = ".su2";
 
@@ -5878,13 +5978,10 @@ int mesh_writeSU2(void *aimInfo,
         scaleFactor = 1;
     }
 
-    filename = (char *) EG_alloc((strlen(fname) + 1 + strlen(fileExt)) *sizeof(char));
-    if (filename == NULL) {
-        status  = EGADS_MALLOC;
-        goto cleanup;
-    }
+    stringLength = strlen(fname) + strlen(fileExt) + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-    sprintf(filename,"%s%s",fname, fileExt);
+    snprintf(filename,stringLength,"%s%s",fname, fileExt);
 
     fp = aim_fopen(aimInfo, filename, "w");
 
@@ -6159,6 +6256,7 @@ int mesh_writeNASTRAN(void *aimInfo,
     FILE *fp = NULL;
     int i, j, gridFields;
     int coordID, propertyID;
+    size_t stringLength;
     char *filename = NULL, *delimiter = NULL, *tempString = NULL;
     //char x[20], y[20], z[20];
     char fileExt[] = ".bdf";
@@ -6190,13 +6288,10 @@ int mesh_writeNASTRAN(void *aimInfo,
         scaleFactor = 1;
     }
 
-    filename = (char *) EG_alloc((strlen(fname) + 1 + strlen(fileExt)) *sizeof(char));
-    if (filename == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    stringLength = strlen(fname) + strlen(fileExt) + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-    sprintf(filename,"%s%s", fname, fileExt);
+    snprintf(filename,stringLength,"%s%s",fname, fileExt);
 
     fp = aim_fopen(aimInfo, filename, "w");
     if (fp == NULL) {
@@ -6531,13 +6626,15 @@ int mesh_writeAstros(void *aimInfo,
                      int asciiFlag, // 0 for binary, anything else for ascii
                      const meshStruct *mesh,
                      feaFileTypeEnum gridFileType,
-                     int numDesignVariable, feaDesignVariableStruct feaDesignVariable[],
+       /*@unused@*/  int numDesignVariable,
+       /*@unused@*/  feaDesignVariableStruct feaDesignVariable[],
                      double scaleFactor) // Scale factor for coordinates
 {
     int status; // Function return status
     FILE *fp = NULL;
     int i, j, gridFields;
     int coordID, propertyID;
+    size_t stringLength;
     char *filename = NULL, *delimiter = NULL, *tempString = NULL;
     //char x[20], y[20], z[20];
     char fileExt[] = ".bdf";
@@ -6546,12 +6643,18 @@ int mesh_writeAstros(void *aimInfo,
     meshElementSubTypeEnum elementSubType;
 
     // Design variables
-    int foundDesignVar, designIndex;
+    int foundDesignVar; //, designIndex;
     double maxDesignVar = 0.0;
 
     if (mesh == NULL) return CAPS_NULLVALUE;
 
-    printf("\nWriting Astros grid and connectivity file (in large field format) ....\n");
+    if (gridFileType == LargeField) {
+        printf("\nWriting Astros grid and connectivity file (in large field format) ....\n");
+    } else if (gridFileType == FreeField){
+        printf("\nWriting Astros grid and connectivity file (in free field format) ....\n");
+    } else {
+        printf("\nWriting Astros grid and connectivity file ....\n");
+    }
 
     if (asciiFlag == 0) {
         printf("\tBinary output is not currently supported for working with Astros\n");
@@ -6564,13 +6667,10 @@ int mesh_writeAstros(void *aimInfo,
         scaleFactor = 1;
     }
 
-    filename = (char *) EG_alloc((strlen(fname) + 1 + strlen(fileExt)) *sizeof(char));
-    if (filename == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    stringLength = strlen(fname) + strlen(fileExt) + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-    sprintf(filename,"%s%s", fname, fileExt);
+    snprintf(filename,stringLength,"%s%s", fname, fileExt);
 
     fp = aim_fopen(aimInfo, filename, "w");
     if (fp == NULL) {
@@ -6655,7 +6755,7 @@ int mesh_writeAstros(void *aimInfo,
 
             tempString = convert_integerToString(mesh->node[i].nodeID  , 7, 1);
             fprintf(fp, "%s%s", delimiter, tempString);
-            EG_free(tempString);
+            EG_free(tempString); tempString = NULL;
 
             // If the coord ID == 0 leave blank
             if (mesh->node[i].analysisType == MeshStructure) {
@@ -6669,7 +6769,7 @@ int mesh_writeAstros(void *aimInfo,
             }
 
             for (j = 0; j < 3; j++) {
-                tempString = convert_doubleToString(mesh->node[i].xyz[j], gridFields, 1);
+                tempString = convert_doubleToString(mesh->node[i].xyz[j]*scaleFactor, gridFields, 1);
                 fprintf(fp,"%s%s", delimiter, tempString);
                 EG_free(tempString); tempString = NULL;
             }
@@ -6705,23 +6805,25 @@ int mesh_writeAstros(void *aimInfo,
         // Check for design minimum area
         foundDesignVar = (int) false;
 
-        for (designIndex = 0; designIndex < numDesignVariable; designIndex++) {
-            for (j = 0; j < feaDesignVariable[designIndex].numPropertyID; j++) {
+        /* NOTE: mdlk - the TMAX field is ignored unless elem linked to global design variables
+            by SHAPE entries which we do not currently use, so this is commented out for now */
+        // for (designIndex = 0; designIndex < numDesignVariable; designIndex++) {
+        //     for (j = 0; j < feaDesignVariable[designIndex].numPropertyID; j++) {
 
-                if (feaDesignVariable[designIndex].propertySetID[j] == propertyID) {
-                    foundDesignVar = (int) true;
+        //         if (feaDesignVariable[designIndex].propertySetID[j] == propertyID) {
+        //             foundDesignVar = (int) true;
 
-                    maxDesignVar = feaDesignVariable[designIndex].upperBound;
+        //             maxDesignVar = feaDesignVariable[designIndex].upperBound;
 
-                    // If 0.0 don't do anything
-                    if (maxDesignVar == 0.0) foundDesignVar = (int) false;
+        //             // If 0.0 don't do anything
+        //             if (maxDesignVar == 0.0) foundDesignVar = (int) false;
 
-                    break;
-                }
-            }
+        //             break;
+        //         }
+        //     }
 
-            if (foundDesignVar == (int) true) break;
-        }
+        //     if (foundDesignVar == (int) true) break;
+        // }
 
         if ( mesh->element[i].elementType == Line &&
                 elementSubType == UnknownMeshSubElement) { // Non-default subtype handled by astros_writeSubElementCard
@@ -6950,6 +7052,7 @@ int mesh_writeSTL(void *aimInfo,
 
     double norm[3] = {0,0,0}, p1[3] = {0,0,0}, p2[3] = {0,0,0}, p3[3] = {0,0,0};
     float temp;
+    size_t stringLength;
     char *filename = NULL;
     char fileExt[] = ".stl";
     char header[80] = "CAPS_STL";
@@ -6996,13 +7099,10 @@ int mesh_writeSTL(void *aimInfo,
         scaleFactor = 1;
     }
 
-    filename = (char *) EG_alloc((strlen(fname) + 1 + strlen(fileExt)) *sizeof(char));
-    if (filename == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
+    stringLength = strlen(fname) + strlen(fileExt) + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-    sprintf(filename,"%s%s",fname, fileExt);
+    snprintf(filename,stringLength,"%s%s",fname, fileExt);
 
     fp = aim_fopen(aimInfo, filename,"w");
 
@@ -7314,7 +7414,7 @@ int mesh_writeTecplot(void *aimInfo,
         scaleFactor = 1;
     }
 */
-    sprintf(filename,"%s.dat",fname);
+    snprintf(filename,512,"%s.dat",fname);
 
 
     if (mesh->meshQuickRef.useStartIndex == (int) false &&
@@ -7481,6 +7581,7 @@ int mesh_writeAirfoil(void *aimInfo,
 
     int firstLineElement = (int) false;
 
+    size_t stringLength;
     char *filename = NULL;
     char fileExt[] = ".af";
 
@@ -7506,10 +7607,10 @@ int mesh_writeAirfoil(void *aimInfo,
         scaleFactor = 1;
     }
 
-    filename = (char *) EG_alloc((strlen(fname) + 1 + strlen(fileExt)) *sizeof(char));
-    if (filename == NULL) return EGADS_MALLOC;
+    stringLength = strlen(fname) + strlen(fileExt) + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-    sprintf(filename,"%s%s",fname, fileExt);
+    snprintf(filename,stringLength,"%s%s",fname, fileExt);
 
     fp = aim_fopen(aimInfo, filename,"w");
 
@@ -7665,6 +7766,7 @@ int mesh_writeFAST(void *aimInfo,
 
     cfdMeshDataStruct *cfdData;
 
+    size_t stringLength;
     char *filename = NULL;
     char fileExt[] = ".msh";
 
@@ -7685,10 +7787,10 @@ int mesh_writeFAST(void *aimInfo,
         scaleFactor = 1;
     }
 
-    filename = (char *) EG_alloc((strlen(fname) + 1 + strlen(fileExt)) *sizeof(char));
-    if (filename == NULL) return EGADS_MALLOC;
+    stringLength = strlen(fname) + strlen(fileExt) + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-    sprintf(filename,"%s%s",fname, fileExt);
+    snprintf(filename,stringLength,"%s%s",fname, fileExt);
 
     fp = aim_fopen(aimInfo, filename,"w");
 
@@ -7792,6 +7894,7 @@ int mesh_writeAbaqus(void *aimInfo,
 
     int i, j; // Indexing
 
+    size_t stringLength;
     char *filename = NULL;
     char fileExt[] = "_Mesh.inp";
 
@@ -7818,10 +7921,10 @@ int mesh_writeAbaqus(void *aimInfo,
         scaleFactor = 1;
     }
 
-    filename = (char *) EG_alloc((strlen(fname) + 1 + strlen(fileExt)) *sizeof(char));
-    if (filename == NULL) return EGADS_MALLOC;
+    stringLength = strlen(fname) + strlen(fileExt) + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-    sprintf(filename,"%s%s",fname, fileExt);
+    snprintf(filename,stringLength,"%s%s",fname, fileExt);
 
     fp = aim_fopen(aimInfo, filename,"w");
 
@@ -8458,7 +8561,7 @@ int mesh_nodeID2Array(const meshStruct *mesh,
 {
     int status; // Function status
 
-    int inode, j, k; // Indexing
+    int inode; // Indexing
 
     int numNodeID = 0;
     int *n2a = NULL;
@@ -8468,10 +8571,8 @@ int mesh_nodeID2Array(const meshStruct *mesh,
     *n2a_out = NULL;
 
     // get the maximum nodeID value from the elements
-    for (j = 0; j < mesh->numElement; j++) {
-        for (k = 0; k < mesh_numMeshConnectivity(mesh->element[j].elementType); k++) {
-            numNodeID = MAX(numNodeID, mesh->element[j].connectivity[k]);
-        }
+    for (inode = 0; inode < mesh->numNode; inode++) {
+        numNodeID = MAX(numNodeID, mesh->node[inode].nodeID);
     }
     numNodeID++; // change to a count rather than ID
 
@@ -8490,15 +8591,13 @@ int mesh_nodeID2Array(const meshStruct *mesh,
     *n2a_out = n2a;
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) {
-            printf("Error: Premature exit in mesh_nodeID2Array, status %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS) {
+        printf("Error: Premature exit in mesh_nodeID2Array, status %d\n", status);
+        AIM_FREE(n2a);
+    }
 
-            if (n2a != NULL) EG_free(n2a);
-            n2a = NULL;
-        }
-
-        return status;
+    return status;
 }
 
 // Create a new mesh with topology tagged with capsIgnore being removed, if capsIgnore isn't found the mesh is simply copied.
@@ -8768,8 +8867,8 @@ int mesh_setAnalysisType(meshAnalysisTypeEnum analysisType, meshStruct *mesh) {
         return status;
 }
 
-// Function used by mesh_findGroupElements to determined which nodes match the attribute index
-static int _matchAttrIndex(meshElementStruct *element, void *attrIndex) {
+// Function used by mesh_findGroupElements to determined which elements match the attribute index
+int mesh_matchElementAttrIndex(meshElementStruct *element, void *attrIndex) {
 
     feaMeshDataStruct *feaData;
 
@@ -8819,7 +8918,7 @@ int mesh_findGroupElements(meshStruct *mesh,
 
         // Get elements with matching attribute index
         status = mesh_findElements(
-            mesh, _matchAttrIndex, &attrIndex, &numFound, &foundSet);
+            mesh, mesh_matchElementAttrIndex, &attrIndex, &numFound, &foundSet);
         if (status != CAPS_SUCCESS) goto cleanup;
 
         for (foundIndex = 0; foundIndex < numFound; foundIndex++) {
@@ -8918,6 +9017,23 @@ int mesh_findElements(meshStruct *mesh,
         }
 
         return status;
+}
+
+
+// Function used to determined if node matches the attribute index
+int mesh_matchNodeAttrIndex(meshNodeStruct *node, void *attrIndex) {
+
+    feaMeshDataStruct *feaData;
+
+    if (node->analysisType == MeshStructure) {
+
+        feaData = (feaMeshDataStruct *) node->analysisData;
+
+        if (feaData->attrIndex == *((int *) attrIndex)) {
+            return (int) true;
+        }
+    }
+    return (int) false;
 }
 
 // Find meshNodeStructs with `isMatch` function

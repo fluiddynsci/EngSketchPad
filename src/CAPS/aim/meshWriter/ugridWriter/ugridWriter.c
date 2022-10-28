@@ -1,7 +1,7 @@
 /*
  *      CAPS: Computational Aircraft Prototype Syntheses
  *
- *             Testing AIM 3D Mesh Writer Example Code
+ *             ugrid 3D Mesh Writer Code
  *
  *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
@@ -175,7 +175,7 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
     }
   }
 
-  printf("Finished writing SU2 file\n\n");
+  printf("Finished writing ugrid file\n\n");
 
   status = CAPS_SUCCESS;
 

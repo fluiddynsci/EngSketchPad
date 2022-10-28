@@ -31,6 +31,7 @@ typedef struct {
   int             nbnd;     /* number of boundary groups */
   aimMeshBnd     *bnds;     /* boundary group info */
   char           *fileName; /* full path name (no extension) for grids */
+  int             _delTess; /* internal use only, whether tess/body ego are deleted */
 } aimMeshRef;
 
 typedef int    (*wrDLLFunc) (void);
@@ -90,7 +91,7 @@ __ProtoExt__ int
   aim_writeMeshes( void *aimInfo, int index, aimMesh *mesh );
 
 __ProtoExt__ int
-  aim_initMeshBnd(aimMeshBnd *meshBnd);
+  aim_initMeshBnd( aimMeshBnd *meshBnd );
 
 __ProtoExt__ int
   aim_initMeshRef( aimMeshRef *meshRef );
@@ -119,6 +120,13 @@ __ProtoExt__ int
 
 __ProtoExt__ int
   aim_readBinaryUgrid( void *aimStruc, aimMesh *mesh );
+
+__ProtoExt__ int
+  aim_storeMeshRef( void *aimStruc, const aimMeshRef *meshRef,
+                    const char *meshextension );
+
+__ProtoExt__ int
+  aim_loadMeshRef( void *aimStruc, aimMeshRef *meshRef );
 
 /******************** meshWriter Dynamic Interface ***********************/
 

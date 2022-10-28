@@ -1,0 +1,11 @@
+# clearance3
+# written by John Dannenhoffer
+
+BOX       0.0  0.0  0.0  3.0  3.0  3.0
+SPHERE    1.7  1.5  1.5  1.0
+ROTATEZ   5.0  1.7  1.5
+
+SPECIAL   clearance -1 3
+ASSERT    @length  0.30  0.001
+
+END

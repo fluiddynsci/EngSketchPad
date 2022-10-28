@@ -43,6 +43,16 @@ int fun3d_writeParameterization(void *aimInfo,
                                 cfdDesignVariableStruct designVariable[],
                                 aimMeshRef *meshRef);
 
+// Write FUN3D surface file
+// Will dump out the body meshes in 'filename'_body#.dat  files.
+// If combine == True all surfaces will be added to a single file; if
+// combine == False each surface representing a geometric body will be
+// written to an individual file.
+int  fun3d_writeSurface(void *aimInfo,
+                        aimMeshRef *meshRef,
+                        char *filename,
+                        int combine);
+
 // Write FUN3D rubber.data file
 // Will not write shape entries unless explicitly told to check if they are need
 int fun3d_writeRubber(void *aimInfo,
@@ -61,6 +71,9 @@ int fun3d_readRubber(void *aimInfo,
 
 // Make FUN3D directory structure/tree
 int fun3d_makeDirectory(void *aimInfo);
+
+// Map the old surface tessellation on to the new bodies
+int fun3d_morphMeshUpdate(void *aimInfo,  aimMeshRef *meshRef, int numBody, ego *body);
 
 #ifdef __cplusplus
 }

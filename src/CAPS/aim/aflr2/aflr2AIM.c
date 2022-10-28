@@ -601,7 +601,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
         for (bodyIndex = 0; bodyIndex < numSurface; bodyIndex++) {
 
             if (numSurface > 1) {
-                sprintf(bodyNumber, "%d", bodyIndex);
+                snprintf(bodyNumber, 11, "%d", bodyIndex);
                 AIM_ALLOC(filename, strlen(aflr2Instance->meshInput.outputFileName) +
                                     strlen("_2D_") + 2 +
                                     strlen(bodyNumber), char, aimInfo, status);

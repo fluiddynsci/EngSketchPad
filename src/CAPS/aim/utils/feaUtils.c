@@ -38,6 +38,7 @@ int fea_createMesh(void *aimInfo,
                    mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                    mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
                    mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
+        /*@null@*/ mapAttrToIndexStruct *referenceMap,  // (in)  map from CAPSReference names to indexes
                    int *numMesh,                        // (out) total number of FEA mesh structures
                    meshStruct **feaMesh,                // (out) FEA mesh structure
                    feaProblemStruct *feaProblem ) {     // (out) FEA problem structure
@@ -108,14 +109,24 @@ int fea_createMesh(void *aimInfo,
     for (i = 0; i < numBody; i++ ) feaMeshList[i] = (int) true;
 
     // Check for capsDiscipline consistency
+    i = 0;
     for (body = 0; body < numBody; body++) {
 
         status = retrieve_CAPSDisciplineAttr(bodies[body], &discipline);
         if (status != CAPS_SUCCESS) continue; // Need to add an error code
 
-        if (strcasecmp(discipline, "structure") != 0) feaMeshList[body] = (int) false;
+        if (strcasecmp(discipline, "structure") != 0) {
+            feaMeshList[body] = (int) false;
+            i++;
+        }
     }
 
+    if (i == numBody) {
+        AIM_ERROR(aimInfo, "No bodies with capsDiscipline Structure!");
+        status = CAPS_BADVALUE;
+        goto cleanup;
+    }
+  
     //for (body = 0; body< numBody; body++) printf("Body %i, FeaMeshList = %i\n", body, feaMeshList[body]);
 
     // Get CoordSystem attribute to index mapping
@@ -168,6 +179,15 @@ int fea_createMesh(void *aimInfo,
                                                   bodies,
                                                   3, //>2 - search the body, faces, edges, and all the nodes
                                                   responseMap);
+        AIM_STATUS(aimInfo, status);
+    }
+
+    if (referenceMap != NULL) {
+        // Get response to index mapping
+        status = create_CAPSReferenceAttrToIndexMap(numBody,
+                                                  bodies,
+                                                  3, //>2 - search the body, faces, edges, and all the nodes
+                                                  referenceMap);
         AIM_STATUS(aimInfo, status);
     }
 
@@ -271,6 +291,7 @@ int fea_createMesh(void *aimInfo,
                                              transferMap,
                                              connectMap,
                                              responseMap,
+                                             referenceMap,
                                              &feaMeshes[body]);
                 AIM_STATUS(aimInfo, status);
 
@@ -285,6 +306,7 @@ int fea_createMesh(void *aimInfo,
                 printf("\tElemental Tria3 = %d\n", feaMeshes[body].meshQuickRef.numTriangle);
                 printf("\tElemental Quad4 = %d\n", feaMeshes[body].meshQuickRef.numQuadrilateral);
             }
+
 
             if (numFEAMesh > 1) {
                 printf("Combining multiple FEA meshes!\n");
@@ -372,6 +394,7 @@ int fea_createMesh(void *aimInfo,
                                          transferMap,
                                          connectMap,
                                          responseMap,
+                                         referenceMap,
                                          &feaProblem->feaMesh);
             AIM_STATUS(aimInfo, status);
 
@@ -431,6 +454,7 @@ int fea_createMesh(void *aimInfo,
                                    transferMap,
                                    connectMap,
                                    responseMap,
+                                   referenceMap,
                                    &tempMesh[*numMesh-1]);
 
             AIM_STATUS(aimInfo, status);
@@ -509,7 +533,8 @@ int fea_bodyToBEM(void *aimInfo,                       // (in)  AIM structure
                   mapAttrToIndexStruct *loadMap,       // (in)  map from CAPSLoad names to indexes
                   mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                   mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
-                  mapAttrToIndexStruct *responseMap,    // (in)  map from CAPSResponse names to indexes
+                  mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
+                  mapAttrToIndexStruct *referenceMap,  // (in)  map from CAPSReference names to indexes
                   meshStruct *feaMesh)                 // (out) FEA mesh structure
 {
     int status = 0; // Function return status
@@ -895,6 +920,7 @@ int fea_bodyToBEM(void *aimInfo,                       // (in)  AIM structure
                                      transferMap,
                                      connectMap,
                                      responseMap,
+                                     referenceMap,
                                      pointType, pointTopoIndex,
                                      feaData); // Set the feaData structure
         if (status != CAPS_SUCCESS) goto cleanup;
@@ -1273,6 +1299,7 @@ int fea_bodyToBEM(void *aimInfo,                       // (in)  AIM structure
 
             }
         }
+
     }
 
     if (qints != NULL) {
@@ -1323,6 +1350,7 @@ int fea_setAnalysisData( void *aimInfo,                       // (in)  AIM struc
                          mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                          mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
                          mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
+                         mapAttrToIndexStruct *referenceMap,  // (in)  map from CAPSReference names to indexes
                          meshStruct *feaMesh)                 // (in/out) FEA mesh structure
 {
     int status = 0; // Function return status
@@ -1353,11 +1381,23 @@ int fea_setAnalysisData( void *aimInfo,                       // (in)  AIM struc
     int pointType, pointTopoIndex;
     double xyzPoint[3];
 
+    // Meshing
+    int numPoint = 0, numTri = 0;
+    const int  *triConn = NULL, *triNeighbor = NULL; // Triangle
+
+    int gID; // Global id
+
+    const double *xyz, *uv;
+    double result[18];
+
+    const int *ptype = NULL, *pindex = NULL;
+
     // Attributues
     const char *attrName;
     int         attrIndex, coordSystemIndex, loadIndex;
 
     feaMeshDataStruct *feaData = NULL;
+    meshGeomDataStruct *geomData;
 
     // ---------------------------------------------------------------
 
@@ -1402,6 +1442,7 @@ int fea_setAnalysisData( void *aimInfo,                       // (in)  AIM struc
                                          transferMap,
                                          connectMap,
                                          responseMap,
+                                         referenceMap,
                                          pointType, pointTopoIndex,
                                          feaData); // Set the feaData structure
             AIM_STATUS(aimInfo, status);
@@ -1553,6 +1594,62 @@ int fea_setAnalysisData( void *aimInfo,                       // (in)  AIM struc
                 }
 
                 eref = efaces[face-1];
+
+                // If this is a face in a capsBound, set geomData in nodes
+                status = retrieve_CAPSBoundAttr(eref, &attrName);
+                if (status == CAPS_SUCCESS) {
+                    
+                    status = EG_getTessFace(feaMesh->egadsTess, face,
+                                            &numPoint, &xyz, &uv, &ptype, &pindex,
+                                            &numTri, &triConn, &triNeighbor);
+                    if (status < EGADS_SUCCESS) goto cleanup;
+                    
+                    for (i = 0; i < numPoint; i++) {
+
+                        status = EG_localToGlobal(feaMesh->egadsTess, face, i+1, &gID);
+                        if (status != EGADS_SUCCESS) goto cleanup;
+                        
+                        geomData = feaMesh->node[gID-1].geomData;
+
+                        if (geomData == NULL) {
+                            
+                            // Get geometry data for node
+                            geomData = EG_alloc(sizeof(meshGeomDataStruct));
+
+                            if (geomData == NULL) {
+                                status = EGADS_MALLOC;
+                                goto cleanup;
+                            }
+
+                            status = initiate_meshGeomDataStruct(geomData);
+                            if (status != CAPS_SUCCESS) goto cleanup;
+
+                            geomData->type = ptype[i];
+                            geomData->topoIndex = pindex[i];
+
+                            // Want the face index to be set for topoIndex
+                            if (geomData->topoIndex < 0) geomData->topoIndex = face+1;
+
+                            geomData->uv[0] = uv[2*i + 0];
+                            geomData->uv[1] = uv[2*i + 1];
+
+                            status = EG_evaluate(eref, geomData->uv, result);
+                            if (status != EGADS_SUCCESS) goto cleanup;
+
+                            // dU
+                            geomData->firstDerivative[0] = result[3];
+                            geomData->firstDerivative[1] = result[4];
+                            geomData->firstDerivative[2] = result[5];
+
+                            // dV
+                            geomData->firstDerivative[3] = result[6];
+                            geomData->firstDerivative[4] = result[7];
+                            geomData->firstDerivative[5] = result[8];
+                            
+                            feaMesh->node[gID-1].geomData = geomData;
+                        }
+                    }
+                }
             }
 
             loadIndex = CAPSMAGIC;
@@ -1627,6 +1724,7 @@ int fea_setAnalysisData( void *aimInfo,                       // (in)  AIM struc
                                              transferMap,
                                              connectMap,
                                              responseMap,
+                                             referenceMap,
                                              pointType, pointTopoIndex,
                                              feaData); // Set the feaData structure
                 AIM_STATUS(aimInfo, status);
@@ -1738,6 +1836,7 @@ int fea_setFEADataPoint(ego *faces, ego *edges, ego *nodes,
                         mapAttrToIndexStruct *transferMap,
                         mapAttrToIndexStruct *connectMap,
                         mapAttrToIndexStruct *responseMap,
+                        mapAttrToIndexStruct *referenceMap,
                         int pointType, int pointTopoIndex,
                         feaMeshDataStruct *feaData) { // Set the feaData structure
 
@@ -1748,7 +1847,7 @@ int fea_setFEADataPoint(ego *faces, ego *edges, ego *nodes,
     // Attributes
     const char *attrName;
     int         constraintIndex=-1, loadIndex=-1, transferIndex=-1, connectIndex=-1;
-    int         connectLinkIndex=-1, attrIndex=-1, responseIndex=-1; //coordSystemIndex
+    int         connectLinkIndex=-1, attrIndex=-1, responseIndex=-1, referenceIndex=-1; //coordSystemIndex
 
     ego object;
 
@@ -1761,6 +1860,7 @@ int fea_setFEADataPoint(ego *faces, ego *edges, ego *nodes,
     connectIndex = CAPSMAGIC;
     connectLinkIndex = CAPSMAGIC;
     responseIndex = CAPSMAGIC;
+    referenceIndex = CAPSMAGIC;
 
     if (pointType == 0) { // Node
 
@@ -1818,16 +1918,21 @@ int fea_setFEADataPoint(ego *faces, ego *edges, ego *nodes,
         if (status != CAPS_SUCCESS && status != CAPS_NOTFOUND && status != CAPS_NULLVALUE) goto cleanup;
     }
 
+    status = retrieve_CAPSReferenceAttr(object, &attrName);
+    if (status == CAPS_SUCCESS) {
+        status = get_mapAttrToIndexIndex(referenceMap, attrName, &referenceIndex);
+        if (status != CAPS_SUCCESS && status != CAPS_NOTFOUND && status != CAPS_NULLVALUE) goto cleanup;
+    }
+
     feaData->attrIndex = attrIndex;
-    
+
     feaData->constraintIndex = constraintIndex;
     feaData->loadIndex = loadIndex;
     feaData->transferIndex = transferIndex;
-
     feaData->connectIndex = connectIndex;
     feaData->connectLinkIndex = connectLinkIndex;
-
     feaData->responseIndex = responseIndex;
+    feaData->referenceIndex = referenceIndex;
 
     status = CAPS_SUCCESS;
     goto cleanup;
@@ -1892,7 +1997,7 @@ int initiate_feaPropertyStruct(feaPropertyStruct *feaProperty) {
     feaProperty->bendingInertiaRatio = 1.0; // Ratio of actual bending moment inertia (I) to bending inertia of a solid
                                             //   plate of thickness TM Real  - default 1.0
     feaProperty->materialShearID = 0;       // ID number of material for shear - if not specified and shearMembraneRatio > 0 this value defaults to materialID
-    feaProperty->shearMembraneRatio  = 5.0/6.0;     // Ratio of shear to membrane thickness  - default 5/6
+    feaProperty->shearMembraneRatio = 5.0/6.0;     // Ratio of shear to membrane thickness  - default 5/6
     feaProperty->massPerArea = 0.0;           // Mass per unit area
     //feaProperty->neutralPlaneDist[0] = 0;   // Distances from the neutral plane of the plate to locations where
     //feaProperty->neutralPlaneDist[1] = 0;   //   stress is calculate
@@ -2191,7 +2296,7 @@ int initiate_feaAnalysisStruct(feaAnalysisStruct *feaAnalysis) {
     feaAnalysis->analysisID = 0; // ID number of analysis
 
     // Loads for the analysis
-    feaAnalysis->numLoad = 0; 	// Number of loads in the analysis
+    feaAnalysis->numLoad = 0;     // Number of loads in the analysis
     feaAnalysis->loadSetID = NULL; // List of the load IDSs
 
     // Constraints for the analysis
@@ -2249,6 +2354,13 @@ int initiate_feaAnalysisStruct(feaAnalysisStruct *feaAnalysis) {
     feaAnalysis->numReducedFreq = 0;
     feaAnalysis->reducedFreq = NULL;
 
+    feaAnalysis->numFlutterVel = 0;
+    feaAnalysis->flutterVel = NULL;
+
+    feaAnalysis->flutterConvergenceParam = 0.0;
+
+    feaAnalysis->visualFlutter = (int) false;
+
     return CAPS_SUCCESS;
 }
 
@@ -2264,7 +2376,7 @@ int destroy_feaAnalysisStruct(feaAnalysisStruct *feaAnalysis) {
     feaAnalysis->analysisID = 0; // ID number of analysis
 
     // Loads for the analysis
-    feaAnalysis->numLoad = 0; 	// Number of loads in the analysis
+    feaAnalysis->numLoad = 0;     // Number of loads in the analysis
     if(feaAnalysis->loadSetID != NULL) EG_free(feaAnalysis->loadSetID);
     feaAnalysis->loadSetID = NULL; // List of the load IDSs
 
@@ -2348,13 +2460,21 @@ int destroy_feaAnalysisStruct(feaAnalysisStruct *feaAnalysis) {
     feaAnalysis->numControlConstraint = 0; // Number of control surface constrained variables
     feaAnalysis->controlConstraint = NULL; // List of character labels identifying control surfaces to be constrained trim variables, size=[numControlConstraint]
 
-    if (feaAnalysis->magControlConstraint != NULL) EG_free(feaAnalysis->magControlConstraint);
+    EG_free(feaAnalysis->magControlConstraint);
     feaAnalysis->magControlConstraint = NULL; // Magnitude of control surface constrained variables, size=[numControlConstraint]
 
     // Flutter
     feaAnalysis->numReducedFreq = 0;
-    if (feaAnalysis->reducedFreq != NULL) EG_free(feaAnalysis->reducedFreq);
-    feaAnalysis->reducedFreq = NULL; // Mach number
+    EG_free(feaAnalysis->reducedFreq);
+    feaAnalysis->reducedFreq = NULL;
+
+    feaAnalysis->numFlutterVel = 0;
+    EG_free(feaAnalysis->flutterVel);
+    feaAnalysis->flutterVel = NULL;
+
+    feaAnalysis->flutterConvergenceParam = 0.0;
+
+    feaAnalysis->visualFlutter = (int) false;
 
     return CAPS_SUCCESS;
 }
@@ -2541,8 +2661,6 @@ int initiate_feaDesignVariableStruct(feaDesignVariableStruct *feaDesignVariable)
 
     feaDesignVariable->name = NULL;
 
-    feaDesignVariable->designVariableType = UnknownDesignVar;
-
     feaDesignVariable->designVariableID = 0; //  ID number of design variable
 
 
@@ -2555,22 +2673,6 @@ int initiate_feaDesignVariableStruct(feaDesignVariableStruct *feaDesignVariable)
 
     feaDesignVariable->discreteValue = NULL; // List of discrete values that a design variable can assume;
 
-    feaDesignVariable->numMaterialID = 0; // Number of materials to apply the design variable to
-    feaDesignVariable->materialSetID = NULL; // List of materials IDs
-    feaDesignVariable->materialSetType = NULL; // List of materials types corresponding to the materialSetID
-
-    feaDesignVariable->numPropertyID = 0;   // Number of property ID to apply the design variable to
-    feaDesignVariable->propertySetID = NULL; // List of property IDs
-    feaDesignVariable->propertySetType = NULL; // List of property types corresponding to the propertySetID
-
-    feaDesignVariable->numElementID = 0; // Number of element ID to apply the design variable to
-    feaDesignVariable->elementSetID = NULL; // List of element IDs
-    feaDesignVariable->elementSetType = NULL; // List of element types corresponding to the elementSetID
-    feaDesignVariable->elementSetSubType = NULL; // List of element subtypes correspoding to the elementSetID
-
-    feaDesignVariable->fieldPosition = 0; //  Position in card to apply design variable to
-    feaDesignVariable->fieldName = NULL; // Name of property/material to apply design variable to
-
     feaDesignVariable->numIndependVariable = 0;  // Number of independent variables this variables depends on
     feaDesignVariable->independVariable = NULL; // List of independent variable names, size[numIndependVariable]
     feaDesignVariable->independVariableID = NULL;// List of independent variable designVariableIDs, size[numIndependVariable]
@@ -2578,6 +2680,9 @@ int initiate_feaDesignVariableStruct(feaDesignVariableStruct *feaDesignVariable)
 
     feaDesignVariable->variableWeight[0] = 0.0; // Weight to apply to if variable is dependent
     feaDesignVariable->variableWeight[1] = 0.0;
+
+    feaDesignVariable->numRelation = 0;
+    feaDesignVariable->relationSet = NULL;
 
     return CAPS_SUCCESS;
 }
@@ -2587,9 +2692,6 @@ int destroy_feaDesignVariableStruct(feaDesignVariableStruct *feaDesignVariable) 
 
     if (feaDesignVariable->name != NULL) EG_free(feaDesignVariable->name);
     feaDesignVariable->name = NULL;
-
-
-    feaDesignVariable->designVariableType = UnknownDesignVar;
 
     feaDesignVariable->designVariableID = 0; //  ID number of design variable
 
@@ -2601,34 +2703,6 @@ int destroy_feaDesignVariableStruct(feaDesignVariableStruct *feaDesignVariable) 
     feaDesignVariable->numDiscreteValue = 0; // Number of discrete values that a design variable can assume;
     if (feaDesignVariable->discreteValue != NULL) EG_free(feaDesignVariable->discreteValue);
     feaDesignVariable->discreteValue = NULL; // List of discrete values that a design variable can assume;
-
-    feaDesignVariable->numMaterialID = 0; // Number of materials to apply the design variable to
-    if (feaDesignVariable->materialSetID != NULL) EG_free(feaDesignVariable->materialSetID);
-    feaDesignVariable->materialSetID = NULL; // List of materials IDs
-
-    if (feaDesignVariable->materialSetType != NULL) EG_free(feaDesignVariable->materialSetType);
-    feaDesignVariable->materialSetType = NULL; // List of materials types corresponding to the materialSetID
-
-    feaDesignVariable->numPropertyID = 0;   // Number of property ID to apply the design variable to
-    if (feaDesignVariable->propertySetID != NULL) EG_free(feaDesignVariable->propertySetID);
-    feaDesignVariable->propertySetID = NULL; // List of property IDs
-
-    if (feaDesignVariable->propertySetType != NULL) EG_free(feaDesignVariable->propertySetType);
-    feaDesignVariable->propertySetType = NULL; // List of property types corresponding to the propertySetID
-
-    feaDesignVariable->numElementID = 0; // Number of element ID to apply the design variable to
-    if (feaDesignVariable->elementSetID != NULL) EG_free(feaDesignVariable->elementSetID); 
-    feaDesignVariable->elementSetID = NULL; // List of element IDs
-
-    if (feaDesignVariable->elementSetType != NULL) EG_free(feaDesignVariable->elementSetType);
-    feaDesignVariable->elementSetType = NULL; // List of element types corresponding to the elementSetID
-    
-    if (feaDesignVariable->elementSetSubType != NULL) EG_free(feaDesignVariable->elementSetSubType);
-    feaDesignVariable->elementSetSubType = NULL; // List of element subtypes correspoding to the elementSetID
-
-    feaDesignVariable->fieldPosition = 0; //  Position in card to apply design variable to
-    if (feaDesignVariable->fieldName != NULL) EG_free(feaDesignVariable->fieldName);
-    feaDesignVariable->fieldName = NULL; // Name of property/material to apply design variable to
 
     (void) string_freeArray(feaDesignVariable->numIndependVariable, &feaDesignVariable->independVariable);
     feaDesignVariable->independVariable = NULL; // List of independent variable names, size[numIndependVariable]
@@ -2644,6 +2718,9 @@ int destroy_feaDesignVariableStruct(feaDesignVariableStruct *feaDesignVariable) 
     feaDesignVariable->variableWeight[0] = 0.0; // Weight to apply to if variable is dependent
     feaDesignVariable->variableWeight[1] = 0.0;
 
+    feaDesignVariable->numRelation = 0;
+    if (feaDesignVariable->relationSet != NULL) EG_free(feaDesignVariable->relationSet);
+
     return CAPS_SUCCESS;
 
 }
@@ -2654,6 +2731,8 @@ int initiate_feaDesignConstraintStruct(feaDesignConstraintStruct *feaDesignConst
     feaDesignConstraint->name = NULL;
 
     feaDesignConstraint->designConstraintID = 0; //  ID number of design constraint
+
+    feaDesignConstraint->designConstraintType = UnknownDesignCon;
 
     feaDesignConstraint->responseType = NULL;  // Response type options for DRESP1 Entry
 
@@ -2667,6 +2746,15 @@ int initiate_feaDesignConstraintStruct(feaDesignConstraintStruct *feaDesignConst
     feaDesignConstraint->fieldPosition = 0; //  Position in card to apply design variable to
     feaDesignConstraint->fieldName = NULL; // Name of property/material to apply design variable to
 
+    feaDesignConstraint->velocityType = NULL;
+    feaDesignConstraint->scalingFactor = 0.0;
+
+    feaDesignConstraint->numVelocity = 0;
+    feaDesignConstraint->velocity = NULL;
+
+    feaDesignConstraint->numDamping = 0;
+    feaDesignConstraint->damping = NULL;
+
     return CAPS_SUCCESS;
 }
 
@@ -2677,6 +2765,8 @@ int destroy_feaDesignConstraintStruct(feaDesignConstraintStruct *feaDesignConstr
     feaDesignConstraint->name = NULL;
 
     feaDesignConstraint->designConstraintID = 0; //  ID number of design constraint
+
+    feaDesignConstraint->designConstraintType = UnknownDesignCon;
 
     if (feaDesignConstraint->responseType != NULL) EG_free(feaDesignConstraint->responseType);
     feaDesignConstraint->responseType = NULL;  // Response type options for DRESP1 Entry
@@ -2696,10 +2786,47 @@ int destroy_feaDesignConstraintStruct(feaDesignConstraintStruct *feaDesignConstr
     if (feaDesignConstraint->fieldName != NULL) EG_free(feaDesignConstraint->fieldName);
     feaDesignConstraint->fieldName = NULL; // Name of property/material to apply design variable to
 
+    if (feaDesignConstraint->velocityType != NULL) EG_free(feaDesignConstraint->velocityType);
+    feaDesignConstraint->velocityType = NULL;
+    feaDesignConstraint->scalingFactor = 0.0;
+    
+    if (feaDesignConstraint->velocity != NULL) EG_free(feaDesignConstraint->velocity);
+    feaDesignConstraint->numVelocity = 0;
+    feaDesignConstraint->velocity = NULL;
+
+    if (feaDesignConstraint->damping != NULL) EG_free(feaDesignConstraint->damping);
+    feaDesignConstraint->numDamping = 0;
+    feaDesignConstraint->damping = NULL;
+
     return CAPS_SUCCESS;
 
 }
 
+// Initiate (0 out all values and NULL all pointers) of feaOptimizationControl in the feaOptimizationControlStruct structure format
+int initiate_feaOptimizationControlStruct(feaOptimizationControlStruct *feaOptimizationControl) {
+
+    feaOptimizationControl->fullyStressedDesign = 0;    // ASTROS specific - fully stressed design number of iterations
+    feaOptimizationControl->mathProgramming = 0;        // Math programming number of iteratinons
+    feaOptimizationControl->maxIter = 0;                // Maximum number of optimization iterations
+    feaOptimizationControl->constraintRetention = 0.0;  // Constraint retention factor
+    feaOptimizationControl->eps = 0.0;                  // A different constraint retention factor?
+    feaOptimizationControl->moveLimit = 0.0;            // Move limit
+
+    return CAPS_SUCCESS;
+}
+
+// Destroy (0 out all values and NULL all pointers) of feaOptimizationControl in the feaOptimizationControlStruct structure format
+int destroy_feaOptimzationControlStruct(feaOptimizationControlStruct *feaOptimizationControl) {
+
+  feaOptimizationControl->fullyStressedDesign = 0;    // ASTROS specific - fully stressed design number of iterations
+  feaOptimizationControl->mathProgramming = 0;        // Math programming number of iteratinons
+  feaOptimizationControl->maxIter = 0;                // Maximum number of optimization iterations
+  feaOptimizationControl->constraintRetention = 0.0;  // Constraint retention factor
+  feaOptimizationControl->eps = 0.0;                  // A different constraint retention factor?
+  feaOptimizationControl->moveLimit = 0.0;            // Move limit
+
+    return CAPS_SUCCESS;
+}
 
 // Initiate (0 out all values and NULL all pointers) of feaCoordSystem in the feaCoordSystemStruct structure format
 int initiate_feaCoordSystemStruct(feaCoordSystemStruct *feaCoordSystem) {
@@ -2795,9 +2922,10 @@ int initiate_feaAeroRefStruct(feaAeroRefStruct *feaAeroRef) {
     feaAeroRef->coordSystemID = 0; // Aerodynamic coordinate sytem id
     feaAeroRef->rigidMotionCoordSystemID = 0; // Reference coordinate system identification for rigid body motions.
 
-    feaAeroRef->refChord = 1.0; // Reference chord length.  	Reference span.  (Real > 0.0)
+    feaAeroRef->refChord = 1.0; // Reference chord length.  Reference span.  (Real > 0.0)
     feaAeroRef->refSpan = 1.0; // Reference span
     feaAeroRef->refArea = 1.0; // Reference area
+    feaAeroRef->refGridID = 0;
 
     feaAeroRef->symmetryXZ  = 0; // Symmetry key for the aero coordinate x-z plane.  (Integer = +1 for symmetry, 0 for no symmetry,
                                  // and -1 for antisymmetry; Default = 0)
@@ -2812,9 +2940,10 @@ int destroy_feaAeroRefStruct(feaAeroRefStruct *feaAeroRef) {
     feaAeroRef->coordSystemID = 0; // Aerodynamic coordinate sytem id
     feaAeroRef->rigidMotionCoordSystemID = 0; // Reference coordinate system identification for rigid body motions.
 
-    feaAeroRef->refChord = 0; // Reference chord length.  	Reference span.  (Real > 0.0)
+    feaAeroRef->refChord = 0; // Reference chord length.  Reference span.  (Real > 0.0)
     feaAeroRef->refSpan = 0; // Reference span
     feaAeroRef->refArea = 0; // Reference area
+    feaAeroRef->refGridID = 0;
 
     feaAeroRef->symmetryXZ  = 0; // Symmetry key for the aero coordinate x-z plane.  (Integer = +1 for symmetry, 0 for no symmetry,
                                  // and -1 for antisymmetry; Default = 0)
@@ -2977,7 +3106,7 @@ int initiate_feaDesignEquationResponseStruct(feaDesignEquationResponseStruct* eq
 
     if (equationResponse == NULL) return CAPS_NULLVALUE;
 
-    equationResponse->equationResponseID = 0; 
+    equationResponse->equationResponseID = 0;
 
     equationResponse->name = NULL; // Name of the equation
 
@@ -3015,7 +3144,7 @@ int destroy_feaDesignEquationResponseStruct(feaDesignEquationResponseStruct* equ
     if (equationResponse->designVariableNameSet != NULL) {
         string_freeArray(equationResponse->numDesignVariable, &equationResponse->designVariableNameSet);
     }
-    
+
     if (equationResponse->constantLabelSet != NULL) {
         string_freeArray(equationResponse->numConstant, &equationResponse->constantLabelSet);
     }
@@ -3075,7 +3204,7 @@ int destroy_feaDesignOptParamStruct(feaDesignOptParamStruct *table) {
     if (table == NULL) return CAPS_NULLVALUE;
 
     if (table->paramLabel != NULL) string_freeArray(table->numParam, &table->paramLabel);
-    
+
     if (table->paramValue != NULL) {
         for (i = 0; i < table->numParam; i++) {
             if (table->paramValue[i] != NULL) {
@@ -3096,18 +3225,32 @@ int initiate_feaDesignVariableRelationStruct(feaDesignVariableRelationStruct *re
 
     relation->name = NULL;
 
-    relation->relationType = 0;
+    relation->componentType = 0;
 
     relation->relationID = 0;
 
     relation->numDesignVariable = 0;
     relation->designVariableNameSet = NULL;
+    relation->designVariableSet = NULL;
 
-    relation->fieldPosition = 0; 
+    relation->fieldPosition = 0;
     relation->fieldName = NULL;
 
-    relation->constantRelationCoeff = 0.0; 
-    relation->linearRelationCoeff = NULL; 
+    relation->constantRelationCoeff = 0.0;
+    relation->linearRelationCoeff = NULL;
+
+    relation->numMaterialID = 0; // Number of materials to apply the design variable to
+    relation->materialSetID = NULL; // List of materials IDs
+    relation->materialSetType = NULL; // List of materials types corresponding to the materialSetID
+
+    relation->numPropertyID = 0;   // Number of property ID to apply the design variable to
+    relation->propertySetID = NULL; // List of property IDs
+    relation->propertySetType = NULL; // List of property types corresponding to the propertySetID
+
+    relation->numElementID = 0; // Number of element ID to apply the design variable to
+    relation->elementSetID = NULL; // List of element IDs
+    relation->elementSetType = NULL; // List of element types corresponding to the elementSetID
+    relation->elementSetSubType = NULL; // List of element subtypes correspoding to the elementSetID
 
     return CAPS_SUCCESS;
 }
@@ -3118,10 +3261,35 @@ int destroy_feaDesignVariableRelationStruct(feaDesignVariableRelationStruct *rel
 
     if (relation->designVariableNameSet != NULL) string_freeArray(relation->numDesignVariable, &relation->designVariableNameSet);
     if (relation->name != NULL) EG_free(relation->name);
+    if (relation->designVariableSet != NULL) EG_free(relation->designVariableSet);
 
     if (relation->fieldName != NULL) EG_free(relation->fieldName);
 
     if (relation->linearRelationCoeff != NULL) EG_free(relation->linearRelationCoeff);
+
+    relation->numMaterialID = 0; // Number of materials to apply the design variable to
+    if (relation->materialSetID != NULL) EG_free(relation->materialSetID);
+    relation->materialSetID = NULL; // List of materials IDs
+
+    if (relation->materialSetType != NULL) EG_free(relation->materialSetType);
+    relation->materialSetType = NULL; // List of materials types corresponding to the materialSetID
+
+    relation->numPropertyID = 0;   // Number of property ID to apply the design variable to
+    if (relation->propertySetID != NULL) EG_free(relation->propertySetID);
+    relation->propertySetID = NULL; // List of property IDs
+
+    if (relation->propertySetType != NULL) EG_free(relation->propertySetType);
+    relation->propertySetType = NULL; // List of property types corresponding to the propertySetID
+
+    relation->numElementID = 0; // Number of element ID to apply the design variable to
+    if (relation->elementSetID != NULL) EG_free(relation->elementSetID);
+    relation->elementSetID = NULL; // List of element IDs
+
+    if (relation->elementSetType != NULL) EG_free(relation->elementSetType);
+    relation->elementSetType = NULL; // List of element types corresponding to the elementSetID
+
+    if (relation->elementSetSubType != NULL) EG_free(relation->elementSetSubType);
+    relation->elementSetSubType = NULL; // List of element subtypes correspoding to the elementSetID
 
     return initiate_feaDesignVariableRelationStruct(relation);
 }
@@ -3137,8 +3305,8 @@ int fea_getMaterial(void *aimInfo,
     /*! \page feaMaterial FEA Material
      * Structure for the material tuple  = ("Material Name", "Value").
      * "Material Name" defines the reference name for the material being specified.
-     *	The "Value" can either be a JSON String dictionary (see Section \ref jsonStringMaterial) or a single string keyword
-     *	(see Section \ref keyStringMaterial).
+     * The "Value" can either be a JSON String dictionary (see Section \ref jsonStringMaterial) or a single string keyword
+     * (see Section \ref keyStringMaterial).
      */
 
     int status; //Function return
@@ -3199,14 +3367,18 @@ int fea_getMaterial(void *aimInfo,
              * \section jsonStringMaterial JSON String Dictionary
              *
              * If "Value" is JSON string dictionary
-             * \if (MYSTRAN || NASTRAN || ASTROS || HSM || ABAQUS)
+             * \if (MYSTRAN || NASTRAN || ASTROS || HSM || ABAQUS || MASSTRAN)
              *  (e.g. "Value" = {"density": 7850, "youngModulus": 120000.0, "poissonRatio": 0.5, "materialType": "isotropic"})
              * \endif
              *  the following keywords ( = default values) may be used:
              *
              * <ul>
              * <li> <B>materialType = "Isotropic"</B> </li> <br>
+             * \if (MYSTRAN || NASTRAN || ASTROS || HSM || ABAQUS)
              *      Material property type. Options: Isotropic, Anisothotropic, Orthotropic, or Anisotropic.
+             * \elseif MASSTRAN
+             *      Material property type. Options: Isotropic.
+             * \endif
              * </ul>
              */
 
@@ -3317,7 +3489,7 @@ int fea_getMaterial(void *aimInfo,
             /*! \page feaMaterial
              *
              *
-             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || ABAQUS)
+             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || ABAQUS || MASSTRAN)
              *  <ul>
              *  <li> <B>density = 0.0</B> </li> <br>
              *  Density of the material.
@@ -3715,11 +3887,16 @@ int fea_getProperty(void *aimInfo,
              *  Type of property to apply to a given capsGroup <c>Name</c>. Options: ConcentratedMass, Rod,
              *  Bar, Shear, Shell, Composite, and Solid
              * </ul>
+             * \elseif (MASSTRAN)
+             * <ul>
+             *  <li> <B>propertyType = No Default value</B> </li> <br>
+             *  Type of property to apply to a given capsGroup <c>Name</c>. Options: ConcentratedMass, Shell
+             * </ul>
              * \elseif ABAQUS
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>propertyType = No Default value</B> </li> <br>
              *  Type of property to apply to a give capsGroup <c>Name</c>. Options: ConcentratedMass, Rod,
@@ -3735,16 +3912,15 @@ int fea_getProperty(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 //{UnknownProperty, ConcentratedMass Rod, Bar, Shear, Shell, Composite, Solid}
-                if (strcasecmp(keyValue, "\"ConcentratedMass\"") == 0) feaProblem->feaProperty[i].propertyType = ConcentratedMass;
-                else if (strcasecmp(keyValue, "\"Rod\"")      == 0) feaProblem->feaProperty[i].propertyType = Rod;
-                else if (strcasecmp(keyValue, "\"Bar\"")      == 0) feaProblem->feaProperty[i].propertyType = Bar;
-                else if (strcasecmp(keyValue, "\"Shear\"")    == 0) feaProblem->feaProperty[i].propertyType = Shear;
-                else if (strcasecmp(keyValue, "\"Shell\"")    == 0) feaProblem->feaProperty[i].propertyType = Shell;
-                else if (strcasecmp(keyValue, "\"Membrane\"")    == 0) feaProblem->feaProperty[i].propertyType = Membrane;
-                else if (strcasecmp(keyValue, "\"Composite\"")== 0) feaProblem->feaProperty[i].propertyType = Composite;
-                else if (strcasecmp(keyValue, "\"Solid\"")    == 0) feaProblem->feaProperty[i].propertyType = Solid;
+                if      (strcasecmp(keyValue, "\"ConcentratedMass\"") == 0) feaProblem->feaProperty[i].propertyType = ConcentratedMass;
+                else if (strcasecmp(keyValue, "\"Rod\"")              == 0) feaProblem->feaProperty[i].propertyType = Rod;
+                else if (strcasecmp(keyValue, "\"Bar\"")              == 0) feaProblem->feaProperty[i].propertyType = Bar;
+                else if (strcasecmp(keyValue, "\"Shear\"")            == 0) feaProblem->feaProperty[i].propertyType = Shear;
+                else if (strcasecmp(keyValue, "\"Shell\"")            == 0) feaProblem->feaProperty[i].propertyType = Shell;
+                else if (strcasecmp(keyValue, "\"Membrane\"")         == 0) feaProblem->feaProperty[i].propertyType = Membrane;
+                else if (strcasecmp(keyValue, "\"Composite\"")        == 0) feaProblem->feaProperty[i].propertyType = Composite;
+                else if (strcasecmp(keyValue, "\"Solid\"")            == 0) feaProblem->feaProperty[i].propertyType = Solid;
                 else {
-
                     AIM_ERROR(aimInfo, "Unrecognized \"%s\" specified (%s) for Property tuple %s, current options are "
                                        "\"Rod, Bar, Shear, Shell, Composite, and Solid\"\n", keyWord,
                                        keyValue,
@@ -3756,7 +3932,6 @@ int fea_getProperty(void *aimInfo,
                 }
 
             } else {
-
                 AIM_ERROR(aimInfo, "\tNo \"%s\" specified for Property tuple %s, this mandatory! Current options are "
                                    "\"ConcentratedMass, Rod, Bar, Shear, Shell, Composite, and Solid\"\n", keyWord,
                                    propertyTuple[i].name);
@@ -3779,7 +3954,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              *  <ul>
              *  <li> <B>material = `Material Name' (\ref feaMaterial) </B> </li> <br>
              *  `Material Name' from \ref feaMaterial to use for property. If no material is set the first material
@@ -3849,7 +4024,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              *  <ul>
              *  <li> <B>crossSecArea = 0.0</B> </li> <br>
              *  Cross sectional area.
@@ -3876,7 +4051,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              *  <ul>
              *  <li> <B>torsionalConst = 0.0</B> </li> <br>
              *  Torsional constant.
@@ -3903,7 +4078,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>torsionalStressReCoeff = 0.0</B> </li> <br>
              *  Torsional stress recovery coefficient.
@@ -3929,7 +4104,7 @@ int fea_getProperty(void *aimInfo,
              *
              * \elseif ( MYSTRAN || NASTRAN || ASTROS || ABAQUS)
              * <ul>
-             *  <li> <B>massPerArea = 0.0</B> </li> <br>
+             *  <li> <B>massPerLength = 0.0</B> </li> <br>
              *  Non-structural mass per unit length.
              * </ul>
              *
@@ -3957,7 +4132,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>zAxisInertia = 0.0</B> </li> <br>
              *  Section moment of inertia about the element z-axis.
@@ -3984,7 +4159,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>yAxisInertia = 0.0</B> </li> <br>
              *  Section moment of inertia about the element y-axis.
@@ -4011,7 +4186,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>yCoords[4] = [0.0, 0.0, 0.0, 0.0]</B> </li> <br>
              *  Element y-coordinates, in the bar cross-section, of four points at which to recover stresses
@@ -4039,7 +4214,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>zCoords[4] = [0.0, 0.0, 0.0, 0.0]</B> </li> <br>
              *  Element z-coordinates, in the bar cross-section, of four points at which to recover stresses
@@ -4067,7 +4242,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>areaShearFactors[2] = [0.0, 0.0]</B> </li> <br>
              *  Area factors for shear.
@@ -4095,7 +4270,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>crossProductInertia = 0.0</B> </li> <br>
              *  Section cross-product of inertia.
@@ -4112,11 +4287,17 @@ int fea_getProperty(void *aimInfo,
 
             /*! \page feaProperty
              *
-             * \if (MYSTRAN || NASTRAN)
+             * \if (MYSTRAN || NASTRAN )
              * <ul>
              *  <li> <B>crossSecType = NULL</B> </li> <br>
              *  Cross-section type. Must be one of following character variables: BAR, BOX, BOX1,
              *  CHAN, CHAN1, CHAN2, CROSS, H, HAT, HEXA, I, I1, ROD, T, T1, T2, TUBE, or Z.
+             * </ul>
+             * \elseif ASTROS
+             * <ul>
+             *  <li> <B>crossSecType = NULL</B> </li> <br>
+             *  Cross-section type. Must be one of following character variables: I, T, BOX, BAR, 
+             *  TUBE, ROD, HAT, or GBOX.
              * </ul>
              * \endif
              */
@@ -4129,7 +4310,7 @@ int fea_getProperty(void *aimInfo,
 
              /*! \page feaProperty
               *
-              * \if (MYSTRAN || NASTRAN)
+              * \if (MYSTRAN || NASTRAN || ASTROS)
               * <ul>
               *  <li> <B>crossSecDimension = [0,0,0,....]</B> </li> <br>
               *  Cross-sectional dimensions (length of array is dependent on the "crossSecType"). Max
@@ -4167,7 +4348,7 @@ int fea_getProperty(void *aimInfo,
 
             /*! \page feaProperty
              *
-             * \if (MYSTRAN || NASTRAN)
+             * \if (MYSTRAN || NASTRAN || MASSTRAN)
              * <ul>
              *  <li> <B>membraneThickness = 0.0</B> </li> <br>
              *  Membrane thickness.
@@ -4176,7 +4357,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>membraneThickness = 0.0</B> </li> <br>
              *  Membrane thickness.
@@ -4208,7 +4389,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>bendingInertiaRatio = 1.0</B> </li> <br>
              *  Ratio of actual bending moment inertia to the bending inertia of a solid plate of thickness "membraneThickness"
@@ -4235,7 +4416,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>shearMembraneRatio = 5.0/6.0</B> </li> <br>
              *  Ratio shear thickness to membrane thickness.
@@ -4262,7 +4443,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>materialBending = "Material Name" (\ref feaMaterial)</B> </li> <br>
              *  "Material Name" from \ref feaMaterial to use for property bending.
@@ -4328,7 +4509,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>materialShear = "Material Name" (\ref feaMaterial)</B> </li> <br>
              *  "Material Name" from \ref feaMaterial to use for property shear.
@@ -4382,7 +4563,7 @@ int fea_getProperty(void *aimInfo,
 
             /*! \page feaProperty
              *
-             * \if (HSM)
+             * \if (HSM || MASSTRAN)
              * <ul>
              *  <li> <B>massPerArea = 0.0</B> </li> <br>
              *  Mass per unit area.
@@ -4440,7 +4621,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>compositeMaterial = "no default" </B> </li> <br>
              *  List of "Material Name"s, ["Material Name -1", "Material Name -2", ...], from \ref feaMaterial to use for composites.
@@ -4503,7 +4684,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>shearBondAllowable = 0.0 </B> </li> <br>
              *  Allowable interlaminar shear stress.
@@ -4533,13 +4714,6 @@ int fea_getProperty(void *aimInfo,
              *  reverse order internally in the PCOMP card). For an odd number of plies, the 1/2 thickness
              *   of the center ply is specified with the first ply being the bottom ply in the stack, default (False) all plies specified.
              * </ul>
-             *
-             * \else
-             * <ul>
-             *  <li> <B>symmetricLaminate = False </B> </li> <br>
-             *  Symmetric lamination option. True- SYM only half the plies are specified, for odd number plies 1/2 thickness
-             *   of center ply is specified with the first ply being the bottom ply in the stack, default (False) all plies specified
-             * </ul>
              * \endif
              */
             keyWord = "symmetricLaminate";
@@ -4561,7 +4735,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>compositeFailureTheory = "(no default)" </B> </li> <br>
              *  Composite failure theory.
@@ -4589,7 +4763,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>compositeThickness = (no default) </B> </li> <br>
              *  List of composite thickness for each layer (e.g. [1.2, 4.0, 3.0]). If the length of this list doesn't match the length
@@ -4653,7 +4827,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>compositeOrientation = (no default) </B> </li> <br>
              *  List of composite orientations (angle relative element material axis) for each layer (eg. [5.0, 10.0, 30.0]).
@@ -4718,7 +4892,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>mass = 0.0</B> </li> <br>
              *  Mass value.
@@ -4735,7 +4909,7 @@ int fea_getProperty(void *aimInfo,
 
             /*! \page feaProperty
              *
-             * \if (MYSTRAN || NASTRAN)
+             * \if (MYSTRAN || NASTRAN || MASSTRAN)
              * <ul>
              *  <li> <B>massOffset = [0.0, 0.0, 0.0]</B> </li> <br>
              *  Offset distance from the grid point to the center of gravity for a concentrated mass.
@@ -4744,7 +4918,7 @@ int fea_getProperty(void *aimInfo,
              *
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>massOffset = [0.0, 0.0, 0.0]</B> </li> <br>
              *  Offset distance from the grid point to the center of gravity for a concentrated mass.
@@ -4763,7 +4937,7 @@ int fea_getProperty(void *aimInfo,
 
             /*! \page feaProperty
              *
-             * \if (MYSTRAN || NASTRAN)
+             * \if (MYSTRAN || NASTRAN || MASSTRAN)
              * <ul>
              *  <li> <B>massInertia = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</B> </li> <br>
              *  Mass moment of inertia measured at the mass center of gravity.
@@ -4772,7 +4946,7 @@ int fea_getProperty(void *aimInfo,
              *v
              * Something else ....
              *
-             * \else
+             * \elseif ASTROS
              * <ul>
              *  <li> <B>massInertia = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</B> </li> <br>
              *  Mass moment of inertia measured at the mass center of gravity.
@@ -5519,13 +5693,13 @@ int fea_getConnection(int numConnectionTuple,
              * <ul>
              *  <li> <B>connectionType = RigidBody</B> </li> <br>
              *  Type of connection to apply to a given capsConnect pair defined by "Connection Name" and the "groupName".
-             *  Options: Mass (scalar), Spring (scalar), Damper (scalar), RigidBody.
+             *  Options: Mass (scalar), Spring (scalar), Damper (scalar), RigidBody, RigidBodyInterpolate.
              * </ul>
              * \elseif (ASTROS)
              * <ul>
              *  <li> <B>connectionType = RigidBody</B> </li> <br>
              *  Type of connection to apply to a given capsConnect pair defined by "Connection Name" and the "groupName".
-             *  Options: Mass (scalar), Spring (scalar), RigidBody.
+             *  Options: Mass (scalar), Spring (scalar), RigidBody, RigidBodyInterpolate.
              * </ul>
              * \endif
              *
@@ -5613,7 +5787,7 @@ int fea_getConnection(int numConnectionTuple,
              * <ul>
              *  <li> <B>componentNumberEnd= 0 </B> </li> <br>
              *  Component numbers / degrees of freedom of the ending point of the connection for mass,
-             *  spring, and damper elements (scalar), rigid body interpolative connection ( 0 <= Integer <= 6).
+             *  spring, damper elements (scalar), and rigid body interpolative connection ( 0 <= Integer <= 6).
              * </ul>
              * \endif
              *
@@ -5714,89 +5888,89 @@ int fea_getConnection(int numConnectionTuple,
                 if (status != CAPS_SUCCESS) return status;
             }
 
+            /* \page feaConnection
+             *
+             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * <ul>
+             *  <li> <B>glue = False </B> </li> <br>
+             *  Turn on gluing for the connection.
+             * </ul>
+             * \endif
+             */
+            keyWord = "glue";
+            status = search_jsonDictionary( connectionTuple[i].value, keyWord, &keyValue);
+            if (status == CAPS_SUCCESS) {
+
+                status = string_toBoolean(keyValue, &glue);
+                if (keyValue != NULL) {
+                    EG_free(keyValue);
+                    keyValue = NULL;
+                }
+                if (status != CAPS_SUCCESS) return status;
+            }
+
+            /* \page feaConnection
+             *
+             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * <ul>
+             *  <li> <B>glueNumMaster = 5 </B> </li> <br>
+             *  Maximum number of the masters for a glue connections.
+             * </ul>
+             * \endif
+             */
+            keyWord = "glueNumMaster";
+            status = search_jsonDictionary( connectionTuple[i].value, keyWord, &keyValue);
+            if (status == CAPS_SUCCESS) {
+
+                status = string_toInteger(keyValue, &glueNumMaster);
+                if (keyValue != NULL) {
+                    EG_free(keyValue);
+                    keyValue = NULL;
+                }
+                if (status != CAPS_SUCCESS) return status;
+            }
+
+            /* \page feaConnection
+             *
+             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * <ul>
+             *  <li> <B>glueSearchRadius = 0 </B> </li> <br>
+             *  Search radius when looking for masters for a glue connections.
+             * </ul>
+             * \endif
+             */
+            keyWord = "glueSearchRadius";
+            status = search_jsonDictionary( connectionTuple[i].value, keyWord, &keyValue);
+            if (status == CAPS_SUCCESS) {
+
+                status = string_toDouble(keyValue, &glueSearchRadius);
+                if (keyValue != NULL) {
+                    EG_free(keyValue);
+                    keyValue = NULL;
+                }
+                if (status != CAPS_SUCCESS) return status;
+            }
+
             /*! \page feaConnection
-               *
-               * \if (MYSTRAN || NASTRAN || ASTROS)
-               * <ul>
-               *  <li> <B>glue = False </B> </li> <br>
-               *  Turn on gluing for the connection.
-               * </ul>
-               * \endif
-               */
-              keyWord = "glue";
-              status = search_jsonDictionary( connectionTuple[i].value, keyWord, &keyValue);
-              if (status == CAPS_SUCCESS) {
+             *
+             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * <ul>
+             *  <li> <B>weighting = 1 </B> </li> <br>
+             *  Weighting factor for a rigid body interpolative connections.
+             * </ul>
+             * \endif
+             */
+            keyWord = "weighting";
+            status = search_jsonDictionary( connectionTuple[i].value, keyWord, &keyValue);
+            if (status == CAPS_SUCCESS) {
 
-                  status = string_toBoolean(keyValue, &glue);
-                  if (keyValue != NULL) {
-                      EG_free(keyValue);
-                      keyValue = NULL;
-                  }
-                  if (status != CAPS_SUCCESS) return status;
-              }
-
-              /*! \page feaConnection
-               *
-               * \if (MYSTRAN || NASTRAN || ASTROS)
-               * <ul>
-               *  <li> <B>glueNumMaster = 5 </B> </li> <br>
-               *  Maximum number of the masters for a glue connections.
-               * </ul>
-               * \endif
-               */
-              keyWord = "glueNumMaster";
-              status = search_jsonDictionary( connectionTuple[i].value, keyWord, &keyValue);
-              if (status == CAPS_SUCCESS) {
-
-                  status = string_toInteger(keyValue, &glueNumMaster);
-                  if (keyValue != NULL) {
-                      EG_free(keyValue);
-                      keyValue = NULL;
-                  }
-                  if (status != CAPS_SUCCESS) return status;
-              }
-
-              /*! \page feaConnection
-               *
-               * \if (MYSTRAN || NASTRAN || ASTROS)
-               * <ul>
-               *  <li> <B>glueSearchRadius = 0 </B> </li> <br>
-               *  Search radius when looking for masters for a glue connections.
-               * </ul>
-               * \endif
-               */
-              keyWord = "glueSearchRadius";
-              status = search_jsonDictionary( connectionTuple[i].value, keyWord, &keyValue);
-              if (status == CAPS_SUCCESS) {
-
-                  status = string_toDouble(keyValue, &glueSearchRadius);
-                  if (keyValue != NULL) {
-                      EG_free(keyValue);
-                      keyValue = NULL;
-                  }
-                  if (status != CAPS_SUCCESS) return status;
-              }
-
-              /*! \page feaConnection
-               *
-               * \if (MYSTRAN || NASTRAN || ASTROS)
-               * <ul>
-               *  <li> <B>weighting = 1 </B> </li> <br>
-               *  Weighting factor for a rigid body interpolative connections.
-               * </ul>
-               * \endif
-               */
-              keyWord = "weighting";
-              status = search_jsonDictionary( connectionTuple[i].value, keyWord, &keyValue);
-              if (status == CAPS_SUCCESS) {
-
-                  status = string_toDouble(keyValue, &weighting);
-                  if (keyValue != NULL) {
-                      EG_free(keyValue);
-                      keyValue = NULL;
-                  }
-                  if (status != CAPS_SUCCESS) return status;
-              }
+                status = string_toDouble(keyValue, &weighting);
+                if (keyValue != NULL) {
+                    EG_free(keyValue);
+                    keyValue = NULL;
+                }
+                if (status != CAPS_SUCCESS) return status;
+            }
 
             /*! \page feaConnection
              *
@@ -5812,7 +5986,7 @@ int fea_getConnection(int numConnectionTuple,
             keyWord = "groupName";
             status = search_jsonDictionary( connectionTuple[i].value, keyWord, &keyValue);
             if (status == CAPS_SUCCESS) {
-                
+
                 status = string_toStringDynamicArray(keyValue, &numGroupName, &groupName);
                 if (keyValue != NULL) EG_free(keyValue);
                 keyValue = NULL;
@@ -5839,7 +6013,7 @@ int fea_getConnection(int numConnectionTuple,
                     if (status != CAPS_SUCCESS) return status;
 
                 } else {
-                    
+
                     // Lets loop through the group names and create the connections
                     for (groupIndex = 0; groupIndex < numGroupName; groupIndex++) {
 
@@ -7364,11 +7538,7 @@ int fea_getAnalysis(int numAnalysisTuple,
 
                 feaProblem->feaAnalysis[i].analysisType = Modal;
             }
-
-            if (keyValue != NULL) {
-                EG_free(keyValue);
-                keyValue = NULL;
-            }
+            AIM_FREE(keyValue);
 
             // Get loads to be applied for a given analysis
 
@@ -8273,6 +8443,77 @@ int fea_getAnalysis(int numAnalysisTuple,
 
             /*! \page feaAnalysis
              *
+             * \if (NASTRAN || ASTROS)
+             * <ul>
+             *  <li> <B>flutterVel = [0.1, ..., 20.0]</B> </li> <br>
+             *  Velocities to be used in Flutter Analysis. If no values are provided the
+             *  following relation is used
+             *
+             *   v = sqrt(2*dynamicPressure/density)
+             *   dv = (v*2 - v/2) / 20;
+             *
+             *   flutterVel[0]  = v/10
+             *   flutterVel[i] = v/2 + i*dv; where i = 1....21
+             *   flutterVel[22] = v*10;
+             *  </ul>
+             * \endif
+             */
+            keyWord = "flutterVel";
+            status = search_jsonDictionary( analysisTuple[i].value, keyWord, &keyValue);
+            if (status == CAPS_SUCCESS) {
+
+                status = string_toDoubleDynamicArray(keyValue, &feaProblem->feaAnalysis[i].numFlutterVel, &feaProblem->feaAnalysis[i].flutterVel);
+                if (keyValue != NULL) {
+                    EG_free(keyValue);
+                    keyValue = NULL;
+                }
+                if (status != CAPS_SUCCESS) return status;
+            }
+
+            /*! \page feaAnalysis
+             *
+             * \if (ASTROS)
+             * <ul>
+             *  <li> <B>flutterConvergenceParam = 1e-5 </B> </li> <br>
+             *  Convergence parameter for flutter eigenvalue.
+             *  </ul>
+             * \endif
+             */
+            keyWord = "flutterConvergenceParam";
+            status = search_jsonDictionary( analysisTuple[i].value, keyWord, &keyValue);
+            if (status == CAPS_SUCCESS) {
+
+                status = string_toDouble(keyValue, &feaProblem->feaAnalysis[i].flutterConvergenceParam);
+                AIM_FREE(keyValue);
+                if (status != CAPS_SUCCESS) return status;
+            }
+            else {
+                feaProblem->feaAnalysis[i].flutterConvergenceParam = 1.e-5;
+            }
+
+            /*! \page feaAnalysis
+             *
+             * \if (NASTRAN || ASTROS)
+             * <ul>
+             *  <li> <B>visualFlutter = False </B> </li> <br>
+             *  Turn on flutter visualization f06 output.
+             *  </ul>
+             * \endif
+             */
+            // keyWord = "visualFlutter";
+            // status = search_jsonDictionary( analysisTuple[i].value, keyWord, &keyValue);
+            // if (status == CAPS_SUCCESS) {
+            // 
+            //     status = string_toBoolean(keyValue, &feaProblem->feaAnalysis[i].visualFlutter);
+            //     if (keyValue != NULL) {
+            //         EG_free(keyValue);
+            //         keyValue = NULL;
+            //     }
+            //     if (status != CAPS_SUCCESS) return status;
+            // }
+
+            /*! \page feaAnalysis
+             *
              * \if (NASTRAN)
              * <ul>
              *  <li> <B>analysisResponse = "(no default)"</B> </li> <br>
@@ -8339,6 +8580,12 @@ int fea_getAnalysis(int numAnalysisTuple,
                 groupName = NULL;
             }
 
+            if (feaProblem->feaAnalysis[i].analysisType == AeroelasticFlutter) {
+                // Setup the default flutter velocities  if not specified
+                status = fea_defaultFlutterVelocity(&feaProblem->feaAnalysis[i]);
+                if (status != CAPS_SUCCESS) return status;
+            }
+
         } else { // Not JSONstring
 
             /*! \page feaAnalysis
@@ -8357,18 +8604,15 @@ int fea_getAnalysis(int numAnalysisTuple,
         }
     }
 
-    if (keyValue != NULL) {
-        EG_free(keyValue);
-        keyValue = NULL;
-    }
+    AIM_FREE(keyValue);
 
     printf("\tDone getting FEA analyses\n");
     return CAPS_SUCCESS;
-} 
+}
 
 // Get the design variables from a capsTuple
 int fea_getDesignVariable(void *aimInfo,
-                          int requireGroup,
+             /*@unused@*/ int requireGroup,
                           int numDesignVariableTuple,
                           capsTuple designVariableTuple[],
                           int numDesignVariableRelationTuple,
@@ -8376,7 +8620,7 @@ int fea_getDesignVariable(void *aimInfo,
                           mapAttrToIndexStruct *attrMap,
                           feaProblemStruct *feaProblem) {
 
-    /*! \page feaDesignVariable FEA DesignVariable
+    /*! \page feaDesignVariable FEA Design Variables
      * Structure for the design variable tuple  = ("DesignVariable Name", "Value").
      * "DesignVariable Name" defines the reference name for the design variable being specified.
      *  This string will be used in the FEA input directly. The "Value" must be a JSON String dictionary
@@ -8404,16 +8648,6 @@ int fea_getDesignVariable(void *aimInfo,
 
     feaDesignVariableStruct *designVariable;
     feaDesignVariableRelationStruct *designVariableRelation;
-    feaMeshDataStruct *feaData = NULL;
-
-    int numMaterial;
-    feaMaterialStruct **materialSet = NULL, *material;
-
-    int numProperty;
-    feaPropertyStruct **propertySet = NULL, *property;
-
-    int numElement;
-    meshElementStruct **elementSet = NULL, *element;
 
     // Destroy our design variable structures coming in if aren't 0 and NULL already
     if (feaProblem->feaDesignVariable != NULL) {
@@ -8443,10 +8677,8 @@ int fea_getDesignVariable(void *aimInfo,
     feaProblem->numDesignVariable = numDesignVariableTuple;
 
     printf("\tNumber of design variables          - %d\n", feaProblem->numDesignVariable);
-    // printf("\tNumber of design variable relations - %d\n", numDesignVariableRelationTuple);
 
     if (feaProblem->numDesignVariable > 0) {
-
         AIM_ALLOC(feaProblem->feaDesignVariable,
                   feaProblem->numDesignVariable, feaDesignVariableStruct, aimInfo, status);
 
@@ -8465,7 +8697,7 @@ int fea_getDesignVariable(void *aimInfo,
         designVariable = &feaProblem->feaDesignVariable[i];
 
         printf("\tDesign_Variable name - %s\n", designVariableTuple[i].name);
-        
+
         AIM_STRDUP(designVariable->name, designVariableTuple[i].name, aimInfo, status);
 
         designVariable->designVariableID = i + 1;
@@ -8473,13 +8705,11 @@ int fea_getDesignVariable(void *aimInfo,
         // Do we have a json string?
         if (json_isDict(designVariableTuple[i].value)) {
 
-            //printf("JSON String - %s\n", designVariableTuple[i].value);
-
             /*! \page feaDesignVariable
              * \section jsonStringDesignVariable JSON String Dictionary
              *
              * If "Value" is JSON string dictionary
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS || MASSTRAN)
              *  (eg. "Value" = {"initialValue": 5.0, "upperBound": 10.0})
              * \endif
              *  the following keywords ( = default values) may be used:
@@ -8488,103 +8718,7 @@ int fea_getDesignVariable(void *aimInfo,
 
             /*! \page feaDesignVariable
              *
-             * \if NASTRAN
-             * <ul>
-             *  <li> <B>groupName = "(no default)"</B> </li> <br>
-             *  Single or list of <c>capsGroup</c> or FEA Material name(s)
-             *  to the design variable (e.g. "Name1" or ["Name1","Name2",...].
-             *  - For <c>variableType</c> Property a <c>capsGroup</c> Name (or names) is given. The property (see \ref feaProperty) also
-             *  assigned to the same <c>capsGroup</c> will be automatically related to this design variable entry.
-             *  - For <c>variableType</c> Material a \ref feaMaterial name (or names) is given.
-             *  - For <c>variableType</c> Element a <c>capsGroup</c> Name (or names) is given.
-             * </ul>
-             *  \endif
-             *
-             */
-            keyWord = "groupName";
-            status = json_getStringDynamicArray(
-                designVariableTuple[i].value, keyWord, 
-                &numGroupName, &groupName);
-                
-            if (status != CAPS_SUCCESS && requireGroup == (int)true) {
-                // required
-                AIM_ERROR(aimInfo, "No \"%s\" specified for Design_Variable tuple %s",
-                          keyWord, designVariableTuple[i].name);
-                goto cleanup;
-            }
-
-            // collect materials associated with groupName
-            status = fea_findMaterialsByNames(
-                feaProblem, numGroupName, groupName, &numMaterial, &materialSet);
-
-            if (status == CAPS_SUCCESS) {
-
-                AIM_ALLOC(designVariable->materialSetID, numMaterial, int, aimInfo, status);
-                AIM_ALLOC(designVariable->materialSetType, numMaterial, int, aimInfo, status);
-                designVariable->numMaterialID = numMaterial;
-
-                for (j = 0; j < numMaterial; j++) {
-
-                    material = materialSet[j];
-                    designVariable->materialSetID[j] = material->materialID;
-                    designVariable->materialSetType[j] = material->materialType;
-
-                }
-            }
-
-            // collect properties associated with groupName
-            status = fea_findPropertiesByNames(feaProblem, numGroupName, groupName,
-                                               &numProperty, &propertySet);
-
-            if (status == CAPS_SUCCESS) {
-
-                AIM_ALLOC(designVariable->propertySetID, numProperty, int, aimInfo, status);
-                AIM_ALLOC(designVariable->propertySetType, numProperty, int, aimInfo, status);
-                designVariable->numPropertyID = numProperty;
-
-                for (j = 0; j < numProperty; j++) {
-
-                    property = propertySet[j];
-                    designVariable->propertySetID[j] = property->propertyID;
-                    designVariable->propertySetType[j] = property->propertyType;
-
-                }
-            }
-
-            // collect elements associated with groupName
-            status = mesh_findGroupElements(
-                &feaProblem->feaMesh, attrMap, numGroupName, groupName, &numElement, &elementSet);
-            
-            if (status == CAPS_SUCCESS) {
-
-                AIM_ALLOC(designVariable->elementSetID, numElement, int, aimInfo, status);
-                AIM_ALLOC(designVariable->elementSetType, numElement, int, aimInfo, status);
-                AIM_ALLOC(designVariable->elementSetSubType, numElement, int, aimInfo, status);
-                designVariable->numElementID = numElement;
-
-                for (j = 0; j < numElement; j++) {
-
-                    element = elementSet[j];
-                    designVariable->elementSetID[j] = element->elementID;
-                    designVariable->elementSetType[j] = element->elementType;
-                    feaData = (feaMeshDataStruct *) element->analysisData;
-                    designVariable->elementSetSubType[j] = feaData->elementSubType;
-
-                }
-            }
-
-            if (groupName != NULL)
-                string_freeArray(numGroupName, &groupName);
-            numGroupName = 0;
-            groupName = NULL;
-
-            AIM_FREE(materialSet);
-            AIM_FREE(propertySet);
-            AIM_FREE(elementSet);
-
-            /*! \page feaDesignVariable
-             *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS || MASSTRAN)
              * <ul>
              *  <li> <B>initialValue = 0.0</B> </li> <br>
              *  Initial value for the design variable.
@@ -8594,7 +8728,7 @@ int fea_getDesignVariable(void *aimInfo,
              */
             keyWord = "initialValue";
             status = json_getDouble(
-                designVariableTuple[i].value, keyWord, 
+                designVariableTuple[i].value, keyWord,
                 &designVariable->initialValue);
 
             if (status != CAPS_SUCCESS) {
@@ -8603,7 +8737,7 @@ int fea_getDesignVariable(void *aimInfo,
 
             /*! \page feaDesignVariable
              *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              * <ul>
              *  <li> <B>lowerBound = 0.0</B> </li> <br>
              *  Lower bound for the design variable.
@@ -8612,7 +8746,7 @@ int fea_getDesignVariable(void *aimInfo,
              */
             keyWord = "lowerBound";
             status = json_getDouble(
-                designVariableTuple[i].value, keyWord, 
+                designVariableTuple[i].value, keyWord,
                 &designVariable->lowerBound);
 
             if (status != CAPS_SUCCESS) {
@@ -8621,7 +8755,7 @@ int fea_getDesignVariable(void *aimInfo,
 
             /*! \page feaDesignVariable
              *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              * <ul>
              *  <li> <B>upperBound = 0.0</B> </li> <br>
              *  Upper bound for the design variable.
@@ -8630,7 +8764,7 @@ int fea_getDesignVariable(void *aimInfo,
              */
             keyWord = "upperBound";
             status = json_getDouble(
-                designVariableTuple[i].value, keyWord, 
+                designVariableTuple[i].value, keyWord,
                 &designVariable->upperBound);
 
             if (status != CAPS_SUCCESS) {
@@ -8639,7 +8773,7 @@ int fea_getDesignVariable(void *aimInfo,
 
             /*! \page feaDesignVariable
              *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              * <ul>
              *  <li> <B>maxDelta = 0.0</B> </li> <br>
              *  Move limit for the design variable.
@@ -8648,7 +8782,7 @@ int fea_getDesignVariable(void *aimInfo,
              */
             keyWord = "maxDelta";
             status = json_getDouble(
-                designVariableTuple[i].value, keyWord, 
+                designVariableTuple[i].value, keyWord,
                 &designVariable->maxDelta);
 
             if (status != CAPS_SUCCESS) {
@@ -8657,16 +8791,16 @@ int fea_getDesignVariable(void *aimInfo,
 
             /*! \page feaDesignVariable
              *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              * <ul>
              *  <li> <B>discreteValue = 0.0</B> </li> <br>
-             *  List of discrete values do use for the design variable (e.g. [0.0,1.0,1.5,3.0].
+             *  List of discrete values to use for the design variable (e.g. [0.0,1.0,1.5,3.0].
              * </ul>
              * \endif
              */
             keyWord = "discreteValue";
             status = json_getDoubleDynamicArray(
-                designVariableTuple[i].value, keyWord, 
+                designVariableTuple[i].value, keyWord,
                 &designVariable->numDiscreteValue, &designVariable->discreteValue);
 
             if (status != CAPS_SUCCESS) {
@@ -8791,6 +8925,7 @@ int fea_getDesignVariable(void *aimInfo,
             // check if design variable relation info also included in input
             keyWord = "fieldName";
             status = search_jsonDictionary( designVariableTuple[i].value, keyWord, &keyValue);
+
             AIM_FREE(keyValue);
 
             if (status != CAPS_SUCCESS) {
@@ -8800,8 +8935,30 @@ int fea_getDesignVariable(void *aimInfo,
             }
 
             if (status == CAPS_SUCCESS) {
+
+//                // The main relation associated with this design variable, if defined in input
+//                AIM_REALL(feaProblem->feaDesignVariableRelation, relationIndex+1, feaDesignVariableRelationStruct, aimInfo, status);
+//
+//                designVariableRelation = &feaProblem->feaDesignVariableRelation[relationIndex++];
+//
+//                feaProblem->numDesignVariableRelation = relationIndex;
+//
+//                status = initiate_feaDesignVariableRelationStruct(designVariableRelation);
+//                AIM_STATUS(aimInfo, status);
+//
+//                printf("\tWarning: the ability to provide design variable relation data "
+//                       "within Design_Variable input is deprecated and "
+//                       "will be removed in the future. Please use provide relation data "
+//                       "via \"Design_Variable_Relation\" instead.\n");
+//
+//                status = fea_getDesignVariableRelationEntry( &designVariableTuple[i], designVariableRelation,
+//                                                             attrMap, feaProblem, designVariable->name);
+//                AIM_STATUS(aimInfo, status);
+//
+//                designVariableRelation->relationID = relationIndex;
+
                 AIM_ERROR(aimInfo, "The ability to provide design variable relation data "
-                                   "within Design_Variable input is deprecated. Please use provide relation data "
+                                   "within Design_Variable input is deprecated. Please provide relation data "
                                    "via \"Design_Variable_Relation\" instead.\n");
                 status = CAPS_BADVALUE;
                 goto cleanup;
@@ -8857,7 +9014,7 @@ int fea_getDesignVariable(void *aimInfo,
 
     if (designVariableRelationTuple != NULL) {
 
-        AIM_REALL(feaProblem->feaDesignVariableRelation, numDesignVariableRelationTuple, feaDesignVariableRelationStruct, aimInfo, status);
+        AIM_ALLOC(feaProblem->feaDesignVariableRelation, numDesignVariableRelationTuple, feaDesignVariableRelationStruct, aimInfo, status);
         feaProblem->numDesignVariableRelation = numDesignVariableRelationTuple;
 
         for (i = 0; i < numDesignVariableRelationTuple; i++) {
@@ -8867,7 +9024,7 @@ int fea_getDesignVariable(void *aimInfo,
 
         // Go through design variable relations defined via 'Design_Variable_Relation'
         for (i = 0; i < numDesignVariableRelationTuple; i++) {
-            
+
             /*! \page feaDesignVariableRelation FEA DesignVariableRelation
              * Structure for the design variable tuple  = ("DesignVariableRelation Name", "Value").
              * "DesignVariableRelation Name" defines the reference name for the design variable being specified.
@@ -8881,11 +9038,16 @@ int fea_getDesignVariable(void *aimInfo,
             designVariableRelation->relationID = i+1;
 
             status = fea_getDesignVariableRelationEntry(
-                &designVariableRelationTuple[i], designVariableRelation, attrMap, feaProblem, NULL);
+                aimInfo, &designVariableRelationTuple[i], designVariableRelation, 
+                attrMap, feaProblem, NULL
+            );
             AIM_STATUS(aimInfo, status);
         }
 
     }
+    status = fea_linkDesignVariablesAndRelations(feaProblem);
+    AIM_STATUS(aimInfo, status);
+
     printf("\tNumber of design variable relations - %d\n", feaProblem->numDesignVariableRelation);
     printf("\tDone getting FEA design variables\n");
     status = CAPS_SUCCESS;
@@ -8893,9 +9055,6 @@ int fea_getDesignVariable(void *aimInfo,
 cleanup:
 
     AIM_FREE(keyValue);
-    AIM_FREE(materialSet);
-    AIM_FREE(propertySet);
-    AIM_FREE(elementSet);
 
     if (groupName != NULL)
         string_freeArray(numGroupName, &groupName);
@@ -8903,83 +9062,105 @@ cleanup:
     return status;
 }
 
-int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput, 
+int fea_getDesignVariableRelationEntry(void *aimInfo,
+                                       capsTuple *designVariableInput, 
                           /*@unused@*/ feaDesignVariableRelationStruct *designVariableRelation,
                           /*@unused@*/ mapAttrToIndexStruct *attrMap,
                           /*@unused@*/ feaProblemStruct *feaProblem,
-                                       char *forceGroupName) {
-    
-    
+                          /*@unused@*/ char *forceGroupName) {
+
+
     int status; //Function return
 
-    int i; // Indexing
+    int i, j; // Indexing
 
     int numLinearCoeff;
 
     char *keyValue = NULL;
     char *keyWord = NULL;
 
+    char **groupName = NULL;
+    int  numGroupName = 0;
+
+    feaMeshDataStruct *feaData = NULL;
+
+    int numMaterial;
+    feaMaterialStruct **materialSet = NULL, *material;
+
+    int numProperty;
+    feaPropertyStruct **propertySet = NULL, *property;
+
+    int numElement;
+    meshElementStruct **elementSet = NULL, *element;
+
     printf("\tDesign_Variable_Relation name - %s\n", designVariableInput->name);
 
     designVariableRelation->name = EG_strdup(designVariableInput->name);
 
-    /*! \page feaDesignVariableRelation
+    /*! \page feaDesignVariableRelation FEA Design Variable Relations
      * \section jsonStringDesignVariableRelation JSON String Dictionary
      *
      * If "Value" is JSON string dictionary
-     * \if NASTRAN
-     *  (eg. "Value" = {"variableType": "Property", "groupName": "plate", "fieldName": "TM"})
+     * \if (NASTRAN || TACS || MASSTRAN)
+     *  (eg. "Value" = {"componentType": "Property", "componentName": "plate", "fieldName": "TM", "variableName": "MyDesVar"})
+     * \endif
+     * \if (ASTROS)
+     *  (eg. "Value" = {"componentType": "Property", "componentName": "plate", "variableName": "MyDesVar"})
      * \endif
      *  the following keywords ( = default values) may be used:
      *
      */
-    // make sure design variable relation tuple value is json string
     if (!json_isDict(designVariableInput->value)) {
         PRINT_ERROR(
             "'Design_Variable_Relation' tuple value must be a JSON dictionary");
         return CAPS_BADVALUE;
     }
-    //printf("JSON String - %s\n", designVariableInput->value);
 
     /*! \page feaDesignVariableRelation
-     * \if NASTRAN
+     * \if (NASTRAN || TACS || MASSTRAN)
      * <ul>
-     * <li> <B>variableType = "Property"</B> </li> <br>
-     *  Type of design variable relation. Options: "Material", "Property", "Element".
+     * <li> <B>componentType = "Property"</B> </li> <br>
+     *  The type of component for this design variable relation. Options: "Material", "Property", "Element".
+     * </ul>
+     * \endif
+     * \if (ASTROS)
+     * <ul>
+     * <li> <B>componentType = "Property"</B> </li> <br>
+     *  The type of component for this design variable relation. Options: "Property".
      * </ul>
      * \endif
      *
      */
-    // Get design variable relation type
-    keyWord = "variableType";
+    // Get component type for design variable relation
+    keyWord = "componentType";
     status = json_getString(
         designVariableInput->value, keyWord, &keyValue);
 
-    // If "variableType" not found, check "designVariableType" for legacy purposes
-    // Warn that "designVariableType" is deprecated and will be removed in the future!
+    // If "componentType" not found, check "variableType" for legacy purposes
+    // Warn that "variableType" is deprecated and will be removed in the future!
     if (status != CAPS_SUCCESS) {
 
         status = json_getString(
-            designVariableInput->value, "designVariableType", &keyValue);
+            designVariableInput->value, "variableType", &keyValue);
 
         if (status == CAPS_SUCCESS) {
-            printf("\tWarning: \"designVariableType\" is deprecated and "
-                    "will be removed in the future. Please use \"variableType\" "
+            printf("\tWarning: \"variableType\" is deprecated and "
+                    "will be removed in the future. Please use \"componentType\" "
                     "instead.\n");
         }
     }
 
     if (status == CAPS_SUCCESS) {
 
-        if      (strcasecmp(keyValue, "Material")  == 0) designVariableRelation->relationType = MaterialDesignVar;
-        else if (strcasecmp(keyValue, "Property")  == 0) designVariableRelation->relationType = PropertyDesignVar;
-        else if (strcasecmp(keyValue, "Element")  == 0) designVariableRelation->relationType = ElementDesignVar;
+        if      (strcasecmp(keyValue, "Material")  == 0) designVariableRelation->componentType = MaterialDesignVar;
+        else if (strcasecmp(keyValue, "Property")  == 0) designVariableRelation->componentType = PropertyDesignVar;
+        else if (strcasecmp(keyValue, "Element")  == 0) designVariableRelation->componentType = ElementDesignVar;
         else {
 
             printf("\tUnrecognized \"%s\" specified (%s) for Design_Variable_Relation tuple %s, defaulting to \"Property\"\n", keyWord,
                                                                                                                         keyValue,
                                                                                                                         designVariableInput->name);
-            designVariableRelation->relationType = PropertyDesignVar;
+            designVariableRelation->componentType = PropertyDesignVar;
         }
 
     }
@@ -8987,93 +9168,195 @@ int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput,
         printf("\tNo \"%s\" specified for Design_Variable_Relation tuple %s, defaulting to \"Property\"\n", keyWord,
                                                                                                     designVariableInput->name);
 
-        designVariableRelation->relationType = PropertyDesignVar;
+        designVariableRelation->componentType = PropertyDesignVar;
     }
 
-    if (keyValue != NULL) {
-        EG_free(keyValue);
-        keyValue = NULL;
-    }
+    AIM_FREE(keyValue);
 
     /*! \page feaDesignVariableRelation
      *
-     * \if NASTRAN
+     * \if (NASTRAN || TACS || MASSTRAN)
      * <ul>
-     *  <li> <B>groupName = "(no default)"</B> </li> <br>
+     *  <li> <B>componentName = "(no default)"</B> </li> <br>
+     *  Single or list of FEA Property(ies), or FEA Material name(s) linked
+     *  to the design variable relation (e.g. "Name1" or ["Name1","Name2",...].
+     *  - For <c>componentType</c> Property a \ref feaProperty name (or names) is given.
+     *  - For <c>componentType</c> Material a \ref feaMaterial name (or names) is given.
+     *  \if (NASTRAN || TACS)
+     *  - For <c>componentType</c> Element a <c>capsGroup</c> Name (or names) is given.
+     *  \endif
+     * </ul>
+     *  \endif
+     * \if (ASTROS)
+     * <ul>
+     *  <li> <B>componentName = "(no default)"</B> </li> <br>
+     *  Single FEA Property linked to the design variable (e.g. "Name1").
+     *  - For <c>componentType</c> Property a \ref feaProperty name (or names) is given.
+     * </ul>
+     *  \endif
+     *
+     */
+    keyWord = "componentName";
+    status = json_getStringDynamicArray(
+        designVariableInput->value, keyWord,
+        &numGroupName, &groupName);
+
+    if (status != CAPS_SUCCESS) {
+        // required
+        AIM_ERROR(aimInfo, "No \"%s\" specified for Design_Variable tuple %s",
+                    keyWord, designVariableInput->name);
+        goto cleanup;
+    }
+
+    // collect materials associated with groupName
+    status = fea_findMaterialsByNames(feaProblem, numGroupName, groupName, &numMaterial, &materialSet);
+
+    if (status == CAPS_SUCCESS) {
+
+        AIM_ALLOC(designVariableRelation->materialSetID, numMaterial, int, aimInfo, status);
+        AIM_ALLOC(designVariableRelation->materialSetType, numMaterial, int, aimInfo, status);
+        designVariableRelation->numMaterialID = numMaterial;
+
+        for (j = 0; j < numMaterial; j++) {
+
+            material = materialSet[j];
+            designVariableRelation->materialSetID[j] = material->materialID;
+            designVariableRelation->materialSetType[j] = material->materialType;
+
+        }
+    }
+
+    // collect properties associated with groupName
+    status = fea_findPropertiesByNames(feaProblem, numGroupName, groupName,
+                                        &numProperty, &propertySet);
+
+    if (status == CAPS_SUCCESS) {
+
+        AIM_ALLOC(designVariableRelation->propertySetID, numProperty, int, aimInfo, status);
+        AIM_ALLOC(designVariableRelation->propertySetType, numProperty, int, aimInfo, status);
+        designVariableRelation->numPropertyID = numProperty;
+
+        for (j = 0; j < numProperty; j++) {
+
+            property = propertySet[j];
+            designVariableRelation->propertySetID[j] = property->propertyID;
+            designVariableRelation->propertySetType[j] = property->propertyType;
+
+        }
+    }
+
+    // collect elements associated with groupName
+    status = mesh_findGroupElements(
+        &feaProblem->feaMesh, attrMap, numGroupName, groupName, &numElement, &elementSet);
+
+    if (status == CAPS_SUCCESS) {
+
+        AIM_ALLOC(designVariableRelation->elementSetID, numElement, int, aimInfo, status);
+        AIM_ALLOC(designVariableRelation->elementSetType, numElement, int, aimInfo, status);
+        AIM_ALLOC(designVariableRelation->elementSetSubType, numElement, int, aimInfo, status);
+        designVariableRelation->numElementID = numElement;
+
+        for (j = 0; j < numElement; j++) {
+
+            element = elementSet[j];
+            designVariableRelation->elementSetID[j] = element->elementID;
+            designVariableRelation->elementSetType[j] = element->elementType;
+            feaData = (feaMeshDataStruct *) element->analysisData;
+            designVariableRelation->elementSetSubType[j] = feaData->elementSubType;
+
+        }
+    }
+
+    if (groupName != NULL)
+        string_freeArray(numGroupName, &groupName);
+    numGroupName = 0;
+    groupName = NULL;
+
+    AIM_FREE(materialSet);
+    AIM_FREE(propertySet);
+    AIM_FREE(elementSet);
+
+    /*! \page feaDesignVariableRelation
+     *
+     * \if (NASTRAN || TACS || MASSTRAN)
+     * <ul>
+     *  <li> <B>variableName = "(no default)"</B> </li> <br>
      *  Single or list of names of design variables linked to this relation
      * </ul>
      * \endif
+     * \if (ASTROS)
+     * <ul>
+     *  <li> <B>variableName = "(no default)"</B> </li> <br>
+     *  Name of design variable linked to this relation
+     * </ul>
+     * \endif
      */
-    // NOTE: forceGroupName allows us to call this function on a Design_Variable tuple
-    //       and ignore its groupName member that has a diff meaning
-    if (forceGroupName != NULL) {
-        
-        designVariableRelation->numDesignVariable = 1;
-
-        designVariableRelation->designVariableNameSet = EG_alloc(
-            designVariableRelation->numDesignVariable * sizeof(char *));
-        if (designVariableRelation->designVariableNameSet == NULL) {
-            status = EGADS_MALLOC;
-            goto cleanup;
-        }
-        
-        designVariableRelation->designVariableNameSet[0] = EG_strdup(forceGroupName); 
-    }
-    else {
-        keyWord = "groupName";
-        status = json_getStringDynamicArray(
-            designVariableInput->value, keyWord, 
-            &designVariableRelation->numDesignVariable, &designVariableRelation->designVariableNameSet);
-        if (status != CAPS_SUCCESS) {
-            // // required
-            // PRINT_ERROR("No \"%s\" specified for Design_Variable_Relation tuple %s",
-            //             keyWord, designVariableInput->name);
-            // goto cleanup;
-        }
+    keyWord = "variableName";
+    status = json_getStringDynamicArray(
+        designVariableInput->value, keyWord,
+        &designVariableRelation->numDesignVariable, &designVariableRelation->designVariableNameSet);
+    if (status != CAPS_SUCCESS) {
+        // required
+        PRINT_ERROR("No \"%s\" specified for Design_Variable_Relation tuple %s",
+                    keyWord, designVariableInput->name);
+        goto cleanup;
     }
 
     /*! \page feaDesignVariableRelation
      *
-     * \if NASTRAN
+     * \if (NASTRAN || TACS || MASSTRAN)
      * <ul>
      *  <li> <B>fieldName = "(no default)"</B> </li> <br>
      *  Fieldname of variable relation (e.g. "E" for Young's Modulus). Design Variable Relations can be defined as three types based on the <c>variableType</c> value.
      *  These are Material, Property, or Element.  This means that an aspect of a material, property, or element input can change in the optimization problem.  This input
      *  specifies what aspect of the Material, Property, or Element is changing.
-     *  -# <b> Material Types</b> Selected based on the material type (see \ref feaMaterial, materialType) referenced  in the <c>groupName</c> above.
-     *  	- <c><b> MAT1</b>, 	materialType = "Isotropic" </c>
-     *  		- "E", "G", "NU", "RHO", "A"
-     *  	- <c><b>  MAT2</b>, materialType = "Anisothotropic"  </c>
-     *  		- "G11", "G12", "G13", "G22", "G23", "G33", "RHO", "A1", "A2", "A3"
-     *  	- <c><b>  MAT8</b>, materialType = "Orthotropic"  </c>
-     *  	    - "E1", "E2", "NU12", "G12", "G1Z", "G2Z", "RHO", "A1", "A2"
-     *  	- <c><b>  MAT9</b>, materialType = "Anisotropic"  </c>
-     *  	    - "G11", "G12", "G13", "G14", "G15", "G16"
-     *  	    - "G22", "G23", "G24", "G25", "G26"
-     *  	    - "G33", "G34", "G35", "G36"
-     *  	    - "G44", "G45", "G46"
-     *  	    - "G55", "G56", "G66"
-     *  	    - "RHO", "A1", "A2", "A3", "A4", "A5", "A6"
+     *  \if (MASSTRAN)
+     *  -# <b> Material Types</b> Selected based on the material type (see \ref feaMaterial, materialType) referenced  in the <c>componentName</c> above.
+     *      - <c> materialType = "Isotropic" </c>
+     *          - "density"
      *  -# <b> Property Types</b> (see \ref feaProperty)
-     *  	- <c><b> PROD</b> </c> 	<c>propertyType = "Rod"</c>
-     *  		- "A", "J"
-     *  	- <c><b> PBAR</b> </c> 	<c>propertyType = "Bar"</c>
-     *  		- "A", "I1", "I2", "J"
-     *  	- <c><b> PSHELL</b> </c><c>propertyType = "Shell"</c>
-     *  		- "T"
-     *  	- <c><b> PCOMP</b> </c> <c>propertyType = "Composite"</c>
-     *  		- "T1", "THETA1", "T2", "THETA2", ... "Ti", "THETAi"
-     *  	- <c><b> PSOLID</b> </c><c>propertyType = "Solid"</c>
-     *  		- not supported
+     *      - <c>propertyType = "ConcentratedMass"</c>
+     *          - "mass",
+     *          - "massOffset1", "massOffset2", "massOffset2"
+     *          - "Ixx", "Iyy", "Izz", "Ixy", "Ixz", "Iyz"
+     *      - <c>propertyType = "Shell"</c>
+     *          - "membraneThickness", "massPerArea"
+     *  \else
+     *  -# <b> Material Types</b> Selected based on the material type (see \ref feaMaterial, materialType) referenced  in the <c>componentName</c> above.
+     *      - <c><b> MAT1</b>,     materialType = "Isotropic" </c>
+     *          - "E", "G", "NU", "RHO", "A"
+     *      - <c><b>  MAT2</b>, materialType = "Anisothotropic"  </c>
+     *          - "G11", "G12", "G13", "G22", "G23", "G33", "RHO", "A1", "A2", "A3"
+     *      - <c><b>  MAT8</b>, materialType = "Orthotropic"  </c>
+     *          - "E1", "E2", "NU12", "G12", "G1Z", "G2Z", "RHO", "A1", "A2"
+     *      - <c><b>  MAT9</b>, materialType = "Anisotropic"  </c>
+     *          - "G11", "G12", "G13", "G14", "G15", "G16"
+     *          - "G22", "G23", "G24", "G25", "G26"
+     *          - "G33", "G34", "G35", "G36"
+     *          - "G44", "G45", "G46"
+     *          - "G55", "G56", "G66"
+     *          - "RHO", "A1", "A2", "A3", "A4", "A5", "A6"
+     *  -# <b> Property Types</b> (see \ref feaProperty)
+     *      - <c><b> PROD</b> </c> <c>propertyType = "Rod"</c>
+     *          - "A", "J"
+     *      - <c><b> PBAR</b> </c> <c>propertyType = "Bar"</c>
+     *          - "A", "I1", "I2", "J"
+     *      - <c><b> PSHELL</b> </c> <c>propertyType = "Shell"</c>
+     *          - "T"
+     *      - <c><b> PCOMP</b> </c> <c>propertyType = "Composite"</c>
+     *          - "T1", "THETA1", "T2", "THETA2", ... "Ti", "THETAi"
+     *      - <c><b> PSOLID</b> </c> <c>propertyType = "Solid"</c>
+     *          - not supported
      *  -# <b> Element Types</b>
      *      - <c><b> CTRIA3, CQUAD4</b> </c> <c>propertyType = "Shell"</c>
      *          - "ZOFFS"
+     *  \endif
      * </ul>
      * \endif
      */
     keyWord = "fieldName";
     status = json_getString(
-        designVariableInput->value, keyWord, 
+        designVariableInput->value, keyWord,
         &designVariableRelation->fieldName);
     if (status != CAPS_SUCCESS) {
         // optional
@@ -9081,7 +9364,7 @@ int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput,
 
     /*! \page feaDesignVariableRelation
      *
-     * \if NASTRAN
+     * \if (NASTRAN || TACS)
      * <ul>
      *  <li> <B>fieldPosition = 0</B> </li> <br>
      *  This input is ignored if not defined.  The user may use this field instead of the <c>fieldName</c> input defined above to
@@ -9093,7 +9376,7 @@ int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput,
 
     keyWord = "fieldPosition";
     status = json_getInteger(
-        designVariableInput->value, keyWord, 
+        designVariableInput->value, keyWord,
         &designVariableRelation->fieldPosition);
     if (status != CAPS_SUCCESS) {
         // optional
@@ -9101,7 +9384,7 @@ int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput,
 
     /*! \page feaDesignVariableRelation
      *
-     * \if NASTRAN
+     * \if (NASTRAN || TACS || ASTROS || MASSTRAN)
      * <ul>
      *  <li> <B>constantCoeff = 0.0</B> </li> <br>
      *  Constant term of relation.
@@ -9110,7 +9393,7 @@ int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput,
      */
     keyWord = "constantCoeff";
     status = json_getDouble(
-        designVariableInput->value, keyWord, 
+        designVariableInput->value, keyWord,
         &designVariableRelation->constantRelationCoeff);
     if (status != CAPS_SUCCESS) {
         // default
@@ -9119,16 +9402,16 @@ int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput,
 
     /*! \page feaDesignVariableRelation
      *
-     * \if NASTRAN
+     * \if (NASTRAN || TACS || ASTROS || MASSTRAN)
      * <ul>
      *  <li> <B>linearCoeff = 1.0</B> </li> <br>
-     *  Single or list of coefficients of linear relation. Must be same length as <c>groupName</c>.
+     *  Single or list of coefficients of linear relation. Must be same length as <c>variableName</c>.
      * </ul>
      * \endif
      */
     keyWord = "linearCoeff";
     status = json_getDoubleDynamicArray(
-        designVariableInput->value, keyWord, 
+        designVariableInput->value, keyWord,
         &numLinearCoeff, &designVariableRelation->linearRelationCoeff);
 
     if (status != CAPS_SUCCESS) {
@@ -9147,7 +9430,7 @@ int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput,
 
     if (numLinearCoeff != designVariableRelation->numDesignVariable) {
         PRINT_ERROR("Number of \"linearCoeff\" values (%d) does not match"
-                    " number of \"groupName\" values (%d)",
+                    " number of \"variableName\" values (%d)",
                     numLinearCoeff, designVariableRelation->numDesignVariable);
         status = CAPS_BADVALUE;
         goto cleanup;
@@ -9167,10 +9450,10 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
                             capsTuple designConstraintTuple[],
                             feaProblemStruct *feaProblem) {
 
-    /*! \page feaDesignConstraint FEA DesignConstraint
+    /*! \page feaDesignConstraint FEA Design Constraints
      * Structure for the design constraint tuple  = (`DesignConstraint Name', `Value').
      * 'DesignConstraint Name' defines the reference name for the design constraint being specified.
-     *	The "Value" must be a JSON String dictionary (see Section \ref jsonStringDesignConstraint).
+     * The "Value" must be a JSON String dictionary (see Section \ref jsonStringDesignConstraint).
      */
 
     int status; //Function return
@@ -9237,12 +9520,12 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
              * \section jsonStringDesignConstraint JSON String Dictionary
              *
              * If "Value" is JSON string dictionary
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              *  (eg. "Value" = {"groupName": "plate", "upperBound": 10.0})
              * \endif
              *  the following keywords ( = default values) may be used:
              *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              * <ul>
              *  <li> <B>groupName = "(no default)"</B> </li> <br>
              *  Single or list of <c>capsGroup</c> name(s)
@@ -9318,10 +9601,38 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
             }
 
             //Fill up designConstraint properties
+            /*! \page feaDesignConstraint
+             *
+             * \if (NASTRAN || ASTROS)
+             * <ul>
+             *  <li> <B> constraintType = "Property" </B> </li> <br>
+             *  The type of design constraint. Options: "Property", "Flutter"
+             * </ul>
+             * \endif
+             */
+            keyWord = "constraintType";
+            status = json_getString(
+                designConstraintTuple[i].value, keyWord, &keyValue);
+            if (status == CAPS_SUCCESS) {
+                if (strcasecmp(keyValue, "Property") == 0)
+                    feaProblem->feaDesignConstraint[i].designConstraintType = PropertyDesignCon;
+                else if (strcasecmp(keyValue, "Flutter") == 0)
+                    feaProblem->feaDesignConstraint[i].designConstraintType = FlutterDesignCon;
+                else {
+                    PRINT_WARNING("Unknown constraintType %s... defaulting to Property.", keyValue);
+                    feaProblem->feaDesignConstraint[i].designConstraintType = PropertyDesignCon;
+                }
+            }
+            else {
+                feaProblem->feaDesignConstraint[i].designConstraintType = PropertyDesignCon;
+            }
+
+            if (keyValue != NULL) EG_free(keyValue);
+            keyValue = NULL;
 
             /*! \page feaDesignConstraint
              *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              * <ul>
              *  <li> <B>lowerBound = 0.0</B> </li> <br>
              *  Lower bound for the design constraint.
@@ -9343,7 +9654,7 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
 
             /*! \page feaDesignConstraint
              *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              * <ul>
              *  <li> <B>upperBound = 0.0</B> </li> <br>
              *  Upper bound for the design constraint.
@@ -9365,13 +9676,13 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
 
             /*! \page feaDesignConstraint
              *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              * <ul>
              *  <li> <B>responseType = "(no default)"</B> </li> <br>
              *  Response type options for DRESP1 Entry (see Nastran manual).
-             *  	- Implemented Options
-             *  		-# <c>STRESS</c>, for <c>propertyType = "Rod" or "Shell"</c> (see \ref feaProperty)
-             *  		-# <c>CFAILURE</c>, for <c>propertyType = "Composite"</c> (see \ref feaProperty)
+             *      - Implemented Options
+             *          -# <c>STRESS</c>, for <c>propertyType = "Rod" or "Shell"</c> (see \ref feaProperty)
+             *          -# <c>CFAILURE</c>, for <c>propertyType = "Composite"</c> (see \ref feaProperty)
              * </ul>
              * \endif
              *
@@ -9405,7 +9716,7 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
 
             /*! \page feaDesignConstraint
              *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              * <ul>
              *  <li> <B>fieldName = "(no default)"</B> </li> <br>
              *  For constraints, this field is only used currently when applying constraints to composites.  This field is used to identify
@@ -9415,9 +9726,9 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
              *  Additionally, the <c>fieldPosition</c> integer entry below can be used.  In this case <c>"LAMINA1" = 1</c>.
              *
              *  *  -# <b> Property Types</b> (see \ref feaProperty)
-             *  	- <c><b> PCOMP</b> </c> <c>propertyType = "Composite"</c>
-             *  		- "T1", "THETA1", "T2", "THETA2", ... "Ti", "THETAi"
-             *  		- "LAMINA1", "LAMINA2", ... "LAMINAi"
+             *      - <c><b> PCOMP</b> </c> <c>propertyType = "Composite"</c>
+             *          - "T1", "THETA1", "T2", "THETA2", ... "Ti", "THETAi"
+             *          - "LAMINA1", "LAMINA2", ... "LAMINAi"
              *
              * </ul>
              * \endif
@@ -9452,7 +9763,7 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
 
             /*! \page feaDesignConstraint
              *
-             * \if NASTRAN
+             * \if (NASTRAN || ASTROS)
              * <ul>
              *  <li> <B>fieldPosition = 0</B> </li> <br>
              *  This input is ignored if not defined.  The user may use this field instead of the <c>fieldName</c> input defined above to
@@ -9473,6 +9784,79 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
                 }
                 if (status != CAPS_SUCCESS) return status;
             }
+            
+            /*! \page feaDesignConstraint
+             *
+             * \if ASTROS
+             * <ul>
+             *  <li> <B>velocityType = "TRUE" </B> </li> <br>
+             *  The nature of the velocity values defined with "velocity" keyword. Can be either "TRUE" for true velocity
+             *  or "EQUIV" for equivalent air speed.
+             * </ul>
+             * \endif
+             */
+            keyWord = "velocityType";
+            status = json_getString(
+                designConstraintTuple[i].value, keyWord, 
+                &feaProblem->feaDesignConstraint[i].velocityType);
+            if (status != CAPS_SUCCESS) {
+                feaProblem->feaDesignConstraint[i].velocityType = EG_strdup("TRUE");
+            }
+            
+            /*! \page feaDesignConstraint
+             *
+             * \if ASTROS
+             * <ul>
+             *  <li> <B>scalingFactor = 0.10 </B> </li> <br>
+             *  The constraint scaling factor.
+             * </ul>
+             * \endif
+             */
+            keyWord = "scalingFactor";
+            status = json_getDouble(
+                designConstraintTuple[i].value, keyWord, 
+                &feaProblem->feaDesignConstraint[i].scalingFactor);
+            if (status != CAPS_SUCCESS) {
+                feaProblem->feaDesignConstraint[i].scalingFactor = 0.10;
+            }
+            
+            /*! \page feaDesignConstraint
+             *
+             * \if ASTROS
+             * <ul>
+             *  <li> <B>velocity = (No Default) </B> </li> <br>
+             *  The velocity values for flutter constraint.
+             *  Must be an array with equal length to defined "damping" values.
+             * </ul>
+             * \endif
+             */
+            keyWord = "velocity";
+            status = json_getDoubleDynamicArray(
+                designConstraintTuple[i].value, keyWord, 
+                &feaProblem->feaDesignConstraint[i].numVelocity, 
+                &feaProblem->feaDesignConstraint[i].velocity);
+            if (status != CAPS_SUCCESS) {
+                // only required if constraintType == FlutterCon
+            }
+            
+            /*! \page feaDesignConstraint
+             *
+             * \if ASTROS
+             * <ul>
+             *  <li> <B>damping = (No Default) </B> </li> <br>
+             *  The damping values for flutter constraint.
+             *  Must be an array with equal length to defined "velocity" values.
+             * </ul>
+             * \endif
+             */
+            keyWord = "damping";
+            status = json_getDoubleDynamicArray(
+                designConstraintTuple[i].value, keyWord, 
+                &feaProblem->feaDesignConstraint[i].numDamping, 
+                &feaProblem->feaDesignConstraint[i].damping);
+            if (status != CAPS_SUCCESS) {
+                // only required if constraintType == FlutterCon
+            }
 
         } else {
 
@@ -9489,6 +9873,175 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
     }
 
     printf("Done getting FEA design constraints\n");
+    return CAPS_SUCCESS;
+}
+
+// Get the design constraints from a capsTuple
+int fea_getOptimizationControl(char *optimizationControlInput,
+                               feaProblemStruct *feaProblem) {
+
+    /*! \page feaOptimizationControl FEA Optimization Control
+     * Structure for the optimization control dictionary  = `Value'.
+     * The "Value" must be a JSON String dictionary (see Section \ref jsonStringDesignConstraint).
+     */
+
+    int status; //Function return
+
+    char *keyValue = NULL;
+    char *keyWord = NULL;
+
+    // Destroy our optimization control structures coming in if aren't 0 and NULL already
+    status = destroy_feaOptimzationControlStruct(&feaProblem->feaOptimizationControl);
+    if (status != CAPS_SUCCESS) return status;
+
+    printf("\nGetting FEA optimization control.......\n");
+
+    status = initiate_feaOptimizationControlStruct(&feaProblem->feaOptimizationControl);
+    if (status != CAPS_SUCCESS) return status;
+
+    if (optimizationControlInput == NULL) {
+        optimizationControlInput = "{}";
+    }
+
+    // Do we have a json string?
+    if (strncmp(optimizationControlInput, "{", 1) == 0) {
+
+        /*! \page feaOptimizationControl
+         *
+         * \if NASTRAN
+         * <ul>
+         *  <li> <B>fullyStressedDesign = 0</B> </li> <br>
+         *  Number of iterations with fully stressed design.
+         * </ul>
+         * \endif
+         *
+         */
+        keyWord = "fullyStressedDesign";
+        status = json_getInteger(
+            optimizationControlInput, keyWord,
+            &feaProblem->feaOptimizationControl.fullyStressedDesign);
+
+        // Set default value if value is not in JSON
+        if (status != CAPS_SUCCESS) {
+            feaProblem->feaOptimizationControl.fullyStressedDesign = 0;
+        }
+
+        /*! \page feaOptimizationControl
+         *
+         * \if NASTRAN
+         * <ul>
+         *  <li> <B>mathProgramming = 30</B> </li> <br>
+         *  Number of iterations for math programming methods.
+         * </ul>
+         * \endif
+         *
+         */
+        keyWord = "mathProgramming";
+        status = json_getInteger(
+            optimizationControlInput, keyWord,
+            &feaProblem->feaOptimizationControl.mathProgramming);
+
+        // Set default value if value is not in JSON
+        if (status != CAPS_SUCCESS) {
+            feaProblem->feaOptimizationControl.mathProgramming = 30;
+        }
+
+        /*! \page feaOptimizationControl
+         *
+         * \if NASTRAN
+         * <ul>
+         *  <li> <B>maxIter = 30</B> </li> <br>
+         *  Maximum number of optimization iterations.
+         * </ul>
+         * \endif
+         *
+         */
+        keyWord = "maxIter";
+        status = json_getInteger(
+            optimizationControlInput, keyWord,
+            &feaProblem->feaOptimizationControl.maxIter);
+
+        // Set default value if value is not in JSON
+        if (status != CAPS_SUCCESS) {
+            feaProblem->feaOptimizationControl.maxIter = 30;
+        }
+
+        /*! \page feaOptimizationControl
+         *
+         * \if NASTRAN
+         * <ul>
+         *  <li> <B>constraintRetention = 1.5</B> </li> <br>
+         *  Constraint retention factor.
+         *  Will be at least 1.5 times the number of design variables
+         * </ul>
+         * \endif
+         *
+         */
+        keyWord = "constraintRetention";
+        status = json_getDouble(
+            optimizationControlInput, keyWord,
+            &feaProblem->feaOptimizationControl.constraintRetention);
+
+        // Set default value if value is not in JSON
+        if (status != CAPS_SUCCESS) {
+            feaProblem->feaOptimizationControl.constraintRetention = 1.5;
+        }
+
+        /*! \page feaOptimizationControl
+         *
+         * \if NASTRAN
+         * <ul>
+         *  <li> <B>eps = 1.0</B> </li> <br>
+         *  Constraint retention parameter in which all constraints having a
+         *  value greater than "eps" will be considered active.
+         *  
+         * </ul>
+         * \endif
+         *
+         */
+        keyWord = "eps";
+        status = json_getDouble(
+            optimizationControlInput, keyWord,
+            &feaProblem->feaOptimizationControl.eps);
+
+        // Set default value if value is not in JSON
+        if (status != CAPS_SUCCESS) {
+            feaProblem->feaOptimizationControl.eps = 1.0;
+        }
+
+        /*! \page feaOptimizationControl
+         *
+         * \if NASTRAN
+         * <ul>
+         *  <li> <B>moveLimit = 1.0</B> </li> <br>
+         *  Move limit bound.
+         * </ul>
+         * \endif
+         *
+         */
+        keyWord = "moveLimit";
+        status = json_getDouble(
+            optimizationControlInput, keyWord,
+            &feaProblem->feaOptimizationControl.moveLimit);
+
+        // Set default value if value is not in JSON
+        if (status != CAPS_SUCCESS) {
+            feaProblem->feaOptimizationControl.moveLimit = 1.5;
+        }
+
+    } else {
+
+        printf("\tError: OptimizationControl tuple value is expected to be a JSON string\n");
+        return CAPS_BADVALUE;
+
+    }
+
+    if (keyValue != NULL) {
+        EG_free(keyValue);
+        keyValue = NULL;
+    }
+
+    printf("Done getting FEA Optimization Control\n");
     return CAPS_SUCCESS;
 }
 
@@ -9739,7 +10292,7 @@ int fea_getDesignEquation(int numEquationTuple,
                           capsTuple equationTuple[],
                           feaProblemStruct *feaProblem) {
 
-    /*! \page feaDesignEquation FEA DesignEquation
+    /*! \page feaDesignEquation FEA Design Equations
      * Structure for the design equation tuple  = ("DesignEquation Name", ["Value1", ... , "ValueN"]).
      * "DesignEquation Name" defines the reference name for the design equation being specified.
      *  This string will be used in the FEA input directly. The values "Value1", ... , "ValueN" are a
@@ -9809,7 +10362,7 @@ int fea_getDesignEquation(int numEquationTuple,
         */
         // set the equation array
         status = string_toStringDynamicArray(
-            equationTuple[i].value, 
+            equationTuple[i].value,
             &equation->equationArraySize,
             &equation->equationArray);
 
@@ -9825,7 +10378,7 @@ int fea_getDesignTable(int numConstantTuple,
                          feaProblemStruct *feaProblem) {
 
 
-    /*! \page feaDesignTable FEA TableConstant
+    /*! \page feaDesignTable FEA Table Constants
      * Structure for the table constant tuple  = ("TableConstant Name", "Value").
      * "TableConstant Name" defines the reference name for the table constant being specified.
      *  This string will be used in the FEA input directly. The "Value" is the value of the
@@ -9872,7 +10425,7 @@ int fea_getDesignTable(int numConstantTuple,
     // for each analysis table constant tuple
     for (i = 0; i < table->numConstant; i++) {
 
-        printf("\tDesign_Table - %s: %s\n", 
+        printf("\tDesign_Table - %s: %s\n",
                constantTuple[i].name, constantTuple[i].value);
 
         // set constant label
@@ -9908,7 +10461,7 @@ int fea_getDesignResponse(int numDesignResponseTuple,
                           mapAttrToIndexStruct *responseMap,
                           feaProblemStruct *feaProblem) {
 
-    /*! \page feaDesignResponse FEA DesignResponse
+    /*! \page feaDesignResponse FEA Design Responses
      * Structure for the design response tuple  = ("DesignResponse Name", "Value").
      * "DesignResponse Name" defines the reference name for the design response being specified.
      *  This string will be used in the FEA input directly. The "Value" must be a JSON String dictionary
@@ -10002,7 +10555,7 @@ int fea_getDesignResponse(int numDesignResponseTuple,
          * \if NASTRAN
          * <ul>
          *  <li> <B>responseType</B> </li> <br>
-         *  Type of design sensitivity response. For options, 
+         *  Type of design sensitivity response. For options,
          *  see NASTRAN User Guide DRESP1 Design Sensitivity Response Attributes table.
          * </ul>
          * \endif
@@ -10061,7 +10614,7 @@ int fea_getDesignResponse(int numDesignResponseTuple,
             designResponseTuple[i].value, keyword, &groupName);
 
         if (status == CAPS_SUCCESS) {
-        
+
             // Get the corresponding response index
             status = get_mapAttrToIndexIndex(responseMap, (const char *) groupName, &attrIndex);
 
@@ -10070,7 +10623,7 @@ int fea_getDesignResponse(int numDesignResponseTuple,
                 continue;
             } else if (status != CAPS_SUCCESS) return status;
 
-            status = mesh_findNodes(&feaProblem->feaMesh, 
+            status = mesh_findNodes(&feaProblem->feaMesh,
                                     _matchResponseNode, (void *) &attrIndex,
                                     &numNode, &nodeSet);
             if (status != CAPS_SUCCESS) return status;
@@ -10088,6 +10641,8 @@ int fea_getDesignResponse(int numDesignResponseTuple,
             response->gridID = nodeSet[0]->nodeID;
 
             EG_free(nodeSet);
+            nodeSet = NULL;
+
         }
         else {
             // required
@@ -10098,7 +10653,9 @@ int fea_getDesignResponse(int numDesignResponseTuple,
 
         if (groupName != NULL) {
             EG_free(groupName);
+            groupName = NULL;
         }
+
     }
 
     return CAPS_SUCCESS;
@@ -10108,7 +10665,7 @@ int fea_getDesignEquationResponse(int numDesignEquationResponseTuple,
                             capsTuple designEquationResponseTuple[],
                             feaProblemStruct *feaProblem) {
 
-    /*! \page feaDesignEquationResponse FEA DesignEquationResponse
+    /*! \page feaDesignEquationResponse FEA Design Equation Responses
      * Structure for the design equation response tuple  = ("DesignEquationResponse Name", "Value").
      * "DesignEquationResponse Name" defines the reference name for the design equation response being specified.
      *  This string will be used in the FEA input directly. The "Value" must be a JSON String dictionary
@@ -10220,7 +10777,7 @@ int fea_getDesignEquationResponse(int numDesignEquationResponseTuple,
          */
         keyword = "variable";
         status = json_getStringDynamicArray(
-            designEquationResponseTuple[i].value, keyword, 
+            designEquationResponseTuple[i].value, keyword,
             &equationResponse->numDesignVariable, &equationResponse->designVariableNameSet);
         if (status != CAPS_SUCCESS) {
             // optional
@@ -10237,7 +10794,7 @@ int fea_getDesignEquationResponse(int numDesignEquationResponseTuple,
          */
         keyword = "constant";
         status = json_getStringDynamicArray(
-            designEquationResponseTuple[i].value, keyword, 
+            designEquationResponseTuple[i].value, keyword,
             &equationResponse->numConstant, &equationResponse->constantLabelSet);
         if (status != CAPS_SUCCESS) {
             // optional
@@ -10254,7 +10811,7 @@ int fea_getDesignEquationResponse(int numDesignEquationResponseTuple,
          */
         keyword = "response";
         status = json_getStringDynamicArray(
-            designEquationResponseTuple[i].value, keyword, 
+            designEquationResponseTuple[i].value, keyword,
             &equationResponse->numResponse, &equationResponse->responseNameSet);
         if (status != CAPS_SUCCESS) {
             // optional
@@ -10271,7 +10828,7 @@ int fea_getDesignEquationResponse(int numDesignEquationResponseTuple,
          */
         keyword = "equationResponse";
         status = json_getStringDynamicArray(
-            designEquationResponseTuple[i].value, keyword, 
+            designEquationResponseTuple[i].value, keyword,
             &equationResponse->numEquationResponse, &equationResponse->equationResponseNameSet);
         if (status != CAPS_SUCCESS) {
             // optional
@@ -10285,10 +10842,8 @@ int fea_getDesignEquationResponse(int numDesignEquationResponseTuple,
 int fea_getDesignOptParam(int numParamTuple,
                        capsTuple paramTuple[],
                        feaProblemStruct *feaProblem) {
-    
 
-
-    /*! \page feaDesignOptParam FEA DesignOptParam
+    /*! \page feaDesignOptParam FEA Design Optimization Parameters
      * Structure for the design optimization parameter tuple  = ("DesignOptParam Name", "Value").
      * "DesignOptParam Name" defines the reference name for the design optimization parameter being specified.
      *  This string will be used in the FEA input directly. The "Value" is the value of the
@@ -10343,7 +10898,7 @@ int fea_getDesignOptParam(int numParamTuple,
     // for each analysis design optimization parameter tuple
     for (i = 0; i < table->numParam; i++) {
 
-        printf("\tDesign_Opt_Param - %s: %s\n", 
+        printf("\tDesign_Opt_Param - %s: %s\n",
                paramTuple[i].name, paramTuple[i].value);
 
         // set param label
@@ -10353,10 +10908,10 @@ int fea_getDesignOptParam(int numParamTuple,
         // set param value
 
         // if param value is real
-        if (strchr(paramTuple[i].value, '.') 
+        if (strchr(paramTuple[i].value, '.')
             || strchr(paramTuple[i].value, 'e')
             || strchr(paramTuple[i].value, 'E')) {
-            
+
             paramDouble = EG_alloc(sizeof(double));
             if (paramDouble == NULL) return EGADS_MALLOC;
 
@@ -10389,10 +10944,103 @@ int fea_getDesignOptParam(int numParamTuple,
     return CAPS_SUCCESS;
 }
 
+// Function used by fea_getAeroReference to determine which nodes are in reference group
+static int _matchReferenceNode(meshNodeStruct *node, void *referenceIndex) {
+
+    feaMeshDataStruct *feaData;
+
+    if (node->analysisType == MeshStructure) {
+
+        feaData = (feaMeshDataStruct *) node->analysisData;
+
+        if (feaData->referenceIndex == *((int *) referenceIndex)) {
+            return (int) true;
+        }
+    }
+    return (int) false;
+}
+
+// Get aero reference information from json dict
+int fea_getAeroReference(char *aeroRefInput, 
+                         mapAttrToIndexStruct *attrMap, 
+                         feaProblemStruct *feaProblem) {
+    
+    /*! \page feaAeroReference FEA Aerodynamic References
+     * The aerodynamic reference input must be a JSON String dictionary
+     *  (see Section \ref jsonStringAeroReference).
+     *
+     */
+    int status, attrIndex = 0;
+
+    char *keyword, *refNodeName = NULL;
+
+    int numNodes;
+    meshNodeStruct **nodes = NULL;
+
+    printf("\nGetting Aero Reference Parameters.......\n");
+
+    /*! \page feaAeroReference
+     * \section jsonStringAeroReference JSON String Dictionary
+     *
+     * The following keywords ( = default values) may be used:
+     *  
+     */
+    // make sure input is json string
+    if (!json_isDict(aeroRefInput)) {
+        PRINT_ERROR(
+            "'Aero_Reference' value must be a JSON dictionary");
+        return CAPS_BADVALUE;
+    }
+
+    /*! \page feaAeroReference
+     *
+     * \if ASTROS
+     * <ul>
+     *  <li> <B>referenceNode</B> </li> <br>
+     *  Defines the reference <c>capsReference</c> for the node to be used for stability derivative calculations.
+     * </ul>
+     * \endif
+     */
+    keyword = "referenceNode";
+    status = json_getString(
+        aeroRefInput, keyword, &refNodeName);
+    if (status == CAPS_SUCCESS) {
+        
+        // find node with capsReference == refNodeName
+
+        status = get_mapAttrToIndexIndex(attrMap, refNodeName, &attrIndex);
+        if (status != CAPS_SUCCESS) {
+            PRINT_ERROR("capsGroup name %s not found in attribute to index map", refNodeName);
+            goto cleanup;
+        }
+
+        status = mesh_findNodes(
+            &feaProblem->feaMesh, _matchReferenceNode, &attrIndex, &numNodes, &nodes);
+        if (status == CAPS_NOTFOUND) {
+            PRINT_ERROR("No node found with capsReference name %s", refNodeName);
+        }
+        if (status != CAPS_SUCCESS) {
+            goto cleanup;
+        }
+
+        // set refGridID to the nodeID
+        feaProblem->feaAeroRef.refGridID = nodes[0]->nodeID;
+    }
+
+    status = CAPS_SUCCESS;
+
+    cleanup:
+
+        if (refNodeName != NULL) EG_free(refNodeName);
+        if (nodes != NULL) EG_free(nodes);
+
+        return status;
+}
+
 // Find feaPropertyStructs with given names in feaProblem
-int fea_findPropertiesByNames(feaProblemStruct *feaProblem, 
+int fea_findPropertiesByNames(feaProblemStruct *feaProblem,
                              int numPropertyNames,
-                             char **propertyNames, 
+                             char **propertyNames,
                              int *numProperties,
                              feaPropertyStruct ***properties) {
     int i, status;
@@ -10433,9 +11081,9 @@ int fea_findPropertiesByNames(feaProblemStruct *feaProblem,
 }
 
 // Find feaMaterialStructs with given names in feaProblem
-int fea_findMaterialsByNames(feaProblemStruct *feaProblem, 
+int fea_findMaterialsByNames(feaProblemStruct *feaProblem,
                              int numMaterialNames,
-                             char **materialNames, 
+                             char **materialNames,
                              int *numMaterials,
                              feaMaterialStruct ***materials) {
     int i, status;
@@ -10478,15 +11126,15 @@ int fea_findMaterialsByNames(feaProblemStruct *feaProblem,
 // Find feaDesignVariableStructs with given names in feaProblem
 int fea_findDesignVariablesByNames(const feaProblemStruct *feaProblem,
                                    int numDesignVariableNames,
-                                   char **designVariableNames, 
+                                   char **designVariableNames,
                                    int *numDesignVariables,
                                    feaDesignVariableStruct ***designVariables) {
     int i, status;
 
     int numFound;
-    feaDesignVariableStruct **designVariablesFound, *designVariable;
+    feaDesignVariableStruct **designVariablesFound=NULL, *designVariable=NULL;
 
-    designVariablesFound = EG_alloc(sizeof(feaDesignVariableStruct *) * numDesignVariableNames);
+    designVariablesFound = (feaDesignVariableStruct **) EG_alloc(numDesignVariableNames * sizeof(feaDesignVariableStruct *));
 
     numFound = 0;
     for (i = 0; i < feaProblem->numDesignVariable; i++) {
@@ -10505,10 +11153,9 @@ int fea_findDesignVariablesByNames(const feaProblemStruct *feaProblem,
     }
 
     if (numFound < numDesignVariableNames) {
-        designVariablesFound = EG_reall(designVariablesFound, sizeof(feaDesignVariableStruct *) * numFound);
+        designVariablesFound = EG_reall(designVariablesFound, numFound * sizeof(feaDesignVariableStruct *));
         status = CAPS_NOTFOUND;
-    }
-    else {
+    } else {
         status = CAPS_SUCCESS;
     }
 
@@ -10521,7 +11168,7 @@ int fea_findDesignVariablesByNames(const feaProblemStruct *feaProblem,
 // Find feaDesignResponseStructs with given names in feaProblem
 int fea_findDesignResponsesByNames(const feaProblemStruct *feaProblem,
                                    int numDesignResponseNames,
-                                   char **designResponseNames, 
+                                   char **designResponseNames,
                                    int *numDesignResponses,
                                    feaDesignResponseStruct ***designResponses) {
     int i, status;
@@ -10618,6 +11265,132 @@ int fea_findEquationByName(const feaProblemStruct *feaProblem, char *equationNam
     }
 
     return CAPS_NOTFOUND;
+}
+
+// Find vlmControlStruct with given controlSurfName in feaProble
+int fea_findControlSurfaceByName(const feaProblemStruct *feaProblem, char *controlSurfName, vlmControlStruct **controlSurf) {
+
+    int isection, icontrol;
+
+    vlmSurfaceStruct *surface;
+    vlmSectionStruct *section;
+
+    surface = &feaProblem->feaAero->vlmSurface;
+
+    for (isection = 0; isection < surface->numSection; isection++) {
+
+        section = &surface->vlmSection[isection];
+
+        for (icontrol = 0; icontrol < section->numControl; icontrol++) {
+
+            if (strcmp(section->vlmControl[icontrol].name, controlSurfName) == 0) {
+                *controlSurf = &section->vlmControl[icontrol];
+                return CAPS_SUCCESS;
+            }
+        }
+    }
+
+    return CAPS_NOTFOUND;
+}
+
+// Find feaDesignConstraintStruct with given constraintType in feaProblem
+int fea_findDesignConstraintByType(const feaProblemStruct *feaProblem, feaDesignConstraintTypeEnum constraintType, feaDesignConstraintStruct **designConstraint) {
+
+    int i;
+
+    for (i = 0; i < feaProblem->numDesignConstraint; i++) {
+
+        if (feaProblem->feaDesignConstraint[i].designConstraintType == constraintType) {
+            *designConstraint = &feaProblem->feaDesignConstraint[i];
+            return CAPS_SUCCESS;
+        }
+    }
+
+    return CAPS_NOTFOUND;
+}
+
+static inline int _feaDesignVariableRelation_linkDesignVariable(feaDesignVariableRelationStruct *relation,
+                                                  feaDesignVariableStruct *desvar, 
+                                                  int desvarIndex) {
+    if (relation->designVariableSet == NULL) {
+        relation->designVariableSet = (
+            (feaDesignVariableStruct **) 
+            EG_alloc(sizeof(feaDesignVariableStruct *) * relation->numDesignVariable)
+        );
+    }
+    if (relation->designVariableSet == NULL) {
+        return EGADS_MALLOC;
+    }
+
+    relation->designVariableSet[desvarIndex] = desvar;
+
+    return CAPS_SUCCESS;
+}
+
+static inline int _feaDesignVariable_linkDesignVariableRelation(feaDesignVariableStruct *desvar, 
+                                                  feaDesignVariableRelationStruct *relation) {
+    
+    if (desvar->numRelation == 0) {
+        desvar->relationSet = (
+            (feaDesignVariableRelationStruct **) 
+            EG_alloc(sizeof(feaDesignVariableRelationStruct *))
+        );
+    }
+    else {
+        desvar->relationSet = (
+            (feaDesignVariableRelationStruct **) 
+            EG_reall(desvar->relationSet, sizeof(feaDesignVariableRelationStruct *) * (desvar->numRelation + 1))
+        );
+    }
+    if (desvar->relationSet == NULL) {
+        return EGADS_MALLOC;
+    }
+
+    desvar->relationSet[desvar->numRelation] = relation;
+    desvar->numRelation++;
+
+    return CAPS_SUCCESS;
+}
+
+// Populate the feaDesignVariable.relationSet and feaDesignVariableRelation.variableSet members
+// in all feaDesignVariables and feaDesignVariableRelations
+int fea_linkDesignVariablesAndRelations(const feaProblemStruct *feaProblem) {
+
+    int status;
+    int idvGlobal, idv, irel;
+
+    char *desvarName = NULL, **desvarNameSet = NULL;
+
+    feaDesignVariableStruct *desvar = NULL;
+    feaDesignVariableRelationStruct *desvarRelation = NULL;
+
+    for (irel = 0; irel < feaProblem->numDesignVariableRelation; irel++) {
+        
+        desvarRelation = &feaProblem->feaDesignVariableRelation[irel];
+        desvarNameSet = desvarRelation->designVariableNameSet;
+
+        for (idv = 0; idv < desvarRelation->numDesignVariable; idv++) {
+
+            desvarName = desvarNameSet[idv];
+
+            for (idvGlobal = 0; idvGlobal < feaProblem->numDesignVariable; idvGlobal++) {
+
+                desvar = &feaProblem->feaDesignVariable[idvGlobal];
+                
+                if (strcmp(desvar->name, desvarName) == 0) {
+
+                    status = _feaDesignVariableRelation_linkDesignVariable(desvarRelation, desvar, idv);
+                    if (status != CAPS_SUCCESS) return status;
+
+                    status = _feaDesignVariable_linkDesignVariableRelation(desvar, desvarRelation);
+                    if (status != CAPS_SUCCESS) return status;
+                    break;
+                } 
+            }
+        }
+    }
+
+    return CAPS_SUCCESS;
 }
 
 // Initiate (0 out all values and NULL all pointers) of feaProblem in the feaProblemStruct structure format
@@ -10726,10 +11499,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaAnalysisStruct\n", status);
         }
     }
-
-    if (feaProblem->feaAnalysis != NULL) EG_free(feaProblem->feaAnalysis);
-    feaProblem->feaAnalysis = NULL;
-
+    AIM_FREE(feaProblem->feaAnalysis);
     feaProblem->numAnalysis = 0;
 
     // Materials
@@ -10739,9 +11509,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaMaterialStruct\n", status);
         }
     }
-    if (feaProblem->feaMaterial != NULL) EG_free(feaProblem->feaMaterial);
-    feaProblem->feaMaterial = NULL;
-
+    AIM_FREE(feaProblem->feaMaterial);
     feaProblem->numMaterial = 0;
 
     // Properties
@@ -10751,10 +11519,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaPropertyStruct\n", status);
         }
     }
-
-    if (feaProblem->feaProperty != NULL)EG_free(feaProblem->feaProperty);
-    feaProblem->feaProperty = NULL;
-
+    AIM_FREE(feaProblem->feaProperty);
     feaProblem->numProperty = 0;
 
     // Constraints
@@ -10764,11 +11529,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaConstraintStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaConstraint);
     feaProblem->numConstraint = 0;
-
-    if (feaProblem->feaConstraint != NULL) EG_free(feaProblem->feaConstraint);
-    feaProblem->feaConstraint = NULL;
 
     // Supports
     if (feaProblem->feaSupport != NULL) {
@@ -10777,11 +11539,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaSupportStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaSupport);
     feaProblem->numSupport = 0;
-
-    if (feaProblem->feaSupport != NULL) EG_free(feaProblem->feaSupport);
-    feaProblem->feaSupport = NULL;
 
     // Loads
     if (feaProblem->feaLoad != NULL) {
@@ -10790,11 +11549,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaLoadStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaLoad);
     feaProblem->numLoad = 0;
-
-    if (feaProblem->feaLoad != NULL) EG_free(feaProblem->feaLoad);
-    feaProblem->feaLoad = NULL;
 
     // Connections
     if (feaProblem->feaConnect != NULL) {
@@ -10803,11 +11559,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaConnectStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaConnect);
     feaProblem->numConnect = 0;
-
-    if (feaProblem->feaConnect != NULL) EG_free(feaProblem->feaConnect);
-    feaProblem->feaConnect = NULL;
 
     // Mesh
     status = destroy_meshStruct(&feaProblem->feaMesh);
@@ -10824,11 +11577,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaDesignVariableStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaDesignVariable);
     feaProblem->numDesignVariable = 0;
-
-    if (feaProblem->feaDesignVariable != NULL) EG_free(feaProblem->feaDesignVariable);
-    feaProblem->feaDesignVariable = NULL;
 
     // Optimization - design variable relations
     if (feaProblem->feaDesignVariableRelation != NULL) {
@@ -10836,8 +11586,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             status = destroy_feaDesignVariableRelationStruct(&feaProblem->feaDesignVariableRelation[i]);
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaDesignVariableRelationStruct\n", status);
         }
-        EG_free(feaProblem->feaDesignVariableRelation);
-        feaProblem->feaDesignVariableRelation = NULL;
+        AIM_FREE(feaProblem->feaDesignVariableRelation);
     }
     feaProblem->numDesignVariableRelation = 0;
 
@@ -10848,11 +11597,8 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaDesignConstraintStruct\n", status);
         }
     }
-
+    AIM_FREE(feaProblem->feaDesignConstraint);
     feaProblem->numDesignConstraint = 0;
-
-    if (feaProblem->feaDesignConstraint != NULL) EG_free(feaProblem->feaDesignConstraint);
-    feaProblem->feaDesignConstraint = NULL;
 
     // Optimization - Equations
     if (feaProblem->feaEquation != NULL) {
@@ -10860,10 +11606,9 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             status = destroy_feaDesignEquationStruct(&feaProblem->feaEquation[i]);
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaDesignEquationStruct\n", status);
         }
-        EG_free(feaProblem->feaEquation);
+        AIM_FREE(feaProblem->feaEquation);
     }
     feaProblem->numEquation = 0;
-    feaProblem->feaEquation = NULL;
 
     // Optimization - Table Constants
     status = destroy_feaDesignTableStruct(&feaProblem->feaDesignTable);
@@ -10879,10 +11624,9 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             status = destroy_feaDesignResponseStruct(&feaProblem->feaDesignResponse[i]);
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaDesignResponseStruct\n", status);
         }
-        EG_free(feaProblem->feaDesignResponse);
+        AIM_FREE(feaProblem->feaDesignResponse);
     }
     feaProblem->numDesignResponse = 0;
-    feaProblem->feaDesignResponse = NULL;
 
     // Optimization - Design Sensitivity Equation Response Quantities
     if (feaProblem->feaEquationResponse != NULL) {
@@ -10890,10 +11634,9 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             status = destroy_feaDesignEquationResponseStruct(&feaProblem->feaEquationResponse[i]);
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaEquationResponseStruct\n", status);
         }
-        EG_free(feaProblem->feaEquationResponse);
+        AIM_FREE(feaProblem->feaEquationResponse);
     }
     feaProblem->numEquationResponse = 0;
-    feaProblem->feaEquationResponse = NULL;
 
     // Coordinate Systems
     if (feaProblem->feaCoordSystem != NULL) {
@@ -10903,10 +11646,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaCoordSystemStruct\n", status);
         }
     }
-
-    if (feaProblem->feaCoordSystem != NULL) EG_free(feaProblem->feaCoordSystem);
-    feaProblem->feaCoordSystem = NULL;
-
+    AIM_FREE(feaProblem->feaCoordSystem);
     feaProblem->numCoordSystem = 0;
 
     // Aerodynamics
@@ -10917,10 +11657,7 @@ int destroy_feaProblemStruct(feaProblemStruct *feaProblem) {
             if (status != CAPS_SUCCESS) printf("Status %d during destroy_feaAeroStruct\n", status);
         }
     }
-
-    if (feaProblem->feaAero != NULL) EG_free(feaProblem->feaAero);
-    feaProblem->feaAero = NULL;
-
+    AIM_FREE(feaProblem->feaAero);
     feaProblem->numAero = 0;
 
     (void) destroy_feaAeroRefStruct(&feaProblem->feaAeroRef);
@@ -11267,21 +12004,33 @@ int fea_assignElementSubType(int numProperty, feaPropertyStruct *feaProperty, me
 
         for (i = 0; i < feaMesh->numElement; i++) {
 
-            if (feaMesh->element[i].markerID != feaProperty[propertyIndex].propertyID) continue;
-
             // What if this is a volume mesh we inherited ?
             if (feaMesh->element[i].analysisType != MeshStructure) {
                 printf("Developer error: Analysis type not set to MeshStructure for element %d\n", feaMesh->element[i].elementID);
                 return CAPS_BADVALUE;
             }
 
-            feaData = (feaMeshDataStruct *) feaMesh->element[i].analysisData;
+            // Matching proptery id
+            if (feaMesh->element[i].analysisData != NULL) {
+                feaData = (feaMeshDataStruct *) feaMesh->element[i].analysisData;
 
-            if (feaData->propertyID != feaProperty[propertyIndex].propertyID) {
-                printf("Developer error: Property ID mismatch between element \"markerID\" (%d) and feaData \"propertyID\" (%d) for element %d\n",
-                        feaData->propertyID, feaProperty[propertyIndex].propertyID, feaMesh->element[i].elementID);
+                if (feaData->propertyID != feaProperty[propertyIndex].propertyID) continue;
+
+            } else {
+                printf("Developer error: No 'feaData' set on element %d\n", feaMesh->element[i].elementID);
                 return CAPS_BADVALUE;
+
             }
+
+//            if (feaMesh->element[i].markerID != feaProperty[propertyIndex].propertyID) continue;
+//
+//            feaData = (feaMeshDataStruct *) feaMesh->element[i].analysisData;
+//            if (feaData->propertyID != feaProperty[propertyIndex].propertyID) {
+//                printf("Developer error: Property ID mismatch between element \"markerID\" (%d) and feaData \"propertyID\" (%d) for element %d\n",
+//                        feaData->propertyID, feaProperty[propertyIndex].propertyID, feaMesh->element[i].elementID);
+//                return CAPS_BADVALUE;
+//            }
+
 
             if (feaProperty[propertyIndex].propertyType == ConcentratedMass &&
                 feaMesh->element[i].elementType == Node) {
@@ -11917,4 +12666,36 @@ int fea_createDefaultAnalysis(feaProblemStruct *feaProblem, const char *analysis
         }
 
         return status;
+}
+
+// Setup the default flutter velocities if not specified
+int fea_defaultFlutterVelocity(feaAnalysisStruct *feaAnalysis) {
+    int i;
+
+    int defaultNum = 23;
+    double velocity=0, dv=1, vmin=0, vmax=0;
+
+    if (feaAnalysis->numFlutterVel == 0) {
+        AIM_FREE(feaAnalysis->flutterVel);
+
+        feaAnalysis->numFlutterVel = defaultNum;
+        feaAnalysis->flutterVel = EG_alloc(feaAnalysis->numFlutterVel*sizeof(double));
+        if (feaAnalysis->flutterVel == NULL) {
+            return EGADS_MALLOC;
+        }
+
+        velocity = sqrt(2*feaAnalysis->dynamicPressure/feaAnalysis->density);
+        vmin = velocity / 2.0;
+        vmax = 2 * velocity;
+        dv = (vmax - vmin) / (double) (feaAnalysis->numFlutterVel-3);
+
+        for (i = 0; i < feaAnalysis->numFlutterVel-2; i++) {
+            feaAnalysis->flutterVel[i+1] = vmin + (double) i * dv;
+        }
+
+        feaAnalysis->flutterVel[0] = velocity/10;
+        feaAnalysis->flutterVel[feaAnalysis->numFlutterVel-1] = velocity*10;
+    }
+
+    return CAPS_SUCCESS;
 }

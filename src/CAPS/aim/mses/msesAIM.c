@@ -264,7 +264,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 {
   int status = CAPS_SUCCESS;
   /*! \page aimInputsMSES AIM Inputs
-   * The following list outlines the xFoil inputs along with their default values available
+   * The following list outlines the MSES inputs along with their default values available
    * through the AIM interface.
    */
 
@@ -1359,7 +1359,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
   char *line=NULL;
   FILE *fp=NULL;
 
-  msesSensx *sensx;
+  msesSensx *sensx=NULL;
   double coord[3], data[18], tm, tp, ism_dot[9], isp_dot[9];
 
   double *M=NULL, *rhs=NULL, *dmod_dvar=NULL, ds;
@@ -1433,6 +1433,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
   // read in the sensx.airfoil file
   status = msesSensxRead(aimInfo, sensxfile, &sensx);
   AIM_STATUS(aimInfo, status);
+  AIM_NOTNULL(sensx, aimInfo, status);
 
   numFunctional = 7;
   AIM_ALLOC(values, numFunctional, capsValue*, aimInfo, status);
@@ -1890,7 +1891,9 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                int index, char **aoname, capsValue *form)
 {
     /*! \page aimOutputsMSES AIM Outputs
-     * The following list outlines the xFoil outputs available through the AIM interface.
+     * The following list outlines the MSES outputs available through the AIM interface.
+     *
+     * Angle of attack and coefficients have derivatives w.r.t Alpha, Mach, and Re
      */
 
     int status = CAPS_SUCCESS;

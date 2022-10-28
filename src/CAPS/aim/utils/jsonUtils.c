@@ -35,7 +35,6 @@ int json_getString(char *jsonDict, char *key, char **value)
     int status;
     char *valueStr = NULL;
 
-    // if (*value != NULL) return CAPS_BADVALUE;
     if (*value != NULL) {
         EG_free(*value);
         *value = NULL;

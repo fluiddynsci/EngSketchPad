@@ -105,7 +105,7 @@ void browserMessage(/*@unused@*/ void *uPtr, /*@unused@*/ void *wsi,
                             &xyzs, &uvs, &ptype, &pindex, &ntri,
                             &tris, &tric);
       if (stat != EGADS_SUCCESS) continue;
-      sprintf(gpname, "Body %d Face %d", ibody+1, i+1);
+      snprintf(gpname, 45, "Body %d Face %d", ibody+1, i+1);
       index = wv_indexGPrim(cntxt, gpname);
       if (index < 0) {
         printf(" wv_indexGPrim = %d for %s (%d)!\n", i, gpname, index);
@@ -245,7 +245,7 @@ void browserMessage(/*@unused@*/ void *uPtr, /*@unused@*/ void *wsi,
 #endif
           nh++;
         }
-        sprintf(gpname, "Body %d Loop %d/%d", ibody+1, i+1, j+1);
+        snprintf(gpname, 45, "Body %d Loop %d/%d", ibody+1, i+1, j+1);
         index = wv_indexGPrim(cntxt, gpname);
         if (index < 0) {
           printf(" wv_indexGPrim = %d for %s (%d)!\n", i, gpname, index);

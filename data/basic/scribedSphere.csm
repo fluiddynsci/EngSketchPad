@@ -24,7 +24,7 @@ PATBEG    icone  azimuth.size
    SUBTRACT
 
    # mark the newly scribed Edges
-   SELECT    EDGE  0  0  @nbody-4  0  0
+   SELECT    EDGE  0  0  @nbody-1  0  0
    ATTRIBUTE _color      $red
    ATTRIBUTE __newEdge__ $on
    

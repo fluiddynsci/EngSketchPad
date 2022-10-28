@@ -10,7 +10,8 @@ extern "C" {
 
 // Fill vlmSurface in a vlmSurfaceStruct format with vortex lattice information
 // from an incoming surfaceTuple
-int get_vlmSurface(int numTuple,
+int get_vlmSurface(void *aimInfo,
+                   int numTuple,
                    capsTuple surfaceTuple[],
                    mapAttrToIndexStruct *attrMap,
                    double Cspace,

@@ -1744,7 +1744,7 @@ EG_exportEBody(egObject *EBody, stream_T *fp)
     }
     if (Fwrite(eface->senses, sizeof(int), eface->eloops.nobjs, fp) !=
         eface->eloops.nobjs) return EGADS_WRITERR;
-    for (j = 0; j < eface->npatch; j++) {
+    for (j = 0; j < abs(eface->npatch); j++) {
       k = EG_indexBodyTopo(body, eface->patches[j].face);
       if (k <= EGADS_SUCCESS) {
         printf(" EGADS Error: Face %d index = %d in EFace %d (EG_exportEBody)!\n",

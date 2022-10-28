@@ -78,8 +78,8 @@ store     OML
     #Rotate the body to put it in the typical aero-coordinate system
     rotatex   90   0   0
    
-   	attribute capsIntent $STRUCTURE #FEA Analysis (2D elements) 
-   	attribute capsAIM $nastranAIM;astrosAIM;mystranAIM;hsmAIM
+   	attribute capsIntent $Structure #FEA Analysis (2D elements) 
+   	attribute capsAIM $nastranAIM;astrosAIM;mystranAIM;hsmAIM;egadsTessAIM
 
 
 # CFD
@@ -114,18 +114,18 @@ store     OML
     #Rotate the body to put it in the typical aero-coordinate system
     rotatex   90   0   0
     
-    attribute capsIntent $CFD #CFD Analysis
+    attribute capsIntent $Aerodynamic #CFD Analysis
     attribute capsAIM $fun3dAIM;su2AIM;egadsTessAIM;aflr4AIM;tetgenAIM;aflr3AIM #CFD Analysis
 
     # Restore outer mold line of wing for Cart3D
     restore OML
     rotatex   90   0   0
     select body
-       attribute .tParams  params
-       attribute capsIntent $CFD       #CFD Analysis
-       attribute capsAIM $cart3dAIM    #CFD Analysis
-       attribute capsReferenceArea     area
-       attribute capsReferenceChord    sqrt(area/aspect)
-       attribute capsReferenceSpan     sqrt(area/aspect)*aspect
-       attribute capsReferenceX        croot/4
+       attribute .tParams            params
+       attribute capsIntent          $Aerodynamic #CFD Analysis
+       attribute capsAIM             $cart3dAIM 
+       attribute capsReferenceArea   area
+       attribute capsReferenceChord  sqrt(area/aspect)
+       attribute capsReferenceSpan   sqrt(area/aspect)*aspect
+       attribute capsReferenceX      croot/4
     

@@ -896,13 +896,11 @@ int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo,
            nsec, nsecrev+1-nsecrevfound);
 
     // Create char for number of sections in the friction input (lifting + bodyOfRev)
-/*@-bufferoverflowhigh@*/
     if (nsec+nsecrev+1-nsecrevfound >= 10) {
-        sprintf(tmpInt,"%d.       ",nsec+nsecrev+1-nsecrevfound);
+        snprintf(tmpInt,12,"%d.       ",nsec+nsecrev+1-nsecrevfound);
     } else {
-        sprintf(tmpInt,"%d.        ",nsec+nsecrev+1-nsecrevfound);
+        snprintf(tmpInt,12,"%d.        ",nsec+nsecrev+1-nsecrevfound);
     }
-/*@+bufferoverflowhigh@*/
 
     // Create input file for friction
     fp = aim_fopen(aimInfo, "frictionInput.txt","w");

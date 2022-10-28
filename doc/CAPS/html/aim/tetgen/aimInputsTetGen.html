@@ -94,8 +94,13 @@ $(function() {
  Sets the tolerance for coplanar test in TetGen.</li>
 </ul>
 </li>
-<li><b> Multiple_Mesh = False</b> <br  />
- If set to True a volume will be generated for each body. When set to False (default value) only a single volume mesh will be created.</li>
+<li><b> Multiple_Mesh = "SingleDomain"</b> <br  />
+ If "SingleDomain": Generate a single volume mesh file is assuming multiple bodies define a single computational domain (i.e. CFD)<br  />
+ <br  />
+ If "MultiFile": Generate a volume mesh file for each body.<br  />
+ <br  />
+ If "MultiDomain": Generate a single mesh file containing multiple volume meshes for each body.<br  />
+</li>
 <li><b>Regions = NULL</b><br  />
  If this input is set, the volume mesh will be divided into regions, each bounded by surface mesh and identified by an interior <code>seed</code> point. If a seed appears in the <code>Regions</code> input, then its region will be meshed and the markers for all cells in the region will be set to the region's <code>id</code>. The markers for cells that fall outside of any user-defined region or hole will be numbered automatically. The input is a vector of tuples. The tuple keys are ignored and the tuple values are dictionaries; each requires an integer <code>id</code> entry and a 3-vector <code>seed</code> point. For example, from within a pyCAPS script,</li>
 </ul>
@@ -121,7 +126,7 @@ $(function() {
 </div><!-- PageDoc -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Sat Jul 2 2022 10:13:13 for TetGen Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
+Generated on Thu Dec 8 2022 20:46:12 for TetGen Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
 </small></address>
 </body>
 </html>

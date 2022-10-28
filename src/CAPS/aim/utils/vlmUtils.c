@@ -27,7 +27,8 @@ extern int EG_isPlanar(const ego object);
 
 // Fill vlmSurface in a vlmSurfaceStruct format with vortex lattice information
 // from an incoming surfaceTuple
-int get_vlmSurface(int numTuple,
+int get_vlmSurface(void *aimInfo,
+                   int numTuple,
                    capsTuple surfaceTuple[],
                    mapAttrToIndexStruct *attrMap,
                    double Cspace,
@@ -77,7 +78,7 @@ int get_vlmSurface(int numTuple,
     // Initiate vlmSurfaces
     for (i = 0; i < (*numVLMSurface); i++) {
         status = initiate_vlmSurfaceStruct(&(*vlmSurface)[i]);
-        if (status != CAPS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         // set default Cspace
         (*vlmSurface)[i].Cspace = Cspace;
@@ -123,7 +124,7 @@ int get_vlmSurface(int numTuple,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toStringDynamicArray(keyValue, &numGroupName, &groupName);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 if (keyValue != NULL) EG_free(keyValue);
                 keyValue = NULL;
@@ -134,10 +135,10 @@ int get_vlmSurface(int numTuple,
                     status = get_mapAttrToIndexIndex(attrMap, (const char *) groupName[groupIndex], &attrIndex);
 
                     if (status == CAPS_NOTFOUND) {
-                        printf("\tgroupName name %s not found in attribute map of capsGroups!!!!\n", groupName[groupIndex]);
+                        printf("groupName name %s not found in map of capsGroups attributes!", groupName[groupIndex]);
                         continue;
-
-                    } else if (status != CAPS_SUCCESS) goto cleanup;
+                    }
+                    AIM_STATUS(aimInfo, status);
 
                     (*vlmSurface)[i].numAttr += 1;
                     if ((*vlmSurface)[i].numAttr == 1) {
@@ -157,7 +158,7 @@ int get_vlmSurface(int numTuple,
                 }
 
                 status = string_freeArray(numGroupName, &groupName);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
                 groupName = NULL;
                 numGroupName = 0;
 
@@ -169,7 +170,7 @@ int get_vlmSurface(int numTuple,
 
                 status = get_mapAttrToIndexIndex(attrMap, (const char *) (*vlmSurface)[i].name, &attrIndex);
                 if (status == CAPS_NOTFOUND) {
-                    printf("\tTuple name %s not found in attribute map of capsGroups!!!!\n", (*vlmSurface)[i].name);
+                    AIM_ERROR(aimInfo, "Tuple name %s not found in map of capsGroups attributes!", (*vlmSurface)[i].name);
                     goto cleanup;
                 }
 
@@ -189,7 +190,7 @@ int get_vlmSurface(int numTuple,
                 (*vlmSurface)[i].attrIndex[(*vlmSurface)[i].numAttr-1] = attrIndex;
             }
 
-            EG_free(keyValue); keyValue = NULL;
+            AIM_FREE(keyValue);
 
             /*! \page vlmSurface
              * \if (AVL)
@@ -209,12 +210,13 @@ int get_vlmSurface(int numTuple,
                 else if (strcasecmp(keyValue, "\"NOLOAD\"") == 0) (*vlmSurface)[i].noload = (int) true;
                 else {
 
-                    printf("\tUnrecognized \"%s\" specified (%s) for VLM Section tuple %s, current options are "
-                            "\" NOWAKE, NOALBE, or  NOLOAD\"\n", keyWord, keyValue, surfaceTuple[i].name);
+                    AIM_ERROR(aimInfo, "Unrecognized \"%s\" specified (%s) for VLM Section tuple %s, current options are "
+                            "\" NOWAKE, NOALBE, or  NOLOAD\"", keyWord, keyValue, surfaceTuple[i].name);
+                    status = CAPS_BADVALUE;
+                    goto cleanup;
                 }
 
-                if (keyValue != NULL) EG_free(keyValue);
-                keyValue = NULL;
+                AIM_FREE(keyValue);
             }
 
             /*! \page vlmSurface
@@ -229,10 +231,9 @@ int get_vlmSurface(int numTuple,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toInteger(keyValue, &(*vlmSurface)[i].Nchord);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
-                if (keyValue != NULL) EG_free(keyValue);
-                keyValue = NULL;
+                AIM_FREE(keyValue);
             }
 
             /*! \page vlmSurface
@@ -251,21 +252,18 @@ int get_vlmSurface(int numTuple,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &(*vlmSurface)[i].Cspace);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
-                EG_free(keyValue); keyValue = NULL;
+                AIM_FREE(keyValue);
             }
 
             /* Check for lingering numSpan in old scripts */
             keyWord = "numSpan";
             status = search_jsonDictionary( surfaceTuple[i].value, keyWord, &keyValue);
             if (status == CAPS_SUCCESS) {
-                EG_free(keyValue); keyValue = NULL;
-
-                printf("************************************************************\n");
-                printf("Error: numSpan is depricated.\n");
-                printf("       Please use numSpanTotal or numSpanPerSection instead.\n");
-                printf("************************************************************\n");
+                AIM_FREE(keyValue);
+                AIM_ERROR(aimInfo, "numSpan is depricated.");
+                AIM_ADDLINE(aimInfo, "Please use numSpanTotal or numSpanPerSection instead.");
                 status = CAPS_BADVALUE;
                 goto cleanup;
             }
@@ -284,9 +282,9 @@ int get_vlmSurface(int numTuple,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toInteger(keyValue, &(*vlmSurface)[i].NspanTotal);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
-                EG_free(keyValue); keyValue = NULL;
+                AIM_FREE(keyValue);
             }
 
             /*! \page vlmSurface
@@ -304,15 +302,15 @@ int get_vlmSurface(int numTuple,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toInteger(keyValue, &(*vlmSurface)[i].NspanSection);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
-                EG_free(keyValue); keyValue = NULL;
+                AIM_FREE(keyValue);
             }
 
             if ((*vlmSurface)[i].NspanTotal != 0 && (*vlmSurface)[i].NspanSection != 0) {
-                printf("Error: Only one of numSpanTotal and numSpanPerSection can be non-zero!\n");
-                printf("       numSpanTotal      = %d\n", (*vlmSurface)[i].NspanTotal);
-                printf("       numSpanPerSection = %d\n", (*vlmSurface)[i].NspanSection);
+                AIM_ERROR(aimInfo, "Only one of numSpanTotal and numSpanPerSection can be non-zero!");
+                AIM_ADDLINE(aimInfo, "       numSpanTotal      = %d", (*vlmSurface)[i].NspanTotal);
+                AIM_ADDLINE(aimInfo, "       numSpanPerSection = %d", (*vlmSurface)[i].NspanSection);
                 status = CAPS_BADVALUE;
                 goto cleanup;
             }
@@ -329,9 +327,9 @@ int get_vlmSurface(int numTuple,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &(*vlmSurface)[i].Sspace);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
-                EG_free(keyValue); keyValue = NULL;
+                AIM_FREE(keyValue);
             }
 
             /*! \page vlmSurface
@@ -347,9 +345,9 @@ int get_vlmSurface(int numTuple,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toBoolean(keyValue, &(*vlmSurface)[i].iYdup);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
-                EG_free(keyValue); keyValue = NULL;
+                AIM_FREE(keyValue);
             }
 
             /*! \page vlmSurface
@@ -366,7 +364,7 @@ int get_vlmSurface(int numTuple,
 
                 (*vlmSurface)[i].surfaceType = string_removeQuotation(keyValue);
 
-                EG_free(keyValue); keyValue = NULL;
+                AIM_FREE(keyValue);
             } else {
                 (*vlmSurface)[i].surfaceType = EG_strdup("Wing");
             }
@@ -380,7 +378,7 @@ int get_vlmSurface(int numTuple,
              * - (NONE Currently)
              *
              */
-            printf("\tNo current defaults for get_vlmSurface, tuple value must be a JSON string\n");
+            AIM_ERROR(aimInfo, "No current defaults for get_vlmSurface, tuple value must be a JSON string");
             status = CAPS_BADVALUE;
             goto cleanup;
         }
@@ -391,9 +389,8 @@ int get_vlmSurface(int numTuple,
     status = CAPS_SUCCESS;
 
 cleanup:
-    if (status != CAPS_SUCCESS) printf("Error: Premature exit in get_vlmSurface, status = %d\n", status);
 
-    EG_free(keyValue); keyValue = NULL;
+    AIM_FREE(keyValue);
 
     if (numGroupName != 0 && groupName != NULL){
         (void) string_freeArray(numGroupName, &groupName);
@@ -499,7 +496,7 @@ int get_vlmControl(void *aimInfo,
             if (status == CAPS_SUCCESS) {
 
                 status = string_toDouble(keyValue, &(*vlmControl)[i].percentChord);
-                if (status != CAPS_SUCCESS) goto cleanup;
+                AIM_STATUS(aimInfo, status);
 
                 if (keyValue != NULL) EG_free(keyValue);
                 keyValue = NULL;
@@ -582,6 +579,29 @@ int get_vlmControl(void *aimInfo,
                 AIM_FREE(keyValue);
             }
 
+            /*! \page vlmControl
+             * \if (ASTROS)
+             * <ul>
+             * <li> <B>surfaceSymmetry = "SYM" </B> </li> <br>
+             *      The surface type of symmetry.
+             * </ul>
+             * \endif
+             */
+            keyWord = "surfaceSymmetry";
+            status = search_jsonDictionary( controlTuple[i].value, keyWord, &keyValue);
+            if (status == CAPS_SUCCESS) {
+
+                (*vlmControl)[i].surfaceSymmetry = string_removeQuotation(keyValue);
+                if ((*vlmControl)[i].surfaceSymmetry == NULL) {
+                    status = EGADS_MALLOC;
+                    goto cleanup;
+                }
+
+                if (keyValue != NULL) EG_free(keyValue);
+                keyValue = NULL;
+            }
+
+
 
 
         } else {
@@ -636,6 +656,8 @@ int initiate_vlmControlStruct(vlmControlStruct *control) {
 
     control->deflectionDup = 0; // Sign of deflection for duplicated surface
 
+    control->surfaceSymmetry = NULL;
+
     return CAPS_SUCCESS;
 }
 
@@ -663,6 +685,9 @@ int destroy_vlmControlStruct(vlmControlStruct *control) {
     control->leOrTe = 0; // Leading = 0 or trailing > 0 edge control surface
 
     control->deflectionDup = 0; // Sign of deflection for duplicated surface
+
+    if (control->surfaceSymmetry != NULL) EG_free(control->surfaceSymmetry);
+    control->surfaceSymmetry = NULL;
 
     return CAPS_SUCCESS;
 }
@@ -1055,6 +1080,11 @@ int copy_vlmControlStruct(vlmControlStruct *controlIn, vlmControlStruct *control
     controlOut->leOrTe = controlIn->leOrTe; // Leading = 0 or trailing > 0 edge control surface
 
     controlOut->deflectionDup = controlIn->deflectionDup; // Sign of deflection for duplicated surface
+
+    if (controlIn->surfaceSymmetry != NULL) {
+        controlOut->surfaceSymmetry = EG_strdup(controlIn->surfaceSymmetry);
+        if (controlOut->surfaceSymmetry == NULL) return EGADS_MALLOC;
+    }
 
     return CAPS_SUCCESS;
 }
@@ -1601,7 +1631,7 @@ int finalize_vlmSectionStruct(void *aimInfo, vlmSectionStruct *vlmSection)
     status = vlm_secNormal(aimInfo,
                            ebody,
                            vlmSection->normal);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     // Find the leadinge edge Node
     status = vlm_findLeadingEdge(numNode, nodes, &vlmSection->nodeIndexLE, vlmSection->xyzLE);
@@ -1691,7 +1721,7 @@ int vlm_getSectionYZ(void *aimInfo, ego body, ego *copy)
     double secnorm[3] = {0,0,0};
 
     status = vlm_secNormal(aimInfo, body, secnorm);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     if ( fabs(fabs(secnorm[1]) - 1.) > DOTTOL &&
          fabs(fabs(secnorm[2]) - 1.) > DOTTOL ) {
@@ -1744,13 +1774,13 @@ int vlm_getSectionRadial(void *aimInfo, ego body, ego *copy)
     double secnorm[3] = {0,0,0};
 
     status = vlm_secNormal(aimInfo, body, secnorm);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     status = EG_getBodyTopos(body, NULL, NODE, &numNode, &nodes);
     AIM_STATUS(aimInfo, status);
 
     status = vlm_findLeadingEdge(numNode, nodes, &nodeIndexLE, xyzLE );
-    if (status != CAPS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
 
     radLE[0] = 0;
@@ -1868,7 +1898,7 @@ int vlm_getSections(void *aimInfo,
             section = (*vlmSurface)[surf].numSection-1;
 
             status = initiate_vlmSectionStruct(&(*vlmSurface)[surf].vlmSection[section]);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             // Store the section index
             (*vlmSurface)[surf].vlmSection[section].sectionIndex = section;
@@ -1889,7 +1919,7 @@ int vlm_getSections(void *aimInfo,
             // Get the section normal
             status = vlm_secNormal(aimInfo, bodies[body],
                                    (*vlmSurface)[surf].vlmSection[section].normal);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             // modify bodies as needed for the given coordinate system
             if (sys == vlmGENERIC) {
@@ -2815,9 +2845,9 @@ int vlm_getSectionCoord(void *aimInfo,
 
     status = EG_attributeRet(body, "_name", &atype, &alen, &ints, &reals, &string);
     if (status == EGADS_SUCCESS) {
-      sprintf(filename, "section_%d_%s.egads", ID, string);
+      snprintf(filename, 256, "section_%d_%s.egads", ID, string);
     } else {
-      sprintf(filename, "section%d.egads", ID);
+      snprintf(filename, 256, "section%d.egads", ID);
     }
     /* make a model and write it out */
     remove(filename);
@@ -2951,9 +2981,9 @@ int vlm_getSectionCoord(void *aimInfo,
 
     status = EG_attributeRet(body, "_name", &atype, &alen, &ints, &reals, &string);
     if (status == EGADS_SUCCESS) {
-      sprintf(filename, "section_%d_%s.egads", ID, string);
+      snprintf(filename, 256, "section_%d_%s.egads", ID, string);
     } else {
-      sprintf(filename, "section%d.egads", ID);
+      snprintf(filename, 256, "section%d.egads", ID);
     }
 
     EG_getContext(body, &context);
@@ -3063,6 +3093,16 @@ int vlm_getSectionCoord(void *aimInfo,
       goto cleanup;
     }
 
+
+    for (i = 0; i < counter; i++) {
+        if (fabs(xCoord[i]) < 1e-12) {
+            xCoord[i] = 0.0;
+        }
+        if (fabs(yCoord[i]) < 1e-12) {
+            yCoord[i] = 0.0;
+        }
+    }
+
     // counter may be lower than numPoint if there are points on the teObj
     *xCoordOut = xCoord;
     *yCoordOut = yCoord;
@@ -3122,7 +3162,7 @@ int vlm_writeSection(void *aimInfo,
                                  &xCoord,
                                  &yCoord,
                                  &tess);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     for( i = 0; i < numPoint; i++) {
         fprintf(fp, "%16.12e %16.12e\n", xCoord[i], yCoord[i]);
@@ -3303,7 +3343,7 @@ int vlm_getSectionCoordX(void *aimInfo,
     *yLowerOut = NULL;
 
     if (vlmSection->teClass != NODE) {
-      printf("Error in vlm_getSectionCoordX: Trailing edge must be sharp!\n");
+      AIM_ERROR(aimInfo, "Trailing edge must be sharp!");
       status = CAPS_SHAPEERR;
       goto cleanup;
     }
@@ -3317,16 +3357,10 @@ int vlm_getSectionCoordX(void *aimInfo,
     teObj = vlmSection->teObj;
 
     status = EG_getBodyTopos(body, NULL, NODE, &numNode, &nodes);
-    if (status != EGADS_SUCCESS) {
-        printf("Error in vlm_getSectionCoordX, getBodyTopos Nodes = %d\n", status);
-        goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status);
 
     status = EG_getBodyTopos(body, NULL, EDGE, &numEdge, &edges);
-    if (status != EGADS_SUCCESS) {
-        printf("Error in vlm_getSectionCoordX, getBodyTopos Edges = %d\n", status);
-        goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status);
 
     // get the leading edge node
     nodeLE = nodes[nodeIndexLE-1];
@@ -3336,14 +3370,14 @@ int vlm_getSectionCoordX(void *aimInfo,
                                numEdge, edges,
                                teObj, &numEdgePoint,
                                &numEdgeSegs, &edgeSegs);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     // Get the loop edge ordering so it starts at the trailing edge NODE
     status = vlm_secOrderEdges(numNode, nodes,
                                numEdge, edges,
                                body, teObj,
                                &edgeLoopOrder, &edgeLoopSense, &nodeTE);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     // vector from LE to TE normalized
     xdot[0]  =  xyzTE[0] - xyzLE[0];
@@ -3392,7 +3426,8 @@ int vlm_getSectionCoordX(void *aimInfo,
     params[2] =  20;
 
     status = EG_makeTessBody(body, params, &tess);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
+
 
 
     // set output points
@@ -3416,7 +3451,7 @@ int vlm_getSectionCoordX(void *aimInfo,
         // Get t- range for edge
         status = EG_getTopology(edges[edgeIndex], &ref, &oclass, &mtype, trange, &numChildren, &children, &sens);
         if (mtype == DEGENERATE) continue;
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         // Check if the first node is the LE edge, which means the current edge is on the lower surface
         sense = edgeLoopSense[i];
@@ -3427,7 +3462,7 @@ int vlm_getSectionCoordX(void *aimInfo,
         }
 
         status = EG_getTessEdge(tess, edgeIndex+1, &nlen, &pxyz, &pt);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         jbeg = sense == SFORWARD ? 0 : nlen-1;
         jend = sense == SFORWARD ? nlen-1 : 0;
@@ -3450,7 +3485,7 @@ int vlm_getSectionCoordX(void *aimInfo,
             if (j == jend) { break; }
 
             status = EG_evaluate(edges[edgeIndex], &t, result);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             result[0] -= xyzLE[0];
             result[1] -= xyzLE[1];
@@ -3460,7 +3495,7 @@ int vlm_getSectionCoordX(void *aimInfo,
             // use Newton solve to refine the t-value
             status = _refineT(x1, xCoord[ipnt], scale, chord,
                               edges[edgeIndex], xdot, result, xyzLE, &t);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             yUpper[ipnt] = (ydot[0]*result[0]+ydot[1]*result[1]+ydot[2]*result[2])/chord;
         }
@@ -3474,12 +3509,12 @@ int vlm_getSectionCoordX(void *aimInfo,
         // Get t- range for edge
         status = EG_getTopology(edges[edgeIndex], &ref, &oclass, &mtype, trange, &numChildren, &children, &sens);
         if (mtype == DEGENERATE) continue;
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         sense = edgeLoopSense[i];
 
         status = EG_getTessEdge(tess, edgeIndex+1, &nlen, &pxyz, &pt);
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
 
         jbeg = sense == SFORWARD ? 0 : nlen-1;
         jend = sense == SFORWARD ? nlen-1 : 0;
@@ -3502,7 +3537,7 @@ int vlm_getSectionCoordX(void *aimInfo,
             if (j == jend) { break; }
 
             status = EG_evaluate(edges[edgeIndex], &t, result);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             result[0] -= xyzLE[0];
             result[1] -= xyzLE[1];
@@ -3512,7 +3547,7 @@ int vlm_getSectionCoordX(void *aimInfo,
             // use Newton solve to refine the t-value
             status = _refineT(x1, xCoord[ipnt], scale, chord,
                               edges[edgeIndex], xdot, result, xyzLE, &t);
-            if (status != CAPS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
 
             yLower[ipnt] = (ydot[0]*result[0]+ydot[1]*result[1]+ydot[2]*result[2])/chord;
         }
@@ -3520,7 +3555,7 @@ int vlm_getSectionCoordX(void *aimInfo,
 
     // Enforce leading and trailing edge nodes and fill in first/last points
     status = EG_evaluate(nodeLE, NULL, result);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     result[0] -= xyzLE[0];
     result[1] -= xyzLE[1];
@@ -3530,7 +3565,7 @@ int vlm_getSectionCoordX(void *aimInfo,
     yLower[0] = (ydot[0]*result[0]+ydot[1]*result[1]+ydot[2]*result[2])/chord;
 
     status = EG_evaluate(nodeTE, NULL, result);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     result[0] -= xyzLE[0];
     result[1] -= xyzLE[1];
@@ -3538,6 +3573,18 @@ int vlm_getSectionCoordX(void *aimInfo,
 
     yUpper[numPoint-1] = (ydot[0]*result[0]+ydot[1]*result[1]+ydot[2]*result[2])/chord;
     yLower[numPoint-1] = (ydot[0]*result[0]+ydot[1]*result[1]+ydot[2]*result[2])/chord;
+
+    for (i = 0; i < numPoint; i++) {
+        if (fabs(xCoord[i]) < 1e-12) {
+            xCoord[i] = 0.0;
+        }
+        if (fabs(yUpper[i]) < 1e-12) {
+            yUpper[i] = 0.0;
+        }
+        if (fabs(yLower[i]) < 1e-12) {
+            yLower[i] = 0.0;
+        }
+    }
 
     *xCoordOut = xCoord;
     *yUpperOut = yUpper;
@@ -3547,10 +3594,9 @@ int vlm_getSectionCoordX(void *aimInfo,
 
 cleanup:
     if (status != CAPS_SUCCESS) {
-        printf("Error: Premature exit in vlm_getSectionCoordX, status = %d\n", status);
-        EG_free(xCoord);
-        EG_free(yUpper);
-        EG_free(yLower);
+        AIM_FREE(xCoord);
+        AIM_FREE(yUpper);
+        AIM_FREE(yLower);
     }
 
     if (edgeSegs != NULL) {
@@ -3575,11 +3621,11 @@ cleanup:
 // Get the camber line for a set of x coordinates
 int vlm_getSectionCamberLine(void *aimInfo,
                              vlmSectionStruct *vlmSection,
-                            double Cspace,       // Chordwise spacing (see spacer)
-                            int normalize,       // Normalize by chord (true/false)
-                            int numPoint,        // Number of points in airfoil
-                            double **xCoordOut,  // [numPoint] increasing x values
-                            double **yCamberOut) // [numPoint] camber line y values
+                             double Cspace,       // Chordwise spacing (see spacer)
+                             int normalize,       // Normalize by chord (true/false)
+                             int numPoint,        // Number of points in airfoil
+                             double **xCoordOut,  // [numPoint] increasing x values
+                             double **yCamberOut) // [numPoint] camber line y values
 {
 
     int i, status;
@@ -3590,7 +3636,7 @@ int vlm_getSectionCamberLine(void *aimInfo,
                                   Cspace, // Cosine distribution
                                   normalize, (int)false, numPoint,
                                   &xCoord, &yUpper, &yLower);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     yCamber = EG_alloc(numPoint * sizeof(double));
     if (yCamber == NULL) {

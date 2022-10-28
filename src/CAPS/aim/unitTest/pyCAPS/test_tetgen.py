@@ -46,7 +46,7 @@ class TestTETGEN(unittest.TestCase):
         tetgen.input.Mesh_Format = "Tecplot"
         tetgen.input.Mesh_Gen_Input_String = ""
         tetgen.input.Mesh_Tolerance = 1e-16
-        tetgen.input.Multiple_Mesh = False
+        tetgen.input.Multiple_Mesh = 'SingleDomain'
 
         tetgen.input.Regions = {
               'A': { 'id': 10, 'seed': [0, 0,  1] },
@@ -115,7 +115,12 @@ class TestTETGEN(unittest.TestCase):
         # Set project name
         tetgen.input.Proj_Name = "tetgenMesh"
 
-        tetgen.input.Multiple_Mesh = True
+        tetgen.input.Multiple_Mesh = 'MultiFile'
+
+        # Just make sure it runs without errors...
+        tetgen.runAnalysis()
+
+        tetgen.input.Multiple_Mesh = 'MultiDomain'
 
         # Just make sure it runs without errors...
         tetgen.runAnalysis()

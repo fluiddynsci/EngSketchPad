@@ -28,6 +28,7 @@ typedef struct {
 
 typedef struct {
     int size;
+    char **names;
     double* x;
     double* y;
     double* z;
@@ -294,6 +295,7 @@ typedef struct {
     int connectLinkIndex;
 
     int responseIndex;
+    int referenceIndex;
 
     meshElementSubTypeEnum elementSubType;
 

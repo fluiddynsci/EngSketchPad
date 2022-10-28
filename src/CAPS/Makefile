@@ -12,7 +12,7 @@ default:	$(LDIR)/libudunits2.dylib $(IDIR)/udunits2.h \
 
 $(LDIR)/libudunits2.dylib:	udunits/DARWIN64/libudunits2.0.dylib
 	/bin/cp udunits/DARWIN64/libudunits2.0.dylib $(LDIR)
-	/bin/ln -s $(LDIR)/libudunits2.0.dylib $(LDIR)/libudunits2.dylib
+	/bin/ln -s libudunits2.0.dylib $(LDIR)/libudunits2.dylib
 
 $(IDIR)/udunits2.h:		udunits/include/udunits2.h
 	/bin/cp udunits/include/*.h $(IDIR)
@@ -61,7 +61,7 @@ default:	$(LDIR)/libudunits2.dylib $(IDIR)/udunits2.h \
 
 $(LDIR)/libudunits2.dylib:	udunits/DARWINM1/libudunits2.0.dylib
 	/bin/cp udunits/DARWINM1/libudunits2.0.dylib $(LDIR)
-	/bin/ln -s $(LDIR)/libudunits2.0.dylib $(LDIR)/libudunits2.dylib
+	/bin/ln -s libudunits2.0.dylib $(LDIR)/libudunits2.dylib
 
 $(IDIR)/udunits2.h:		udunits/include/udunits2.h
 	/bin/cp udunits/include/*.h $(IDIR)
@@ -82,7 +82,7 @@ $(BDIR)/pxplot:			Executables/DARWIN64/pxplot
 	/bin/cp Executables/DARWIN64/pxplot $(BDIR)/pxplot
 
 $(BDIR)/xfoil:			Executables/DARWIN64/xfoil
-	/bin/cp Executables/DARWIN64/xfoil $(BDIR)/xfoil
+	/bin/cp Executables/DARWINM1/xfoil $(BDIR)/xfoil
 
 $(BDIR)/ASTRO.D01:		Executables/DARWINM1/ASTRO.D01
 	/bin/cp Executables/DARWINM1/ASTRO.D01 $(BDIR)/ASTRO.D01
@@ -124,7 +124,7 @@ endif
 
 $(LDIR)/libudunits2.so:	udunits/LINUX64/libudunits2.so
 	/bin/cp udunits/LINUX64/libudunits2.so $(LDIR)
-	ln -s $(LDIR)/libudunits2.so $(LDIR)/libudunits2.so.0
+	ln -s libudunits2.so $(LDIR)/libudunits2.so.0
 
 $(IDIR)/udunits2.h:	udunits/include/udunits2.h
 	/bin/cp udunits/include/*.h $(IDIR)

@@ -24,6 +24,9 @@ typedef struct {
     int    leOrTe; // Leading = 0 or trailing > 0 edge control surface
 
     int  deflectionDup; // Sign of deflection for duplicated surface
+
+    char *surfaceSymmetry; // Control surface type of symmetry
+
 } vlmControlStruct;
 
 typedef struct {

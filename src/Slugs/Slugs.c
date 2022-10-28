@@ -517,7 +517,7 @@ main(int       argc,                /* (in)  number of arguments */
 
 #ifdef GRAFIC
     /* initialize the grafics */
-    sprintf(pltitl, "Program Fitter2D");
+    snprintf(pltitl, 254, "Program Fitter2D");
     grinit_(&io_kbd, &io_scr, pltitl, strlen(pltitl));
 #endif
 
@@ -3156,7 +3156,7 @@ generateFits(int    ncp,                /* (in)  number of control points */
             int    indgr=1+2+4+16+64+1024, itype=0;
             char   pltitl[80];
 
-            sprintf(pltitl, "~u~v~Face %d", iface);
+            snprintf(pltitl, 79, "~u~v~Face %d", iface);
 
             grctrl_(plotPoints_image, &indgr, pltitl,
                     (void*)(&itype),

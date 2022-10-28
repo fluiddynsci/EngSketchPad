@@ -39,6 +39,9 @@ endif
 ifneq ("$(ESP_ARCH)","CYGWIN64")
 	(cd cart3d; make)
 endif
+ifdef SEACAS
+	(cd plato; make)
+endif
 	(cd pointwise; make)
 	(cd meshWriter; make)
 	(cd custom; make)
@@ -75,6 +78,7 @@ endif
 ifneq ("$(ESP_ARCH)","CYGWIN64")
 	(cd cart3d; make lint)
 endif
+	(cd plato; make lint)
 	(cd pointwise; make lint)
 	(cd meshWriter; make lint)
 	(cd utils; make lint)
@@ -111,6 +115,9 @@ ifdef TETGEN
 endif
 ifneq ("$(ESP_ARCH)","CYGWIN64")
 	(cd cart3d; make clean)
+endif
+ifdef SEACAS
+	(cd plato; make clean)
 endif
 	(cd pointwise; make clean)
 	(cd meshWriter; make clean)
@@ -149,6 +156,9 @@ endif
 ifneq ("$(ESP_ARCH)","CYGWIN64")
 	(cd cart3d; make cleanall)
 endif
+ifdef SEACAS
+	(cd plato; make cleanall)
+endif
 	(cd pointwise; make cleanall)
 	(cd meshWriter; make cleanall)
 	(cd custom; make cleanall)
@@ -176,6 +186,7 @@ dox:
 	(cd mses; make dox)
 	(cd interference; make dox)
 	(cd cart3d; make dox)
+	(cd plato; make dox)
 	(cd pointwise; make dox)
 
 doxclean:
@@ -201,4 +212,5 @@ doxclean:
 	(cd mses; make doxclean)
 	(cd interference; make doxclean)
 	(cd cart3d; make doxclean)
+	(cd plato; make doxclean)
 	(cd pointwise; make doxclean)

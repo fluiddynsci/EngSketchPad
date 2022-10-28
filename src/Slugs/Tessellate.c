@@ -4758,7 +4758,7 @@ writeStlBinary(tess_T  *tess,           /* (in)  pointer to TESS */
     }
 
     /* create header */
-    sprintf(header, "written by StlEdit, ncolr=%d", tess->ncolr);
+    snprintf(header, 80, "written by StlEdit, ncolr=%d", tess->ncolr);
     (void) fwrite(header, sizeof(char), 80, fp);
 
     /* number of Triangles */

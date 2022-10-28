@@ -322,11 +322,10 @@ static int checkAndCreateMesh(void *aimInfo, aimStorage *mystranInstance)
                           &mystranInstance->loadMap,
                           &transferMap,
                           &connectMap,
-                          NULL,
+                          NULL, NULL, 
                           &mystranInstance->numMesh,
                           &mystranInstance->feaMesh,
-                          &mystranInstance->feaProblem);
-/*@+nullpass@*/
+                          &mystranInstance->feaProblem );
   if (status != CAPS_SUCCESS) return status;
 
   status = destroy_mapAttrToIndexStruct(&transferMap);
@@ -1191,6 +1190,7 @@ int aimPostAnalysis(void *instStore, /*@unused@*/ void *aimInfo,
                     /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
 {
   int  status;
+  size_t stringLength;
   char *filename = NULL; // File to open
   char extF06[] = ".F06";
   FILE *fp = NULL; // File pointer
@@ -1202,11 +1202,10 @@ int aimPostAnalysis(void *instStore, /*@unused@*/ void *aimInfo,
   mystranInstance = (aimStorage *) instStore;
 
   // check that the mystran *.F06 file was created
-  filename = (char *) EG_alloc((strlen(mystranInstance->projectName) +
-                                strlen(extF06)+1)*sizeof(char));
-  if (filename == NULL) return EGADS_MALLOC;
+  stringLength = strlen(mystranInstance->projectName) + strlen(extF06)+1;
+  AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-  sprintf(filename, "%s%s", mystranInstance->projectName, extF06);
+  snprintf(filename, stringLength, "%s%s", mystranInstance->projectName, extF06);
 
   fp = aim_fopen(aimInfo, filename, "r");
   if (fp == NULL) {
@@ -1217,7 +1216,7 @@ int aimPostAnalysis(void *instStore, /*@unused@*/ void *aimInfo,
   status = CAPS_SUCCESS;
 
 cleanup:
-    EG_free(filename); // Free filename allocation
+    AIM_FREE(filename); // Free filename allocation
     if (fp != NULL) fclose(fp);
 
     return status;
@@ -1499,6 +1498,7 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
     int globalNodeID;
 
     // Filename stuff
+    size_t stringLength;
     char *filename = NULL;
     FILE *fp; // File pointer
 
@@ -1517,11 +1517,10 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
         return CAPS_NOTFOUND;
     }
 
-    filename = (char *) EG_alloc((strlen(mystranInstance->projectName) +
-                                  strlen(extF06) + 1)*sizeof(char));
-    if (filename == NULL) return EGADS_MALLOC;
+    stringLength = strlen(mystranInstance->projectName) + strlen(extF06) + 1;
+    AIM_ALLOC(filename, stringLength, char, discr->aInfo, status);
 
-    sprintf(filename,"%s%s", mystranInstance->projectName, extF06);
+    snprintf(filename,stringLength,"%s%s", mystranInstance->projectName, extF06);
 
     // Open file
     fp = aim_fopen(discr->aInfo, filename, "r");
@@ -1531,8 +1530,7 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
         return CAPS_IOERR;
     }
 
-    if (filename != NULL) EG_free(filename);
-    filename = NULL;
+    AIM_FREE(filename);
 
     if (strcasecmp(dataName, "Displacement") == 0) {
 

@@ -39,6 +39,7 @@ typedef struct {
     modl_T    *MODL;                    /* pointer to OpenCSM MODL */
     modl_T    *MODLorig;                /* pointer to OpenCSM MODL before CAPS */
     void      *CAPS;                    /* capsProject */
+    int       batch;                    /* =1 if in batch mode */
     wvContext *cntxt;                   /* WebViewer context */
     float     sgFocus[4];               /* scene graph focus */
     void      *sgMutex;                 /* mutex associated with scene graphs */

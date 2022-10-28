@@ -604,7 +604,7 @@ remakeTopology(ego etopo)
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_makeTopology(context, egeom, oclass, mtype,
-                          data, nchild, echild, senses, &eNewTopo);
+                           data, nchild, echild, senses, &eNewTopo);
   if (status != EGADS_SUCCESS) goto cleanup;
 
   status = EG_isEquivalent(etopo, eNewTopo);
@@ -642,7 +642,8 @@ cleanup:
   EG_free(rvec);
 
   if (status != EGADS_SUCCESS) {
-    printf(" Failure %d in %s\n", status, __func__);
+    printf(" Failure %d in TopoClass = %d  %s\n",
+           status, etopo->oclass, __func__);
   }
 
   return status;

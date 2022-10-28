@@ -3421,7 +3421,8 @@ EG_fitTriangles(egObject *context, int npts, double *xyzs, int ntris,
     stat = prm_SmoothUV(3, per, ppnts, ntris, ptris, npts, 3, uv, xyzs);
     if (outLevel > 1)
       printf(" EG_fitTriangles: prm_SmoothUV = %d\n", stat);
-    if (stat == EGADS_MALLOC) stat = EGADS_SUCCESS;
+    if (stat == EGADS_MALLOC)     stat = EGADS_SUCCESS;
+    if (stat == PRM_NOTCONVERGED) stat = EGADS_SUCCESS;
     while ((stat != EGADS_SUCCESS) && (type < 7)) {
       if (ppnts != NULL) EG_free(ppnts);
       type++;
@@ -3436,7 +3437,8 @@ EG_fitTriangles(egObject *context, int npts, double *xyzs, int ntris,
       stat = prm_SmoothUV(3, per, ppnts, ntris, ptris, npts, 3, uv, xyzs);
       if (outLevel > 1)
         printf(" EG_fitTriangles: prm_SmoothUV = %d\n", stat);
-      if (stat == EGADS_MALLOC) stat = EGADS_SUCCESS;
+      if (stat == EGADS_MALLOC)     stat = EGADS_SUCCESS;
+      if (stat == PRM_NOTCONVERGED) stat = EGADS_SUCCESS;
     }
     if (stat == EGADS_SUCCESS) {
       n    = 3;

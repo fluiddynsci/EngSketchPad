@@ -38,6 +38,8 @@ enum aimInputs
   Design_Functional,
   Design_SensFile,
   Design_Sensitivity,
+  Mesh_Morph,
+  Mesh_Morph_Combine,
   Mesh,
   NUMINPUT = Mesh                /* Total number of inputs */
 };

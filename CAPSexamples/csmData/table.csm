@@ -1,0 +1,55 @@
+
+ATTRIBUTE capsAIM $egadsTessAIM;tetgenAIM;platoAIM
+
+# Table top parameters
+DESPMTR L 1
+DESPMTR W 1
+DESPMTR H 0.1
+
+# Leg paramters
+DESPMTR Lr 0.1
+DESPMTR Lh 0.6
+DESPMTR fL 0.9
+DESPMTR fW 0.9
+
+# Make the top of the table
+BOX -L/2 0 -W/2 L H W
+SELECT body
+   ATTRIBUTE _name $tableTop
+SELECT face
+   ATTRIBUTE capsGroup $tableTopSide
+
+# Make the Legs
+CYLINDER 0 -Lh 0  0 0 0 Lr
+STORE leg
+
+SET LL (L/2-Lr)*fL
+SET WL (W/2-Lr)*fW
+
+RESTORE leg
+TRANSLATE -LL 0 -WL
+SELECT body
+   ATTRIBUTE _name $leg0
+SELECT face
+   ATTRIBUTE capsGroup $leg0Side
+
+RESTORE leg
+TRANSLATE -LL 0  WL
+SELECT body
+   ATTRIBUTE _name $leg1
+SELECT face
+   ATTRIBUTE capsGroup $leg1Side
+
+RESTORE leg
+TRANSLATE  LL 0  WL
+SELECT body
+   ATTRIBUTE _name $leg2
+SELECT face
+   ATTRIBUTE capsGroup $leg2Side
+
+RESTORE leg
+TRANSLATE  LL 0 -WL
+SELECT body
+   ATTRIBUTE _name $leg3
+SELECT face
+   ATTRIBUTE capsGroup $leg3Side

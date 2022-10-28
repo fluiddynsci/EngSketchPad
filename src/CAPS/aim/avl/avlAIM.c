@@ -20,6 +20,8 @@
 #include "vlmSpanSpace.h"
 #include "cfdUtils.h"
 
+//#include "egadsPatch.h" // Used to put AVL mesh on EGADS tessellation
+
 #include "avlmrf/avlmrf.h"
 
 #ifdef WIN32
@@ -907,7 +909,7 @@ getStripForces(void *aimInfo, aimStorage *avlInstance, int *length, capsTuple **
     int status = CAPS_SUCCESS;
     int i, j; //Indexing
 
-    size_t     vallen = 0, alen = 0;
+    size_t     vallen = 0, alen = 0, stringLength;
     char       token[24], *value = NULL;
     capsTuple  *tuples = NULL, *surfaces = NULL;
     int        isurf, numSurfaces = 0;
@@ -940,12 +942,13 @@ getStripForces(void *aimInfo, aimStorage *avlInstance, int *length, capsTuple **
         // copy the data columns
         for (i = 0; i < AVL_NSTRP_DATA; i++) {
             for (j = 0; j < avlInstance->strp.surf[isurf].nSpan; j++) {
-                sprintf(token, "%16.12e", avlInstance->strp.surf[isurf].data[i].val[j]);
+                snprintf(token, 24, "%16.12e", avlInstance->strp.surf[isurf].data[i].val[j]);
                 vallen = strlen(tuples[i].value);
-                AIM_REALL(tuples[i].value, vallen+strlen(token)+2, char, aimInfo, status);
+                stringLength = vallen+strlen(token)+2;
+                AIM_REALL(tuples[i].value, stringLength, char, aimInfo, status);
 
                 // append the values to the list
-                sprintf(tuples[i].value + vallen,"%s,", token);
+                snprintf(tuples[i].value + vallen,stringLength,"%s,", token);
             }
         }
 
@@ -962,7 +965,7 @@ getStripForces(void *aimInfo, aimStorage *avlInstance, int *length, capsTuple **
             AIM_REALL(surfaces[isurf].value, vallen+alen, char, aimInfo, status);
 
             value = surfaces[isurf].value + vallen;
-            sprintf(value,"\"%s\":%s,", tuples[i].name, tuples[i].value);
+            snprintf(value,alen,"\"%s\":%s,", tuples[i].name, tuples[i].value);
 
             // release the memory now that it's been consumed
             AIM_FREE(tuples[i].name );
@@ -1147,7 +1150,7 @@ read_StripForces(void *aimInfo, int *length, capsTuple **surfaces_out)
               AIM_REALL(tuples[i].value, vallen+strlen(token)+2, char, aimInfo, status);
 
               // append the values to the list
-              sprintf(tuples[i].value + vallen,"%s,", token);
+              snprintf(tuples[i].value + vallen,vallen+strlen(token)+2,"%s,", token);
               i++;
           }
         }
@@ -1168,7 +1171,7 @@ read_StripForces(void *aimInfo, int *length, capsTuple **surfaces_out)
             AIM_REALL(surfaces[numSurfaces-1].value, vallen+alen, char, aimInfo, status);
 
             value = surfaces[numSurfaces-1].value + vallen;
-            sprintf(value,"\"%s\":%s,", tuples[i].name, tuples[i].value);
+            snprintf(value,alen,"\"%s\":%s,", tuples[i].name, tuples[i].value);
 
             // release the memory now that it's been consumed
             AIM_FREE(tuples[i].name );
@@ -1281,7 +1284,7 @@ get_controlDeriv(void *aimInfo, int controlIndex, int outputIndex, double *data)
         goto cleanup;
     }
 
-    sprintf(key, "%sd%02d =", coeff, controlIndex);
+    snprintf(key, 42, "%sd%02d =", coeff, controlIndex);
 
     status = read_Data(aimInfo, fileToOpen, key, data);
     AIM_STATUS (aimInfo, status);
@@ -1349,7 +1352,7 @@ read_EigenValues(void *aimInfo, int *length, capsTuple **eigen_out)
             for (i = numCase; i < icase; i++)
               eigen[icase-1].name = eigen[icase-1].value = NULL;
 
-            sprintf(caseName,"case %d", icase );
+            snprintf(caseName,30,"case %d", icase );
             AIM_STRDUP(eigen[icase-1].name , caseName, aimInfo, status);
             AIM_STRDUP(eigen[icase-1].value, "["     , aimInfo, status);
             numCase = icase;
@@ -1364,9 +1367,9 @@ read_EigenValues(void *aimInfo, int *length, capsTuple **eigen_out)
 
                 // append the values to the list
                 if (i == 0)
-                    sprintf(eigen[icase-1].value + vallen,"[%s,", token );
+                    snprintf(eigen[icase-1].value + vallen,strlen(token)+3,"[%s,", token );
                 else
-                    sprintf(eigen[icase-1].value + vallen,"%s],", token );
+                    snprintf(eigen[icase-1].value + vallen,strlen(token)+3,"%s],", token );
             }
     }
 
@@ -1729,6 +1732,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 #endif
 
     avlInstance = (aimStorage *) instStore;
+    if (avlInstance == NULL) AIM_STATUS(aimInfo, CAPS_NULLVALUE);
 
     if (avlInstance != NULL) units = &avlInstance->units;
 
@@ -2043,7 +2047,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
             aim_newAnalysisIn(aimInfo, inAVL_Surface) == CAPS_SUCCESS) {
 
             // Get AVL surface information
-            status = get_vlmSurface(aimInputs[inAVL_Surface-1].length,
+            status = get_vlmSurface(aimInfo,
+                                    aimInputs[inAVL_Surface-1].length,
                                     aimInputs[inAVL_Surface-1].vals.tuple,
                                     &avlInstance->groupMap,
                                     1.0, // default Cspace
@@ -3905,7 +3910,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
             if (index == ControlStability) {
 
                 // Stability axis
-                sprintf(jsonOut,"{\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e}",
+                snprintf(jsonOut,200,"{\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e}",
                         "CLtot" , avlInstance->dermatS.cont[i].CLd,
                         "CYtot" , avlInstance->dermatS.cont[i].CYd,
                         "Cl'tot", avlInstance->dermatS.cont[i].Cld,
@@ -3918,7 +3923,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
             } else if (index == ControlBody) {
 
                 // Body axis
-                sprintf(jsonOut,"{\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e}",
+                snprintf(jsonOut,200,"{\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e,\"%s\":%16.12e}",
                         "CXtot", avlInstance->dermatB.cont[i].CXd,
                         "CYtot", avlInstance->dermatB.cont[i].CYd,
                         "CZtot", avlInstance->dermatB.cont[i].CZd,
@@ -3929,7 +3934,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
 
             } else if (index == HingeMoment) {
 
-                sprintf(jsonOut, "%16.12e", avlInstance->hinge.cont[i].Chinge);
+                snprintf(jsonOut, 200, "%16.12e", avlInstance->hinge.cont[i].Chinge);
 
                 AIM_STRDUP(val->vals.tuple[i].value, jsonOut, aimInfo, status);
 
@@ -4537,7 +4542,7 @@ int aimBackdoor(void *instStore, void *aimInfo, const char *JSONin,
             goto cleanup;
         }
 
-        sprintf(outputJSON, "{\"sensitivity\": %7.6f}", val.vals.real);
+        snprintf(outputJSON,50, "{\"sensitivity\": %7.6f}", val.vals.real);
     }
 
     *JSONout = outputJSON;

@@ -1796,16 +1796,13 @@ int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo,
         for (i = 0; i < nbody; i++) {
 
             if (locWing[i]) {
-
-/*@-bufferoverflowhigh@*/
-                sprintf(tmpName,"CS%d CAMBER",i);
+                snprintf(tmpName,50,"CS%d CAMBER",i);
                 printAwaveArray(surfaces[i].ndiv, surfaces[i].camber, tmpName,
                                 fp);
 
-                sprintf(tmpName,"CS%d HALF THICK",i);
+                snprintf(tmpName,50,"CS%d HALF THICK",i);
                 printAwaveArray(surfaces[i].ndiv, surfaces[i].halfThick, tmpName,
                                 fp);
-/*@+bufferoverflowhigh@*/
             }
         }
     }
@@ -1893,9 +1890,7 @@ int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo,
             printf(" awaveAIM/aimPreAnalysis defineAwavePod = %d\n", status);
         }
 
-        /*@-bufferoverflowhigh@*/
-        sprintf(tmpName,"POD %i",n);
-        /*@+bufferoverflowhigh@*/
+        snprintf(tmpName,50,"POD %i",n);
 
         printAwaveArray(3, xyzPod, tmpName , fp);
         printAwaveArray(NPODOR, xPod, "   X" , fp);

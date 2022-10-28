@@ -252,7 +252,7 @@ int mystran_readF06EigenVector(FILE *fp, int *numEigenVector, int *numGridPoint,
                 return EGADS_MALLOC;
             }
 
-            sprintf(beginEigenLine, "%s%d", outputEigenLine, 1);
+            snprintf(beginEigenLine, strlen(outputEigenLine)+2, "%s%d", outputEigenLine, 1);
             beginEigenLine[strlen(outputEigenLine)+1] = '\0';
         }
 
@@ -342,7 +342,8 @@ int mystran_readF06EigenVector(FILE *fp, int *numEigenVector, int *numGridPoint,
                 return EGADS_MALLOC;
             }
 
-            sprintf(beginEigenLine,"%s%d",outputEigenLine, eigenValue);
+            snprintf(beginEigenLine,strlen(outputEigenLine)+
+                intLength+1,"%s%d",outputEigenLine, eigenValue);
             beginEigenLine[strlen(outputEigenLine)+intLength] = '\0';
         }
 
@@ -415,7 +416,7 @@ int mystran_readF06Displacement(FILE *fp, int subcaseId, int *numGridPoint,
                                          sizeof(char));
     if (beginSubcaseLine == NULL) return EGADS_MALLOC;
 
-    sprintf(beginSubcaseLine,"%s%d",outputSubcaseLine, subcaseId);
+    snprintf(beginSubcaseLine,strlen(outputSubcaseLine)+intLength+1,"%s%d",outputSubcaseLine, subcaseId);
     beginSubcaseLine[strlen(outputSubcaseLine)+intLength] = '\0';
 
     // Loop through file line by line until we have determined how many grid points we have

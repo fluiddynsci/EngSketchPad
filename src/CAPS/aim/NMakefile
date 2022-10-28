@@ -83,6 +83,11 @@ all:
 	nmake -f NMakefile
 	cd ..
 !ENDIF
+!IFDEF SEACAS
+	cd plato
+	nmake -f NMakefile
+	cd ..
+!ENDIF
 	cd custom
 	nmake -f Nmakefile
 	cd ..
@@ -166,6 +171,11 @@ clean:
 	nmake -f NMakefile clean
 	cd ..
 !ENDIF
+!IFDEF SEACAS
+	cd plato
+	nmake -f NMakefile clean
+	cd ..
+!ENDIF
 	cd custom
 	nmake -f NMakefile clean
 	cd ..
@@ -246,6 +256,11 @@ cleanall:
 !ENDIF
 !IFDEF TETGEN
 	cd tetgen
+	nmake -f NMakefile cleanall
+	cd ..
+!ENDIF
+!IFDEF SEACAS
+	cd plato
 	nmake -f NMakefile cleanall
 	cd ..
 !ENDIF

@@ -14,8 +14,7 @@ name      root
    linseg    0   0   0
 skend     0
 attribute capsGroup  $yatesPlate
-attribute capsIntent $STRUCTURE
-attribute capsAIM $nastranAIM;astrosAIM;mystranAIM;masstranAIM
+attribute capsAIM $nastranAIM;astrosAIM;mystranAIM;masstranAIM;egadsTessAIM
 scale     12
 
 select edge 1

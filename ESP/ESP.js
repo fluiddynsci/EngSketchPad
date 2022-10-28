@@ -200,6 +200,7 @@
 //    cmdEditHint(line)
 //    cmdEditUndo(cm)
 //    cmdEditDebug()
+//    cmdEditTrace()
 //    printObject(obj)
 //    sprintf()
 //    sleep(milliseconds)
@@ -562,7 +563,7 @@ var wvInitUI = function () {
     wv.userNames = "";             // bar-separatede list of userNames
     wv.myName    = "*host*";       // my username
     wv.lastXform = null;           // last xfrom received while not sync'd
-    wv.plotType  =  0;             // =0 mono, =1 ubar, =2 vbar, =3 cmin, =4 cmax, =5 gc, =6 normals, =10 erep, =11 plugs, =12 pyscript, =13 mitten
+    wv.plotType  =  0;             // =0 mono, =1 ubar, =2 vbar, =3 cmin, =4 cmax, =5 gc, =6 normals, =7 x-comp, =8 y-comp, =9 z-comp, =10 erep, =11 plugs, =12 pyscript, =13 mitten
     wv.loLimit   = -1;             // lower limit in key
     wv.upLimit   = +1;             // upper limit in key
     wv.nchanges  = 0;              // number of Branch or Parameter changes by browser
@@ -1695,7 +1696,7 @@ var wvServerMessage = function (text) {
 
             var button = document.getElementById("collabMenuBtn");
             button.hidden = false;
-            button.style.backgroundColor = "#AFFFAF";    // greenish
+            button.style.backgroundColor = "#AFFFAF";       // greenish
 
             try {
                 wv.codeMirror.setOption("readOnly", false);
@@ -1715,9 +1716,9 @@ var wvServerMessage = function (text) {
             button.hidden = false;
 
             if (wv.myRole == 1) {
-                button.style.backgroundColor = "#FFFFAF";    // yellow
+                button.style.backgroundColor = "#FFFFAF";   // yellow
             } else {
-                button.style.backgroundColor = null;         // white
+                button.style.backgroundColor = null;        // white
             }
 
             try {
@@ -1896,11 +1897,11 @@ var wvServerMessage = function (text) {
         if (wv.filenames.split("|").length <= 3 || wv.server == "serveCAPS") {
             var button = document.getElementById("solveButton");
             button["innerHTML"] = "Re-building...";
-            button.style.backgroundColor = "#FFFF3F";
+            button.style.backgroundColor = "#FFFF3F";       // light yellow
 
             // turn the background of the message window back to original color
             var botm = document.getElementById("brframe");
-            botm.style.backgroundColor = "#F7F7F7";
+            botm.style.backgroundColor = "#F7F7F7";         // grey
 
             browserToServer("build|0|");
 
@@ -1936,30 +1937,33 @@ var wvServerMessage = function (text) {
 
         // turn the background of the message window back to original color
         var botm = document.getElementById("brframe");
-        botm.style.backgroundColor = "#F7F7F7";
+        botm.style.backgroundColor = "#F7F7F7";             // grey
 
         var textList = text.split("|");
 
         // post messages sent from OpenCSM
-        if (textList[3].length > 0) {
-            postMessage(textList[3]);
+        if (textList[4].length > 0) {
+            postMessage(textList[4]);
         }
 
         if (textList[1].substring(0,7) == "ERROR::") {
             alert("how did we get here???");
         } else {
             var ibrch  = Number(textList[1]);
-            var nbody  = Number(textList[2]);
+            var nbrch  = Number(textList[2]);
+            var nbody  = Number(textList[3]);
 
             wv.builtTo = ibrch;
 
-            if (ibrch == 0 && brch.length == 0) {
+            if (ibrch == 0 && nbrch == 0) {
+                postMessage("\nNothing to build");
+                changeMode(0);
                 // post nothing because we started without a file
-            } else if (ibrch == brch.length || brch.length == 0) {
+            } else if (ibrch == nbrch || nbrch == 0) {
                 postMessage("\nEntire build complete, which generated "+nbody+
                             " Body(s)");
                 changeMode(0);
-            } else if (ibrch >= brch.length) {
+            } else if (ibrch >= nbrch) {
                 postMessage("\nBuild complete through ibrch="+ibrch+
                             ", which generated "+nbody+" Body(s)");
                 changeMode(0);
@@ -2028,6 +2032,13 @@ var wvServerMessage = function (text) {
         postMessage(textList[3]);
         postMessage(" ");
 
+    // if it starts with "getTracePmtrs|", post the reposnse
+    } else if (text.substring(0,14) == "getTracePmtrs|") {
+        var textList = text.split("|");
+
+        postMessage(textList[1]);
+        postMessage(" ");
+
     // if it starts with "caps|list|" post a message */
     } else if (text.substring(0,9) == "caps|list") {
         var textList = text.split("|");
@@ -2064,6 +2075,11 @@ var wvServerMessage = function (text) {
 
     // if it starts with "timLoad|" pass to curTool or postMessage
     } else if (text.substring(0,8) == "timLoad|") {
+        if (text.substring(0,17) == "timLoad|pyscript|" && wv.curTool.timLoadCB === undefined) {
+            console.log("forcing pyscript mode");
+            changeMode(12);
+        }
+        
         if (wv.overlay !== undefined && wv.overlay.timLoadCB !== undefined) {
             wv.overlay.timLoadCB(text.substring(8));
         } else if (wv.curTool.timLoadCB !== undefined) {
@@ -2091,6 +2107,11 @@ var wvServerMessage = function (text) {
 //        } else {
 //            postMessage(text);
         }
+
+    // if it starts with "timMesg|" and contains "|ERROR::", post the error
+    } else if (text.substring(0,8) == "timMesg|" && text.indexOf("|ERROR::") > 0) {
+
+        alert(text.substring(text.indexOf("|ERROR::")+1));
 
     // if it starts with "timMesg|" pass to curTool or postMessage
     } else if (text.substring(0,8) == "timMesg|") {
@@ -2292,14 +2313,8 @@ var wvServerMessage = function (text) {
         // post the editorForm
         changeMode(7);
 
-    // if it starts with "setCsmFileBeg|" do nothing
-    } else if (text.substring(0,14) == "setCsmFileBeg|") {
-
-    // if it starts with "setCsmFileMid|" do nothing
-    } else if (text.substring(0,14) == "setCsmFileMid|") {
-
-    // if it starts with "setCsmFileEnd|" do nothing
-    } else if (text.substring(0,14) == "setCsmFileEnd|") {
+    // if it starts with "setCsmFile|" do nothing
+    } else if (text.substring(0,11) == "setCsmFile|") {
 
     // if it starts with "setWvKey|" turn key or logo on
     } else if (text.substring(0,9) == "setWvKey|") {
@@ -2517,20 +2532,41 @@ var wvServerMessage = function (text) {
         //        postMessage(textList[0]);
         if (text.endsWith("||") && text.length > 2) {
             postMessage(text.substring(7,text.length-2));
-        } else {
+        } else if (wv.curMode != 12) {
             postMessage(text.substring(7));
+        } else {
+            postMessage(text);
         }
 
-        // turn the background of the message window back to light-yellow
-        var botm = document.getElementById("brframe");
-        botm.style.backgroundColor = "#FFFF99";
+        // do not interpret errors as important if in pyscript
+        if (wv.curMode != 12) {
+            
+            // turn the background of the message window back to light-yellow
+            var botm = document.getElementById("brframe");
+            botm.style.backgroundColor = "#FFFF99";             // yellow
+
+            var button = document.getElementById("solveButton");
+
+            button["innerHTML"] = "Fix before re-build";
+            button.style.backgroundColor = "#FF3F3F";           // red
+
+            changeMode(0);
+        }
+
+    // if it starts with "updateSolveBtn|" update the solve button
+    } else if (text.substring(0,15) == "updateSolveBtn|") {
+        var textList = text.split("|");
 
         var button = document.getElementById("solveButton");
 
-        button["innerHTML"] = "Fix before re-build";
-        button.style.backgroundColor = "#FF3F3F";
-
-        changeMode(0);
+        if        (textList[1] == "0") {                    // needs to be built
+            button.style.backgroundColor = "#3FFF3F";       // greenish
+        } else if (textList[1] == "1") {                    // building
+            button.style.backgroundColor = "#FFFF3F";       // light yellow
+        } else {
+            button.style.backgroundColor = null;            // done
+        }
+        button["innerHTML"] = textList[2];
 
     // if it starts with "message|" post the message
     } else if (text.substring(0,8) == "message|") {
@@ -2558,7 +2594,7 @@ var wvServerDown = function () {
 
     // turn the background of the message window pink
     var botm = document.getElementById("brframe");
-    botm.style.backgroundColor = "#FFAFAF";
+    botm.style.backgroundColor = "#FFAFAF";                 // red
 };
 
 
@@ -2948,7 +2984,7 @@ var cmdFileOpen = function () {
 
             var button = document.getElementById("solveButton");
             button["innerHTML"] = "Re-building...";
-            button.style.backgroundColor = "#FFFF3F";
+            button.style.backgroundColor = "#FFFF3F";       // yellow
 
             //inactivate buttons until build is done
             changeMode(-1);
@@ -3163,15 +3199,6 @@ var editorOk = function () {
 //$$$        return;
     }
 
-    // because of an apparent limit on the size of text
-    //    messages that can be sent from the browser to the
-    //    server, we need to send the new file back in
-    //    pieces and then reassemble on the server
-    var maxMessageSize = 800;
-
-    var ichar    = 0;
-    var part     = newFile.substring(ichar, ichar+maxMessageSize);
-
     if (wv.fileindx < 0) {
         var myFilename = wv.filenames;
     } else {
@@ -3179,16 +3206,7 @@ var editorOk = function () {
         var myFilename = filelist[wv.fileindx];
     }
 
-    browserToServer("setCsmFileBeg|"+myFilename+"|"+part);
-    ichar += maxMessageSize;
-
-    while (ichar < newFile.length) {
-        part = newFile.substring(ichar, ichar+maxMessageSize);
-        browserToServer("setCsmFileMid|"+part);
-        ichar += maxMessageSize;
-    }
-
-    browserToServer("setCsmFileEnd|");
+    browserToServer("setCsmFile|"+myFilename+"|"+newFile+"|");
 
     if (wv.server != "serveCAPS") {
         postMessage("'"+myFilename+"' file has been changed.");
@@ -3224,11 +3242,11 @@ var editorOk = function () {
     } else if (wv.filenames.split("|").length <= 3) {
         var button = document.getElementById("solveButton");
         button["innerHTML"] = "Re-building...";
-        button.style.backgroundColor = "#FFFF3F";
+        button.style.backgroundColor = "#FFFF3F";           // yellow
 
         // turn the background of the message window back to original color
         var botm = document.getElementById("brframe");
-        botm.style.backgroundColor = "#F7F7F7";
+        botm.style.backgroundColor = "#F7F7F7";             // grey
 
         // inactivate buttons until build is done
         changeMode( 0);
@@ -3329,12 +3347,12 @@ var cmdTool = function () {
         button.onclick = ereped.launch;
         menu.appendChild(button);
 
-//        button = document.createElement("input");
-//        button.type    = "button";
-//        button.title   = "Launch Gloves";
-//        button.value   = "Gloves";
-//        button.onclick = gloves.launch;
-//        menu.appendChild(button);
+        button = document.createElement("input");
+        button.type    = "button";
+        button.title   = "Launch Gloves";
+        button.value   = "Gloves";
+        button.onclick = gloves.launch;
+        menu.appendChild(button);
 
         button = document.createElement("input");
         button.type    = "button";
@@ -3656,7 +3674,7 @@ var cmdCollabSync = function () {
 
     // update button
     var button = document.getElementById("collabMenuBtn");
-    button.style.backgroundColor = "#FFFFAF";    // yellow
+    button.style.backgroundColor = "#FFFFAF";               // yellow
 };
 
 
@@ -3678,7 +3696,7 @@ var cmdCollabUnsync = function () {
     wv.myRole = 2;
 
     var button = document.getElementById("collabMenuBtn");
-    button.style.backgroundColor = null;       // white
+    button.style.backgroundColor = null;                    // white
 };
 
 
@@ -3740,7 +3758,7 @@ var cmdOverlayBeg = function (text) {
         var button = document.getElementById("exitOlayBtn");
         button.hidden = false;
         button["innerHTML"] = "Exit " + textList[1];
-        button.style.backgroundColor = "#3FFF3F";
+        button.style.backgroundColor = "#3FFF3F";           // greenish
     }
 };
 
@@ -4338,7 +4356,7 @@ var compGeomSens = function () {
 
     var button = document.getElementById("solveButton");
     button["innerHTML"] = "Re-building...";
-    button.style.backgroundColor = "#FFFF3F";
+    button.style.backgroundColor = "#FFFF3F";               // yellow
 
     // inactivate buttons until build is done
     changeMode( 0);
@@ -4493,7 +4511,7 @@ var compTessSens = function () {
 
     var button = document.getElementById("solveButton");
     button["innerHTML"] = "Re-building...";
-    button.style.backgroundColor = "#FFFF3F";
+    button.style.backgroundColor = "#FFFF3F";               // yellow
 
     // inactivate buttons until build is done
     changeMode( 0);
@@ -5561,7 +5579,7 @@ var buildTo = function () {
 
     var button = document.getElementById("solveButton");
     button["innerHTML"] = "Re-building...";
-    button.style.backgroundColor = "#FFFF3F";
+    button.style.backgroundColor = "#FFFF3F";               // yellow
 
     // inactivate buttons until build is done
     changeMode(-1);
@@ -6566,11 +6584,11 @@ main.cmdSolve = function () {
             }
 
             button["innerHTML"] = "Re-building...";
-            button.style.backgroundColor = "#FFFF3F";
+            button.style.backgroundColor = "#FFFF3F";       // yellow
 
             // turn the background of the message window back to original color
             var botm = document.getElementById("brframe");
-            botm.style.backgroundColor = "#F7F7F7";
+            botm.style.backgroundColor = "#F7F7F7";         // grey
 
             // inactivate buttons until build is done
             changeMode(-1);
@@ -6599,11 +6617,11 @@ main.cmdSolve = function () {
         }
 
         button["innerHTML"] = "Re-building...";
-        button.style.backgroundColor = "#FFFF3F";
+        button.style.backgroundColor = "#FFFF3F";           // yellow
 
         // turn the background of the message window back to original color
         var botm = document.getElementById("brframe");
-        botm.style.backgroundColor = "#F7F7F7";
+        botm.style.backgroundColor = "#F7F7F7";             // grey
 
         // inactivate buttons until build is done
         changeMode(-1);
@@ -6938,6 +6956,9 @@ var modifyDisplayType = function (e) {
                            "   4  maximum curvature\n"+
                            "   5  Gaussian curvature\n"+
                            "   6  normals\n"+
+                           "   7  x-component\n"+
+                           "   8  y-component\n"+
+                           "   9  z-component\n"+
                            "  10  Erep", "0");
 
         if (ptype === null) {
@@ -6948,7 +6969,7 @@ var modifyDisplayType = function (e) {
         } else {
             wv.plotType = Number(ptype);
 
-            if (wv.plotType > 0 && wv.plotType < 7) {
+            if (wv.plotType > 0 && wv.plotType < 10) {
                 setKeyLimits(null);
             } else {
                 // send the limits back to the server
@@ -8018,7 +8039,7 @@ var activateBuildButton = function () {
     var button = document.getElementById("solveButton");
 
     button["innerHTML"] = "Press to Re-build";
-    button.style.backgroundColor = "#3FFF3F";
+    button.style.backgroundColor = "#3FFF3F";               // greenish
 };
 
 
@@ -9178,9 +9199,6 @@ var setupEditBrchForm = function () {
     } else if (type == "cirarc") {
         argList  = ["xon", "yon", "zon", "xend", "yend", "zend"];
         defValue = ["",    "",    "",    "",     "",     ""    ];
-    } else if (type == "combine") {
-        argList  = ["toler"];
-        defValue = ["0"    ];
     } else if (type == "cone") {
         argList  = ["xvrtx", "yvrtx", "zvrtx", "xbase", "ybase", "zbase", "radius"];
         defValue = ["",      "",      "",      "",      "",      "",      ""      ];
@@ -9198,6 +9216,9 @@ var setupEditBrchForm = function () {
     } else if (type == "dump") {
         argList  = ["$filename", "remove", "tomark"];
         defValue = ["",          "0",      "0"     ];
+    } else if (type == "elevate") {
+        argList  = ["toler"];
+        defValue = ["0"    ];
     } else if (type == "else") {
         argList  = [];
         defValue = [];
@@ -9871,7 +9892,39 @@ var browserToServer = function (text) {
         console.log("("+date.toTimeString().substring(0,8)+") browser-->server: "+text.substring(0,40));
     }
 
-    wv.socketUt.send(text);
+//    wv.socketUt.send(text);
+
+    // because to a limit on the size of messages that can be sent
+    //   from te browser to the server, send the message in
+    //   chunks of chunkSize or less
+    var firstChar = 0;
+    var lastChar  = text.length - 1;
+    var chunkSize = 4000;
+    var chunkNum  = 1;
+    var prolog    = "";
+    var epilog    = "";
+
+    // send chunks if not the last
+    while (lastChar > firstChar+chunkSize) {
+        if (chunkNum.toString().length == 1) {
+            epilog = "#!00" + chunkNum + "!#";
+        } else if (chunkNum.toString().length == 2) {
+            epilog = "#!0"  + chunkNum + "!#";
+        } else {
+            epilog = "#!"   + chunkNum + "!#";
+        }
+
+        wv.socketUt.send(prolog + text.substring(firstChar, firstChar+chunkSize) + epilog);
+
+        firstChar += chunkSize;
+        chunkNum  ++;
+        prolog     = epilog;
+    }
+
+    // send the last chunk
+    if (lastChar > firstChar) {
+        wv.socketUt.send(prolog + text.substring(firstChar));
+    }
 };
 
 
@@ -10293,8 +10346,6 @@ var cmdEditHint = function () {
         hintText =        "hint:: CHAMFER   radius edgeList=0 listStyle=0";
     } else if (curLine.match(/^\s*cirarc/i) !== null) {
         hintText =        "hint:: CIRARC    xon yon zon xend yend zend";
-    } else if (curLine.match(/^\s*combine/i) !== null) {
-        hintText =        "hint:: COMBINE   toler=0";
     } else if (curLine.match(/^\s*cone/i) !== null) {
         hintText =        "hint:: CONE      xvrtx yvrtx zvrtx xbase ybase zbase radius";
     } else if (curLine.match(/^\s*connect/i) !== null) {
@@ -10311,6 +10362,8 @@ var cmdEditHint = function () {
         hintText =        "hint:: DIMENSION $pmtrName nrow ncol despmtr=0";
     } else if (curLine.match(/^\s*dump/i) !== null) {
         hintText =        "hint:: DUMP      $filename remove=0 toMark=0 withTess=0";
+    } else if (curLine.match(/^\s*elevate/i) !== null) {
+        hintText =        "hint:: ELEVATE toler=0";
     } else if (curLine.match(/^\s*elseif/i) !== null) {
         hintText =        "hint:: ELSEIF    val1 $op1 val2 $op2=and val3=0 $op3=eq val4=0";
     } else if (curLine.match(/^\s*else/i) !== null) {
@@ -10342,7 +10395,7 @@ var cmdEditHint = function () {
     } else if (curLine.match(/^\s*intersect/i) !== null) {
         hintText =        "hint:: INTERSECT $order=none index=1 maxtol=0";
     } else if (curLine.match(/^\s*join/i) !== null) {
-        hintText =        "hint:: JOIN      toler=0";
+        hintText =        "hint:: JOIN      toler=0 toMark=0";
     } else if (curLine.match(/^\s*lbound/i) !== null) {
         hintText =        "hint:: LBOUND    $pmtrName bounds";
     } else if (curLine.match(/^\s*linseg/i) !== null) {
@@ -10356,7 +10409,7 @@ var cmdEditHint = function () {
     } else if (curLine.match(/^\s*mark/i) !== null) {
         hintText =        "hint:: MARK";
     } else if (curLine.match(/^\s*message/i) !== null) {
-        hintText =        "hint:: MESSAGE   $text $schar=_";
+        hintText =        "hint:: MESSAGE   $text $schar=_ $fileName=. $openType=a";
     } else if (curLine.match(/^\s*mirror/i) !== null) {
         hintText =        "hint:: MIRROR    nx ny nz dist=0";
     } else if (curLine.match(/^\s*name/i) !== null) {
@@ -10484,6 +10537,26 @@ var cmdEditDebug = function (cm) {
 
 
 //
+// callback from "Trace" button in .csm editor
+//
+var cmdEditTrace = function (cm) {
+    // alert("in cmdEditTrace()");
+
+    if (checkIfWithBall() === false) {
+        return;
+    }
+
+    var ans = prompt("Enter pattern to match: (* for all)", "*");
+    if (ans === null) {
+        return;
+    }
+
+    // get the info from the server
+    browserToServer("getTracePmtrs|"+ans+"|");
+};
+
+
+//
 // print an object and its contents
 //
 var printObject = function (obj) {
@@ -10578,6 +10651,7 @@ CodeMirror.defineSimpleMode("csm_mode", {
     {token: "keyword", regex: /\s*(despmtr|DESPMTR)\b/,     sol: true},
     {token: "keyword", regex: /\s*(dimension|DIMENSION)\b/, sol: true},
     {token: "keyword", regex: /\s*(dump|DUMP)\b/,           sol: true},
+    {token: "keyword", regex: /\s*(elevate|ELEVATE)\b/,     sol: true},
     {token: "keyword", regex: /\s*(else|ELSE)\b/,           sol: true, indent: true, dedent: true},
     {token: "keyword", regex: /\s*(elseif|ELSEIF)\b/,       sol: true, indent: true, dedent: true},
     {token: "keyword", regex: /\s*(end|END)\b/,             sol: true,               dedent: true},

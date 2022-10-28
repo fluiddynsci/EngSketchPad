@@ -71,7 +71,7 @@ Introduction to CAPS</h1>
 <p>Aerospace vehicle design can be described as an evolutionary process of gathering information to make informed decisions. Meticulous application of this process involves numerous simulations covering many disciplines and fidelity levels. A design team needs to be able to easily increase or decrease fidelity as they gather more information about a particular design. To this end a geometry system that can support multi-disciplinary, multi-fidelity analysis from a single source is required. The Computational Aircraft Prototype Syntheses (CAPS), which is a part of the Engineering Sketch Pad (ESP) <a class="el" href="citelist.html#CITEREF_ESP">[12]</a>, satisfies the above by combining proven computational geometry, meshing, and analyses model generation techniques into a complete browser-based, client-server environment that is accessible to the entire design team of an aerospace vehicle. CAPS links analysis and meshing disciplines to any ESP geometry model via dynamically-loadable Analysis Interface Module (AIM) plugins. CAPS is accessed from either a browser-based user interface and or Multi-Disciplinary Analysis and Optimization (MDAO) framework through a programming interface. Here, we describe the fundamental building blocks of CAPS in ESP. The paradigm shift of creating geometry for multi-fidelity design is described in detail and represented in ESP scripts. We then demonstrate the use of this multi-fidelity geometry to support multi-fidelity, multi-physics analysis including discipline coupling.</p>
 <p>The conceptualization and philosophy related to CAPS program is described in <a class="el" href="citelist.html#CITEREF_deanHaimesDhoff2019">[3]</a>. This document introduces main concepts and requirements to use CAPS. Before beginning the user should be familiar with ESP and be comfortable with creating parametric geometry inputs in a *.csm file format. For the user not familiar with ESP at a command prompt execute the following. <br  />
  </p><div class="fragment"><div class="line">&gt;&gt; serveESP</div>
-</div><!-- fragment --><p>Click on the <b>Help</b> button on the upper left of the screen. This will bring up the <b>Engineering Sketch Pad (ESP) Version 1.21</b> documentation, that includes manual and tutorials. After completing the tutorials return to this CAPS Overview!</p>
+</div><!-- fragment --><p>Click on the <b>Help</b> button on the upper left of the screen. This will bring up the <b>Engineering Sketch Pad (ESP) Version 1.22</b> documentation, that includes manual and tutorials. After completing the tutorials return to this CAPS Overview!</p>
 <h1><a class="anchor" id="newtoCAPS"></a>
 ESP Enhancement: Integrated and Collaborative Design Environment</h1>
 <p>This release includes an innovative way to develop ESP and CAPS scripts. A few of the highlights are: The scripts developed using this IDE are version controlled, both analysis and geometry scripts can be accessed and modified in the same familiar environment, and can be accessed in a multi-user setup for collaboration <a class="el" href="citelist.html#CITEREF_dannenhofferBhagat2022">[5]</a>. Please refer to Tutorial 6 in the ESP manual, which is a walk-through for this new capability.</p>
@@ -193,6 +193,7 @@ AIM Documentation: Aerodynamic Solvers</h2>
 <p><b>pdf/CAPS_AIM_fun3d.pdf</b> - FUN3D <a class="el" href="citelist.html#CITEREF_FUN3D">[2]</a> is a NASA developed and distributed solver commonly used by U.S. government agencies and U.S. contractors.</p>
 <p><b>pdf/CAPS_AIM_xfoil.pdf</b> - XFOIL is an open source, subsonic airfoil analysis tool developed by Mark Drela. For distribution see: <a href="http://web.mit.edu/drela/Public/web/xfoil/">http://web.mit.edu/drela/Public/web/xfoil/</a> .</p>
 <p><b>pdf/CAPS_AIM_tsfoil.pdf</b> - TSFOIL is a transonic airfoil analysis tool available at <a href="http://www.dept.aoe.vt.edu/~mason/Mason_f/MRsoft.html">http://www.dept.aoe.vt.edu/~mason/Mason_f/MRsoft.html</a> .</p>
+<p><b>pdf/CAPS_AIM_mses.pdf</b> - This AIM can be used to interact (through file I/O) with the airfoil analysis tool MSES.</p>
 <h2><a class="anchor" id="strAIMDox"></a>
 AIM Documentation: Structural Solvers</h2>
 <p><b>pdf/CAPS_AIM_mystran.pdf</b> - MYSTRAN <a class="el" href="citelist.html#CITEREF_MYSTRAN">[4]</a> is a free linear structural solver.</p>
@@ -204,7 +205,6 @@ AIM Documentation: Structural Solvers</h2>
 AIM Documentation: Design, Optimization and Systems</h2>
 <p><b>pdf/CAPS_AIM_fun3d.pdf</b> - This AIM can be used to interact with FUN3D, a NASA developed and distributed solver commonly used by U.S. government agencies and U.S. contractors.</p>
 <p><b>pdf/CAPS_AIM_cart3d.pdf</b> - This AIM can be used to interact with CART3D <a class="el" href="citelist.html#CITEREF_CART3D">[1]</a>,a high-fidelity inviscid analysis package for conceptual and preliminary aerodynamic design, developed by NASA</p>
-<p><b>pdf/CAPS_AIM_mses.pdf</b> - This AIM can be used to interact (through file I/O) with the airfoil analysis tool MSES.</p>
 <p><b>pdf/CAPS_AIM_interference.pdf</b> - This AIM can be used to determine the interference between a collection of solid bodies.</p>
 <p><b>AIMdevel.pdf</b> - A detailed description on AIM development, including documentation of API and helper functions.</p>
 <p>Developing new AIMs and enhancing the existing ones is an on-going activity. If you need to interface an analysis that is not listed here or need to modify an existing one to make it suitable for your workflow, please contact us for further assistance. </p>
@@ -212,7 +212,7 @@ AIM Documentation: Design, Optimization and Systems</h2>
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Sat Jul 2 2022 10:13:45 for CAPS by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
+Generated on Tue Dec 6 2022 21:52:23 for CAPS by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
 </small></address>
 </body>
 </html>

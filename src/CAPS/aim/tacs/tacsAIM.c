@@ -294,6 +294,7 @@ static int checkAndCreateMesh(void *aimInfo, aimStorage *tacsInstance)
                           &tacsInstance->transferMap,
                           &tacsInstance->connectMap,
                           &tacsInstance->responseMap,
+                          NULL,
                           &tacsInstance->numMesh,
                           &tacsInstance->feaMesh,
                           &tacsInstance->feaProblem );
@@ -1641,7 +1642,10 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
         if (i == 0) printf("\tWriting design variable cards\n");
 
-        status = nastran_writeDesignVariableCard(fp,
+        // skip geometry design variables
+        if (aim_getIndex(aimInfo, tacsInstance->feaProblem.feaDesignVariable[i].name , GEOMETRYIN) > 0) continue;
+
+        status = nastran_writeDesignVariableCard(aimInfo, fp,
                                                  &tacsInstance->feaProblem.feaDesignVariable[i],
                                                  &tacsInstance->feaProblem.feaFileFormat);
         AIM_STATUS(aimInfo, status);
@@ -2134,7 +2138,7 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, /*@u
                                       strlen(extF06) +1)*sizeof(char));
         if (filename == NULL) return EGADS_MALLOC;
 
-        sprintf(filename, "%s%s", tacsInstance->projectName, extF06);
+        snprintf(filename, "%s%s", tacsInstance->projectName, extF06);
 
         fp = aim_fopen(aimInfo, filename, "r");
 
@@ -2176,7 +2180,7 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, /*@u
                                       strlen(extOP2) +1)*sizeof(char));
         if (filename == NULL) return EGADS_MALLOC;
 
-        sprintf(filename, "%s%s", tacsInstance->projectName, extOP2);
+        snprintf(filename, "%s%s", tacsInstance->projectName, extOP2);
 
        status = nastran_readOP2Objective(filename, &numData, &dataVector);
 
@@ -2350,8 +2354,9 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
     int globalNodeID;
 
     // Filename stuff
+    size_t stringLength;
     char *filename = NULL;
-    FILE *fp; // File pointer
+    FILE *fp=NULL; // File pointer
 
 #ifdef DEBUG
     printf(" nastranAIM/aimTransfer name = %s  npts = %d/%d!\n",
@@ -2370,10 +2375,10 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
         return CAPS_NOTFOUND;
     }
 
-    filename = (char *) EG_alloc((strlen(tacsInstance->projectName) +
-                                  strlen(extF06) + 1)*sizeof(char));
-    if (filename == NULL) return EGADS_MALLOC;
-    sprintf(filename,"%s%s", tacsInstance->projectName, extF06);
+    stringLength = strlen(tacsInstance->projectName) + strlen(extF06) + 1;
+    AIM_ALLOC(filename, stringLength, char, discr->aInfo, status);
+
+    snprintf(filename,stringLength,"%s%s", tacsInstance->projectName, extF06);
 
     // Open file
     fp = aim_fopen(discr->aInfo, filename, "r");

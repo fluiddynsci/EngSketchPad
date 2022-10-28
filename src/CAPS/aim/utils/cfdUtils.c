@@ -1246,7 +1246,7 @@ int cfd_getDesignFunctional(void *aimInfo,
     /*! \if (FUN3D)
      *
      * \page cfdDesignFunctional CFD Functional
-     * Structure for the design functional tuple  = ("Functional Name", "Value").
+     * Structure for the design functional tuple  = {"Functional Name": "Expression"}.
      * "Functional Name" defines the functional returned as a dynamic output.
      *  The "Value" must be a JSON String dictionary (see Section \ref jsonStringcfdDesignFunctional).
      *
@@ -1293,7 +1293,7 @@ int cfd_getDesignFunctional(void *aimInfo,
     /*! \if (CART3D)
      *
      * \page cfdDesignFunctional CFD Functional
-     * Structure for the design functional tuple  = ("Functional Name", "Expresson").
+     * Structure for the design functional tuple  = {"Functional Name": "Expression"}.
      * "Functional Name" is a user specified unique name, and the Expression is a mathematical expression
      * parsed by Cart3D symbolically.
      *
@@ -1304,6 +1304,31 @@ int cfd_getDesignFunctional(void *aimInfo,
      * | "cl", "cd"                   |  Lift, drag coefficients                                            |
      * | "cmx", "cmy", "cmz"          |  x/y/z-axis moment coefficients                                     |
      * | "cx", "cy", "cz"             |  x/y/z-axis force coefficients                                      |
+     *
+     * \endif
+     */
+
+    /*! \if (SU2)
+     *
+     * \page cfdDesignFunctional CFD Functional
+     * Structure for the design functional tuple  = {"Functional Name": "Expression"}.
+     * "Functional Name" must be one of the SU2 pre-defined functionals: <br>
+     * DRAG, LIFT, SIDEFORCE,<br>
+     * MOMENT_X, MOMENT_Y, MOMENT_Z,<br>
+     * EFFICIENCY, BUFFET,<br>
+     * EQUIVALENT_AREA, NEARFIELD_PRESSURE,<br>
+     * FORCE_X, FORCE_Y, FORCE_Z, THRUST,<br>
+     * TORQUE, TOTAL_HEATFLUX, CUSTOM_OBJFUNC, <br>
+     * MAXIMUM_HEATFLUX, INVERSE_DESIGN_PRESSURE,<br>
+     * INVERSE_DESIGN_HEATFLUX, SURFACE_TOTAL_PRESSURE, <br>
+     * SURFACE_MASSFLOW, SURFACE_STATIC_PRESSURE, SURFACE_MACH <br>
+     *<br>
+     * and "Expression" must be an empty string. <br>
+     * <br>
+     * If "Functional Name" is "CUSTOM_OBJFUNC" then "Expression" defines the objective
+     * which is parsed symbolically, e.g.: <br>
+     * <br>
+     * {"CUSTOM_OBJFUNC": 'DRAG + 10 * pow(fmax(0.4-LIFT, 0), 2)'}
      *
      * \endif
      */
@@ -1380,20 +1405,20 @@ int cfd_getDesignFunctional(void *aimInfo,
             if (strncmp(compJson[j], "{", 1) == 0) {
                 //printf("JSON String - %s\n",bcTuple[i].value);
 
-                /*! \if (FUN3D)
+                /*! \if (FUN3D || CART3D)
                  * \page cfdDesignFunctional
                  *
                  *  \section jsonStringcfdDesignFunctional JSON String Dictionary
                  *
                  * If "Value" is a JSON string dictionary (eg. "Value" = "Composite":[{"function": "cl", "weight": 3.0, "target": 10.7},
-                 *                                                {"function": "cd", "weight": 2.0, "power": 2.0}])<br>
+                 *                                                                    {"function": "cd", "weight": 2.0, "power": 2.0}])<br>
                  * which represents the composite functional: \f$Composite = 3 (c_l-10.7) + 2 c_d^2\f$<br>
                  * The following keywords ( = default values) may be used:
                  *
                  * \endif
                  */
 
-                /*! \if (FUN3D)
+                /*! \if (FUN3D || CART3D)
                  *
                  * \page cfdDesignFunctional
                  *
@@ -1431,7 +1456,7 @@ int cfd_getDesignFunctional(void *aimInfo,
                     }
                 }
 
-                /*! \if (FUN3D)
+                /*! \if (FUN3D || CART3D)
                  *
                  *  \page cfdDesignFunctional
                  *
@@ -1452,7 +1477,7 @@ int cfd_getDesignFunctional(void *aimInfo,
                     goto cleanup;
                 }
 
-                /*! \if (FUN3D)
+                /*! \if (FUN3D || CART3D)
                  *
                  *  \page cfdDesignFunctional
                  *
@@ -1471,7 +1496,7 @@ int cfd_getDesignFunctional(void *aimInfo,
                     AIM_FREE(keyValue);
                 }
 
-                /*! \if (FUN3D)
+                /*! \if (FUN3D || CART3D)
                  *
                  *  \page cfdDesignFunctional
                  *
@@ -1490,7 +1515,7 @@ int cfd_getDesignFunctional(void *aimInfo,
                     AIM_FREE(keyValue);
                 }
 
-                /*! \if (FUN3D)
+                /*! \if (FUN3D || CART3D)
                  *
                  * \page cfdDesignFunctional
                  *

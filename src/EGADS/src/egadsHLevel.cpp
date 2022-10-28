@@ -237,7 +237,10 @@ EG_matchSplitter(BRepAlgoAPI_BuilderAlgo& BSO, egObject *src,
       return EGADS_MALLOC;
     }
   }
-  if ((emap == NULL) && (fmap == NULL)) return EGADS_CONSTERR;
+  if ((emap == NULL) && (fmap == NULL)) {
+    if ((fullAttrs == 0) && (rmap.Extent() == 0)) return EGADS_SUCCESS;
+    return EGADS_CONSTERR;
+  }
 
   if (emap != NULL)
     for (i = 0; i < rmape.Extent(); i++) emap[i] = NULL;
@@ -494,7 +497,10 @@ EG_matchGeneral(BRepAlgoAPI_BooleanOperation& BSO, egObject *src,
       return EGADS_MALLOC;
     }
   }
-  if ((emap == NULL) && (fmap == NULL)) return EGADS_CONSTERR;
+  if ((emap == NULL) && (fmap == NULL)) {
+    if ((fullAttrs == 0) && (rmap.Extent() == 0)) return EGADS_SUCCESS;
+    return EGADS_CONSTERR;
+  }
 
   if (emap != NULL)
     for (i = 0; i < rmape.Extent(); i++) emap[i] = NULL;
@@ -6800,7 +6806,7 @@ EG_rotate_loop(objStack *stack, const egObject *loop0, const egObject *loop1,
                                NULL, 1, &body, NULL, &model);
 
         char filename[42];
-        sprintf(filename, "circle_%d.egads", i);
+        snprintf(filename, 42, "circle_%d.egads", i);
         EG_saveModel(model, filename);
       }
 #endif
@@ -6904,7 +6910,7 @@ EG_rotate_loop(objStack *stack, const egObject *loop0, const egObject *loop1,
                                NULL, 1, &body, NULL, &model);
 
         char filename[42];
-        sprintf(filename, "loop_%d.egads", i);
+        snprintf(filename, 42, "loop_%d.egads", i);
         EG_saveModel(model, filename);
       }
 #endif
@@ -6972,7 +6978,7 @@ EG_rotate_loop(objStack *stack, const egObject *loop0, const egObject *loop1,
                                NULL, 1, &body, NULL, &model);
 
         char filename[42];
-        sprintf(filename, "face_%d.egads", i);
+        snprintf(filename, 42, "face_%d.egads", i);
         EG_saveModel(model, filename);
       }
 #endif
@@ -7312,7 +7318,7 @@ EG_rotate(const egObject *src, double angle, const double *axis,
                            NULL, 1, &body, NULL, &model);
 
     char filename[42];
-    sprintf(filename, "face_%d.egads", i);
+    snprintf(filename, 42, "face_%d.egads", i);
     EG_saveModel(model, filename);
   }
 #endif

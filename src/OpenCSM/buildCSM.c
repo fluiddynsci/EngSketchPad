@@ -38,15 +38,12 @@
     #include <windows.h>
 #endif
 
-#include "egads.h"
-
 #define CINT    const int
 #define CDOUBLE const double
 #define CCHAR   const char
 
 #define STRNCPY(A, B, LEN) strncpy(A, B, LEN); A[LEN-1] = '\0';
 
-#include "common.h"
 #include "OpenCSM.h"
 #include "udp.h"
 
@@ -650,7 +647,7 @@ gvdata(int       ngraphics,             /* (in)  number of objects to fill */
     color.green = 0.0;
     color.blue  = 0.0;
 
-    sprintf(title, "X axis");
+    snprintf(title, 15, "X axis");
     utype = 999;
     graphic[i] = gv_alloc(GV_NONINDEXED, GV_DISJOINTLINES, mask, color, title, utype, 0);
     if (graphic[i] != NULL) {
@@ -696,7 +693,7 @@ gvdata(int       ngraphics,             /* (in)  number of objects to fill */
     color.green = 1.0;
     color.blue  = 0.0;
 
-    sprintf(title, "Y axis");
+    snprintf(title, 15, "Y axis");
     utype = 999;
     graphic[i] = gv_alloc(GV_NONINDEXED, GV_DISJOINTLINES, mask, color, title, utype, 0);
     if (graphic[i] != NULL) {
@@ -750,7 +747,7 @@ gvdata(int       ngraphics,             /* (in)  number of objects to fill */
     color.green = 0.0;
     color.blue  = 1.0;
 
-    sprintf(title, "Z axis");
+    snprintf(title, 15, "Z axis");
     utype = 999;
     graphic[i] = gv_alloc(GV_NONINDEXED, GV_DISJOINTLINES, mask, color, title, utype, 0);
     if (graphic[i] != NULL) {
@@ -814,7 +811,7 @@ gvdata(int       ngraphics,             /* (in)  number of objects to fill */
         }
 
         /* if the family does not exist, create it */
-        sprintf(bodyName, "Body %d", ibody);
+        snprintf(bodyName, 15, "Body %d", ibody);
 
         if (gv_getfamily( bodyName, 1, &attr) == -1){
             gv_allocfamily(bodyName);
@@ -837,7 +834,7 @@ gvdata(int       ngraphics,             /* (in)  number of objects to fill */
             color.green = GREEN(MODL->body[ibody].edge[iedge].gratt.color);
             color.blue  = BLUE( MODL->body[ibody].edge[iedge].gratt.color);
 
-            sprintf(title, "Edge %d:%d", ibody, iedge);
+            snprintf(title, 15, "Edge %d:%d", ibody, iedge);
             utype = 1 + 10 * ibody;
             graphic[i] = gv_alloc(GV_NONINDEXED, GV_POLYLINES, mask, color, title, utype, iedge);
 
@@ -888,7 +885,7 @@ gvdata(int       ngraphics,             /* (in)  number of objects to fill */
             color.green = GREEN(MODL->body[ibody].face[iface].gratt.color);
             color.blue  = BLUE( MODL->body[ibody].face[iface].gratt.color);
 
-            sprintf(title, "Face %d:%d", ibody, iface);
+            snprintf(title, 15, "Face %d:%d", ibody, iface);
             utype = 2 + 10 * ibody;
             graphic[i] = gv_alloc(GV_INDEXED, GV_DISJOINTTRIANGLES, mask, color, title, utype, iface);
 
@@ -947,7 +944,7 @@ gvdata(int       ngraphics,             /* (in)  number of objects to fill */
             color.green = 0;
             color.blue  = 0;
 
-            sprintf(title, "Tufts %d", ibody);
+            snprintf(title, 15, "Tufts %d", ibody);
             utype = 3 + 10 * ibody;
             graphic[i] = gv_alloc(GV_NONINDEXED, GV_DISJOINTLINES, mask, color, title, utype, ibody);
 
@@ -1515,7 +1512,7 @@ gvevent(int       *win,                 /* (in)  window of event */
                 } else {
 
                     /* create header */
-                    sprintf(header, "written by buildCSM, ncolr=%d", 0);
+                    snprintf(header, 254, "written by buildCSM, ncolr=%d", 0);
                     (void) fwrite(header, sizeof(char), 80, stl_fp);
 
                     /* number of Triangles in Bodys on the stack */
@@ -2622,8 +2619,8 @@ gvevent(int       *win,                 /* (in)  window of event */
                 FILE *fp2;
                 SPRINT0(0, "--> Option 't' chosen (write .topo file)");
 
-                strcpy(tempname, casename);
-                strcat(tempname, ".topo");
+                strncpy(tempname, 254, casename);
+                strncat(tempname, 254, ".topo");
                 fp2 = fopen(tempname, "w");
 
                 for (jbody = 0; jbody < nbody; jbody++) {
@@ -3046,7 +3043,7 @@ gvevent(int       *win,                 /* (in)  window of event */
 
             /* '>' - write viewpoint */
             } else if (*state == '>') {
-                sprintf(tempName, "ViewMatrix%d.dat", numarg);
+                snprintf(tempName, 253, "ViewMatrix%d.dat", numarg);
                 fp = fopen(tempName, "w");
                 fprintf(fp, "%f %f %f %f\n", gv_xform[0][0], gv_xform[1][0],
                                              gv_xform[2][0], gv_xform[3][0]);
@@ -3067,7 +3064,7 @@ gvevent(int       *win,                 /* (in)  window of event */
                 int     count = 0;
                 double  size;
 
-                sprintf(tempName, "ViewMatrix%d.dat", numarg);
+                snprintf(tempName, 253, "ViewMatrix%d.dat", numarg);
                 fp = fopen(tempName, "r");
                 if (fp != NULL) {
                     SPRINT1(0, "resetting to %s", tempName);

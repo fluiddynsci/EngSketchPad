@@ -3,6 +3,7 @@ from pyEGADS import egads
 import os
 import math
 import sys
+import gc
 
 class TestEGADS(unittest.TestCase):
 
@@ -13,6 +14,7 @@ class TestEGADS(unittest.TestCase):
 
     # make sure the context is clean before it is closed
     def tearDown(self):
+        gc.collect() # ensure garbage collection has occured
         oclass, mtype, topObj, prev, next = self.context.getInfo()
         self.assertFalse( next , "Context is not properly clean!")
         del self.context
@@ -1305,9 +1307,20 @@ class TestEGADS(unittest.TestCase):
         self.assertTrue( all([edges[i].isEquivalent(bodyEdges[i]) for i in range(4)]) )
         self.assertTrue( face.isEquivalent(bodyFaces[0]) )
 
-        body = bodyFaces[0].getBody()
-        self.assertTrue( body.isEquivalent(faceBody) )
-        self.assertEqual( body, faceBody )
+        for node in bodyNodes:
+            body = node.getBody()
+            self.assertTrue( body.isEquivalent(faceBody) )
+            self.assertEqual( body, faceBody )
+
+        for edge in bodyEdges:
+            body = edge.getBody()
+            self.assertTrue( body.isEquivalent(faceBody) )
+            self.assertEqual( body, faceBody )
+
+        for face in bodyFaces:
+            body = face.getBody()
+            self.assertTrue( body.isEquivalent(faceBody) )
+            self.assertEqual( body, faceBody )
 
         for i in range(4):
             self.assertEqual( faceBody.indexBodyTopo(bodyNodes[i]), i+1 )
@@ -1316,6 +1329,8 @@ class TestEGADS(unittest.TestCase):
         for i in range(4):
             self.assertEqual( faceBody.objectBodyTopo(egads.NODE, i+1), bodyNodes[i] )
             self.assertEqual( faceBody.objectBodyTopo(egads.EDGE, i+1), bodyEdges[i] )
+
+        tess = faceBody.makeTessBody([0.1, 0.1, 15])
 
         # Make a model
         # Modules take ownership if bodies, so a body placed in a model can no longer be deleted
@@ -1332,6 +1347,21 @@ class TestEGADS(unittest.TestCase):
         del loop
         del plane
         del face
+        del tess
+        
+        faceBody = self._makeFaceBody(self.context)
+        
+        nodes = faceBody.getBodyTopos(egads.NODE)
+        edges = faceBody.getBodyTopos(egads.EDGE)
+        faces = faceBody.getBodyTopos(egads.FACE)
+        
+        # try deleting the face body before the children
+        del faceBody
+        
+        # Check that the children are still alive
+        nodes[0].evaluate(None)
+        edges[0].evaluate(0.5)
+        faces[0].evaluate([0.5,0.5])
 
 #==============================================================================
     def _makeFaceBody(self, context):
@@ -2416,15 +2446,10 @@ class TestEGADS(unittest.TestCase):
                 (oclass, mtype, geom, lim, eloops, sens) = eface.getTopology()
                 self.assertEqual(oclass, egads.EFACE)
                 self.assertEqual(1, len(eloops))
-                
-                for eface in efaces:
-                    (oclass, mtype, geom, lim, eloops, sens) = eface.getTopology()
-                    self.assertEqual(oclass, egads.EFACE)
-                    self.assertEqual(1, len(eloops))
-                    
-                    for eloop in eloops:
-                        (oclass, mtype, geom, lim, eedges, sens) = eloop.getTopology()
-                        self.assertEqual(oclass, egads.ELOOPX)
+
+                for eloop in eloops:
+                    (oclass, mtype, geom, lim, eedges, sens) = eloop.getTopology()
+                    self.assertEqual(oclass, egads.ELOOPX)
 
         # check getting the original FACES
         faces = ebody.getBodyTopos(egads.FACE)

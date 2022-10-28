@@ -21,7 +21,9 @@ typedef enum {UnknownAnalysis, Modal, Static, Optimization, AeroelasticTrim, Aer
 
 typedef enum {UnknownFileType, SmallField, LargeField, FreeField} feaFileTypeEnum;
 
-typedef enum {UnknownDesignVar, MaterialDesignVar, PropertyDesignVar, ElementDesignVar} feaDesignVariableTypeEnum;
+typedef enum {UnknownDesignVar, MaterialDesignVar, PropertyDesignVar, ElementDesignVar} feaDesignComponentTypeEnum;
+
+typedef enum {UnknownDesignCon, MaterialDesignCon, PropertyDesignCon, ElementDesignCon, FlutterDesignCon} feaDesignConstraintTypeEnum;
 
 typedef enum {UnknownCoordSystem, RectangularCoordSystem, SphericalCoordSystem, CylindricalCoordSystem } feaCoordSystemTypeEnum;
 
@@ -37,9 +39,11 @@ typedef struct {
     int coordSystemID; // Aerodynamic coordinate sytem id
     int rigidMotionCoordSystemID; // Reference coordinate system identification for rigid body motions.
 
-    double refChord; // Reference chord length.      Reference span.  (Real > 0.0)
+    double refChord; // Reference chord length  (Real > 0.0)
     double refSpan; // Reference span
     double refArea; // Reference area
+
+    int refGridID; // Reference grid point ID
 
     int symmetryXZ; // Symmetry key for the aero coordinate x-z plane.  (Integer = +1 for symmetry, 0 for no symmetry,
                       // and -1 for antisymmetry; Default = 0)
@@ -117,32 +121,46 @@ typedef struct {
 
 } feaCoordSystemStruct;
 
+typedef struct feaDesignVariableStruct_T feaDesignVariableStruct;
+
 // Structure to hold design variable relation information
 typedef struct {
 
     char *name;
 
-    feaDesignVariableTypeEnum relationType;
+    feaDesignComponentTypeEnum componentType; // rename ComponentType
 
     int relationID;
 
     int numDesignVariable;
-    char **designVariableNameSet; // Design variable borrowed references, size = [numDesignVariable]
- 
+    char **designVariableNameSet; // Design variable name borrowed references, size = [numDesignVariable]
+    feaDesignVariableStruct **designVariableSet; // Design variable struct borrowed references, size = [numDesignVariable]
+
     int fieldPosition; //  Position in card to apply design variable to
     char *fieldName; // Name of property/material to apply design variable to
 
     double constantRelationCoeff; // Constant terms of relation
     double *linearRelationCoeff; // Coefficients of linear relation, size = [numDesignVariable]
 
+    int numMaterialID; // Number of materials to apply the design variable to
+    int *materialSetID; // List of materials IDs
+    int *materialSetType; // List of materials types corresponding to the materialSetID
+
+    int numPropertyID;   // Number of property ID to apply the design variable to
+    int *propertySetID; // List of property IDs
+    int *propertySetType; // List of property types corresponding to the propertySetID
+
+    int numElementID; // Number of element ID to apply the design variable to
+    int *elementSetID; // List of element IDs
+    int *elementSetType; // List of element types corresponding to the elementSetID
+    int *elementSetSubType; // List of element subtypes correspoding to the elementSetID
+
 } feaDesignVariableRelationStruct;
 
 // Structure to hold design variable information
-typedef struct {
+struct feaDesignVariableStruct_T {
 
     char *name;
-
-    feaDesignVariableTypeEnum designVariableType;
 
     int designVariableID; //  ID number of design variable
 
@@ -165,7 +183,7 @@ typedef struct {
     int numElementID; // Number of element ID to apply the design variable to
     int *elementSetID; // List of element IDs
     int *elementSetType; // List of element types corresponding to the elementSetID
-    int *elementSetSubType; // List of element subtypes correspoding to the elementSetID
+    int *elementSetSubType; // List of element subtypes corresponding to the elementSetID
 
     int fieldPosition; //  Position in card to apply design variable to
     char *fieldName; // Name of property/material to apply design variable to
@@ -177,14 +195,18 @@ typedef struct {
 
     double variableWeight[2]; // Weight to apply to if variable is dependent
 
-} feaDesignVariableStruct;
+    int numRelation;
+    feaDesignVariableRelationStruct **relationSet; // Design variable relation struct borrowed references, size = [numRelation]
 
+};
 
 // Structure to hold design constraint information
 typedef struct {
     char *name;
 
     int designConstraintID;  // ID number of design constraint
+
+    feaDesignConstraintTypeEnum designConstraintType;
 
     char *responseType;  // Response type options for DRESP1 Entry
 
@@ -198,9 +220,29 @@ typedef struct {
     int fieldPosition; //  Position in card to apply design variable to
     char *fieldName; // Name of property/material to apply design variable to
 
+    // Flutter Constraint members
+    char *velocityType; // Nature of the velocity, TRUE or EQUIV
+    double scalingFactor; // Constraint scaling factor
+    
+    int numVelocity;
+    double *velocity; // Velocity values
+
+    int numDamping;
+    double *damping; // Damping values
 
 } feaDesignConstraintStruct;
 
+// Structure to hold optimization control information
+typedef struct {
+  
+    int fullyStressedDesign;   // ASTROS specific - ?
+    int mathProgramming; // Maximum number of optimization iterations
+    int maxIter; // Maximum number of optimization iterations
+    double constraintRetention; // Maximum number of optimization iterations
+    double eps; // Maximum number of optimization iterations
+    double moveLimit; // Maximum number of optimization iterations
+    
+} feaOptimizationControlStruct;
 
 typedef struct {
 
@@ -240,7 +282,7 @@ typedef struct {
 
 typedef struct {
 
-    int equationResponseID; 
+    int equationResponseID;
 
     char *name; // Unique name
 
@@ -449,7 +491,6 @@ typedef struct {
 
 } feaSupportStruct;
 
-
 // Structure to hold FEA loads
 typedef struct {
 
@@ -560,6 +601,13 @@ typedef struct {
     int numReducedFreq; // number of reduced frequencies numbers - flutter can have up to 8
     double *reducedFreq; // reduced frequency
 
+    int numFlutterVel;  // number of velocities to be using FLFACT card
+    double *flutterVel;  // velocities to be used in FLFACT
+
+    double flutterConvergenceParam; // convergence parameter for flutter eigenvalue
+
+    int visualFlutter; // flag to visualize flutter - applies (-) to FLFACT velocities
+
 } feaAnalysisStruct;
 
 // Structure to hold FEA problem information
@@ -623,6 +671,9 @@ typedef struct {
 
     // Optimization - Table Constants
     feaDesignTableStruct feaDesignTable;
+
+    // Optimization - Control options
+    feaOptimizationControlStruct feaOptimizationControl;
 
     // Optimization - Table Constants
     feaDesignOptParamStruct feaDesignOptParam;

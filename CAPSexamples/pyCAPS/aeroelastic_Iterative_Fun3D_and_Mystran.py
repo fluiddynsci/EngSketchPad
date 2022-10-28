@@ -38,23 +38,23 @@ myProblem = pyCAPS.Problem(problemName=workDir,
 # Load AIMs
 myProblem.analysis.create(aim = "egadsTessAIM",
                           name= "egads",
-                          capsIntent = "CFD")
+                          capsIntent = "Aerodynamic")
 
 myProblem.analysis.create(aim = "tetgenAIM",
                           name= "tetgen",
-                          capsIntent = "CFD")
+                          capsIntent = "Aerodynamic")
 
 myProblem.analysis["tetgen"].input["Surface_Mesh"].link(myProblem.analysis["egads"].output["Surface_Mesh"])
 
 myProblem.analysis.create(aim = "fun3dAIM",
                           name = "fun3d",
-                          capsIntent = "CFD")
+                          capsIntent = "Aerodynamic")
 
 myProblem.analysis["fun3d"].input["Mesh"].link(myProblem.analysis["tetgen"].output["Volume_Mesh"])
 
 myProblem.analysis.create(aim = "mystranAIM",
                           name = "mystran",
-                          capsIntent = "STRUCTURE",
+                          capsIntent = "Structure",
                           autoExec = False)
 
 boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
@@ -67,12 +67,12 @@ for boundName in boundNames:
     mystranVset = bound.vertexSet.create(myProblem.analysis["mystran"])
     
     # Create pressure data sets
-    fun3d_Pressure   = fun3dVset.dataSet.create("Pressure", pyCAPS.fType.FieldOut)
-    mystran_Pressure = mystranVset.dataSet.create("Pressure", pyCAPS.fType.FieldIn)
+    fun3d_Pressure   = fun3dVset.dataSet.create("Pressure")
+    mystran_Pressure = mystranVset.dataSet.create("Pressure")
 
     # Create displacement data sets
-    fun3d_Displacement   = fun3dVset.dataSet.create("Displacement", pyCAPS.fType.FieldIn, init=[0,0,0])
-    mystran_Displacement = mystranVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+    fun3d_Displacement   = fun3dVset.dataSet.create("Displacement", init=[0,0,0])
+    mystran_Displacement = mystranVset.dataSet.create("Displacement")
 
     # Link the data sets
     mystran_Pressure.link(fun3d_Pressure, "Conserve")

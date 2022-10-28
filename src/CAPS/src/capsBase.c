@@ -53,12 +53,14 @@ extern void ut_free(/*@only@*/ ut_unit* const unit);
 
 extern /*@null@*/ /*@only@*/ char *EG_strdup(/*@null@*/ const char *str);
 
-extern void caps_jrnlWrite(int funID, capsProblem *problem, capsObject *obj,
-                           int status, int nargs, capsJrnl *args, CAPSLONG sNum0,
-                           CAPSLONG sNum);
+extern int  capsInputSum(int nargs, capsJrnl *args, CAPSLONG *md5);
+extern void caps_jrnlWrite(int funID, CAPSLONG *md5, capsProblem *problem,
+                           capsObject *obj, int status, int nargs,
+                           capsJrnl *args, CAPSLONG sNm0, CAPSLONG sNum);
 extern int  caps_jrnlEnd(capsProblem *problem);
-extern int  caps_jrnlRead(int funID, capsProblem *problem, capsObject *obj,
-                          int nargs, capsJrnl *args, CAPSLONG *sNum, int *stat);
+extern int  caps_jrnlRead(int funID, CAPSLONG *md5, capsProblem *problem,
+                          capsObject *obj, int nargs, capsJrnl *args,
+                          CAPSLONG *sNum, int *stat);
 extern int  caps_filter(capsProblem *problem, capsAnalysis *analysis);
 extern int  caps_Aprx1DFree(/*@only@*/ capsAprx1D *approx);
 extern int  caps_Aprx2DFree(/*@only@*/ capsAprx2D *approx);
@@ -673,9 +675,11 @@ void caps_freeValueObjects(int vflag, int nObjs, capsObject **objects)
       } else {
         /* pointer type -- nothing should be done here... */
       }
+      if (value->lims       != NULL) EG_free(value->lims);
       if (value->units      != NULL) EG_free(value->units);
       if (value->meshWriter != NULL) EG_free(value->meshWriter);
       if (value->partial    != NULL) EG_free(value->partial);
+      if (value->stepSize   != NULL) EG_free(value->stepSize);
       if (value->derivs     != NULL) {
         for (j = 0; j < value->nderiv; j++) {
           if (value->derivs[j].name  != NULL) EG_free(value->derivs[j].name);
@@ -925,21 +929,23 @@ caps_makeVal(enum capsvType type, int len, const void *data, capsValue **val)
   if (data  == NULL) return CAPS_NULLVALUE;
   value = (capsValue *) EG_alloc(sizeof(capsValue));
   if (value == NULL) return EGADS_MALLOC;
-  value->length     = len;
-  value->type       = type;
-  value->nrow       = value->ncol   = value->dim = 0;
-  value->index      = value->pIndex = 0;
-  value->lfixed     = value->sfixed = Fixed;
-  value->nullVal    = NotAllowed;
-  value->units      = NULL;
-  value->meshWriter = NULL;
-  value->link       = NULL;
+  value->length          = len;
+  value->type            = type;
+  value->nrow            = value->ncol   = value->dim = 0;
+  value->index           = value->pIndex = 0;
+  value->lfixed          = value->sfixed = Fixed;
+  value->nullVal         = NotAllowed;
+  value->lims            = NULL;
+  value->units           = NULL;
+  value->meshWriter      = NULL;
+  value->link            = NULL;
   value->limits.dlims[0] = value->limits.dlims[1] = 0.0;
   value->linkMethod      = Copy;
   value->gInType         = 0;
   value->partial         = NULL;
   value->nderiv          = 0;
   value->derivs          = NULL;
+  value->stepSize        = NULL;
 
   if (data == NULL) {
     value->nullVal = IsNull;
@@ -1403,7 +1409,7 @@ caps_info(capsObject *object, char **name, enum capsoType *type,
           capsOwn *last)
 {
   int         i, stat, ret;
-  CAPSLONG    sNum;
+  CAPSLONG    sNum, md5[2];
   capsValue   *value;
   capsProblem *problem;
   capsObject  *pobj;
@@ -1424,6 +1430,11 @@ caps_info(capsObject *object, char **name, enum capsoType *type,
   if (stat != CAPS_SUCCESS) return stat;
   problem  = (capsProblem *) pobj->blind;
   
+  args[0].type        = jObject;
+  args[0].members.obj = object;
+  stat = capsInputSum(1, args, md5);
+  if (stat != CAPS_SUCCESS) return stat;
+  
   *type    = object->type;
   *subtype = object->subtype;
   *name    = object->name;
@@ -1432,7 +1443,8 @@ caps_info(capsObject *object, char **name, enum capsoType *type,
   args[0].type = jObject;
   args[1].type = jOwn;
   if (problem->dbFlag == 0) {
-    stat       = caps_jrnlRead(CAPS_INFO, problem, object, 2, args, &sNum, &ret);
+    stat       = caps_jrnlRead(CAPS_INFO, md5, problem, object, 2, args, &sNum,
+                               &ret);
     if (stat == CAPS_JOURNALERR) return stat;
     if (stat == CAPS_JOURNAL) {
       if (ret >= CAPS_SUCCESS) {
@@ -1466,7 +1478,7 @@ caps_info(capsObject *object, char **name, enum capsoType *type,
 /*@-nullret@*/
   args[1].members.own = *last;
 /*@+nullret@*/
-  caps_jrnlWrite(CAPS_INFO, problem, object, ret, 2, args, problem->sNum,
+  caps_jrnlWrite(CAPS_INFO, md5, problem, object, ret, 2, args, problem->sNum,
                  problem->sNum);
   
   return ret;
@@ -1615,7 +1627,7 @@ caps_size(capsObject *object, enum capsoType type, enum capssType stype,
           int *size, int *nErr, capsErrs **errors)
 {
   int         status, ret;
-  CAPSLONG    sNum;
+  CAPSLONG    sNum, md5[2];
   capsObject  *pobject;
   capsProblem *problem;
   capsJrnl    args[3];
@@ -1632,10 +1644,20 @@ caps_size(capsObject *object, enum capsoType type, enum capssType stype,
   if (problem->dbFlag == 1)
     return caps_sizeX(object, type, stype, size, nErr, errors);
   
+  args[0].type            = jObject;
+  args[0].members.obj     = object;
+  args[1].type            = jInteger;
+  args[1].members.integer = type;
+  args[2].type            = jInteger;
+  args[2].members.integer = stype;
+  status = capsInputSum(3, args, md5);
+  if (status != CAPS_SUCCESS) return status;
+  
   args[0].type = jInteger;
   args[1].type = jInteger;
   args[2].type = jErr;
-  status       = caps_jrnlRead(CAPS_SIZE, problem, object, 3, args, &sNum, &ret);
+  status       = caps_jrnlRead(CAPS_SIZE, md5, problem, object, 3, args, &sNum,
+                               &ret);
   if (status == CAPS_JOURNALERR) return status;
   if (status == CAPS_JOURNAL) {
     *size   = args[0].members.integer;
@@ -1651,7 +1673,8 @@ caps_size(capsObject *object, enum capsoType type, enum capssType stype,
     args[1].members.integer = *nErr;
     args[2].members.errs    = *errors;
   }
-  caps_jrnlWrite(CAPS_SIZE, problem, object, ret, 3, args, sNum, problem->sNum);
+  caps_jrnlWrite(CAPS_SIZE, md5, problem, object, ret, 3, args, sNum,
+                 problem->sNum);
   
   return ret;
 }
@@ -1747,10 +1770,10 @@ caps_childByIndex(capsObject *object, enum capsoType type, enum capssType stype,
                   int index, capsObject **child)
 {
   int         status, ret;
-  CAPSLONG    sNum;
+  CAPSLONG    sNum, md5[2];
   capsObject  *pobject;
   capsProblem *problem;
-  capsJrnl    args[1];
+  capsJrnl    args[4];
   
   *child = NULL;
   if (object              == NULL)      return CAPS_NULLOBJ;
@@ -1764,8 +1787,19 @@ caps_childByIndex(capsObject *object, enum capsoType type, enum capssType stype,
   if (problem->dbFlag == 1)
     return caps_childByIndX(object, problem, type, stype, index, child);
   
+  args[0].type            = jObject;
+  args[0].members.obj     = object;
+  args[1].type            = jInteger;
+  args[1].members.integer = type;
+  args[2].type            = jInteger;
+  args[2].members.integer = stype;
+  args[3].type            = jInteger;
+  args[3].members.integer = index;
+  status = capsInputSum(4, args, md5);
+  if (status != CAPS_SUCCESS) return status;
+  
   args[0].type = jObject;
-  status       = caps_jrnlRead(CAPS_CHILDBYINDEX, problem, object, 1, args,
+  status       = caps_jrnlRead(CAPS_CHILDBYINDEX, md5, problem, object, 1, args,
                                &sNum, &ret);
   if (status == CAPS_JOURNALERR) return status;
   if (status == CAPS_JOURNAL) {
@@ -1775,7 +1809,7 @@ caps_childByIndex(capsObject *object, enum capsoType type, enum capssType stype,
   
   ret = caps_childByIndX(object, problem, type, stype, index, child);
   args[0].members.obj = *child;
-  caps_jrnlWrite(CAPS_CHILDBYINDEX, problem, object, ret, 1, args,
+  caps_jrnlWrite(CAPS_CHILDBYINDEX, md5, problem, object, ret, 1, args,
                  problem->sNum, problem->sNum);
   
   return ret;
@@ -1811,13 +1845,13 @@ caps_childByName(capsObject *object, enum capsoType type, enum capssType stype,
   int           stat, ret, major, minor, nField, exec, dirty;
   int           *ranks, *fInOut;
   char          *intents, *apath, *unitSys, **fnames;
-  CAPSLONG      sNum;
+  CAPSLONG      sNum, md5[2];
   capsObject    *pobject;
   capsProblem   *problem;
   capsAnalysis  *analysis;
   capsBound     *bound;
   capsVertexSet *vertexSet;
-  capsJrnl      args[1];
+  capsJrnl      args[4];
   
   if (child               == NULL)      return CAPS_NULLOBJ;
   if (nErr                == NULL)      return CAPS_NULLOBJ;
@@ -1834,9 +1868,20 @@ caps_childByName(capsObject *object, enum capsoType type, enum capssType stype,
   if (stat != CAPS_SUCCESS) return stat;
   problem = (capsProblem *) pobject->blind;
   
+  args[0].type            = jObject;
+  args[0].members.obj     = object;
+  args[1].type            = jInteger;
+  args[1].members.integer = type;
+  args[2].type            = jInteger;
+  args[2].members.integer = stype;
+  args[3].type            = jString;
+  args[3].members.string  = (char *) name;
+  stat = capsInputSum(4, args, md5);
+  if (stat != CAPS_SUCCESS) return stat;
+  
   args[0].type = jObject;
   if (problem->dbFlag == 0) {
-    stat       = caps_jrnlRead(CAPS_CHILDBYNAME, problem, object, 1, args,
+    stat       = caps_jrnlRead(CAPS_CHILDBYNAME, md5, problem, object, 1, args,
                                &sNum, &ret);
     if (stat == CAPS_JOURNALERR) return stat;
     if (stat == CAPS_JOURNAL) {
@@ -1936,8 +1981,8 @@ caps_childByName(capsObject *object, enum capsoType type, enum capssType stype,
 retrn:
   if (problem->dbFlag == 1) return ret;
   args[0].members.obj = *child;
-  caps_jrnlWrite(CAPS_CHILDBYNAME, problem, object, ret, 1, args, problem->sNum,
-                 problem->sNum);
+  caps_jrnlWrite(CAPS_CHILDBYNAME, md5, problem, object, ret, 1, args,
+                 problem->sNum, problem->sNum);
   
   return ret;
 }
@@ -1947,7 +1992,7 @@ int
 caps_bodyByIndex(capsObject *object, int index, ego *body, char **lunits)
 {
   int          i, status, ret, oclass, mtype, *senses;
-  CAPSLONG     sNum;
+  CAPSLONG     sNum, md5[2];
   capsObject   *pobject;
   capsProblem  *problem;
   capsAnalysis *analysis;
@@ -1966,10 +2011,17 @@ caps_bodyByIndex(capsObject *object, int index, ego *body, char **lunits)
   if (status != CAPS_SUCCESS) return status;
   problem = (capsProblem *) pobject->blind;
   
+  args[0].type            = jObject;
+  args[0].members.obj     = object;
+  args[1].type            = jInteger;
+  args[1].members.integer = index;
+  status = capsInputSum(2, args, md5);
+  if (status != CAPS_SUCCESS) return status;
+  
   args[0].type = jEgos;
   args[1].type = jString;
   if (problem->dbFlag == 0) {
-    status     = caps_jrnlRead(CAPS_BODYBYINDEX, problem, object, 2, args,
+    status     = caps_jrnlRead(CAPS_BODYBYINDEX, md5, problem, object, 2, args,
                                  &sNum, &ret);
     if (status == CAPS_JOURNALERR) return status;
     if (status == CAPS_JOURNAL) {
@@ -2020,7 +2072,7 @@ caps_bodyByIndex(capsObject *object, int index, ego *body, char **lunits)
 done:
   args[0].members.model  = *body;
   args[1].members.string = *lunits;
-  caps_jrnlWrite(CAPS_BODYBYINDEX, problem, object, status, 2, args,
+  caps_jrnlWrite(CAPS_BODYBYINDEX, md5, problem, object, status, 2, args,
                  problem->sNum, problem->sNum);
   
   return status;
@@ -2068,10 +2120,10 @@ int
 caps_markForDelete(capsObject *object)
 {
   int         ret, stat;
-  CAPSLONG    sNum;
+  CAPSLONG    sNum, md5[2];
   capsObject  *pobject;
   capsProblem *problem;
-  capsJrnl     args[1];    /* not really used */
+  capsJrnl     args[1];
 
   if  (object              == NULL)       return CAPS_NULLOBJ;
   if  (object->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
@@ -2086,9 +2138,13 @@ caps_markForDelete(capsObject *object)
   problem  = (capsProblem *) pobject->blind;
   if (problem->dbFlag      == 1)          return CAPS_READONLYERR;
 
-  args[0].type = jString;
-  stat         = caps_jrnlRead(CAPS_MARKFORDELETE, problem, object, 0, args,
-                               &sNum, &ret);
+  args[0].type        = jObject;
+  args[0].members.obj = object;
+  stat = capsInputSum(1, args, md5);
+  if (stat != CAPS_SUCCESS) return stat;
+  
+  stat = caps_jrnlRead(CAPS_MARKFORDELETE, md5, problem, object, 0, args, &sNum,
+                       &ret);
   if (stat == CAPS_JOURNALERR) return stat;
   if (stat == CAPS_JOURNAL)    return ret;
 
@@ -2102,7 +2158,7 @@ caps_markForDelete(capsObject *object)
     ret = caps_writeValueObj(problem, object);
   }
   
-  caps_jrnlWrite(CAPS_MARKFORDELETE, problem, object, ret, 0, args,
+  caps_jrnlWrite(CAPS_MARKFORDELETE, md5, problem, object, ret, 0, args,
                  problem->sNum, problem->sNum);
 
   return ret;
@@ -2198,8 +2254,10 @@ caps_printErrors(/*@null@*/ FILE *fp, int nErr, capsErrs *errors)
 int
 caps_writeParameters(const capsObject *pobject, char *filename)
 {
-  int         status;
+  int         status, ret;
+  CAPSLONG    sNum, md5[2];
   capsProblem *problem;
+  capsJrnl    args[2];
   
   if (pobject              == NULL)       return CAPS_NULLOBJ;
   if (pobject->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
@@ -2208,16 +2266,39 @@ caps_writeParameters(const capsObject *pobject, char *filename)
   if (pobject->blind       == NULL)       return CAPS_NULLBLIND;
   if (filename             == NULL)       return CAPS_NULLNAME;
   problem = (capsProblem *) pobject->blind;
+  if (problem->dbFlag      == 1)          return CAPS_READONLYERR;
   problem->funID = CAPS_WRITEPARAMETERS;
   
-  /* ignore if restarting */
-  if (problem->stFlag == CAPS_JOURNALERR) return CAPS_JOURNALERR;
-  if (problem->stFlag == oContinue) {
-    status = caps_jrnlEnd(problem);
-    if (status != CAPS_CLEAN)             return CAPS_SUCCESS;
+  args[0].type           = jObject;
+  args[0].members.obj    = problem->mySelf;
+  args[1].type           = jString;
+  args[1].members.string = (char *) filename;
+  status = capsInputSum(2, args, md5);
+  if (status != CAPS_SUCCESS) return status;
+  
+  args[0].type           = jFile;
+/*@-kepttrans@*/
+  args[0].members.string = (char *) filename;
+/*@+kepttrans@*/
+  status = caps_jrnlRead(CAPS_WRITEPARAMETERS, md5, problem, problem->mySelf,
+                         1, args, &sNum, &ret);
+  if (status == CAPS_JOURNALERR) return status;
+  if (status == CAPS_JOURNAL)    return ret;
+  
+  sNum = problem->sNum;
+  ret  = ocsmSaveDespmtrs(problem->modl, filename);
+  if (ret == SUCCESS) {
+    problem->sNum += 1;
+    status = caps_writeSerialNum(problem);
+    if (status != CAPS_SUCCESS)
+      printf(" CAPS Warning: caps_writeSerialNum = %d (caps_writeParameters)\n",
+             status);
   }
   
-  return ocsmSaveDespmtrs(problem->modl, filename);
+  caps_jrnlWrite(CAPS_WRITEPARAMETERS, md5, problem, problem->mySelf, ret,
+                 1, args, sNum, problem->sNum);
+  
+  return ret;
 }
 
 
@@ -2459,8 +2540,14 @@ caps_writeGeometrX(capsObject *object, int flag, const char *filename,
       return stat;
     }
   }
-
-  return CAPS_SUCCESS;
+  
+  problem->sNum += 1;
+  stat = caps_writeSerialNum(problem);
+  if (stat != CAPS_SUCCESS)
+    printf(" CAPS Warning: caps_writeSerialNum = %d (caps_writeGeometry)\n",
+           stat);
+  
+  return stat;
 }
 
 
@@ -2469,13 +2556,13 @@ caps_writeGeometry(capsObject *object, int flag, const char *filename,
                    int *nErr, capsErrs **errors)
 {
   int         stat, ret;
-  CAPSLONG    sNum;
+  CAPSLONG    sNum, md5[2];
   capsObject  *pobject;
   capsProblem *problem;
-  capsJrnl    args[2];
+  capsJrnl    args[3];
   
-  *nErr    = 0;
-  *errors  = NULL;
+  *nErr   = 0;
+  *errors = NULL;
   if  (object              == NULL)      return CAPS_NULLOBJ;
   if  (object->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
   if ((object->type        != PROBLEM) &&
@@ -2488,10 +2575,25 @@ caps_writeGeometry(capsObject *object, int flag, const char *filename,
   problem = (capsProblem *) pobject->blind;
   if (problem->dbFlag == 1) return CAPS_READONLYERR;
   
-  args[0].type = jInteger;
-  args[1].type = jErr;
-  stat         = caps_jrnlRead(CAPS_WRITEGEOMETRY, problem, object, 2, args,
-                               &sNum, &ret);
+  args[0].type            = jObject;
+  args[0].members.obj     = object;
+  args[1].type            = jInteger;
+  args[1].members.integer = flag;
+  args[2].type            = jString;
+/*@-kepttrans@*/
+  args[2].members.string  = (char *) filename;
+/*@+kepttrans@*/
+  stat = capsInputSum(3, args, md5);
+  if (stat != CAPS_SUCCESS) return stat;
+  
+  args[0].type           = jInteger;
+  args[1].type           = jErr;
+  args[2].type           = jFile;
+/*@-kepttrans@*/
+  args[2].members.string = (char *) filename;
+/*@+kepttrans@*/
+  stat = caps_jrnlRead(CAPS_WRITEGEOMETRY, md5, problem, object, 3, args, &sNum,
+                       &ret);
   if (stat == CAPS_JOURNALERR) return stat;
   if (stat == CAPS_JOURNAL) {
     *nErr   = args[0].members.integer;
@@ -2503,7 +2605,7 @@ caps_writeGeometry(capsObject *object, int flag, const char *filename,
   ret  = caps_writeGeometrX(object, flag, filename, nErr, errors);
   args[0].members.integer = *nErr;
   args[1].members.errs    = *errors;
-  caps_jrnlWrite(CAPS_WRITEGEOMETRY, problem, object, ret, 2, args, sNum,
+  caps_jrnlWrite(CAPS_WRITEGEOMETRY, md5, problem, object, ret, 3, args, sNum,
                  problem->sNum);
   
   return ret;
@@ -2514,7 +2616,7 @@ int
 caps_getHistory(capsObject *object, int *nHist, capsOwn **history)
 {
   int         status, ret;
-  CAPSLONG    sNum;
+  CAPSLONG    sNum, md5[2];
   capsObject  *pobject;
   capsProblem *problem;
   capsJrnl    args[1];
@@ -2527,10 +2629,15 @@ caps_getHistory(capsObject *object, int *nHist, capsOwn **history)
   status = caps_findProblem(object, CAPS_GETHISTORY, &pobject);
   if (status              != CAPS_SUCCESS) return status;
   problem = (capsProblem *) pobject->blind;
+  
+  args[0].type        = jObject;
+  args[0].members.obj = object;
+  status = capsInputSum(1, args, md5);
+  if (status != CAPS_SUCCESS) return status;
 
   args[0].type = jOwns;
   if (problem->dbFlag == 0) {
-    status     = caps_jrnlRead(CAPS_GETHISTORY, problem, object, 1, args,
+    status     = caps_jrnlRead(CAPS_GETHISTORY, md5, problem, object, 1, args,
                                &sNum, &ret);
     if (status == CAPS_JOURNALERR) return status;
     if (status == CAPS_JOURNAL) {
@@ -2548,7 +2655,7 @@ caps_getHistory(capsObject *object, int *nHist, capsOwn **history)
 
   args[0].num          = *nHist;
   args[0].members.owns = *history;
-  caps_jrnlWrite(CAPS_GETHISTORY, problem, object, CAPS_SUCCESS, 1, args,
+  caps_jrnlWrite(CAPS_GETHISTORY, md5, problem, object, CAPS_SUCCESS, 1, args,
                  problem->sNum, problem->sNum);
 
   return CAPS_SUCCESS;

@@ -148,14 +148,18 @@ $(function() {
  Read &lt;Proj_Name&gt;.sens file to compute functional sensitivities w.r.t Design_Variable. Using this requires Design_Functional = NULL.</li>
 <li><b> Design_Sensitivity = False</b> <br  />
  If True and Design_Functional is set, create geometric sensitivities Fun3D input files needed to compute Design_Functional sensitivities w.r.t Design_Variable. If True and Design_SensFile = True, read functional sensitivities from &lt;Proj_Name&gt;.sens and compute sensitivities w.r.t Design_Variable. The value of the design functionals become available as Dynamic Output Value Objects using the "name" of the functionals.</li>
+<li><b> Mesh_Morph = False</b> <br  />
+ Project previous surface mesh onto new geometry and write out a 'Proj_Name'_body#.dat file.</li>
+<li><b> Mesh_Morph_Combine = True</b> <br  />
+ When using Mesh_Morph, setting Mesh_Morph_Combine = True will write out a single body,'Proj_Name'_body1.dat, file containing all surface meshes. If Mesh_Morph_Combine = False, a body file will be written out for each individual surface mesh.</li>
 <li><b>Mesh = NULL</b> <br  />
- A Area_Mesh or Volume_Mesh link for 2D and 3D calculations respectively. </li>
+ An Area_Mesh or Volume_Mesh link for 2D and 3D calculations respectively. </li>
 </ul>
 </div></div><!-- contents -->
 </div><!-- PageDoc -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Sat Jul 2 2022 10:12:29 for FUN3D Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
+Generated on Thu Dec 8 2022 20:45:47 for FUN3D Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
 </small></address>
 </body>
 </html>

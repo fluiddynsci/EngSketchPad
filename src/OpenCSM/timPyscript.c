@@ -43,11 +43,10 @@
 #include <math.h>
 #include <assert.h>
 
-#include "egads.h"
-#include "common.h"
 #include "OpenCSM.h"
 #include "tim.h"
 #include "emp.h"
+#include "caps.h"
 
 #define CINT    const int
 #define CDOUBLE const double
@@ -246,6 +245,10 @@ timLoad(esp_T *ESP,                     /* (in)  pointer to ESP structure */
         status = 0;
         goto cleanup;
     }
+
+    /* wait a second to make sure that the browser has had
+       a chance to change its mode */
+    SLEEP(1000);
 
     /* send the pyscript file over to the browser */
     MALLOC(buffer, char, nbuffer);
@@ -454,6 +457,23 @@ timQuit(esp_T *ESP,                     /* (in)  pointer to ESP structure */
         goto cleanup;
     }
 
+    /* if we entered pyscript from somewhere other than capsMode,
+       restore the original MODL */
+    if (ESP->nudata == 1 || strcmp(ESP->timName[ESP->nudata-2], "capsMode") != 0) {
+        ESP->MODL = ESP->MODLorig;
+        ESP->CAPS = NULL;
+
+        tim_bcst("pyscript", "returnMessage|build|0|");
+
+        /* also clear the udp cache */
+        status = ocsmFree(NULL);
+    }
+
+    /* update the display to the way it was before pyscript was executed if
+       not in capsMode */
+    tim_bcst("pyscript", "returnMessage|getPmtrs|");
+    tim_bcst("pyscript", "returnMessage|getBrchs|");
+
     /* free up the filename */
     FREE(ESP->udata[ESP->nudata-1]);
     ESP->timName[   ESP->nudata-1][0] = '\0';
@@ -539,7 +559,8 @@ timSetModl(void  *myModl,               /* (in)  pointer to active MODL */
         }
 
         /* update the ESP structure */
-        ESP->MODL = myModl;
+        ESP->MODL     = myModl;
+        ESP->MODLorig = myModl;
     }
 
 //cleanup:
@@ -586,6 +607,12 @@ timSetCaps(void  *myCaps,               /* (in)  pointer to active CAPS */
 {
     int    status = EGADS_SUCCESS;      /* (out) return status */
 
+//$$$    int         builtTo, nbody=0;
+    int         oclass, mtype;
+    ego         topRef, prev, next;
+    capsObject  *myObject;
+    capsProblem *myProblem;
+
     ROUTINE(timSetCaps);
 
     /* --------------------------------------------------------------- */
@@ -594,9 +621,33 @@ timSetCaps(void  *myCaps,               /* (in)  pointer to active CAPS */
         printf("WARNING:: not running via serveESP\n");
     } else {
         ESP->CAPS = myCaps;
+        myObject  = (capsObject *) myCaps;
+        myProblem = (capsProblem *) myObject->blind;
+        ESP->MODL = myProblem->modl;
+
+        status = EG_getInfo((ego)(ESP->MODL), &oclass, &mtype, &topRef, &prev, &next);
+        if (status == EGADS_SUCCESS && oclass == MODEL) {
+            printf("WARNING:: starting from a .egads file is not supported\n");
+            goto cleanup;
+        } else {
+            status = EGADS_SUCCESS;
+        }
+
+        /* there is no need to build the configuration since CAPS will
+           build it in a lazy manner whenever it is needed */
+        
+        /* if there are no Bodys but Branches, build and tessellate now */
+//$$$        if (ESP->MODL->nbrch > 0 && ESP->MODL->nbody == 0) {
+//$$$            printf("this is ocsmBuild(4)\n");
+//$$$            status = ocsmBuild(ESP->MODL, 0, &builtTo, &nbody, NULL);
+//$$$            CHECK_STATUS(ocsmBuild);
+//$$$
+//$$$            status = ocsmTessellate(ESP->MODL, 0);
+//$$$            CHECK_STATUS(ocsmTessellate);
+//$$$        }
     }
 
-//cleanup:
+cleanup:
     return status;
 }
 
@@ -795,6 +846,7 @@ void executePyscript(void *esp)
                 fprintf(fp2,   "    if JfD3key[0:2] != \"__\":\n");
                 fprintf(fp2,   "        del globals()[JfD3key]\n");
                 fprintf(fp2,   "del JfD3key\n");
+                fprintf(fp2,   "import gc; gc.collect()\n");
                 fprintf(fp2,   "# --------------------------------------------------\n\n");
             }
 
@@ -870,6 +922,9 @@ void executePyscript(void *esp)
 
     PyEval_SetTrace(traceFunc, NULL);
 
+    /* inform python that we are running from pyscript */
+    PyRun_SimpleString("from pyOCSM import ocsm\nfrom pyOCSM import esp\nocsm.PyScRiPt = 1");
+
     /* run from the file */
     fp = fopen(filename, "r");
     PyRun_SimpleFile(fp, filename);
@@ -879,7 +934,7 @@ void executePyscript(void *esp)
     PyRun_SimpleString("esp.UpdateESP()\n");
 
     /* clean up all variables */
-    PyRun_SimpleString("for JfD3key in dir():\n    if JfD3key[0:2] != \"__\":\n        del globals()[JfD3key]\ndel JfD3key\n");
+    PyRun_SimpleString("for JfD3key in dir():\n    if JfD3key[0:2] != \"__\":\n        del globals()[JfD3key]\ndel JfD3key\nimport gc\ngc.collect()\n");
 
     /* wait a second and then tell the tee thread to kill itself */
     SLEEP(1000);
@@ -898,7 +953,7 @@ void executePyscript(void *esp)
 
     /* delete all modls except the last one saved */
     for (i = 0; i < nmodls; i++) {
-        if (modls[i] != ESP->MODL && modls[i] != NULL) {
+        if (modls[i] != ESP->MODL && modls[i] != ESP->MODLorig && modls[i] != NULL) {
             status = ocsmFree(modls[i]);
             if (status < EGADS_SUCCESS) {
                 printf("ERROR:: ocsmFree failed for i=%d\n", i);
@@ -942,6 +997,11 @@ void executePyscript(void *esp)
     /* cleanup and delete the thread state structure */
     PyThreadState_Clear(myThreadState);
     PyThreadState_DeleteCurrent();
+
+    /* if this was not run from CAPSmode, restore from the original MODL pointer */
+    if (ESP->nudata == 1) {
+        ESP->MODL = ESP->MODLorig;
+    }
 
 cleanup:
     if (status < SUCCESS) {
@@ -1034,7 +1094,7 @@ tee(void *arg)
                     return;
                 }
 
-                sprintf(newline, "%s\n", line);
+                snprintf(newline, linecap+9, "%s\n", line);
                 wv_broadcastText(newline);
                 free(newline);
             }

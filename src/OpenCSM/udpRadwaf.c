@@ -47,8 +47,6 @@ static double argDdefs[NUMUDPARGS] = {0.,       0.,       0.,       -1.,      };
                          udpGet, udpVel, udpClean, udpMesh */
 #include "udpUtilities.c"
 
-#define EPS03  0.001
-
 static int makeNode(ego context, double xyz[], ego *enode);
 static int makeEdge(ego enode1, ego enode2, ego *eedge);
 static int makeFrame(ego context, int iframe, double xframe, double ysize, double zsize,

@@ -53,8 +53,6 @@ static double argDdefs[NUMUDPARGS] = {0.,          0.,          0.,          0.,
                          udpGet, udpVel, udpClean, udpMesh */
 #include "udpUtilities.c"
 
-#define  EPS06   1.0e-6
-
 
 /*
  ************************************************************************
@@ -71,7 +69,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
            char *string[])              /* (out) error message */
 {
     int     status = EGADS_SUCCESS;
-    int     wire, sense[8], nedges, add=1;
+    int     wire, sense[8], nedges;
     double  node1[3], node2[3], node3[3], node4[3], node5[3], node6[3], node7[3], node8[3];
     double  cent1[3], cent2[3], cent3[3], cent4[3], axis1[3], axis2[3];
     double  data[18], trange[2];
@@ -469,12 +467,6 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         /* make Face from the loop */
         status = EG_makeFace(eloop, SREVERSE, NULL, &eface);
         CHECK_STATUS(EG_makeFace);
-
-        /* since this will make a PLANE, we need to add an Attribute
-           to tell OpenCSM to scale the UVs when computing sensitivities */
-        status = EG_attributeAdd(eface, "_scaleuv", ATTRINT, 1,
-                                 &add, NULL, NULL);
-        CHECK_STATUS(EG_attributeAdd);
 
         /* create the FaceBody (which will be returned) */
         status = EG_makeTopology(context, NULL, BODY, FACEBODY, NULL, 1, &eface, NULL, ebody);
@@ -953,12 +945,6 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         /* make Face from the loop */
         status = EG_makeFace(eloop, SFORWARD, NULL, &eface);
         CHECK_STATUS(EG_makeFace);
-
-        /* since this will make a PLANE, we need to add an Attribute
-           to tell OpenCSM to scale the UVs when computing sensitivities */
-        status = EG_attributeAdd(eface, "_scaleuv", ATTRINT, 1,
-                                 &add, NULL, NULL);
-        CHECK_STATUS(EG_attributeAdd);
 
         /* create the FaceBody (which will be returned) */
         status = EG_makeTopology(context, NULL, BODY, FACEBODY, NULL, 1, &eface, NULL, ebody);

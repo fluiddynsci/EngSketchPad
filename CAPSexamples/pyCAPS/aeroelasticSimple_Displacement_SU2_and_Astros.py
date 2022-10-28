@@ -48,23 +48,23 @@ myProblem = pyCAPS.Problem(problemName=workDir,
 # Load AIMs 
 surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
                                      name= "egads",
-                                     capsIntent = "CFD")
+                                     capsIntent = "Aerodynamic")
 
 mesh = myProblem.analysis.create(aim = "tetgenAIM", 
                                  name= "tetgen",
-                                 capsIntent = "CFD")
+                                 capsIntent = "Aerodynamic")
 
 mesh.input["Surface_Mesh"].link(surfMesh.output["Surface_Mesh"])
 
 su2 = myProblem.analysis.create(aim = "su2AIM", 
                                 name = "su2", 
-                                capsIntent = "CFD")
+                                capsIntent = "Aerodynamic")
 
 su2.input["Mesh"].link(mesh.output["Volume_Mesh"])
 
 astros = myProblem.analysis.create(aim = "astrosAIM", 
                                    name = "astros", 
-                                   capsIntent = "STRUCTURE",
+                                   capsIntent = "Structure",
                                    autoExec = False)
 
 # Create the data transfer connections
@@ -78,8 +78,8 @@ for boundName in boundNames:
     astrosVset = bound.vertexSet.create(astros)
 
     # Create displacement data sets
-    su2_Displacement    = su2Vset.dataSet.create("Displacement", pyCAPS.fType.FieldIn)
-    astros_Displacement = astrosVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+    su2_Displacement    = su2Vset.dataSet.create("Displacement")
+    astros_Displacement = astrosVset.dataSet.create("Displacement")
 
     # Link the data set
     su2_Displacement.link(astros_Displacement, "Interpolate")

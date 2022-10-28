@@ -32,9 +32,6 @@
 #define MAXUDPINPUTBODYS 0
 #define NUMUDPARGS       1
 
-/* define tolerance for Node comparison */
-#define EPS06  1.0e-6
-
 /* set up the necessary structures (uses NUMUDPARGS) */
 #include "udpUtilities.h"
 

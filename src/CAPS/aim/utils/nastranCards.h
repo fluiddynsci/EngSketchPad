@@ -115,8 +115,9 @@ int nastranCard_aesurf(FILE *fp, int *id, char *label, int *cid, int *alid,
  * x43     Edge chord lengths in aerodynamic coordinate system (Real >= 0.0,
  *         but not both zero)
  */
-int nastranCard_caero1(FILE *fp, const int *eid, const int *pid, const int *cp,
-                       const int *nspan, const int *nchord, const int *lspan, const int *lchord,
+int nastranCard_caero1(FILE *fp, const int *eid, const int *pid, /*@null@*/ const int *cp,
+                       /*@null@*/ const int *nspan, /*@null@*/ const int *nchord,
+                       /*@null@*/ const int *lspan, /*@null@*/ const int *lchord,
                        const int *igid, const double xyz1[3], const double xyz4[3],
                        const double *x12, const double *x43,
                        feaFileTypeEnum formatType);
@@ -191,7 +192,7 @@ int nastranCard_cord2c(FILE *fp, const int *cid, const int *rid,
 /*
  * CORD2R
  */
-int nastranCard_cord2r(FILE *fp, const int *cid, const int *rid,
+int nastranCard_cord2r(FILE *fp, const int *cid, /*@null@*/ const int *rid,
                        double a[3], double b[3], double c[3],
                        feaFileTypeEnum formatType);
 
@@ -421,7 +422,7 @@ int nastranCard_dvmrel1(FILE *fp, const int *id, const char *type, const int *mi
  * pmax    Maximum value allowed for this property (Real, or blank)
  * c0      Constant term of relation (Real, Default = 1.0E20)
  * dvid    DESVAR entry identification numbers (Integer > 0)
- * coef    Coefficients of linear relation (Real)
+ * coef    Coefficient of linear relation (Real)
  *
  * numDV   Number of design variables
  */
@@ -525,7 +526,7 @@ int nastranCard_moment(FILE *fp, const int *sid, const int *g, const int *cid, c
 /*
  * PAERO1
  */
-int nastranCard_paero1(FILE *fp, const int *pid, int numB, const int *b,
+int nastranCard_paero1(FILE *fp, const int *pid, int numB, /*@null@*/ const int *b,
                        feaFileTypeEnum formatType);
 
 /*

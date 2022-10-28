@@ -235,7 +235,7 @@ main(int       argc,                /* (in)  number of arguments */
 
 #ifdef GRAFIC
     /* initialize the grafics */
-    sprintf(pltitl, "Program TestFit.  casename=%s", casename);
+    snprintf(pltitl, 254, "Program TestFit.  casename=%s", casename);
     grinit_(&io_kbd, &io_scr, pltitl, strlen(pltitl));
 #endif
 
@@ -786,8 +786,8 @@ plotCurve2(int    iedge,                /* (in)  Edge number */
 
     /* --------------------------------------------------------------- */
 
-    sprintf(pltitl, "~x~y~ m=%d,  n=%d,  normf=%10.3e,  dotmin=%.4f,  nmin=%d",
-            m, n, normf, dotmin, nmin);
+    snprintf(pltitl, 254, "~x~y~ m=%d,  n=%d,  normf=%10.3e,  dotmin=%.4f,  nmin=%d",
+             m, n, normf, dotmin, nmin);
 
     grctrl_(plotCurve_image, &indgr, pltitl,
             (void*)(&iedge),
@@ -893,7 +893,7 @@ plotCurve_image(int   *ifunct,
 
             int iset=1;
             float zero=0;
-            sprintf(lablgr, "~x~y~Edge %d", *iedge);
+            snprintf(lablgr, 79, "~x~y~Edge %d", *iedge);
             grvalu_("LABLGR", &iset, &zero, lablgr, strlen("LABLGR"), strlen(lablgr));
         } else if (ymax-ymin >= xmax-xmin && zmax-zmin >= xmax-xmin) {
             *itype = 1;
@@ -904,7 +904,7 @@ plotCurve_image(int   *ifunct,
 
             int iset=1;
             float zero=0;
-            sprintf(lablgr, "~y~z~Edge %d", *iedge);
+            snprintf(lablgr, 79, "~y~z~Edge %d", *iedge);
             grvalu_("LABLGR", &iset, &zero, lablgr, strlen("LABLGR"), strlen(lablgr));
         } else {
             *itype = 2;
@@ -915,7 +915,7 @@ plotCurve_image(int   *ifunct,
 
             int iset=1;
             float zero=0;
-            sprintf(lablgr, "~z~x~Edge %d", *iedge);
+            snprintf(lablgr, 79, "~z~x~Edge %d", *iedge);
             grvalu_("LABLGR", &iset, &zero, lablgr, strlen("LABLGR"), strlen(lablgr));
         }
 
@@ -1088,8 +1088,8 @@ plotSurface2(int    iface,              /* (in)  Face nummber */
 
     /* --------------------------------------------------------------- */
 
-    sprintf(pltitl, "~x~y~Face %d: m=%d,  nu=%d,  nv=%d,  normf=%10.3e,  nmin=%d",
-            iface, m, nu, nv, normf, nmin);
+    snprintf(pltitl, 254, "~x~y~Face %d: m=%d,  nu=%d,  nv=%d,  normf=%10.3e,  nmin=%d",
+             iface, m, nu, nv, normf, nmin);
 
     grctrl_(plotSurface_image, &indgr, pltitl,
             (void*)(&iface),

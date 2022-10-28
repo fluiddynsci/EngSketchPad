@@ -2574,6 +2574,20 @@ EG_otherFaces(egTess1D tess1d, egObject **faces, int facex, egObject *edge,
 }
   
   
+  
+__HOST_AND_DEVICE__ static int
+EG_effectFaceCurv(egObject *face)
+{
+  egEFace *eface;
+  
+  if (face->oclass == FACE) return 1;
+  eface = (egEFace *) face->blind;
+  if (eface == NULL)        return 1;
+  
+  return eface->npatch;
+}
+
+  
 __HOST_AND_DEVICE__ static int
 EG_effectIndex(egObject *ebody, egObject *eedge, double t)
 {
@@ -3450,13 +3464,14 @@ EG_tessEdge(egTessel *btess, egObject **faces, int j, egObject *edge,
   if (params[2] > 0.0) {
     aLen = npts;
     for (n = 0; n < 2; n++) {
-      sense =  1;
+      sense = 1;
       if (n == 0) sense = -1;
       for (nf = 0; nf < btess->tess1d[j].faces[n].nface; nf++) {
         face = btess->tess1d[j].faces[n].index;
         if (btess->tess1d[j].faces[n].nface > 1)
           face = btess->tess1d[j].faces[n].faces[nf];
         if (face <= 0) continue;
+        if (EG_effectFaceCurv(faces[face-1]) < 0) continue;
         stat = EG_getTopology(faces[face-1], &ref, &oclass, &ntype, range,
                               &ndum, &dum, &senses);
         if (stat != EGADS_SUCCESS) continue;
@@ -3465,7 +3480,7 @@ EG_tessEdge(egTessel *btess, egObject **faces, int j, egObject *edge,
         stat = EG_tolerance(faces[face-1], &tol);
         if (stat != EGADS_SUCCESS) continue;
         if (params[1] > tol) tol = params[1];
-        if (tol < 1.e-7) tol  = 1.e-7;
+        if (tol < 1.e-7) tol  =  1.e-7;
         result[0] = result[2] =  1.e10;
         result[1] = result[3] = -1.e10;
         for (i = 0; i < npts; i++) {

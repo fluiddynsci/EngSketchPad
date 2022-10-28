@@ -29,7 +29,7 @@ store     flap 999
 
 # find the z bounding box of the body
 restore   flap 999
-store     flap 999
+store     .
 set       zmin      @zmin
 set       zmax      @zmax
 
@@ -67,6 +67,19 @@ project   xflap[3]  yflap[3]  zmin-1  0.0  0.0  1.0
 set       z3min  @zcg
 
 set       dzpivot  min(z2max-z2min,z3max-z3min)/2
+
+# this is added to make debugging easier
+catbeg    $face_not_found
+   message   flap_outline_does_not_intersect_body
+   skbeg     x1p  y1p  zmin-1
+      linseg x2p  y2p  zmin-1
+      linseg x3p  y3p  zmin-1
+      linseg x4p  y4p  zmin-1
+      linseg x1p  y1p  zmin-1
+   skend
+   extrude   0.0    0.0     zmax-zmin+2
+   throw     -999
+catend
 
 # cutout in wing (which is bigger than the flap)
 skbeg     x1p  y1p  zmin-1

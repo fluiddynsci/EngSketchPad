@@ -26,3 +26,6 @@ int array_allocDoubleVector(int numRow, double defaultValue, double **arrOut);
 
 // Max value in an double array
 int array_maxDoubleValue(int numRow, double *arr, int *index, double *value);
+
+// Remove duplicates in a integer array - if in2 == NULL, in1 is simply copied
+int array_removeIntegerDuplicate(int numIn1, int *in1, int numIn2, /*@null@*/ int *in2, int *numOut, int **out);

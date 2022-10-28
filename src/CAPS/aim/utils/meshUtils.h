@@ -68,7 +68,8 @@ int initiate_bndCondStruct(bndCondStruct *bndCond);
 int destroy_bndCondStruct(bndCondStruct *bndCond);
 
 // Populate a tetgenRegionsStruct regions data structure
-int populate_regions(tetgenRegionsStruct* regions,
+int populate_regions(void *aimInfo,
+                     tetgenRegionsStruct* regions,
                      int length,
                      const capsTuple* tuples);
 
@@ -77,6 +78,11 @@ int initiate_regions(tetgenRegionsStruct* regions);
 
 // Destroy a tetgenRegionsStruct regions data structure
 int destroy_regions(tetgenRegionsStruct* regions);
+
+// Copy a tetgenRegionsStruct
+int copy_regions(void *aimInfo,
+                 const tetgenRegionsStruct* regions,
+                 tetgenRegionsStruct* copy);
 
 // Populate a tetgenHolesStruct holes data structure
 int populate_holes(tetgenHolesStruct* holes,
@@ -339,6 +345,9 @@ int mesh_createIgnoreMesh(meshStruct *mesh, meshStruct *meshIgnore);
 // Changes the analysisType of a mesh
 int mesh_setAnalysisType(meshAnalysisTypeEnum analysisType, meshStruct *mesh);
 
+// Function used to determine if node matches the attribute index
+int mesh_matchNodeAttrIndex(meshNodeStruct *node, void *attrIndex);
+
 // Find meshNodeStructs with `isMatch` function
 // Returns array of borrowed pointers
 int mesh_findNodes(meshStruct *mesh, 
@@ -346,6 +355,9 @@ int mesh_findNodes(meshStruct *mesh,
                    void *isMatchArg, 
                    int *numFound, 
                    meshNodeStruct ***foundSet);
+
+// Function used to determine which element matches the attribute index
+int mesh_matchElementAttrIndex(meshElementStruct *element, void *attrIndex);
 
 // Find meshElementStructs with `isMatch` function
 // Returns array of borrowed pointers

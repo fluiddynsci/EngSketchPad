@@ -26,8 +26,8 @@ typedef double DOUBLE_2D[2];
 #include "liteDevice.h"
 
 
-/* #define DEBUG    */
-/* #define FULLATTR */
+/* #define DEBUG */
+#define FULLATTR
 
 
   extern int EG_close(egObject *context);
@@ -276,13 +276,13 @@ EG_attrBuildSeq(egAttrs *attrs)
 static int
 EG_addStrAttr(egObject *obj, const char *name, const char *str)
 {
-  int     i, length, find = -1;
-  char    *temp;
-  egAttr  *attr;
-  egAttrs *attrs;
-  egObject obj_, *obj_h = &obj_;
+  int      i, length, find = -1;
+  char     *temp;
+  egAttr   *attr;
+  egAttrs  *attrs;
+  egObject obj_,   *obj_h   = &obj_;
   egAttrs  attrs_, *attrs_h = &attrs_;
-  egAttr   attr_, *attr_h = &attr_;
+  egAttr   attr_,  *attr_h  = &attr_;
   
   if (obj == NULL)               return EGADS_NULLOBJ;
   EG_GET_OBJECT(obj_h, obj);
@@ -401,15 +401,20 @@ EG_freeAttrs(egAttrs **attrx)
   int     i;
   egAttrs *attrs;
   egAttrs attrs_, *attrs_h = &attrs_;
-  egAttr  attr_, *attr_h = &attr_;
+  egAttr  attr_,  *attr_h  = &attr_;
   egAttrs *nil = NULL;
   
   attrs = *attrx;
   if (attrs == NULL) return;
   EG_GET_ATTRS(attrs_h, *attrx);
-  
   EG_SET_ATTRS_PTR(attrx, nil);
+  
   /* remove any attributes */
+  for (i = 0; i < attrs_h->nseqs; i++) {
+    EG_FREE(attrs_h->seqs[i].root);
+    EG_FREE(attrs_h->seqs[i].attrSeq);
+  }
+  if (attrs_h->seqs != NULL) EG_FREE(attrs_h->seqs);
   for (i = 0; i < attrs_h->nattrs; i++) {
     EG_GET_ATTR(attr_h, &(attrs_h->attrs[i]));
     if (attr_.name != NULL) EG_FREE(attr_.name);
@@ -853,6 +858,7 @@ EG_readBody(egObject *context, egObject *mobject, int bindex, stream_T *fp)
       obj_h->oclass = PCURVE;
       obj_h->mtype  = mtype;
       obj_h->blind  = lgeom;
+      obj_h->topObj = bobj;
       stat = EG_readAttrs(fp, (egAttrs **) &obj_h->attrs);
       if (stat != EGADS_SUCCESS) return stat;
       EG_SET_OBJECT(&obj, obj_h);
@@ -920,6 +926,7 @@ EG_readBody(egObject *context, egObject *mobject, int bindex, stream_T *fp)
       obj_h->oclass = CURVE;
       obj_h->mtype  = mtype;
       obj_h->blind  = lgeom;
+      obj_h->topObj = bobj;
       stat = EG_readAttrs(fp, (egAttrs **) &obj_h->attrs);
       if (stat != EGADS_SUCCESS) return stat;
       EG_SET_OBJECT(&obj, obj_h);
@@ -959,6 +966,7 @@ EG_readBody(egObject *context, egObject *mobject, int bindex, stream_T *fp)
       obj_h->oclass = SURFACE;
       obj_h->mtype  = mtype;
       obj_h->blind  = lgeom;
+      obj_h->topObj = bobj;
       stat = EG_readAttrs(fp, (egAttrs **) &obj_h->attrs);
       if (stat != EGADS_SUCCESS) return stat;
       EG_SET_OBJECT(&obj, obj_h);
@@ -991,6 +999,7 @@ EG_readBody(egObject *context, egObject *mobject, int bindex, stream_T *fp)
       obj_h->oclass = NODE;
       obj_h->mtype  = 0;
       obj_h->blind  = lnode;
+      obj_h->topObj = bobj;
       stat = EG_readAttrs(fp, (egAttrs **) &obj_h->attrs);
       if (stat != EGADS_SUCCESS) return stat;
       EG_SET_OBJECT(&obj, obj_h);
@@ -1072,6 +1081,7 @@ EG_readBody(egObject *context, egObject *mobject, int bindex, stream_T *fp)
       obj_h->oclass = EDGE;
       obj_h->mtype  = mtype;
       obj_h->blind  = ledge;
+      obj_h->topObj = bobj;
       stat = EG_readAttrs(fp, (egAttrs **) &obj_h->attrs);
       if (stat != EGADS_SUCCESS) return stat;
       EG_SET_OBJECT(&obj, obj_h);
@@ -1236,6 +1246,7 @@ EG_readBody(egObject *context, egObject *mobject, int bindex, stream_T *fp)
       obj_h->oclass = LOOP;
       obj_h->mtype  = mtype;
       obj_h->blind  = lloop;
+      obj_h->topObj = bobj;
       stat = EG_readAttrs(fp, (egAttrs **) &obj_h->attrs);
       if (stat != EGADS_SUCCESS) return stat;
       EG_SET_OBJECT(&obj, obj_h);
@@ -1349,6 +1360,7 @@ EG_readBody(egObject *context, egObject *mobject, int bindex, stream_T *fp)
       obj_h->oclass = FACE;
       obj_h->mtype  = mtype;
       obj_h->blind  = lface;
+      obj_h->topObj = bobj;
       stat = EG_readAttrs(fp, (egAttrs **) &obj_h->attrs);
       if (stat != EGADS_SUCCESS) return stat;
       EG_SET_OBJECT(&obj, obj_h);
@@ -1440,6 +1452,7 @@ EG_readBody(egObject *context, egObject *mobject, int bindex, stream_T *fp)
       obj_h->oclass = SHELL;
       obj_h->mtype  = mtype;
       obj_h->blind  = lshell;
+      obj_h->topObj = bobj;
       stat = EG_readAttrs(fp, (egAttrs **) &obj_h->attrs);
       if (stat != EGADS_SUCCESS) return stat;
       EG_SET_OBJECT(&obj, obj_h);
@@ -2001,20 +2014,20 @@ EG_readEBody(egObject *context, egObject *mobject, int bindex, int iref,
     n = Fread(eface->senses, sizeof(int), eface->eloops.nobjs, fp);
     if (n != eface->eloops.nobjs) return EGADS_READERR;
     
-    eface->patches = (egEPatch *) EG_alloc(eface->npatch*sizeof(egEPatch));
+    eface->patches = (egEPatch *) EG_alloc(abs(eface->npatch)*sizeof(egEPatch));
     if (eface->patches == NULL) {
       printf(" EGADS Error: Malloc on %d Patch Object %d (EG_importEBody)!\n",
-             i+1, eface->npatch);
+             i+1, abs(eface->npatch));
       return EGADS_MALLOC;
     }
-    for (j = 0; j < eface->npatch; j++) {
+    for (j = 0; j < abs(eface->npatch); j++) {
       eface->patches[j].uvtris  = NULL;
       eface->patches[j].uvtric  = NULL;
       eface->patches[j].uvs     = NULL;
       eface->patches[j].deflect = NULL;
       eface->patches[j].tol     = -1.0;
     }
-    for (j = 0; j < eface->npatch; j++) {
+    for (j = 0; j < abs(eface->npatch); j++) {
       n = Fread(&index,                      sizeof(int), 1, fp);
       if (n != 1) return EGADS_READERR;
       n = Fread(&eface->patches[j].start,    sizeof(int), 1, fp);

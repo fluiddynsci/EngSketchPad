@@ -1,9 +1,9 @@
                         ESP: The Engineering Sketch Pad
-                             Rev 1.21 -- July 2022
+                             Rev 1.22 -- December 2022
 
   ******************************************************************
   * THESE DIRECTIONS ARE ONLY REQUIRED IF YOU WILL BE BUILDING ESP *
-  *    THEY ARE NOT NEEDED IS YOU USE A PRE-BUILT DISTRIBUTION     *
+  *    THEY ARE NOT NEEDED IF YOU USE A PRE-BUILT DISTRIBUTION     *
   ******************************************************************
 
 0. Preamble
@@ -94,12 +94,13 @@
 
 1.2.1 EGADS
 
-    The significant updates made to EGADS from Rev 1.20 are:
+    The significant updates made to EGADS from Rev 1.21 are:
 
-    * Blends with C0s had vanishing derivatives -- this has been fixed
-    * The Tessellator is now more robust against bad PCurves
-    * STEP / IGES import and export now handle units in a consistent manner
-    * The STEP "Name" attribute is now imported and exported with STEP IO 
+    * Added a Julia interface (jlEGADS)
+    * Refactor pyEGADS to support EGADSlite
+    * Added periodic support for EG_approximate
+    * Allow for senses to be flipped when applying EG_isEquivalent
+    * Can rule with sections of different number of Edges
 
 1.2.2 OpenCSM
 
@@ -110,16 +111,16 @@
 
 1.2.3 CAPS
 
-    * The addition of Analysis Dynamic Output Value Objects
-    * A number of examples of using CAPS as a component in OpenMDAO
-    * More complete sensitivity handling
-    * The addition of TACS and MSES AIMs
-    * "Phasing" fully implemented and tested -- the application "phaseUtil"
-      to manage the files in a Phase (see $ESP_ROOT/doc/Concepts.pdf).
-    * Script/App restarting is now functional
-    * The AIM infrastructure has undergone some changes that will require 
-      modification of any existing AIMs (not distributed here). Please refer 
-      to the AIM development guide ($ESP_ROOT/doc/CAPS/AIMdevel.pdf).
+    * Update setLimits/getLimits for per element limits
+    * Documented Python 1-to-1 CAPS interface
+    * Add support for mesh morphing with fun3d AIM
+    * Support Cart3D preSpec inputs and bodies
+    * Allow for FD sensitivities within the AIM sensitivity functions
+    * Add analysis and geometric sensitvities to masstran AIM
+    * Design variable specifications for structural analysis AIMs have been corrected. 
+      This is unfortunately a breaking change for existing pyCAPS scripts.
+    * Added TACS AIM for structural analysis
+    * Upgraded to SU2-7.4.0
 
 1.2.4 ESP
 
@@ -127,7 +128,7 @@
     * A complete "Integrated Design Environment" now exists in ESP. In the
       help look at Tutorial #6 to get a flavor of what you can now do.
 
-1.2.5 Known issues in v1.21:
+1.2.5 Known issues in v1.22:
 
     * None
 
@@ -187,7 +188,7 @@
     (run from the command window):
 
         C:\> cd %ESP_ROOT%\config
-        C:\> bash winEnv D:\OpenCASCADE7.4.1
+        C:\> bash winEnv D:\OpenCASCADE7.6.0
 
     winEnv (like makeEnv) has an optional second argument that is only 
     required if the distribution of OpenCASCADE has multiple architectures. 
@@ -459,7 +460,7 @@
 4.9 SU2
 
     Supported versions are: 4.1.1 (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) 
-    and 7.3.1 (Blackbird). SU2 version 6.0 will work except for the use of 
+    and 7.4.0 (Blackbird). SU2 version 6.0 will work except for the use of 
     displacements in a Fluid/Structure Interaction setting.
     
 4.10 xfoil

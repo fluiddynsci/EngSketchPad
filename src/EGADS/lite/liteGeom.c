@@ -71,6 +71,174 @@ __PROTO_H_AND_D__ int  EG_eCurvature( const egObject *geom, const double *param,
                                       double *result );
 
 
+__HOST_AND_DEVICE__ void
+EG_getGeometryLen(const egObject *geom, int *nivec, int *nrvec)
+{
+  int nint, nreal;
+  liteGeometry *lgeom = NULL;
+
+  *nivec = *nrvec = nint = nreal = 0;
+  if  (geom == NULL)               return;
+  if  (geom->magicnumber != MAGIC) return;
+  if ((geom->oclass < PCURVE) || (geom->oclass > SURFACE))
+                                   return;
+  if (geom->blind == NULL)         return;
+
+  lgeom = (liteGeometry *) geom->blind;
+
+  if (geom->oclass == PCURVE) {
+
+    switch (geom->mtype) {
+
+      case LINE:
+        nreal = 4;
+        break;
+
+      case CIRCLE:
+        nreal = 7;
+        break;
+
+      case ELLIPSE:
+        nreal = 8;
+        break;
+
+      case PARABOLA:
+        nreal = 7;
+        break;
+
+      case HYPERBOLA:
+        nreal = 8;
+        break;
+
+      case TRIMMED:
+        nreal = 2;
+        break;
+
+      case BEZIER:
+        nint  = 3;
+        nreal = 2*lgeom->header[2];
+        if ((lgeom->header[0]&2) != 0) nreal += lgeom->header[2];
+        break;
+
+      case BSPLINE:
+        nint  = 4;
+        nreal = lgeom->header[3] + 2*lgeom->header[2];
+        if ((lgeom->header[0]&2) != 0) nreal += lgeom->header[2];
+        break;
+
+      case OFFSET:
+        nreal = 1;
+        break;
+    }
+
+  } else if (geom->oclass == CURVE) {
+
+    switch (geom->mtype) {
+
+      case LINE:
+        nreal = 6;
+        break;
+
+      case CIRCLE:
+        nreal = 10;
+        break;
+
+      case ELLIPSE:
+        nreal = 11;
+        break;
+
+      case PARABOLA:
+        nreal = 10;
+        break;
+
+      case HYPERBOLA:
+        nreal = 11;
+        break;
+
+      case TRIMMED:
+        nreal = 2;
+        break;
+
+      case BEZIER:
+        nint  = 3;
+        nreal = 3*lgeom->header[2];
+        if ((lgeom->header[0]&2) != 0) nreal += lgeom->header[2];
+        break;
+
+      case BSPLINE:
+        nint  = 4;
+        nreal = lgeom->header[3] + 3*lgeom->header[2];
+        if ((lgeom->header[0]&2) != 0) nreal += lgeom->header[2];
+        break;
+
+      case OFFSET:
+        nreal = 4;
+        break;
+    }
+
+  } else {
+
+    /* surface */
+    switch (geom->mtype) {
+
+      case PLANE:
+        nreal = 9;
+        break;
+
+      case SPHERICAL:
+        nreal = 10;
+        break;
+
+      case CONICAL:
+        nreal = 14;
+        break;
+
+      case CYLINDRICAL:
+        nreal = 13;
+        break;
+
+      case TOROIDAL:
+        nreal = 14;
+        break;
+
+      case REVOLUTION:
+        nreal = 6;
+        break;
+
+      case EXTRUSION:
+        nreal = 3;
+        break;
+
+      case TRIMMED:
+        nreal = 4;
+        break;
+
+      case BEZIER:
+        nint  = 5;
+        nreal = 3*lgeom->header[2]*lgeom->header[4];
+        if ((lgeom->header[0]&2) != 0)
+          nreal += lgeom->header[2]*lgeom->header[4];
+        break;
+
+      case BSPLINE:
+        nint  = 7;
+        nreal = lgeom->header[3] + lgeom->header[6] +
+                3*lgeom->header[2]*lgeom->header[5];
+        if ((lgeom->header[0]&2) != 0)
+          nreal += lgeom->header[2]*lgeom->header[5];
+        break;
+
+      case OFFSET:
+        nreal = 1;
+        break;
+    }
+  }
+
+  *nivec = nint;
+  *nrvec = nreal;
+}
+
+
 __HOST_AND_DEVICE__ int
 EG_getGeometry(const egObject     *geom, int *oclass, int *type,
                      egObject **refGeom, /*@null@*/ int    **ivec,

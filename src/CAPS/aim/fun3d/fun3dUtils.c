@@ -443,7 +443,7 @@ int fun3d_2DMesh(void *aimInfo,
     status = initiate_meshStruct(&volumeMesh);
     AIM_STATUS(aimInfo, status);
 
-    sprintf(filename, "%s%s", meshRef->fileName, MESHEXTENSION);
+    snprintf(filename, PATH_MAX, "%s%s", meshRef->fileName, MESHEXTENSION);
 
     fp = fopen(filename, "rb");
     if (fp == NULL) {
@@ -1157,7 +1157,7 @@ int fun3d_dataTransfer(void *aimInfo,
 
         AIM_ALLOC(filename, stringLength+1, char, aimInfo, status);
 
-        sprintf(filename, "%s%s%s%d%s",
+        snprintf(filename,stringLength+1, "%s%s%s%d%s",
                 projectName,
                 fileExtBody,
                 fileExtMode,  // Change modeNumber so it always starts at 1!
@@ -1673,8 +1673,8 @@ int  fun3d_writeParameterization(void *aimInfo,
     const char *string;
 
     char message[100];
-    char filePre[] = "model.tec.";
-    char fileExt[] = ".sd1";
+    char *filePre = "model.tec.";
+    char *fileExt = ".sd1";
     char *filename = NULL;
     char folder[]  = "Rubberize";
     char zoneTitle[100];
@@ -1738,16 +1738,16 @@ int  fun3d_writeParameterization(void *aimInfo,
         AIM_ALLOC(dataOutName[i], stringLength+1, char, aimInfo, status);
 
         // Set names
-        if      (i == 0) sprintf(dataOutName[i], "%s", "x");
-        else if (i == 1) sprintf(dataOutName[i], "%s", "y");
-        else if (i == 2) sprintf(dataOutName[i], "%s", "z");
-        else if (i == 3) sprintf(dataOutName[i], "%s", "id");
+        if      (i == 0) snprintf(dataOutName[i], stringLength+1, "%s", "x");
+        else if (i == 1) snprintf(dataOutName[i], stringLength+1, "%s", "y");
+        else if (i == 2) snprintf(dataOutName[i], stringLength+1, "%s", "z");
+        else if (i == 3) snprintf(dataOutName[i], stringLength+1, "%s", "id");
         else {
 
-            if      (j == 1) sprintf(dataOutName[i], "%s%d", "xD", k);
-            else if (j == 2) sprintf(dataOutName[i], "%s%d", "yD", k);
+            if      (j == 1) snprintf(dataOutName[i], stringLength+1, "%s%d", "xD", k);
+            else if (j == 2) snprintf(dataOutName[i], stringLength+1, "%s%d", "yD", k);
             else if (j == 3) {
-                sprintf(dataOutName[i], "%s%d", "zD", k);
+                snprintf(dataOutName[i], stringLength+1, "%s%d", "zD", k);
                 j = 0;
                 k += 1;
             }
@@ -1915,19 +1915,19 @@ int  fun3d_writeParameterization(void *aimInfo,
       }
       AIM_FREE(faces);
 
-      sprintf(message,"%s %d,", "sensitivity file for body", i+1);
+      snprintf(message,100,"%s %d,", "sensitivity file for body", i+1);
 
       stringLength = strlen(folder) + 1 + strlen(filePre) + 7 + strlen(fileExt) + 1 ;
 
       AIM_REALL(filename, stringLength, char, aimInfo, status);
 
 #ifdef WIN32
-      sprintf(filename, "%s\\%s%d%s", folder, filePre, i+1, fileExt);
+      snprintf(filename, stringLength, "%s\\%s%d%s", folder, filePre, i+1, fileExt);
 #else
-      sprintf(filename, "%s/%s%d%s",  folder, filePre, i+1, fileExt);
+      snprintf(filename, stringLength, "%s/%s%d%s",  folder, filePre, i+1, fileExt);
 #endif
 
-      sprintf(zoneTitle, "%s_%d", "Body", i+1);
+      snprintf(zoneTitle, 100, "%s_%d", "Body", i+1);
       /*@-nullpass@*/
       status = tecplot_writeFEPOINT(aimInfo,
                                     filename,
@@ -1972,6 +1972,281 @@ cleanup:
     AIM_FREE(dxyz);
     AIM_FREE(filename);
     AIM_FREE(geomSelect);
+
+    return status;
+}
+
+
+// Write FUN3D surface file
+// Will dump out the body meshes in 'filename'_body#.dat  files.
+// If combine == True all surfaces will be added to a single file; if
+// combine == False each surface representing a geometric body will be
+// written to an individual file.
+int  fun3d_writeSurface(void *aimInfo,
+                        aimMeshRef *meshRef,
+                        char *filename,
+                        int combine)
+{
+
+    int status; // Function return status
+
+    int i, j, k, nodeOffset=0, connectOffset=0; // Indexing
+
+    int stringLength = 7;
+
+    // Data transfer Out variables
+    char **dataOutName= NULL;
+
+    double **dataOutMatrix = NULL;
+    int *dataOutFormat = NULL;
+    int *dataConnectMatrix = NULL;
+
+    int numOutVariable = 4; // x, y, z, id
+    int numOutDataPoint = 0, numNode = 0;
+    int numOutDataConnect = 0;
+
+    // Variables used in global node mapping
+    int ptype, pindex;
+    double xyz[3];
+
+    double *dxyz = NULL;
+
+    int iface;
+    int state, nFace;
+    ego body, *faces=NULL;
+
+    int alen, ntri, atype, itri, ielem;
+    const double *face_xyz, *face_uv, *reals;
+    const int *face_ptype, *face_pindex, *face_tris, *face_tric, *nquad=NULL;
+    const char *string;
+
+    char message[100];
+    char *fileExt = ".dat";
+    char *fileBody = "_body";
+    char *fname = NULL;
+    char zoneTitle[100];
+
+      // Allocate our names
+    AIM_ALLOC(dataOutName, numOutVariable, char*, aimInfo, status);
+    for (i = 0; i < numOutVariable; i++) dataOutName[i] = NULL;
+
+    stringLength = 11;
+
+    for (i = 0; i < numOutVariable; i++) {
+
+        AIM_ALLOC(dataOutName[i], stringLength+1, char, aimInfo, status);
+
+        // Set names
+        if      (i == 0) snprintf(dataOutName[i], stringLength+1, "%s", "x");
+        else if (i == 1) snprintf(dataOutName[i], stringLength+1, "%s", "y");
+        else if (i == 2) snprintf(dataOutName[i], stringLength+1, "%s", "z");
+        else             snprintf(dataOutName[i], stringLength+1, "%s", "id");
+    }
+
+    // Allocate our variable type
+    AIM_ALLOC(dataOutFormat, numOutVariable, int, aimInfo, status);
+
+    // Set data out formatting
+    for (i = 0; i < numOutVariable; i++) {
+        if (strcasecmp(dataOutName[i], "id") == 0) {
+            dataOutFormat[i] = (int) Integer;
+        } else {
+            dataOutFormat[i] = (int) Double;
+        }
+    }
+
+    // Allocate data arrays that are going to be output
+    AIM_ALLOC(dataOutMatrix, numOutVariable, double*, aimInfo, status);
+    for (i = 0; i < numOutVariable; i++) dataOutMatrix[i] = NULL;
+
+    // Loop through bodies
+    for (i = 0; i < meshRef->nmap; i++) {
+        if (meshRef->maps[i].tess != NULL) {
+
+            //
+            // Get node locations and global index
+            //
+
+            status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &numNode);
+            AIM_STATUS(aimInfo, status);
+
+            if (combine == (int) true) numOutDataPoint += numNode;
+            else                       numOutDataPoint = numNode;
+
+            // Allocate data arrays
+            for (j = 0; j < numOutVariable; j++) {
+                AIM_REALL(dataOutMatrix[j], numOutDataPoint, double, aimInfo, status);
+            }
+
+            for (j = 0; j < numNode; j++) {
+                status = EG_getGlobal(meshRef->maps[i].tess, j+1, &ptype, &pindex, xyz);
+                AIM_STATUS(aimInfo, status);
+
+                // First just set the Coordinates
+                dataOutMatrix[0][j+nodeOffset] = xyz[0];
+                dataOutMatrix[1][j+nodeOffset] = xyz[1];
+                dataOutMatrix[2][j+nodeOffset] = xyz[2];
+
+                // Volume mesh node ID
+                dataOutMatrix[3][j+nodeOffset] = meshRef->maps[i].map[j];
+            }
+
+            //
+            // Get connectivity
+            //
+
+            // check if the tessellation has a mixture of quad and tess
+            status = EG_attributeRet(meshRef->maps[i].tess, ".mixed", &atype, &alen, &nquad, &reals, &string);
+            if (status != EGADS_SUCCESS &&
+                status != EGADS_NOTFOUND) AIM_STATUS(aimInfo, status);
+
+            status = EG_getBodyTopos(body, NULL, FACE, &nFace, &faces);
+            AIM_STATUS(aimInfo, status);
+
+            ielem = 0;
+
+            for (iface = 0; iface < nFace; iface++) {
+                // get the face tessellation
+                status = EG_getTessFace(meshRef->maps[i].tess, iface+1, &alen, &face_xyz, &face_uv,
+                                        &face_ptype, &face_pindex, &ntri, &face_tris, &face_tric);
+                AIM_STATUS(aimInfo, status);
+
+                if (nquad == NULL) { // all triangles
+
+                    // re-allocate data arrays
+                    AIM_REALL(dataConnectMatrix, 4*(numOutDataConnect + ntri), int, aimInfo, status);
+
+                    for (itri = 0; itri < ntri; itri++, ielem++) {
+                        for (j = 0; j < 3; j++) {
+                            status = EG_localToGlobal(meshRef->maps[i].tess, iface+1, face_tris[3*itri+j], &k);
+                            AIM_STATUS(aimInfo, status);
+
+                            dataConnectMatrix[4*(ielem+connectOffset)+j] = k+nodeOffset;
+                        }
+                        // repeat the last node for triangles
+                        dataConnectMatrix[4*(ielem+connectOffset)+3] = dataConnectMatrix[4*(ielem+connectOffset)+2];
+                    }
+
+                    numOutDataConnect += ntri;
+
+                } else { // mixture of tri and quad elements
+
+                    // re-allocate data arrays
+                    AIM_REALL(dataConnectMatrix, 4*(numOutDataConnect + ntri-nquad[iface]), int, aimInfo, status);
+
+                    // process triangles
+                    for (itri = 0; itri < ntri-2*nquad[iface]; itri++, ielem++) {
+                        for (j = 0; j < 3; j++) {
+                            status = EG_localToGlobal(meshRef->maps[i].tess, iface+1, face_tris[3*itri+j], &k);
+                            AIM_STATUS(aimInfo, status);
+
+                            dataConnectMatrix[4*(ielem+connectOffset)+j] = k+nodeOffset;
+                        }
+                        // repeat the last node for triangle
+                        dataConnectMatrix[4*(ielem+connectOffset)+3] = dataConnectMatrix[4*(ielem+connectOffset)+2];
+                    }
+                    // process quads
+                    for (; itri < ntri; itri++, ielem++) {
+                        for (j = 0; j < 3; j++) {
+                            status = EG_localToGlobal(meshRef->maps[i].tess, iface+1, face_tris[3*itri+j], &k);
+                            AIM_STATUS(aimInfo, status);
+
+                            dataConnectMatrix[4*(ielem+connectOffset)+j] = k+nodeOffset;
+                        }
+
+                        // add the last node from the 2nd triangle to make the quad
+                        itri++;
+                        status = EG_localToGlobal(meshRef->maps[i].tess, iface+1, face_tris[3*itri+2], &k);
+                        AIM_STATUS(aimInfo, status);
+
+                        dataConnectMatrix[4*(ielem+connectOffset)+3] = k+nodeOffset;
+                    }
+
+                    numOutDataConnect += ntri-nquad[iface];
+                }
+            }
+
+            AIM_FREE(faces);
+
+
+            // Write file
+            if (combine == (int) true) {
+
+                nodeOffset = numOutDataPoint;
+                connectOffset = numOutDataConnect;
+
+                /// Need to keep writing - otherwise may never write if the last ->tess is null
+                //if (i < meshRef->nmap - 1) continue; // Do NOT write a mesh until the last body
+
+                snprintf(message,100,"surface file for %d (of %d) in body 1", 1, meshRef->nmap);
+
+                stringLength = strlen(filename) + strlen("fileBody") + 7 + strlen(fileExt) + 1 ;
+
+                AIM_REALL(fname, stringLength, char, aimInfo, status);
+
+                snprintf(fname, stringLength, "%s%s%d%s",  filename, fileBody, 1, fileExt);
+
+                snprintf(zoneTitle,100, "%s_%d", "Body", 1);
+
+            } else {
+
+                nodeOffset = 0;
+                connectOffset = 0;
+
+                snprintf(message,100,"surface file for body %d (of %d)", i+1, meshRef->nmap);
+
+                stringLength = strlen(filename) + strlen("fileBody") + 7 + strlen(fileExt) + 1 ;
+
+                AIM_REALL(fname, stringLength, char, aimInfo, status);
+
+                snprintf(fname, stringLength, "%s%s%d%s",  filename, fileBody, i+1, fileExt);
+
+                snprintf(zoneTitle,100, "%s_%d", "Body", i+1);
+
+            }
+
+            /*@-nullpass@*/
+            status = tecplot_writeFEPOINT(aimInfo,
+                                          fname,
+                                          message,
+                                          zoneTitle,
+                                          numOutVariable,
+                                          dataOutName,
+                                          numOutDataPoint,
+                                          dataOutMatrix,
+                                          dataOutFormat,
+                                          numOutDataConnect,
+                                          dataConnectMatrix,
+                                          NULL);
+            /*@+nullpass@*/
+            AIM_STATUS(aimInfo, status);
+
+            if (combine == (int) false) numOutDataConnect = 0; // Reset counter
+        }
+    }
+
+    status = CAPS_SUCCESS;
+
+cleanup:
+
+    (void) string_freeArray(numOutVariable, &dataOutName);
+#ifdef S_SPLINT_S
+    EG_free(dataOutName);
+#endif
+
+    if (dataOutMatrix != NULL) {
+        for (i = 0; i < numOutVariable; i++) {
+            AIM_FREE(dataOutMatrix[i]);
+        }
+    }
+
+    AIM_FREE(dataOutMatrix);
+    AIM_FREE(dataOutFormat);
+    AIM_FREE(dataConnectMatrix);
+    AIM_FREE(faces);
+
+    AIM_FREE(dxyz);
+    AIM_FREE(fname);
 
     return status;
 }
@@ -2523,7 +2798,7 @@ cleanup:
 }
 
 // Finds a line in rubber.data that matches header
-static int findHeader(const char *header, char **line, size_t *nline, int *iline, FILE *fp)
+static int _findHeader(const char *header, char **line, size_t *nline, int *iline, FILE *fp)
 {
     int i;
     while (getline(line, nline, fp) != -1) {
@@ -2579,7 +2854,7 @@ int fun3d_readRubber(void *aimInfo,
 
     for (i = 0; i < design.numDesignFunctional; i++) {
 
-        status = findHeader("Current value of function", &line, &nline, &iline, fp);
+        status = _findHeader("Current value of function", &line, &nline, &iline, fp);
         AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
 
         // Get the line with the objective value
@@ -2718,13 +2993,13 @@ int fun3d_readRubber(void *aimInfo,
         for (ibody = 0; ibody < numBody; ibody++) {
 
           // Rigid motion design variables
-          status = findHeader("Current derivatives of", &line, &nline, &iline, fp);
+          status = _findHeader("Current derivatives of", &line, &nline, &iline, fp);
           AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
 
           // Skip reading rigid motion design variables for now
-          
+
           // Read shape design variables
-          status = findHeader("Current derivatives of", &line, &nline, &iline, fp);
+          status = _findHeader("Current derivatives of", &line, &nline, &iline, fp);
           AIM_STATUS(aimInfo, status, "rubber.data line %d", iline);
 
           for (j = 0; j < design.designFunctional[i].numDesignVariable; j++) {
@@ -2779,7 +3054,7 @@ int fun3d_makeDirectory(void *aimInfo)
     AIM_STATUS(aimInfo, status);
 
     // Datafiles
-    sprintf(filename, "%s/%s", flow, datafile);
+    snprintf(filename, PATH_MAX, "%s/%s", flow, datafile);
     status = aim_mkDir(aimInfo, filename);
     AIM_STATUS(aimInfo, status);
 
@@ -2795,4 +3070,73 @@ int fun3d_makeDirectory(void *aimInfo)
 
 cleanup:
     return status;
+}
+
+
+// Map the old surface tessellation on to the new bodies
+int fun3d_morphMeshUpdate(void *aimInfo,  aimMeshRef *meshRef, int numBody, ego *bodies)
+{
+    int status = CAPS_SUCCESS;
+    int i=0;
+    int state, numVert;
+    ego bodyMapping;
+    ego body, tessbody;
+    ego tess;
+
+    // Have the number of bodies changed?
+    if (meshRef->nmap != numBody) {
+        AIM_ERROR(aimInfo, "The number of original surface meshes does NOT equal the number of current bodies!\n");
+        status = CAPS_MISMATCH;
+        goto cleanup;
+    }
+
+    // Are the bodies topological equivalent?
+    for (i = 0; i < meshRef->nmap; i++) {
+
+        status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &numVert);
+        AIM_STATUS(aimInfo, status);
+
+        status = EG_mapBody(body, bodies[i], "_faceID",  &bodyMapping); // "_faceID" - same as in OpenCSM
+        if (status != EGADS_SUCCESS || bodyMapping != NULL) {
+
+            AIM_ERROR(aimInfo, "New and old body %d (of %d) do not appear to be topologically equivalent!", i+1, meshRef->nmap);
+
+            if (bodyMapping != NULL) {
+                AIM_ADDLINE(aimInfo, "Body mapping isn't NULL!");
+            }
+
+            status = CAPS_MISMATCH;
+            goto cleanup;
+        }
+    }
+
+    // Now lets "tweak" the surface tessellation - map the old tessellation to the new bodies
+    for (i = 0; i < meshRef->nmap; i++) {
+
+        status = EG_statusTessBody(meshRef->maps[i].tess, &tessbody, &state, &numVert);
+        AIM_STATUS(aimInfo, status);
+
+        // nothing to do if bodies are the same
+        if (tessbody == bodies[i]) continue;
+
+        printf("Projecting tessellation %d (of %d) on to new body\n", i+1, meshRef->nmap);
+
+        status = EG_mapTessBody(meshRef->maps[i].tess,
+                                bodies[i],
+                                &tess);
+        AIM_STATUS(aimInfo, status);
+
+        if (meshRef->_delTess == (int)true) {
+            EG_deleteObject(meshRef->maps[i].tess);
+            EG_deleteObject(tessbody);
+        }
+        meshRef->maps[i].tess = tess;
+        status = aim_newTess(aimInfo, tess);
+        AIM_STATUS(aimInfo, status);
+    }
+
+    meshRef->_delTess = (int)false;
+
+    cleanup:
+        return status;
 }

@@ -1,7 +1,7 @@
 /*
  *      CAPS: Computational Aircraft Prototype Syntheses
  *
- *             Testing AIM 3D Mesh Writer Example Code
+ *             ugrid 3D Mesh Writer Code
  *
  *      Copyright 2014-2022, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1

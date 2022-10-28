@@ -231,6 +231,9 @@ int retrieve_CAPSConnectLinkAttr(ego geomEntity, const char **string);
 // Retrieve the string following a capsResponse tag
 int retrieve_CAPSResponseAttr(ego geomEntity, const char **string);
 
+// Retrieve the string following a capsReference tag
+int retrieve_CAPSReferenceAttr(ego geomEntity, const char **string);
+
 // Retrieve the value following a capsDiscipline
 int retrieve_CAPSDisciplineAttr(ego geomEntity, const char **string);
 
@@ -272,6 +275,9 @@ int create_CAPSConnectAttrToIndexMap(int numBody, ego bodies[], int attrLevel,
 // Create a mapping between unique capsResponse attribute names and an index value
 int create_CAPSResponseAttrToIndexMap(int numBody, ego bodies[], int attrLevel,
                                       mapAttrToIndexStruct *attrMap);
+
+// Create a mapping between unique capsReference attribute names and an index value
+int create_CAPSReferenceAttrToIndexMap(int numBody, ego bodies[], int attrLevel, mapAttrToIndexStruct *attrMap);
 
 // Create a mapping between unique capsMesh attribute names and an index value
 int create_CAPSMeshAttrToIndexMap(int numBody, ego bodies[], int attrLevel,

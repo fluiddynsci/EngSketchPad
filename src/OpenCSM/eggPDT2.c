@@ -446,7 +446,7 @@ eggGenerate(double uv[],                /* (in)  array of coordinates for Bounda
         int  indgr    = 1+2+4+16+64;
         char pltitl[80];
 
-        sprintf(pltitl, "~u~v~after pass %3d", ipass);
+        snprintf(pltitl, 79, "~u~v~after pass %3d", ipass);
 
         grctrl_(plotGrid, &indgr, pltitl,
                 (void*)(grid),

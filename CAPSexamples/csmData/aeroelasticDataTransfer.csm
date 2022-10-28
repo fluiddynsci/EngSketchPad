@@ -116,7 +116,7 @@ store     OML
     rotatex   90   0   0
    
     select body
-   	attribute capsIntent $STRUCTURE #FEA Analysis (2D elements)
+   	attribute capsIntent $Structure #FEA Analysis (2D elements)
    	attribute capsAIM $nastranAIM;astrosAIM;mystranAIM
    	
     udprim editAttr filename <<
@@ -158,5 +158,5 @@ store     OML
     #Rotate the body to put it in the typical aero-coordinate system
     rotatex   90   0   0
     
-    attribute capsIntent $CFD #CFD Analysis
+    attribute capsIntent $Aerodynamic #CFD Analysis
     attribute capsAIM $fun3dAIM;su2AIM;egadsTessAIM;aflr4AIM;tetgenAIM;aflr3AIM #CFD Analysis

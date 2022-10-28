@@ -107,6 +107,9 @@ caps_initFunIDs()
   caps_funID[CAPS_LINKVALUE     ] = "linkValue";
   caps_funID[CAPS_HASDERIV      ] = "hasDeriv";
   caps_funID[CAPS_GETDERIV      ] = "getDeriv";
+  caps_funID[CAPS_GETVALUESIZE  ] = "getValueSize";
+  caps_funID[CAPS_SETSTEPSIZE   ] = "setStepSize";
+  caps_funID[CAPS_GETSTEPSIZE   ] = "getStepSize";
 /*@+observertrans@*/
 
 }

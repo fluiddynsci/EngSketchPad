@@ -1139,10 +1139,9 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
         stringLength = strlen(delaundoInstance->meshInput.outputFileName) +
                        strlen(fileExt) + 1;
 
-        AIM_ALLOC(filename, stringLength+1, char, aimInfo, status);
+        AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-        sprintf(filename, "%s%s", delaundoInstance->meshInput.outputFileName, fileExt);
-        filename[stringLength] = '\0';
+        snprintf(filename, stringLength, "%s%s", delaundoInstance->meshInput.outputFileName, fileExt);
 
         fp = aim_fopen(aimInfo, filename, "w");
         if (fp == NULL) {
@@ -1406,12 +1405,11 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
     delaundoInstance = (aimStorage *) instStore;
 
     stringLength  = strlen(delaundoInstance->meshInput.outputFileName) +
-                    strlen(fileExt);
+                    strlen(fileExt) + 1;
 
-    AIM_ALLOC(filename, stringLength + 1, char, aimInfo, status);
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-    sprintf(filename, "%s%s", delaundoInstance->meshInput.outputFileName,fileExt);
-    filename[stringLength] = '\0';
+    snprintf(filename, stringLength, "%s%s", delaundoInstance->meshInput.outputFileName,fileExt);
 
     printf("Reading delaundo mesh file - %s\n", filename);
 
@@ -1592,7 +1590,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
         for (surf = 0; surf < delaundoInstance->numSurface; surf++) {
 
             if (delaundoInstance->numSurface > 1) {
-                sprintf(bodyNumber, "%d", surf);
+                snprintf(bodyNumber, 11, "%d", surf);
                 filename = (char *) EG_alloc((strlen(delaundoInstance->meshInput.outputFileName)  +
                                               strlen("_Surf_") + 2 +
                                               strlen(bodyNumber))*sizeof(char));

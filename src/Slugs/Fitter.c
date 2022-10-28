@@ -2600,8 +2600,8 @@ plotCurve(int    m,                     /* (in)  number of points in cloud */
 
     /* --------------------------------------------------------------- */
 
-    sprintf(pltitl, "~x~y~ m=%d,  n=%d,  normf=%.7f,  dotmin=%.4f,  nmin=%d",
-            m, n, normf, dotmin, nmin);
+    snprintf(pltitl, 254, "~x~y~ m=%d,  n=%d,  normf=%.7f,  dotmin=%.4f,  nmin=%d",
+             m, n, normf, dotmin, nmin);
 
     grctrl_(plotCurve_image, &indgr, pltitl,
             (void*)(&itype),
@@ -2648,8 +2648,8 @@ plotSurface(int    m,                   /* (in)  number of points in cloud */
 
     /* --------------------------------------------------------------- */
 
-    sprintf(pltitl, "~x~y~ m=%d,  n=%d,  normf=%.7f,  nmin=%d",
-            m, n, normf, nmin);
+    snprintf(pltitl, 254, "~x~y~ m=%d,  n=%d,  normf=%.7f,  nmin=%d",
+             m, n, normf, nmin);
 
     grctrl_(plotSurface_image, &indgr, pltitl,
             (void*)(&m),

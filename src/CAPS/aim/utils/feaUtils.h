@@ -21,6 +21,7 @@ int fea_createMesh(void *aimInfo,
                    mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                    mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
                    mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
+       /*@null@*/  mapAttrToIndexStruct *referenceMap,  // (in)  map from CAPSReference names to indexes
                    int *numMesh,                        // (out) total number of FEA mesh structures
                    meshStruct **feaMesh,                // (out) FEA mesh structure
                    feaProblemStruct *feaProblem );      // (out) FEA problem structure
@@ -41,6 +42,7 @@ int fea_bodyToBEM(void *aimInfo,                       // (in)  AIM structure
                   mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                   mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
                   mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
+                  mapAttrToIndexStruct *referenceMap,   // (in)  map from CAPSReference names to indexes
                   meshStruct *feaMesh);                // (out) FEA mesh structure
 
 // Set the fea analysis meta data in a mesh
@@ -52,6 +54,7 @@ int fea_setAnalysisData( void *aimInfo,                       // (in)  AIM struc
                          mapAttrToIndexStruct *transferMap,   // (in)  map from CAPSTransfer names to indexes
                          mapAttrToIndexStruct *connectMap,    // (in)  map from CAPSConnect names to indexes
                          mapAttrToIndexStruct *responseMap,   // (in)  map from CAPSResponse names to indexes
+                         mapAttrToIndexStruct *referenceMap,   // (in)  map from CAPSReference names to indexes
                          meshStruct *feaMesh);                // (in/out) FEA mesh structure
 
 // Set feaData for a given point index and topology index. Ego faces, edges, and nodes must be provided along with attribute maps
@@ -63,6 +66,7 @@ int fea_setFEADataPoint(ego *faces, ego *edges, ego *nodes,
                         mapAttrToIndexStruct *transferMap,
                         mapAttrToIndexStruct *connectMap,
                         mapAttrToIndexStruct *responseMap,  
+                        mapAttrToIndexStruct *referenceMap,
                         int pointType, int pointTopoIndex,
                         feaMeshDataStruct *feaData);// Set the feaData structure
 
@@ -122,7 +126,8 @@ int fea_getDesignVariable(void *aimInfo,
                           feaProblemStruct *feaProblem);
 
 // Get a design variable relation from a capsTuple key value pair
-int fea_getDesignVariableRelationEntry(capsTuple *designVariableInput, 
+int fea_getDesignVariableRelationEntry(void *aimInfo,
+                                       capsTuple *designVariableInput, 
                                        feaDesignVariableRelationStruct *designVariableRelation,
                                        mapAttrToIndexStruct *attrMap,
                                        feaProblemStruct *feaProblem,
@@ -133,6 +138,10 @@ int fea_getDesignConstraint(int numDesignConstraintTuple,
                             capsTuple designConstraintTuple[],
                             feaProblemStruct *feaProblem);
 
+// Get the optimization control from a capsTuple
+int fea_getOptimizationControl(char *numOptimizationControlInput,
+                               feaProblemStruct *feaProblem);
+                                                        
 /// Get the coordinate system information from the bodies and an attribute map (of CoordSystem)
 int fea_getCoordSystem(int numBody,
                        ego bodies[],
@@ -160,6 +169,11 @@ int fea_getDesignResponse(int numDesignResponseTuple,
 int fea_getDesignEquationResponse(int numDesignEquationResponseTuple,
                                   capsTuple designEquationResponseTuple[],
                                   feaProblemStruct *feaProblem);
+
+// Get aero reference information from json dict
+int fea_getAeroReference(char *aeroRefInput, 
+                         mapAttrToIndexStruct *attrMap, 
+                         feaProblemStruct *feaProblem);
 
 // Get the design optimization parameters from a capsTuple
 int fea_getDesignOptParam(int numOptParam,
@@ -211,6 +225,22 @@ int fea_findEquationResponsesByNames(const feaProblemStruct *feaProblem,
 int fea_findEquationByName(const feaProblemStruct *feaProblem,
                            char *equationName, 
                            feaDesignEquationStruct **equation);
+
+// Find vlmControlStruct with given controlSurfName in feaProblem
+// Returns borrowed pointer
+int fea_findControlSurfaceByName(const feaProblemStruct *feaProblem,
+                                 char *controlSurfName,
+                                 vlmControlStruct **controlSurf);
+
+// Find feaDesignConstraintStruct with given constraintType in feaProblem
+// Returns borrowed pointer
+int fea_findDesignConstraintByType(const feaProblemStruct *feaProblem,
+                                   feaDesignConstraintTypeEnum constraintType, 
+                                   feaDesignConstraintStruct **designConstraint);
+
+// Populate the feaDesignVariable.relationSet and feaDesignVariableRelation.variableSet members
+// in all feaDesignVariables and feaDesignVariableRelations
+int fea_linkDesignVariablesAndRelations(const feaProblemStruct *feaProblem);
 
 // Initiate (0 out all values and NULL all pointers) of feaProperty in the feaPropertyStruct structure format
 int initiate_feaPropertyStruct(feaPropertyStruct *feaProperty);
@@ -281,6 +311,12 @@ int initiate_feaDesignConstraintStruct(feaDesignConstraintStruct *feaDesignConst
 
 // Destroy (0 out all values and NULL all pointers) of feaDesignConstraint in the feaDesignConstraintStruct structure format
 int destroy_feaDesignConstraintStruct(feaDesignConstraintStruct *feaDesignConstraint);
+
+// Initiate (0 out all values and NULL all pointers) of feaOptimizationControl in the feaOptimizationControlStructStruct structure format
+int initiate_feaOptimizationControlStruct(feaOptimizationControlStruct *feaOptimizationControl);
+
+// Destroy (0 out all values and NULL all pointers) of feaOptimizationControl in the feaOptimizationControlStructStruct structure format
+int destroy_feaOptimzationControlStruct(feaOptimizationControlStruct *feaOptimizationControl);
 
 // Initiate (0 out all values and NULL all pointers) of feaCoordSystem in the feaCoordSystemStruct structure format
 int initiate_feaCoordSystemStruct(feaCoordSystemStruct *feaCoordSystem);
@@ -367,6 +403,9 @@ int fea_glueMesh(meshStruct *mesh,
 
 // Create a default analysis structure based on previous inputs
 int fea_createDefaultAnalysis(feaProblemStruct *feaProblem, const char *analysisType);
+
+// Setup the default flutter velocities  if not specified
+int fea_defaultFlutterVelocity(feaAnalysisStruct *feaAnalysis);
 
 #ifdef __cplusplus
 }

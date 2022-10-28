@@ -124,6 +124,7 @@ static int destroy_aimStorage(aimStorage *tetgenInstance)
     for (i = 0; i < tetgenInstance->numMeshRef; i++)
       aim_freeMeshRef(&tetgenInstance->meshRef[i]);
     AIM_FREE(tetgenInstance->meshRef);
+    tetgenInstance->numMeshRef = 0;
 
     return CAPS_SUCCESS;
 }
@@ -259,8 +260,7 @@ aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, int index,
     } else if (index == Mesh_Format) {
         *ainame               = EG_strdup("Mesh_Format");
         defval->type          = String;
-        defval->vals.string   = EG_strdup("AFLR3"); // TECPLOT, VTK, AFLR3, SU2, NASTRAN
-        defval->lfixed        = Change;
+        AIM_STRDUP(defval->vals.string, "AFLR3", aimInfo, status); // TECPLOT, VTK, AFLR3, SU2, NASTRAN
 
         /*! \page aimInputsTetGen
          * - <B> Mesh_Format = "AFLR3"</B> <br>
@@ -280,7 +280,7 @@ aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, int index,
         defval->type          = String;
         defval->nullVal       = IsNull;
         defval->vals.string   = NULL;
-        defval->lfixed       = Change;
+        defval->lfixed        = Change;
 
         /*! \page aimInputsTetGen
          * - <B> Mesh_Gen_Input_String = NULL</B> <br>
@@ -313,13 +313,17 @@ aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, int index,
          */
     } else if (index == Multiple_Mesh) {
         *ainame               = EG_strdup("Multiple_Mesh");
-        defval->type          = Boolean;
-        defval->vals.integer  = (int) false;
+        defval->type          = String;
+        AIM_STRDUP(defval->vals.string, "SingleDomain", aimInfo, status);
 
         /*! \page aimInputsTetGen
-         * - <B> Multiple_Mesh = False</B> <br>
-         * If set to True a volume will be generated for each body. When set to False (default value) only a single volume
-         * mesh will be created.
+         * - <B> Multiple_Mesh = "SingleDomain"</B> <br>
+         * If "SingleDomain": Generate a single volume mesh file is assuming multiple
+         * bodies define a single computational domain (i.e. CFD)<br>
+         * <br>
+         * If "MultiFile": Generate a volume mesh file for each body.<br>
+         * <br>
+         * If "MultiDomain": Generate a single mesh file containing multiple volume meshes for each body.<br>
          */
 
     } else if (index == Regions) {
@@ -437,6 +441,14 @@ aimUpdateState(void *instStore, void *aimInfo, capsValue *aimInputs)
         return CAPS_SOURCEERR;
     }
 
+    if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") != 0 &&
+        strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") != 0 &&
+        strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiDomain") != 0) {
+        AIM_ERROR(aimInfo, "Multiple_Mesh = '%s' must be 'SingleDomain', 'MultiFile', or 'MultiDomain'", aimInputs[Multiple_Mesh-1].vals.string);
+        status = CAPS_BADVALUE;
+        goto cleanup;
+    }
+
     // Get capsGroup name and index mapping
     status = create_CAPSGroupAttrToIndexMap(numBody,
                                             bodies,
@@ -464,7 +476,8 @@ aimUpdateState(void *instStore, void *aimInfo, capsValue *aimInputs)
     tetgenInstance->meshInput.tetgenInput.meshTolerance        = aimInputs[Mesh_Tolerance-1].vals.real;
 
     if (aimInputs[Regions-1].nullVal != IsNull) {
-      populate_regions(&tetgenInstance->meshInput.tetgenInput.regions,
+      populate_regions(aimInfo,
+                       &tetgenInstance->meshInput.tetgenInput.regions,
                        aimInputs[Regions-1].length,
                        aimInputs[Regions-1].vals.tuple);
     }
@@ -513,6 +526,10 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     int numVolumeMesh = 0;
     meshStruct *volumeMesh = NULL;
 
+    // Attribute to index map
+    mapAttrToIndexStruct groupMap;
+    int lastAttr = 0;
+
     // Meshing related variables
     meshElementStruct *element;
 
@@ -520,12 +537,16 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     int     bodyBoundingBox = 0;
 
     int numElementCheck;
+    int MultiMesh = 0;
 
     // File ouput
-    char *filename=NULL;
+    char filename[PATH_MAX];
     char bodyNumberFile[42];
     char aimFile[PATH_MAX];
     FILE *fp;
+
+    status = initiate_mapAttrToIndexStruct(&groupMap);
+    AIM_STATUS(aimInfo, status);
 
     // Get AIM bodies
     status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
@@ -564,26 +585,20 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
         return CAPS_SOURCEERR;
     }
 
-    // Create/setup volume meshes
-    if (aimInputs[Multiple_Mesh-1].vals.integer == (int) true) {
-
-        AIM_ALLOC(volumeMesh, numBody, meshStruct, aimInfo, status);
-        numVolumeMesh = numBody;
-
-        for (ibody = 0; ibody < numVolumeMesh; ibody++) {
-            status = initiate_meshStruct(&volumeMesh[ibody]);
-            AIM_STATUS(aimInfo, status);
-
-            // Set reference mesh - One surface per body
-            volumeMesh[ibody].numReferenceMesh = 1;
-            AIM_ALLOC(volumeMesh[ibody].referenceMesh, volumeMesh[ibody].numReferenceMesh, meshStruct, aimInfo, status);
-
-            volumeMesh[ibody].referenceMesh[0] = surfaceMesh[ibody];
-            printf("Tetgen MultiMesh TopoIndex = %d\n",
-                   volumeMesh[0].referenceMesh[0].element[0].topoIndex);
-        }
-
+    if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
+      MultiMesh = 0;
+    } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") == 0) {
+      MultiMesh = 1;
+    } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiDomain") == 0) {
+      MultiMesh = 2;
     } else {
+      AIM_ERROR(aimInfo, "Developer error! Unkown Multiple_Mesh %s", aimInputs[Multiple_Mesh-1].vals.string);
+      status = CAPS_BADVALUE;
+      goto cleanup;
+    }
+
+    // Create/setup volume meshes
+    if (MultiMesh == 0) {
 
         // Determine which body is the bounding body based on size
         bodyBoundingBox = 0;
@@ -661,44 +676,128 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
         }
 
          // Report surface mesh
-        printf("Number of surface nodes - %d\n",
-               volumeMesh[0].numNode);
-        printf("Number of surface elements - %d\n",
-               volumeMesh[0].numElement);
+        printf("Number of surface: nodes - %d, elements - %d\n",
+               volumeMesh[0].numNode, volumeMesh[0].numElement);
+
+    } else if (MultiMesh == 1) {
+
+         AIM_ALLOC(volumeMesh, numBody, meshStruct, aimInfo, status);
+         numVolumeMesh = numBody;
+
+         for (ibody = 0; ibody < numVolumeMesh; ibody++) {
+             status = initiate_meshStruct(&volumeMesh[ibody]);
+             AIM_STATUS(aimInfo, status);
+
+             // Set reference mesh - One surface per body
+             volumeMesh[ibody].numReferenceMesh = 1;
+             AIM_ALLOC(volumeMesh[ibody].referenceMesh, volumeMesh[ibody].numReferenceMesh, meshStruct, aimInfo, status);
+
+             volumeMesh[ibody].referenceMesh[0] = surfaceMesh[ibody];
+
+             // Report surface mesh
+             printf("Body %d number of surface: nodes - %d, elements - %d\n",
+                    ibody+1, surfaceMesh[ibody].numNode, surfaceMesh[ibody].numElement);
+         }
+
+    } else if (MultiMesh == 2) {
+
+        numVolumeMesh = 1;
+        AIM_ALLOC(volumeMesh, numVolumeMesh, meshStruct, aimInfo, status);
+
+        status = initiate_meshStruct(&volumeMesh[0]);
+        AIM_STATUS(aimInfo, status);
+
+        // Set reference meshes
+        volumeMesh[0].numReferenceMesh = numBody;
+        AIM_ALLOC(volumeMesh[0].referenceMesh, volumeMesh[0].numReferenceMesh, meshStruct, aimInfo, status);
+
+        for (ibody = 0; ibody < numBody; ibody++) {
+            volumeMesh[0].referenceMesh[ibody] = surfaceMesh[ibody];
+
+            // Report surface mesh
+            printf("Body %d number of surface: nodes - %d, elements - %d\n",
+                   ibody+1, surfaceMesh[ibody].numNode, surfaceMesh[ibody].numElement);
+        }
+
     }
 
     // Call tetgen volume mesh interface
-    for (ibody = 0; ibody < numVolumeMesh; ibody++) {
+    if (MultiMesh == 0) {
+        printf("Getting volume mesh\n");
 
-        snprintf(bodyNumberFile, 42, "tetgen_%d", ibody);
-        status = aim_file(aimInfo, bodyNumberFile, aimFile);
+        status = aim_file(aimInfo, "tetgen_0", aimFile);
         AIM_STATUS(aimInfo, status);
 
-        // Call tetgen volume mesh interface for each body
-        if (numVolumeMesh > 1) {
-            printf("Getting volume mesh for body %d (of %d)\n", ibody+1, numBody);
-
-            status = tetgen_VolumeMesh(aimInfo,
-                                       tetgenInstance->meshInput,
-                                       aimFile,
-                                      &volumeMesh[ibody].referenceMesh[0],
-                                      &volumeMesh[ibody]);
-        } else {
-            printf("Getting volume mesh\n");
-
-            status = tetgen_VolumeMesh(aimInfo,
-                                       tetgenInstance->meshInput,
-                                       aimFile,
-                                      &volumeMesh[ibody],
-                                      &volumeMesh[ibody]);
-        }
+        status = tetgen_VolumeMesh(aimInfo,
+                                   tetgenInstance->meshInput,
+                                   &tetgenInstance->groupMap,
+                                   aimFile,
+                                   1,
+                                   &volumeMesh[0],
+                                   &volumeMesh[0]);
 
         if (status != CAPS_SUCCESS) {
-            if (numVolumeMesh > 1) {
-              AIM_ERROR(aimInfo, "TetGen volume mesh failed on body - %d!!!!", ibody+1);
-            } else {
-              AIM_ERROR(aimInfo, "TetGen volume mesh failed!!!!");
-            }
+            AIM_ERROR(aimInfo, "TetGen volume mesh failed!!!!");
+            goto cleanup;
+        }
+
+    } else if (MultiMesh == 1) {
+
+      for (ibody = 0; ibody < numVolumeMesh; ibody++) {
+
+          snprintf(bodyNumberFile, 42, "tetgen_%d", ibody);
+          status = aim_file(aimInfo, bodyNumberFile, aimFile);
+          AIM_STATUS(aimInfo, status);
+
+          // Call tetgen volume mesh interface for each body
+          printf("Getting volume mesh for body %d (of %d)\n", ibody+1, numBody);
+
+          // Get capsGroup name and index mapping
+          status = create_CAPSGroupAttrToIndexMap(1,
+                                                  &bodies[ibody],
+                                                  1, // Only search down to the face level of the EGADS body
+                                                  &groupMap);
+          AIM_STATUS(aimInfo, status);
+
+          for (i = 0; i < groupMap.numAttribute; i++) {
+            groupMap.attributeIndex[i] += lastAttr;
+          }
+
+          status = tetgen_VolumeMesh(aimInfo,
+                                     tetgenInstance->meshInput,
+                                     &groupMap,
+                                     aimFile,
+                                     1,
+                                     &volumeMesh[ibody].referenceMesh[0],
+                                     &volumeMesh[ibody]);
+
+          if (status != CAPS_SUCCESS) {
+            AIM_ERROR(aimInfo, "TetGen volume mesh failed on body - %d!!!!", ibody+1);
+            goto cleanup;
+          }
+
+          lastAttr = groupMap.attributeIndex[groupMap.numAttribute-1];
+
+          status = destroy_mapAttrToIndexStruct(&groupMap);
+          AIM_STATUS(aimInfo, status);
+      }
+
+    } else if (MultiMesh == 2) {
+        printf("Getting volume mesh\n");
+
+        status = aim_file(aimInfo, "tetgen_0", aimFile);
+        AIM_STATUS(aimInfo, status);
+
+        status = tetgen_VolumeMesh(aimInfo,
+                                   tetgenInstance->meshInput,
+                                   &tetgenInstance->groupMap,
+                                   aimFile,
+                                   volumeMesh[0].numReferenceMesh,
+                                   volumeMesh[0].referenceMesh,
+                                   &volumeMesh[0]);
+
+        if (status != CAPS_SUCCESS) {
+            AIM_ERROR(aimInfo, "TetGen volume mesh failed!!!!");
             goto cleanup;
         }
     }
@@ -753,17 +852,9 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
         for (ibody = 0; ibody < numVolumeMesh; ibody++) {
 
-            if (aimInputs[Multiple_Mesh-1].vals.integer == (int) true) {
-                sprintf(bodyNumberFile, "%d", ibody);
-                AIM_ALLOC(filename, strlen(tetgenInstance->meshInput.outputFileName) + 2 +
-                                    strlen("_Vol")+strlen(bodyNumberFile), char, aimInfo, status);
-            } else {
-                AIM_ALLOC(filename, strlen(tetgenInstance->meshInput.outputFileName)+2, char, aimInfo, status);
-            }
-
             strcpy(filename, tetgenInstance->meshInput.outputFileName);
 
-            if (aimInputs[Multiple_Mesh-1].vals.integer == (int) true) {
+            if (MultiMesh == 1) {
                 strcat(filename,"_Vol");
                 strcat(filename,bodyNumberFile);
             }
@@ -822,10 +913,9 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                 status = CAPS_BADVALUE;
                 goto cleanup;
             }
-            AIM_FREE(filename);
         }
-    } else {
-        printf("No project name (\"Proj_Name\") provided - A volume mesh will not be written out\n");
+    //} else {
+    //    printf("No project name (\"Proj_Name\") provided - A volume mesh will not be written out\n");
     }
 
     status = CAPS_SUCCESS;
@@ -839,7 +929,8 @@ cleanup:
         }
         AIM_FREE(volumeMesh);
     }
-    AIM_FREE(filename);
+
+    destroy_mapAttrToIndexStruct(&groupMap);
 
     return status;
 }
@@ -889,7 +980,7 @@ aimPostAnalysis(void *instStore, void *aimInfo,
     AIM_NOTNULL(surfaceMesh, aimInfo, status);
 
     // Create/setup volume meshes
-    if (aimInputs[Multiple_Mesh-1].vals.integer == (int) true) {
+    if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") == 0) {
 
         AIM_ALLOC(tetgenInstance->meshRef, numBody, aimMeshRef, aimInfo, status);
         tetgenInstance->numMeshRef = numBody;

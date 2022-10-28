@@ -421,6 +421,7 @@ if [[ "$TYPE" == "CFD" || "$TYPE" == "ALL" ]]; then
             expectPythonSuccess "fun3d_and_AFLR2_NodeDist_PyTest.py"
             expectPythonSuccess "fun3d_and_AFLR2_PyTest.py"
             expectPythonSuccess "fun3d_and_AFLR4_AFLR3_PyTest.py"
+            expectPythonSuccess "fun3d_Morph_PyTest.py"
         fi
         if [[ `command -v delaundo` || `command -v delaundo.exe` ]]; then
             echo "delaundo: `which delaundo`"
@@ -432,6 +433,7 @@ if [[ "$TYPE" == "CFD" || "$TYPE" == "ALL" ]]; then
         fi
         expectPythonSuccess "fun3d_PyTest.py"
     else
+        expectPythonSuccess "fun3d_Morph_PyTest.py" -noAnalysis
         notRun="$notRun\nFun3D"
     fi
 
@@ -517,6 +519,14 @@ if [[ "$TYPE" == "STRUCTURE" || "$TYPE" == "ALL" ]]; then
         notRun="$notRun\nMystran"
     fi
 
+    ###### Plato ######
+    if [[ -f $ESP_ROOT/lib/exodusWriter.$EXT ]]; then
+        expectPythonSuccess "plato_table_PyTest.py"
+        expectPythonSuccess "plato_cyli_box_PyTest.py"
+    else
+        notRun="$notRun\nPlato"
+    fi
+
     testsRan=1
 fi
 
@@ -564,7 +574,7 @@ if [[ "$TYPE" == "CORSAIRLITE" || "$TYPE" == "ALL" ]]; then
     echo "Running.... CORSAIRLITE PyTests"
     echo ""
     
-    cd ../corsairlite
+    cd $regTestDir/../corsairlite
     expectPythonSuccess "gp.py"
     expectPythonSuccess "qp.py"
     expectPythonSuccess "sp.py"
@@ -574,7 +584,7 @@ if [[ "$TYPE" == "CORSAIRLITE" || "$TYPE" == "ALL" ]]; then
       expectPythonSuccess "hoburg_blackbox.py"
     fi
 
-    cd capsPhase
+    cd $regTestDir/../corsairlite/capsPhase
     rm -rf ostrich
     expectPythonSuccess "pyCAPS/sizeWing.py"
     if [[ `command -v avl` ]]; then
@@ -582,7 +592,22 @@ if [[ "$TYPE" == "CORSAIRLITE" || "$TYPE" == "ALL" ]]; then
         expectPythonSuccess "pyCAPS/optTaperAvl.py"
         expectPythonSuccess "pyCAPS/optWingAvl.py"
     fi
- 
+
+    cd $regTestDir/../corsairlite/multifidelity
+    rm -rf hoburg
+    expectPythonSuccess "pyCAPS/GPSize.py"
+    if [[ `command -v mses` ]]; then
+        echo "mses: `which mses`"
+        expectPythonSuccess "pyCAPS/MSES.py"
+        expectPythonSuccess "pyCAPS/Camber.py"
+        expectPythonSuccess "pyCAPS/CMConstraint.py"
+        if ( python -c 'import torch' ); then
+            expectPythonSuccess "pyCAPS/Kulfan2.py"
+            expectPythonSuccess "pyCAPS/FlowTrip.py"
+            expectPythonSuccess "pyCAPS/Kulfan4.py"
+        fi
+    fi
+
     testsRan=1
 fi
 

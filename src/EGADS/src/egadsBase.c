@@ -72,6 +72,7 @@
   extern int  EG_setTessFace( egObject *tess, int fIndex, int len,
                               const double *xyz, const double *uv, int ntri,
                               const int *tris );
+  extern int  EG_sampleSame( const egObject *obj1, const egObject *obj2 );
 
 
 
@@ -1801,8 +1802,10 @@ EG_isSame(const egObject *obj1, const egObject *obj2)
   
   /* check for degenerate Edge */
   if ((obj1->oclass == EDGE) && (obj2->oclass == EDGE)) {
-    if ((obj1->mtype == DEGENERATE) && (obj2->mtype == DEGENERATE)) return EGADS_SUCCESS;
-    if ((obj1->mtype == DEGENERATE) || (obj2->mtype == DEGENERATE)) return EGADS_OUTSIDE;
+    if ((obj1->mtype == DEGENERATE) && (obj2->mtype == DEGENERATE))
+      return EGADS_SUCCESS;
+    if ((obj1->mtype == DEGENERATE) || (obj2->mtype == DEGENERATE))
+      return EGADS_OUTSIDE;
   }
 
   /* get the geometric objects */
@@ -1972,6 +1975,9 @@ EG_isSame(const egObject *obj1, const egObject *obj2)
         stat++;
         break;
       }
+    if ((mtype1 == PLANE) && (stat != 0)) {
+      stat = EG_sampleSame(geom1, geom2);
+    }
   } else {
     scale = 0.0;
     for (i = nk; i < nc; i++) {

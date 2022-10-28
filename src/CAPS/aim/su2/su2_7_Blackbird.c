@@ -11,7 +11,7 @@
 #include "cfdTypes.h"  // Bring in cfd specific types
 #include "su2Utils.h"  // Bring in su2 utility header
 
-// Write SU2 configuration file for version Blackbird (7.3.1)
+// Write SU2 configuration file for version Blackbird (7.4.0)
 int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
                                const char *meshfilename,
                                cfdBoundaryConditionStruct bcProps, int withMotion)
@@ -42,7 +42,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     FILE *fp = NULL;
     char fileExt[] = ".cfg";
 
-    printf("Write SU2 configuration file for version \"BlackBird (7.3.1) \"\n");
+    printf("Write SU2 configuration file for version \"BlackBird (7.4.0) \"\n");
     stringLength = 1
                    + strlen(aimInputs[Proj_Name-1].vals.string)
                    + strlen(fileExt);
@@ -66,7 +66,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%%                                                                              %%\n");
     fprintf(fp,"%% SU2 configuration file                                                       %%\n");
     fprintf(fp,"%% Created by SU2AIM for Project: \"%s\"\n", aimInputs[Proj_Name-1].vals.string);
-    fprintf(fp,"%% File Version 7.3.1 \"Blackbird\"                                               %%\n");
+    fprintf(fp,"%% File Version 7.4.0 \"Blackbird\"                                               %%\n");
     fprintf(fp,"%%                                                                              %%\n");
     fprintf(fp,"%% Please report bugs/comments/suggestions to NBhagat1@UDayton.edu              %%\n");
     fprintf(fp,"%%                                                                              %%\n");
@@ -90,11 +90,17 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     }
 
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% Specify turbulence model (NONE, SA, SA_NEG, SST, SA_E, SA_COMP, SA_E_COMP, SST_SUST) \n");
+    fprintf(fp,"%% Specify turbulence model (NONE, SA, SST) \n");
     string_toUpperCase(aimInputs[Turbulence_Model-1].vals.string);
     fprintf(fp,"KIND_TURB_MODEL = %s\n", aimInputs[Turbulence_Model-1].vals.string);
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% Transition model (NONE, BC) \n");
+    fprintf(fp, "%% Specify versions/corrections of the SST model (V2003m, V1994m, VORTICITY, KATO_LAUNDER, UQ, SUSTAINING) \n");
+    fprintf(fp, "%% SST_OPTIONS= NONE \n");
+    fprintf(fp, "%% \n");
+    fprintf(fp, "%% Specify versions/corrections of the SA model (NEGATIVE, EDWARDS, WITHFT2, QCR2000, COMPRESSIBILITY, ROTATION, BCM, EXPERIMENTAL) \n");
+    fprintf(fp, "%% SA_OPTIONS= NONE \n");
+    fprintf(fp, "%% \n");
+    fprintf(fp,"%% Transition model (NONE, LM) \n");
     fprintf(fp,"%% KIND_TRANS_MODEL= NONE \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Specify subgrid scale model(NONE, IMPLICIT_LES, SMAGORINSKY, WALE, VREMAN) \n");
@@ -294,6 +300,8 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
                                          density, &real);
         AIM_STATUS(aimInfo, status);
         fprintf(fp,"FREESTREAM_DENSITY= %f\n", real);
+    } else {
+        fprintf(fp,"FREESTREAM_DENSITY= 1.2886\n");
     }
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Free-stream velocity (1.0 m/s, 1.0 ft/s by default) \n");
@@ -459,7 +467,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% ---- NONEQUILIBRIUM GAS, IDEAL GAS, POLYTROPIC, VAN DER WAALS AND PENG ROBINSON CONSTANTS -------%% \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Fluid model (STANDARD_AIR, IDEAL_GAS, VW_GAS, PR_GAS, \n");
-    fprintf(fp,"%%              CONSTANT_DENSITY, INC_IDEAL_GAS, INC_IDEAL_GAS_POLY, MUTATIONPP, SU2_NONEQ) \n");
+    fprintf(fp,"%%              CONSTANT_DENSITY, INC_IDEAL_GAS, INC_IDEAL_GAS_POLY, MUTATIONPP, SU2_NONEQ, FLUID_MIXTURE) \n");
     fprintf(fp,"%% FLUID_MODEL= STANDARD_AIR \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Ratio of specific heats (1.4 default and the value is hardcoded \n");
@@ -487,8 +495,9 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% Used with Boussinesq approx. (incompressible, BOUSSINESQ density model only) \n");
     fprintf(fp,"%% THERMAL_EXPANSION_COEFF= 0.00347 \n");
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% Molecular weight for an incompressible ideal gas (28.96 g/mol (air) default) \n");
-    fprintf(fp,"%% MOLECULAR_WEIGHT= 28.96 \n");
+    fprintf(fp,"%% Molecular Weights of species for an incompressible ideal gas (28.96 g/mol (air) default) \n");
+    fprintf(fp, "%% For multispecies, we have N Molecular weights: W_1, W_2,...., W_N \n");
+    fprintf(fp,"%% MOLECULAR_WEIGHT= 28.96, 16.043\n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Temperature polynomial coefficients (up to quartic) for specific heat Cp. \n");
     fprintf(fp,"%% Format -> Cp(T) : b0 + b1*T + b2*T^2 + b3*T^3 + b4*T^4 \n");
@@ -553,6 +562,13 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Type of dynamic mesh (NONE, RIGID_MOTION, ROTATING_FRAME, \n");
     fprintf(fp,"%%                       STEADY_TRANSLATION, GUST) \n");
+    fprintf(fp,"%% ROTATING_FRAME: This option considers both parameters ROTATION_RATE and \n");
+    fprintf(fp,"%% TRANSLATION_RATE, which allows to simulate a free-flying aircraft (in a flight \n");
+    fprintf(fp,"%% mechanical sense) which moves and rotates in all six degrees of freedom about \n");
+    fprintf(fp,"%% the center of gravity. In this context, the farfield MACH number is set to  \n");
+    fprintf(fp,"%% zero and MACH_MOTION is used instead to compute force coefficients.\n");
+    fprintf(fp,"%% STEADY_TRANSLATION: This option considers only the parameter TRANSLATION_RATE.\n");
+    fprintf(fp,"%% \n");
     fprintf(fp,"%% GRID_MOVEMENT= NONE \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Motion mach number (non-dimensional). Used for initializing a viscous flow \n");
@@ -858,6 +874,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Inlet Species boundary marker(s) with the following format: \n");
     fprintf(fp,"%% (inlet_marker, Species1, Species2, ..., SpeciesN-1, inlet_marker2, Species1, Species2, ...) \n");
+    fprintf(fp, "%% For N species, N-1 transport equations are solved, the last one Y_N is solved algebraically as 1-(sum of the species 1 to (N-1)) \n");
     fprintf(fp,"%% MARKER_INLET_SPECIES= (inlet, 0.5, ..., inlet2, 0.6, ...) \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Use strong inlet and outlet BC in the species solver \n");
@@ -1621,7 +1638,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% \n");
     fprintf(fp,"%% -------------------- NEMO NUMERICAL METHOD DEFINITION -----------------------%% \n");
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% Mixture transport properties (WILKE,GUPTA-YOS,CHAPMANN-ENSKOG) \n");
+    fprintf(fp,"%% Mixture transport properties (WILKE,GUPTA-YOS,CHAPMANN-ENSKOG, SUTHERLAND) \n");
     fprintf(fp,"%% TRANSPORT_COEFF_MODEL = WILKE \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% ----------------------- GEOMETRY EVALUATION PARAMETERS ----------------------%% \n");
@@ -1853,9 +1870,6 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% \n");
     fprintf(fp,"%% ------------------- UNCERTAINTY QUANTIFICATION DEFINITION -------------------%% \n");
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% Using uncertainty quantification module (YES, NO). Only available with SST \n");
-    fprintf(fp,"%% USING_UQ= NO \n");
-    fprintf(fp,"%% \n");
     fprintf(fp,"%% Eigenvalue perturbation definition (1, 2, or 3) \n");
     fprintf(fp,"%% UQ_COMPONENT= 1 \n");
     fprintf(fp,"%% \n");
@@ -1955,6 +1969,9 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% History output groups (use 'SU2_CFD -d <config_file>' to view list of available fields) \n");
     fprintf(fp,"HISTORY_OUTPUT= (ITER, TIME_DOMAIN, WALL_TIME, RMS_RES, AERO_COEFF) \n");
     fprintf(fp,"%% \n");
+    fprintf(fp, "%% User defined functions available on screen and history output. See TestCases/user_defined_functions/. \n");
+    fprintf(fp, "%% CUSTOM_OUTPUTS= '' \n");
+    fprintf(fp, "%% \n");
     fprintf(fp,"%% Volume output fields/groups (use 'SU2_CFD -d <config_file>' to view list of available fields) \n");
     fprintf(fp,"%% VOLUME_OUTPUT= (COORDINATES, SOLUTION, PRIMITIVE) \n");
     fprintf(fp,"%% \n");

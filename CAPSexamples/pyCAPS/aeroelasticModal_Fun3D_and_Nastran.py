@@ -35,23 +35,23 @@ myProblem = pyCAPS.Problem(problemName=workDir,
 # Load AIMs 
 surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
                                      name= "egads",
-                                     capsIntent = "CFD")
+                                     capsIntent = "Aerodynamic")
 
 mesh = myProblem.analysis.create(aim = "tetgenAIM", 
                                  name= "tetgen",
-                                 capsIntent = "CFD")
+                                 capsIntent = "Aerodynamic")
 
 mesh.input["Surface_Mesh"].link(surfMesh.output["Surface_Mesh"])
 
 fluid = myProblem.analysis.create(aim = "fun3dAIM", 
                                   name = "fun3d", 
-                                  capsIntent = "CFD")
+                                  capsIntent = "Aerodynamic")
 
 fluid.input["Mesh"].link(mesh.output["Volume_Mesh"])
 
 structure = myProblem.analysis.create(aim = "mystranAIM", 
                                       name = "mystran", 
-                                      capsIntent = "STRUCTURE",
+                                      capsIntent = "Structure",
                                       autoExec = False)
 
 # Create an array of EigenVector names 

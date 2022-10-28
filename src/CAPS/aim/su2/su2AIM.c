@@ -333,7 +333,7 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
      * distributed with SU2.
      * Note: The configuration file is dependent on the version of SU2 used.
      * This configuration file that will be auto generated is compatible with
-     * SU2 4.1.1. (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) or 7.3.1 (Blackbird - Default)
+     * SU2 4.1.1. (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) or 7.4.0 (Blackbird - Default)
      */
 
     su2Instance = (aimStorage *) instStore;
@@ -433,7 +433,7 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
         defval->nullVal      = NotNull;
         defval->units        = NULL;
         defval->lfixed       = Change;
-        defval->vals.string  = EG_strdup("SA_NEG");
+        defval->vals.string  = EG_strdup("SA");
 
         /*! \page aimInputsSU2
          * - <B> Turbulence_Model = "SA_NEG"</B> <br>
@@ -805,7 +805,7 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
 
         /*! \page aimInputsSU2
          * - <B>SU2_Version = "Blackbird"</B> <br>
-         * SU2 version to generate specific configuration file. Options: "Cardinal(4.0)", "Raven(5.0)", "Falcon(6.2)" or "Blackbird(7.3.1)".
+         * SU2 version to generate specific configuration file. Options: "Cardinal(4.0)", "Raven(5.0)", "Falcon(6.2)" or "Blackbird(7.4.0)".
          */
 
       if (su2Instance != NULL) su2Instance->su2Version = defval;
@@ -1405,6 +1405,7 @@ int aimCalcOutput(void *instStore, void *aimInfo, int index, capsValue *val)
 
     char *strValue;    // Holder string for value of keyword
 
+    size_t stringLength;
     char *filename = NULL; // File to open
     char fileExtension[] = ".dat";
     char fileSuffix[] = "forces_breakdown_";
@@ -1464,13 +1465,10 @@ int aimCalcOutput(void *instStore, void *aimInfo, int index, capsValue *val)
     }
 
     // Open SU2 force file
-    filename = (char *) EG_alloc((strlen(su2Instance->projectName) +
-                                  strlen(fileSuffix) + strlen(fileExtension) +1)*sizeof(char));
-    if (filename == NULL) return EGADS_MALLOC;
+    stringLength = strlen(su2Instance->projectName) + strlen(fileSuffix) + strlen(fileExtension) + 1;
+    AIM_ALLOC(filename, stringLength, char, aimInfo, status);
 
-/*@-bufferoverflowhigh@*/
-    sprintf(filename, "%s%s%s", fileSuffix, su2Instance->projectName, fileExtension);
-/*@+bufferoverflowhigh@*/
+    snprintf(filename, stringLength, "%s%s%s", fileSuffix, su2Instance->projectName, fileExtension);
 
     fp = aim_fopen(aimInfo, filename, "r");
     AIM_FREE(filename); // Free filename allocation
@@ -1739,6 +1737,7 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
     int found = (int) false;
 
     // Filename stuff
+    size_t stringLength;
     char *filename = NULL; //"pyCAPS_SU2_Tetgen_ddfdrive_bndry1.dat";
 
 #ifdef DEBUG
@@ -1767,12 +1766,10 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
         }
     }
 
-    AIM_ALLOC(filename, (strlen(su2Instance->projectName) +
-                         strlen("surface_flow_.csv") + 1), char, discr->aInfo, status);
+    stringLength = strlen(su2Instance->projectName) + strlen("surface_flow_.csv") + 1;
+    AIM_ALLOC(filename, stringLength, char, discr->aInfo, status);
 
-/*@-bufferoverflowhigh@*/
-    sprintf(filename,"%s%s%s", "surface_flow_", su2Instance->projectName, ".csv");
-/*@+bufferoverflowhigh@*/
+    snprintf(filename,stringLength,"%s%s%s", "surface_flow_", su2Instance->projectName, ".csv");
 
     status = su2_readAeroLoad(discr->aInfo,
                               filename,

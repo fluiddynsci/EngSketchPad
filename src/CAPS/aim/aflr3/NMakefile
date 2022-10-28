@@ -67,7 +67,9 @@ EGADS_AFLR4_OBJS = 	\
 			$(ODIR)\egads_eval_xyz_at_uv.obj \
 			$(ODIR)\egads_face_node_map.obj \
 			$(ODIR)\egads_get_model.obj \
-			$(ODIR)\egads_set_ext_cad_data.obj
+			$(ODIR)\egads_set_ext_cad_data.obj \
+			$(ODIR)\aflr43_bc_mod.obj \
+			$(ODIR)\aflr43_bc_reset.obj
 
 default: clear_version $(ODIR)\aflr3_version.exe $(LDIR)\aflr3AIM.dll
 
@@ -96,6 +98,9 @@ $(ODIR)\aflr3_Interface.obj:	aflr3_Interface.c ..\utils\meshUtils.h
 # Compile each AFLR source file
 {$(AFLR)\src\egads_aflr4\}.c{$(ODIR)}.obj::
 	cl /c $(CPPOPT) /W0 /Fo"$(ODIR)"\ /Dstrcasecmp=stricmp -I$(IDIR) -I$(AFLR)\src\egads_aflr4 $<
+
+{$(AFLR)\src\aflr43\}.c{$(ODIR)}.obj::
+	cl /c $(CPPOPT) /W0 /Fo"$(ODIR)"\ /Dstrcasecmp=stricmp -I$(IDIR) -I$(AFLR)\src\aflr43 $<
 
 $(LDIR)\AFLR.dll: $(AFLR)\$(AFLR_ARCH)\bin\AFLR.dll
 	xcopy /Q /Y $(AFLR)\$(AFLR_ARCH)\bin\AFLR.dll $(LDIR)

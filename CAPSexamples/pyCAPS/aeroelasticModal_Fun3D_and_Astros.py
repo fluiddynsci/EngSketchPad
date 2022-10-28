@@ -42,23 +42,23 @@ myProblem = pyCAPS.Problem(problemName=workDir,
 # Load AIMs 
 surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
                                      name= "egads",
-                                     capsIntent = "CFD")
+                                     capsIntent = "Aerodynamic")
 
 mesh = myProblem.analysis.create(aim = "tetgenAIM", 
                                  name= "tetgen",
-                                 capsIntent = "CFD")
+                                 capsIntent = "Aerodynamic")
 
 mesh.input["Surface_Mesh"].link(surfMesh.output["Surface_Mesh"])
 
 fluid = myProblem.analysis.create(aim = "fun3dAIM", 
                                   name = "fun3d", 
-                                  capsIntent = "CFD")
+                                  capsIntent = "Aerodynamic")
 
 fluid.input["Mesh"].link(mesh.output["Volume_Mesh"])
 
 structure = myProblem.analysis.create(aim = "astrosAIM", 
                                       name = "astros", 
-                                      capsIntent = "STRUCTURE",
+                                      capsIntent = "Structure",
                                       autoExec = False)
 
 # Create an array of EigenVector names 
@@ -78,8 +78,8 @@ for boundName in boundNames:
     
     # Create eigenVector data sets
     for eigenVector in eigenVectors:
-        fluid_eigenVector     = fluidVset.dataSet.create(eigenVector, pyCAPS.fType.FieldIn)
-        structure_eigenVector = structureVset.dataSet.create(eigenVector, pyCAPS.fType.FieldOut)
+        fluid_eigenVector     = fluidVset.dataSet.create(eigenVector)
+        structure_eigenVector = structureVset.dataSet.create(eigenVector)
 
         # Link the data sets
         fluid_eigenVector.link(structure_eigenVector, "Conserve")

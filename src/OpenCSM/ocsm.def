@@ -3,10 +3,12 @@ EXPORTS
 convertToBSplines
 createTessVels
 GetToken
+ocsmAdjoint
 ocsmAdjustUDCs
 ocsmBodyDetails
 ocsmBuild
 ocsmCheck
+ocsmClearance
 ocsmCopy
 ocsmDelBrch
 ocsmDelPmtr
@@ -51,6 +53,7 @@ ocsmPrintBrep
 ocsmPrintEgo
 ocsmPrintPmtrs
 ocsmPrintProfile
+ocsmRegBcstCB
 ocsmRegMesgCB
 ocsmRegSizeCB
 ocsmRetAttr
@@ -75,6 +78,7 @@ ocsmSetVel
 ocsmSetVelD
 ocsmSolveSketch
 ocsmTessellate
+ocsmTracePmtrs
 ocsmUpdateDespmtrs
 ocsmUpdateTess
 ocsmVersion

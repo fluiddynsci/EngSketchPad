@@ -1392,7 +1392,7 @@ char *string_format(char *format, ...) {
 
     // create formatted string
     va_start(args, format);
-    vsprintf(formatted, format, args);
+    vsnprintf(formatted, length + 1, format, args);
     va_end(args);
 
     return formatted;
@@ -1570,11 +1570,11 @@ char * convert_integerToString(int integerVal, int fieldWidth, int leftOrRight)
     // Populate output string array with blank spaces and integer depending on justification
     if (leftOrRight == 0) {
 
-        inputTest = sprintf(tmp, "%-*d", fieldWidth, integerVal);
+        inputTest = snprintf(tmp, 42, "%-*d", fieldWidth, integerVal);
 
     } else {
 
-        inputTest = sprintf(tmp, "%*d", fieldWidth, integerVal);
+        inputTest = snprintf(tmp, 42, "%*d", fieldWidth, integerVal);
     }
 
     if (inputTest < 0 || inputTest > fieldWidth) {
@@ -1651,7 +1651,7 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
 
     // If zero, and yes the sign matters!?!
     if (doubleVal == 0.0 || doubleVal == +0.0 || doubleVal == -0.0) {
-        sprintf(stringVal, "%#.*f", fieldWidth-2, 0.0);
+        snprintf(stringVal, fieldWidth+1, "%#.*f", fieldWidth-2, 0.0);
         return stringVal;
     }
 
@@ -1659,7 +1659,7 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
     if (doubleVal < 0) offset++; // account for the negative sign
 
     // extract the exponent with rounding to check for simple float formatting
-    sprintf(tmp, "%1.*E", fieldWidth-offset, doubleVal);
+    snprintf(tmp, 42, "%1.*E", fieldWidth-offset, doubleVal);
     i = fieldWidth;
     tmp[i++] = '\0';
     scival = atoi(tmp+i);
@@ -1668,12 +1668,12 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
     // sized to make sure the '.' is included in the string (otherwise Fortran isn't happy)
     if (scival > -2 && scival < fieldWidth-(offset-2)-1) {
 
-        sprintf(numString, "%#*.*f", fieldWidth, fieldWidth-MAX(scival,0)-offset, doubleVal);
+        snprintf(numString, 255, "%#*.*f", fieldWidth, fieldWidth-MAX(scival,0)-offset, doubleVal);
 
     } else {
 
         // do loop as the exponent might change due to rounding
-        sprintf(sci, "%+d", scival);
+        snprintf(sci, 10, "%+d", scival);
         do {
             remain = (int)(fieldWidth-offset-strlen(sci)-1);
           
@@ -1687,7 +1687,7 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
             }
 
             // construct the format statement based on the available digits
-            sprintf(tmp, "%#1.*E", remain, doubleVal);
+            snprintf(tmp, 42, "%#1.*E", remain, doubleVal);
 
             // truncate at 'E'
             i = fieldWidth-strlen(sci)-1;
@@ -1695,10 +1695,10 @@ char * convert_doubleToString(double doubleVal, int fieldWidth, int leftOrRight)
 
             // get the exponent again and minimize it's size
             scival = atoi(tmp+i);
-            sprintf(sci, "%+d", scival);
+            snprintf(sci, 10, "%+d", scival);
 
             // print the final string with the exponent
-            sprintf(numString, "%sE%s", tmp, sci);
+            snprintf(numString, 255, "%sE%s", tmp, sci);
           
             // catch situations where 2 charachters are changed
             diff = abs(len - (int)strlen(numString));
@@ -1961,7 +1961,7 @@ int increment_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMap, const char *ke
     }
 
     //printf("KEY WORD = %s\n",keyWord);
-    sprintf(attrMap->attributeName[attrMap->numAttribute-1], "%s", keyWord);
+    snprintf(attrMap->attributeName[attrMap->numAttribute-1], strlen(keyWord) + 1, "%s", keyWord);
 
     status = set_mapAttrToIndexStruct(attrMap, keyWord, attrMap->numAttribute);
     if (status != CAPS_SUCCESS) return status;
@@ -2061,7 +2061,7 @@ int copy_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMapIn, mapAttrToIndexStr
             return EGADS_MALLOC;
         }
 
-        sprintf(attrMapOut->attributeName[i], "%s", keyWord);
+        snprintf(attrMapOut->attributeName[i], strlen(keyWord)+1, "%s", keyWord);
     }
 
 
@@ -2257,6 +2257,16 @@ int retrieve_CAPSResponseAttr(ego geomEntity, const char **string) {
 
     int status;
     char *attributeKey = "capsResponse";
+
+    status = retrieve_stringAttr(geomEntity, attributeKey, string);
+    return status;
+}
+
+// Retrieve the string following a capsReference tag
+int retrieve_CAPSReferenceAttr(ego geomEntity, const char **string) {
+
+    int status;
+    char *attributeKey = "capsReference";
 
     status = retrieve_stringAttr(geomEntity, attributeKey, string);
     return status;
@@ -2780,6 +2790,28 @@ int create_CAPSResponseAttrToIndexMap(int numBody, ego bodies[], int attrLevel, 
     int status; // Function return integer
 
     char *mapName = "capsResponse";
+
+    status = create_genericAttrToIndexMap(numBody, bodies, attrLevel, mapName, attrMap);
+
+    return status;
+}
+
+// Create a mapping between unique capsReference attribute names and an index value
+int create_CAPSReferenceAttrToIndexMap(int numBody, ego bodies[], int attrLevel, mapAttrToIndexStruct *attrMap) {
+
+    // In:
+    //      numBody   = Number of incoming bodies
+    //      bodies    = Array of ego bodies
+    //      attrLevel = Level of depth to traverse the body:  0 - search just body attributes
+    //                                                        1 - search the body and all the faces
+    //                                                        2 - search the body, faces, and all the edges
+    //                                                       >2 - search the body, faces, edges, and all the nodes
+    // Out:
+    //      attrMap = A filled mapAttrToIndex structure
+
+    int status; // Function return integer
+
+    char *mapName = "capsReference";
 
     status = create_genericAttrToIndexMap(numBody, bodies, attrLevel, mapName, attrMap);
 

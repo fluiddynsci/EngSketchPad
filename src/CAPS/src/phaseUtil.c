@@ -52,14 +52,10 @@ extern void  EG_free(/*@null@*/ /*@only@*/ void *pointer);
 extern /*@null@*/ /*@only@*/
        char *EG_strdup(/*@null@*/ const char *str);
 
-extern int  caps_statFile(const char *path);
-extern int  caps_rmFile(const char *path);
-extern int  caps_rmDir(const char *path);
-extern void caps_rmWild(const char *path, const char *wild);
-extern int  caps_mkDir(const char *path);
-extern int  caps_cpDir(const char *src, const char *dst);
-extern int  caps_cpFile(const char *src, const char *dst);
-extern int  caps_rename(const char *src, const char *dst);
+extern int   caps_statFile(const char *path);
+extern int   caps_rmFile(const char *path);
+extern int   caps_rmDir(const char *path);
+extern int   caps_cpDir(const char *src, const char *dst);
 
 
 

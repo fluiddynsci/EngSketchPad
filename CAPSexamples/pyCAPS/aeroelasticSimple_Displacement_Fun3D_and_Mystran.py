@@ -34,23 +34,23 @@ myProblem = pyCAPS.Problem(problemName=workDir,
 # Load AIMs
 surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
                                      name= "egads",
-                                     capsIntent = "CFD")
+                                     capsIntent = "Aerodynamic")
 
 mesh = myProblem.analysis.create(aim = "tetgenAIM", 
                                  name= "tetgen",
-                                 capsIntent = "CFD")
+                                 capsIntent = "Aerodynamic")
 
 mesh.input["Surface_Mesh"].link(surfMesh.output["Surface_Mesh"])
 
 fun3d = myProblem.analysis.create(aim = "fun3dAIM", 
                                   name = "fun3d", 
-                                  capsIntent = "CFD")
+                                  capsIntent = "Aerodynamic")
 
 fun3d.input["Mesh"].link(mesh.output["Volume_Mesh"])
 
 mystran = myProblem.analysis.create(aim = "mystranAIM",
                                     name = "mystran",
-                                    capsIntent = "STRUCTURE",
+                                    capsIntent = "Structure",
                                     autoExec = False)
 
 # Create the data transfer connections
@@ -64,8 +64,8 @@ for boundName in boundNames:
     mystranVset = bound.vertexSet.create(mystran)
 
     # Create displacement data sets
-    fun3d_Displacement   = fun3dVset.dataSet.create("Displacement", pyCAPS.fType.FieldIn)
-    mystran_Displacement = mystranVset.dataSet.create("Displacement", pyCAPS.fType.FieldOut)
+    fun3d_Displacement   = fun3dVset.dataSet.create("Displacement")
+    mystran_Displacement = mystranVset.dataSet.create("Displacement")
 
     # Link the data set
     fun3d_Displacement.link(mystran_Displacement, "Interpolate")

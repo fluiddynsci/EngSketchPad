@@ -93,6 +93,9 @@ pyscript.launch = function (e) {
         name += ".py";
     }
 
+    // remember this name for next time
+    wv.espPrefix = name;
+
     // change mode
     changeMode(12);
 
@@ -105,7 +108,7 @@ pyscript.launch = function (e) {
     // change solve button legend
     var button = document.getElementById("solveButton");
     button["innerHTML"] = "EditingPyscript";
-    button.style.backgroundColor = "#FFFF3F";
+    button.style.backgroundColor = "#FFFF3F";     // light yellow
 };
 
 
@@ -187,6 +190,7 @@ pyscript.cmdSave = function () {
     document.getElementById("editorIndentBtn").hidden = false;
     document.getElementById("editorHintBtn").hidden = false;
     document.getElementById("editorDebugBtn").hidden = false;
+    document.getElementById("editorTraceBtn").hidden = false;
 
     // change the Cancel and Save buttons to their original states
     var cancelBtn = document.getElementById("editorCancelBtn");
@@ -237,6 +241,7 @@ pyscript.cmdQuit = function () {
     document.getElementById("editorIndentBtn").hidden = false;
     document.getElementById("editorHintBtn").hidden = false;
     document.getElementById("editorDebugBtn").hidden = false;
+    document.getElementById("editorTraceBtn").hidden = false;
 
     // change the Cancel and Save buttons to their original states
     var cancelBtn = document.getElementById("editorCancelBtn");
@@ -505,6 +510,7 @@ pyscript.timLoadCB = function (text) {
         document.getElementById("editorIndentBtn").hidden = true;
         document.getElementById("editorHintBtn").hidden = true;
         document.getElementById("editorDebugBtn").hidden = true;
+        document.getElementById("editorTraceBtn").hidden = true;
 
         // change the Cancel and Save buttons
         var cancelBtn = document.getElementById("editorCancelBtn");

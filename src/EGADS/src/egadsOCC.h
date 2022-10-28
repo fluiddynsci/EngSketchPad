@@ -18,6 +18,11 @@
 #pragma warning( disable : 4786 )
 #endif // WIN32
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 #define CASVER  (OCC_VERSION_MAJOR*100 + OCC_VERSION_MINOR*10 + OCC_VERSION_MAINTENANCE)
 
 #include <Standard.hxx>
@@ -211,5 +216,9 @@
 #include <STEPControl_StepModelType.hxx>
 #include <STEPControl_Reader.hxx>
 #include <STEPControl_Writer.hxx>
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #endif

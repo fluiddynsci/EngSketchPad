@@ -17,6 +17,7 @@
  *
  * The Pointwise AIM provides the CAPS users with the ability to generate volume meshes mostly suitable for CFD analysis.
  * This includes both inviscid analysis and viscous analysis with boundary layers using the pointwise T-Rex algorithm.
+ * 2D mesh generation is currently not available.
  *
  * An outline of the AIM's inputs, outputs and attributes are provided in \ref aimInputsPointwise and
  * \ref aimOutputsPointwise and \ref attributePointwise, respectively.
@@ -653,6 +654,7 @@ writeMesh(void *aimInfo, aimStorage *pointwiseInstance,
   capsValue *MeshFormat;
   capsValue *MeshASCII_Flag;
 
+  size_t stringLength;
   char *filename = NULL, surfNumber[11];
   const char *outputFileName = NULL;
   const char *outputFormat = NULL;
@@ -688,15 +690,12 @@ writeMesh(void *aimInfo, aimStorage *pointwiseInstance,
     for (volIndex = 0; volIndex < numVolumeMesh; volIndex++) {
       volumeMesh = &volumeMesh[volIndex];
       for (surfIndex = 0; surfIndex < volumeMesh->numReferenceMesh; surfIndex++) {
-/*@-bufferoverflowhigh@*/
-        sprintf(surfNumber, "%d", surfIndex+1);
-/*@+bufferoverflowhigh@*/
-        filename = (char *) EG_alloc((strlen(outputFileName) +strlen("_Surf_") +
-                                      strlen(surfNumber)+1)*sizeof(char));
-        if (filename == NULL) { status = EGADS_MALLOC; goto cleanup; }
-/*@-bufferoverflowhigh@*/
-        sprintf(filename, "%s_Surf_%s", outputFileName, surfNumber);
-/*@+bufferoverflowhigh@*/
+        snprintf(surfNumber, 11, "%d", surfIndex+1);
+
+        stringLength = strlen(outputFileName) +strlen("_Surf_") + strlen(surfNumber)+1;
+        AIM_ALLOC(filename, stringLength, char, aimInfo, status);
+
+        snprintf(filename, stringLength, "%s_Surf_%s", outputFileName, surfNumber);
 
         if (strcasecmp(outputFormat, "AFLR3") == 0) {
 
@@ -736,7 +735,7 @@ writeMesh(void *aimInfo, aimStorage *pointwiseInstance,
   for (volIndex = 0; volIndex < numVolumeMesh; volIndex++) {
 
 //      if (aimInputs[Multiple_Mesh-1].vals.integer == (int) true) {
-//          sprintf(bodyIndexNumber, "%d", bodyIndex);
+//          snprintf(bodyIndexNumber, 11, "%d", bodyIndex);
 //          filename = (char *) EG_alloc((strlen(outputFileName) + 1 +
 //                                        strlen("_Vol")+strlen(bodyIndexNumber))*sizeof(char));
 //      } else {
@@ -1038,7 +1037,7 @@ static int set_autoQuiltAttr(ego *body) {
             // If neither face has an attribute
             if (face1Attr == NULL && face2Attr == NULL) {
 
-                sprintf(quiltName, "%s%d", quiltNamePrefix, quiltIndex);
+                snprintf(quiltName, 30, "%s%d", quiltNamePrefix, quiltIndex);
 
                 // Face 1
                 status = EG_attributeAdd(bodyFace[i], pwQuiltAttr, ATTRSTRING,

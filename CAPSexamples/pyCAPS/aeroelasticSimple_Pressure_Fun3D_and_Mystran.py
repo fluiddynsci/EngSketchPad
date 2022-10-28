@@ -34,23 +34,23 @@ myProblem = pyCAPS.Problem(problemName=workDir,
 # Load AIMs
 surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
                                      name= "egads",
-                                     capsIntent = "CFD")
+                                     capsIntent = "Aerodynamic")
 
 mesh = myProblem.analysis.create(aim = "tetgenAIM", 
                                  name= "tetgen",
-                                 capsIntent = "CFD")
+                                 capsIntent = "Aerodynamic")
 
 mesh.input["Surface_Mesh"].link(surfMesh.output["Surface_Mesh"])
 
 fun3d = myProblem.analysis.create(aim = "fun3dAIM", 
                                   name = "fun3d", 
-                                  capsIntent = "CFD")
+                                  capsIntent = "Aerodynamic")
 
 fun3d.input["Mesh"].link(mesh.output["Volume_Mesh"])
 
 mystran = myProblem.analysis.create(aim = "mystranAIM",
                                     name = "mystran",
-                                    capsIntent = "STRUCTURE",
+                                    capsIntent = "Structure",
                                     autoExec = True)
 
 # Create the data transfer connections
@@ -64,8 +64,8 @@ for boundName in boundNames:
     mystranVset = bound.vertexSet.create(mystran)
 
     # Create pressure data sets
-    fun3d_Pressure   = fun3dVset.dataSet.create("Pressure", pyCAPS.fType.FieldOut)
-    mystran_Pressure = mystranVset.dataSet.create("Pressure", pyCAPS.fType.FieldIn)
+    fun3d_Pressure   = fun3dVset.dataSet.create("Pressure")
+    mystran_Pressure = mystranVset.dataSet.create("Pressure")
 
     # Link the data set
     mystran_Pressure.link(fun3d_Pressure, "Conserve")

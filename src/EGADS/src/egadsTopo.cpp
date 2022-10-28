@@ -6767,7 +6767,8 @@ EG_getMassProperties(const egObject *topo, /*@null@*/ double *data)
 int
 EG_isEquivalent(const egObject *topo1, const egObject *topo2)
 {
-  int          i, stat;
+  int          i, j, n, stat;
+  double       t, tol, result1[9], result2[9];
   TopoDS_Shape shape1, shape2;
 
   if (topo1 == topo2)                 return EGADS_SUCCESS;
@@ -6839,13 +6840,34 @@ EG_isEquivalent(const egObject *topo1, const egObject *topo2)
 
   } else if (topo1->oclass == EDGE) {
 
+    if (topo1->mtype != topo2->mtype) return EGADS_OUTSIDE;
     stat = EG_isSame(topo1, topo2);
     if (stat != EGADS_SUCCESS) return stat;
     egadsEdge *pedge1 = (egadsEdge *) topo1->blind;
     egadsEdge *pedge2 = (egadsEdge *) topo2->blind;
-    stat = EG_isSame(pedge1->nodes[0], pedge2->nodes[0]);
+    if (topo1->mtype != TWONODE)
+      return EG_isSame(pedge1->nodes[0], pedge2->nodes[0]);
+
+    n = 0;
+    if (EG_isSame(pedge1->nodes[0], pedge2->nodes[0]) == EGADS_SUCCESS) n++;
+    if (EG_isSame(pedge1->nodes[0], pedge2->nodes[1]) == EGADS_SUCCESS) n++;
+    if (EG_isSame(pedge1->nodes[1], pedge2->nodes[0]) == EGADS_SUCCESS) n++;
+    if (EG_isSame(pedge1->nodes[1], pedge2->nodes[1]) == EGADS_SUCCESS) n++;
+    if (n != 2) return EGADS_OUTSIDE;
+    
+    t    = 0.5*(pedge1->trange[0] + pedge1->trange[1]);
+    stat = EG_evaluate(pedge1->curve, &t, result1);
     if (stat != EGADS_SUCCESS) return stat;
-    return EG_isSame(pedge1->nodes[1], pedge2->nodes[1]);
+    t    = 0.5*(pedge2->trange[0] + pedge2->trange[1]);
+    stat = EG_evaluate(pedge2->curve, &t, result2);
+    if (stat != EGADS_SUCCESS) return stat;
+    tol = BRep_Tool::Tolerance(pedge1->edge);
+    t   = BRep_Tool::Tolerance(pedge2->edge);
+    if (tol < t) tol = t;
+    t = sqrt((result1[0]-result2[0])*(result1[0]-result2[0]) +
+             (result1[1]-result2[1])*(result1[1]-result2[1]) +
+             (result1[2]-result2[2])*(result1[2]-result2[2]));
+    if (t < tol) return EGADS_SUCCESS;
 
   } else if (topo1->oclass == LOOP) {
 
@@ -6854,9 +6876,13 @@ EG_isEquivalent(const egObject *topo1, const egObject *topo2)
 
     if (ploop1->nedges != ploop2->nedges) return EGADS_OUTSIDE;
     for (i = 0; i < ploop1->nedges; i++) {
-      if (ploop1->senses[i] != ploop2->senses[i]) return EGADS_OUTSIDE;
-      stat = EG_isEquivalent(ploop1->edges[i], ploop2->edges[i]);
-      if (stat != EGADS_SUCCESS) return stat;
+      for (n = j = 0; j < ploop2->nedges; j++)
+        if (EG_isEquivalent(ploop1->edges[i], ploop2->edges[j]) ==
+            EGADS_SUCCESS) {
+          n = j+1;
+          break;
+        }
+      if (n == 0) return EGADS_OUTSIDE;
     }
     return EGADS_SUCCESS;
 
@@ -9464,7 +9490,7 @@ EG_edgeCmp(double *cg0, double *cg1)
 static int
 EG_getEdgeIDs(egadsBody *pbody, const char *fAttr, edgeID **IDs)
 {
-  int          i, j, k, m, n, len, index, cnt, hit, stat, aType, aLen;
+  int          i, j, k, m, n, len, index, cnt, slen, hit, stat, aType, aLen;
   char         **facAttr, line[1025];
   const int    *ints;
   const char   *str;
@@ -9614,7 +9640,7 @@ EG_getEdgeIDs(egadsBody *pbody, const char *fAttr, edgeID **IDs)
     if (aType == ATTRSTRING) {
       facAttr[i] = EG_strdup(str);
     } else if (aType == ATTRREAL) {
-      sprintf(line, "%20.13le", reals[0]);
+      snprintf(line, 1025, "%20.13le", reals[0]);
       for (j = 1; j < aLen; j++) {
         hit = strlen(line);
         if (hit+21 > 1024) {
@@ -9622,11 +9648,11 @@ EG_getEdgeIDs(egadsBody *pbody, const char *fAttr, edgeID **IDs)
                  i+1, j);
           break;
         }
-        sprintf(&line[hit], ":%20.13le", reals[j]);
+        snprintf(&line[hit], 1025-hit, ":%20.13le", reals[j]);
       }
       facAttr[i] = EG_strdup(line);
     } else if (aType == ATTRINT) {
-      sprintf(line, "%d", ints[0]);
+      snprintf(line, 1025, "%d", ints[0]);
       for (j = 1; j < aLen; j++) {
         hit = strlen(line);
         if (hit+10 > 1024) {
@@ -9634,7 +9660,7 @@ EG_getEdgeIDs(egadsBody *pbody, const char *fAttr, edgeID **IDs)
                  i+1, j);
           break;
         }
-        sprintf(&line[hit], ":%d", ints[j]);
+        snprintf(&line[hit], 1025-hit, ":%d", ints[j]);
       }
       facAttr[i] = EG_strdup(line);
     }
@@ -9670,16 +9696,17 @@ EG_getEdgeIDs(egadsBody *pbody, const char *fAttr, edgeID **IDs)
     } while (hit != 0);
     for (cnt = j = 0; j < edgeIDs[i].nFace; j++)
       cnt += strlen(facAttr[edgeIDs[i].fIndices[j]-1]) + 1;
-    edgeIDs[i].ID = (char *) EG_alloc((cnt+11)*sizeof(char));
+    slen = cnt+11;
+    edgeIDs[i].ID = (char *) EG_alloc(slen*sizeof(char));
     if (edgeIDs[i].ID == NULL) continue;
     // concatinate the ordered Face strings
     for (cnt = j = 0; j < edgeIDs[i].nFace; j++) {
-      sprintf(&edgeIDs[i].ID[cnt], "%s|", facAttr[edgeIDs[i].fIndices[j]-1]);
+      snprintf(&edgeIDs[i].ID[cnt], slen-cnt, "%s|", facAttr[edgeIDs[i].fIndices[j]-1]);
       cnt += strlen(facAttr[edgeIDs[i].fIndices[j]-1]) + 1;
     }
     // append the sequence number
     cnt--;
-    sprintf(&edgeIDs[i].ID[cnt], "\\%d", edgeIDs[i].seq);
+    snprintf(&edgeIDs[i].ID[cnt], slen-cnt, "\\%d", edgeIDs[i].seq);
   }
   for (i = 0; i < pbody->faces.map.Extent(); i++) EG_free(facAttr[i]);
   EG_free(facAttr);

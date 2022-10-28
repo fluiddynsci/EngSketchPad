@@ -6,7 +6,7 @@ DIRS = $(filter-out NMakefile, $(filter-out Makefile, $(wildcard *)))
 default:	$(DIRS)
 
 $(DIRS):
-	make -C $@ $(MAKECMDGOALS)
+	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 lint:		$(DIRS)
 

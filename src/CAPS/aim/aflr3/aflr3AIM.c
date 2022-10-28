@@ -145,6 +145,7 @@ static int destroy_aimStorage(aimStorage *aflr3Instance, int inUpdate)
         (void) destroy_meshSizingStruct(&aflr3Instance->meshProp[i]);
     }
     AIM_FREE(aflr3Instance->meshProp);
+    aflr3Instance->numMeshProp = 0;
 
     return status;
 }
@@ -815,7 +816,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
         for (ibody = 0; ibody < numVolumeMesh; ibody++) {
 
             if (aimInputs[Multiple_Mesh-1].vals.integer == (int) true) {
-                sprintf(bodyNumberFile, "%d", ibody);
+                snprintf(bodyNumberFile, 42, "%d", ibody);
                 AIM_ALLOC(filename, strlen(aflr3Instance->meshInput.outputFileName) +
                                     2+strlen("_Vol")+strlen(bodyNumberFile), char, aimInfo, status);
             } else {

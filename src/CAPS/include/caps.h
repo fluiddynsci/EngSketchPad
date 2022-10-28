@@ -86,8 +86,8 @@ __ProtoExt__ int
   caps_readParameters( const capsObj pobject, char *filename );
 
 __ProtoExt__ int
-  caps_writeGeometry(capsObj object, int flag, const char *filename,
-                     int *nErr, capsErrs **errors);
+  caps_writeGeometry( capsObj object, int flag, const char *filename,
+                      int *nErr, capsErrs **errors );
 
 
 /* attribute functions */
@@ -296,6 +296,9 @@ __ProtoExt__ int
                   capsErrs **errors );
 
 __ProtoExt__ int
+  caps_getValueSize( capsObj object, int *nrow, int *ncol );
+
+__ProtoExt__ int
   caps_getValueProps( capsObj object, int *dim, int *gInType,
                       enum capsFixed *lfix, enum capsFixed *sfix,
                       enum capsNull *ntype );
@@ -318,12 +321,19 @@ __ProtoExt__ int
                   capsObj target, int *nErr, capsErrs **errors );
 
 __ProtoExt__ int
-  caps_hasDeriv(capsObject *vobj, int *nderiv, char ***names,
-                int *nErr, capsErrs **errors);
+  caps_hasDeriv( capsObject *vobj, int *nderiv, char ***names,
+                 int *nErr, capsErrs **errors );
 
 __ProtoExt__ int
   caps_getDeriv( capsObj value, const char *name, int *len, int *len_wrt,
                  double **deriv, int *nErr, capsErrs **errors );
+
+__ProtoExt__ int
+  caps_setStepSize( capsObj object, /*@null@*/ const double *steps );
+
+__ProtoExt__ int
+  caps_getStepSize( capsObj object, const double **steps );
+
 
 /* units */
 

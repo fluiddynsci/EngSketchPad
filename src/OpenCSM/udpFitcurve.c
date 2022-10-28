@@ -63,11 +63,6 @@ static double argDdefs[NUMUDPARGS] = {0.,         0.,      1.,        0.,       
 /*                                                                     */
 /***********************************************************************/
 
-#define           MIN(A,B)        (((A) < (B)) ? (A) : (B))
-#define           MAX(A,B)        (((A) > (B)) ? (A) : (B))
-#define           EPS06           1.0e-6
-#define           HUGEQ           1.0e+20
-
 static int    EG_fitBspline(ego context,
                             int npnt, int bitflag, double xyz[],
                             int ncp, ego *ecurve, double *rms);
