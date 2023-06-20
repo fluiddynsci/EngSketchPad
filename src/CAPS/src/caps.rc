@@ -9,11 +9,11 @@ BLOCK "StringFileInfo"
 	BLOCK "040904E4"
 	{
 		VALUE "FileDescription", "CAPS Dynamic Library"
-		VALUE "FileVersion", "1.22"
+		VALUE "FileVersion", "1.23"
 		VALUE "InternalName", "CAPS"
 		VALUE "OriginalFilename", "caps.DLL"
 		VALUE "ProductName", "CAPS"
-		VALUE "ProductVersion", "1.22"
+		VALUE "ProductVersion", "1.23"
 		VALUE "LegalCopyright", "Copyright © 2011-2022 MIT. All Rights Reserved."
 		VALUE "Comment", "Copyright 2011-2022 MIT. All rights reserved."
 	}

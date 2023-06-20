@@ -133,7 +133,8 @@ store     OML
 >>
     select body
         attribute capsDiscipline $Structure #FEA Analysis (2D elements)
-        attribute capsAIM        $nastranAIM;astrosAIM;mystranAIM;egadsTessAIM
+        attribute capsAIM        $nastranAIM;astrosAIM;mystranAIM;egadsTessAIM;aflr4AIM
+        attribute capsMeshLength croot
         attribute _name          $FEA
 
 # Point Connecting to Rib_Root to apply boundary conditions too

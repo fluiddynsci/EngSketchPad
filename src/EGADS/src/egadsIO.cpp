@@ -3,7 +3,7 @@
  *
  *             Load & Save Functions
  *
- *      Copyright 2011-2022, Massachusetts Institute of Technology
+ *      Copyright 2011-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -49,8 +49,11 @@
 class egadsLabel
 {
 public:
-  TopoDS_Shape shape;
-  char        *shapeName;
+  egadsLabel(const char* shapeName) : shapeName(EG_strdup(shapeName)) {}
+  egadsLabel(const egadsLabel& label) : shapeName(EG_strdup(label.shapeName)) {}
+  ~egadsLabel() { EG_free(shapeName); }
+
+  char  *shapeName;
 };
 
 
@@ -59,7 +62,7 @@ public:
 #endif
 
 
-//#define INTERIM
+#define INTERIM
 
 #define UVTOL    1.e-4
 
@@ -895,13 +898,13 @@ int
 EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
 {
   int          i, j, stat, outLevel, len, nattr, nerr, hite, hitf, egads = 0;
-  int          oclass, ibody, *invalid = NULL, nas = 0, nbs = 0;
+  int          oclass, ibody, *invalid = NULL, nbs = 0;
   double       scale  = 1.0;
   char         *units = NULL;
   egObject     *omodel, *aobj;
   TopoDS_Shape source;
   egadsModel   *mshape = NULL;
-  egadsLabel   *labels = NULL;
+  NCollection_IndexedDataMap<TopoDS_Shape, egadsLabel> labels;
   FILE         *fp;
   
   *model = NULL;
@@ -995,8 +998,9 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
                                        StepRepr_NextAssemblyUsageOccurrence);
     Handle(Standard_Type) tPD   = STANDARD_TYPE(StepBasic_ProductDefinition);
 #endif
-    // count the name attributes
-    nas = 0;
+    TopoDS_Compound compound;
+    BRep_Builder    builder3D;
+    builder3D.MakeCompound(compound);
     for (i = 1; i <= nbs; i++) {
       TopoDS_Shape aShape = aReader.Shape(i);
       TopTools_IndexedMapOfShape MapAll;
@@ -1013,45 +1017,9 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         const char *STEPname = aReprItem->Name()->ToCString();
         if (STEPname == NULL)      continue;
         if (strlen(STEPname) == 0) continue;
-        nas++;
-      }
-    }
-    if (nas != 0) {
-      printf("  Number of Name Attrs Found = %d\n", nas);
-      labels = new egadsLabel[nas];
-      for (i = 0; i < nas; i++) {
-        labels[i].shape.Nullify();
-        labels[i].shapeName = NULL;
-      }
-    }
-
-    TopoDS_Compound compound;
-    BRep_Builder    builder3D;
-    builder3D.MakeCompound(compound);
-    nas = 0;
-    for (i = 1; i <= nbs; i++) {
-      TopoDS_Shape aShape = aReader.Shape(i);
-      if (labels != NULL) {
-        TopTools_IndexedMapOfShape MapAll;
-        TopExp::MapShapes(aShape, MapAll);
-        for (int j = 1; j <= MapAll.Extent(); j++) {
-          TopoDS_Shape aShape = MapAll(j);
-          Handle(Standard_Transient) ent = TR->EntityFromShapeResult(aShape, 1);
-          if (ent.IsNull())          ent = TR->EntityFromShapeResult(aShape,-1);
-          if (ent.IsNull())          ent = TR->EntityFromShapeResult(aShape, 4);
-          if (ent.IsNull())          continue;
-          Handle(StepRepr_RepresentationItem) aReprItem;
-          aReprItem = Handle(StepRepr_RepresentationItem)::DownCast(ent);
-          if (aReprItem.IsNull())    continue;
-          const char *STEPname = aReprItem->Name()->ToCString();
-          if (STEPname == NULL)      continue;
-          if (strlen(STEPname) == 0) continue;
-          labels[nas].shape     = aShape;
-          labels[nas].shapeName = EG_strdup(STEPname);
-          nas++;
-  /*      printf(" %d/%d %s -> Name found: %s\n", j, MapAll.Extent(),
-                 TopAbs::ShapeTypeToString(aShape.ShapeType()), STEPname);  */
-        }
+        labels.Add(aShape, egadsLabel(STEPname));
+       /* printf(" %d/%d %s -> Name found: %s\n", j, MapAll.Extent(),
+               TopAbs::ShapeTypeToString(aShape.ShapeType()), STEPname); */
       }
 #ifdef STEPASSATTRS
       Handle(Standard_Transient) ent = TR->EntityFromShapeResult(aShape, 3);
@@ -1110,9 +1078,23 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         if (!xForm.IsDone()) {
           printf(" EGADS Warning: Can't scale Body %d (EG_loadModel)!\n", i);
         } else {
+          TopTools_IndexedMapOfShape bMap;
+          TopExp::MapShapes(aShape, bMap);
+
           aShape = xForm.ModifiedShape(aShape);
+
+          TopTools_IndexedMapOfShape aMap;
+          TopExp::MapShapes(aShape, aMap);
+          for (int j = 1; j <= bMap.Extent(); j++) {
+            TopoDS_Shape bShape = bMap(j);
+            if (!labels.Contains(bShape)) continue;
+            egadsLabel label = labels.FindFromKey(bShape);
+            labels.RemoveKey(bShape);
+            labels.Add(aMap(j), label);
+          }
         }
       }
+
       builder3D.Add(compound, aShape);
     }
     source = compound;
@@ -1172,7 +1154,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     iReader.TransferRoots();
     if ((bflg&16) != 0) egads = -1;
 
-    nas = nbs = iReader.NbShapes();
+    nbs = iReader.NbShapes();
     if (nbs <= 0) {
       if (outLevel > 0)
         printf(" EGADS Error: %s has No Shapes (EG_loadModel)!\n", 
@@ -1185,7 +1167,6 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     const Handle(XSControl_WorkSession)& workSession = iReader.WS();
     const Handle(XSControl_TransferReader)& transferReader =
           workSession->TransferReader();
-    labels = new egadsLabel[nas];
 
     TopoDS_Compound compound;
     BRep_Builder    builder3D;
@@ -1193,19 +1174,17 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     for (i = 1; i <= nbs; i++) {
       TopoDS_Shape aShape = iReader.Shape(i);
       
-      labels[i-1].shapeName = NULL;
       const Handle(IGESData_IGESEntity)& shapeEntity =
             Handle(IGESData_IGESEntity)::DownCast(
                   transferReader->EntityFromShapeResult(aShape, -1));
       if (shapeEntity->HasName())
-        labels[i-1].shapeName = EG_strdup(shapeEntity->NameValue()->ToCString());
+        labels.Add(aShape, egadsLabel(shapeEntity->NameValue()->ToCString()));
       
       if ((bflg&8) != 0) {
         ShapeUpgrade_UnifySameDomain uShape(aShape);
         uShape.Build();
         aShape = uShape.Shape();
       }
-      labels[i-1].shape = aShape;
       if (scale != 1.0) {
         gp_Trsf form = gp_Trsf();
         form.SetValues(scale, 0.0,   0.0,   0.0,
@@ -1215,7 +1194,20 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         if (!xForm.IsDone()) {
           printf(" EGADS Warning: Can't scale Body %d (EG_loadModel)!\n", i);
         } else {
+          TopTools_IndexedMapOfShape bMap;
+          TopExp::MapShapes(aShape, bMap);
+
           aShape = xForm.ModifiedShape(aShape);
+
+          TopTools_IndexedMapOfShape aMap;
+          TopExp::MapShapes(aShape, aMap);
+          for (int j = 1; j <= bMap.Extent(); j++) {
+            TopoDS_Shape bShape = bMap(j);
+            if (!labels.Contains(bShape)) continue;
+            egadsLabel label = labels.FindFromKey(bShape);
+            labels.RemoveKey(bShape);
+            labels.Add(aMap(j), label);
+          }
         }
       }
       builder3D.Add(compound, aShape);
@@ -1451,13 +1443,6 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
       }
       delete [] mshape->bodies;
       delete mshape;
-      if (labels != NULL) {
-        for (j = 0; j < nas; j++) {
-          if (labels[j].shapeName == NULL) continue;
-          EG_free(labels[j].shapeName);
-        }
-        delete [] labels;
-      }
       return stat;
     }
     egObject  *pobj    = mshape->bodies[i];
@@ -1617,13 +1602,6 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     }
     delete [] mshape->bodies;
     delete mshape;
-    if (labels != NULL) {
-      for (j = 0; j < nas; j++) {
-        if (labels[j].shapeName == NULL) continue;
-        EG_free(labels[j].shapeName);
-      }
-      delete [] labels;
-    }
     if (invalid != NULL) EG_free(invalid);
     return stat;
   }
@@ -1642,13 +1620,6 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
       if (egads == 1) {
         mshape->nbody = i;
         EG_destroyTopology(omodel);
-        if (labels != NULL) {
-          for (j = 0; j < nas; j++) {
-            if (labels[j].shapeName == NULL) continue;
-            EG_free(labels[j].shapeName);
-          }
-          delete [] labels;
-        }
         if (invalid != NULL) EG_free(invalid);
         return stat;
       }
@@ -1668,13 +1639,6 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     mshape->nbody = j;
     if (j == 0) {
       EG_destroyTopology(omodel);
-      if (labels != NULL) {
-        for (j = 0; j < nas; j++) {
-          if (labels[j].shapeName == NULL) continue;
-          EG_free(labels[j].shapeName);
-        }
-        delete [] labels;
-      }
       if (invalid != NULL) EG_free(invalid);
       return EGADS_TOPOERR;
     }
@@ -1691,35 +1655,34 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
   }
   
   /* possibly assign attributes from IGES/STEP read */
-  if (labels != NULL) {
-    for (i = 0; i < nas; i++) {
-      if (labels[i].shapeName == NULL) continue;
-      char *value = labels[i].shapeName;
+  if (labels.Extent() > 0) {
+    for (i = 1; i <= labels.Extent(); i++) {
+      const char *value = labels(i).shapeName;
+      if (value == NULL) continue;
+      TopoDS_Shape aShape = labels.FindKey(i);
 /*    printf(" Shape %2d: %s\n", i+1, value);  */
       for (int ibody = 0; ibody < mshape->nbody; ibody++) {
         egObject  *pobj   = mshape->bodies[ibody];
         egadsBody *pbody  = (egadsBody *) pobj->blind;
-        if (pbody->shape == labels[i].shape)
+        if (pbody->shape == aShape)
           EG_attributeAdd(pobj, "Name", ATTRSTRING, 1, NULL, NULL, value);
-        j = pbody->nodes.map.FindIndex(labels[i].shape);
+        j = pbody->nodes.map.FindIndex(aShape);
         if (j != 0) EG_attributeAdd(pbody->nodes.objs[j-1],  "Name", ATTRSTRING,
                                     1, NULL, NULL, value);
-        j = pbody->edges.map.FindIndex(labels[i].shape);
+        j = pbody->edges.map.FindIndex(aShape);
         if (j != 0) EG_attributeAdd(pbody->edges.objs[j-1],  "Name", ATTRSTRING,
                                     1, NULL, NULL, value);
-        j = pbody->loops.map.FindIndex(labels[i].shape);
+        j = pbody->loops.map.FindIndex(aShape);
         if (j != 0) EG_attributeAdd(pbody->loops.objs[j-1],  "Name", ATTRSTRING,
                                     1, NULL, NULL, value);
-        j = pbody->faces.map.FindIndex(labels[i].shape);
+        j = pbody->faces.map.FindIndex(aShape);
         if (j != 0) EG_attributeAdd(pbody->faces.objs[j-1],  "Name", ATTRSTRING,
                                     1, NULL, NULL, value);
-        j = pbody->shells.map.FindIndex(labels[i].shape);
+        j = pbody->shells.map.FindIndex(aShape);
         if (j != 0) EG_attributeAdd(pbody->shells.objs[j-1], "Name", ATTRSTRING,
                                     1, NULL, NULL, value);
       }
-      EG_free(value);
     }
-    delete [] labels;
   }
   if (invalid != NULL) EG_free(invalid);
   if (egads != 1) return EGADS_SUCCESS;
@@ -2678,9 +2641,8 @@ EG_saveTess(egObject *tess, const char *name)
 
   // write out face tessellations
   for (iface = 0; iface < nface; iface++) {
-    status = EG_getTessFace(tess, iface+1, &len, &pxyz, &puv, &ptype, &pindex,
-                            &ntri, &ptris, &ptric);
-    if (status != EGADS_SUCCESS) goto cleanup;
+    EG_getTessFace(tess, iface+1, &len, &pxyz, &puv, &ptype, &pindex,
+                   &ntri, &ptris, &ptric);
 
     fwrite(&len,   sizeof(int),         1, fp);
     fwrite(&ntri,  sizeof(int),         1, fp);
@@ -2719,6 +2681,7 @@ EG_loadTess(egObject *body, const char *name, egObject **tess)
   int      i, ir, status, nnode, nedge, nface, n[3], len, ntri, nattr;
   int      *ptype, *pindex, *tris, *tric;
   double   *xyz, *param;
+  egTessel *btess;
   egObject *obj;
   FILE     *fp;
   
@@ -2800,7 +2763,13 @@ EG_loadTess(egObject *body, const char *name, egObject **tess)
     len = ntri = 0;
     fread(&len,  sizeof(int), 1, fp);
     fread(&ntri, sizeof(int), 1, fp);
-    if ((len == 0) || (ntri == 0)) continue;
+    if ((len == 0) || (ntri == 0)) {
+      btess = (egTessel *) (*tess)->blind;
+      btess->nFace = 0;
+      EG_free(btess->tess2d);
+      btess->tess2d = NULL;
+      continue;
+    }
     xyz    = (double *) malloc(3*len*sizeof(double));
     param  = (double *) malloc(2*len*sizeof(double));
     ptype  = (int *)    malloc(  len* sizeof(int));

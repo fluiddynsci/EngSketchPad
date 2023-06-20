@@ -48,21 +48,21 @@ myProblem = pyCAPS.Problem(problemName=workDir,
                            outLevel=args.outLevel)
 
 # Load AIMs
-myProblem.analysis.create(aim = "egadsTessAIM",
-                          name= "egads",
+myProblem.analysis.create(aim = "aflr4AIM",
+                          name= "aflr4",
                           capsIntent = "Aerodynamic")
 
-myProblem.analysis.create(aim = "tetgenAIM",
-                          name= "tetgen",
+myProblem.analysis.create(aim = "aflr3AIM",
+                          name= "aflr3",
                           capsIntent = "Aerodynamic")
 
-myProblem.analysis["tetgen"].input["Surface_Mesh"].link(myProblem.analysis["egads"].output["Surface_Mesh"])
+myProblem.analysis["aflr3"].input["Surface_Mesh"].link(myProblem.analysis["aflr4"].output["Surface_Mesh"])
 
 myProblem.analysis.create(aim = "su2AIM",
                           name = "su2",
                           capsIntent = "Aerodynamic")
 
-myProblem.analysis["su2"].input["Mesh"].link(myProblem.analysis["tetgen"].output["Volume_Mesh"])
+myProblem.analysis["su2"].input["Mesh"].link(myProblem.analysis["aflr3"].output["Volume_Mesh"])
 
 myProblem.analysis.create(aim = "astrosAIM",
                           name = "astros",
@@ -74,11 +74,11 @@ boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
 for boundName in boundNames:
     # Create the bound
     bound = myProblem.bound.create(boundName)
-    
+
     # Create the vertex sets on the bound for su2 and astros analysis
     su2Vset    = bound.vertexSet.create(myProblem.analysis["su2"])
     astrosVset = bound.vertexSet.create(myProblem.analysis["astros"])
-    
+
     # Create pressure data sets
     su2_Pressure    = su2Vset.dataSet.create("Pressure")
     astros_Pressure = astrosVset.dataSet.create("Pressure")
@@ -90,17 +90,18 @@ for boundName in boundNames:
     # Link the data sets
     astros_Pressure.link(su2_Pressure, "Conserve")
     su2_Displacement.link(astros_Displacement, "Interpolate")
-    
+
     # Close the bound as complete (cannot create more vertex or data sets)
     bound.close()
 
-# Set inputs for EGADS
-myProblem.analysis["egads"].input.Tess_Params = [.6, 0.05, 20.0]
-myProblem.analysis["egads"].input.Edge_Point_Max = 4
+# Set inputs for aflr4
+myProblem.analysis["aflr4"].input.ff_cdfr = 1.4
+myProblem.analysis["aflr4"].input.max_scale = 0.75
+myProblem.analysis["aflr4"].input.min_scale = 0.1
+myProblem.analysis["aflr4"].input.Mesh_Length_Factor = 2
 
-# Set inputs for tetgen
-myProblem.analysis["tetgen"].input.Preserve_Surf_Mesh = True
-myProblem.analysis["tetgen"].input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
+# Set inputs for aflr3
+myProblem.analysis["aflr3"].input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set inputs for su2
 speedofSound = 340.0 # m/s
@@ -210,6 +211,6 @@ for iter in range(numTransferIteration):
 
     ####### Astros #######################
     #
-    # Astros executes automatically 
+    # Astros executes automatically
     #
     #######################################

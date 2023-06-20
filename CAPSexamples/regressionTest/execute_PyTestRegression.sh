@@ -190,6 +190,7 @@ if [ "$TYPE" == "MINIMAL" ]; then
     if [[ `command -v flowCart` ]]; then
         ulimit -s unlimited || true # Cart3D requires unlimited stack size
         expectPythonSuccess "cart3d_PyTest.py"
+        #notRun="$notRun\nCart3D"
     else
         notRun="$notRun\nCart3D"
     fi
@@ -521,8 +522,26 @@ if [[ "$TYPE" == "STRUCTURE" || "$TYPE" == "ALL" ]]; then
 
     ###### Plato ######
     if [[ -f $ESP_ROOT/lib/exodusWriter.$EXT ]]; then
-        expectPythonSuccess "plato_table_PyTest.py"
-        expectPythonSuccess "plato_cyli_box_PyTest.py"
+        if [[ -f $ESP_ROOT/lib/aflr2AIM.$EXT && \
+              -f $ESP_ROOT/lib/aflr3AIM.$EXT && \
+              -f $ESP_ROOT/lib/aflr4AIM.$EXT ]]; then
+            expectPythonSuccess "plato_aflr_airfoil_PyTest.py"
+            expectPythonSuccess "plato_aflr_table_PyTest.py"
+            expectPythonSuccess "plato_aflr_table_morph_PyTest.py"
+            if [[ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]]; then
+                expectPythonSuccess "plato_aflr_tetgen_cyli_box_PyTest.py"
+            fi
+        fi
+        if [[ -f $ESP_ROOT/lib/tetgenAIM.$EXT ]]; then
+            expectPythonSuccess "plato_tetgen_table_PyTest.py"
+            expectPythonSuccess "plato_tetgen_cyli_box_PyTest.py"
+        fi
+        if [[ -f $ESP_ROOT/lib/aflr2AIM.$EXT && \
+              -f $ESP_ROOT/lib/aflr3AIM.$EXT && \
+              -f $ESP_ROOT/lib/aflr4AIM.$EXT && \
+              -f $ESP_ROOT/lib/tetgenAIM.$EXT ]]; then
+            expectPythonSuccess "plato_aflr_tetgen_table_PyTest.py"
+        fi
     else
         notRun="$notRun\nPlato"
     fi

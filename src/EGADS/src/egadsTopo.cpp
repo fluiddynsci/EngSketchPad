@@ -3,7 +3,7 @@
  *
  *             Topology Functions
  *
- *      Copyright 2011-2022, Massachusetts Institute of Technology
+ *      Copyright 2011-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -1290,6 +1290,7 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
         EG_cleanMaps(&body->nodes);
         return stat;
       }
+      body->nodes.objs[j]->topObj = topObj;
     }
   }
   if (nEdge > 0) {
@@ -1305,6 +1306,7 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
         EG_cleanMaps(&body->nodes);
         return stat;
       }
+      body->edges.objs[j]->topObj = topObj;
     }
   }
   if (nLoop > 0) {
@@ -1322,6 +1324,7 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
         EG_cleanMaps(&body->nodes);
         return stat;
       }
+      body->loops.objs[j]->topObj = topObj;
     }
   }
   if (nFace > 0) {
@@ -1341,6 +1344,7 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
         EG_cleanMaps(&body->nodes);
         return stat;
       }
+      body->faces.objs[j]->topObj = topObj;
     }
   }
   if (nShell > 0) {
@@ -1362,6 +1366,7 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
         EG_cleanMaps(&body->nodes);
         return stat;
       }
+      body->shells.objs[j]->topObj = topObj;
     }
   }
 
@@ -1409,6 +1414,7 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
         EG_cleanMaps(&body->nodes);
         return stat;
       }
+      curves_obj[j]->topObj = topObj;
     }
   }
 
@@ -1449,9 +1455,9 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
         EG_cleanMaps(&body->nodes);
         return stat;
       }
+      surfs_obj[j]->topObj = topObj;
       Handle(Geom_Surface) hSurface =
                                  Handle(Geom_Surface)::DownCast(surfs_map(j+1));
-      surfs_obj[j]->topObj = topObj;
       EG_completeSurf(surfs_obj[j], hSurface);
     }
   }
@@ -1473,7 +1479,6 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
     pnode->xyz_dot[0]  = pnode->xyz_dot[1] = pnode->xyz_dot[2] = 0.0;
     obj->oclass        = NODE;
     obj->blind         = pnode;
-    obj->topObj        = topObj;
   }
 
   for (j = 0; j < nEdge; j++) {
@@ -1607,7 +1612,6 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
     }
     obj->oclass        = EDGE;
     obj->blind         = pedge;
-    obj->topObj        = topObj;
     obj->mtype         = TWONODE;
     if (n1 == n2) obj->mtype = ONENODE;
     if (degen == 1) {
@@ -1710,7 +1714,6 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
     ploop->topFlg      = 0;
     ploop->bbox.filled = 0;
     obj->blind         = ploop;
-    obj->topObj        = topObj;
     obj->mtype         = OPEN;
     if (closed == 1) obj->mtype = CLOSED;
     if (bobj->mtype == WIREBODY) EG_referenceObject(obj, bobj);
@@ -1783,7 +1786,6 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
     BRepTools::UVBounds(Face, pface->urange[0], pface->urange[1],
                               pface->vrange[0], pface->vrange[1]);
     obj->blind         = pface;
-    obj->topObj        = topObj;
     obj->mtype         = SFORWARD;
     if (Face.Orientation() == TopAbs_REVERSED) obj->mtype = SREVERSE;
     if (bobj->mtype == FACEBODY) EG_referenceObject(obj, bobj);
@@ -1846,7 +1848,6 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
       pshell->topFlg      = 0;
       pshell->bbox.filled = 0;
       obj->blind          = pshell;
-      obj->topObj         = topObj;
       obj->mtype          = EG_shellClosure(pshell, 0);
       if (bobj->mtype >= SHEETBODY) EG_referenceObject(obj, bobj);
     }
@@ -2313,6 +2314,54 @@ EG_getTopology(const egObject *topo, egObject **geom, int *oclass,
 
   return EGADS_SUCCESS;
 }
+
+
+template<int N>
+int
+EG_getTopology(const egObject *topo, egObject **geom, int *oclass,
+               int *type, /*@null@*/ SurrealS<N> *limits, int *nChildren,
+               egObject ***children, int **senses)
+{
+  int stat = EGADS_SUCCESS;
+  double lims[4];
+
+  stat = EG_getTopology(topo, geom, oclass, type, lims, nChildren, children, senses);
+  if (stat != EGADS_SUCCESS) return stat;
+
+  if (topo->oclass == NODE) {
+
+    egadsNode *pnode = (egadsNode *) topo->blind;
+    if (pnode->filled == 0) return EGADS_NODATA;
+
+    limits[0] = pnode->xyz_dot[0];
+    limits[1] = pnode->xyz_dot[1];
+    limits[2] = pnode->xyz_dot[2];
+  } else if (topo->oclass == EDGE) {
+
+    egadsEdge *pedge = (egadsEdge *) topo->blind;
+    if (pedge != NULL && limits != NULL) {
+      if (pedge->filled == 0) return EGADS_NODATA;
+
+      limits[0] = pedge->trange_dot[0];
+      limits[1] = pedge->trange_dot[1];
+    }
+  } else if (topo->oclass == FACE) {
+
+    egadsFace *pface = (egadsFace *) topo->blind;
+    if (pface != NULL && limits != NULL) {
+      limits[0] = pface->urange[0];
+      limits[1] = pface->urange[1];
+      limits[2] = pface->vrange[0];
+      limits[3] = pface->vrange[1];
+    }
+  }
+
+  return stat;
+}
+template int
+EG_getTopology(const egObject *topo, egObject **geom, int *oclass,
+               int *type, /*@null@*/ SurrealS<1> *limits, int *nChildren,
+               egObject ***children, int **senses);
 
 
 static void
@@ -4139,6 +4188,7 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
       builder3D.Add(compound, pbody->shape);
       EG_referenceObject(children[i], obj);
       EG_removeCntxtRef(children[i]);
+      //pmodel->bodies[i]->topObj = obj; Why does this not work!?!?
     }
     pmodel->shape = compound;
 
@@ -4223,6 +4273,81 @@ EG_makeTopology_dot(egObject *context, /*@null@*/ egObject *geom,
 
   return EGADS_SUCCESS;
 }
+
+template<int N>
+int
+EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
+                int oclass, int mtype,
+                /*@null@*/ SurrealS<N> *limits,
+                int nChildren, /*@null@*/ egObject **children,
+                /*@null@*/ int *senses, egObject **topo)
+{
+  int stat, i, outLevel;
+  double lims[3], lims_dot[3];
+  egCntxt  *cntx;
+
+  if (context == NULL)               return EGADS_NULLOBJ;
+  if (context->magicnumber != MAGIC) return EGADS_NOTOBJ;
+  if (context->oclass != CONTXT)     return EGADS_NOTCNTX;
+  if (EG_sameThread(context))        return EGADS_CNTXTHRD;
+  cntx = (egCntxt *) context->blind;
+  if (cntx == NULL)                  return EGADS_NODATA;
+  outLevel = cntx->outLevel;
+
+  if (geom != NULL) {
+    if (EG_hasGeometry_dot(geom) != EGADS_SUCCESS) {
+      if (outLevel > 0) {
+        printf(" EGADS Error: Reference geom with no sensitivities");
+        printf(" (EG_makeTopology_dot)!\n");
+      }
+      return EGADS_NODATA;
+    }
+  }
+
+  for (i = 0; i < nChildren; i++) {
+    if (EG_hasGeometry_dot(children[i]) != EGADS_SUCCESS) {
+      if (outLevel > 0) {
+        printf(" EGADS Error: Child[%d] does not have sensitivities", i);
+        printf(" (EG_makeTopology_dot)!\n");
+      }
+      return EGADS_NODATA;
+    }
+  }
+
+  if (oclass == NODE) {
+    lims[0] = limits[0].value();
+    lims[1] = limits[1].value();
+    lims[2] = limits[2].value();
+  } else if (oclass == EDGE) {
+    lims[0] = limits[0].value();
+    lims[1] = limits[1].value();
+  }
+
+  stat = EG_makeTopology(context, geom, oclass, mtype, lims,
+                         nChildren, children, senses, topo);
+  if (stat != EGADS_SUCCESS) return stat;
+
+  if (oclass == NODE) {
+    lims_dot[0] = limits[0].deriv();
+    lims_dot[1] = limits[1].deriv();
+    lims_dot[2] = limits[2].deriv();
+    stat = EG_setGeometry_dot(*topo, NODE, 0, NULL, lims, lims_dot);
+    if (stat != EGADS_SUCCESS) return stat;
+  } else if (oclass == EDGE) {
+    lims_dot[0] = limits[0].deriv();
+    lims_dot[1] = limits[1].deriv();
+    stat = EG_setRange_dot(*topo, oclass, lims, lims_dot);
+    if (stat != EGADS_SUCCESS) return stat;
+  }
+
+  return EGADS_SUCCESS;
+}
+template int
+EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
+                int oclass, int mtype,
+                /*@null@*/ SurrealS<1> *limits,
+                int nChildren, /*@null@*/ egObject **children,
+                /*@null@*/ int *senses, egObject **topo);
 
 
 int
@@ -5467,7 +5592,7 @@ EG_makeFace(egObject *object, int mtype,
 #else
     geom->topObj = obj;
     EG_referenceObject(geom, obj);
-    EG_dereferenceObject(geom, context);
+    EG_removeCntxtRef(geom);
 #endif
   }
 
@@ -9145,9 +9270,8 @@ int
 EG_replaceFaces(const egObject *body, int nobj, egObject **objs,
                       egObject **result)
 {
-  int      i, j, k, outLevel, stat, mtype, nerr, fullAttr, no;
-  double   tmin, tmax, trange[2], xyz[3];
-  egObject *context, *obj, *src, *geom, **obs;
+  int      i, j, k, outLevel, stat, mtype, nerr, hasdot, fullAttr, no;
+  egObject *context, *obj, *src, **obs;
 
   *result = NULL;
   if  (body == NULL)               return EGADS_NULLOBJ;
@@ -9386,7 +9510,8 @@ EG_replaceFaces(const egObject *body, int nobj, egObject **objs,
     return stat;
   }
 
-  // assign attributes
+  // assign attributes and sensitvities
+  hasdot = EG_hasGeometry_dot(body);
   if (fullAttr == 1) EG_attriBodyDup(body, obj);
   if (pbody->faces.map.Extent() != pbodn->faces.map.Extent()+nNull) {
     if (outLevel > 0)
@@ -9402,11 +9527,19 @@ EG_replaceFaces(const egObject *body, int nobj, egObject **objs,
       }
       if (fullAttr == 1) EG_attributeDel(pbodn->faces.objs[j], NULL);
       EG_attributeDup(src, pbodn->faces.objs[j]);
+      if (hasdot == EGADS_SUCCESS) {
+        stat = EG_copyGeometry_dot(src, NULL, NULL, pbodn->faces.objs[j]);
+        if (stat != EGADS_SUCCESS) {
+          delete [] amap;
+          printf(" EGADS Error: Copy Geometry dot = %d for face %d\n", stat, i+1);
+          return stat;
+        }
+      }
       j++;
     }
   }
   delete [] amap;
-  
+
   /* deal with extended attribution */
   if (fullAttr == 1) {
 
@@ -9420,21 +9553,9 @@ EG_replaceFaces(const egObject *body, int nobj, egObject **objs,
       }
       for (k = 0; k < no; k++) {
         if (obs[k]->mtype == DEGENERATE) continue;
-        egadsEdge *pedge = (egadsEdge *) obs[k]->blind;
-        trange[0] = pedge->trange[0];
-        trange[1] = pedge->trange[1];
-        geom      = pedge->curve;
         for (j = 0; j < pbodn->edges.map.Extent(); j++) {
           if (pbodn->edges.objs[j]->mtype == DEGENERATE) continue;
-          if (EG_isSame(obs[k], pbodn->edges.objs[j]) == EGADS_SUCCESS) {
-            egadsEdge *pedgd = (egadsEdge *) pbodn->edges.objs[j]->blind;
-            egadsNode *pnod0 = (egadsNode *) pedgd->nodes[0]->blind;
-            egadsNode *pnod1 = (egadsNode *) pedgd->nodes[1]->blind;
-            stat = EG_invEvaluate(geom, pnod0->xyz, &tmin, xyz);
-            if (stat != EGADS_SUCCESS) continue;
-            stat = EG_invEvaluate(geom, pnod1->xyz, &tmax, xyz);
-            if (stat != EGADS_SUCCESS) continue;
-            if ((tmin+UVTOL < trange[0]) || (tmax-UVTOL > trange[1])) continue;
+          if (EG_isEquivalent(obs[k], pbodn->edges.objs[j]) == EGADS_SUCCESS) {
             EG_attributeDup(obs[k], pbodn->edges.objs[j]);
           }
         }

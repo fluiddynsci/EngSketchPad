@@ -3,8 +3,14 @@ ifndef ESP_ROOT
 $(error ESP_ROOT must be set -- Please fix the environment...)
 endif
 #
+ifneq ($(MAKECMDGOALS),dox)
+ifneq ($(MAKECMDGOALS),doxclean)
+#
 ifndef TETGEN
 $(error TETGEN must be set -- Please fix the environment...)
+endif
+#
+endif
 endif
 #
 IDIR  = $(ESP_ROOT)/include

@@ -3,7 +3,7 @@
  *
  *             Cart3D AIM
  *
- *      Copyright 2014-2022, Massachusetts Institute of Technology
+ * *      Copyright 2014-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -391,7 +391,7 @@ cart3d_Components(void *aimInfo,
   int *bndEdgeConn = NULL;
   int *bndEdgeCompID = NULL;
   int *bndEdgeTopoID = NULL;
-  int twoDMesh;
+  int twoDMesh = (int)false;
   int numQuadFace;
   int *quadFaceConn = NULL;
   int *quadFaceCompID = NULL;
@@ -561,7 +561,7 @@ cart3d_Components(void *aimInfo,
                                    &ntri, &triFaceConn, &triFaceCompID, &triFaceTopoID,
                                    &nedge, &bndEdgeConn, &bndEdgeCompID, &bndEdgeTopoID,
                                    &nnode, &nodeConn, &nodeCompID, &nodeTopoID,
-                                   &twoDMesh,
+                                   twoDMesh,
                                    NULL,
                                    &numQuadFace, &quadFaceConn, &quadFaceCompID, &quadFaceTopoID);
     AIM_STATUS(aimInfo, status);
@@ -1715,7 +1715,7 @@ aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, int index,
 
     /*! \page aimInputsCART3D
      * - <B> Design_Sensitivity = False</B> <br>
-     * Create geometric sensitivities Fun3D input files needed to compute Design_Functional sensitivities w.r.t Design_Variable.
+     * Create geometric sensitivities Cart3D input files needed to compute Design_Functional sensitivities w.r.t Design_Variable.
      */
 
   } else if (index == Design_Adapt) {

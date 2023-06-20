@@ -11,7 +11,7 @@
 #include "cfdTypes.h"  // Bring in cfd specific types
 #include "su2Utils.h"  // Bring in su2 utility header
 
-// Write SU2 configuration file for version Blackbird (7.4.0)
+// Write SU2 configuration file for version Blackbird (7.5.1)
 int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
                                const char *meshfilename,
                                cfdBoundaryConditionStruct bcProps, int withMotion)
@@ -42,7 +42,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     FILE *fp = NULL;
     char fileExt[] = ".cfg";
 
-    printf("Write SU2 configuration file for version \"BlackBird (7.4.0) \"\n");
+    printf("Write SU2 configuration file for version \"BlackBird (7.5.1) \"\n");
     stringLength = 1
                    + strlen(aimInputs[Proj_Name-1].vals.string)
                    + strlen(fileExt);
@@ -66,7 +66,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%%                                                                              %%\n");
     fprintf(fp,"%% SU2 configuration file                                                       %%\n");
     fprintf(fp,"%% Created by SU2AIM for Project: \"%s\"\n", aimInputs[Proj_Name-1].vals.string);
-    fprintf(fp,"%% File Version 7.4.0 \"Blackbird\"                                               %%\n");
+    fprintf(fp,"%% File Version 7.5.1 \"Blackbird\"                                               %%\n");
     fprintf(fp,"%%                                                                              %%\n");
     fprintf(fp,"%% Please report bugs/comments/suggestions to NBhagat1@UDayton.edu              %%\n");
     fprintf(fp,"%%                                                                              %%\n");
@@ -102,6 +102,8 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp, "%% \n");
     fprintf(fp,"%% Transition model (NONE, LM) \n");
     fprintf(fp,"%% KIND_TRANS_MODEL= NONE \n");
+    fprintf(fp, "%% Specify versions/correlations of the LM model (LM2015, MALAN, SULUKSNA, KRAUSE, KRAUSE_HYPER, MEDIDA, MEDIDA_BAEDER, MENTER_LANG \n");
+    fprintf(fp,"%% LM_OPTIONS= NONE \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Specify subgrid scale model(NONE, IMPLICIT_LES, SMAGORINSKY, WALE, VREMAN) \n");
     fprintf(fp,"%% KIND_SGS_MODEL= NONE \n");
@@ -464,11 +466,14 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% Aircraft semi-span (0 implies automatic calculation) (m or in) \n");
     fprintf(fp,"%% SEMI_SPAN= 0.0 \n");
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% ---- NONEQUILIBRIUM GAS, IDEAL GAS, POLYTROPIC, VAN DER WAALS AND PENG ROBINSON CONSTANTS -------%% \n");
+    fprintf(fp,"%% ---- NONEQUILIBRIUM GAS, IDEAL GAS, POLYTROPIC, VAN DER WAALS AND PENG ROBINSON CONSTANTS, CoolProp library -------%% \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Fluid model (STANDARD_AIR, IDEAL_GAS, VW_GAS, PR_GAS, \n");
-    fprintf(fp,"%%              CONSTANT_DENSITY, INC_IDEAL_GAS, INC_IDEAL_GAS_POLY, MUTATIONPP, SU2_NONEQ, FLUID_MIXTURE) \n");
+    fprintf(fp,"%%              CONSTANT_DENSITY, INC_IDEAL_GAS, INC_IDEAL_GAS_POLY, MUTATIONPP, SU2_NONEQ, FLUID_MIXTURE, COOL_PROP) \n");
     fprintf(fp,"%% FLUID_MODEL= STANDARD_AIR \n");
+    fprintf(fp,"%% To find all available fluid name for CoolProp library, clikc the following link: \n");
+    fprintf(fp,"%% http://www.coolprop.org/fluid_properties/PurePseudoPure.html#list-of-fluids \n");
+    fprintf(fp,"%% FLUID_NAME = nitrogen \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Ratio of specific heats (1.4 default and the value is hardcoded \n");
     fprintf(fp,"%%                          for the model STANDARD_AIR, compressible only) \n");
@@ -486,6 +491,9 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Acentri factor (0.035 (air)) \n");
     fprintf(fp,"%% ACENTRIC_FACTOR= 0.035 \n");
+    fprintf(fp,"%% \n");
+    fprintf(fp,"%% Thermodynamics(operating) Pressure (101325 Pa default value, only for incompressible flow and FLUID_MIXTURE) \n");
+    fprintf(fp,"%% THERMODYNAMIC_PRESSURE= 101325.0 \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Specific heat at constant pressure, Cp (1004.703 J/kg*K (air)). \n");
     fprintf(fp,"%% Incompressible fluids with energy eqn. (CONSTANT_DENSITY, INC_IDEAL_GAS) and the heat equation. \n");
@@ -513,6 +521,10 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Freeze chemical reactions \n");
     fprintf(fp,"%% FROZEN_MIXTURE= NO \n");
+    fprintf(fp,"%% \n");
+    fprintf(fp,"%% NEMO Inlet Options \n");
+    fprintf(fp,"%% INLET_TEMPERATURE_VE = 288.15 \n");
+    fprintf(fp,"%% INLET_GAS_COMPOSITION = (0.77, 0.23, 0.0, 0.0, 0.0) \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% --------------------------- VISCOSITY MODEL ---------------------------------%% \n");
     fprintf(fp,"%% \n");
@@ -860,7 +872,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% \n");
     fprintf(fp,"%% --------------------- SPECIES TRANSPORT SIMULATION --------------------------%% \n");
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% Specify scalar transport model (NONE, PASSIVE_SCALAR) \n");
+    fprintf(fp,"%% Specify scalar transport model (NONE, SPECIES_TRANSPORT) \n");
     fprintf(fp,"%% KIND_SCALAR_MODEL= NONE \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Mass diffusivity model (CONSTANT_DIFFUSIVITY) \n");
@@ -880,7 +892,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% Use strong inlet and outlet BC in the species solver \n");
     fprintf(fp,"%% SPECIES_USE_STRONG_BC= NO \n");
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% Convective numerical method for species transport (SCALAR_UPWIND) \n");
+    fprintf(fp,"%% Convective numerical method for species transport (SCALAR_UPWIND, BOUNDED_SCALAR)) \n");
     fprintf(fp,"%% CONV_NUM_METHOD_SPECIES= SCALAR_UPWIND \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Monotonic Upwind Scheme for Conservation Laws (TVD) in the species equations. \n");
@@ -923,6 +935,13 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Vector of body force values (BodyForce_X, BodyForce_Y, BodyForce_Z) \n");
     fprintf(fp,"%% BODY_FORCE_VECTOR= ( 0.0, 0.0, 0.0 ) \n");
+    fprintf(fp,"%% \n");
+    fprintf(fp,"%% --------------------------- VORTICITY_CONFINEMENT ---------------------------%% \n");
+    fprintf(fp,"%% \n");
+    fprintf(fp,"%% Enable vorticity confinement (YES/NO) \n");
+    fprintf(fp,"%% VORTICITY_CONFINEMENT = NO \n");
+    fprintf(fp,"%% Set confinement parameter (0.00 by default) \n");
+    fprintf(fp,"%% CONFINEMENT_PARAM = 0.00 \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% --------------------- STREAMWISE PERIODICITY DEFINITION ---------------------%% \n");
     fprintf(fp,"%% \n");
@@ -1240,6 +1259,10 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% Format: ( marker name, ... ) \n");
     fprintf(fp,"%% CATALYTIC_WALL= ( NONE ) \n");
     fprintf(fp,"%% \n");
+    fprintf(fp,"%% Inlet Turbulent boundary marker(s) with the following format: \n");
+    fprintf(fp,"%% (inlet_marker1, TurbIntensity1, RatioTurbLamViscosity1, inlet_marker2, TurbIntensity2, RatioTurbLamViscosity2, ...) \n");
+    fprintf(fp,"%% MARKER_INLET_TURBULENT= (inlet1, 0.05, 15, inlet2, 0.02, ...) \n");
+    fprintf(fp,"\n");
     fprintf(fp,"%% ------------------------ WALL ROUGHNESS DEFINITION --------------------------%% \n");
     fprintf(fp,"%% The equivalent sand grain roughness height (k_s) on each of the wall. This must be in m. \n");
     fprintf(fp,"%% This is a list of (string, double) each element corresponding to the MARKER defined in WALL_TYPE. \n");
@@ -1475,7 +1498,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% -------------------- FLOW NUMERICAL METHOD DEFINITION -----------------------%% \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Convective numerical method (JST, JST_KE, JST_MAT, LAX-FRIEDRICH, CUSP, ROE, AUSM, \n");
-    fprintf(fp,"%%                              AUSMPLUSUP, AUSMPLUSUP2, AUSMPWPLUS, HLLC, TURKEL_PREC, \n");
+    fprintf(fp,"%%                              AUSMPLUSUP, AUSMPLUSUP2, AUSMPLUSM, HLLC, TURKEL_PREC, \n");
     fprintf(fp,"%%                              SW, MSW, FDS, SLAU, SLAU2, L2ROE, LMROE) \n");
     string_toUpperCase(aimInputs[Convective_Flux-1].vals.string);
     if(compare == 0 ) {
@@ -1499,7 +1522,8 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Use the vectorized version of the selected numerical method (available for JST family and Roe). \n");
     fprintf(fp,"%% SU2 should be compiled for an AVX or AVX512 architecture for best performance. \n");
-    fprintf(fp,"%% USE_VECTORIZATION= NO \n");
+    fprintf(fp,"%% NOTE: Currently vectorization always used for schemes that support it. \n");
+    fprintf(fp,"%% USE_VECTORIZATION= YES \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Entropy fix coefficient (0.0 implies no entropy fixing, 1.0 implies scalar \n");
     fprintf(fp,"%%                          artificial dissipation) \n");
@@ -1522,7 +1546,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% FEM numerical method (DG) \n");
     fprintf(fp,"%% NUM_METHOD_FEM_FLOW= DG \n");
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% Riemann solver used for DG (ROE, LAX-FRIEDRICH, AUSM, AUSMPW+, HLLC, VAN_LEER) \n");
+    fprintf(fp,"%% Riemann solver used for DG (ROE, LAX-FRIEDRICH, AUSM, HLLC, VAN_LEER) \n");
     fprintf(fp,"%% RIEMANN_SOLVER_FEM= ROE \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Constant factor applied for quadrature with straight elements (2.0 by default) \n");
@@ -1564,7 +1588,7 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% \n");
     fprintf(fp,"%% -------------------- TURBULENT NUMERICAL METHOD DEFINITION ------------------%% \n");
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% Convective numerical method (SCALAR_UPWIND) \n");
+    fprintf(fp,"%% Convective numerical method (SCALAR_UPWIND, BOUNDED_SCALAR) \n");
     fprintf(fp,"%% CONV_NUM_METHOD_TURB= SCALAR_UPWIND \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Time discretization (EULER_IMPLICIT, EULER_EXPLICIT) \n");
@@ -1578,14 +1602,14 @@ int su2_writeCongfig_Blackbird(void *aimInfo, capsValue *aimInputs,
     fprintf(fp,"%% Value of the thermal diffusivity \n");
     fprintf(fp,"%% THERMAL_DIFFUSIVITY= 1.0 \n");
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% Convective numerical method \n");
-    fprintf(fp,"%% CONV_NUM_METHOD_HEAT= SPACE_CENTERED \n");
+    fprintf(fp,"%% Convective numerical method for the heat equation (only SCALAR_UPWIND)\n");
+    fprintf(fp,"%% CONV_NUM_METHOD_HEAT= SCALAR_UPWIND\n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Check if the MUSCL scheme should be used \n");
     fprintf(fp,"%% MUSCL_HEAT= YES \n");
     fprintf(fp,"%% \n");
-    fprintf(fp,"%% 2nd and 4th order artificial dissipation coefficients for the JST method \n");
-    fprintf(fp,"%% JST_SENSOR_COEFF_HEAT= ( 0.5, 0.15 ) \n");
+    fprintf(fp,"%% Slope limiter for the heat equation (same options as SLOPE_LIMITER_SPECIES)\n");
+    fprintf(fp,"%% SLOPE_LIMITER_HEAT = NONE \n");
     fprintf(fp,"%% \n");
     fprintf(fp,"%% Time discretization \n");
     fprintf(fp,"%% TIME_DISCRE_HEAT= EULER_IMPLICIT \n");

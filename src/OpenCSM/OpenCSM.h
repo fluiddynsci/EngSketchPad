@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,7 @@
 #define _OPENCSM_H_
 
 #define OCSM_MAJOR_VERSION  1
-#define OCSM_MINOR_VERSION 22
+#define OCSM_MINOR_VERSION 23
 
 #define MAX_NAME_LEN       64           /* maximum chars in name */
 #define MAX_EXPR_LEN      512           /* maximum chars in expression */
@@ -325,7 +325,7 @@ BEZIER    x y z
                   sensitivity computed w.r.t. x, y, z
                   signals that may be thrown/caught:
 
-BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0
+BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0 copyAttr=0
           use:    create a Body by blending through Xsects since Mark
           pops:   Xsect1 ... Mark
           pushes: Body
@@ -375,14 +375,17 @@ BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0
                           endList describes inward tangency at end
                   if begList!=0 and endList!=0, there must be at least
                      three interior Xsects
-                  interior Xsects can be repeated once for C1 continuity
-                  interior Xsects can be repeated twice for C0 continuity
+                  blend is be default C2 between Xsects, except:
+                     Xsects repeated once yield C1 continuity
+                     Xsects repeated twice yield C0 continuity
                   if reorder!=0 then Xsects are reordered to minimize Edge
                      lengths in the direction between Xsects
                   first Xsect is unaltered if reorder>0
                   last  Xsect is unaltered if reorder<0
                   if oneFace==1 then do not split at C0 (multiplicity=3)
                   if periodic=1 then connect the first and last Xsects
+                  if copyAttr=1 then user Attributes are copied
+                     from Xsects to new Edges
                   sensitivity computed w.r.t. begList, endList
                   sets up @-parameters
                   the Faces all receive the Branch's Attributes
@@ -444,6 +447,15 @@ CATBEG    sigCode
                      $self_intersecting
                      $wrong_types_on_stack
                      $assert_failed
+                     $udp_error1
+                     $udp_error2
+                     $udp_error3
+                     $udp_error4
+                     $udp_error5
+                     $udp_error6
+                     $udp_error7
+                     $udp_error8
+                     $udp_error9
                   if sigCode does not match current signal, skip to matching
                      CATEND
                   Block contains all Branches up to matching CATEND
@@ -828,6 +840,16 @@ EVALUATE  $type arg1 ...
                      return in @edata:
                         t,
                         xclose,  yclose,  zclose
+                  elseif arguments are: "edgekt ibody iedge"
+                     ibody is Body number (1:nbody)
+                     iedge is Edge number (1:nedge)
+                     return in @edata:
+                        knot1, knot2, ...
+                  elseif arguments are: "edgecp ibody iedge"
+                     ibody is Body number (1:nbody)
+                     iedge is Edge number (1:nedge)
+                     return in @edata:
+                        xcp1 ycp1 zcp1 xcp2 ycp2 ...
                   elseif arguments are: "face ibody iface u v"
                      ibody is Body number (1:nbody)
                      iface is Face number (1:nface)
@@ -853,6 +875,21 @@ EVALUATE  $type arg1 ...
                      return in @edata:
                         u,       v,
                         xclose,  yclose,  zclose
+                  elseif arguments are: "faceukt ibody iface"
+                     ibody is Body number (1:nbody)
+                     iface is Face number (1:nface)
+                     return in @edata:
+                        uknot1, uknot2, ...
+                  elseif arguments are: "facevkt ibody iface"
+                     ibody is Body number (1:nbody)
+                     iface is Face number (1:nface)
+                     return in @edata:
+                        vknot1, vknot2,...
+                  elseif arguments are: "facecp ibody iface"
+                     ibody is Body number (1:nbody)
+                     iface is Face number (1:nface)
+                     return in @edata:
+                        xcp1, ycp1, zcp1, xcp2, ycp2, ...
                   cannot be followed by ATTRIBUTE or CSYSTEM
                   signals that may be thrown/caught:
                      $body_not_found
@@ -1474,7 +1511,7 @@ ROTATEZ   angDeg xaxis=0 yaxis=0
                   signals that may be thrown/caught:
                      $insufficient_bodys_on_stack
 
-RULE      reorder=0 periodic=0
+RULE      reorder=0 periodic=0 copyAttr=0
           use:    create a Body by creating ruled surfaces thru Xsects
                      since Mark
           pops:   Xsect1 ... Mark
@@ -1485,7 +1522,13 @@ RULE      reorder=0 periodic=0
                      lengths
                   first Xsect is unaltered if reorder>0
                   last  Xsect is unaltered if reorder<0
-                  all Xsects must have the same number of Edges
+                  if no Nodes in the Xsects have Attribute .multiNode,
+                      all Xsects must have the same number of Edges
+                  if a Node in a Xsect has Attribute .multiNode, the
+                      integer value of the Attribute tells the multiplicity
+                  if the first Node has Attribute .multiNode, then a second
+                      integer value tells which replicate (bias-0) should be
+                      considered the beginning of the Xsect
                   Xsects cannot be non-manifold WireBody
                   if all Xsects are NodeBodys
                      a WireBody is created
@@ -1495,6 +1538,8 @@ RULE      reorder=0 periodic=0
                      a SolidBody is created
                   the first and/or last Xsect can be a NodeBody
                   if periodic=1 then connect the first and last Xsects
+                  if copyAttr=1 then user Attributes are copied
+                     from Xsects to new Edges
                   computes Face sensitivities analytically
                   sets up @-parameters
                   the Faces all receive the Branch's Attributes
@@ -1708,6 +1753,8 @@ SELECT    $type arg1 ...
                      make @sellist contain all Edges not in previous @sellist
                   elseif arguments are: "not" and @seltype==0
                      make @sellist contain all Nodes not in previous @sellist
+                  elseif arguments are: "flip"
+                     the order of entities in @sellist are flipped
                   elseif arguments are: "sort $key"
                      sorts @sellist based upon $key which can be: $xmin, $ymin, $zmin,
                         $xmax, $ymax, $zmax, $xcg, $ycg, $zcg, $area, or $length
@@ -2933,6 +2980,7 @@ typedef int (*eggFree_H)     (void*);
 typedef struct modl_T {
     int           magic;                /* magic number to check for valid *modl */
     int           checked;              /* =1 if successfully passed checks */
+    int           embedded;             /* =1 if embedded MODL (udp storage not cleared) */
     int           ibrch;                /* Branch number being executed */
     int           nextseq;              /* number of next automatcally-numbered item */
     int           ngroup;               /* number of Groups */
@@ -2979,6 +3027,7 @@ typedef struct modl_T {
     int           mbody;                /* maximum   Bodys */
     body_T        *body;                /* array  of Bodys */
 
+    double        forceFDs;             /* !=0 to fircs FDs with given step */
     int           needFDs;              /* =1 if finite differences are needed */
     int           numdots;              /* number of non-zero dots associated with DESPMTRS */
     struct modl_T *perturb;             /* model of perturbed body for sensitivty */
@@ -3007,6 +3056,17 @@ typedef struct modl_T {
     prof_T        profile[101];         /* profile data */
 } modl_T;
 
+/* allow for compilation by C++ */
+#ifdef __ProtoExt__
+   #undef __ProtoExt__
+#endif
+#ifdef __cplusplus
+   extern "C" {
+   #define __ProtoExt__
+#else
+   #define __ProtoExt__ extern
+#endif
+
 /*
  ************************************************************************
  *                                                                      *
@@ -3016,10 +3076,12 @@ typedef struct modl_T {
  */
 
 /* return current version */
+__ProtoExt__
 int ocsmVersion(int   *imajor,          /* (out) major version number */
                 int   *iminor);         /* (out) minor version number */
 
 /* set output level */
+__ProtoExt__
 int ocsmSetOutLevel(int    ilevel);     /* (in)  output level: */
                                         /*       <0 do not change */
                                         /*       =0 errors only */
@@ -3028,36 +3090,50 @@ int ocsmSetOutLevel(int    ilevel);     /* (in)  output level: */
                                         /* (out) previous outLevel */
 
 /* set (global) auxiliary pointer */
+__ProtoExt__
 int ocsmSetAuxPtr(void  *newAuxPtr);    /* (in)  auxiliary pointer */
 
 /* get (global auxiliary pointer */
+__ProtoExt__
 int ocsmGetAuxPtr(void  **oldAuxPtr);   /* (out) auxiliary pointer */
 
 /* create a MODL by reading a .csm file */
+__ProtoExt__
 int ocsmLoad(char   filename[],         /* (in)  file to be read (with .csm) */
              void   **modl);            /* (out) pointer to MODL */
 
 /* create a MODL from an ego */
+__ProtoExt__
 int ocsmLoadFromModel(ego    emodel,    /* (in)  egads MODEL */
                       void   **modl);   /* (out) pointer to MODL */
 
 /* load dictionary from dictname */
+__ProtoExt__
 int ocsmLoadDict(void   *modl,          /* (in)  pointer to MODL */
                  char   dictname[]);    /* (in)  file that contains dictionary */
 
 /* adjust UDCs to be colocated with the .csm file */
+__ProtoExt__
 int ocsmAdjustUDCs(void   *modl);       /* (in)  pointer to MODL */
 
 /* update CFGPMTRs and DESPMTRs from filename */
+__ProtoExt__
 int ocsmUpdateDespmtrs(void   *modl,    /* (in)  pointer to MODL */
                        char   filename[]); /* (in) file that contains DESPMTRs */
 
 /* get a list of all .csm, .cpc. and .udc files */
+__ProtoExt__
 int ocsmGetFilelist(void   *modl,       /* (in)  pointer to MODL */
                     char   *filelist[]);/* (out) bar-sepatared list of files */
                                         /*       must be freed by user */
 
+/* get file tree info */
+__ProtoExt__
+int ocsmGetFiletree(void   *modl,       /* (in)  pointer to MODL */
+                    char   *info[]);    /* (out) info about the file tree */
+
 /* save a MODL to a file */
+__ProtoExt__
 int ocsmSave(void   *modl,              /* (in)  pointer to MODL */
              char   filename[]);        /* (in)  file to be written (with extension) */
                                         /*       .csm -> write outer .csm file */
@@ -3065,39 +3141,48 @@ int ocsmSave(void   *modl,              /* (in)  pointer to MODL */
                                         /*       .udc -> write a .udc file */
 
 /* save CFGPMTRs and DESPMTRs to file */
+__ProtoExt__
 int ocsmSaveDespmtrs(void   *modl,      /* (in)  pointer to MODL */
                      char   filename[]);/* (in)  file to which DESPMTRS should be written */
 
 /* copy a MODL (but not the Bodys) */
+__ProtoExt__
 int ocsmCopy(void   *srcModl,           /* (in)  pointer to source MODL */
              void   **newModl);         /* (out) pointer to new    MODL */
 
 /* free up all storage associated with a MODL */
+__ProtoExt__
 int ocsmFree(
    /*@null@*/void   *modl);             /* (in)  pointer to MODL (or NULL) */
 
 /* get info about a MODL */
+__ProtoExt__
 int ocsmInfo(void   *modl,              /* (in)  pointer to MODL */
              int    *nbrch,             /* (out) number of Branches */
              int    *npmtr,             /* (out) number of Parameters */
              int    *nbody);            /* (out) number of Bodys */
 
 /* check that Branches are properly ordered */
+__ProtoExt__
 int ocsmCheck(void   *modl);            /* (in)  pointer to MODL */
 
 /* register a callback function for exporting messages */
+__ProtoExt__
 int ocsmRegMesgCB(void    *modl,        /* (in)  pointer to MODL */
                   void    (*callback)(char[]));   /* (in)  handle of callback function */
 
 /* register a callback function for broadcasting messages */
+__ProtoExt__
 int ocsmRegBcstCB(void    *modl,        /* (in)  pointer to MODL */
                   void    (*callback)(char[]));   /* (in)  handle of callback function */
 
 /* register a callback function for DESPMTR size changes */
+__ProtoExt__
 int ocsmRegSizeCB(void    *modl,        /* (in)  pointer to MODL */
                   void    (*callback)(void*, int, int, int));   /* (in)  handle of callback function */
 
 /* build Bodys by executing the MODL up to a given Branch */
+__ProtoExt__
 int ocsmBuild(void   *modl,             /* (in)  pointer to MODL */
               int    buildTo,           /* (in)  last Branch to execute (or 0 for all, or -1 for no recycling) */
               int    *builtTo,          /* (out) last Branch executed successfully */
@@ -3107,20 +3192,24 @@ int ocsmBuild(void   *modl,             /* (in)  pointer to MODL */
                                                  (at least nbody long) */
 
 /* print profile from last ocsmBuild() */
+__ProtoExt__
 int ocsmPrintProfile(void   *modl,      /* (in)  pointer to MODL */
                      char   filename[]);/* (in)  file to which output is appended (or "" for stdout) */
 
 /* tessellate one or more Bodys */
+__ProtoExt__
 int ocsmTessellate(void   *modl,        /* (in)  pointer to MODL */
                    int    ibody);       /* (in)  Body index (1:nbody) or 0 for all on stack */
 
 /* get information about one Body */
+__ProtoExt__
 int ocsmBodyDetails(void   *modl,       /* (in)  pointer to MODL */
                     char   fiename[],   /* (in)  name of file from which Body was created */
                     int    linenum,     /* (in)  line in filename from which Body was created */
                     char   *info[]);    /* (out) info about the Body (freeable) */
 
 /* create a perturbed MODL */
+__ProtoExt__
 int ocsmPerturb(void   *modl,           /* (in)  pointer to MODL */
                 int    npmtrs,          /* (in)  number of perturbed Parameters (or 0 to remove) */
       /*@null@*/int    ipmtrs[],        /* (in)  array of Parameter indices (1:npmtr) */
@@ -3129,11 +3218,13 @@ int ocsmPerturb(void   *modl,           /* (in)  pointer to MODL */
       /*@null@*/double values[]);       /* (in)  array of perturbed values */
 
 /* update a tessellation from a file */
+__ProtoExt__
 int ocsmUpdateTess(void   *modl,        /* (in)  pointer to MODL */
                    int    ibody,        /* (in)  Body index (1:nbody) */
                    char   filename[]);  /* (in)  name of .tess file */
 
 /* compute clearance between Bodys */
+__ProtoExt__
 int ocsmClearance(void   *modl,         /* (in)  pointer to MODL */
                   int    ibody1,        /* (in)  >0  Body index of enclosing Body */
                                         /*       <0  Body index of neighboring Body */
@@ -3143,7 +3234,15 @@ int ocsmClearance(void   *modl,         /* (in)  pointer to MODL */
                   double pnt1[],        /* (out) closest point on ibody1 (iface, u, v) */
                   double pnt2[]);       /* (out) closest point on ibody2 (iface, u, v) */
 
+/* show matrix of "SPECIAL provide" statements */
+__ProtoExt__
+int ocsmShowTblOfContents(void   *modl, /* (in)  pointer to MODL */
+                          int    irow,  /* (in)  dimension to be associated with rows (1-8) */
+                          int    icol,  /* (in)  dimension to ba associated with columns (1-8) */
+                          char   *info[]); /* (out) info containing matrix (freeable) */
+
 /* create a new Branch */
+__ProtoExt__
 int ocsmNewBrch(void   *modl,           /* (in)  pointer to MODL */
                 int    iafter,          /* (in)  Branch index (0-nbrch) after which to add */
                 int    type,            /* (in)  Branch type (see below) */
@@ -3160,6 +3259,7 @@ int ocsmNewBrch(void   *modl,           /* (in)  pointer to MODL */
       /*@null@*/char   arg9[]);         /* (in)  Argument 9 (or NULL) */
 
 /* get info about a Branch */
+__ProtoExt__
 int ocsmGetBrch(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch,           /* (in)  Branch index (1:nbrch) */
                 int    *type,           /* (out) Branch type (see below) */
@@ -3172,19 +3272,23 @@ int ocsmGetBrch(void   *modl,           /* (in)  pointer to MODL */
                 int    *nattr);         /* (out) number of Attributes */
 
 /* set activity for a Branch */
+__ProtoExt__
 int ocsmSetBrch(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch,           /* (in)  Branch index (1:nbrch) */
                 int    actv);           /* (in)  Branch activity (see below) */
 
 /* delete a Branch (or whole Sketch if SKBEG) */
+__ProtoExt__
 int ocsmDelBrch(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch);          /* (in)  Branch index (1:nbrch) */
 
 /* print Branches to file */
+__ProtoExt__
 int ocsmPrintBrchs(void   *modl,        /* (in)  pointer to MODL */
                    char   filename[]);  /* (in)  file to which output is appended (or "" for stdout) */
 
 /* get an Argument for a Branch */
+__ProtoExt__
 int ocsmGetArg(void   *modl,            /* (in)  pointer to MODL */
                int    ibrch,            /* (in)  Branch index (1:nbrch) */
                int    iarg,             /* (in)  Argument index (1:narg) */
@@ -3193,12 +3297,14 @@ int ocsmGetArg(void   *modl,            /* (in)  pointer to MODL */
                double *dot);            /* (out) Argument velocity */
 
 /* set an Argument for a Branch */
+__ProtoExt__
 int ocsmSetArg(void   *modl,            /* (in)  pointer to MODL */
                int    ibrch,            /* (in)  Branch index (1:nbrch) */
                int    iarg,             /* (in)  Argument index (1:narg) */
                char   defn[]);          /* (in)  Argument definition */
 
 /* return an Attribute for a Branch by index */
+__ProtoExt__
 int ocsmRetAttr(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch,           /* (in)  Branch index (1:nbrch) */
                 int    iattr,           /* (in)  Attribute index (1:nattr) */
@@ -3206,18 +3312,27 @@ int ocsmRetAttr(void   *modl,           /* (in)  pointer to MODL */
                 char   avalue[]);       /* (out) Attribute value (at least MAX_STRVAL_LEN long) */
 
 /* get an Attribute for a Branch by name */
+__ProtoExt__
 int ocsmGetAttr(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch,           /* (in)  Branch index (1:nbrch) or 0 for global */
                 char   aname[],         /* (in)  Attribute name */
                 char   avalue[]);       /* (out) Attribute value (at least MAX_STRVAL_LEN long) */
 
 /* set an Attribute for a Branch */
+__ProtoExt__
 int ocsmSetAttr(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch,           /* (in)  Branch index (1:nbrch) or 0 for global */
                 char   aname[],         /* (in)  Attribute name */
                 char   avalue[]);       /* (in)  Attribute value (or blank to delete) */
 
+/* trace definition of all Attributes */
+__ProtoExt__
+int ocsmTraceAttrs(void   *modl,        /* (in)  pointer to MODL */
+                   char   pattern[],    /* (in)  pattern of Attributes to match */
+                   char   *info[]);     /* (out) info about the Attributes (freeable) */
+
 /* return a Csystem for a Branch by index */
+__ProtoExt__
 int ocsmRetCsys(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch,           /* (in)  Branch index (1:nbrch) */
                 int    icsys,           /* (in)  Csystem index (1:nattr) */
@@ -3225,32 +3340,38 @@ int ocsmRetCsys(void   *modl,           /* (in)  pointer to MODL */
                 char   cvalue[]);       /* (out) Csystem value (at least MAX_STRVAL_LEN long) */
 
 /* get a Csystem for a Branch by name */
+__ProtoExt__
 int ocsmGetCsys(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch,           /* (in)  Branch index (1:nbrch) */
                 char   cname[],         /* (in)  Csystem name */
                 char   cvalue[]);       /* (out) Csystem value (at least MAX_STRVAL_LEN long) */
 
 /* set a Csystem for a Branch */
+__ProtoExt__
 int ocsmSetCsys(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch,           /* (in)  Branch index (1:nbrch)  */
                 char   cname[],         /* (in)  Csystem name */
                 char   cvalue[]);       /* (in)  Csystem value (or blank to delete) */
 
 /* print global Attributes to file */
+__ProtoExt__
 int ocsmPrintAttrs(void   *modl,        /* (in)  pointer to MODL */
                    char   filename[]);  /* (in)  file to which output is appended (or "" for stdout) */
 
 /* get the name of a Branch */
+__ProtoExt__
 int ocsmGetName(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch,           /* (in)  Branch index (1:nbrch) */
                 char   name[]);         /* (out) Branch name (at least MAX_STRVAL_LEN long) */
 
 /* set the name for a Branch */
+__ProtoExt__
 int ocsmSetName(void   *modl,           /* (in)  pointer to MODL */
                 int    ibrch,           /* (in)  Branch index (1:nbrch) */
                 char   name[]);         /* (in)  Branch name */
 
 /* get string data associated with a Sketch */
+__ProtoExt__
 int ocsmGetSketch(void   *modl,         /* (in)  pointer to MODL */
                   int    ibrch,         /* (in)  Branch index (1:nbrch) within Sketch */
                   int    maxlen,        /* (in)  length of begs, vars, cons, and segs */
@@ -3266,12 +3387,14 @@ int ocsmGetSketch(void   *modl,         /* (in)  pointer to MODL */
                                         /*       ibeg and iend are bias-1 */
 
 /* solve for new Sketch variables */
+__ProtoExt__
 int ocsmSolveSketch(void   *modl,       /* (in)  pointer to MODL */
                     char   vars_in[],   /* (in)  string with Sketch variables */
                     char   cons[],      /* (in)  string with Sketch constraints */
                     char   vars_out[]); /* (out) string (1024 long) with new Sketch variables */
 
 /* overwrite Branches associated with a Sketch */
+__ProtoExt__
 int ocsmSaveSketch(void   *modl,        /* (in)  pointer to MODL */
                    int    ibrch,        /* (in)  Branch index (1:nbrch) within Sketch */
                    char   vars[],       /* (in)  string with Sketch variables */
@@ -3279,12 +3402,14 @@ int ocsmSaveSketch(void   *modl,        /* (in)  pointer to MODL */
                    char   segs[]);      /* (in)  string with Sketch segments */
 
 /* make an EBody from a given Body */
+__ProtoExt__
 int ocsmMakeEBody(void   *modl,         /* (in)  pointer to MODL */
                   int    ibody,         /* (in)  Body index (1:nbody) */
                   double dihedral,      /* (in)  dihedral angle (deg) for implicit .Keeps */
         /*@null@*/char   entList[]);    /* (in)  entities to use in make EBody (or NULL to delete) */
 
 /* create a new Parameter */
+__ProtoExt__
 int ocsmNewPmtr(void   *modl,           /* (in)  pointer to MODL */
                 char   name[],          /* (in)  Parameter name */
                 int    type,            /* (in)  Parameter type */
@@ -3292,10 +3417,12 @@ int ocsmNewPmtr(void   *modl,           /* (in)  pointer to MODL */
                 int    ncol);           /* (in)  number of columns */
 
 /* delete a Parameter */
+__ProtoExt__
 int ocsmDelPmtr(void   *modl,           /* (in)  pointer to MODL */
                 int    ipmtr);          /* (in)  Parameter index (1:npmtr) */
 
 /* find (or create) a Parameter */
+__ProtoExt__
 int ocsmFindPmtr(void   *modl,          /* (in)  pointer to MODL */
                  char   name[],         /* (in)  Parameter name */
                  int    type,           /* (in)  Parameter type    (or 0 to not create) */
@@ -3304,6 +3431,7 @@ int ocsmFindPmtr(void   *modl,          /* (in)  pointer to MODL */
                  int    *ipmtr);        /* (out) Parameter index (1:npmtr) (or 0 if not found) */
 
 /* get info about a Parameter */
+__ProtoExt__
 int ocsmGetPmtr(void   *modl,           /* (in)  pointer to MODL */
                 int    ipmtr,           /* (in)  Parameter index (1:npmtr) */
                 int    *type,           /* (out) Parameter type */
@@ -3312,15 +3440,18 @@ int ocsmGetPmtr(void   *modl,           /* (in)  pointer to MODL */
                 char   name[]);         /* (out) Parameter name (at least MAX_NAME_LEN long) */
 
 /* print DESPMTRs and OUTPMTRs to file */
+__ProtoExt__
 int ocsmPrintPmtrs(void   *modl,        /* (in)  pointer to MODL */
                    char   filename[]);  /* (in)  file to which output is appended (or "" for stdout) */
 
 /* trace definition and uses of all Paremeters */
+__ProtoExt__
 int ocsmTracePmtrs(void   *modl,        /* (in)  pointer to MODL */
                    char   pattern[],    /* (in)  pattern of Parameters to match */
                    char   *info[]);     /* (out) info about the Parameters (freeable) */
 
 /* get the Value of a Parameter */
+__ProtoExt__
 int ocsmGetValu(void   *modl,           /* (in)  pointer to MODL */
                 int    ipmtr,           /* (in)  Parameter index (1:npmtr) */
                 int    irow,            /* (in)  row    index (1:nrow) */
@@ -3329,11 +3460,13 @@ int ocsmGetValu(void   *modl,           /* (in)  pointer to MODL */
                 double *dot);           /* (out) Parameter velocity */
 
 /* get the Value of a string Parameter */
+__ProtoExt__
 int ocsmGetValuS(void   *modl,          /* (in)  pointer to MODL */
                  int    ipmtr,          /* (in)  Parameter index (1:npmtr) */
                  char   str[]);         /* (out) Parameter value (at least MAX_STRVAL_LEN long) */
 
 /* set a Value for a Parameter */
+__ProtoExt__
 int ocsmSetValu(void   *modl,           /* (in)  pointer to MODL */
                 int    ipmtr,           /* (in)  Parameter index (1:npmtr) */
                 int    irow,            /* (in)  row    index (1:nrow) */
@@ -3341,6 +3474,7 @@ int ocsmSetValu(void   *modl,           /* (in)  pointer to MODL */
                 char   defn[]);         /* (in)  definition of Value */
 
 /* set a (double) Value for a Parameter */
+__ProtoExt__
 int ocsmSetValuD(void   *modl,          /* (in)  pointer to MODL */
                  int    ipmtr,          /* (in)  Parameter index (1:npmtr) */
                  int    irow,           /* (in)  row    index (1:nrow) */
@@ -3348,6 +3482,7 @@ int ocsmSetValuD(void   *modl,          /* (in)  pointer to MODL */
                  double value);         /* (in)  value to set */
 
 /* get the Bounds of a Parameter */
+__ProtoExt__
 int ocsmGetBnds(void   *modl,           /* (in)  pointer to MODL */
                 int    ipmtr,           /* (in)  Parameter index (1:npmtr) */
                 int    irow,            /* (in)  row    index (1:nrow) */
@@ -3356,6 +3491,7 @@ int ocsmGetBnds(void   *modl,           /* (in)  pointer to MODL */
                 double *ubound);        /* (out) upper Bound */
 
 /* set the Bounds of a Parameter */
+__ProtoExt__
 int ocsmSetBnds(void   *modl,           /* (in)  pointer to MODL */
                 int    ipmtr,           /* (in)  Parameter index (1:npmtr) */
                 int    irow,            /* (in)  row    index (1:nrow) */
@@ -3364,10 +3500,12 @@ int ocsmSetBnds(void   *modl,           /* (in)  pointer to MODL */
                 double ubound);         /* (in)  upper Bound to set */
 
 /* set sensitivity FD time step (or select analytic) */
+__ProtoExt__
 int ocsmSetDtime(void   *modl,          /* (in)  pointer to MODL */
                  double dtime);         /* (in)  time step (or 0 to choose analytic) */
 
 /* set the velocity for a Parameter */
+__ProtoExt__
 int ocsmSetVel(void   *modl,            /* (in)  pointer to MODL */
                int    ipmtr,            /* (in)  Parameter index (1:npmtr) or 0 for all */
                int    irow,             /* (in)  row    index (1:nrow)     or 0 for all */
@@ -3375,6 +3513,7 @@ int ocsmSetVel(void   *modl,            /* (in)  pointer to MODL */
                char   defn[]);          /* (in)  definition of Velocity */
 
 /* set the (double) velocity for a Parameter */
+__ProtoExt__
 int ocsmSetVelD(void   *modl,           /* (in)  pointer to MODL */
                 int    ipmtr,           /* (in)  Parameter index (1:npmtr) or 0 for all */
                 int    irow,            /* (in)  row    index (1:nrow)     or 0 for all */
@@ -3382,6 +3521,7 @@ int ocsmSetVelD(void   *modl,           /* (in)  pointer to MODL */
                 double dot);            /* (in)  velocity to set */
 
 /* get the EGO associated with a Body or its parts */
+__ProtoExt__
 int ocsmGetEgo(void   *modl,            /* (in)  pointer to MODL */
                int    ibody,            /* (in)  Body index (1:nbody) */
                int    seltype,          /* (in)  OCSM_BODY, OCSM_NODE, OCSM_EDGE, or OCSM_FACE */
@@ -3393,6 +3533,7 @@ int ocsmGetEgo(void   *modl,            /* (in)  pointer to MODL */
                ego    *theEgo);         /* (out) context or associated EGO */
 
 /* set a tessellation or EBody for a Body */
+__ProtoExt__
 int ocsmSetEgo(void   *modl,            /* (in)  pointer to MODL */
                int    ibody,            /* (in)  Body index (1:nbody) */
                int    iselect,          /* (in)  1 for Tessellation,
@@ -3400,6 +3541,7 @@ int ocsmSetEgo(void   *modl,            /* (in)  pointer to MODL */
                ego    theEgo);          /* (in)  associated EGO */
 
 /* find the entity nnumber given FaceID or EdgeID */
+__ProtoExt__
 int ocsmFindEnt(void   *modl,           /* (in)  pointer to MODL */
                 int    ibody,           /* (in)  Body index (1:nbody) */
                 int    seltype,         /* (in)  OCSM_EDGE, or OCSM_FACE */
@@ -3407,6 +3549,7 @@ int ocsmFindEnt(void   *modl,           /* (in)  pointer to MODL */
                 int    *ient);          /* (out) entity number */
 
 /* get the parametric coordinates on an Edge or Face */
+__ProtoExt__
 int ocsmGetUV(void   *modl,             /* (in)  pointer to MODL */
               int    ibody,             /* (in)  Body index (1:nbody) */
               int    seltype,           /* (in)  OCSM_EDGE, or OCSM_FACE */
@@ -3416,6 +3559,7 @@ int ocsmGetUV(void   *modl,             /* (in)  pointer to MODL */
               double uv[]);             /* (out) para coords (1*npnt or 2*npnt in length) */
 
 /* get the coordinates on a Node, Edge, or Face */
+__ProtoExt__
 int ocsmGetXYZ(void   *modl,            /* (in)  pointer to MODL */
                int    ibody,            /* (in)  Body index (1:nbody) */
                int    seltype,          /* (in)  OCSM_NODE, OCSM_EDGE, or OCSM_FACE */
@@ -3425,6 +3569,7 @@ int ocsmGetXYZ(void   *modl,            /* (in)  pointer to MODL */
                double xyz[]);           /* (out) coordinates (3*npnt in length) */
 
 /* get the unit normals for a Face */
+__ProtoExt__
 int ocsmGetNorm(void   *modl,           /* (in)  pointer to MODL */
                 int    ibody,           /* (in)  Body index (1:nbody) */
                 int    iface,           /* (in)  Face index (1:nface) */
@@ -3433,6 +3578,7 @@ int ocsmGetNorm(void   *modl,           /* (in)  pointer to MODL */
                 double norm[]);         /* (out) normals (3*npnt in length) */
 
 /* get the velocities of coordinates on a Node, Edge, or Face */
+__ProtoExt__
 int ocsmGetVel(void   *modl,            /* (in)  pointer to MODL */
                int    ibody,            /* (in)  Body index (1:nbody) */
                int    seltype,          /* (in)  OCSM_NODE, OCSM_EDGE, or OCSM_FACE */
@@ -3448,10 +3594,12 @@ int ocsmGetVel(void   *modl,            /* (in)  pointer to MODL */
                                                     3*npnt for OCSM_FACE */
 
 /* set up alternative tessellation by an external grid generator */
+__ProtoExt__
 int ocsmSetEgg(void   *modl,            /* (in)  pointer to MODL */
                char   *eggname);        /* (in)  name of dynamically-loadable file */
 
 /* get the number of tess points on an Edge or Face */
+__ProtoExt__
 int ocsmGetTessNpnt(void   *modl,       /* (in)  pointer to MODL */
                     int    ibody,       /* (in)  Body index (1:nbody)) */
                     int    seltype,     /* (in)  OCSM_EDGE , or OCSM_FACE */
@@ -3459,6 +3607,7 @@ int ocsmGetTessNpnt(void   *modl,       /* (in)  pointer to MODL */
                     int    *npnt);      /* (out) number of tessellation points */
 
 /* get the tessellation velocities on a Node, Edge, or Face */
+__ProtoExt__
 int ocsmGetTessVel(void   *modl,        /* (in)  pointer to MODL */
                    int    ibody,        /* (in)  Body index (1:nbody)) */
                    int    seltype,      /* (in)  OCSM_NODE, OCSM_EDGE, or OCSM_FACE */
@@ -3466,6 +3615,7 @@ int ocsmGetTessVel(void   *modl,        /* (in)  pointer to MODL */
              const double *dxyz[]);     /* (out) pointer to storage containing velocities */
 
 /* get the adjoint multiplication for selected DESPMTRs */
+__ProtoExt__
 int ocsmAdjoint(void   *modl,           /* (in)  pointer to MODL */
                 int    ibody,           /* (in)  BBody index (1:nbody) */
                 int    ndp,             /* (in)  number of selected DESPMTRs */
@@ -3476,7 +3626,14 @@ int ocsmAdjoint(void   *modl,           /* (in)  pointer to MODL */
       /*@null@*/double dOdX[],          /* (in)  array of d(obj)/d(xyz)   nobj*3*nglob (or NULL if nobj=0) */
                 double dOdD[]);         /* (out) array of d(obj)/d(dp)    nobj*ndp  (or 3*nglobID*ndp) */
 
+/* trace definition and uses of all Storage */
+__ProtoExt__
+int ocsmTraceStors(void   *modl,        /* (in)  pointer to MODL */
+                   char   pattern[],    /* (in)  pattern of Stores to match */
+                   char   *info[]);     /* (out) info about the Stores (freeable) */
+
 /* get info about a Body */
+__ProtoExt__
 int ocsmGetBody(void   *modl,           /* (in)  pointer to MODL */
                 int    ibody,           /* (in)  Body index (1:nbody) */
                 int    *type,           /* (out) Branch type (see below) */
@@ -3489,15 +3646,18 @@ int ocsmGetBody(void   *modl,           /* (in)  pointer to MODL */
                 int    *nface);         /* (out) number of Faces */
 
 /* print all Bodys to file */
+__ProtoExt__
 int ocsmPrintBodys(void   *modl,        /* (in)  pointer to MODL */
                    char   filename[]);  /* (in)  file to which output is appended (or "" for stdout) */
 
 /* print the BRep associated with a specific Body */
+__ProtoExt__
 int ocsmPrintBrep(void   *modl,         /* (in)  pointer to MODL */
                   int    ibody,         /* (in)  Body index (1:nbody) */
                   char   filename[]);   /* (in)  file to which output is appended (or "" for stdout) */
 
 /* evaluate an expression */
+__ProtoExt__
 int ocsmEvalExpr(void   *modl,          /* (in)  pointer to MODL */
                  char   expr[],         /* (in)  expression */
                  double *value,         /* (out) value */
@@ -3505,15 +3665,22 @@ int ocsmEvalExpr(void   *modl,          /* (in)  pointer to MODL */
                  char   str[]);         /* (out) value if string-valued (w/o leading $) */
 
 /* print the contents of an EGADS ego */
+__ProtoExt__
 void ocsmPrintEgo(
         /*@null@*/ego    obj);          /* (in)  EGADS ego */
 
 /* convert an OCSM code to text */
 /*@observer@*/
+__ProtoExt__
 char *ocsmGetText(int    icode);        /* (in)  code to look up */
 
 /* convert text to an OCSM code */
+__ProtoExt__
 int ocsmGetCode(char   *text);          /* (in)  text to look up */
+
+#ifdef __cplusplus
+}
+#endif
 
 /*
  ************************************************************************

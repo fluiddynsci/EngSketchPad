@@ -1176,6 +1176,170 @@ cleanup:
 }
 
 
+/*****************************************************************************/
+/*                                                                           */
+/*  replaceFaceS                                                             */
+/*                                                                           */
+/*****************************************************************************/
+
+int
+pingReplaceFaces(ego context, objStack *stack)
+{
+  int    status = EGADS_SUCCESS;
+  int    iparam, np1, nt1, iedge, nedge, iface, nface;
+  int    oclass, mtype, nchild, *senses;
+  double data[6], data_dot[6], range[4], params[3], dtime = 1e-7;
+  const int    *pt1, *pi1, *ts1, *tc1;
+  const double *t1, *x1, *uv1;
+  ego    ebody1=NULL, ebody2, tess1=NULL, tess2, ebox1, ebox2;
+  ego    *efaces1, *efaces2, enewFace1, enewFace2, erepl1[4], erepl2[4];
+  ego    egeom, *echild1, *echild2;
+
+  data[0] = 4; /* base coordinate */
+  data[1] = 5;
+  data[2] = 6;
+  data[3] = 1; /* dx, dy, dz sizes */
+  data[4] = 2;
+  data[5] = 3;
+
+  /* make the body */
+  status = EG_makeSolidBody(context, BOX, data, &ebox1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* get the Faces from the Body */
+  status = EG_getBodyTopos(ebox1, NULL, FACE, &nface, &efaces1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* get the loops */
+  status = EG_getTopology(efaces1[4], &egeom, &oclass, &mtype,
+                          range, &nchild, &echild1, &senses);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* make a new Face */
+  status  = EG_makeFace(echild1[0], SFORWARD, NULL, &enewFace1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* replace faces */
+  erepl1[0] = efaces1[3];
+  erepl1[1] = NULL;
+  erepl1[2] = efaces1[4];
+  erepl1[3] = enewFace1;
+  status    = EG_replaceFaces(ebox1, 2, erepl1, &ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* test re-making the topology */
+  status = remakeTopology(ebody1);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  /* zero out velocities */
+  for (iparam = 0; iparam < 6; iparam++) data_dot[iparam] = 0;
+
+  for (iparam = 0; iparam < 6; iparam++) {
+
+    EG_deleteObject(tess1);
+    EG_deleteObject(ebody1);
+
+    /* set the velocity of the original body */
+    data_dot[iparam] = 1.0;
+    status = EG_makeSolidBody_dot(ebox1, BOX, data, data_dot);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* make a new Face */
+    status = EG_makeFace_dot(enewFace1, echild1[0], NULL, NULL);
+    if (status != EGADS_SUCCESS) goto cleanup;
+    data_dot[iparam] = 0.0;
+
+    /* replace faces */
+    status    = EG_replaceFaces(ebox1, 2, erepl1, &ebody1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+ 
+    /* make the tessellation */
+    params[0] =  0.2;
+    params[1] =  0.01;
+    params[2] = 12.0;
+    status = EG_makeTessBody(ebody1, params, &tess1);
+
+    if (iparam == 0) {
+      /* get the Faces from the Body */
+      status = EG_getBodyTopos(ebody1, NULL, FACE, &nface, NULL);
+      if (status != EGADS_SUCCESS) goto cleanup;
+
+      /* get the Edges from the Body */
+      status = EG_getBodyTopos(ebody1, NULL, EDGE, &nedge, NULL);
+      if (status != EGADS_SUCCESS) goto cleanup;
+
+      for (iedge = 0; iedge < nedge; iedge++) {
+        status = EG_getTessEdge(tess1, iedge+1, &np1, &x1, &t1);
+        if (status != EGADS_SUCCESS) goto cleanup;
+        printf(" replaceFaces Edge %d np1 = %d\n", iedge+1, np1);
+      }
+
+      for (iface = 0; iface < nface; iface++) {
+        status = EG_getTessFace(tess1, iface+1, &np1, &x1, &uv1, &pt1, &pi1,
+                                &nt1, &ts1, &tc1);
+        if (status != EGADS_SUCCESS) goto cleanup;
+        printf(" replaceFaces Face %d np1 = %d\n", iface+1, np1);
+      }
+    }
+
+    status = EG_hasGeometry_dot(ebody1);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* make a perturbed body for finite difference */
+    data[iparam] += dtime;
+    status = EG_makeSolidBody(context, BOX, data, &ebox2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* get the Faces from the Body */
+    status = EG_getBodyTopos(ebox2, NULL, FACE, &nface, &efaces2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* get the loops */
+    status = EG_getTopology(efaces2[4], &egeom, &oclass, &mtype,
+                            range, &nchild, &echild2, &senses);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* make a new Face */
+    status = EG_makeFace(echild2[0], SFORWARD, NULL, &enewFace2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* replace faces */
+    erepl2[0] = efaces2[3];
+    erepl2[1] = NULL;
+    erepl2[2] = efaces2[4];
+    erepl2[3] = enewFace2;
+    status    = EG_replaceFaces(ebox2, 2, erepl2, &ebody2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+    data[iparam] -= dtime;
+    EG_free(efaces2);
+    EG_deleteObject(enewFace2);
+    EG_deleteObject(ebox2);
+
+    /* map the tessellation */
+    status = EG_mapTessBody(tess1, ebody2, &tess2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* ping the bodies */
+    status = pingBodies(tess1, tess2, dtime, iparam, "replaceFace", 1e-7, 1e-7, 1e-7);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    EG_deleteObject(tess2);
+    EG_deleteObject(ebody2);
+  }
+
+  EG_deleteObject(tess1);
+  EG_deleteObject(ebody1);
+  EG_free(efaces1);
+  EG_deleteObject(enewFace1);
+  EG_deleteObject(ebox1);
+
+cleanup:
+  if (status != EGADS_SUCCESS) {
+    printf(" Failure %d in %s\n", status, __func__);
+  }
+  return status;
+}
+
 int main(int argc, char *argv[])
 {
   int status, i, oclass, mtype;
@@ -1209,6 +1373,9 @@ int main(int argc, char *argv[])
   if (status != EGADS_SUCCESS) goto cleanup;
 #endif
   status = pingMakeFace(context, &stack);
+  if (status != EGADS_SUCCESS) goto cleanup;
+
+  status = pingReplaceFaces(context, &stack);
   if (status != EGADS_SUCCESS) goto cleanup;
 
 cleanup:

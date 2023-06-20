@@ -48,6 +48,9 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
   ego    ebody1, ebody2;
   ego    *efaces1=NULL, *efaces2=NULL, *eedges1=NULL, *eedges2=NULL, *enodes1=NULL, *enodes2=NULL;
   ego    top, prev, next;
+// Error handling
+  ego bodies[4], model, context;
+
 
   status = EG_statusTessBody( tess1, &ebody1, &np1, &np2 );
   if (status != EGADS_SUCCESS) goto cleanup;
@@ -88,17 +91,23 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
                                             &nt1, &ts1, &tc1);
     if (status != EGADS_SUCCESS) goto cleanup;
 
-    status = EG_getTessFace(tess2, iface+1, &np2, &x2, &uv2, &pt2, &pi2,
+    /* note that a negative index means the .fMap Attribute is taken care of in
+       EG_getTessFace() */
+    status = EG_getTessFace(tess2,-iface-1, &np2, &x2, &uv2, &pt2, &pi2,
                                             &nt2, &ts2, &tc2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* check dot information */
+    status = EG_hasGeometry_dot(efaces1[iface]);
     if (status != EGADS_SUCCESS) goto cleanup;
 
     for (n = 0; n < np1; n++) {
 
-      /* evaluate original edge and velocities*/
+      /* evaluate original face and velocities*/
       status = EG_evaluate_dot(efaces1[iface], &uv1[2*n], NULL, p1, p1_dot);
       if (status != EGADS_SUCCESS) goto cleanup;
 
-      /* evaluate perturbed edge */
+      /* evaluate perturbed face */
       status = EG_evaluate(efaces2[iface], &uv2[2*n], p2);
       if (status != EGADS_SUCCESS) goto cleanup;
 
@@ -132,7 +141,11 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
     if (status != EGADS_SUCCESS) goto cleanup;
 
     /* get the tessellation from the perturbed edge */
-    status = EG_getTessEdge(tess2, iedge+1, &np2, &x2, &t2);
+    status = EG_getTessEdge(tess2,-iedge-1, &np2, &x2, &t2);
+    if (status != EGADS_SUCCESS) goto cleanup;
+
+    /* check dot information */
+    status = EG_hasGeometry_dot(eedges1[iedge]);
     if (status != EGADS_SUCCESS) goto cleanup;
 
     for (n = 0; n < np1; n++) {
@@ -180,9 +193,17 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
         nerr++;
       }
     }
+
+    //printf("range_dot = (%+f, %+f)\n", range_dot[0], range_dot[1]);
+    //printf("   fd_dot = (%+f, %+f)\n", fd_dot[0], fd_dot[1]);
+    //printf("\n");
   }
 
   for (inode = 0; inode < nnode; inode++) {
+
+    /* check dot information */
+    status = EG_hasGeometry_dot(enodes1[inode]);
+    if (status != EGADS_SUCCESS) goto cleanup;
 
     /* evaluate original node and velocities*/
     status = EG_evaluate_dot(enodes1[inode], NULL, NULL, p1, p1_dot);
@@ -211,8 +232,18 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
   }
 
 cleanup:
-  if (status != EGADS_SUCCESS) {
-    printf(" Failure %d in %s\n", status, __func__);
+  if (status + nerr != EGADS_SUCCESS) {
+    printf(" Failure %d in %s. Writing failure.egads\n", status + nerr, __func__);
+    EG_getContext(ebody1, &context);
+    EG_copyObject(ebody1, NULL, &bodies[0]);
+    EG_copyObject(ebody2, NULL, &bodies[1]);
+    EG_copyObject(tess1, bodies[0], &bodies[2]);
+    EG_copyObject(tess2, bodies[1], &bodies[3]);
+    EG_makeTopology(context, NULL, MODEL, 4, NULL, 2,
+                    bodies, NULL, &model);
+    remove("failure.egads");
+    EG_saveModel(model, "failure.egads");
+    EG_deleteObject(model);
   }
   EG_free(efaces1);
   EG_free(eedges1);
@@ -224,6 +255,7 @@ cleanup:
 
   return status + nerr;
 }
+
 
 /*****************************************************************************/
 /*                                                                           */
@@ -5393,10 +5425,10 @@ pingToroidal(ego context, objStack *stack)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     /* ping the bodies */
-    status = pingBodies(tess1, tess2, dtime, iparam, "Toroidal", 5e-7, 1e-7, 1e-7);
+    status = pingBodies(tess1, tess2, dtime, iparam, "Toroidal", 5e-7, 5e-7, 5e-7);
     if (status != EGADS_SUCCESS) goto cleanup;
 
-    status = pingBodiesExtern(tess1, ebody2, dtime, iparam, "Toroidal", 5e-7, 1e-7, 1e-7);
+    status = pingBodiesExtern(tess1, ebody2, dtime, iparam, "Toroidal", 5e-7, 5e-7, 5e-7);
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);
@@ -5901,10 +5933,10 @@ pingRevolution(ego context, objStack *stack)
     if (status != EGADS_SUCCESS) goto cleanup;
 
     /* ping the bodies */
-    status = pingBodies(tess1, tess2, dtime, iparam, "Revolution", 5e-7, 1e-7, 1e-7);
+    status = pingBodies(tess1, tess2, dtime, iparam, "Revolution", 5e-7, 5e-7, 5e-7);
     if (status != EGADS_SUCCESS) goto cleanup;
 
-    status = pingBodiesExtern(tess1, ebody2, dtime, iparam, "Revolution", 5e-7, 1e-7, 1e-7);
+    status = pingBodiesExtern(tess1, ebody2, dtime, iparam, "Revolution", 5e-7, 5e-7, 5e-7);
     if (status != EGADS_SUCCESS) goto cleanup;
 
     EG_deleteObject(tess2);

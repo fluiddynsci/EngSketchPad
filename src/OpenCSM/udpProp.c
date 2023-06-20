@@ -13,7 +13,7 @@
  */
 
 /*
- * Copyright (C) 2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -622,8 +622,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     *ebody = etemp1;
 
     /* set the output value(s) */
-    CTHRUST(0) = Tc;
-    EFF(    0) = Tc / CPOWER(0);
+    CTHRUST(numUdp) = Tc;
+    EFF(    numUdp) = Tc / CPOWER(0);
 
     /* remember this model (body) */
     udps[numUdp].ebody = *ebody;

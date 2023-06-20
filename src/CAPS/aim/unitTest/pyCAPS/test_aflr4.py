@@ -80,9 +80,12 @@ class TestAFLR4(unittest.TestCase):
         myAnalysis.input.min_scale = 0.01
         myAnalysis.input.Mesh_Length_Factor = 1.05
         myAnalysis.input.erw_all = 0.7
+        myAnalysis.input.Multiple_Mesh = "MultiDomain"
+        myAnalysis.input.EGADS_Quad = False
+        myAnalysis.input.AFLR4_Quad = False
 
 #==============================================================================
-    def test_SingleBody_AnalysisOutVal(self):
+    def test_SingleBody_output(self):
 
         file = os.path.join("..","csmData","cfdSingleBody.csm")
         myProblem = pyCAPS.Problem(self.problemName+str(self.iProb), capsFile=file, outLevel=0); self.__class__.iProb += 1
@@ -110,7 +113,7 @@ class TestAFLR4(unittest.TestCase):
 
 
 #==============================================================================
-    def test_MultiBody(self):
+    def test_MultiBody_quad(self):
 
         file = os.path.join("..","csmData","cfdMultiBody.csm")
         myProblem = pyCAPS.Problem(self.problemName+str(self.iProb), capsFile=file, outLevel=0); self.__class__.iProb += 1
@@ -121,6 +124,19 @@ class TestAFLR4(unittest.TestCase):
 
         # Run
         myAnalysis.runAnalysis()
+
+        # Assert AnalysisOutVals
+        self.assertTrue(myAnalysis.output.Done)
+
+        numNodes = myAnalysis.output.NumberOfNode
+        self.assertGreater(numNodes, 0)
+        numElements = myAnalysis.output.NumberOfElement
+        self.assertGreater(numElements, 0)
+
+        myAnalysis.input.AFLR4_Quad= True
+
+        self.assertNotEqual(myAnalysis.output.NumberOfNode, numNodes)
+        self.assertNotEqual(myAnalysis.output.NumberOfElement, numElements)
 
 #==============================================================================
     def test_reenter(self):

@@ -3,7 +3,7 @@
  *
  *             Base Object Functions
  *
- *      Copyright 2011-2022, Massachusetts Institute of Technology
+ *      Copyright 2011-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -595,7 +595,7 @@ EG_derefObj(egObject *object, /*@null@*/ const egObject *refx, int flg)
             while (nobj != NULL) {
               obj = (egObject *) nobj->attrs;
               if (obj != ref)
-                printf("            obj = %d/%d\n", obj->oclass, obj->mtype);
+                printf("            obj = %p %d/%d\n", (void*)obj, obj->oclass, obj->mtype);
               pobj = nobj;
               nobj = (egObject *) pobj->blind;          /* next reference */
             }
@@ -649,6 +649,7 @@ EG_derefObj(egObject *object, /*@null@*/ const egObject *refx, int flg)
     pobj->next   = nobj;
     obj->mtype   = REFERENCE;
     obj->oclass  = EMPTY;
+    obj->attrs   = NULL;
     obj->blind   = NULL;
     obj->topObj  = context;
     obj->prev    = NULL;
@@ -810,8 +811,9 @@ int
 EG_deleteObject(egObject *object)
 {
   int      outLevel, total, cnt, nref, stat, oclass, mtype, nbody;
-  int      i, *senses, locked = 0;
+  int      i, j, *senses, locked = 0;
   egObject *context, *obj, *next, **bodies;
+  egObject *pobj, *nobj;
   egCntxt  *cntx;
   egTessel *tess;
   egEBody  *ebody;
@@ -869,6 +871,47 @@ EG_deleteObject(egObject *object)
         }
         obj = next;
       }
+
+      /* check for references in the bodies */
+      for (i = 0; i < nbody; i++) {
+        if ((bodies[i]->oclass == TESSELLATION) ||
+            (bodies[i]->oclass == EBODY)) continue;
+
+        nobj = bodies[i]->tref;
+        pobj = NULL;
+        j = 0;
+        while (nobj != NULL) {
+          obj = (egObject *) nobj->attrs;
+          if ((obj != context) &&
+              (obj != object) &&
+              (obj->oclass != TESSELLATION) &&
+              (obj->oclass != EBODY)) j++;
+          pobj = nobj;
+          nobj = (egObject *) pobj->blind;          /* next reference */
+        }
+        if (j > 0) {
+          cnt += j;
+          if (outLevel > 0) {
+            printf(" EGADS Info: Body %d %d/%d dereference with %d active objects!\n",
+                i+1, bodies[i]->oclass, bodies[i]->mtype, j);
+            if (outLevel > 1) {
+              nobj = bodies[i]->tref;
+              pobj = NULL;
+              while (nobj != NULL) {
+                obj = (egObject *) nobj->attrs;
+                if ((obj != context) &&
+                    (obj != object) &&
+                    (obj->oclass != TESSELLATION) &&
+                    (obj->oclass != EBODY))
+                  printf("            obj = %p %d/%d\n", (void*)obj, obj->oclass, obj->mtype);
+                pobj = nobj;
+                nobj = (egObject *) pobj->blind;          /* next reference */
+              }
+            }
+          }
+        }
+      }
+
       /* is this necessary or even correct?
       for (i = 0; i < nbody; i++) {
         egObject *pobj;
@@ -1582,99 +1625,123 @@ EG_close(egObject *context)
   
   /* delete tessellation objects not in models */
 
-  obj  = context->next;
-  last = NULL;
-  while (obj != NULL) {
-    next = obj->next;
-    if ((obj->oclass == TESSELLATION) && (obj->topObj == context))
-      if (EG_deleteObject(obj) == EGADS_SUCCESS) {
-        obj = last;
-        if (obj == NULL) {
-          next = context->next;
-        } else {
-          next = obj->next;
+  do {
+    cnt = 0;
+    obj  = context->next;
+    last = NULL;
+    while (obj != NULL) {
+      next = obj->next;
+      if ((obj->oclass == TESSELLATION) && (obj->topObj == context))
+        if (EG_deleteObject(obj) == EGADS_SUCCESS) {
+          cnt++;
+          obj = last;
+          if (obj == NULL) {
+            next = context->next;
+          } else {
+            next = obj->next;
+          }
         }
-      }
-    last = obj;
-    obj  = next;
-  }
+      last = obj;
+      obj  = next;
+    }
+  } while (cnt != 0);
 
   /* delete all models */
 
-  obj  = context->next;
-  last = NULL;
-  while (obj != NULL) {
-    next = obj->next;
-    if (obj->oclass == MODEL)
-      if (EG_deleteObject(obj) == EGADS_SUCCESS) {
-        obj = last;
-        if (obj == NULL) {
-          next = context->next;
-        } else {
-          next = obj->next;
+  do {
+    cnt = 0;
+    obj  = context->next;
+    last = NULL;
+    while (obj != NULL) {
+      next = obj->next;
+      if (obj->oclass == MODEL) {
+        if (EG_deleteObject(obj) == EGADS_SUCCESS) {
+          cnt++;
+          obj = last;
+          if (obj == NULL) {
+            next = context->next;
+          } else {
+            next = obj->next;
+          }
         }
       }
-    last = obj;
-    obj  = next;
-  }
-  
+      last = obj;
+      obj  = next;
+    }
+  } while (cnt != 0);
+
   /* delete tessellation objects */
 
-  obj  = context->next;
-  last = NULL;
-  while (obj != NULL) {
-    next = obj->next;
-    if (obj->oclass == TESSELLATION)
-      if (EG_deleteObject(obj) == EGADS_SUCCESS) {
-        obj = last;
-        if (obj == NULL) {
-          next = context->next;
-        } else {
-          next = obj->next;
+  do {
+    cnt = 0;
+    obj  = context->next;
+    last = NULL;
+    while (obj != NULL) {
+      next = obj->next;
+      if (obj->oclass == TESSELLATION) {
+        if (EG_deleteObject(obj) == EGADS_SUCCESS) {
+          cnt++;
+          obj = last;
+          if (obj == NULL) {
+            next = context->next;
+          } else {
+            next = obj->next;
+          }
         }
       }
-    last = obj;
-    obj  = next;
-  }
+      last = obj;
+      obj  = next;
+    }
+  } while (cnt != 0);
   
   /* delete Effective Bodies objects */
 
-  obj  = context->next;
-  last = NULL;
-  while (obj != NULL) {
-    next = obj->next;
-    if (obj->oclass == EBODY)
-      if (EG_deleteObject(obj) == EGADS_SUCCESS) {
-        obj = last;
-        if (obj == NULL) {
-          next = context->next;
-        } else {
-          next = obj->next;
+  do {
+    cnt = 0;
+    obj  = context->next;
+    last = NULL;
+    while (obj != NULL) {
+      next = obj->next;
+      if (obj->oclass == EBODY) {
+        if (EG_deleteObject(obj) == EGADS_SUCCESS) {
+          cnt++;
+          obj = last;
+          if (obj == NULL) {
+            next = context->next;
+          } else {
+            next = obj->next;
+          }
         }
       }
-    last = obj;
-    obj  = next;
-  }
-  
+      last = obj;
+      obj  = next;
+    }
+  } while (cnt != 0);
+
   /* delete all bodies that are left */
-  
-  obj  = context->next;
-  last = NULL;
-  while (obj != NULL) {
-    next = obj->next;
-    if (obj->oclass == BODY)
-      if (EG_deleteObject(obj) == EGADS_SUCCESS) {
-        obj = last;
-        if (obj == NULL) {
-          next = context->next;
-        } else {
-          next = obj->next;
+
+  do {
+    cnt = 0;
+    obj  = context->next;
+    last = NULL;
+    while (obj != NULL) {
+      next = obj->next;
+      if (obj->oclass == BODY) {
+        if (EG_deleteObject(obj) == EGADS_SUCCESS) {
+          cnt++;
+          obj = last;
+          if (obj == NULL) {
+            next = context->next;
+          } else {
+            next = obj->next;
+          }
         }
       }
-    last = obj;
-    obj  = next;
-  }
-  
+      last = obj;
+      obj  = next;
+    }
+  } while (cnt != 0);
+
   /* dereference until nothing is left (which should be the case) */
   if (cntx->mutex != NULL) EMP_LockSet(cntx->mutex);
 

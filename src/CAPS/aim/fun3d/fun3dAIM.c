@@ -1065,7 +1065,7 @@ int aimUpdateState(void *instStore, void *aimInfo,
         AIM_STATUS(aimInfo, status);
 
         // Mightly Morph the mesh
-        status = fun3d_morphMeshUpdate(aimInfo, &fun3dInstance->meshRefObj, numBody, bodies);
+        status = aim_morphMeshUpdate(aimInfo, &fun3dInstance->meshRefObj, numBody, bodies);
         AIM_STATUS(aimInfo, status);
         /*@-immediatetrans@*/
         fun3dInstance->meshRef = &fun3dInstance->meshRefObj;

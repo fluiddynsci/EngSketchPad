@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -41,10 +41,10 @@
 #define LAYOUT(      IUDP)    ((int    *) (udps[IUDP].arg[4].val))[0]
 
 /* data about possible arguments */
-static char  *argNames[NUMUDPARGS] = {"depth",     "segments",  "filename", "progress", "layout", "rebuild",   };
-static int    argTypes[NUMUDPARGS] = {ATTRREALSEN, ATTRREALSEN, ATTRFILE,   ATTRINT,    ATTRINT,  ATTRREALSEN, };
-static int    argIdefs[NUMUDPARGS] = {0,           0,           0,          0,          0,        0,           };
-static double argDdefs[NUMUDPARGS] = {1.,          0.,          0.,         0.,         0.,       0.,          };
+static char  *argNames[NUMUDPARGS] = {"depth",     "segments",  "filename", "progress", "layout",  "rebuild",   };
+static int    argTypes[NUMUDPARGS] = {ATTRREALSEN, ATTRREALSEN, ATTRFILE,   ATTRINT,    ATTRINT,   ATTRREBUILD, };
+static int    argIdefs[NUMUDPARGS] = {0,           0,           0,          0,          0,         0,           };
+static double argDdefs[NUMUDPARGS] = {1.,          0.,          0.,         0.,         0.,        0.,          };
 
 /* get utility routines: udpErrorStr, udpInitialize, udpReset, udpSet,
                          udpGet, udpVel, udpClean, udpMesh */
@@ -90,8 +90,6 @@ static int     plotWaffle(int npnt, pnt_T pnt[], int nseg, seg_T seg[]);
 #endif
 
 #define           MAX(A,B)        (((A) < (B)) ? (B) : (A))
-
-static void *realloc_temp=NULL;              /* used by RALLOC macro */
 
 
 /*
@@ -673,6 +671,7 @@ cleanup:
     LINE   linename  pointname pointname [attrName1=attrValue1 [...]]
                                                         creates line between points with given attributes
     CLINE  -------------- same as LINE ---------------- creates construction line ...
+    SET    varname expression                           sets varname to expression
     PATBEG varname ncopy                                loops ncopy times with varname=1,...,ncopy
     PATEND
     IFTHEN val1 op val2                                 op is LT LE EQ GE GT or NE
@@ -697,7 +696,8 @@ processFile(ego    context,             /* (in)  EGADS context */
     int    pat_value[]={ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     int    pat_end[  ]={-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
     long   pat_seek[ ]={ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    int    istream, ieof, iskip, ifthen, npat=0, outLevel;
+    int    set_pmtr[ ]={ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int    istream, ieof, iskip, ifthen, npat=0, nset=0, outLevel;
     double xloc,     yloc,     xvalue,     yvalue,     value,     val1,     val2;
     double xloc_dot, yloc_dot, xvalue_dot, yvalue_dot, value_dot, val1_dot, val2_dot;
     double frac,     N,     D,     s,     dist,     dx,     dy,     alen;
@@ -1485,6 +1485,48 @@ processFile(ego    context,             /* (in)  EGADS context */
             }
 
             (*nseg)++;
+
+        } else if (strcmp(token, "set") == 0 ||
+                   strcmp(token, "SET") == 0   ) {
+
+            if (nset < 9) {
+                nset++;
+            } else {
+                snprintf(message, 1024, "can only have 10 SET statements\nwhile processing: %s", templine);
+                status = EGADS_RANGERR;
+                goto cleanup;
+            }
+
+            /* get the expression */
+            status = getToken(templine, 2, ' ', 255, token);
+            if (status < SUCCESS) {
+                snprintf(message, 1024, "cannot find second token\nwhile processing: %s", templine);
+                goto cleanup;
+            }
+
+            status = ocsmEvalExpr(MODL, token, &value, &value_dot, str);
+            if (status < SUCCESS) {
+                snprintf(message, 1024, "cannot evaluate \"%s\"\nwhile processing: %s", token, templine);
+                goto cleanup;
+            }
+
+            /* set up Parameter */
+            status = getToken(templine, 1, ' ', 255, token);
+            if (status < SUCCESS) {
+                snprintf(message, 1024, "cannot find first token\nwhile processing: %s", templine);
+                goto cleanup;
+            }
+
+            status = ocsmFindPmtr(MODL, token, OCSM_LOCALVAR, 1, 1, &set_pmtr[nset]);
+            CHECK_STATUS(ocsm_localvar);
+
+            if (set_pmtr[nset] <= npmtr_save) {
+                snprintf(message, 1024, "cannot use \"%s\" since it was previously defined\nwhile processing: %s", token, templine);
+                status = EGADS_NONAME;
+                goto cleanup;
+            }
+
+            MODL->pmtr[set_pmtr[nset]].value[0] = value;
 
         } else if (strcmp(token, "patbeg") == 0 ||
                    strcmp(token, "PATBEG") == 0   ) {

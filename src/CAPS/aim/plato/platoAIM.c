@@ -52,6 +52,8 @@
 
 #include "exodusWriter.h"
 
+#include <exodusII.h>
+
 #define MAX(A,B)         (((A) < (B)) ? (B) : (A))
 
 #ifdef WIN32
@@ -69,13 +71,18 @@
 
 enum aimInputs
 {
-  Mesh = 1,             /* index is 1-based */
+  Proj_Name = 1,        /* index is 1-based */
+  Mesh_Morph,
+  Mesh,
   NUMINPUT = Mesh       /* Total number of inputs */
 };
 
 #define NUMOUTPUT  0
 
 typedef struct {
+
+  // Mesh reference obtained from meshing AIM
+  aimMeshRef *meshRef, meshRefObj;
 
 } aimStorage;
 
@@ -144,12 +151,15 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, /*@unus
     */
 
     // Allocate platoInstance
-    //AIM_ALLOC(platoInstance, 1, aimStorage, aimInfo, status);
+    AIM_ALLOC(platoInstance, 1, aimStorage, aimInfo, status);
     *instStore = platoInstance;
 
     // Set initial values for platoInstance
 
-//cleanup:
+    platoInstance->meshRef = NULL;
+    aim_initMeshRef(&platoInstance->meshRefObj);
+
+cleanup:
     if (status != CAPS_SUCCESS) {
         /* release all possibly allocated memory on error */
         if (*fnames != NULL)
@@ -182,7 +192,31 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, int inde
      */
 
     //platoInstance = (aimStorage *) instStore;
-    if (index == Mesh) {
+    if (index == Proj_Name) {
+        *ainame              = EG_strdup("Proj_Name");
+        defval->type         = String;
+        defval->nullVal      = NotNull;
+        defval->vals.string  = EG_strdup("plato_CAPS");
+
+        /*! \page aimInputsPLATO
+         * - <B> Proj_Name = "plato_CAPS"</B> <br>
+         * This corresponds to the project name used for file naming.
+         */
+
+    } else if (index == Mesh_Morph) {
+        *ainame              = EG_strdup("Mesh_Morph");
+        defval->type         = Boolean;
+        defval->lfixed       = Fixed;
+        defval->vals.integer = (int) false;
+        defval->dim          = Scalar;
+        defval->nullVal      = NotNull;
+
+        /*! \page aimInputsPLATO
+         * - <B> Mesh_Morph = False</B> <br>
+         * Project previous surface mesh onto new geometry and write out a 'Proj_Name'_body#.dat file.
+         */
+
+    } else if (index == Mesh) {
         *ainame             = AIM_NAME(Mesh);
         defval->type        = PointerMesh;
         defval->nrow        = 1;
@@ -193,7 +227,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, int inde
 
         /*! \page aimInputsPLATO
          * - <B>Mesh = NULL</B> <br>
-         * A Volume_Mesh link for 3D calculations.
+         * An Area_Mesh or Volume_Mesh link for 2D and 3D calculations respectively.
          */
 
     } else {
@@ -215,23 +249,50 @@ int aimUpdateState(/*@unused@*/ void *instStore, void *aimInfo,
 {
     int status; // Function return status
 
-    // Volume Mesh obtained from meshing AIM
-    aimMeshRef *meshRef = NULL;
+    // AIM input bodies
+    int  numBody;
+    ego *bodies = NULL;
+    const char *intents;
 
-    //aimStorage *platoInstance;
+    aimStorage *platoInstance;
 
-    //platoInstance = (aimStorage *) instStore;
+    platoInstance = (aimStorage *) instStore;
+    AIM_NOTNULL(platoInstance, aimInfo, status);
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
-    if (aimInputs[Mesh-1].nullVal == IsNull) {
+    // Free our meshRef
+    (void) aim_freeMeshRef(&platoInstance->meshRefObj);
+
+    if (aimInputs[Mesh-1].nullVal == IsNull &&
+        aimInputs[Mesh_Morph-1].vals.integer == (int) false) {
         AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to a 'Volume_Mesh'");
         status = CAPS_BADVALUE;
         goto cleanup;
     }
 
+    // Get AIM bodies
+    status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
+    AIM_STATUS(aimInfo, status);
+    AIM_NOTNULL(bodies, aimInfo, status);
+
     // Get mesh
-    meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
-    AIM_NOTNULL(meshRef, aimInfo, status);
+    platoInstance->meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
+
+    if ( aimInputs[Mesh_Morph-1].vals.integer == (int) true &&
+        platoInstance->meshRef == NULL) { // If we are mighty morphing
+
+        // Lets "load" the meshRef now since it's not linked
+        status = aim_loadMeshRef(aimInfo, &platoInstance->meshRefObj);
+        AIM_STATUS(aimInfo, status);
+
+        // Mightly Morph the mesh
+        status = aim_morphMeshUpdate(aimInfo, &platoInstance->meshRefObj, numBody, bodies);
+        AIM_STATUS(aimInfo, status);
+        /*@-immediatetrans@*/
+        platoInstance->meshRef = &platoInstance->meshRefObj;
+        /*@+immediatetrans@*/
+    }
+    AIM_NOTNULL(platoInstance->meshRef, aimInfo, status);
 
     status = CAPS_SUCCESS;
 cleanup:
@@ -242,91 +303,180 @@ cleanup:
 // ********************** AIM Function Break *****************************
 int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo, capsValue *aimInputs)
 {
-    // Function return flag
-    int status;
+  // Function return flag
+  int status;
 
-    int i, imap;
+  int i, j, imap;
 
-    // EGADS return values
-//    int          atype, alen;
-//    const int    *ints;
-//    const double *reals;
-    const char   *intents;
-    ego body;
-    int state, np;
-    FILE *fp = NULL;
+  // EGADS return values
+  const char   *intents;
+  ego body;
+  int state, np, nGlobal, ptype, pindex;
+  double xyz[3];
+  FILE *fp = NULL;
 
-    // Output filename
-    char meshfilename[PATH_MAX];
-    char filepath[PATH_MAX];
+  // Output filename
+  char meshfilename[PATH_MAX];
+  char filepath[PATH_MAX];
 
-    // AIM input bodies
-    int  numBody;
-    ego *bodies = NULL;
+  // AIM input bodies
+  int  numBody;
+  ego *bodies = NULL;
 
-    // Volume Mesh obtained from meshing AIM
-    aimMeshRef *meshRef = NULL;
+  // exodus file I/O
+  int CPU_word_size = sizeof(double);
+  int IO_word_size = sizeof(double);
+  float version;
+  int exoid = 0;
+  ex_init_params par;
+  double *x=NULL, *y=NULL, *z=NULL;
+  int dim, nVertex;
 
-    //const aimStorage *platoInstance;
+  // Volume Mesh obtained from meshing AIM
+  aimMeshRef *meshRef = NULL;
 
-    //platoInstance = (const aimStorage *) instStore;
+  const aimStorage *platoInstance;
 
-    // Get AIM bodies
-    status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
-    AIM_STATUS(aimInfo, status);
+  platoInstance = (const aimStorage *) instStore;
+
+  // Get AIM bodies
+  status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
+  AIM_STATUS(aimInfo, status);
 
 #ifdef DEBUG
-    printf(" platoAIM/aimPreAnalysis  numBody = %d!\n", numBody);
+  printf(" platoAIM/aimPreAnalysis  numBody = %d!\n", numBody);
 #endif
-    if ((numBody <= 0) || (bodies == NULL)) {
-        AIM_ERROR(aimInfo, "No Bodies!");
-        return CAPS_SOURCEERR;
-    }
+  if ((numBody <= 0) || (bodies == NULL)) {
+    AIM_ERROR(aimInfo, "No Bodies!");
+    return CAPS_SOURCEERR;
+  }
 
-    if (aimInputs == NULL) return CAPS_BADVALUE;
+  AIM_NOTNULL(aimInputs, aimInfo, status);
 
-    if (aimInputs[Mesh-1].nullVal == IsNull) {
-        AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to a 'Volume_Mesh'");
-        status = CAPS_BADVALUE;
-        goto cleanup;
-    }
+  // Get mesh
+  meshRef = platoInstance->meshRef;
+  AIM_NOTNULL(meshRef, aimInfo, status);
 
-    // Get mesh
-    meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
-    AIM_NOTNULL(meshRef, aimInfo, status);
-
-    status = aim_relPath(aimInfo, meshRef->fileName, ".", filepath);
-    AIM_STATUS(aimInfo, status);
-    snprintf(meshfilename, PATH_MAX, "%s%s", filepath, MESHEXTENSION);
-
-    fp = aim_fopen(aimInfo, "sensMap.txt", "w");
-    if (fp == NULL) {
-      AIM_ERROR(aimInfo, "Failed to open sensMap.txt'");
-      status = CAPS_IOERR;
-      goto cleanup;
-    }
-
-    // Write the number of maps
-    fprintf(fp, "%d\n", meshRef->nmap);
-
-    for (imap = 0; imap < meshRef->nmap; imap++) {
-      status = EG_statusTessBody(meshRef->maps[imap].tess, &body, &state, &np);
+  if ( aimInputs[Mesh_Morph-1].vals.integer == (int) true) { // If we are mighty morphing
+    if (aimInputs[Mesh-1].nullVal == NotNull) {
+      // store the current mesh for future iterations
+      status = aim_storeMeshRef(aimInfo, (aimMeshRef *) aimInputs[Mesh-1].vals.AIMptr, MESHEXTENSION);
       AIM_STATUS(aimInfo, status);
 
-      // Write number of points in the map
-      fprintf(fp, "%d\n", np);
+    } else {
+      snprintf(meshfilename, PATH_MAX, "%s%s", meshRef->fileName, MESHEXTENSION);
 
-      // Write the map
-      for (i = 0; i < np; i++)
-        fprintf(fp, "%d\n", meshRef->maps[imap].map[i]);
+      exoid = ex_open(meshfilename, EX_READ | EX_NETCDF4 | EX_NOCLASSIC,
+                      &CPU_word_size, &IO_word_size, &version);
+      if (exoid <= 0) {
+        AIM_ERROR(aimInfo, "Cannot open file: %s\n", meshfilename);
+        return CAPS_IOERR;
+      }
+
+      status = ex_get_init_ext(exoid, &par);
+      AIM_STATUS(aimInfo, status);
+
+      dim     = par.num_dim;
+      nVertex = par.num_nodes;
+
+      AIM_ALLOC(x, nVertex, double, aimInfo, status);
+      AIM_ALLOC(y, nVertex, double, aimInfo, status);
+      if (dim == 3)
+        AIM_ALLOC(z, nVertex, double, aimInfo, status);
+
+      /* get all of the vertices */
+      status = ex_get_coord(exoid, x, y, z);
+      AIM_STATUS(aimInfo, status);
+
+      ex_close(exoid);
+      exoid = 0;
+      
+      for (imap = 0; imap < meshRef->nmap; imap++) {
+        status = EG_statusTessBody(meshRef->maps[imap].tess, &body, &state, &nGlobal);
+        AIM_STATUS(aimInfo, status);
+
+        // Write the map
+        for (i = 0; i < nGlobal; i++) {
+          status = EG_getGlobal(meshRef->maps[imap].tess, i+1, &ptype, &pindex, xyz);
+          AIM_STATUS(aimInfo, status);
+
+          j = meshRef->maps[imap].map[i]-1;
+
+          x[j] = xyz[0];
+          y[j] = xyz[1];
+          if (dim == 3)
+            z[j] = xyz[2];
+        }
+      }
+      
+      exoid = ex_open(meshfilename, EX_WRITE | EX_CLOBBER | EX_NETCDF4 | EX_NOCLASSIC,
+                      &CPU_word_size, &IO_word_size, &version);
+      if (exoid <= 0) {
+        AIM_ERROR(aimInfo, "Cannot open file: %s\n", meshfilename);
+        return CAPS_IOERR;
+      }
+      
+      /* set all of the vertices */
+      status = ex_put_coord(exoid, x, y, z);
+      AIM_STATUS(aimInfo, status);
+
+      AIM_FREE(x);
+      AIM_FREE(y);
+      AIM_FREE(z);
+
+      ex_close(exoid);
+      exoid = 0;
     }
+  } else {
+    /* create a symbolic link to the file name*/
+    snprintf(meshfilename, PATH_MAX, "%s%s", meshRef->fileName, MESHEXTENSION);
+    snprintf(filepath, PATH_MAX, "%s%s", aimInputs[Proj_Name-1].vals.string, MESHEXTENSION);
+    status = aim_symLink(aimInfo, meshfilename, filepath);
+    AIM_STATUS(aimInfo, status);
+  }
 
-    status = CAPS_SUCCESS;
+  fp = aim_fopen(aimInfo, "sensMap.txt", "w");
+  if (fp == NULL) {
+    AIM_ERROR(aimInfo, "Failed to open sensMap.txt'");
+    status = CAPS_IOERR;
+    goto cleanup;
+  }
+
+  // Write the number of maps
+  fprintf(fp, "%d\n", meshRef->nmap);
+
+  for (imap = 0; imap < meshRef->nmap; imap++) {
+    status = EG_statusTessBody(meshRef->maps[imap].tess, &body, &state, &np);
+    AIM_STATUS(aimInfo, status);
+
+    // Write number of points in the map
+    fprintf(fp, "%d\n", np);
+
+    // Write the map
+    for (i = 0; i < np; i++)
+      fprintf(fp, "%d\n", meshRef->maps[imap].map[i]);
+
+
+    snprintf(meshfilename, PATH_MAX, "%s_%d.eto", aimInputs[Proj_Name-1].vals.string, imap+1);
+    status = aim_file(aimInfo, meshfilename, filepath);
+    AIM_STATUS(aimInfo, status);
+
+    remove(filepath);
+    status = EG_saveTess(meshRef->maps[imap].tess, filepath);
+    AIM_STATUS(aimInfo, status);
+  }
+
+  status = CAPS_SUCCESS;
 
 cleanup:
-    if (fp != NULL) fclose(fp);
+  AIM_FREE(x);
+  AIM_FREE(y);
+  AIM_FREE(z);
 
-    return status;
+  if (fp != NULL) fclose(fp);
+  if (exoid > 0) ex_close(exoid);
+
+  return status;
 }
 
 
@@ -337,24 +487,24 @@ int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
   int status = CAPS_SUCCESS;
 
   // Mesh reference obtained from meshing AIM
-  aimMeshRef *meshRef = NULL;
+  //aimMeshRef *meshRef = NULL;
 
   //aimStorage *platoInstance;
 
   //platoInstance = (aimStorage*)instStore;
 
-  AIM_NOTNULL(aimInputs, aimInfo, status);
+//  AIM_NOTNULL(aimInputs, aimInfo, status);
 
   // Get mesh
-  meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
-  AIM_NOTNULL(meshRef, aimInfo, status);
+//  meshRef = (aimMeshRef *)aimInputs[Mesh-1].vals.AIMptr;
+//  AIM_NOTNULL(meshRef, aimInfo, status);
 
-cleanup:
+//cleanup:
   return status;
 }
 
 
-int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     /*@unused@*/ int index, /*@unused@*/ char **aoname, /*@unused@*/ capsValue *form)
 {
 	// SU2 Outputs
@@ -400,6 +550,9 @@ void aimCleanup(void *instStore)
     printf(" platoAIM/aimCleanup!\n");
 #endif
     platoInstance = (aimStorage *) instStore;
+
+    aim_freeMeshRef(&platoInstance->meshRefObj);
+    platoInstance->meshRef = NULL;
 
     AIM_FREE(platoInstance);
 }

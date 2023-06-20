@@ -3,7 +3,7 @@
 #   pyCAPS --- Python version of CAPS API                                 #
 #                                                                         #
 #                                                                         #
-#      Copyright 2011-2022, Massachusetts Institute of Technology         #
+#      Copyright 2011-2023, Massachusetts Institute of Technology         #
 #      Licensed under The GNU Lesser General Public License, version 2.1  #
 #      See http://www.opensource.org/licenses/lgpl-2.1.php                #
 #                                                                         #
@@ -2668,14 +2668,14 @@ class capsObj:
     @checkClosed
     def setStepSizeSize(self, sizes):
         """
-        Set the Finite-Difference Step Size
+        Set and use OpenCSM Finite-Difference Step Size
         
         Only for GeometryIn/DESPMTR Value Objects
         
         Parameters
         ----------
         sizes:
-            the FD step sizes for each Value member (nrow of ncol tuples)
+            the FD step sizes for each Value member (nrow x ncol matrix (e.g. list of lists))
             a zero indicates use analytic derivatives; can be None -- set all to zero
         """
         
@@ -2696,14 +2696,14 @@ class capsObj:
     @checkClosed
     def getStepSizeSize(self):
         """
-        Get the Finite-Difference Step Size
+        Get the OpenCSM Finite-Difference Step Size
         
         Only for GeometryIn/DESPMTR Value Objects
         
         Returns
         ----------
         sizes:
-            the FD step sizes for each Value member (nrow of ncol tuples)
+            the FD step sizes for each Value member (nrow x ncol matrix (e.g. list of lists))
             a zero indicates use analytic derivatives; can be None -- all are zero
         """
 

@@ -12,24 +12,27 @@ LIBS    = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -l
 else ifeq ($(CASREV),7.6)
 CPDS    = -std=c++11
 LIBS    = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet
+else ifeq ($(CASREV),7.7)
+CPDS    = -std=c++11
+LIBS    = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet
 else 
-$(error Unsupported CASREV=$(CASREV) -- Must be one of: 7.3 7.4 7.6)
+$(error Unsupported CASREV=$(CASREV) -- Must be one of: 7.3 7.4 7.6 7.7)
 endif
 
 LIBS    += -pthread -lm
 WARNINGS = -Wall -Wno-dangling-else -Wno-parentheses -Wno-unused-result -Wno-format-truncation
 DEFINE   = -DREVISION=$(CASREV)
-CXX      = g++ -m64 -g $(ESPFLAGS)
+CXX      = g++ -g $(ESPFLAGS)
 CPPOPT   = -O -fPIC -DOCC_CONVERT_SIGNALS -D_GNU_SOURCE=1 -DNDEBUG -DNo_Exception -D_OCC64 $(WARNINGS) $(CPDS)
-CC       = gcc -m64 -g $(ESPFLAGS)
+CC       = gcc -g $(ESPFLAGS)
 COPTS    = -O -fno-unit-at-a-time -fPIC $(WARNINGS)
 OCOPT    = -O -fno-unit-at-a-time -fPIC $(WARNINGS)
 ifeq ($(EFCOMP),gfortran)
-FCOMP    = gfortran -m64 -g $(ESPFFLAGS)
+FCOMP    = gfortran -g $(ESPFFLAGS)
 FOPTS    = -O -fPIC -frecursive -fcray-pointer
 endif
 ifeq ($(EFCOMP),ifort)
-FCOMP    = ifort -m64 -g -traceback
+FCOMP    = ifort -g -traceback
 FOPTS    = -O -fPIC -recursive
 endif
 LOPTS  = rs

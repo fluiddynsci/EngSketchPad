@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -49,8 +49,6 @@ static double argDdefs[NUMUDPARGS] = {0.,       0.,         };
 /* prototype for function defined below */
 
 #include "OpenCSM.h"
-
-static void *realloc_temp=NULL;              /* used by RALLOC macro */
 
 
 /*
@@ -223,10 +221,30 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
         if (mtype2 == SOLIDBODY) {
             status = EG_generalBoolean(ebodys[0], esheet, INTERSECTION, 0, &emodel2);
-            CHECK_STATUS(EG_generalBoolean);
+            if (status != SUCCESS) {
+                if (idir == 1) {
+                    printf("skipping slice at x=%12.5f because EG_generalBoolean failed\n", xslice);
+                } else if (idir == 2) {
+                    printf("skipping slice at y=%12.5f because EG_generalBoolean failed\n", yslice);
+                } else {
+                    printf("skipping slice at z=%12.5f because EG_generalBoolean failed\n", zslice);
+                }
+                continue;
+            }
+//$$$            CHECK_STATUS(EG_generalBoolean);
         } else if (mtype2 == SHEETBODY || mtype2 == FACEBODY) {
             status = EG_intersection(ebodys[0], esheet, &nedge, NULL, &emodel2);
-            CHECK_STATUS(EG_intersection);
+            if (status != SUCCESS) {
+                if (idir == 1) {
+                    printf("skipping slice at x=%12.5f because EG_intersection\n", xslice);
+                } else if (idir == 2) {
+                    printf("skipping slice at y=%12.5f because EG_intersection\n", yslice);
+                } else {
+                    printf("skipping slice at z=%12.5f because EG_intersection\n", zslice);
+                }
+                continue;
+            }
+//$$$            CHECK_STATUS(EG_intersection);
         } else {
             snprintf(message, 100, "input Body must be SolidBody or SheetBody");
             status = EGADS_CONSTERR;
@@ -250,7 +268,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
                     CHECK_STATUS(EG_attributeAdd);
                 }
 
-                /* tell OpenCSM that the Faces do not have a _body attribute */
+                /* tell OpenCSM to put _body, _brch, and Branch Attributes on the Faces */
                 status = EG_attributeAdd(eslices[nslice], "__markFaces__", ATTRINT, 1,
                                          &one, NULL, NULL);
                 CHECK_STATUS(EG_attributeAdd);
@@ -279,7 +297,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
 cleanup:
     FREE(eslices);
-    
+
     if (strlen(message) > 0) {
         *string = message;
         printf("%s\n", message);

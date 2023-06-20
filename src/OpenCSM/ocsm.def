@@ -26,6 +26,7 @@ ocsmGetCode
 ocsmGetCsys
 ocsmGetEgo
 ocsmGetFilelist
+ocsmGetFiletree
 ocsmGetName
 ocsmGetNorm
 ocsmGetPmtr
@@ -76,9 +77,12 @@ ocsmSetValu
 ocsmSetValuD
 ocsmSetVel
 ocsmSetVelD
+ocsmShowTblOfContents
 ocsmSolveSketch
 ocsmTessellate
+ocsmTraceAttrs
 ocsmTracePmtrs
+ocsmTraceStors
 ocsmUpdateDespmtrs
 ocsmUpdateTess
 ocsmVersion

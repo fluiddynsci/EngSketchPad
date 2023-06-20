@@ -2014,7 +2014,7 @@ int destroy_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMap) {
 }
 
 // Make a copy of attribute map (attrMapIn)
-int copy_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMapIn, mapAttrToIndexStruct *attrMapOut) {
+int copy_mapAttrToIndexStruct(const mapAttrToIndexStruct *attrMapIn, mapAttrToIndexStruct *attrMapOut) {
 
     int status; // Function return status
     int i, j; // Indexing
@@ -2362,10 +2362,14 @@ int create_genericAttrToIndexMap(int numBody, ego bodies[], int attrLevelIn, con
     // In:
     //    numBody   = Number of incoming bodies
     //    bodies    = Array of ego bodies
-    //    attrLevel = Level of depth to traverse the body:  0 - search just body attributes
+    //    attrLevel = Level of depth to traverse the body:
+    //                              0 - search just body attributes
     //                              1 - search the body and all the faces
+    //                             -1 - search the only faces
     //                              2 - search the body, faces, and all the edges
-    //                             >2 - search the body, faces, edges, and all the nodes
+    //                             -2 - search the only edges
+    //                              3 - search the body, faces, edges, and all the nodes
+    //                             -3 - search the only nodes
     // Out:
     //         attrMap = A filled mapAttrToIndex structure
 
@@ -2406,17 +2410,19 @@ int create_genericAttrToIndexMap(int numBody, ego bodies[], int attrLevelIn, con
         if (oclass == NODE) attrLevel = 0; // If we have a node body - change attrLevel to just the body
 
         // Get groupName following mapName
-        status = retrieve_stringAttr(bodies[body], mapName, &groupName);
-        if (status != EGADS_SUCCESS && status != EGADS_NOTFOUND) goto cleanup;
+        if (attrLevel >= 0) {
+            status = retrieve_stringAttr(bodies[body], mapName, &groupName);
+            if (status != EGADS_SUCCESS && status != EGADS_NOTFOUND) goto cleanup;
 
-        // Set attribute map
-        if (status == CAPS_SUCCESS) {
-            status = increment_mapAttrToIndexStruct(attrMap, groupName);
-            if (status != CAPS_SUCCESS && status != EGADS_EXISTS) goto cleanup;
+            // Set attribute map
+            if (status == CAPS_SUCCESS) {
+                status = increment_mapAttrToIndexStruct(attrMap, groupName);
+                if (status != CAPS_SUCCESS && status != EGADS_EXISTS) goto cleanup;
+            }
         }
 
         // Search through faces
-        if (attrLevel > 0) {
+        if (attrLevel > 0 || attrLevel == -1) {
 
             // Determine the number of faces
             status = EG_getBodyTopos(bodies[body], NULL, FACE, &numFace, &faces);
@@ -2438,7 +2444,7 @@ int create_genericAttrToIndexMap(int numBody, ego bodies[], int attrLevelIn, con
         } // End face loop
 
         // Search through edges
-        if (attrLevel > 1) {
+        if (attrLevel > 1 || attrLevel == -2) {
             status = EG_getBodyTopos(bodies[body], NULL, EDGE, &numEdge, &edges);
             if (status != EGADS_SUCCESS) goto cleanup;
 
@@ -2458,7 +2464,7 @@ int create_genericAttrToIndexMap(int numBody, ego bodies[], int attrLevelIn, con
         } // End edge loop
 
         // Search through nodes
-        if (attrLevel > 2) {
+        if (attrLevel > 2 || attrLevel == -3) {
             status = EG_getBodyTopos(bodies[body], NULL, NODE, &numNode, &nodes);
             if (status != EGADS_SUCCESS) goto cleanup;
 

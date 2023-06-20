@@ -2,8 +2,8 @@
 
 // Structures for general FEA analysis - Written by Dr. Ryan Durscher AFRL/RQVC
 
-#ifndef FEATYPES_H
-#define FEATYPES_H
+#ifndef _AIM_UTILS_FEATYPES_H_
+#define _AIM_UTILS_FEATYPES_H_
 
 #include "meshTypes.h" // Bring in mesh structures
 #include "vlmTypes.h"  // Bring in vortex lattice methods structures
@@ -698,4 +698,4 @@ typedef struct {
 
 } feaProblemStruct;
 
-#endif
+#endif // _AIM_UTILS_FEATYPES_H_

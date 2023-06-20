@@ -882,6 +882,15 @@ int get_ControlSurface(void *aimInfo,
     // Control related variables
     double chordPercent, chordVec[3]; //chordLength
 
+    /* Remove previous control structures */
+    for (section = 0; section < vlmSurface->numSection; section++) {
+      for (control = 0; control < vlmSurface->vlmSection[section].numControl; control++) {
+        status = destroy_vlmControlStruct(&vlmSurface->vlmSection[section].vlmControl[control]);
+        AIM_STATUS(aimInfo, status);
+      }
+    }
+
+
     for (section = 0; section < vlmSurface->numSection; section++) {
 
         vlmSurface->vlmSection[section].numControl = 0;
@@ -936,13 +945,8 @@ int get_ControlSurface(void *aimInfo,
             //printf("AttrName = %s\n", attrName);
 
             vlmSurface->vlmSection[section].numControl += 1;
-            vlmSurface->vlmSection[section].vlmControl = (vlmControlStruct *)
-                           EG_reall(vlmSurface->vlmSection[section].vlmControl,
-                                    vlmSurface->vlmSection[section].numControl*sizeof(vlmControlStruct));
-            if (vlmSurface->vlmSection[section].vlmControl == NULL) {
-              status = EGADS_MALLOC;
-              goto cleanup;
-            }
+            AIM_REALL(vlmSurface->vlmSection[section].vlmControl,
+                      vlmSurface->vlmSection[section].numControl, vlmControlStruct, aimInfo, status);
 
             index = vlmSurface->vlmSection[section].numControl-1; // Make copy to shorten the following lines of code
 
@@ -950,13 +954,9 @@ int get_ControlSurface(void *aimInfo,
             AIM_STATUS(aimInfo, status);
 
             // Get name of control surface
-            if (vlmSurface->vlmSection[section].vlmControl[index].name != NULL) EG_free(vlmSurface->vlmSection[section].vlmControl[index].name);
+            AIM_FREE(vlmSurface->vlmSection[section].vlmControl[index].name);
 
-            vlmSurface->vlmSection[section].vlmControl[index].name = EG_strdup(attrName);
-            if (vlmSurface->vlmSection[section].vlmControl[index].name == NULL) {
-              status = EGADS_MALLOC;
-              goto cleanup;
-            }
+            AIM_STRDUP(vlmSurface->vlmSection[section].vlmControl[index].name, attrName, aimInfo, status);
 
             // Loop through control surfaces from input Tuple and see if defaults have be augmented
             for (control = 0; control < numControl; control++) {
@@ -1038,6 +1038,8 @@ int get_ControlSurface(void *aimInfo,
              */
         }
     }
+
+    status = CAPS_SUCCESS;
 
 cleanup:
 
@@ -3248,7 +3250,7 @@ void spacer( int N, double pspace, double scale, double x[]) {
   x[N-1] = scale;
 }
 // Use Newton solve to refine the t-value
-static int _refineT(double x1, double xCoord, double scale, double chord,
+static int _refineT(void *aimInfo, double x1, double xCoord, double scale, double chord,
                     ego edge, double xdot[], double result[], double xyzLE[],
                     double *t) {
 
@@ -3281,7 +3283,7 @@ static int _refineT(double x1, double xCoord, double scale, double chord,
             deltaT /= 2;
 
             if (tries++ > 20) {
-                PRINT_ERROR("Newton solve did not converge.\n"
+                AIM_ERROR(aimInfo, "Newton solve did not converge.\n"
                             "There is likely something wrong with the geometry of the airfoil.");
                 return CAPS_BADVALUE;
             }
@@ -3493,7 +3495,7 @@ int vlm_getSectionCoordX(void *aimInfo,
 
             x1 = (xdot[0]*result[0]+xdot[1]*result[1]+xdot[2]*result[2])/chord;
             // use Newton solve to refine the t-value
-            status = _refineT(x1, xCoord[ipnt], scale, chord,
+            status = _refineT(aimInfo, x1, xCoord[ipnt], scale, chord,
                               edges[edgeIndex], xdot, result, xyzLE, &t);
             AIM_STATUS(aimInfo, status);
 
@@ -3545,7 +3547,7 @@ int vlm_getSectionCoordX(void *aimInfo,
 
             x1 = (xdot[0]*result[0]+xdot[1]*result[1]+xdot[2]*result[2])/chord;
             // use Newton solve to refine the t-value
-            status = _refineT(x1, xCoord[ipnt], scale, chord,
+            status = _refineT(aimInfo, x1, xCoord[ipnt], scale, chord,
                               edges[edgeIndex], xdot, result, xyzLE, &t);
             AIM_STATUS(aimInfo, status);
 

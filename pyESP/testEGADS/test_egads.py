@@ -1333,7 +1333,7 @@ class TestEGADS(unittest.TestCase):
         tess = faceBody.makeTessBody([0.1, 0.1, 15])
 
         # Make a model
-        # Modules take ownership if bodies, so a body placed in a model can no longer be deleted
+        # Models take ownership if bodies, so a body placed in a model can no longer be deleted
         model = self.context.makeTopology(egads.MODEL, children=[faceBody])
 
         # exlicitly test deleting in reverse order to test referencing

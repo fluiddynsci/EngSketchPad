@@ -3,12 +3,18 @@ ifndef ESP_ROOT
 $(error ESP_ROOT must be set -- Please fix the environment...)
 endif
 #
+ifneq ($(MAKECMDGOALS),dox)
+ifneq ($(MAKECMDGOALS),doxclean)
+#
 ifndef AFLR
 $(error AFLR must be set -- Please fix the environment...)
 endif
 #
 ifndef AFLR_ARCH
 $(error AFLR_ARCH must be set -- Please fix the environment...)
+endif
+#
+endif
 endif
 #
 IDIR  = $(ESP_ROOT)/include
@@ -78,8 +84,8 @@ egads_eval_uv_bounds.c            \
 egads_eval_xyz_at_u.c             \
 egads_eval_xyz_at_uv.c            \
 egads_face_node_map.c             \
-egads_get_model.c                 \
-egads_set_ext_cad_data.c          \
+egads_cad_geom_faceMatch.c        \
+egads_data.c                      \
 aflr43_bc_mod.c                   \
 aflr43_bc_reset.c
 
@@ -115,7 +121,11 @@ OBJS=$(EGADS_AFLR4_OBJS)
 #AFLR4_FILES = $(wildcard $(AFLR)/src/aflr4/*.c)
 #AFLR4_OBJS  = $(subst $(AFLR)/src/aflr4,$(ODIR),$(AFLR4_FILES:.c=.o))
 
-OBJS+=$(AFLR3_OBJS) $(UG_OBJS) $(UG3_OBJS) $(UG_IO_OBJS) $(AFLR4_OBJS) $(DGEOM_OBJS) $(OTB_OBJS)
+#VPATH      += $(AFLR)/src/anbl3
+#ANBL3_FILES = $(wildcard $(AFLR)/src/anbl3/*.c)
+#ANBL3_OBJS  = $(subst $(AFLR)/src/anbl3,$(ODIR),$(ANBL3_FILES:.c=.o))
+
+OBJS+=$(AFLR3_OBJS) $(UG_OBJS) $(UG3_OBJS) $(UG_IO_OBJS) $(AFLR4_OBJS) $(DGEOM_OBJS) $(OTB_OBJS) $(ANBL3_OBJS)
 ###############################################################################
 
 $(LDIR)/aflr3AIM.so:	$(ODIR)/aflr3AIM.o $(ODIR)/aflr3_Interface.o \
@@ -129,13 +139,12 @@ $(LDIR)/aflr3AIM.so:	$(ODIR)/aflr3AIM.o $(ODIR)/aflr3_Interface.o \
 
 $(ODIR)/aflr3AIM.o:	$(ODIR)/aflr3_version aflr3AIM.c aflr3_Interface.h $(IDIR)/capsTypes.h \
 			$(IDIR)/aimUtil.h $(IDIR)/aimMesh.h ../utils/meshUtils.h
-	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils aflr3AIM.c \
-		-o $(ODIR)/aflr3AIM.o
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils -I$(AFLR)/src \
+		aflr3AIM.c -o $(ODIR)/aflr3AIM.o
 
 $(ODIR)/aflr3_Interface.o:	$(ODIR)/aflr3_version aflr3_Interface.c aflr3_Interface.h \
 				../utils/meshUtils.h
-	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) \
-		-I$(AFLR)/src/aflr3 -I$(AFLR)/src -I../utils \
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I../utils -I$(AFLR)/src \
 		aflr3_Interface.c -o $(ODIR)/aflr3_Interface.o
 
 # Compile and execute to check the version number
@@ -148,7 +157,7 @@ $(ODIR)/aflr3_version:	aflr3_version.c $(AFLR)/src/aflr3/aflr3_version.h
 
 # Build for each AFLR C source file
 $(ODIR)/%.o: %.c $(EGADS_INC_FILES) | $(ODIR)/aflr3_version
-	$(CC) -c $(COPTS) $(DEFINE) -w -I$(IDIR) -I$(AFLR)/src $< -o $@
+	$(CC) -c $(COPTS) $(DEFINE) -D_ENABLE_EGADS_ -w -I$(IDIR) -I$(AFLR)/src $< -o $@
 
 lint:
 	$(LINT) -I../../include -I$(IDIR) -I../utils -I$(AFLR)/src -I$(AFLR)/src/aflr3 $(wildcard *.c) -nullpass -exportlocal -bufferoverflowhigh

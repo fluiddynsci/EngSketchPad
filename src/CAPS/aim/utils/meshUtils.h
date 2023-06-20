@@ -2,6 +2,9 @@
 
 // Mesh related utility functions - Written by Dr. Ryan Durscher AFRL/RQVC
 
+#ifndef _AIM_UTILS_MESHUTILS_H_
+#define _AIM_UTILS_MESHUTILS_H_
+
 #include "meshTypes.h"  // Bring in mesh structures
 #include "capsTypes.h"  // Bring in CAPS types
 #include "cfdTypes.h"   // Bring in cfd structures
@@ -20,7 +23,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
                           int *numTriFace, int *triFaceConn[], int *triFaceCompID[], int *triFaceTopoID[],
                           int *numBndEdge, int *bndEdgeConn[], int *bndEdgeCompID[], int *bndEdgeTopoID[],
                           int *numNodeEle, int *nodeEleConn[], int *nodeEleCompID[], int *nodeEleTopoID[],
-                          int *twoDMesh,
+                          int twoDMesh,
                /*@null@*/ const int *tessFaceQuadMap,
                           int *numQuadFace, int *quadFaceConn[], int *quadFaceCompID[], int *quadFaceTopoID[]);
 
@@ -28,7 +31,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
 int mesh_surfaceMeshEGADSBody(void *aimInfo, ego body, double refLen, const double tessParams[3], int quadMesh, ego *tess);
 
 // Create a surface mesh in meshStruct format using the EGADS body tessellation
-int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh);
+int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh, int twoDMesh);
 
 // Modify the EGADS body tessellation based on given inputs
 int mesh_modifyBodyTess(int numMeshProp,
@@ -383,3 +386,5 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
 #ifdef __cplusplus
 }
 #endif
+
+#endif // _AIM_UTILS_MESHUTILS_H_

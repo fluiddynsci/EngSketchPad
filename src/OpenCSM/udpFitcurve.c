@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -78,8 +78,6 @@ static double L2norm(double f[], int n);
 #ifdef GRAFIC
 static int    plotCurve(int npnt, ego ecurve);
 #endif
-
-static void *realloc_temp=NULL;              /* used by RALLOC macro */
 
 
 /*
@@ -442,8 +440,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     }
 
     /* set the output value(s) */
-    NPNT(0) = npnt;
-    RMS( 0) = rms;
+    NPNT(numUdp) = npnt;
+    RMS( numUdp) = rms;
 
     /* remember this model (body) */
     udps[numUdp].ebody = *ebody;

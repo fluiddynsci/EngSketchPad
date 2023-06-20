@@ -1,7 +1,7 @@
 // This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
 
-#ifndef __CARD_UTILS_H__
-#define __CARD_UTILS_H__
+#ifndef _AIM_UTILS_CARDUTILS_H_
+#define _AIM_UTILS_CARDUTILS_H_
 
 #include "cardTypes.h"
 
@@ -75,4 +75,4 @@ void card_print(cardStruct *card);
 }
 #endif
 
-#endif // __CARD_UTILS_H__
+#endif // _AIM_UTILS_CARDUTILS_H_

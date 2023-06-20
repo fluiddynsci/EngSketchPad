@@ -3,7 +3,7 @@
  *
  *             AVL AIM
  *
- *      Copyright 2014-2022, Massachusetts Institute of Technology
+ * *      Copyright 2014-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -1430,6 +1430,36 @@ cleanup:
 
 
 static int
+stabilityRateDerivatives(void *aimInfo, capsValue *val, double dpP, double dqP, double drP)
+{
+  int i, status = CAPS_SUCCESS;
+
+  int nderiv = 3;
+
+  AIM_REALL(val->derivs, val->nderiv+nderiv, capsDeriv, aimInfo, status);
+  for (i = val->nderiv; i < val->nderiv+nderiv; i++) {
+    val->derivs[i].name    = NULL;
+    val->derivs[i].deriv   = NULL;
+    val->derivs[i].len_wrt = 1;
+    AIM_ALLOC(val->derivs[i].deriv, 1, double, aimInfo, status);
+  }
+
+  i = val->nderiv;
+  AIM_STRDUP(val->derivs[i+0].name, "p'" , aimInfo, status);
+  AIM_STRDUP(val->derivs[i+1].name, "q'", aimInfo, status);
+  AIM_STRDUP(val->derivs[i+2].name, "r'"  , aimInfo, status);
+
+  val->derivs[i+0].deriv[0] = dpP;
+  val->derivs[i+1].deriv[0] = dqP;
+  val->derivs[i+2].deriv[0] = drP;
+  val->nderiv += nderiv;
+
+cleanup:
+  return status;
+}
+
+
+static int
 stabilityControlDerivatives(void *aimInfo, int outIndex, aimStorage *avlInstance, capsValue *val)
 {
   int i, status = CAPS_SUCCESS;
@@ -1508,6 +1538,36 @@ bodyRateDerivatives(void *aimInfo, capsValue *val, double dp, double dq, double 
   val->derivs[i+0].deriv[0] = dp;
   val->derivs[i+1].deriv[0] = dq;
   val->derivs[i+2].deriv[0] = dr;
+  val->nderiv += nderiv;
+
+cleanup:
+  return status;
+}
+
+
+static int
+bodyVelocityDerivatives(void *aimInfo, capsValue *val, double u, double v, double w)
+{
+  int i, status = CAPS_SUCCESS;
+
+  int nderiv = 3;
+
+  AIM_REALL(val->derivs, val->nderiv+nderiv, capsDeriv, aimInfo, status);
+  for (i = val->nderiv; i < val->nderiv+nderiv; i++) {
+    val->derivs[i].name    = NULL;
+    val->derivs[i].deriv   = NULL;
+    val->derivs[i].len_wrt = 1;
+    AIM_ALLOC(val->derivs[i].deriv, 1, double, aimInfo, status);
+  }
+
+  i = val->nderiv;
+  AIM_STRDUP(val->derivs[i+0].name, "u", aimInfo, status);
+  AIM_STRDUP(val->derivs[i+1].name, "v", aimInfo, status);
+  AIM_STRDUP(val->derivs[i+2].name, "w", aimInfo, status);
+
+  val->derivs[i+0].deriv[0] = u;
+  val->derivs[i+1].deriv[0] = v;
+  val->derivs[i+2].deriv[0] = w;
   val->nderiv += nderiv;
 
 cleanup:
@@ -2061,17 +2121,17 @@ int aimUpdateState(void *instStore, void *aimInfo,
                                      avlInstance->numAVLSurface, &avlInstance->avlSurface);
             AIM_STATUS(aimInfo, status);
             AIM_NOTNULL(avlInstance->avlSurface, aimInfo, status);
+        }
 
-            // Loop through surfaces and transfer control surface data to sections
-            for (isurf = 0; isurf < avlInstance->numAVLSurface; isurf++) {
-                /*@-nullpass@*/
-                status = get_ControlSurface(aimInfo,
-                                            avlInstance->numAVLControl,
-                                            avlInstance->avlControl,
-                                            &avlInstance->avlSurface[isurf]);
-                /*@+nullpass@*/
-                AIM_STATUS (aimInfo, status);
-            }
+        // Loop through surfaces and transfer control surface data to sections
+        for (isurf = 0; isurf < avlInstance->numAVLSurface; isurf++) {
+            /*@-nullpass@*/
+            status = get_ControlSurface(aimInfo,
+                                        avlInstance->numAVLControl,
+                                        avlInstance->avlControl,
+                                        &avlInstance->avlSurface[isurf]);
+            /*@+nullpass@*/
+            AIM_STATUS (aimInfo, status);
         }
 
         // Compute auto spacing
@@ -3435,6 +3495,12 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
     case CXtot:
         val->vals.real = avlInstance->tot.CXtot;
 
+        status = bodyVelocityDerivatives(aimInfo, val,
+                                         avlInstance->dermatB.CXu,
+                                         avlInstance->dermatB.CXv,
+                                         avlInstance->dermatB.CXw);
+        AIM_STATUS(aimInfo, status);
+
         status = bodyRateDerivatives(aimInfo, val,
                                      avlInstance->dermatB.CXp,
                                      avlInstance->dermatB.CXq,
@@ -3453,6 +3519,12 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                                            avlInstance->dermatS.CYb);
         AIM_STATUS(aimInfo, status);
 
+        status = bodyVelocityDerivatives(aimInfo, val,
+                                         avlInstance->dermatB.CYu,
+                                         avlInstance->dermatB.CYv,
+                                         avlInstance->dermatB.CYw);
+        AIM_STATUS(aimInfo, status);
+
         status = bodyRateDerivatives(aimInfo, val,
                                      avlInstance->dermatB.CYp,
                                      avlInstance->dermatB.CYq,
@@ -3466,6 +3538,12 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
     case CZtot:
         val->vals.real = avlInstance->tot.CZtot;
 
+        status = bodyVelocityDerivatives(aimInfo, val,
+                                         avlInstance->dermatB.CZu,
+                                         avlInstance->dermatB.CZv,
+                                         avlInstance->dermatB.CZw);
+        AIM_STATUS(aimInfo, status);
+
         status = bodyRateDerivatives(aimInfo, val,
                                      avlInstance->dermatB.CZp,
                                      avlInstance->dermatB.CZq,
@@ -3478,6 +3556,12 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
         break;
     case Cltot:
         val->vals.real = avlInstance->tot.Cltot;
+
+        status = bodyVelocityDerivatives(aimInfo, val,
+                                         avlInstance->dermatB.Clu,
+                                         avlInstance->dermatB.Clv,
+                                         avlInstance->dermatB.Clw);
+        AIM_STATUS(aimInfo, status);
 
         status = bodyRateDerivatives(aimInfo, val,
                                      avlInstance->dermatB.Clp,
@@ -3497,6 +3581,18 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                                            avlInstance->dermatS.Cmb);
         AIM_STATUS(aimInfo, status);
 
+        status = stabilityRateDerivatives(aimInfo, val,
+                                          avlInstance->dermatS.Cmp,
+                                          avlInstance->dermatS.Cmq,
+                                          avlInstance->dermatS.Cmr);
+        AIM_STATUS(aimInfo, status);
+
+        status = bodyVelocityDerivatives(aimInfo, val,
+                                         avlInstance->dermatB.Cmu,
+                                         avlInstance->dermatB.Cmv,
+                                         avlInstance->dermatB.Cmw);
+        AIM_STATUS(aimInfo, status);
+
         status = bodyRateDerivatives(aimInfo, val,
                                      avlInstance->dermatB.Cmp,
                                      avlInstance->dermatB.Cmq,
@@ -3509,6 +3605,12 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
         break;
     case Cntot:
         val->vals.real = avlInstance->tot.Cntot;
+
+        status = bodyVelocityDerivatives(aimInfo, val,
+                                         avlInstance->dermatB.Cnu,
+                                         avlInstance->dermatB.Cnv,
+                                         avlInstance->dermatB.Cnw);
+        AIM_STATUS(aimInfo, status);
 
         status = bodyRateDerivatives(aimInfo, val,
                                      avlInstance->dermatB.Cnp,
@@ -3528,6 +3630,12 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                                            avlInstance->dermatS.Clb);
         AIM_STATUS(aimInfo, status);
 
+        status = stabilityRateDerivatives(aimInfo, val,
+                                          avlInstance->dermatS.Clp,
+                                          avlInstance->dermatS.Clq,
+                                          avlInstance->dermatS.Clr);
+        AIM_STATUS(aimInfo, status);
+
         status = stabilityControlDerivatives(aimInfo, ClPtot, avlInstance, val);
         AIM_STATUS(aimInfo, status);
 
@@ -3540,6 +3648,12 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                                            avlInstance->dermatS.Cnb);
         AIM_STATUS(aimInfo, status);
 
+        status = stabilityRateDerivatives(aimInfo, val,
+                                          avlInstance->dermatS.Cnp,
+                                          avlInstance->dermatS.Cnq,
+                                          avlInstance->dermatS.Cnr);
+        AIM_STATUS(aimInfo, status);
+
         status = stabilityControlDerivatives(aimInfo, CnPtot, avlInstance, val);
         AIM_STATUS(aimInfo, status);
 
@@ -3550,6 +3664,12 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
         status = stabilityAngleDerivatives(aimInfo, val,
                                            avlInstance->dermatS.CLa,
                                            avlInstance->dermatS.CLb);
+        AIM_STATUS(aimInfo, status);
+
+        status = stabilityRateDerivatives(aimInfo, val,
+                                          avlInstance->dermatS.CLp,
+                                          avlInstance->dermatS.CLq,
+                                          avlInstance->dermatS.CLr);
         AIM_STATUS(aimInfo, status);
 
         status = stabilityControlDerivatives(aimInfo, CLtot, avlInstance, val);

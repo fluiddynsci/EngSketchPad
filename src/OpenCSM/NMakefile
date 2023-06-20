@@ -17,11 +17,13 @@ LIBLIST =	$(LDIR)\ocsm.dll \
 		$(LDIR)\bezier.dll \
 		$(LDIR)\biconvex.dll \
 		$(LDIR)\box.dll \
+		$(LDIR)\bspline.dll \
 		$(LDIR)\catmull.dll \
 		$(LDIR)\compare.dll \
 		$(LDIR)\createBEM.dll \
 		$(LDIR)\createPoly.dll \
 		$(LDIR)\csm.dll \
+		$(LDIR)\deform.dll \
 		$(LDIR)\droop.dll \
 		$(LDIR)\dumpPmtrs.dll \
 		$(LDIR)\editAttr.dll \
@@ -35,7 +37,9 @@ LIBLIST =	$(LDIR)\ocsm.dll \
 		$(LDIR)\hex.dll \
 		$(LDIR)\import.dll \
 		$(LDIR)\kulfan.dll \
+		$(LDIR)\linalg.dll \
 		$(LDIR)\matchBodys.dll \
+		$(LDIR)\mechanism.dll \
 		$(LDIR)\naca.dll \
 		$(LDIR)\naca6mc.dll \
 		$(LDIR)\nacelle.dll \
@@ -58,6 +62,8 @@ LIBLIST =	$(LDIR)\ocsm.dll \
 		$(LDIR)\stag.dll \
 		$(LDIR)\stiffener.dll \
 		$(LDIR)\supell.dll \
+		$(LDIR)\tester1.dll \
+		$(LDIR)\tester2.dll \
 		$(LDIR)\waffle.dll \
 		$(LDIR)\PDT2.dll
 LIBFLIST = 	$(LDIR)\naca456.dll
@@ -167,6 +173,15 @@ $(ODIR)\udpBox.obj:	udpBox.c udpUtilities.c udpUtilities.h
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udpBox.c /Fo$(ODIR)\udpBox.obj
 
 
+$(LDIR)\bspline.dll:	$(ODIR)\udpBspline.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\bspline.dll $(LDIR)\bspline.lib $(LDIR)\bspline.exp
+	link /out:$(LDIR)\bspline.dll /dll /def:udp.def $(ODIR)\udpBspline.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
+	$(MCOMP) /manifest $(LDIR)\bspline.dll.manifest /outputresource:$(LDIR)\bspline.dll;2
+
+$(ODIR)\udpBspline.obj:	udpBspline.c udpUtilities.c udpUtilities.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udpBspline.c /Fo$(ODIR)\udpBspline.obj
+
+
 $(LDIR)\catmull.dll:	$(ODIR)\udfCatmull.obj $(LDIR)\ocsm.dll
 	-del $(LDIR)\catmull.dll $(LDIR)\catmull.lib $(LDIR)\catmull.exp
 	link /out:$(LDIR)\catmull.dll /dll /def:udp.def $(ODIR)\udfCatmull.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
@@ -210,6 +225,15 @@ $(LDIR)\csm.dll:	$(ODIR)\udpCsm.obj $(LDIR)\ocsm.dll
 
 $(ODIR)\udpCsm.obj:	udpCsm.c udpUtilities.c udpUtilities.h OpenCSM.h
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udpCsm.c /Fo$(ODIR)\udpCsm.obj
+
+
+$(LDIR)\deform.dll:	$(ODIR)\udfDeform.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\deform.dll $(LDIR)\deform.lib $(LDIR)\deform.exp
+	link /out:$(LDIR)\deform.dll /dll /def:udp.def $(ODIR)\udfDeform.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
+	$(MCOMP) /manifest $(LDIR)\deform.dll.manifest /outputresource:$(LDIR)\deform.dll;2
+
+$(ODIR)\udfDeform.obj:	udfDeform.c udpUtilities.c udpUtilities.h OpenCSM.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udfDeform.c /Fo$(ODIR)\udfDeform.obj
 
 
 $(LDIR)\droop.dll:	$(ODIR)\udfDroop.obj $(LDIR)\ocsm.dll
@@ -329,6 +353,15 @@ $(ODIR)\udpKulfan.obj:	udpKulfan.c udpUtilities.c udpUtilities.h
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udpKulfan.c /Fo$(ODIR)\udpKulfan.obj
 
 
+$(LDIR)\linalg.dll:	$(ODIR)\udfLinalg.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\linalg.dll $(LDIR)\linalg.lib $(LDIR)\linalg.exp
+	link /out:$(LDIR)\linalg.dll /dll /def:udp.def $(ODIR)\udfLinalg.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
+	$(MCOMP) /manifest $(LDIR)\linalg.dll.manifest /outputresource:$(LDIR)\linalg.dll;2
+
+$(ODIR)\udfLinalg.obj:	udfLinalg.c udpUtilities.c udpUtilities.h OpenCSM.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udfLinalg.c /Fo$(ODIR)\udfLinalg.obj
+
+
 $(LDIR)\matchBodys.dll:	$(ODIR)\udfMatchBodys.obj $(LDIR)\ocsm.dll
 	-del $(LDIR)\matchBodys.dll $(LDIR)\matchBodys.lib $(LDIR)\matchBodys.exp
 	link /out:$(LDIR)\matchBodys.dll /dll /def:udp.def $(ODIR)\udfMatchBodys.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
@@ -336,6 +369,15 @@ $(LDIR)\matchBodys.dll:	$(ODIR)\udfMatchBodys.obj $(LDIR)\ocsm.dll
 
 $(ODIR)\udfMatchBodys.obj:	udfMatchBodys.c udpUtilities.c udpUtilities.h OpenCSM.h
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udfMatchBodys.c /Fo$(ODIR)\udfMatchBodys.obj
+
+
+$(LDIR)\mechanism.dll:	$(ODIR)\udfMechanism.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\mechanism.dll $(LDIR)\mechanism.lib $(LDIR)\mechanism.exp
+	link /out:$(LDIR)\mechanism.dll /dll /def:udp.def $(ODIR)\udfMechanism.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
+	$(MCOMP) /manifest $(LDIR)\mechanism.dll.manifest /outputresource:$(LDIR)\mechanism.dll;2
+
+$(ODIR)\udfMechanism.obj:	udfMechanism.c udpUtilities.c udpUtilities.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udfMechanism.c /Fo$(ODIR)\udfMechanism.obj
 
 
 $(LDIR)\naca.dll:	$(ODIR)\udpNaca.obj $(LDIR)\ocsm.dll
@@ -545,6 +587,22 @@ $(ODIR)\udpSupell.obj:	udpSupell.c udpUtilities.c udpUtilities.h
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udpSupell.c /Fo$(ODIR)\udpSupell.obj
 
 
+$(LDIR)\tester1.dll:	$(ODIR)\udfTester1.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\tester1.dll $(LDIR)\tester1.lib $(LDIR)\tester1.exp
+	link /out:$(LDIR)\tester1.dll /dll /def:udp.def $(ODIR)\udfTester1.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
+	$(MCOMP) /manifest $(LDIR)\tester1.dll.manifest /outputresource:$(LDIR)\tester1.dll;2
+
+$(ODIR)\udfTester1.obj:	udfTester1.c udpUtilities.c udpUtilities.h OpenCSM.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udfTester1.c /Fo$(ODIR)\udfTester1.obj
+
+$(LDIR)\tester2.dll:	$(ODIR)\udpTester2.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\tester2.dll $(LDIR)\tester2.lib $(LDIR)\tester2.exp
+	link /out:$(LDIR)\tester2.dll /dll /def:udp.def $(ODIR)\udpTester2.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
+	$(MCOMP) /manifest $(LDIR)\tester2.dll.manifest /outputresource:$(LDIR)\tester2.dll;2
+
+$(ODIR)\udpTester2.obj:	udpTester2.c udpUtilities.c udpUtilities.h OpenCSM.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udpTester2.c /Fo$(ODIR)\udpTester2.obj
+
 $(LDIR)\waffle.dll:	$(ODIR)\udpWaffle.obj $(LDIR)\ocsm.dll
 	-del $(LDIR)\waffle.dll $(LDIR)\waffle.lib $(LDIR)\waffle.exp
 	link /out:$(LDIR)\waffle.dll /dll /def:udp.def $(ODIR)\udpWaffle.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
@@ -659,11 +717,13 @@ clean:
 	-del $(ODIR)\udpBezier.obj
 	-del $(ODIR)\udpBiconvex.obj
 	-del $(ODIR)\udpBox.obj
+	-del $(ODIR)\udpBspline.obj
 	-del $(ODIR)\udfCatmull.obj
 	-del $(ODIR)\udfCompare.obj
 	-del $(ODIR)\udfCreateBEM.obj
 	-del $(ODIR)\udfCreatePoly.obj
 	-del $(ODIR)\udpCsm.obj
+	-del $(ODIR)\udfDeform.obj
 	-del $(ODIR)\udfDroop.obj
 	-del $(ODIR)\udfDumpPmtrs.obj
 	-del $(ODIR)\udfEditAttr.obj
@@ -677,7 +737,9 @@ clean:
 	-del $(ODIR)\udpHex.obj
 	-del $(ODIR)\udpImport.obj
 	-del $(ODIR)\udpKulfan.obj
+	-del $(ODIR)\udfLinalg.obj
 	-del $(ODIR)\udfMatchBodys.obj
+	-del $(ODIR)\udfMechanism.obj
 	-del $(ODIR)\udpNaca.obj
 	-del $(ODIR)\udpNaca456.obj
 	-del $(ODIR)\naca456.obj
@@ -702,6 +764,8 @@ clean:
 	-del $(ODIR)\udpStag.obj
 	-del $(ODIR)\udfStiffener.obj
 	-del $(ODIR)\udpSupell.obj
+	-del $(ODIR)\udfTester1.obj
+	-del $(ODIR)\udpTester2.obj
 	-del $(ODIR)\udpWaffle.obj
 	-del $(ODIR)\eggPDT2.obj
 	-del $(ODIR)\timEreped.obj
@@ -718,11 +782,13 @@ cleanall:	clean
 	-del $(LDIR)\bezier.dll     $(LDIR)\bezier.lib     $(LDIR)\bezier.exp
 	-del $(LDIR)\biconvex.dll   $(LDIR)\biconvex.lib   $(LDIR)\biconvex.exp
 	-del $(LDIR)\box.dll        $(LDIR)\box.lib        $(LDIR)\box.exp
+	-del $(LDIR)\bspline.dll    $(LDIR)\bspline.lib    $(LDIR)\bspline.exp
 	-del $(LDIR)\catmull.dll    $(LDIR)\catmull.lib    $(LDIR)\catmull.exp
 	-del $(LDIR)\compare.dll    $(LDIR)\compare.lib    $(LDIR)\compare.exp
 	-del $(LDIR)\createBEM.dll  $(LDIR)\createBEM.lib  $(LDIR)\createBEM.exp
 	-del $(LDIR)\createPoly.dll $(LDIR)\createPoly.lib $(LDIR)\createPoly.exp
 	-del $(LDIR)\csm.dll        $(LDIR)\csm.lib        $(LDIR)\csm.exp
+	-del $(LDIR)\deform.dll     $(LDIR)\deform.lib     $(LDIR)\deform.exp
 	-del $(LDIR)\droop.dll      $(LDIR)\droop.lib      $(LDIR)\droop.exp
 	-del $(LDIR)\dumpPmtrs.dll  $(LDIR)\dumpPmtrs.lib  $(LDIR)\dumpPmtrs.exp
 	-del $(LDIR)\editAttr.dll   $(LDIR)\editAttr.lib   $(LDIR)\editAttr.exp
@@ -736,7 +802,9 @@ cleanall:	clean
 	-del $(LDIR)\hex.dll        $(LDIR)\hex.lib        $(LDIR)\hex.exp
 	-del $(LDIR)\import.dll     $(LDIR)\import.lib     $(LDIR)\import.exp
 	-del $(LDIR)\kulfan.dll     $(LDIR)\kulfan.lib     $(LDIR)\kulfan.exp
+	-del $(LDIR)\linalg.dll     $(LDIR)\linalg.lib     $(LDIR)\linalg.exp
 	-del $(LDIR)\matchBodys.dll $(LDIR)\matchBodys.lib $(LDIR)\matchBodys.exp
+	-del $(LDIR)\mechanism.dll  $(LDIR)\mechanism.lib  $(LDIR)\mechanism.exp
 	-del $(LDIR)\naca.dll       $(LDIR)\naca.lib       $(LDIR)\naca.exp
 	-del $(LDIR)\naca456.dll    $(LDIR)\naca456.lib    $(LDIR)\naca456.exp
 	-del $(LDIR)\naca6mc.dll    $(LDIR)\naca6mc.lib    $(LDIR)\naca6mc.exp
@@ -760,6 +828,8 @@ cleanall:	clean
 	-del $(LDIR)\stag.dll       $(LDIR)\stag.lib       $(LDIR)\stag.exp
 	-del $(LDIR)\stiffener.dll  $(LDIR)\stiffener.lib  $(LDIR)\stiffener.exp
 	-del $(LDIR)\supell.dll     $(LDIR)\supell.lib     $(LDIR)\supell.exp
+	-del $(LDIR)\tester1.dll    $(LDIR)\tester1.lib    $(LDIR)\tester1.exp
+	-del $(LDIR)\tester2.dll    $(LDIR)\tester2.lib    $(LDIR)\tester2.exp
 	-del $(LDIR)\waffle.dll     $(LDIR)\waffle.lib     $(LDIR)\waffle.exp
 	-del $(LDIR)\PDT2.dll       $(LDIR)\PDT2.lib       $(LDIR)\PDT2.exp
 	-del $(LDIR)\ereped.dll     $(LDIR)\ereped.lib     $(LDIR)\ereped.exp

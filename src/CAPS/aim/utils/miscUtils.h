@@ -2,6 +2,9 @@
 
 // Miscellaneous related utility functions - Written by Dr. Ryan Durscher AFRL/RQVC
 
+#ifndef _AIM_UTILS_MISCUTILS_H_
+#define _AIM_UTILS_MISCUTILS_H_
+
 #include "stdarg.h"
 #include "meshTypes.h"  // Bring in mesh structures
 #include "capsTypes.h"  // Bring in CAPS types
@@ -171,8 +174,8 @@ int initiate_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMap);
 int destroy_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMap);
 
 // Make a copy of attribute map (attrMapIn)
-int copy_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMapIn,
-                              mapAttrToIndexStruct *attrMapOut);
+int copy_mapAttrToIndexStruct(const mapAttrToIndexStruct *attrMapIn,
+                                    mapAttrToIndexStruct *attrMapOut);
 
 // Merge two attribute maps preserving the order (and name) of the first input map.
 int merge_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMap1,
@@ -301,3 +304,5 @@ int copy_intArray(int length, int *in, int *out[]);
 #ifdef __cplusplus
 }
 #endif
+
+#endif // _AIM_UTILS_MISCUTILS_H_

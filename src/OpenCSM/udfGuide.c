@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -292,7 +292,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     (void) ocsmPrintEgo(*ebody);
 #endif
 
-    /* add __markFaces__ attribute so that sweep is treated as primitive */
+    /* tell OpenCSM to put _body, _brch, and Branch Attributes on the Faces */
     {
         int idum=0;
 

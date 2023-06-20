@@ -317,7 +317,7 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     aimStorage *tacsInstance=NULL;
 
 #ifdef DEBUG
-    printf("nastranAIM/aimInitialize   instance = %d!\n", inst);
+    printf("tacsAIM/aimInitialize   instance = %d!\n", inst);
 #endif
 
     /* specify the number of analysis input and out "parameters" */
@@ -393,7 +393,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
     int status = CAPS_SUCCESS;
 
 #ifdef DEBUG
-    printf(" nastranAIM/aimInputs index = %d!\n", index);
+    printf(" tacsAIM/aimInputs index = %d!\n", index);
 #endif
 
     *ainame = NULL;
@@ -403,11 +403,11 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
         *ainame              = EG_strdup("Proj_Name");
         defval->type         = String;
         defval->nullVal      = NotNull;
-        defval->vals.string  = EG_strdup("nastran_CAPS");
+        defval->vals.string  = EG_strdup("tacs_CAPS");
         defval->lfixed       = Change;
 
         /*! \page aimInputsTACS
-         * - <B> Proj_Name = "nastran_CAPS"</B> <br>
+         * - <B> Proj_Name = "tacs_CAPS"</B> <br>
          * This corresponds to the project name used for file naming.
          */
 
@@ -837,7 +837,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set design responses
     if (aimInputs[Design_Response-1].nullVal == NotNull) {
-        status = fea_getDesignResponse(aimInputs[Design_Response-1].length,
+        status = fea_getDesignResponse(aimInfo,
+                                       aimInputs[Design_Response-1].length,
                                        aimInputs[Design_Response-1].vals.tuple,
                                        &tacsInstance->responseMap,
                                        &tacsInstance->feaProblem);
@@ -1153,7 +1154,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                 } else if(strcmp("ASYMMETRIC",tacsInstance->feaProblem.feaAnalysis->aeroSymmetryXY) == 0) {
                     fprintf(fp,"\tAESYMXY = %s\n","ASYMMETRIC");
                 } else {
-                    printf("\t*** Warning *** aeroSymmetryXY Input %s to nastranAIM not understood!\n",tacsInstance->feaProblem.feaAnalysis->aeroSymmetryXY );
+                    printf("\t*** Warning *** aeroSymmetryXY Input %s to tacsAIM not understood!\n",tacsInstance->feaProblem.feaAnalysis->aeroSymmetryXY );
                 }
             }
 
@@ -1172,7 +1173,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                 } else if(strcmp("ASYMMETRIC",tacsInstance->feaProblem.feaAnalysis->aeroSymmetryXZ) == 0) {
                     fprintf(fp,"\tAESYMXZ = %s\n","ASYMMETRIC");
                 } else {
-                    printf("\t*** Warning *** aeroSymmetryXZ Input %s to nastranAIM not understood!\n",tacsInstance->feaProblem.feaAnalysis->aeroSymmetryXZ );
+                    printf("\t*** Warning *** aeroSymmetryXZ Input %s to tacsAIM not understood!\n",tacsInstance->feaProblem.feaAnalysis->aeroSymmetryXZ );
                 }
 
             }
@@ -1210,7 +1211,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                     fprintf(fp, "\tTemperature = %d\n", feaLoad[k].loadID);
                     numThermalLoad += 1;
                     if (numThermalLoad > 1) {
-                        printf("More than 1 Thermal load found - nastranAIM does NOT currently doesn't support multiple thermal loads in a given case!\n");
+                        printf("More than 1 Thermal load found - tacsAIM does NOT currently doesn't support multiple thermal loads in a given case!\n");
                     }
 
                     continue;
@@ -2065,7 +2066,7 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
      */
 
     #ifdef DEBUG
-        printf(" nastranAIM/aimOutputs index = %d!\n", index);
+        printf(" tacsAIM/aimOutputs index = %d!\n", index);
     #endif
 
     /*<--! \page aimOutputsTACS AIM Outputs-->
@@ -2146,7 +2147,7 @@ int aimCalcOutput(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, /*@u
 
         if (fp == NULL) {
 #ifdef DEBUG
-            printf(" nastranAIM/aimCalcOutput Cannot open Output file!\n");
+            printf(" tacsAIM/aimCalcOutput Cannot open Output file!\n");
 #endif
             return CAPS_IOERR;
         }
@@ -2236,7 +2237,7 @@ void aimCleanup(void *instStore)
     aimStorage *tacsInstance;
 
 #ifdef DEBUG
-    printf(" nastranAIM/aimCleanup!\n");
+    printf(" tacsAIM/aimCleanup!\n");
 #endif
     tacsInstance = (aimStorage *) instStore;
 
@@ -2257,7 +2258,7 @@ int aimDiscr(char *tname, capsDiscr *discr)
     aimStorage *tacsInstance;
 
 #ifdef DEBUG
-    printf(" nastranAIM/aimDiscr: tname = %s!\n", tname);
+    printf(" tacsAIM/aimDiscr: tname = %s!\n", tname);
 #endif
     if (tname == NULL) return CAPS_NOTFOUND;
 
@@ -2287,14 +2288,14 @@ int aimDiscr(char *tname, capsDiscr *discr)
     AIM_STATUS(discr->aInfo, status);
 
 #ifdef DEBUG
-    printf(" nastranAIM/aimDiscr: Instance = %d, Finished!!\n", iIndex);
+    printf(" tacsAIM/aimDiscr: Instance = %d, Finished!!\n", iIndex);
 #endif
 
     status = CAPS_SUCCESS;
 
 cleanup:
     if (status != CAPS_SUCCESS)
-        printf("\tPremature exit: function aimDiscr nastranAIM status = %d",
+        printf("\tPremature exit: function aimDiscr tacsAIM status = %d",
                status);
 
     AIM_FREE(tess);
@@ -2359,7 +2360,7 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
     FILE *fp=NULL; // File pointer
 
 #ifdef DEBUG
-    printf(" nastranAIM/aimTransfer name = %s  npts = %d/%d!\n",
+    printf(" tacsAIM/aimTransfer name = %s  npts = %d/%d!\n",
            dataName, numPoint, dataRank);
 #endif
     tacsInstance = (aimStorage *) discr->instStore;
@@ -2554,7 +2555,7 @@ int aimLocateElement(capsDiscr *discr,  double *params, double *param,
                      int *bIndex, int *eIndex, double *bary)
 {
 #ifdef DEBUG
-    printf(" nastranAIM/aimLocateElement !\n");
+    printf(" tacsAIM/aimLocateElement !\n");
 #endif
 
     return aim_locateElement(discr, params, param, bIndex, eIndex, bary);
@@ -2566,7 +2567,7 @@ int aimInterpolation(capsDiscr *discr, const char *name,
                      int rank, double *data, double *result)
 {
 #ifdef DEBUG
-    printf(" nastranAIM/aimInterpolation  %s!\n", name);
+    printf(" tacsAIM/aimInterpolation  %s!\n", name);
 #endif
 
     return aim_interpolation(discr, name, bIndex, eIndex, bary, rank, data,
@@ -2579,7 +2580,7 @@ int aimInterpolateBar(capsDiscr *discr, const char *name,
                       int rank, double *r_bar, double *d_bar)
 {
 #ifdef DEBUG
-    printf(" nastranAIM/aimInterpolateBar  %s!\n", name);
+    printf(" tacsAIM/aimInterpolateBar  %s!\n", name);
 #endif
 
     return aim_interpolateBar(discr, name, bIndex, eIndex, bary, rank, r_bar,
@@ -2591,7 +2592,7 @@ int aimIntegration(capsDiscr *discr, const char *name,int bIndex, int eIndex,
                    int rank, double *data, double *result)
 {
 #ifdef DEBUG
-    printf(" nastranAIM/aimIntegration  %s!\n", name);
+    printf(" tacsAIM/aimIntegration  %s!\n", name);
 #endif
 
     return aim_integration(discr, name, bIndex, eIndex, rank, data, result);
@@ -2602,7 +2603,7 @@ int aimIntegrateBar(capsDiscr *discr, const char *name, int bIndex, int eIndex,
                     int rank, double *r_bar, double *d_bar)
 {
 #ifdef DEBUG
-    printf(" nastranAIM/aimIntegrateBar  %s!\n", name);
+    printf(" tacsAIM/aimIntegrateBar  %s!\n", name);
 #endif
 
     return aim_integrateBar(discr, name, bIndex, eIndex, rank, r_bar, d_bar);

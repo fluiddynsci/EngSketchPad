@@ -1,5 +1,5 @@
 
-ATTRIBUTE capsAIM $egadsTessAIM;tetgenAIM;platoAIM
+ATTRIBUTE capsAIM $egadsTessAIM;tetgenAIM;aflr4AIM;aflr3AIM;platoAIM
 
 # Table top parameters
 DESPMTR L 1
@@ -16,8 +16,19 @@ DESPMTR fW 0.9
 BOX -L/2 0 -W/2 L H W
 SELECT body
    ATTRIBUTE _name $tableTop
+   ATTRIBUTE capsMeshLength L
 SELECT face
    ATTRIBUTE capsGroup $tableTopSide
+SELECT face 1
+   ATTRIBUTE exNodeset $face1;face2
+SELECT face 5
+   ATTRIBUTE exNodeset $face1
+SELECT face 6
+   ATTRIBUTE exNodeset $face2
+SELECT edge 1 4 1 6 1
+   ATTRIBUTE exNodeset $edge
+SELECT node 8
+   ATTRIBUTE exNodeset $node
 
 # Make the Legs
 CYLINDER 0 -Lh 0  0 0 0 Lr

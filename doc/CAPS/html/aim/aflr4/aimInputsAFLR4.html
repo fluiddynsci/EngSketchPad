@@ -202,16 +202,25 @@ $(function() {
 </li>
 <li><b> Mesh_Sizing = NULL </b> <br  />
  See <a class="el" href="meshSizingProp.html">Mesh Sizing</a> for additional details.</li>
-<li><b> Multiple_Mesh = True</b> <br  />
- If set to True (default) a surface mesh will be generated and output (given "Proj_Name" is set) for each body. When set to False only a single surface mesh will be created. Note, this only affects the mesh when writing to a file.</li>
+<li><b> Multiple_Mesh = "SingleDomain"</b> <br  />
+ If "SingleDomain": Generate a single surface mesh file is assuming multiple bodies define a single computational domain (i.e. CFD)<br  />
+ <br  />
+ If "MultiFile": Generate a surface mesh file for each body.<br  />
+ <br  />
+ If "MultiDomain": Generate a single mesh file containing multiple surface meshes for each body.<br  />
+</li>
 <li><b> EGADS_Quad = False </b> <br  />
- Apply EGADS quadding to the AFLR4 triangulation. </li>
+ If true, apply EGADS quadding to the AFLR4 triangulation.</li>
+<li><b> AFLR4_Quad = False </b> <br  />
+ If true, apply -quad flag for AFLR4 quadding.</li>
+<li><b> skin = False </b> <br  />
+ If true, apply -skin flag to automatically set the grid BCs for structural cases. </li>
 </ul>
 </div></div><!-- contents -->
 </div><!-- PageDoc -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Thu Dec 8 2022 20:46:09 for AFLR4 Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
+Generated on Tue May 30 2023 19:59:07 for AFLR4 Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
 </small></address>
 </body>
 </html>

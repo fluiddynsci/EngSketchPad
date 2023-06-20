@@ -1,5 +1,8 @@
 // This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
 
+#ifndef _AIM_UTILS_NASTRANUTILS_H_
+#define _AIM_UTILS_NASTRANUTILS_H_
+
 #include "feaTypes.h"  // Bring in FEA structures
 #include "vlmTypes.h"  // Bring in VLM structures
 
@@ -112,3 +115,5 @@ int nastran_writeAeroCamberTwist(void *aimInfo, FILE *fp, int numAero, feaAeroSt
 #ifdef __cplusplus
 }
 #endif
+
+#endif // _AIM_UTILS_NASTRANUTILS_H_

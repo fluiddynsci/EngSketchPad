@@ -28,12 +28,15 @@ enum aimInputs
   Mesh_Sizing,
   Multiple_Mesh,
   EGADS_Quad,
-  NUMINPUT = EGADS_Quad        /* Total number of inputs */
+  AFLR4_Quad,
+  Skin,
+  NUMINPUT = Skin              /* Total number of inputs */
 };
 
 #define AFLR4TESSFILE "aflr4_%d.eto"
 
 extern int aflr4_Surface_Mesh(void *aimInfo,
+                              int ibodyOffset,
                               int quiet,
                               int numBody, ego *bodies,
                               capsValue *aimInputs,

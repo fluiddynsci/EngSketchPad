@@ -1,10 +1,15 @@
 /*
- * OpenCSM/EGADS User Defined Primitive include
- *
+ ************************************************************************
+ *                                                                      *
+ * OpenCSM/EGADS -- Extended User Defined Primitive/Function Interface  *
+ *                                                                      *
+ *            Written by John Dannenhoffer @ Syracuse University        *
+ *                                                                      *
+ ************************************************************************
  */
 
 /*
- * Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -22,142 +27,168 @@
  *     MA  02110-1301  USA
  */
 
-#define OCSM_NODE 600
-#define OCSM_EDGE 601
-#define OCSM_FACE 602
-
-/* initialize & get info about the list of arguments */
-extern int
-udp_initialize(char   primName[],
-               int    *nArgs,
-               char   **name[],
-               int    *type[],
-               int    *idefault[],
-               double *ddefault[]);
-
-/* get number of Bodys expected in call to udp_executePrim */
-extern int
-udp_numBodys(char primName[]);
-
-/* get list of Bodys associated with primitive */
-extern int
-udp_bodyList(char primName[], ego body, const int *bodyList[]);
-
-/* set the argument list back to default */
-extern int
-udp_clrArguments(char primName[]);
-
-/* clean the udp cache */
-extern int
-udp_clean(char primName[],
-          ego  body);
-
-/* set an argument -- characters are converted based on type */
-extern int
-udp_setArgument(char primName[],
-                char name[],
-                void *value,
-                int  nvalue,
-      /*@null@*/char message[]);
-
-/* execute */
-extern int
-udp_executePrim(char primName[],
-                ego  context,
-                ego  *body,             // destroy with EG_deleteObject
-                int  *nMesh,            // =0 for no 3D mesh
-                char *string[]);        // freeable
-
-/* get an output parameter -- characters are converted based on type */
-extern int
-udp_getOutput(char primName[],
-              ego  body,
-              char name[],
-              void *value,
-              char message[]);
-
-/* return the OverSet Mesh */
-extern int
-udp_getMesh(char   primName[],
-            ego    body,
-            int    iMesh,               // bias-1
-            int    *imax,
-            int    *jmax,
-            int    *kmax,
-            double *mesh[]);             // freeable
-
-/* set a design velocity -- characters are converted based on type */
-extern int
-udp_setVelocity(char   primName[],
-                ego    body,
-                char   name[],
-                double value[],
-                int    nvalue);
-
-/* return sensitivity derivatives for the "real/sens" argument */
-extern int
-udp_sensitivity(char   primName[],
-                ego    body,
-                int    npts,
-                int    entType,
-                int    entIndex,
-      /*@null@*/double uvs[],
-                double vels[]);
-
-/* unload and cleanup for all */
-extern void
-udp_cleanupAll();
-
-/* additional attribute type */
-#define ATTRREALSEN 4
-#define ATTRFILE    5
+#ifndef _UDP_H_
+#define _UDP_H_
 
 /* define needed for WIN32 */
 #ifdef WIN32
     #define snprintf _snprintf
 #endif
 
-/* prototypes for routines to be provided with a udp */
-int udpInitialize(int    *nArgs,
-                  char   **namex[],
-                  int    *typex[],
-                  int    *idefault[],
-                  double *ddefault[]);
+/* --------------------------------------------------------------------- */
+/* (additional) attribute types */
+/* --------------------------------------------------------------------- */
 
-int udpReset(int flag);
+//      ATTRINT      1   // +ATTRINT     for integer input
+                         // -ATTRINT     for integer output
+//      ATTRREAL     2   // +ATTRREAL    for double  input
+                         // -ATTRREAL    for double  output
+//      ATTRSTRING   3   // +ATTRSTRING  for string  input
+                         // -ATTRSTRING  *** cannot be used ***
+#define ATTRREALSEN  4   // +ATTRREALSEN for double input  (with sensitivities)
+                         // -ATTRREALSEN for double output (has  sensitivities)
+#define ATTRFILE     5   // +ATTRFILE    for input file
+                         // -ATTRFILE    *** cannot be used ***
+#define ATTRREBUILD  6   // +ATTRREBUILD to force rebuild
+                         // -ATTRREBUILD *** cannot be used ***
+//      ATTRCSYS    12   //              *** cannot be used ***
+//      ATTRPTR     13   //              *** cannot be used ***
 
-int udpClean(ego ebody);
+#define OCSM_NODE 600
+#define OCSM_EDGE 601
+#define OCSM_FACE 602
 
-int udpSet(char name[],
-           void *values,
-           int  nvalue,
-           char message[]);
+/* --------------------------------------------------------------------- */
+/* prototypes for routines to be provided by a UDP/UDF */
+/* --------------------------------------------------------------------- */
 
-int udpGet(ego  ebody,
-           char name[],
-           void *value,
-           char message[]);
+/* REQUIRED */
+/* excute the primitive */
+int udpExecute(ego  context,            /* (in)  EGADS context */
+               ego  *ebody,             /* (out) Body pointer */
+               int  *nMesh,             /* (out) number of associated meshes */
+               char *string[]);         /* (out) error message (or NULL if none) (freeable) */
 
-int udpVel(ego    ebody,
-           char   name[],
-           double value[],
-           int    nvalue);
+/* OPTIONAL */
+/* return sensitivity derivatives for the "real" argument */
+int udpSensitivity(ego    ebody,        /* (in)  Body pointer (matches return from udpExecute) */
+                   int    npts,         /* (in)  number of points at which sensitivities are computed */
+                   int    entType,      /* (in)  entity type: OCSM_NODE, OCSM_EDGE, or OCSM_FACE */
+                   int    entIndex,     /* (in)  entity index (bias-1) */
+                   double uvs[],        /* (in)  array of parametric coordinates (t or uv) */
+                   double vels[]);      /* (out) array of velocities (3*npts long) */
 
-int udpExecute(ego  context,
-               ego  *ebody,
-               int  *nMesh,
-               char *string[]);         // freeable
+/* OPTIONAL */
+/* return meshes associated with the primitive */
+int udpMesh(ego body,                   /* (in)  Body pointer (matches return from udpExecute) */
+            int  imesh,                 /* (in)  mesh index (bias-1) */
+            int  *imax,                 /* (out) i-dimension of mesh */
+            int  *jmax,                 /* (out) j-dimension of mesh */
+            int  *kmax,                 /* (out) k-dimension of mesh */
+            double *mesh[]);            /* (out) array of mesh points (freeable) */
 
-int udpSensitivity(ego    ebody,
-                   int    npts,
-                   int    entType,
-                   int    entIndex,
-                   double uvs[],
-                   double vels[]);
+/* --------------------------------------------------------------------- */
+/* functions called by OpenCSM.c (based upon above and functions in udpUtilities.c */
+/* --------------------------------------------------------------------- */
 
-int udpMesh(ego body,
-            int  imesh,
-            int  *imax,
-            int  *jmax,
-            int  *kmax,
-            double *mesh[]);            // freeable
+/* initialize & get info about the list of arguments */
+/* udpInitialize in udpUtilities.c */
+extern int
+udp_initialize(char   primName[],       /* (in)  primitive name */
+               int    *nArgs,           /* (out) number of arguments */
+               char   **name[],         /* (out) array of argument names */
+               int    *type[],          /* (out) array of argument types (see below) */
+               int    *idefault[],      /* (out) array of integer default values */
+               double *ddefault[]);     /* (out) array of double  default values */
+
+/* get number of Bodys expected in call to udp_executePrim */
+/* udpNumBodys() in udpUtilities.c */
+extern int
+udp_numBodys(char primName[]);          /* (out) number of expected Bodys */
+
+/* get list of Bodys associated with primitive */
+/* udpBodyList() in udpUtilities.c */
+extern int
+udp_bodyList(char primName[],           /* (in)  primitive name */
+             ego  body,                 /* (in)  Body pointer (matches return from udpExecute) */
+             const int *bodyList[]);    /* (in)  0-terminated list of Bodys used by UDF */
+
+/* set the argument list back to default */
+/* udpReset(0) in udpUtilities.c */
+extern int
+udp_clrArguments(char primName[]);      /* (in)  primitive name */
+
+/* clean the udp cache */
+/* udpClean() in udpUtilities.c */
+extern int
+udp_clean(char primName[],              /* (in)  primitive name */
+          ego  body);                   /* (in)  Body pointer to clean (matches return from udpExecute) */
+
+/* set an argument -- characters are converted based on type */
+/* udpSetArgument() in udpUtilities.c */
+extern int
+udp_setArgument(char primName[],        /* (in)  primitive name */
+                char name[],            /* (in)  argument name */
+                void *value,            /* (in)  argument value(s) */
+                int  nrow,              /* (in)  number of rows or characters */
+                int  ncol,              /* (in)  number of columns (or 0 for string) */
+      /*@null@*/char message[]);        /* (out) error message (or NULL if none) (freeable) */
+
+/* execute */
+/* udpExecute() in UDP/UDF */
+extern int
+udp_executePrim(char primName[],        /* (in)  primitive name */
+                ego  context,           /* (in)  EGADS context */
+                ego  *body,             /* (out) Body (or Model) produced (destroy with EG_deleteObject) */
+                int  *nMesh,            /* (out) number of associated meshes */
+                char *string[]);        /* (out) error message (or NULL if none) (freeable) */
+
+/* get an output parameter -- characters are converted based on type */
+/* udpGet() in udpUtilities.c */
+extern int
+udp_getOutput(char primName[],          /* (in)  primitive name */
+              ego  body,                /* (in)  Body pointer (matches return from udpExecute) */
+              char name[],              /* (in)  parameter name */
+              int  *nrow,               /* (out) number of rows */
+              int  *ncol,               /* (out) number of columns */
+              void *val[],              /* (out) parameter value(s) (freeable) */
+              void *dot[],              /* (out) parameter velocities, or NULL (freeable) */
+              char message[]);          /* (out) error message (or NULL if none) (freeable) */
+
+/* return the OverSet Mesh */
+/* udpMesh() in UDP/UDF or udpUtilities.c (if not in UDP/UDF) */
+extern int
+udp_getMesh(char   primName[],          /* (in)  primitive name */
+            ego    body,                /* (in)  Body pointer (mateches return from udpExecute) */
+            int    iMesh,               /* (in)  mesh index (bias-1( */
+            int    *imax,               /* (out) i-dimension of mesh */
+            int    *jmax,               /* (out) j-dimension of mesh */
+            int    *kmax,               /* (out) k-dimension of mesh */
+            double *mesh[]);            /* (out) mesh points (freeable) */
+
+/* set a design velocity -- characters are converted based on type */
+/* udpVel() in udpUtilities.c */
+extern int
+udp_setVelocity(char   primName[],      /* (in)  primitive name */
+                ego    body,            /* (in)  Body pointer (matches return from udpExecute) */
+                char   name[],          /* (in)  parameter name */
+                double value[],         /* (in)  parameter velocities */
+                int    nvalue);         /* (in)  number of velocities */
+
+/* return sensitivity derivatives for the "real/sens" argument */
+/* udpSensitivity() in UDP/UDF or udpUtilities.c (if not in UDP/UDF) */
+extern int
+udp_sensitivity(char   primName[],      /* (in)  primitive name */
+                ego    body,            /* (in)  Body pointer (matches return from udpExecute) */
+                int    npts,            /* (in)  number of points */
+                int    entType,         /* (in)  entity type (OCSM_NODE, OCSM_EDGE, or OCSM_FACE) */
+                int    entIndex,        /* (in)  entity index (bias-1) */
+      /*@null@*/double uvs[],           /* (in)  parametric coordinates (of NULL for tessellation points) */
+                double vels[]);         /* (out) array of velocities (3*npts in length) */
+
+/* unload and cleanup for all UDP/UDFs */
+/* udpReset(1) in udpUtilities.c */
+extern void
+udp_cleanupAll();
+
+#endif  /* _UDP_H_ */

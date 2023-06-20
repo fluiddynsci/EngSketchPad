@@ -3,8 +3,8 @@
 // Structures for general meshing - Written by Dr. Ryan Durscher AFRL/RQVC
 
 
-#ifndef MESHTYPES_H
-#define MESHTYPES_H
+#ifndef _AIM_UTILS_MESHTYPES_H_
+#define _AIM_UTILS_MESHTYPES_H_
 
 #include "egads.h"
 #include "miscTypes.h"
@@ -315,4 +315,4 @@ typedef struct {
 
 } origamiMeshDataStruct;
 
-#endif
+#endif // _AIM_UTILS_MESHTYPES_H_

@@ -37,11 +37,11 @@ VPATH = $(ODIR)
 OBJS = exodusWriter.o
 
 $(LDIR)/exodusWriter.so:	$(ODIR)/exodusWriter.o $(LDIR)/libaimUtil.a
-	$(CXX) $(SOFLGS) -o $(LDIR)/exodusWriter.so $(ODIR)/exodusWriter.o \
-		-L$(SEACAS)/lib -lexodus -Wl,-rpath $(SEACAS)/lib -L$(LDIR) -laimUtil -legads -locsm -ludunits2 -ldl $(RPATH) -lm
+	$(CXX) $(SOFLGS) $(CPDS) -o $(LDIR)/exodusWriter.so $(ODIR)/exodusWriter.o \
+		-L$(SEACAS)/lib -lexodus -Wl,-rpath $(SEACAS)/lib $(NETCDFLIB) -L$(LDIR) -laimUtil -legads -locsm -ludunits2 -ldl $(RPATH) -lm
 
 $(ODIR)/exodusWriter.o:	exodusWriter.cpp $(IDIR)/aimUtil.h $(IDIR)/aimMesh.h
-	$(CXX) -c $(COPTS) $(DEFINE) -I../include -I$(IDIR) -I$(SEACAS)/include -I$(NETCDFINC) exodusWriter.cpp \
+	$(CXX) -c $(COPTS) $(CPDS) $(DEFINE) -I../include -I$(IDIR) -I$(SEACAS)/include -I$(NETCDFINC) exodusWriter.cpp \
 		-o $(ODIR)/exodusWriter.o
 
 LINT_FLAGS=-uniondef -exportlocal -nullpass -retvalother -evalorder -nullderef \

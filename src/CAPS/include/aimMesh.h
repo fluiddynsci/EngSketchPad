@@ -5,7 +5,7 @@
  *
  *             AIM Mesh Function Prototypes
  *
- *      Copyright 2014-2022, Massachusetts Institute of Technology
+ * *      Copyright 2014-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -127,6 +127,9 @@ __ProtoExt__ int
 
 __ProtoExt__ int
   aim_loadMeshRef( void *aimStruc, aimMeshRef *meshRef );
+
+__ProtoExt__ int
+  aim_morphMeshUpdate(void *aimInfo, aimMeshRef *meshRef, int numBody, ego *bodies);
 
 /******************** meshWriter Dynamic Interface ***********************/
 

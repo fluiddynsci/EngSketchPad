@@ -5,19 +5,20 @@
 
 #include "../src/egadsStack.h"
 
+#if defined(_MSC_VER) && (_MSC_VER < 1900)
+#define __func__  __FUNCTION__
+#endif
+
+//#define PCURVE_SENSITIVITY
+
 int
 EG_isoCurve(const int *header2d, const double *data2d,
             const int ik, const int jk, int *header, double **data);
 
 int
-EG_isoCurve_dot(const int *header2d, const double *data2d,
-                const double *data2d_dot, const int ik, const int jk,
-                int *header, double **data, double **data_dot);
+EG_isoCurve_dot(const int *header2d, const double *data2d, const double *data2d_dot,
+                const int ik, const int jk, int *header, double **data, double **data_dot);
 
-
-#if defined(_MSC_VER) && (_MSC_VER < 1900)
-#define __func__  __FUNCTION__
-#endif
 
 #define TWOPI 6.2831853071795862319959269
 #define PI    (TWOPI/2.0)
@@ -48,6 +49,9 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
   ego    ebody1, ebody2;
   ego    *efaces1=NULL, *efaces2=NULL, *eedges1=NULL, *eedges2=NULL, *enodes1=NULL, *enodes2=NULL;
   ego    top, prev, next;
+// Error handling
+  ego bodies[4], model, context;
+
 
   status = EG_statusTessBody( tess1, &ebody1, &np1, &np2 );
   if (status != EGADS_SUCCESS) goto cleanup;
@@ -229,8 +233,18 @@ pingBodies(ego tess1, ego tess2, double dtime, int iparam, const char *shape, do
   }
 
 cleanup:
-  if (status != EGADS_SUCCESS) {
-    printf(" Failure %d in %s\n", status, __func__);
+  if (status + nerr != EGADS_SUCCESS) {
+    printf(" Failure %d in %s. Writing failure.egads\n", status + nerr, __func__);
+    EG_getContext(ebody1, &context);
+    EG_copyObject(ebody1, NULL, &bodies[0]);
+    EG_copyObject(ebody2, NULL, &bodies[1]);
+    EG_copyObject(tess1, bodies[0], &bodies[2]);
+    EG_copyObject(tess2, bodies[1], &bodies[3]);
+    EG_makeTopology(context, NULL, MODEL, 4, NULL, 2,
+                    bodies, NULL, &model);
+    remove("failure.egads");
+    EG_saveModel(model, "failure.egads");
+    EG_deleteObject(model);
   }
   EG_free(efaces1);
   EG_free(eedges1);

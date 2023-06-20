@@ -368,8 +368,8 @@ class Problem(object):
     ## Initialize the problem.
     # \param problemName CAPS problem name that serves as the root directory for all file I/O.
     # \param phaseName the current phase name (None is equivalent to 'Scratch')
-    # \param phaseStart name of the phase used to start the new phase 
-    # \param capsFile CAPS file to load. Options: *.csm or *.egads.
+    # \param phaseStart name of the phase used to start the new phase
+    # \param capsFile CAPS file to load. If starting a new phase then this file will replaced the csm file used in previous phases without checking for differences. Options: *.csm or *.egads.
     # \param outLevel Level of output verbosity. See \ref setOutLevel .
     # \param phaseContinuation use continuation for a open phase, otherwise the phase is first deleted on disk
     # \param phaseReadOnly open a closed Phase in Read Only mode
@@ -431,10 +431,10 @@ class Problem(object):
                         # Start the phase from an existing phase
                         flag = caps.oFlag.oPhaseName
                         ptr = phaseStart
-                        
+
                         # use a new CSM file for this new phase
                         if capsFile is not None:
-                            flag = caps.oFlag.oPNewCSM 
+                            flag = caps.oFlag.oPNewCSM
                             caps.phaseNewCSM(problemName, phaseName, capsFile)
                     else:
                         # Start a new clean phase
@@ -451,7 +451,7 @@ class Problem(object):
             if hasattr(ocsm, "PyScRiPt"):
                 from pyOCSM import esp
                 esp.SetCaps(problemObj, esp.GetEsp("pyscript"))
-        
+
         super(Problem, self).__setattr__("_problemObj", problemObj)
         super(Problem, self).__setattr__("_name",     problemName)
 
@@ -878,7 +878,7 @@ class ProblemGeometry(object):
 
             # load the viewer
             esp.TimLoad("viewer", esp.GetEsp("pyscript"), "")
-            
+
             # view all Bodys on the stack
             esp.TimMesg("viewer", "MODL")
             esp.TimQuit("viewer")
@@ -1627,12 +1627,12 @@ class ValueIn(object):
 
         self._valObj.transferValues(tmethod, source._valObj)
 
-    ## Property getter returns a copy the finite difference step sizes of the CAPS Value Object
+    ## Property getter returns a copy the OpenCSM finite difference step sizes of the CAPS Value Object
     @property
     def stepSize(self):
         return self._valObj.getStepSizeSize()
 
-    ## Property setter sets the finite difference step sizes in the CAPS Value Object
+    ## Property setter sets and uses OpenCSM finite difference step sizes in the CAPS Value Object
     @stepSize.setter
     def stepSize(self, sizes):
         self._valObj.setStepSizeSize(sizes)
@@ -2487,7 +2487,7 @@ class AnalysisGeometry(object):
 
             # load the viewer
             esp.TimLoad("viewer", esp.GetEsp("pyscript"), "")
-            
+
             name, otype, stype, link, parent, last = self._analysisObj.info()
 
             # view all Bodys on the stack
@@ -3991,7 +3991,7 @@ class DataSet(object):
             if dataRank > 1 or numDataSet > 1:
                 ax.append(fig.add_subplot(dataRank, numDataSet, numDataSet*j + 1 + dataSetIndex, projection='3d'))
             else:
-                ax.append(fig.gca(projection='3d'))
+                ax.append(fig.add_subplot(projection='3d'))
 
             if dataRank == 1:
                 colorArray = data

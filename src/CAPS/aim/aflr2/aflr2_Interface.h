@@ -6,3 +6,6 @@ int aflr2_Surface_Mesh(void *aimInfo,
                        const mapAttrToIndexStruct *meshMap,
                        meshStruct *surfaceMesh,
                        const aimMeshRef *meshRef);
+
+#define AFLR2TESSFILE "aflr2.eto"
+#define AFLR2FILE     "aflr2"

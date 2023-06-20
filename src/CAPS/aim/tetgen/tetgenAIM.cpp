@@ -452,7 +452,7 @@ aimUpdateState(void *instStore, void *aimInfo, capsValue *aimInputs)
     // Get capsGroup name and index mapping
     status = create_CAPSGroupAttrToIndexMap(numBody,
                                             bodies,
-                                            1, // Only search down to the face level of the EGADS body
+                                            -1, // Only search the face level of the EGADS body
                                             &tetgenInstance->groupMap);
     AIM_STATUS(aimInfo, status);
 
@@ -586,15 +586,15 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     }
 
     if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
-      MultiMesh = 0;
+        MultiMesh = 0;
     } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") == 0) {
-      MultiMesh = 1;
+        MultiMesh = 1;
     } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiDomain") == 0) {
-      MultiMesh = 2;
+        MultiMesh = 2;
     } else {
-      AIM_ERROR(aimInfo, "Developer error! Unkown Multiple_Mesh %s", aimInputs[Multiple_Mesh-1].vals.string);
-      status = CAPS_BADVALUE;
-      goto cleanup;
+        AIM_ERROR(aimInfo, "Developer error! Unkown Multiple_Mesh %s", aimInputs[Multiple_Mesh-1].vals.string);
+        status = CAPS_BADVALUE;
+        goto cleanup;
     }
 
     // Create/setup volume meshes
@@ -755,7 +755,7 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
           // Get capsGroup name and index mapping
           status = create_CAPSGroupAttrToIndexMap(1,
                                                   &bodies[ibody],
-                                                  1, // Only search down to the face level of the EGADS body
+                                                  -1, // Only search the face level of the EGADS body
                                                   &groupMap);
           AIM_STATUS(aimInfo, status);
 
@@ -961,10 +961,12 @@ aimPostAnalysis(void *instStore, void *aimInfo,
     int numSurfaceMesh=0;
     meshStruct *surfaceMesh=NULL;
 
-    int i, j, ibody, nodeOffSet;
+    int i, j, ibody, nodeOffset;
+    int MultiMesh, numVolNode;
 
     char bodyNumberFile[42];
     char aimFile[PATH_MAX];
+    FILE *fp = NULL;
 
     aimStorage *tetgenInstance;
 
@@ -979,8 +981,76 @@ aimPostAnalysis(void *instStore, void *aimInfo,
     surfaceMesh    = (meshStruct *)aimInputs[Surface_Mesh-1].vals.AIMptr;
     AIM_NOTNULL(surfaceMesh, aimInfo, status);
 
-    // Create/setup volume meshes
-    if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") == 0) {
+    if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
+      MultiMesh = 0;
+    } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") == 0) {
+      MultiMesh = 1;
+    } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiDomain") == 0) {
+      MultiMesh = 2;
+    } else {
+      AIM_ERROR(aimInfo, "Developer error! Unkown Multiple_Mesh %s", aimInputs[Multiple_Mesh-1].vals.string);
+      status = CAPS_BADVALUE;
+      goto cleanup;
+    }
+
+    // Create/setup mesh maps
+    if (MultiMesh == 0 || MultiMesh == 2) {
+
+        AIM_ALLOC(tetgenInstance->meshRef, 1, aimMeshRef, aimInfo, status);
+        tetgenInstance->numMeshRef = 1;
+        ibody = 0;
+
+        status = aim_initMeshRef(tetgenInstance->meshRef);
+        AIM_STATUS(aimInfo, status);
+
+        if (MultiMesh == 2) {
+            snprintf(bodyNumberFile, 42, "tetgen_%d.txt", ibody);
+            fp = aim_fopen(aimInfo, bodyNumberFile, "r");
+            if (fp == NULL) {
+                AIM_ERROR(aimInfo, "Failed to open '%s'!", bodyNumberFile);
+                status = CAPS_IOERR;
+                goto cleanup;
+            }
+        }
+
+        // set the filename without extensions where the grid is written for solvers
+        snprintf(bodyNumberFile, 42, "tetgen_%d", ibody);
+        status = aim_file(aimInfo, bodyNumberFile, aimFile);
+        AIM_STATUS(aimInfo, status);
+        AIM_STRDUP(tetgenInstance->meshRef[0].fileName, aimFile, aimInfo, status);
+
+        snprintf(bodyNumberFile, 42, NODATATRANSFER, ibody);
+        if (aim_isFile(aimInfo, bodyNumberFile) == CAPS_SUCCESS) {
+          // data transfer and sensitvities are not available
+          tetgenInstance->meshRef[0].nmap = 0;
+          tetgenInstance->meshRef[0].maps = NULL;
+
+        } else {
+
+          AIM_ALLOC(tetgenInstance->meshRef[0].maps, numSurfaceMesh, aimMeshTessMap, aimInfo, status);
+          tetgenInstance->meshRef[0].nmap = numSurfaceMesh;
+
+          nodeOffset = 0;
+          for (ibody = 0; ibody < numSurfaceMesh; ibody++) {
+              tetgenInstance->meshRef[0].maps[ibody].tess = NULL;
+              tetgenInstance->meshRef[0].maps[ibody].map = NULL;
+
+              tetgenInstance->meshRef[0].maps[ibody].tess = surfaceMesh[ibody].egadsTess;
+
+              AIM_ALLOC(tetgenInstance->meshRef[0].maps[ibody].map, surfaceMesh[ibody].numNode, int, aimInfo, status);
+              for (i = 0; i < surfaceMesh[ibody].numNode; i++)
+                tetgenInstance->meshRef[0].maps[ibody].map[i] = nodeOffset + i+1;
+
+              if (MultiMesh == 0) {
+                  nodeOffset += surfaceMesh[ibody].numNode;
+              } else {
+                  fscanf(fp, "%d", &numVolNode);
+                  nodeOffset += numVolNode;
+              }
+          }
+        }
+
+    } else  if (MultiMesh == 1) {
 
         AIM_ALLOC(tetgenInstance->meshRef, numBody, aimMeshRef, aimInfo, status);
         tetgenInstance->numMeshRef = numBody;
@@ -1011,47 +1081,6 @@ aimPostAnalysis(void *instStore, void *aimInfo,
             for (i = 0; i < surfaceMesh[ibody].numNode; i++)
               tetgenInstance->meshRef[ibody].maps[0].map[i] = i+1;
         }
-
-    } else {
-
-        AIM_ALLOC(tetgenInstance->meshRef, 1, aimMeshRef, aimInfo, status);
-        tetgenInstance->numMeshRef = 1;
-        ibody = 0;
-
-        status = aim_initMeshRef(tetgenInstance->meshRef);
-        AIM_STATUS(aimInfo, status);
-
-        // set the filename without extensions where the grid is written for solvers
-        snprintf(bodyNumberFile, 42, "tetgen_%d", ibody);
-        status = aim_file(aimInfo, bodyNumberFile, aimFile);
-        AIM_STATUS(aimInfo, status);
-        AIM_STRDUP(tetgenInstance->meshRef[0].fileName, aimFile, aimInfo, status);
-
-        snprintf(bodyNumberFile, 42, NODATATRANSFER, ibody);
-        if (aim_isFile(aimInfo, bodyNumberFile) == CAPS_SUCCESS) {
-          // data transfer and sensitvities are not available
-          tetgenInstance->meshRef[0].nmap = 0;
-          tetgenInstance->meshRef[0].maps = NULL;
-
-        } else {
-
-          AIM_ALLOC(tetgenInstance->meshRef[0].maps, numSurfaceMesh, aimMeshTessMap, aimInfo, status);
-          tetgenInstance->meshRef[0].nmap = numSurfaceMesh;
-
-          nodeOffSet = 0;
-          for (ibody = 0; ibody < numSurfaceMesh; ibody++) {
-              tetgenInstance->meshRef[0].maps[ibody].tess = NULL;
-              tetgenInstance->meshRef[0].maps[ibody].map = NULL;
-
-              tetgenInstance->meshRef[0].maps[ibody].tess = surfaceMesh[ibody].egadsTess;
-
-              AIM_ALLOC(tetgenInstance->meshRef[0].maps[ibody].map, surfaceMesh[ibody].numNode, int, aimInfo, status);
-              for (i = 0; i < surfaceMesh[ibody].numNode; i++)
-                tetgenInstance->meshRef[0].maps[ibody].map[i] = nodeOffSet + i+1;
-
-              nodeOffSet += surfaceMesh[ibody].numNode;
-          }
-        }
     }
 
     for (i = 0; i < tetgenInstance->numMeshRef; i++) {
@@ -1070,6 +1099,7 @@ aimPostAnalysis(void *instStore, void *aimInfo,
     }
 
 cleanup:
+    if (fp != NULL) fclose(fp);
     return status;
 }
 

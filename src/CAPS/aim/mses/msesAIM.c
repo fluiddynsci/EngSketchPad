@@ -11,7 +11,7 @@
  * \section overviewMSES MSES AIM Overview
  *
  * A module in the Computational Aircraft Prototype Syntheses (CAPS) has been developed to interact (through input
- * files) with the airfoil analysis tool MSES. MSES is not open-source and not freelay available. However,
+ * files) with the airfoil analysis tool MSES. MSES is not open-source and not freely available. However,
  * a 'lite' version of MSES is provided with EngSketchPad that supports analysis of a single airfoil element.
  *
  * An outline of the AIM's inputs and outputs are provided in \ref aimInputsMSES and \ref aimOutputsMSES, respectively.
@@ -1432,7 +1432,14 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
 
   // read in the sensx.airfoil file
   status = msesSensxRead(aimInfo, sensxfile, &sensx);
-  AIM_STATUS(aimInfo, status);
+  if (status != CAPS_SUCCESS) {
+    if (getenv("F_UFMTENDIAN") != NULL) {
+      AIM_ERROR(aimInfo, "The environment variable F_UFMTENDIAN is set in your shell,");
+      AIM_ADDLINE(aimInfo, "which is likely preventing CAPS from reading mses output files.");
+      AIM_ADDLINE(aimInfo, "Please unset F_UFMTENDIAN in your shell.");
+    }
+    AIM_STATUS(aimInfo, status, "Failed to read mses sensx file!");
+  }
   AIM_NOTNULL(sensx, aimInfo, status);
 
   numFunctional = 7;

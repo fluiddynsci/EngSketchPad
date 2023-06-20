@@ -66,8 +66,8 @@ EGADS_AFLR4_OBJS = 	\
 			$(ODIR)\egads_eval_xyz_at_u.obj \
 			$(ODIR)\egads_eval_xyz_at_uv.obj \
 			$(ODIR)\egads_face_node_map.obj \
-			$(ODIR)\egads_get_model.obj \
-			$(ODIR)\egads_set_ext_cad_data.obj \
+			$(ODIR)\egads_cad_geom_faceMatch.obj \
+			$(ODIR)\egads_data.obj \
 			$(ODIR)\aflr43_bc_mod.obj \
 			$(ODIR)\aflr43_bc_reset.obj
 
@@ -87,20 +87,21 @@ $(LDIR)\aflr3AIM.dll:	aflr3AIM.def $(ODIR)\aflr3AIM.obj $(ODIR)\aflr3_Interface.
 
 $(ODIR)\aflr3AIM.obj:	aflr3AIM.c $(IDIR)\capsTypes.h \
 			..\utils\meshUtils.h
-	cl /c $(COPTS) $(DEFINE) -I$(IDIR) -I..\utils aflr3AIM.c \
-		/Fo$(ODIR)\aflr3AIM.obj
+	cl /c $(COPTS) $(DEFINE) -I$(IDIR) -I..\utils \
+		-I$(AFLR)\src \
+		aflr3AIM.c /Fo$(ODIR)\aflr3AIM.obj
 
 $(ODIR)\aflr3_Interface.obj:	aflr3_Interface.c ..\utils\meshUtils.h
-	cl /c $(COPTS) $(DEFINE) -I$(IDIR) \
-		-I$(AFLR)\src\aflr3 -I$(AFLR)\src -I..\utils \
+	cl /c $(COPTS) $(DEFINE) -I$(IDIR) -I..\utils \
+		-I$(AFLR)\src \
 		aflr3_Interface.c /Fo$(ODIR)\aflr3_Interface.obj
 
 # Compile each AFLR source file
 {$(AFLR)\src\egads_aflr4\}.c{$(ODIR)}.obj::
-	cl /c $(CPPOPT) /W0 /Fo"$(ODIR)"\ /Dstrcasecmp=stricmp -I$(IDIR) -I$(AFLR)\src\egads_aflr4 $<
+	cl /c $(CPPOPT) /W0 /Fo"$(ODIR)"\ /Dstrcasecmp=stricmp -D_ENABLE_EGADS_ -I$(IDIR) -I$(AFLR)\src\egads_aflr4 $<
 
 {$(AFLR)\src\aflr43\}.c{$(ODIR)}.obj::
-	cl /c $(CPPOPT) /W0 /Fo"$(ODIR)"\ /Dstrcasecmp=stricmp -I$(IDIR) -I$(AFLR)\src\aflr43 $<
+	cl /c $(CPPOPT) /W0 /Fo"$(ODIR)"\ /Dstrcasecmp=stricmp -D_ENABLE_EGADS_ -I$(IDIR) -I$(AFLR)\src\aflr43 $<
 
 $(LDIR)\AFLR.dll: $(AFLR)\$(AFLR_ARCH)\bin\AFLR.dll
 	xcopy /Q /Y $(AFLR)\$(AFLR_ARCH)\bin\AFLR.dll $(LDIR)

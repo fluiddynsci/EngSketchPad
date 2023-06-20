@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2012/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2012/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -660,7 +660,7 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program serveCSM                    *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2022         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2023         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************\n");
 
@@ -3732,7 +3732,7 @@ buildSceneGraph()
 
                     normx = (data[4] * data[8] - data[5] * data[7]);
                     normy = (data[5] * data[6] - data[3] * data[8]);
-                    normz = (data[6] * data[7] - data[4] * data[6]);
+                    normz = (data[3] * data[7] - data[4] * data[6]);
                     norm  = sqrt(normx*normx + normy*normy + normz*normz);
 
                     tuft[6*ipnt  ] = xyz[3*ipnt  ];

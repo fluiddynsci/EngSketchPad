@@ -2,8 +2,8 @@
 
 // Structures for vortex lattice analysis - Written by Dr. Ryan Durscher AFRL/RQVC
 
-#ifndef VLMTYPES_H
-#define VLMTYPES_H
+#ifndef _AIM_UTILS_VLMTYPES_H_
+#define _AIM_UTILS_VLMTYPES_H_
 
 
 typedef enum  {vlmGENERIC, vlmPLANEYZ, vlmRADIAL} vlmSystemEnum;
@@ -83,4 +83,4 @@ typedef struct {
 
 } vlmSurfaceStruct;
 
-#endif
+#endif // _AIM_UTILS_VLMTYPES_H_

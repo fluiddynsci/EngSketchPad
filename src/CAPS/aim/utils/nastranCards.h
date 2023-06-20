@@ -1,7 +1,7 @@
 // This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
 
-#ifndef __NASTRAN_CARDS_H__
-#define __NASTRAN_CARDS_H__
+#ifndef _AIM_UTILS_NASTRAN_CARDS_H_
+#define _AIM_UTILS_NASTRAN_CARDS_H_
 
 #include "capsTypes.h"
 #include "feaTypes.h" // Bring in FEA structures
@@ -685,4 +685,4 @@ int nastranCard_trim(FILE *fp, const int *id, const double *mach, const double *
 }
 #endif
 
-#endif // __NASTRAN_CARDS_H__
+#endif // _AIM_UTILS_NASTRAN_CARDS_H_

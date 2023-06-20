@@ -5,7 +5,7 @@
  *
  *             General Object Header
  *
- *      Copyright 2014-2022, Massachusetts Institute of Technology
+ * *      Copyright 2014-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -33,8 +33,8 @@
 #endif
 
 #define CAPSMAJOR      1
-#define CAPSMINOR     22
-#define CAPSPROP      CAPSprop: Revision 1.22
+#define CAPSMINOR     23
+#define CAPSPROP      CAPSprop: Revision 1.23
 
 #define CAPSMAGIC     1234321
 #define MAXANAL       64
@@ -267,7 +267,7 @@ typedef struct {
   char   *name;                 /* the derivative with respect to */
   int    len_wrt;               /* the number of members in the derivative
                                    w.r.t. Value Object */
-  double *deriv;                /* the derivative values 
+  double *deriv;                /* the derivative values
                                    - capsValue.length*len_wrt long */
 } capsDeriv;
 
@@ -427,7 +427,7 @@ typedef struct {
   int  irow;                    /* the row index */
   int  icol;                    /* the column index */
 } capsRegGIN;
-  
+
 
 /*
  * structure to hold the intent phrase

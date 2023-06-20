@@ -1,10 +1,15 @@
 /*
- * OpenCSM/EGADS -- Extended User Defined Primitive/Function Interface
- *
+ ************************************************************************
+ *                                                                      *
+ * OpenCSM/EGADS -- Extended User Defined Primitive/Function Interface  *
+ *                                                                      *
+ *            Written by John Dannenhoffer @ Syracuse University        *
+ *                                                                      *
+ ************************************************************************
  */
 
 /*
- * Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -55,7 +60,7 @@ static DLL   udpDLL[ MAXPRIM];
 typedef int (*udpI) (int *nArgs, char **namex[], int *typex[], int *idefault[], double *ddefault[]);
 static        udpI  udpInit[ MAXPRIM];
 
-// udpNumB[]      udpNumBodys()     udp_numBodys()      number of Bodys expecte in first arg to udpExecute
+// udpNumB[]      udpNumBodys()     udp_numBodys()      number of Bodys expected in first arg to udpExecute
 typedef int (*udpN) ();
 static        udpN  udpNumB[ MAXPRIM];
 
@@ -73,11 +78,11 @@ typedef int (*udpC) (ego ebody);
 static        udpC  udpClean[MAXPRIM];
 
 // udpSet[]       udpSetArgument()  udp_setArgument()   sets value of an argument
-typedef int (*udpS) (char name[], void *value, int nvalue, /*@null@*/char message[]);
+typedef int (*udpS) (char name[], void *value, int nrow, int ncol, /*@null@*/char message[]);
 static        udpS  udpSet[MAXPRIM];
 
 // udpGet[]       udpGet()          udp_getOutput()     return an output parameter
-typedef int (*udpG) (ego ebody, char name[], void *value, char message[]);
+typedef int (*udpG) (ego ebody, char name[], int *nrow, int *ncol, void **val, void **dot, char message[]);
 static        udpG  udpGet[MAXPRIM];
 
 // udpMesh[]      udpMesh()         udp_getMesh()       return mesh associated with primitive
@@ -350,7 +355,7 @@ int udp_numBodys(const char primName[])
     if (i == -1) return EGADS_NOTFOUND;
 
 /*@-nullpass@*/
-    return udpNumB[i](0);
+    return udpNumB[i]();
 /*@+nullpass@*/
 }
 
@@ -396,7 +401,8 @@ int udp_clean(const char primName[],
 int udp_setArgument(const char primName[],
                     char       name[],
                     void       *value,
-                    int        nvalue,
+                    int        nrow,
+                    int        ncol,
           /*@null@*/char       message[])
 {
     int i;
@@ -404,7 +410,7 @@ int udp_setArgument(const char primName[],
     i = udpDLoaded(primName);
     if (i == -1) return EGADS_NOTFOUND;
 
-    return udpSet[i](name, value, nvalue, message);
+    return udpSet[i](name, value, nrow, ncol, message);
 }
 
 
@@ -426,16 +432,19 @@ int udp_executePrim(const char primName[],
 int udp_getOutput(const char primName[],
                   ego        body,
                   char       name[],
-                  void       *value,
+                  int        *nrow,
+                  int        *ncol,
+                  void       *val[],
+                  void       *dot[],
                   char       message[])
 {
-  int i;
+    int i;
 
-  i = udpDLoaded(primName);
-  if (i == -1) return EGADS_NOTFOUND;
-  if (udpGet[i] == NULL) return EGADS_EMPTY;
+    i = udpDLoaded(primName);
+    if (i == -1) return EGADS_NOTFOUND;
+    if (udpGet[i] == NULL) return EGADS_EMPTY;
 
-  return udpGet[i](body, name, value, message);
+    return udpGet[i](body, name, nrow, ncol, val, dot, message);
 }
 
 

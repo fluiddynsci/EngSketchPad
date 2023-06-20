@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -119,8 +119,6 @@ typedef struct {
 
     ego     context;          /* EGADS context */
 } poly_TT;
-
-static void *realloc_temp=NULL;              /* used by RALLOC macro */
 
 /*
  ************************************************************************
@@ -397,10 +395,10 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     status = EG_getMassProperties(*ebody, data);
     CHECK_STATUS(EG_getMassProperties);
 
-    AREA(0)   = data[1];
-    VOLUME(0) = data[0];
+    AREA(  numUdp)   = data[1];
+    VOLUME(numUdp) = data[0];
 
-    /* tell OpenCSM that the Faces do not have a _body attribute */
+    /* tell OpenCSM to put _body, _brch, and Branch Attributes on the Faces */
     status = EG_attributeAdd(*ebody, "__markFaces__", ATTRINT, 1,
                              &one, NULL, NULL);
     CHECK_STATUS(EG_attributeAdd);

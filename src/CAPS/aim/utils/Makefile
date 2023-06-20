@@ -14,6 +14,9 @@ else
 ODIR  = .
 endif
 
+# Directory to install header files
+UTILDIR=$(IDIR)/aim/utils
+
 VPATH = $(ODIR)
 
 #OBJS  =	attrUtils.o meshUtils.o cfdUtils.o miscUtils.o feaUtils.o vlmUtils.o nastranUtils.o tecplotUtils.o arrayUtils.o deprecateUtils.o cardUtils.o nastranCards.o tempUtils.o jsonUtils.o pyscriptUtils.o
@@ -26,8 +29,9 @@ OBJSPython = nastranOP2Reader.o
 PYINC=-DHAVE_PYTHON -I$(PYTHONINC)
 endif
 
-default: $(LDIR)/libutils.a $(IDIR)/meshTypes.h $(IDIR)/miscTypes.h
+HFILES=$(patsubst %.h,$(UTILDIR)/%.h,$(wildcard *.h))
 
+default: $(LDIR)/libutils.a $(HFILES)
 
 $(LDIR)/libutils.a:	$(OBJS) $(OBJSPython) $(OBJSP)
 	touch $(LDIR)/libutils.a
@@ -40,15 +44,11 @@ $(OBJS) $(OBJSPython): %.o: %.c %.h
 $(OBJSP): %.o: %.cpp %.h
 	$(CXX) -c $(CPPOPT) $(DEFINE) -I../include -I$(IDIR) -I. $< -o $(ODIR)/$@
 
-$(IDIR)/meshTypes.h: meshTypes.h
-	touch $(IDIR)/meshTypes.h
-	rm $(IDIR)/meshTypes.h
-	cp -p meshTypes.h $(IDIR)/meshTypes.h
+$(UTILDIR):
+	mkdir -p $(UTILDIR)
 
-$(IDIR)/miscTypes.h: miscTypes.h
-	touch $(IDIR)/miscTypes.h
-	rm $(IDIR)/miscTypes.h
-	cp -p miscTypes.h $(IDIR)/miscTypes.h
+$(HFILES): $(UTILDIR)/%.h: %.h | $(UTILDIR)
+	cp -p -f $< $@
 
 LINT_FLAGS=-uniondef -exportlocal -nullpass -retvalother -evalorder -nullderef \
            -initallelements -bufferoverflowhigh -boolops -dependenttrans -kepttrans -immediatetrans

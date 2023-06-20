@@ -3,12 +3,18 @@ ifndef ESP_ROOT
 $(error ESP_ROOT must be set -- Please fix the environment...)
 endif
 #
+ifneq ($(MAKECMDGOALS),dox)
+ifneq ($(MAKECMDGOALS),doxclean)
+#
 ifndef AFLR
 $(error AFLR must be set -- Please fix the environment...)
 endif
 #
 ifndef AFLR_ARCH
 $(error AFLR_ARCH must be set -- Please fix the environment...)
+endif
+#
+endif
 endif
 #
 IDIR  = $(ESP_ROOT)/include
@@ -55,12 +61,12 @@ $(LDIR)/aflr2AIM.so:	$(ODIR)/aflr2AIM.o $(ODIR)/aflr2_Interface.o \
 		$(AFLR2_LIB) -L$(LDIR) -lutils \
 		-laimUtil -locsm -legads -ludunits2 -ldl $(RPATH) $(CPPSLB) -lm
 
-$(ODIR)/aflr2AIM.o:	$(ODIR)/aflr2_version aflr2AIM.c $(IDIR)/capsTypes.h \
+$(ODIR)/aflr2AIM.o:	$(ODIR)/aflr2_version aflr2AIM.c aflr2_Interface.h $(IDIR)/capsTypes.h \
 			$(IDIR)/aimUtil.h $(IDIR)/aimMesh.h ../utils/meshUtils.h 
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I$(AFLR)/src \
 		-I../utils aflr2AIM.c -o $(ODIR)/aflr2AIM.o
 
-$(ODIR)/aflr2_Interface.o:	$(ODIR)/aflr2_version aflr2_Interface.c \
+$(ODIR)/aflr2_Interface.o:	$(ODIR)/aflr2_version aflr2_Interface.c aflr2_Interface.h \
 				../utils/meshUtils.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I$(AFLR)/src \
 		-I../utils aflr2_Interface.c -o $(ODIR)/aflr2_Interface.o

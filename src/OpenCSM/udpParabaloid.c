@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -48,16 +48,7 @@
 #define YRADIUS(IUDP) ((double *) (udps[IUDP].arg[1].val))[0]
 #define ZRADIUS(IUDP) ((double *) (udps[IUDP].arg[2].val))[0]
 
-/* data about possible arguments
-      argNames: argument name
-      argTypes: argument type: ATTRSTRING   string
-                               ATTRINT      integer input
-                              -ATTRINT      integer output
-                               ATTRREAL     double  input
-                              -ATTRREAL     double  output
-                               ATTRREALSENS double input (for which a sensitivity can be calculated)
-      argIdefs: default value for ATTRINT
-      argDdefs: default value for ATTRREAL or ATTRREALSENS */
+/* data about possible arguments */
 static char  *argNames[NUMUDPARGS] = {"xlength", "yradius", "zradius",};
 static int    argTypes[NUMUDPARGS] = {ATTRREAL,  ATTRREAL,  ATTRREAL, };
 static int    argIdefs[NUMUDPARGS] = {0,         0,         0,        };

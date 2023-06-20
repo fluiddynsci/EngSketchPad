@@ -1,8 +1,11 @@
 // This software has been cleared for public release on 05 Nov 2020, case number 88ABW-2020-3462.
 
-#ifndef __JSON_UTILS_H__
-#define __JSON_UTILS_H__
+#ifndef _AIM_UTILS_JSON_UTILS_H_
+#define _AIM_UTILS_JSON_UTILS_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // JSON
 
@@ -42,5 +45,8 @@ int json_getDoubleArray(char *jsonDict, char *key, int size, double value[]);
 int json_getDoubleDynamicArray(char *jsonDict, char *key, int *size,
                                double *value[]);
 
+#ifdef __cplusplus
+}
+#endif
 
-#endif // __JSON_UTILS_H__
+#endif // _AIM_UTILS_JSON_UTILS_H_

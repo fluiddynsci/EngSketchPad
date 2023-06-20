@@ -216,6 +216,17 @@ if [ -n "$pyt" ]; then
 		echo "Info: Ignoring Python exec $pyt older than 3.8!"
 	fi
 fi
+if [ "$PYTH" == UNKNOWN ]; then
+	pyt="`which python3`"
+	if [ -n "$pyt" ]; then
+		if python3 -c "import sys; assert sys.version_info >= (3,8)" >& /dev/null; then 
+			PYTH=python3
+			echo "Info: Python exec $pyt found!"
+		else
+			echo "Info: Ignoring Python exec $pyt older than 3.8!"
+		fi
+	fi
+fi
 
 if [ "$PYTH" != UNKNOWN ]; then
 	if [ "$PYTHONINC" = UNKNOWN ]; then

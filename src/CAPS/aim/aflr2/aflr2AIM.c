@@ -240,8 +240,8 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
         /*! \page aimInputsAFLR2
          * - <B> Tess_Params = [0.025, 0.001, 15.0]</B> <br>
-         * Body tessellation parameters. Tess_Params[0] and Tess_Params[1] get scaled by the bounding
-         * box of the body. (From the EGADS manual) A set of 3 parameters that drive the EDGE discretization
+         * Body tessellation parameters. Tess_Params[0] and Tess_Params[1] get scaled by the capsMeshLength
+         * attribute. (From the EGADS manual) A set of 3 parameters that drive the EDGE discretization
          * and the FACE triangulation. The first is the maximum length of an EDGE segment or triangle side
          * (in physical space). A zero is flag that allows for any length. The second is a curvature-based
          * value that looks locally at the deviation between the centroid of the discrete object and the
@@ -358,14 +358,12 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Global settings
     int minEdgePoint = -1, maxEdgePoint = -1;
-    double refLen = -1.0;
+    double refLen = -1.0, capsMeshLength;
 
     // Body parameters
     const char *intents;
     int numBody = 0; // Number of bodies
     ego *bodies = NULL; // EGADS body objects
-
-    char aimFile[PATH_MAX];
 
     aimStorage *aflr2Instance;
 
@@ -390,11 +388,6 @@ int aimUpdateState(void *instStore, void *aimInfo,
     status = destroy_aimStorage(aflr2Instance, (int)true);
     AIM_STATUS(aimInfo, status);
 
-    // set the filename without extensions where the grid is written for solvers
-    status = aim_file(aimInfo, "aflr2", aimFile);
-    AIM_STATUS(aimInfo, status);
-    AIM_STRDUP(aflr2Instance->meshRef.fileName, aimFile, aimInfo, status);
-
     if (aflr2Instance->meshMap.numAttribute == 0 ||
         aim_newGeometry(aimInfo) == CAPS_SUCCESS ) {
       // Get capsMesh name and index mapping
@@ -410,16 +403,38 @@ int aimUpdateState(void *instStore, void *aimInfo,
       // Get capsGroup name and index mapping to make sure all edges have a capsGroup value
       status = create_CAPSGroupAttrToIndexMap(numBody,
                                               bodies,
-                                              3, // Node level
+                                              -2, // Edges only
                                               &aflr2Instance->groupMap);
       AIM_STATUS(aimInfo, status);
+
+      // offset by 1 to account for 'volume' group
+      for (i = 0; i < aflr2Instance->groupMap.numAttribute; i++) {
+        aflr2Instance->groupMap.attributeIndex[i]++;
+      }
     }
 
     // Setup meshing input structure
 
+    status = check_CAPSMeshLength(numBody, bodies, &capsMeshLength);
+    if (capsMeshLength <= 0 || status != CAPS_SUCCESS) {
+      if (status != CAPS_SUCCESS) {
+        AIM_ERROR(aimInfo, "capsMeshLength is not set on any body.");
+      } else {
+        AIM_ERROR(aimInfo, "capsMeshLength: %f", capsMeshLength);
+      }
+      AIM_ADDLINE(aimInfo, "The capsMeshLength attribute must\n"
+                           "present on at least one body.\n"
+                           "\n"
+                           "capsMeshLength should be a a positive value representative\n"
+                           "of a characteristic length of the geometry,\n"
+                           "e.g. the MAC of a wing or diameter of a fuselage.\n");
+      status = CAPS_BADVALUE;
+      goto cleanup;
+    }
+
     // Get Tessellation parameters -Tess_Params
-    aflr2Instance->meshInput.paramTess[0] = aimInputs[Tess_Params-1].vals.reals[0]; // Gets multiplied by bounding box size
-    aflr2Instance->meshInput.paramTess[1] = aimInputs[Tess_Params-1].vals.reals[1]; // Gets multiplied by bounding box size
+    aflr2Instance->meshInput.paramTess[0] = aimInputs[Tess_Params-1].vals.reals[0]*capsMeshLength;
+    aflr2Instance->meshInput.paramTess[1] = aimInputs[Tess_Params-1].vals.reals[1]*capsMeshLength;
     aflr2Instance->meshInput.paramTess[2] = aimInputs[Tess_Params-1].vals.reals[2];
 
     aflr2Instance->meshInput.quiet           = aimInputs[Mesh_Quiet_Flag-1].vals.integer;
@@ -567,6 +582,9 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++){
         status = initiate_meshStruct(&surfaceMesh[bodyIndex]);
         AIM_STATUS(aimInfo, status);
+
+        status = copy_mapAttrToIndexStruct(&aflr2Instance->groupMap, &surfaceMesh[bodyIndex].groupMap);
+        AIM_STATUS(aimInfo, status);
     }
 
     // Run AFLR2 for each body
@@ -685,7 +703,7 @@ cleanup:
 
 
 // ********************** AIM Function Break *****************************
-int aimExecute(/*@unused@*/ const void *instStore, /*@unused@*/ void *aimStruc,
+int aimExecute(/*@unused@*/ const void *instStore, /*@unused@*/ void *aimInfo,
                int *state)
 {
   *state = 0;
@@ -694,10 +712,107 @@ int aimExecute(/*@unused@*/ const void *instStore, /*@unused@*/ void *aimStruc,
 
 
 // ********************** AIM Function Break *****************************
-int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                     /*@unused@*/ int restart, /*@unused@*/ capsValue *inputs)
 {
-  return CAPS_SUCCESS;
+  int status = CAPS_SUCCESS;
+  int i;
+
+  // Body parameters
+  const char *intents;
+  int numBody = 0; // Number of bodies
+  ego *bodies = NULL; // EGADS body objects
+
+  ego body, tess=NULL;
+  int state, nglobal;
+  int iglobal;
+  int localIndex, topoIndex;
+
+  aimStorage *aflr2Instance;
+  char aimFile[PATH_MAX];
+  double params[3];
+
+  aflr2Instance = (aimStorage *) instStore;
+
+  // Get AIM bodies
+  status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
+  AIM_STATUS(aimInfo, status);
+  AIM_NOTNULL(bodies, aimInfo, status);
+
+  // set the filename without extensions where the grid is written for solvers
+  status = aim_file(aimInfo, AFLR2FILE, aimFile);
+  AIM_STATUS(aimInfo, status);
+  AIM_STRDUP(aflr2Instance->meshRef.fileName, aimFile, aimInfo, status);
+
+  AIM_ALLOC(aflr2Instance->meshRef.maps, 1, aimMeshTessMap, aimInfo, status);
+  aflr2Instance->meshRef.nmap = 1;
+  aflr2Instance->meshRef.maps[0].map = NULL;
+  aflr2Instance->meshRef.maps[0].tess = NULL;
+
+  status = aim_file(aimInfo, AFLR2TESSFILE, aimFile);
+  AIM_STATUS(aimInfo, status);
+
+  // read the eto file
+  status = EG_loadTess(bodies[0], aimFile, &aflr2Instance->meshRef.maps[0].tess);
+  AIM_STATUS(aimInfo, status);
+  AIM_NOTNULL(aflr2Instance->meshRef.maps[0].tess, aimInfo, status);
+
+  // make a copy of the tessellation with all the triangulation
+  status = EG_copyObject(aflr2Instance->meshRef.maps[0].tess, NULL, &tess);
+  AIM_STATUS(aimInfo, status);
+  AIM_NOTNULL(tess, aimInfo, status);
+
+  status = EG_openTessBody(aflr2Instance->meshRef.maps[0].tess);
+  AIM_STATUS(aimInfo, status);
+
+  // Negating the first parameter triggers EGADS to only put vertexes on edges
+  // This removes the face tessellation
+  params[0] = -fabs(aflr2Instance->meshInput.paramTess[0]);
+  params[1] =       aflr2Instance->meshInput.paramTess[1];
+  params[2] =       aflr2Instance->meshInput.paramTess[2];
+
+  status = EG_finishTess( aflr2Instance->meshRef.maps[0].tess, params );
+  AIM_STATUS(aimInfo, status);
+
+  // get the body from the input tessellation
+  status = EG_statusTessBody(aflr2Instance->meshRef.maps[0].tess, &body, &state, &nglobal);
+  AIM_STATUS(aimInfo, status);
+  AIM_NOTNULL(body, aimInfo, status);
+
+  // allocate the boundary to area mesh mapping
+  AIM_ALLOC(aflr2Instance->meshRef.maps[0].map, nglobal, int, aimInfo, status);
+
+  // Find the boundary mesh in the global tessellation
+  for (i = 0; i < nglobal; i++) {
+
+    // Get the local indexes from the boundary mesh
+    status = EG_getGlobal(aflr2Instance->meshRef.maps[0].tess, i+1,
+                          &localIndex, &topoIndex, NULL);
+    AIM_STATUS(aimInfo, status);
+
+    // Get the global index in the full 2D mesh
+    if (localIndex == 0) {
+      status = EG_localToGlobal(tess, localIndex, topoIndex, &iglobal);
+      AIM_STATUS(aimInfo, status);
+    } else if (topoIndex > 0) {
+      status = EG_localToGlobal(tess, -topoIndex, localIndex, &iglobal);
+      AIM_STATUS(aimInfo, status);
+    } else {
+      AIM_ERROR(aimInfo, "Developer exception! Should not find Face index!");
+      status = CAPS_NOTIMPLEMENT;
+      goto cleanup;
+    }
+
+
+    aflr2Instance->meshRef.maps[0].map[i] = iglobal;
+  }
+
+  status = CAPS_SUCCESS;
+cleanup:
+
+  EG_deleteObject(tess);
+
+  return status;
 }
 
 

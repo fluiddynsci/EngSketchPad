@@ -47,7 +47,7 @@ class TestAFLR3(unittest.TestCase):
         aflr3.input.Mesh_Format = "AFLR3"
         aflr3.input.Mesh_ASCII_Flag = True
         aflr3.input.Mesh_Gen_Input_String = ""
-        aflr3.input.Multiple_Mesh = False
+        aflr3.input.Multiple_Mesh = "SingleDomain"
         
         inviscidBC = {"boundaryLayerThickness" : 0.0, "boundaryLayerSpacing" : 0.0}
         viscousBC  = {"boundaryLayerThickness" : 0.1, "boundaryLayerSpacing" : 0.01}
@@ -169,11 +169,15 @@ class TestAFLR3(unittest.TestCase):
         aflr3.input.Proj_Name = "aflr3Mesh"
         aflr3.input.Mesh_Quiet_Flag = True
 
-        aflr3.input.Multiple_Mesh = True
+        aflr3.input.Multiple_Mesh = "MultiFile"
 
         # Just make sure it runs without errors...
         aflr3.runAnalysis()
 
+        aflr3.input.Multiple_Mesh = "MultiDomain"
+
+        # Just make sure it runs without errors...
+        aflr3.runAnalysis()
 
 #==============================================================================
     def test_box(self):

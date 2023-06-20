@@ -15,10 +15,9 @@ parser = argparse.ArgumentParser(description = 'FUN3D Mesh Morph w/ AFLR Pytest 
 #Setup the available commandline options
 parser.add_argument('-workDir', default = "." + os.sep, nargs=1, type=str, help = 'Set working/run directory')
 parser.add_argument('-noAnalysis', action='store_true', default = False, help = "Don't run analysis code")
-parser.add_argument('-cores', default = 1, nargs=1, type=float, help = 'Number of processors')
+parser.add_argument('-cores', default = 1, type=float, help = 'Number of processors')
 parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help="Set output verbosity")
 args = parser.parse_args()
-
 
 def mesh_Setup(myProblem, writeMesh = False):
 

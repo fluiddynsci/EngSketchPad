@@ -2345,7 +2345,9 @@ int nastran_writeDesignVariableRelationCard(void *aimInfo,
             } else if (relationSetType[i] == Anisotropic) {
                 type = "MAT9";
             } else {
-                PRINT_WARNING("Unknown material type: %d", relationSetType[i]);
+                AIM_ERROR(aimInfo, "Unknown material type: %d", relationSetType[i]);
+                status = CAPS_NOTIMPLEMENT;
+                goto cleanup;
             }
 
             status = nastranCard_dvmrel1(
@@ -2387,7 +2389,9 @@ int nastran_writeDesignVariableRelationCard(void *aimInfo,
             } else if (relationSetType[i] == Solid) {
                 type = "PSOLID";
             } else {
-                PRINT_WARNING("Unknown property type: %d", relationSetType[i]);
+                AIM_ERROR(aimInfo, "Unknown property type: %d", relationSetType[i]);
+                status = CAPS_NOTIMPLEMENT;
+                goto cleanup;
             }
 
             status = nastranCard_dvprel1(
@@ -2455,6 +2459,7 @@ int nastran_writeDesignVariableRelationCard(void *aimInfo,
         AIM_ERROR(aimInfo, "Unknown design variable relation type: %d",
                     feaDesignVariableRelation->componentType);
         status = CAPS_BADVALUE;
+        goto cleanup;
     }
 
 

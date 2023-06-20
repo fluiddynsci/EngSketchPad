@@ -21,6 +21,7 @@ typedef int         pid_t;
 
 
 int aflr4_Surface_Mesh(void *aimInfo,
+                       int ibodyOffset,
                        int quiet,
                        int numBody, ego *bodies,
                        capsValue *aimInputs,
@@ -41,7 +42,7 @@ int aflr4_Surface_Mesh(void *aimInfo,
 
     ego *faces = NULL, *copy_bodies=NULL, context, tess, model=NULL;
 
-    int min_ncell, mer_all, no_prox;
+    int min_ncell, mer_all, no_prox, quad, skin;
     int EGADSQuad = (int) false;
 
     double ff_cdfr, abs_min_scale, BL_thickness, Re_l, curv_factor,
@@ -254,6 +255,8 @@ int aflr4_Surface_Mesh(void *aimInfo,
     min_ncell     = aimInputs[Min_ncell-1].vals.integer;
     mer_all       = aimInputs[Mer_all-1].vals.integer;
     no_prox       = aimInputs[No_prox-1].vals.integer;
+    quad          = aimInputs[AFLR4_Quad-1].vals.integer;
+    skin          = aimInputs[Skin-1].vals.integer;
 
     BL_thickness  = aimInputs[BL_Thickness-1].vals.real;
     Re_l          = aimInputs[RE_l-1].vals.real;
@@ -323,6 +326,15 @@ int aflr4_Surface_Mesh(void *aimInfo,
     status = ug_add_int_arg  (   mer_all   , &prog_argc, &prog_argv); if (status != CAPS_SUCCESS) goto cleanup;
     if (no_prox == True) {
       status = ug_add_flag_arg ("-no_prox"    , &prog_argc, &prog_argv); if (status != CAPS_SUCCESS) goto cleanup;
+    }
+    if (quad == True) {
+      status = ug_add_flag_arg ("-quad"       , &prog_argc, &prog_argv); if (status != CAPS_SUCCESS) goto cleanup;
+
+      // proximity currently does not work with -quad. Dave says it's a long story
+      status = ug_add_flag_arg ("-no_prox"    , &prog_argc, &prog_argv); if (status != CAPS_SUCCESS) goto cleanup;
+    }
+    if (skin == True) {
+      status = ug_add_flag_arg ("-skin"       , &prog_argc, &prog_argv); if (status != CAPS_SUCCESS) goto cleanup;
     }
     status = ug_add_flag_arg ( "ff_cdfr"      , &prog_argc, &prog_argv); if (status != CAPS_SUCCESS) goto cleanup;
     status = ug_add_double_arg (ff_cdfr       , &prog_argc, &prog_argv); if (status != CAPS_SUCCESS) goto cleanup;
@@ -461,21 +473,11 @@ int aflr4_Surface_Mesh(void *aimInfo,
         goto cleanup;
     }
 
-    // Reset CAD attribute data.
-
-/*@-nullpass@*/
-    status = aflr4_cad_geom_reset_attr (AFLR4_Param_Struct_Ptr);
-/*@+nullpass@*/
-    if (status != 0) {
-        AIM_ERROR(aimInfo, "aflr4_cad_geom_reset_attr failed!");
-        status = CAPS_EXECERR;
-        goto cleanup;
-    }
-
 //#define DUMP_TECPLOT_DEBUG_FILE
 #ifdef DUMP_TECPLOT_DEBUG_FILE
     {
       int surf = 0;
+      int numEdge = 0;
       int numSurface = 0;
       int numTriFace = 0;
       int numNodes = 0;
@@ -484,7 +486,9 @@ int aflr4_Surface_Mesh(void *aimInfo,
 
       // AFRL4 output arrays
       INT_1D *bcFlag = NULL;
+      INT_1D *ieFlag = NULL;
       INT_1D *idFlag = NULL;
+      INT_2D *edgeCon = NULL;
       INT_3D *triCon = NULL;
       INT_4D *quadCon = NULL;
       DOUBLE_2D *uv = NULL;
@@ -492,43 +496,50 @@ int aflr4_Surface_Mesh(void *aimInfo,
 
       // Get output id index (glue-only composite)
       dgeom_def_get_idef (0, &glueId);
-
+ 
       FILE *fp = aim_fopen(aimInfo, "aflr4_debug.tec", "w");
       fprintf(fp, "VARIABLES = X, Y, Z, u, v\n");
 
-      numSurface = dgeom_def_get_ndef(); // Get number of surfaces meshed
+      numSurface = dgeom_get_ndef(); // Get number of surfaces meshed
 
       for (surf = 0; surf < numSurface ; surf++) {
 
         if (surf+1 == glueId) continue;
 
         status = aflr4_get_def (surf+1,
-                                0, // If there are quads, don't get them.
+                                0,
+                                &numEdge,
                                 &numTriFace,
                                 &numNodes,
                                 &numQuadFace,
                                 &bcFlag,
+                                &ieFlag,
                                 &idFlag,
+                                &edgeCon,
                                 &triCon,
                                 &quadCon,
                                 &uv,
                                 &xyz);
         if (status != CAPS_SUCCESS) goto cleanup;
 
-        fprintf(fp, "ZONE T=\"def %d\" N=%d, E=%d, F=FEPOINT, ET=Triangle\n",
-                surf+1, numNodes, numTriFace);
+        fprintf(fp, "ZONE T=\"def %d\" N=%d, E=%d, F=FEPOINT, ET=Quadrilateral, DT=(DOUBLE DOUBLE DOUBLE DOUBLE DOUBLE)\n",
+                surf+1, numNodes, numTriFace+numQuadFace);
         for (int i = 0; i < numNodes; i++)
           fprintf(fp, "%22.15e %22.15e %22.15e %22.15e %22.15e\n",
                   xyz[i+1][0], xyz[i+1][1], xyz[i+1][2], uv[i+1][0], uv[i+1][1]);
         for (int i = 0; i < numTriFace; i++)
-          fprintf(fp, "%d %d %d\n", triCon[i+1][0], triCon[i+1][1], triCon[i+1][2]);
+          fprintf(fp, "%d %d %d %d\n", triCon[i+1][0], triCon[i+1][1], triCon[i+1][2], triCon[i+1][2]);
+        for (int i = 0; i < numQuadFace; i++)
+          fprintf(fp, "%d %d %d %d\n", quadCon[i+1][0], quadCon[i+1][1], quadCon[i+1][2], quadCon[i+1][3]);
 
-        ug_free (bcFlag); bcFlag = NULL;
-        ug_free (idFlag); idFlag = NULL;
-        ug_free (triCon); triCon = NULL;
+        ug_free (bcFlag);  bcFlag = NULL;
+        ug_free (ieFlag);  ieFlag = NULL;
+        ug_free (idFlag);  idFlag = NULL;
+        ug_free (edgeCon); edgeCon = NULL;
+        ug_free (triCon);  triCon = NULL;
         ug_free (quadCon); quadCon = NULL;
-        ug_free (uv); uv = NULL;
-        ug_free (xyz); xyz = NULL;
+        ug_free (uv);      uv = NULL;
+        ug_free (xyz);     xyz = NULL;
 
       }
       fclose(fp); fp = NULL;
@@ -569,7 +580,7 @@ int aflr4_Surface_Mesh(void *aimInfo,
         }
 
         // set the file name to write the egads file
-        snprintf(bodyNumber, 42, AFLR4TESSFILE, bodyIndex);
+        snprintf(bodyNumber, 42, AFLR4TESSFILE, bodyIndex+ibodyOffset);
         status = aim_file(aimInfo, bodyNumber, aimFile);
         AIM_STATUS(aimInfo, status);
 

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -122,7 +122,7 @@ typedef struct {
 //$$$int             tim_bcst(char myTimName[], char text[]);
 //$$$int             tim_save(char myTimName[]);
 //$$$int             tim_quit(char myTimName[]);
-//$$$void            tim_lock();
+//$$$void            tim_lock(int finalize);
 //$$$void            tim_free();
 //$$$int             update_esp();
 
@@ -708,7 +708,7 @@ cleanup:
 /***********************************************************************/
 
 void
-tim_lock(int finalize)
+tim_lock(int finalize)                  /* (in)  =1 to finalize python */
 {
     int i, j, status; //, ival;
 

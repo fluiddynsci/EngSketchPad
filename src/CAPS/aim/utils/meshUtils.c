@@ -477,7 +477,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
                           int *numTriFace, int *triFaceConn[], int *triFaceCompID[], int *triFaceTopoID[],
                           int *numBndEdge, int *bndEdgeConn[], int *bndEdgeCompID[], int *bndEdgeTopoID[],
                           int *numNodeEle, int *nodeEleConn[], int *nodeEleCompID[], int *nodeEleTopoID[],
-                          int *twoDMesh,
+                          int twoDMesh,
                           const int *tessFaceQuadMap,
                           int *numQuadFace, int *quadFaceConn[], int *quadFaceCompID[], int *quadFaceTopoID[])
 {
@@ -657,29 +657,32 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
 
         // Look for component/boundary ID for attribute mapper based on capsGroup
 
-        status = retrieve_CAPSGroupAttr(faces[face-1], &groupName);
-        if (status == CAPS_SUCCESS) {
-
-            status = get_mapAttrToIndexIndex(attrMap, groupName, &cID);
-            AIM_STATUS(aimInfo, status, "Unable to retrieve boundary index from capsGroup %s", groupName);
-
-            status = retrieve_CAPSIgnoreAttr(faces[face-1], &groupName);
+        cID = -1;
+        if (twoDMesh == (int)false) {
+            status = retrieve_CAPSGroupAttr(faces[face-1], &groupName);
             if (status == CAPS_SUCCESS) {
-                AIM_ERROR(aimInfo, "Both capsGroup and capsIgnore attribute found for face - %d!!", face);
-                print_AllAttr(aimInfo, faces[face-1] );
-                status = CAPS_BADVALUE;
-                goto cleanup;
-            }
-        } else {
 
-            status = retrieve_CAPSIgnoreAttr(faces[face-1], &groupName);
-            if (status == CAPS_SUCCESS) {
-                printf("\tcapsIgnore attribute found for face - %d!!\n", face);
-                cID = -1;
+                status = get_mapAttrToIndexIndex(attrMap, groupName, &cID);
+                AIM_STATUS(aimInfo, status, "Unable to retrieve boundary index from capsGroup %s", groupName);
+
+                status = retrieve_CAPSIgnoreAttr(faces[face-1], &groupName);
+                if (status == CAPS_SUCCESS) {
+                    AIM_ERROR(aimInfo, "Both capsGroup and capsIgnore attribute found for face - %d!!", face);
+                    print_AllAttr(aimInfo, faces[face-1] );
+                    status = CAPS_BADVALUE;
+                    goto cleanup;
+                }
             } else {
-                AIM_ERROR(aimInfo, "No capsGroup/capsIgnore attribute found on Face %d, unable to assign a boundary index value", face);
-                print_AllAttr(aimInfo, faces[face-1] );
-                goto cleanup;
+
+                status = retrieve_CAPSIgnoreAttr(faces[face-1], &groupName);
+                if (status == CAPS_SUCCESS) {
+                    printf("\tcapsIgnore attribute found for face - %d!!\n", face);
+                    cID = -1;
+                } else {
+                    AIM_ERROR(aimInfo, "No capsGroup/capsIgnore attribute found on Face %d, unable to assign a boundary index value", face);
+                    print_AllAttr(aimInfo, faces[face-1] );
+                    goto cleanup;
+                }
             }
         }
 
@@ -721,7 +724,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
 
                 quadConn[4*numQuad + 3] = gID;
 
-                quadCompID[numQuad] = cID;
+                quadCompID[numQuad] = cID == -1 ? 2 : cID;
                 quadTopoID[numQuad] = face;
 
                 numQuad +=1;
@@ -748,7 +751,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
 
             triConn[3*numTri + 2] = gID;
 
-            triCompID[numTri] = cID;
+            triCompID[numTri] = cID == -1 ? 1 : cID;
             triTopoID[numTri] = face;
 
             numTri += 1;
@@ -933,7 +936,6 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
     *bndEdgeConn = lineConn;
     *bndEdgeCompID = lineCompID;
     *bndEdgeTopoID = lineTopoID;
-    *twoDMesh = hardFail;
 
     *numNodeEle = numNodesEle;
     *nodeEleConn = nodeConn;
@@ -977,7 +979,7 @@ cleanup:
 
 
 // Create a surface mesh in meshStruct format using the EGADS body tessellation
-int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
+int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh, int twoDMesh) {
 
     int status; // Function return integer
 
@@ -999,7 +1001,6 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
     int *localBoundaryEdgeList = NULL;
     int *boundaryEdgeMarkList = NULL;
     int *boundaryEdgeTopoList = NULL;
-    int twoDMesh;
     int numQuadFace;
     int *localQuadFaceList = NULL;
     int *quadFaceMarkList = NULL;
@@ -1017,9 +1018,7 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
     // check if the tessellation has a mixture of quad and tess
     status = EG_attributeRet(surfMesh->egadsTess, ".mixed",
                              &atype, &alen, &tessFaceQuadMap, &reals, &string);
-    if (status != EGADS_SUCCESS &&
-        status != EGADS_NOTFOUND) AIM_STATUS(aimInfo, status);
-
+    AIM_NOTFOUND(aimInfo, status);
 
     status = mesh_bodyTessellation(aimInfo,
                                    surfMesh->egadsTess,
@@ -1038,13 +1037,13 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
                                    &locaNodeList,
                                    &nodeMarkList,
                                    &nodeTopoList,
-                                   &twoDMesh,
+                                   twoDMesh,
                                    tessFaceQuadMap,
                                    &numQuadFace,
                                    &localQuadFaceList,
                                    &quadFaceMarkList,
                                    &quadFaceTopoList);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     if (twoDMesh == (int) true) surfMesh->meshType = Surface2DMesh;
     else surfMesh->meshType = SurfaceMesh;
@@ -1077,7 +1076,7 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
 
     // Cleanup mesh Quick reference guide
     status = destroy_meshQuickRefStruct(&surfMesh->meshQuickRef);
-    if (status != CAPS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     // Allocate nodes
     surfMesh->numNode = numNode;
@@ -1101,7 +1100,7 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
     // Get body from tessellation and total number of global points
     status = EG_statusTessBody(surfMesh->egadsTess, &body, &tessStatus, &numPoints);
     if (tessStatus != 1) { status = EGADS_TESSTATE; goto cleanup; }
-    if (status != EGADS_SUCCESS) goto cleanup;
+    AIM_STATUS(aimInfo, status);
 
     if (aim_isNodeBody(body, coord) == CAPS_SUCCESS) {
         numNodeElem = 1;
@@ -1244,25 +1243,24 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh) {
 
     status = CAPS_SUCCESS;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in mesh_surfaceMeshEGADSTess, status = %d\n", status);
+cleanup:
 
-        EG_free(xyz);
-        EG_free(localTriFaceList);
-        EG_free(triFaceMarkList);
-        EG_free(triFaceTopoList);
-        EG_free(localBoundaryEdgeList);
-        EG_free(boundaryEdgeMarkList);
-        EG_free(boundaryEdgeTopoList);
-        EG_free(localQuadFaceList);
-        EG_free(quadFaceMarkList);
-        EG_free(quadFaceTopoList);
+    EG_free(xyz);
+    EG_free(localTriFaceList);
+    EG_free(triFaceMarkList);
+    EG_free(triFaceTopoList);
+    EG_free(localBoundaryEdgeList);
+    EG_free(boundaryEdgeMarkList);
+    EG_free(boundaryEdgeTopoList);
+    EG_free(localQuadFaceList);
+    EG_free(quadFaceMarkList);
+    EG_free(quadFaceTopoList);
 
-        EG_free(locaNodeList);
-        EG_free(nodeMarkList);
-        EG_free(nodeTopoList);
+    EG_free(locaNodeList);
+    EG_free(nodeMarkList);
+    EG_free(nodeTopoList);
 
-        return status;
+    return status;
 }
 
 // Create a surface mesh in meshStruct format using the EGADS body object
@@ -4703,7 +4701,7 @@ int mesh_writeAFLR3(void *aimInfo,
         //numBytes = 7 * sint; // Un-comment if writing an unformatted file
         //fwrite(&numBytes, sint,1,fp); // Un-comment if writing an unformatted file
 
-        fwrite(&mesh->numNode, sint ,1,fp);
+        fwrite(&mesh->numNode,                       sint ,1,fp);
         fwrite(&mesh->meshQuickRef.numTriangle,      sint ,1,fp);
         fwrite(&mesh->meshQuickRef.numQuadrilateral, sint ,1,fp);
         fwrite(&mesh->meshQuickRef.numTetrahedral,   sint ,1,fp);

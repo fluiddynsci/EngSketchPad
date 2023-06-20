@@ -3,7 +3,7 @@
  *
  *             Spline Fitting Functions w/ Derivatives
  *
- *      Copyright 2011-2022, Massachusetts Institute of Technology
+ *      Copyright 2011-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -473,9 +473,9 @@ EG_spline1dFit_impl(int endx, int imaxx, const T *t1, const T *xyz, const T *tn,
 
       /* normalize */
       for (i = 0; i < kk; i++) knots[i] /= knots[kk-1];
-      
+
     } else {
-      
+
       /* note: the start and end knots are added */
       kk          = 0;
       knots[kk++] = kn[0];
@@ -772,14 +772,14 @@ EG_spline1dFit_impl(int endx, int imaxx, const T *t1, const T *xyz, const T *tn,
     }
     if (dxyzmax >= tol)
         printf(" Warning: Not Converged (EG_spline1dFit)!\n");
-  
+
     /* apply periodicity condition by making sure first and last
        intervals are the same (equally spaced knots) */
     if (periodic == 1) {
         del0 = (2*cps[0] - cps[3] - cps[3*imax  ]) / 2;
         del1 = (2*cps[1] - cps[4] - cps[3*imax+1]) / 2;
         del2 = (2*cps[2] - cps[5] - cps[3*imax+2]) / 2;
-      
+
         cps[3]        += del0;
         cps[4]        += del1;
         cps[5]        += del2;
@@ -1005,7 +1005,7 @@ EG_spline1dTan_dot(int imaxx,
     tns[2].deriv() = tn_dot[2];
     tnsp           = (SurrealS<1> *) &tns;
   }
-  
+
   int icp   = imax + 2;
   int iknot = imax + 6;
   xyzS      = new SurrealS<1>[3*imax];
@@ -1529,7 +1529,7 @@ EG_spline2dAppr(int endcx, int imaxx, int jmaxx, const T *xyz,
             printf(" easT[%d] = %lf %lf %lf\n", j, value(easT[3*j  ]),
                    value(easT[3*j+1]), value(easT[3*j+2]));
 #endif
-  
+
     if (perU != 0)
       for (j = 0; j < jmax; j++)
         if ((xyz[3*(0+j*imax)  ] != xyz[3*(imax-1+j*imax)  ]) ||
@@ -3859,7 +3859,7 @@ EG_spline2dAppr(int endcx, int imaxx, int jmaxx, const T *xyz,
 
     for (i = 0; i < 3*icp*jcp; i++) cpsav[i] = cp[i];
     EG_free(cp);
-  
+
     /* adjust the control points for periodic in U */
     if (perU != 0)
       for (j = 0; j < jcp; j++) {
@@ -3998,7 +3998,7 @@ EG_spline2dAppx(egObject *context, int endc,
   int         stat, header[7], size, i, fixed;
   double      *data = NULL, *data_dot = NULL;
   SurrealS<1> *rdata = NULL;
-  
+
   fixed = EG_fixedKnots(context);
   if ((uknot == NULL) && ((fixed != 0) || endc < 0)) imax = -imax;
   if ((vknot == NULL) &&  (fixed != 0))              jmax = -jmax;
@@ -4678,7 +4678,7 @@ EG_subSpline2d(const int *fheader, const T *fdata,
       scp[3*(i+j*sicp)+2] = fcp[3*(i+i1-1+(j+j1-1)*ficp)+2];
     }
   }
-  
+
   // do we need to adjust C0 settings so we get derivatives?
   for (i = 0; i < sicp; i++)
     if ((scp[3*i  ] != scp[3*(i+sicp)  ]) ||
@@ -4690,7 +4690,7 @@ EG_subSpline2d(const int *fheader, const T *fdata,
       scp[3*(i+sicp)+1] = 0.99*scp[3*(i+sicp)+1] + 0.01*scp[3*(i+2*sicp)+1];
       scp[3*(i+sicp)+2] = 0.99*scp[3*(i+sicp)+2] + 0.01*scp[3*(i+2*sicp)+2];
     }
-  
+
   for (i = 0; i < sicp; i++)
     if ((scp[3*(i+(sjcp-1)*sicp)  ] != scp[3*(i+(sjcp-2)*sicp)  ]) ||
         (scp[3*(i+(sjcp-1)*sicp)+1] != scp[3*(i+(sjcp-2)*sicp)+1]) ||

@@ -3,7 +3,7 @@
  *
  *             Geometry Functions
  *
- *      Copyright 2011-2022, Massachusetts Institute of Technology
+ *      Copyright 2011-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -1525,11 +1525,6 @@ EG_setGeometry_dot(egObject *obj, int oclass, int mtype,
         }
         return EGADS_GEOMERR;
       }
-      pnode->filled = 1;
-      for (i = 0; i < 3; i++) {
-        pnode->xyz_dot[i].value() = pnode->xyz[i];
-        pnode->xyz_dot[i].deriv() = rvec_dot[i];
-      }
 
       /* check consistency in the data */
       stat = EGADS_SUCCESS;
@@ -1546,10 +1541,25 @@ EG_setGeometry_dot(egObject *obj, int oclass, int mtype,
       if (stat != EGADS_SUCCESS) {
         if (outLevel > 0) {
           printf(" EGADS Error: Inconsistent NODE geometry data! (EG_setGeometry_dot)\n");
-          for (i = 0; i < 3; i++)
-            printf("     data[%d] %lf : %lf\n", i, pnode->xyz[i], rvec[i]);
+          printf("               %21s : %21s     diffrence\n", "ego data", "input data");
+          for (i = 0; i < 3; i++) {
+            printf("     data[%3d] %21.14le : %21.14le", i, pnode->xyz[i], rvec[i]);
+
+            double diff = pnode->xyz[i] - rvec[i];
+            if (fabs(diff) > 1.e-14*scale) {
+              printf(" <-- %21.14le", diff);
+            }
+            printf("\n");
+          }
         }
         return EGADS_GEOMERR;
+      }
+
+      /* set dot data */
+      pnode->filled = 1;
+      for (i = 0; i < 3; i++) {
+        pnode->xyz_dot[i].value() = pnode->xyz[i];
+        pnode->xyz_dot[i].deriv() = rvec_dot[i];
       }
     }
     return EGADS_SUCCESS;
@@ -7775,6 +7785,32 @@ EG_otherCurve(const egObject *surface, const egObject *curve,
 #endif
     Adaptor3d_CurveOnSurface ConS(Crv, aHGAS);
 
+    if (surface->mtype != PLANE &&
+        (Precision::IsInfinite(hCurve->FirstParameter()) ||
+         Precision::IsInfinite(hCurve->LastParameter())) )
+    {
+#if CASVER < 760
+      if (outLevel > 0)
+      {
+        printf(" EGADS Error: Non-planar surface with infinite PCurve!\n");
+        printf("              Use a TRIMMED PCurve (EG_otherCurve)!\n");
+      }
+      return EGADS_GEOMERR;
+#else
+      Standard_Boolean isU, isForward;
+      Standard_Real aParam;
+      if (!GeomLib::isIsoLine(Crv, isU, aParam, isForward))
+      {
+        if (outLevel > 0)
+        {
+          printf(" EGADS Error: Non-planar surface with infinite PCurve not an IsoLine!\n");
+          printf("              Use a TRIMMED PCurve (EG_otherCurve)!\n");
+        }
+        return EGADS_GEOMERR;
+      }
+#endif
+    }
+
     Handle(Geom_Curve) newcrv;
     GeomLib::BuildCurve3d(prec, ConS, hCurve->FirstParameter(),
                           hCurve->LastParameter(), newcrv, maxDev, aveDev);
@@ -8783,7 +8819,7 @@ EG_flattenBSpline(egObject *object, egObject **result)
       printf(" EGADS Warning: Already flat PCurve EG_flattenBSpline)!\n");
       return EGADS_GEOMERR;
     }
-    
+
     Handle(Geom2d_Curve)    hCurve = pcurve->handle;
     gp_Trsf2d               form   = gp_Trsf2d();
     Handle(Geom2d_Geometry) nGeom  = hCurve->Transformed(form);
@@ -9133,7 +9169,10 @@ EG_addKnots(const egObject *object, int nU, /*@null@*/ double *Us,
 int
 EG_mapSequen(egObject *src, egObject *dst, egObject **result)
 {
-  int      i, j, hit, outLevel, stat;
+  int      i, j, outLevel, stat;
+#ifdef KNOTREMOVE
+  int      hit;
+#endif
   egObject *context, *obj;
 
   if  (src == NULL)                return EGADS_NULLOBJ;
@@ -9180,7 +9219,9 @@ EG_mapSequen(egObject *src, egObject *dst, egObject **result)
     TColStd_Array1OfReal knotd(1, len);
     hBSpline->Knots(knots);
     hBSplind->Knots(knotd);
+#ifdef KNOTREMOVE
     hit = 0;
+#endif
     for (i = 2; i < len; i++) {
       double scaledKnot = (knots(i)-knots(1))/(knots(len)-knots(1));
       scaledKnot *= knotd(len)-knotd(1);
@@ -9189,7 +9230,9 @@ EG_mapSequen(egObject *src, egObject *dst, egObject **result)
         if (fabs(scaledKnot-knotd(j)) <= 0.5*KNDIFF) break;
       if (j != len) continue;
       hBSplind->InsertKnot(scaledKnot);
+#ifdef KNOTREMOVE
       hit++;
+#endif
       if (outLevel > 1)
         printf("   inserting knot = %lf (%lf)\n", scaledKnot, knots(i));
     }
@@ -9254,7 +9297,9 @@ EG_mapSequen(egObject *src, egObject *dst, egObject **result)
     TColStd_Array1OfReal knotd(1, len);
     hBSpline->Knots(knots);
     hBSplind->Knots(knotd);
+#ifdef KNOTREMOVE
     hit = 0;
+#endif
     for (i = 2; i < len; i++) {
       double scaledKnot = (knots(i)-knots(1))/(knots(len)-knots(1));
       scaledKnot *= knotd(len)-knotd(1);
@@ -9263,7 +9308,9 @@ EG_mapSequen(egObject *src, egObject *dst, egObject **result)
         if (fabs(scaledKnot-knotd(j)) <= 0.5*KNDIFF) break;
       if (j != len) continue;
       hBSplind->InsertKnot(scaledKnot);
+#ifdef KNOTREMOVE
       hit++;
+#endif
       if (outLevel > 1)
         printf("   inserting knot = %lf (%lf)\n", scaledKnot, knots(i));
     }
@@ -9337,7 +9384,9 @@ EG_mapSequen(egObject *src, egObject *dst, egObject **result)
     hBSplind->VKnots(vKnotd);
 
     // u knots
+#ifdef KNOTREMOVE
     hit = 0;
+#endif
     for (i = 2; i < uLen; i++) {
       double scaledKnot = (uKnots(i)-uKnots(1))/(uKnots(uLen)-uKnots(1));
       scaledKnot *= uKnotd(uLen)-uKnotd(1);
@@ -9346,7 +9395,9 @@ EG_mapSequen(egObject *src, egObject *dst, egObject **result)
         if (fabs(scaledKnot-uKnotd(j)) <= 0.5*KNDIFF) break;
       if (j != uLen) continue;
       hBSplind->InsertUKnot(scaledKnot, 1, 0.5*KNDIFF);
+#ifdef KNOTREMOVE
       hit++;
+#endif
       if (outLevel > 1)
         printf("   inserting u knot = %lf (%lf)\n", scaledKnot, uKnots(i));
     }
@@ -9373,7 +9424,9 @@ EG_mapSequen(egObject *src, egObject *dst, egObject **result)
 #endif
 
     // v knots
+#ifdef KNOTREMOVE
     hit = 0;
+#endif
     for (i = 2; i < vLen; i++) {
       double scaledKnot = (vKnots(i)-vKnots(1))/(vKnots(vLen)-vKnots(1));
       scaledKnot *= vKnotd(vLen)-vKnotd(1);
@@ -9382,7 +9435,9 @@ EG_mapSequen(egObject *src, egObject *dst, egObject **result)
         if (fabs(scaledKnot-vKnotd(j)) <= 0.5*KNDIFF) break;
       if (j != vLen) continue;
       hBSplind->InsertVKnot(scaledKnot, 1, 0.5*KNDIFF);
+#ifdef KNOTREMOVE
       hit++;
+#endif
       if (outLevel > 1)
         printf("   inserting v knot = %lf (%lf)\n", scaledKnot, vKnots(i));
     }
@@ -9568,10 +9623,10 @@ EG_sampleSame(const egObject *geom1, const egObject *geom2)
 {
   int    i, stat;
   double uv[2], result[18], xyz[3], dist;
-  
+
   if (geom1->mtype == PLANE) {
     double uvs[4][2] = {{-1.0, -1.0}, {-1.0, 1.0}, {1.0, -1.0}, {1.0, 1.0}};
-    
+
     for (i = 0; i < 4; i++) {
       stat = EG_evaluate(geom1, uvs[i], result);
       if (stat != EGADS_SUCCESS) return EGADS_OUTSIDE;
@@ -9584,6 +9639,6 @@ EG_sampleSame(const egObject *geom1, const egObject *geom2)
     }
     return EGADS_SUCCESS;
   }
-  
+
   return EGADS_OUTSIDE;
 }

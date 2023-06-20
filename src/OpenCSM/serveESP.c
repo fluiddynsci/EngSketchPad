@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2012/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2012/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -231,6 +231,7 @@ static int        addVerify  = 0;      /* =1 to create .csm_verify file */
 static int        allVels    = 0;      /* =1 to compute Node/Edge/Faces vels */
 static int        batch      = 0;      /* =0 to enable visualization */
 static int        dumpEgads  = 0;      /* =1 to dump Bodys as they are created */
+static double     forceFDs   = 0;      /* !=0 FD step for sensitivities, 0 for analytic (if possible) */
 static double     histDist   = 0;      /* >0 to generate histograms of distance from points to brep */
 static int        loadEgads  = 0;      /* =1 to read Bodys instead of creating */
 static int        onormal    = 0;      /* =1 to use orthonormal (not perspective) */
@@ -241,6 +242,7 @@ static int        skipBuild  = 0;      /* =1 to skip initial build */
 static int        skipTess   = 0;      /* -1 to skip tessellation at end of build */
 static int        tessel     = 0;      /* =1 for tessellation sensitivities */
 static int        verify     = 0;      /* =1 to enable verification */
+static int        reportTime = 0;      /* =1 to write timing info to timingReport.txt */
 static char       *filename  = NULL;   /* name of .csm file */
 static char       *vrfyname  = NULL;   /* name of .vfy file */
 static char       *despname  = NULL;   /* name of DESPMTRs file */
@@ -497,6 +499,13 @@ main(int       argc,                    /* (in)  number of arguments */
                 showUsage = 1;
                 break;
             }
+        } else if (strcmp(argv[i], "-forceFDs") == 0) {
+            if (i < argc-1) {
+                sscanf(argv[++i], "%lf", &forceFDs);
+            } else {
+                showUsage = 1;
+                break;
+            }
         } else if (strcmp(argv[i], "-histDist") == 0) {
             if (i < argc-1) {
                 sscanf(argv[++i], "%lf", &histDist);
@@ -560,6 +569,8 @@ main(int       argc,                    /* (in)  number of arguments */
                 showUsage = 1;
                 break;
             }
+        } else if (strcmp(argv[i], "-reportTime") == 0) {
+            reportTime = 1;
         } else if (strcmp(argv[i], "-sensTess") == 0) {
             tessel = 1;
         } else if (strcmp(argv[i], "-skipBuild") == 0) {
@@ -606,6 +617,7 @@ main(int       argc,                    /* (in)  number of arguments */
         SPRINT0(0, "                        -dxdd despmtr");
         SPRINT0(0, "                        -egg eggname");
         SPRINT0(0, "                        -help  -or-  -h");
+        SPRINT0(0, "                        -forceFDs step");
         SPRINT0(0, "                        -histDist dist");
         SPRINT0(0, "                        -jrnl jrnlname");
         SPRINT0(0, "                        -loadEgads");
@@ -638,7 +650,7 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program serveESP                    *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2022         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2023         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************\n");
 
@@ -651,6 +663,7 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT1(1, "    dxddname    = %s", dxddname   );
     SPRINT1(1, "    dumpEgads   = %d", dumpEgads  );
     SPRINT1(1, "    eggname     = %s", eggname    );
+    SPRINT1(1, "    forceFDs    = %f", forceFDs   );
     SPRINT1(1, "    jrnl        = %s", jrnlname   );
     SPRINT1(1, "    loadEgads   = %d", loadEgads  );
     SPRINT1(1, "    onormal     = %d", onormal    );
@@ -1002,7 +1015,9 @@ somewhere:
 
     /* build the Bodys from the MODL */
     if (pendingError == 0) {
+        old_time = clock();
         status = buildBodys(ESP, 0, &builtTo, &buildStatus, &nwarn);
+        new_time = clock();
 
         if (status != SUCCESS || buildStatus != SUCCESS || builtTo < 0) {
             successBuild = -1;
@@ -1053,6 +1068,16 @@ somewhere:
             } else if (buildStatus != SUCCESS) {
                 goto cleanup;
 
+            }
+        }
+
+        if (reportTime == 1) {
+            FILE *fp_time;
+
+            fp_time = fopen("timingReport.txt", "a");
+            if (fp_time != NULL) {
+                fprintf(fp_time, "%10.3f %s\n", (double)(new_time-old_time) / (double)(CLOCKS_PER_SEC), casename);
+                fclose(fp_time);
             }
         }
 
@@ -1951,7 +1976,15 @@ browserMessage(void    *esp,
     /* if the sensitivities were just computed, send a message to
        inform the user about the lowest and highest sensitivity values */
     if (sensPost > 0) {
-        snprintf(message2, MAX_LINE_LEN-1, "Sensitivities are in the range between %f and %f", sensLo, sensHi);
+        if        (plotType == 7) {
+            snprintf(message2, MAX_LINE_LEN-1, "X-sensitivities are in the range between %f and %f", sensLo, sensHi);
+        } else if (plotType == 8) {
+            snprintf(message2, MAX_LINE_LEN-1, "Y-sensitivities are in the range between %f and %f", sensLo, sensHi);
+        } else if (plotType == 9) {
+            snprintf(message2, MAX_LINE_LEN-1, "Z-sensitivities are in the range between %f and %f", sensLo, sensHi);
+        } else {
+            snprintf(message2, MAX_LINE_LEN-1, "Sensitivities are in the range between %f and %f", sensLo, sensHi);
+        }
         TRACE_BROADCAST( message2);
         wv_broadcastText(message2);
 
@@ -2163,6 +2196,9 @@ buildBodys(esp_T   *ESP,
         /* set the skip tessellation flag */
         MODL->tessAtEnd = 1 - skipTess;
 
+        /* set the forceFDs flag */
+        MODL->forceFDs = forceFDs;
+
         /* set the build erep flag */
         if (plotType == 10) {
             MODL->erepAtEnd = 1;
@@ -2324,7 +2360,7 @@ buildSceneGraph(esp_T  *ESP)
 {
     int       status = SUCCESS;         /* return status */
 
-    int       ibody, jbody, iface, iedge, inode, iattr, nattr, ipmtr, irc, atype, alen;
+    int       ibody, jbody, iface, iedge, inode, iattr, nattr, ipmtr, irc, atype, alen, icolr;
     int       npnt, ipnt, ntri, itri, igprim, nseg, i, j, k, ij, ij1, ij2, ngrid, ncrod, nctri3, ncquad4;
     int       imax, jmax, ibeg, iend, isw, ise, ine, inw;
     int       attrs, head[3], nitems, nnode, nedge, nface;
@@ -2649,7 +2685,10 @@ buildSceneGraph(esp_T  *ESP)
 
             status = EG_getQuads(etess, iface,
                                  &npnt, &xyz, &uv, &ptype, &pindx, &npatch);
-            if (status != SUCCESS) {
+            if (status == EGADS_NODATA) {
+                SPRINT3(0, "WARNING:: EG_getQuads(%d,%d) -> status=%d", ibody, iface, status);
+                continue;
+            } else if (status != SUCCESS) {
                 SPRINT3(0, "ERROR:: EG_getQuads(%d,%d) -> status=%d", ibody, iface, status);
             }
 
@@ -2663,7 +2702,10 @@ buildSceneGraph(esp_T  *ESP)
                 status = EG_getTessFace(etess, iface,
                                         &npnt, &xyz, &uv, &ptype, &pindx,
                                         &ntri, &tris, &tric);
-                if (status != SUCCESS) {
+                if (status == EGADS_NODATA) {
+                    SPRINT3(0, "WARNING:: EG_getTessFace(%d,%d) -> status=%d", ibody, iface, status);
+                    continue;
+                } else if (status != SUCCESS) {
                     SPRINT3(0, "ERROR:: EG_getTessFace(%d,%d) -> status=%d", ibody, iface, status);
                 }
 
@@ -2968,11 +3010,11 @@ buildSceneGraph(esp_T  *ESP)
 
                     /* find unsigned velocity magnitude */
                     } else if (plotType == 7) {
-                        velmag =       vel[3*ipnt  ];
+                        velmag = vel[3*ipnt  ];
                     } else if (plotType == 8) {
-                        velmag =       vel[3*ipnt+1];
+                        velmag = vel[3*ipnt+1];
                     } else if (plotType == 9) {
-                        velmag =       vel[3*ipnt+2];
+                        velmag = vel[3*ipnt+2];
                     } else {
                         velmag = sqrt( vel[3*ipnt  ] * vel[3*ipnt  ]
                                      + vel[3*ipnt+1] * vel[3*ipnt+1]
@@ -3094,7 +3136,7 @@ buildSceneGraph(esp_T  *ESP)
 
                 FREE(pcolors);
 
-            /* smooth colors (maximum Curv) */
+            /* zebra-stripe colors (maximum Curv) */
             } else if (plotType == 4) {
                 status = EG_getTessFace(etess, iface,
                                         &npnt, &xyz, &uv, &ptype, &pindx,
@@ -3114,7 +3156,17 @@ buildSceneGraph(esp_T  *ESP)
                     } else {
                         rcurv = MAX(data[0], data[4]) * sqrt(size2);
                     }
-                    spec_col((float)(rcurv), &(pcolors[3*ipnt]));
+//$$$                    spec_col((float)(rcurv), &(pcolors[3*ipnt]));
+                    icolr = 32 * (rcurv - lims[0]) / (lims[1] - lims[0]);
+                    if (icolr%2 == 0) {
+                        pcolors[3*ipnt  ] = 0;
+                        pcolors[3*ipnt+1] = 0;
+                        pcolors[3*ipnt+2] = 1;
+                    } else {
+                        pcolors[3*ipnt  ] = 1;
+                        pcolors[3*ipnt+1] = 1;
+                        pcolors[3*ipnt+2] = 1;
+                    }
                 }
 
                 status = wv_setData(WV_REAL32, npnt, (void*)pcolors, WV_COLORS, &(items[nitems]));
@@ -3448,7 +3500,7 @@ buildSceneGraph(esp_T  *ESP)
 
                     normx = (data[4] * data[8] - data[5] * data[7]);
                     normy = (data[5] * data[6] - data[3] * data[8]);
-                    normz = (data[6] * data[7] - data[4] * data[6]);
+                    normz = (data[3] * data[7] - data[4] * data[6]);
                     norm  = sqrt(normx*normx + normy*normy + normz*normz);
 
                     tuft[6*ipnt  ] = xyz[3*ipnt  ];
@@ -3652,6 +3704,19 @@ buildSceneGraph(esp_T  *ESP)
                         tuft[6*ipnt+3] = xyz[3*ipnt  ] + vel[3*ipnt  ];
                         tuft[6*ipnt+4] = xyz[3*ipnt+1] + vel[3*ipnt+1];
                         tuft[6*ipnt+5] = xyz[3*ipnt+2] + vel[3*ipnt+2];
+
+                        if        (plotType == 7) {
+                            velmag = vel[3*ipnt  ];
+                        } else if (plotType == 8) {
+                            velmag = vel[3*ipnt+1];
+                        } else if (plotType == 9) {
+                            velmag = vel[3*ipnt+2];
+                        } else {
+                            velmag = sqrt(vel[3*ipnt]*vel[3*ipnt] + vel[3*ipnt+1]*vel[3*ipnt+1] + vel[3*ipnt+2]*vel[3*ipnt+2]);
+                        }
+
+                        if (velmag < sensLo) sensLo = velmag;
+                        if (velmag > sensHi) sensHi = velmag;
                     }
 
                     status = wv_setData(WV_REAL32, 2*npnt, (void*)tuft, WV_VERTICES, &(items[nitems]));
@@ -5810,7 +5875,7 @@ processBrowserToServer(esp_T   *ESP,
 
     int       i, ibrch, itype, nlist, builtTo, buildStatus, ichar, iundo, nbody;
     int       ipmtr, jpmtr, nrow, ncol, irow, icol, index, iattr, actv, itemp, linenum;
-    int       itoken1, itoken2, itoken3, ibody, onstack, direction=1, nwarn;
+    int       itoken1, itoken2, itoken3, ibody, onstack, direction=1, nwarn, dim1, dim2;
     int       nclient;
     CINT      *tempIlist;
     double    scale, value, dot;
@@ -7516,6 +7581,33 @@ processBrowserToServer(esp_T   *ESP,
 
         FREE(bodyinfo);
 
+    /* "getTraceAttrs|pattern||" */
+    } else if (strncmp(text, "getTraceAttrs|", 14) == 0) {
+
+        /* extract arguments */
+        getToken(text, 1, '|', arg1);
+
+        status = ocsmTraceAttrs(MODL, arg1, &bodyinfo);
+        CHECK_STATUS(ocsmTraceAttrs);
+
+        SPLINT_CHECK_FOR_NULL(bodyinfo);
+
+        if (status == SUCCESS) {
+            itemp = 25 + STRLEN(bodyinfo);
+
+            if (itemp > max_resp_len) {
+                max_resp_len = itemp + 1;
+
+                RALLOC(response, char, max_resp_len+1);
+            }
+
+            /* build the response */
+            snprintf(response, max_resp_len, "getTraceAttrs|%s|", bodyinfo);
+            response_len = STRLEN(response);
+        }
+
+        FREE(bodyinfo);
+
     /* "getTracePmtrs|pattern||" */
     } else if (strncmp(text, "getTracePmtrs|", 14) == 0) {
 
@@ -7538,6 +7630,88 @@ processBrowserToServer(esp_T   *ESP,
 
             /* build the response */
             snprintf(response, max_resp_len, "getTracePmtrs|%s|", bodyinfo);
+            response_len = STRLEN(response);
+        }
+
+        FREE(bodyinfo);
+
+    /* "getTraceStors|pattern||" */
+    } else if (strncmp(text, "getTraceStors|", 14) == 0) {
+
+        /* extract arguments */
+        getToken(text, 1, '|', arg1);
+
+        status = ocsmTraceStors(MODL, arg1, &bodyinfo);
+        CHECK_STATUS(ocsmTraceStors);
+
+        SPLINT_CHECK_FOR_NULL(bodyinfo);
+
+        if (status == SUCCESS) {
+            itemp = 25 + STRLEN(bodyinfo);
+
+            if (itemp > max_resp_len) {
+                max_resp_len = itemp + 1;
+
+                RALLOC(response, char, max_resp_len+1);
+            }
+
+            /* build the response */
+            snprintf(response, max_resp_len, "getTraceStors|%s|", bodyinfo);
+            response_len = STRLEN(response);
+        }
+
+        FREE(bodyinfo);
+
+    /* "getFileTree|" */
+    } else if (strncmp(text, "getFiletree|", 12) == 0) {
+
+        status = ocsmGetFiletree(MODL, &bodyinfo);
+        CHECK_STATUS(ocsmGetFiletree);
+
+        SPLINT_CHECK_FOR_NULL(bodyinfo);
+
+        if (status == SUCCESS) {
+            itemp = 25 + STRLEN(bodyinfo);
+
+            if (itemp > max_resp_len) {
+                max_resp_len = itemp + 1;
+
+                RALLOC(response, char, max_resp_len+1);
+            }
+
+            /* build the response */
+            snprintf(response, max_resp_len, "getFiletree|%s|", bodyinfo);
+            response_len = STRLEN(response);
+        }
+
+        FREE(bodyinfo);
+
+    /* "showProvides|dim1|dim2|" */
+    } else if (strncmp(text, "showTblOfContents|", 17) == 0) {
+
+        /* extrct aarguments */
+        dim1 = -1;
+        dim2 = -1;
+
+        if (getToken(text, 1, '|', arg1)) dim1 = strtol(arg1, &pEnd, 10);
+        if (getToken(text, 2, '|', arg2)) dim2 = strtol(arg2, &pEnd, 10);
+        
+        status = ocsmShowTblOfContents(MODL, dim1, dim2, &bodyinfo);
+        CHECK_STATUS(ocsmShowTblOfContents);
+
+        SPLINT_CHECK_FOR_NULL(bodyinfo);
+
+        if (status == SUCCESS) {
+            itemp = 25 + STRLEN(bodyinfo);
+
+            if (itemp > max_resp_len) {
+                max_resp_len = itemp + 1;
+
+                RALLOC(response, char, max_resp_len+1);
+            }
+
+            /* build the response */
+            snprintf(response, max_resp_len, "showTblOfContents|%s|", bodyinfo);
             response_len = STRLEN(response);
         }
 

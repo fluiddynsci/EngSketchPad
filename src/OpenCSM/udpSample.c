@@ -14,7 +14,7 @@
  */
 
 /*
- * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -73,15 +73,9 @@ static int freePrivateData(void *data);
 
 /* data about possible arguments
       argNames: argument name
-      argTypes: argument type: ATTRSTRING   string
-                               ATTRINT      integer input
-                              -ATTRINT      integer output
-                               ATTRREAL     double  input
-                              -ATTRREAL     double  output
-                               ATTRREALSENS double input (for which a sensitivity can be calculated)
-                               ATTRFILE     file input
+      argTypes: argument type: (see udp.h)
       argIdefs: default value for ATTRINT
-      argDdefs: default value for ATTRREAL or ATTRREALSENS */
+      argDdefs: default value for ATTRREAL or ATTRREALSEN */
 static char  *argNames[NUMUDPARGS] = {"dx",        "dy",        "dz",        "center",    "area",    "volume", };
 static int    argTypes[NUMUDPARGS] = {ATTRREALSEN, ATTRREALSEN, ATTRREALSEN, ATTRREALSEN, -ATTRREAL, -ATTRREAL,};
 static int    argIdefs[NUMUDPARGS] = {0,           0,           0,           0,           0,         0,        };
@@ -251,8 +245,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         status = EG_getMassProperties(*ebody, data);
         CHECK_STATUS(EG_getMassProperties);
 
-        AREA(0)   = data[1];
-        VOLUME(0) = data[0];
+        AREA(  numUdp)   = data[1];
+        VOLUME(numUdp) = data[0];
 
         /* remember this model (Body) */
         udps[numUdp].ebody = *ebody;
@@ -361,8 +355,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         status = EG_getMassProperties(*ebody, data);
         CHECK_STATUS(EG_getMassProperties);
 
-        AREA(0)   = data[1];
-        VOLUME(0) = data[0];
+        AREA(  numUdp)   = data[1];
+        VOLUME(numUdp) = data[0];
 
         /* remember this model (Body) */
         udps[numUdp].ebody = *ebody;
@@ -523,8 +517,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         status = EG_getMassProperties(*ebody, data);
         CHECK_STATUS(EG_getMassProperties);
 
-        AREA(0)   = data[1];
-        VOLUME(0) = data[0];
+        AREA(  numUdp)   = data[1];
+        VOLUME(numUdp) = data[0];
 
         /* remember this model (Body) */
         udps[numUdp].ebody = *ebody;

@@ -32,6 +32,9 @@ all:
 	cd nastran
 	nmake -f NMakefile
 	cd ..
+	cd meshWriter
+	nmake -f NMakefile
+	cd ..
 	cd pointwise
 	nmake -f NMakefile
 	cd ..
@@ -120,6 +123,9 @@ clean:
 	cd nastran
 	nmake -f NMakefile clean
 	cd ..
+	cd meshWriter
+	nmake -f NMakefile clean
+	cd ..
 	cd pointwise
 	nmake -f NMakefile clean
 	cd ..
@@ -206,6 +212,9 @@ cleanall:
 	nmake -f NMakefile cleanall
 	cd ..
 	cd nastran
+	nmake -f NMakefile cleanall
+	cd ..
+	cd meshWriter
 	nmake -f NMakefile cleanall
 	cd ..
 	cd pointwise

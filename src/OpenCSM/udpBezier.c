@@ -11,7 +11,7 @@
  */
 
 /*
- * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -56,8 +56,6 @@ static double argDdefs[NUMUDPARGS] = {0.,         0.,      0.,       0.,       0
     } else if (DEBUGIT(0) != 0) {                                 \
         printf("%s -> status=%d\n", #X, status);                  \
     }
-
-static void *realloc_temp=NULL;              /* used by RALLOC macro */
 
 
 /*
@@ -316,8 +314,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         CHECK_STATUS2(EG_makeTopology(WIREBODY));
 
         /* set the output value(s) */
-        IMAX(0) = imax;
-        JMAX(0) = jmax;
+        IMAX(numUdp) = imax;
+        JMAX(numUdp) = jmax;
 
         /* remember this model (body) */
         udps[numUdp].ebody = *ebody;
@@ -754,8 +752,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         }
 
         /* set the output value(s) */
-        IMAX(0) = imax;
-        JMAX(0) = jmax;
+        IMAX(numUdp) = imax;
+        JMAX(numUdp) = jmax;
 
         /* remember this model (body) */
         udps[numUdp].ebody = *ebody;

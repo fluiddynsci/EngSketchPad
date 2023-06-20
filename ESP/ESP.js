@@ -1,7 +1,7 @@
 // ESP.js implements functions for the Engineering Sketch Pad (ESP)
 // written by John Dannenhoffer and Bob Haimes
 
-// Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
+// Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
 //
 // This library is free software; you can redistribute it and/or
 //    modify it under the terms of the GNU Lesser General Public
@@ -2032,8 +2032,36 @@ var wvServerMessage = function (text) {
         postMessage(textList[3]);
         postMessage(" ");
 
+    // if it starts with "getTraceAttrs|", post the reposnse
+    } else if (text.substring(0,14) == "getTraceAttrs|") {
+        var textList = text.split("|");
+
+        postMessage(textList[1]);
+        postMessage(" ");
+
     // if it starts with "getTracePmtrs|", post the reposnse
     } else if (text.substring(0,14) == "getTracePmtrs|") {
+        var textList = text.split("|");
+
+        postMessage(textList[1]);
+        postMessage(" ");
+
+    // if it starts with "getTraceStors|", post the reposnse
+    } else if (text.substring(0,14) == "getTraceStors|") {
+        var textList = text.split("|");
+
+        postMessage(textList[1]);
+        postMessage(" ");
+
+    // if it starts with "getFiletree|", post the reposnse
+    } else if (text.substring(0,12) == "getFiletree|") {
+        var textList = text.split("|");
+
+        postMessage(textList[1]);
+        postMessage(" ");
+
+    // if it starts with "showTblOfContents|", post the reposnse
+    } else if (text.substring(0,18) == "showTblOfContents|") {
         var textList = text.split("|");
 
         postMessage(textList[1]);
@@ -2079,7 +2107,7 @@ var wvServerMessage = function (text) {
             console.log("forcing pyscript mode");
             changeMode(12);
         }
-        
+
         if (wv.overlay !== undefined && wv.overlay.timLoadCB !== undefined) {
             wv.overlay.timLoadCB(text.substring(8));
         } else if (wv.curTool.timLoadCB !== undefined) {
@@ -2540,7 +2568,7 @@ var wvServerMessage = function (text) {
 
         // do not interpret errors as important if in pyscript
         if (wv.curMode != 12) {
-            
+
             // turn the background of the message window back to light-yellow
             var botm = document.getElementById("brframe");
             botm.style.backgroundColor = "#FFFF99";             // yellow
@@ -2835,6 +2863,19 @@ var cmdFile = function () {
 
                 menu.appendChild(document.createElement("br"));
                 menu.appendChild(button);
+            }
+
+            if (ielem == 20 && ielem < filelist.length-1) {
+                button = document.createElement("input");
+                button.type     = "button";
+                button.title    = "Too many files to edit";
+                button.value    = "<more files>";
+                button.onclick  = function () {alert("Edit top file and use Trace->FileTree to access more files");};
+
+                menu.appendChild(document.createElement("br"));
+                menu.appendChild(button);
+
+                break;
             }
         }
     }
@@ -3347,12 +3388,12 @@ var cmdTool = function () {
         button.onclick = ereped.launch;
         menu.appendChild(button);
 
-        button = document.createElement("input");
-        button.type    = "button";
-        button.title   = "Launch Gloves";
-        button.value   = "Gloves";
-        button.onclick = gloves.launch;
-        menu.appendChild(button);
+//        button = document.createElement("input");
+//        button.type    = "button";
+//        button.title   = "Launch Gloves";
+//        button.value   = "Gloves";
+//        button.onclick = gloves.launch;
+//        menu.appendChild(button);
 
         button = document.createElement("input");
         button.type    = "button";
@@ -6723,18 +6764,25 @@ var gotoCsmError = function (e) {
     if (beg >= 0 && end > beg) {
         var foo = thisLine.slice(beg+2, end).split(":");
         if (foo.length == 2) {
-            var filelist = wv.filenames.split("|");
-            for (var ielem = 0; ielem < filelist.length; ielem++) {
-                if (filelist[ielem] == foo[0]) {
-                    wv.linenum = Number(foo[1]);
-                    cmdFileEdit(null, ielem);
-                    return;
+            if (foo[0].endsWith(".py")) {
+                pyscript.startLine = foo[1] - 1;
+                pyscript.launch(pyscript.filename);
+
+                return;
+            } else {
+                var filelist = wv.filenames.split("|");
+                for (var ielem = 0; ielem < filelist.length; ielem++) {
+                    if (filelist[ielem] == foo[0]) {
+                        wv.linenum = Number(foo[1]);
+                        cmdFileEdit(null, ielem);
+                        return;
+                    }
                 }
             }
         }
     }
 
-    // if not found, look for last [[filename:lnenum]]
+    // if not found, look for last [[filename:linenum]]
     var msgText = botm.innerText;
     beg = msgText.lastIndexOf("[[");
     end = msgText.lastIndexOf("]]");
@@ -6742,12 +6790,19 @@ var gotoCsmError = function (e) {
     if (beg >= 0 && end > beg) {
         foo = msgText.slice(beg+2, end).split(":");
         if (foo.length == 2) {
-            filelist = wv.filenames.split("|");
-            for (var ielem = 0; ielem < filelist.length; ielem++) {
-                if (filelist[ielem] == foo[0]) {
-                    wv.linenum = Number(foo[1]);
-                    cmdFileEdit(null, ielem);
-                    return;
+            if (foo[0].endsWith(".py")) {
+                pyscript.startLine = foo[1] - 1;
+                pyscript.launch(pyscript.filename);
+                
+                return;
+            } else {
+                filelist = wv.filenames.split("|");
+                for (var ielem = 0; ielem < filelist.length; ielem++) {
+                    if (filelist[ielem] == foo[0]) {
+                        wv.linenum = Number(foo[1]);
+                        cmdFileEdit(null, ielem);
+                        return;
+                    }
                 }
             }
         } else {
@@ -6953,7 +7008,7 @@ var modifyDisplayType = function (e) {
                            "   1  normalized U parameter\n"+
                            "   2  normalized V parameter\n"+
                            "   3  minimum curvature\n"+
-                           "   4  maximum curvature\n"+
+                           "   4  maximum curvature (zebra)\n"+
                            "   5  Gaussian curvature\n"+
                            "   6  normals\n"+
                            "   7  x-component\n"+
@@ -9179,8 +9234,8 @@ var setupEditBrchForm = function () {
         defValue = ["",  "",  "" ];
         document.getElementById("EnterSketcher").style.display = "inline";
     } else if (type == "blend") {
-        argList  = ["begList", "endList", "reorder", "oneFace", "periodic"];
-        defValue = ["0",       "0",       "0",       "0"      , "0"       ];
+        argList  = ["begList", "endList", "reorder", "oneFace", "periodic", "copyAttr"];
+        defValue = ["0",       "0",       "0",       "0"      , "0"       , "0"       ];
         suppress = 1;
     } else if (type == "box") {
         argList  = ["xmin", "ymin", "zmin", "dx", "dy", "dz"];
@@ -9338,12 +9393,12 @@ var setupEditBrchForm = function () {
         defValue = ["",       "0",     "0"     ];
         suppress = 1;
     } else if (type == "rule") {
-        argList  = ["reorder", "periodic"];
-        defValue = ["0"      , "0"       ];
+        argList  = ["reorder", "periodic", "copyAttr"];
+        defValue = ["0"      , "0"       , "0"       ];
         suppress = 1;
     } else if (type == "scale") {
-        argList  = ["fact"];
-        defValue = [""    ];
+        argList  = ["fact", "xcent", "ycent", "zcent"];
+        defValue = ["",     "0",     "0",     "0"    ];
         suppress = 1;
     } else if (type == "select") {
         argList  = ["$type", "arg1", "arg2", "arg3", "arg4", "arg5", "arg6", "arg7", "arg8"];
@@ -10333,7 +10388,7 @@ var cmdEditHint = function () {
     } else if (curLine.match(/^\s*bezier/i) !== null) {
         hintText =        "hint:: BEZIER    x y z";
     } else if (curLine.match(/^\s*blend/i) !== null) {
-        hintText =        "hint:: BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0";
+        hintText =        "hint:: BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0 copyAttr=0";
     } else if (curLine.match(/^\s*box/i) !== null) {
         hintText =        "hint:: BOX       xbase ybase zbase dx dy dz";
     } else if (curLine.match(/^\s*catbeg/i) !== null) {
@@ -10441,7 +10496,7 @@ var cmdEditHint = function () {
     } else if (curLine.match(/^\s*rotatez/i) !== null) {
         hintText =        "hint:: ROTATEZ   angDeg xaxis=0 yaxis=0";
     } else if (curLine.match(/^\s*rule/i) !== null) {
-        hintText =        "hint:: RULE      reorder=0 periodic=0";
+        hintText =        "hint:: RULE      reorder=0 periodic=0 copyAttr=0";
     } else if (curLine.match(/^\s*scale/i) !== null) {
         hintText =        "hint:: SCALE     fact xcent=0 ycent=0 zcent=0";
     } else if (curLine.match(/^\s*select/i) !== null) {
@@ -10546,13 +10601,74 @@ var cmdEditTrace = function (cm) {
         return;
     }
 
-    var ans = prompt("Enter pattern to match: (* for all)", "*");
-    if (ans === null) {
+    var itype = prompt("Enter:\n" +
+                       " 1 for Parameters\n" +
+                       " 2 for Storages\n" +
+                       " 3 for Attributes\n" +
+                       " 4 for File Tree\n" +
+                       " 5 for Table of Contents", 0);
+    if (itype == null) {
         return;
     }
 
-    // get the info from the server
-    browserToServer("getTracePmtrs|"+ans+"|");
+    var ans1, ans2;
+    if        (Number(itype) == 1) {
+        ans1 = prompt("Enter pattern to match Parameter: (* for all)", "*");
+        if (ans1 === null) {
+            return;
+        }
+
+        // get the info from the server
+        browserToServer("getTracePmtrs|"+ans1+"|");
+
+    } else if (itype == 2) {
+        ans1 = prompt("Enter pattern to match Storage: (* for all)", "*");
+        if (ans1 === null) {
+            return;
+        }
+
+        // get the info from the server
+        browserToServer("getTraceStors|"+ans1+"|");
+
+    } else if (itype == 3) {
+        ans1 = prompt("Enter pattern to match Attributes: (* for all)", "*");
+        if (ans1 === null) {
+            return;
+        }
+
+        // get the info from the server
+        browserToServer("getTraceAttrs|"+ans1+"|");
+
+    } else if (itype == 4) {
+
+        // get the info from the server
+        browserToServer("getFiletree|");
+
+    } else if (itype == 5) {
+        ans1 = prompt("Enter dimension of provides to be used for rows", 1);
+        if (ans1 === null) {
+            return;
+        } else if (isNaN(ans1)) {
+            return;
+        } else if (Number(ans1) < 1 || Number(ans1) > 8) {
+            alert("row should be between 1 and 8");
+            return;
+        }
+
+        ans2 = prompt("Enter dimension of provides to be used for columns", 2);
+        if (ans2 === null) {
+            return;
+        } else if (isNaN(ans2)) {
+            return;
+        } else if (Number(ans2) < 1 || Number(ans2) > 8) {
+            alert("column should be between 1 and 8");
+            return;
+        }
+
+        // get the info from the server
+        browserToServer("showTblOfContents|"+ans1+"|"+ans2+"|");
+
+    }
 };
 
 

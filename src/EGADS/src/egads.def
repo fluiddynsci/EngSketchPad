@@ -164,6 +164,7 @@ EG_hollowBody
 EG_extrude
 EG_extrude_dot
 EG_rotate
+EG_rotate_dot
 EG_sweep
 EG_loft
 EG_blend

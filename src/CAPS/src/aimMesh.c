@@ -3,7 +3,7 @@
  *
  *             AIM Volume Mesh Functions
  *
- *      Copyright 2014-2022, Massachusetts Institute of Technology
+ * *      Copyright 2014-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -738,7 +738,7 @@ aim_readBinaryUgridElements(void *aimStruc, FILE *fp, /*@null@*/ FILE *fpMV, /*@
 
     } else {
 
-      status = aim_addMeshElemGroup(aimStruc, NULL, 0, elementTopo, 1, nPoint, meshData);
+      status = aim_addMeshElemGroup(aimStruc, NULL, 1, elementTopo, 1, nPoint, meshData);
       AIM_STATUS(aimStruc, status);
 
       igroup = meshData->nElemGroup-1;
@@ -1017,6 +1017,110 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
   fclose(fpID); fpID = NULL;
   /*@+dependenttrans@*/
 
+  // skip face ID section of the file
+  status = fseek(fp, (nTri + nQuad)*sizeof(int), SEEK_CUR);
+  if (status != 0) { status = CAPS_IOERR; goto cleanup; }
+
+  // Elements Tetrahedral
+  nPoint = 4;
+  elementTopo = aimTet;
+  nElems = nTet;
+
+  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
+                                       nPoint, elementTopo, nElems,
+                                       &elementIndex, meshData);
+  AIM_STATUS(aimStruc, status);
+
+  // Elements Pyramid
+  nPoint = 5;
+  elementTopo = aimPyramid;
+  nElems = nPyramid;
+
+  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
+                                       nPoint, elementTopo, nElems,
+                                       &elementIndex, meshData);
+  AIM_STATUS(aimStruc, status);
+
+  // Elements Prism
+  nPoint = 6;
+  elementTopo = aimPrism;
+  nElems = nPrism;
+
+  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
+                                       nPoint, elementTopo, nElems,
+                                       &elementIndex, meshData);
+  AIM_STATUS(aimStruc, status);
+
+  // Elements Hex
+  nPoint = 8;
+  elementTopo = aimHex;
+  nElems = nHex;
+
+  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
+                                       nPoint, elementTopo, nElems,
+                                       &elementIndex, meshData);
+  AIM_STATUS(aimStruc, status);
+
+  // 2D grid
+  if (nTet+nPyramid+nPrism+nHex == 0) {
+    meshData->dim = 2;
+    AIM_FREE(mapGroupID);
+    nMapGroupID = 0;
+
+    status = fread(&nLine, sizeof(int), 1, fp);
+    if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+
+    meshData->nTotalElems += nLine;
+    AIM_REALL(meshData->elemMap, meshData->nTotalElems, aimMeshIndices, aimStruc, status);
+
+    // Elements Line
+    nPoint = 2;
+    elementTopo = aimLine;
+    nElems = nLine;
+
+    for (i = 0; i < nElems; i++) {
+      /* read the element connectivity */
+      status = fread(line, sizeof(int), nPoint, fp);
+      if (status != nPoint) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+      status = fread(&ID, sizeof(int), 1, fp);
+      if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+      if (ID <= 0) {
+        AIM_ERROR(aimStruc, "BC ID must be a positive number: %d!", ID);
+        status = CAPS_IOERR;
+        goto cleanup;
+      }
+
+      /* add the BC group if necessary */
+      if (ID > nMapGroupID) {
+        AIM_REALL(mapGroupID, ID, int, aimStruc, status);
+        for (j = nMapGroupID; j < ID; j++) mapGroupID[j] = -1;
+        nMapGroupID = ID;
+      }
+      if (mapGroupID[ID-1] == -1) {
+        status = aim_addMeshElemGroup(aimStruc, NULL, ID, elementTopo, 1, nPoint, meshData);
+        AIM_STATUS(aimStruc, status);
+        mapGroupID[ID-1] = meshData->nElemGroup-1;
+      }
+
+      igroup = mapGroupID[ID-1];
+
+      /* add the elements to the group */
+      status = aim_addMeshElem(aimStruc, 1, &meshData->elemGroups[igroup]);
+      AIM_STATUS(aimStruc, status);
+
+      meshData->elemGroups[igroup].elements[nPoint*meshData->elemGroups[igroup].nElems-2] = line[0];
+      meshData->elemGroups[igroup].elements[nPoint*meshData->elemGroups[igroup].nElems-1] = line[1];
+
+      meshData->elemMap[elementIndex][0] = igroup;
+      meshData->elemMap[elementIndex][1] = i;
+
+      elementIndex += 1;
+    }
+
+  } else {
+    meshData->dim = 3;
+  }
+
   /* read in the groupName from mapbc file */
   snprintf(filename, PATH_MAX, "%s%s", mesh->meshRef->fileName, ".mapbc");
 
@@ -1072,112 +1176,6 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
     /*@-dependenttrans@*/
     fclose(fpID); fpID = NULL;
     /*@+dependenttrans@*/
-  }
-
-
-  // skip face ID section of the file
-  status = fseek(fp, (nTri + nQuad)*sizeof(int), SEEK_CUR);
-  if (status != 0) { status = CAPS_IOERR; goto cleanup; }
-
-  nMapGroupID = 0;
-  AIM_FREE(mapGroupID);
-
-  // Elements Tetrahedral
-  nPoint = 4;
-  elementTopo = aimTet;
-  nElems = nTet;
-
-  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
-                                       nPoint, elementTopo, nElems,
-                                       &elementIndex, meshData);
-  AIM_STATUS(aimStruc, status);
-
-  // Elements Pyramid
-  nPoint = 5;
-  elementTopo = aimPyramid;
-  nElems = nPyramid;
-
-  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
-                                       nPoint, elementTopo, nElems,
-                                       &elementIndex, meshData);
-  AIM_STATUS(aimStruc, status);
-
-  // Elements Prism
-  nPoint = 6;
-  elementTopo = aimPrism;
-  nElems = nPrism;
-
-  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
-                                       nPoint, elementTopo, nElems,
-                                       &elementIndex, meshData);
-  AIM_STATUS(aimStruc, status);
-
-  // Elements Hex
-  nPoint = 8;
-  elementTopo = aimHex;
-  nElems = nHex;
-
-  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
-                                       nPoint, elementTopo, nElems,
-                                       &elementIndex, meshData);
-  AIM_STATUS(aimStruc, status);
-
-  // 2D grid
-  if (nTet+nPyramid+nPrism+nHex == 0) {
-    meshData->dim = 2;
-
-    status = fread(&nLine, sizeof(int), 1, fp);
-    if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
-
-    meshData->nTotalElems += nLine;
-    AIM_REALL(meshData->elemMap, meshData->nTotalElems, aimMeshIndices, aimStruc, status);
-
-    // Elements Hex
-    nPoint = 2;
-    elementTopo = aimLine;
-    nElems = nLine;
-
-    for (i = 0; i < nElems; i++) {
-      /* read the element connectivity */
-      status = fread(line, sizeof(int), nPoint, fp);
-      if (status != nPoint) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
-      status = fread(&ID, sizeof(int), 1, fp);
-      if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
-      if (ID <= 0) {
-        AIM_ERROR(aimStruc, "BC ID must be a positive number: %d!", ID);
-        status = CAPS_IOERR;
-        goto cleanup;
-      }
-
-      /* add the BC group if necessary */
-      if (ID > nMapGroupID) {
-        AIM_REALL(mapGroupID, ID, int, aimStruc, status);
-        for (j = nMapGroupID; j < ID; j++) mapGroupID[j] = -1;
-        nMapGroupID = ID;
-      }
-      if (mapGroupID[ID-1] == -1) {
-        status = aim_addMeshElemGroup(aimStruc, NULL, ID, elementTopo, 1, nPoint, meshData);
-        AIM_STATUS(aimStruc, status);
-        mapGroupID[ID-1] = meshData->nElemGroup-1;
-      }
-
-      igroup = mapGroupID[ID-1];
-
-      /* add the elements to the group */
-      status = aim_addMeshElem(aimStruc, 1, &meshData->elemGroups[igroup]);
-      AIM_STATUS(aimStruc, status);
-
-      meshData->elemGroups[igroup].elements[nPoint*meshData->elemGroups[igroup].nElems-2] = line[0];
-      meshData->elemGroups[igroup].elements[nPoint*meshData->elemGroups[igroup].nElems-1] = line[1];
-
-      meshData->elemMap[elementIndex][0] = igroup;
-      meshData->elemMap[elementIndex][1] = i;
-
-      elementIndex += 1;
-    }
-
-  } else {
-    meshData->dim = 3;
   }
 
   mesh->meshData = meshData;
@@ -1495,4 +1493,73 @@ cleanup:
   /*@+dependenttrans@*/
 
   return status;
+}
+
+
+// Map the old surface tessellation on to the new bodies
+int aim_morphMeshUpdate(void *aimInfo,  aimMeshRef *meshRef, int numBody, ego *bodies)
+{
+    int status = CAPS_SUCCESS;
+    int i=0;
+    int state, numVert;
+    ego bodyMapping;
+    ego body, tessbody;
+    ego tess;
+
+    // Have the number of bodies changed?
+    if (meshRef->nmap != numBody) {
+        AIM_ERROR(aimInfo, "The number of original surface meshes does NOT equal the number of current bodies!\n");
+        status = CAPS_MISMATCH;
+        goto cleanup;
+    }
+
+    // Are the bodies topological equivalent?
+    for (i = 0; i < meshRef->nmap; i++) {
+
+        status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &numVert);
+        AIM_STATUS(aimInfo, status);
+
+        status = EG_mapBody(body, bodies[i], "_faceID",  &bodyMapping); // "_faceID" - same as in OpenCSM
+        if (status != EGADS_SUCCESS || bodyMapping != NULL) {
+
+            AIM_ERROR(aimInfo, "New and old body %d (of %d) do not appear to be topologically equivalent!", i+1, meshRef->nmap);
+
+            if (bodyMapping != NULL) {
+                AIM_ADDLINE(aimInfo, "Body mapping isn't NULL!");
+            }
+
+            status = CAPS_MISMATCH;
+            goto cleanup;
+        }
+    }
+
+    // Now lets "tweak" the surface tessellation - map the old tessellation to the new bodies
+    for (i = 0; i < meshRef->nmap; i++) {
+
+        status = EG_statusTessBody(meshRef->maps[i].tess, &tessbody, &state, &numVert);
+        AIM_STATUS(aimInfo, status);
+
+        // nothing to do if bodies are the same
+        if (tessbody == bodies[i]) continue;
+
+        printf("Projecting tessellation %d (of %d) on to new body\n", i+1, meshRef->nmap);
+
+        status = EG_mapTessBody(meshRef->maps[i].tess,
+                                bodies[i],
+                                &tess);
+        AIM_STATUS(aimInfo, status);
+
+        if (meshRef->_delTess == (int)true) {
+            EG_deleteObject(meshRef->maps[i].tess);
+            EG_deleteObject(tessbody);
+        }
+        meshRef->maps[i].tess = tess;
+        status = aim_newTess(aimInfo, tess);
+        AIM_STATUS(aimInfo, status);
+    }
+
+    meshRef->_delTess = (int)false;
+
+    cleanup:
+        return status;
 }

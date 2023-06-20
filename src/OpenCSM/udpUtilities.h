@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -47,9 +47,12 @@
 
 /* definition of the udp structures */
 typedef struct {
-    void      *val;
-    void      *dot;
-    int       size;
+    void      *val;           /* values (across rows) */
+    double    *dot;           /* velocities */
+
+    int       size;           /* total size (nrow*ncol) */
+    int       nrow;           /* number of rows */
+    int       ncol;           /* number of columns */
 } udparg_T;
 
 typedef struct {

@@ -727,7 +727,7 @@ int aimPostAnalysis(/*@unused@*/ void *aimStore, /*@unused@*/ void *aimInfo,
         status = EG_loadTess(bodies[bodyIndex], aimFile, &egadsInstance->surfaceMesh[bodyIndex].egadsTess);
         AIM_STATUS(aimInfo, status);
 
-        status = mesh_surfaceMeshEGADSTess(aimInfo, &egadsInstance->surfaceMesh[bodyIndex]);
+        status = mesh_surfaceMeshEGADSTess(aimInfo, &egadsInstance->surfaceMesh[bodyIndex], (int)false);
         AIM_STATUS(aimInfo, status);
 
         status = aim_newTess(aimInfo, egadsInstance->surfaceMesh[bodyIndex].egadsTess);

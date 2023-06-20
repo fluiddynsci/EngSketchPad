@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -413,6 +413,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     status = EG_deleteObject(ewhole);
     CHECK_STATUS(EG_deleteObject);
 
+    /* tell OpenCSM to put _body, _brch, and Branch Attributes on the Faces */
     status = EG_attributeAdd(*ebody, "__markFaces__", ATTRSTRING, 1, NULL, NULL, "true");
     CHECK_STATUS(EG_attributeAdd);
 

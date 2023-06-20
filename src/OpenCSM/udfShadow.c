@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -375,12 +375,12 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     Iyy   = Iyy   - area * (xcent-bbox[0]) * (xcent-bbox[0]);
 
     /* set the output values */
-    AREA( 0) = area;
-    XCENT(0) = xcent;
-    YCENT(0) = ycent;
-    IXX(  0) = Ixx;
-    IXY(  0) = Ixy;
-    IYY(  0) = Iyy;
+    AREA( numUdp) = area;
+    XCENT(numUdp) = xcent;
+    YCENT(numUdp) = ycent;
+    IXX(  numUdp) = Ixx;
+    IXY(  numUdp) = Ixy;
+    IYY(  numUdp) = Iyy;
 
     /* the copy of the Body that was annotated is returned */
     udps[numUdp].ebody = *ebody;

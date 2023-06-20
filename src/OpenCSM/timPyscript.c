@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -379,7 +379,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
         response_len = 1000;
         MALLOC(response, char, response_len);
 
-        snprintf(response, response_len, "timMesg|lineNums|%d|%d|", curLine, maxLine);
+        snprintf(response, response_len, "timMesg|pyscript|lineNums|%d|%d|", curLine, maxLine);
 
         tim_bcst("pyscript", response);
     }
@@ -677,6 +677,14 @@ timBegPython()
     PyPreConfig_InitPythonConfig(&preConfig);
     Py_PreInitialize(&preConfig);
 
+    /* initialize the python interpreter */
+    PyConfig_InitPythonConfig(&config);
+    config.buffered_stdio          = 0;
+    config.install_signal_handlers = 0;
+#ifdef WIN32
+    config.legacy_windows_stdio    = 1;
+#endif
+
     /* set Python Home if not set */
     if (getenv("PYTHONHOME") == NULL) {
         env = getenv("PYTHONINC");
@@ -716,19 +724,15 @@ timBegPython()
         }
         buffer[i-start] = 0;
 
+        fprintf(stdout, "config.home being set to \"%s\"\n", buffer);
+
         pHome = Py_DecodeLocale(buffer, NULL);
         free(buffer);
 
-        Py_SetPythonHome(pHome);
+        config.home = pHome;
+//$$$        Py_SetPythonHome(pHome);
     }
 
-    /* initialize the python interpreter */
-    PyConfig_InitPythonConfig(&config);
-    config.buffered_stdio          = 0;
-    config.install_signal_handlers = 0;
-#ifdef WIN32
-    config.legacy_windows_stdio    = 1;
-#endif
     Py_InitializeFromConfig(&config);
 
     /* import numpy (which MUST be done from the main thread) */

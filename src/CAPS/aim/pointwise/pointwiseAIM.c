@@ -2907,7 +2907,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
     int        i, j, n, ib, ie, it, in;
     int        ivp, npts, nVolPts, iper, iline = 0, cID = 0, nglobal, iglobal;
     int        oclass, mtype, numBody = 0, *senses = NULL, *ivec = NULL;
-    int        numFaces = 0, iface, ibody, iedge, numNodes = 0, nDegen = 0;
+    int        numFaces = 0, iface, ibody, iedge, numNodes = 0; //, nDegen = 0;
     int        ntri = 0, nquad = 0, elem[4], velem[4], *face_tris, elemIndex;
     int        GMA_MAJOR = 0, GMA_MINOR = 0, numConnector = 0, iCon, numDomain = 0, iDom;
     int        egadsID, edgeID, faceID, bodyID, *bodyIndex=NULL, *faceVertID=NULL;
@@ -3139,6 +3139,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
     }
 
     // Count the number of degenerate edges in all bodies
+#if 0
     nDegen = 0;
     for (ib = 0; ib < numBody; ib++) {
       for ( iedge = 0; iedge < bodydata[ib].nedges; iedge++ ) {
@@ -3148,6 +3149,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
         if ( mtype == DEGENERATE ) nDegen++;
       }
     }
+#endif
 
 
     /* open and parse the gma file to count surface/edge tessellations points */
@@ -3718,7 +3720,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
         tess = NULL;
 /*@+kepttrans@*/
 
-        status = mesh_surfaceMeshEGADSTess(aimInfo, &surfaceMeshes[ib]);
+        status = mesh_surfaceMeshEGADSTess(aimInfo, &surfaceMeshes[ib], (int)false);
         AIM_STATUS(aimInfo, status);
 
         printf("Body = %d\n", ib+1);

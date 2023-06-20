@@ -71,7 +71,7 @@ $(function() {
 <li><b> Proj_Name = NULL</b> <br  />
  This corresponds to the output name of the mesh. If left NULL, the mesh is not written to a file.</li>
 <li><b> Tess_Params = [0.025, 0.001, 15.0]</b> <br  />
- Body tessellation parameters. Tess_Params[0] and Tess_Params[1] get scaled by the bounding box of the body. (From the EGADS manual) A set of 3 parameters that drive the EDGE discretization and the FACE triangulation. The first is the maximum length of an EDGE segment or triangle side (in physical space). A zero is flag that allows for any length. The second is a curvature-based value that looks locally at the deviation between the centroid of the discrete object and the underlying geometry. Any deviation larger than the input value will cause the tessellation to be enhanced in those regions. The third is the maximum interior dihedral angle (in degrees) between triangle facets (or Edge segment tangents for a WIREBODY tessellation), note that a zero ignores this phase.</li>
+ Body tessellation parameters. Tess_Params[0] and Tess_Params[1] get scaled by the capsMeshLength attribute. (From the EGADS manual) A set of 3 parameters that drive the EDGE discretization and the FACE triangulation. The first is the maximum length of an EDGE segment or triangle side (in physical space). A zero is flag that allows for any length. The second is a curvature-based value that looks locally at the deviation between the centroid of the discrete object and the underlying geometry. Any deviation larger than the input value will cause the tessellation to be enhanced in those regions. The third is the maximum interior dihedral angle (in degrees) between triangle facets (or Edge segment tangents for a WIREBODY tessellation), note that a zero ignores this phase.</li>
 <li><b> Mesh_Quiet_Flag = False</b> <br  />
  Complete suppression of mesh generator (not including errors)</li>
 <li><b> Mesh_Format = "AFLR3"</b> <br  />
@@ -91,7 +91,7 @@ $(function() {
 </div><!-- PageDoc -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Thu Dec 8 2022 20:46:05 for AFLR2 Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
+Generated on Tue May 30 2023 19:59:01 for AFLR2 Analysis Interface Module (AIM) by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1
 </small></address>
 </body>
 </html>

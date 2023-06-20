@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -69,8 +69,6 @@ static int getBodyTopos(ego ebody, ego esrc, int oclass, int *nlist, ego **elist
 #ifdef DEBUG
 static int printAttrs(ego ebody);
 #endif
-
-static void *realloc_temp=NULL;              /* used by RALLOC macro */
 
 
 /*
@@ -196,7 +194,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     CHECK_STATUS(EG_attributeAdd);
 
     /* set the output value */
-    NCHANGE(0) = (double)nchange;
+    NCHANGE(numUdp) = (double)nchange;
 
     /* the copy of the Body that was annotated is returned */
     udps[numUdp].ebody = *ebody;

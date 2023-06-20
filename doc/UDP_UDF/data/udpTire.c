@@ -11,7 +11,7 @@
  */
 
 /*
- * Copyright (C) 2013/2020  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -912,7 +912,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         goto cleanup;
     }
 
-    VOLUME(0) = data[0];
+    VOLUME(numUdp) = data[0];
 
     /* remember this model (body) */
 #ifdef UDP

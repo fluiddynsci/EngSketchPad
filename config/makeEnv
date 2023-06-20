@@ -6,14 +6,26 @@ echo
 #
 # if arg1 is present set it to CASROOT, second is CASARCH (also optional)
 #
-if [ "$1" ]; then
+if [ "$1" ] && [ "$1" != "-dev" ]; then
 	CASROOT=$1
 	CASARCH=
 	CASREV=
-	if [ "$2" ]; then
+	if [ "$2" ] && [ "$2" != "-dev" ]; then
 		CASARCH=$2
 	fi
 fi
+
+#
+# -dev must be the last argument if speicified
+#
+DEVMODE=OFF
+for var in "$@" ; do
+	if [ "$var" = "-dev" ]; then
+		echo "Development mode!"
+		echo
+		DEVMODE=ON
+	fi
+done
 
 #
 # we must know where the OpenCASCADE distribution is!
@@ -156,10 +168,13 @@ fi
 if [ "$ARCH" = Darwin ]; then
 	CARCH=DARWIN64
 	if [ "$mt" = arm64 ]; then
-		CARCH=DARWINM1
+		CARCH=DARWIN_ARM64
 	fi
 else
 	CARCH=LINUX64
+	if [ "$mt" = aarch64 ]; then
+		CARCH=LINUX_AARCH64
+	fi
 fi
 
 #
@@ -212,13 +227,17 @@ fi
 # do we have AFLR?
 #
 if [ "$ARCH" = Darwin ] && [ "$MACOSX" != UNKNOWN ]; then
-	if [ "$CARCH" = DARWINM1 ]; then
+	if [ "$CARCH" = DARWIN_ARM64 ]; then
 		AFLR_ARCH=MacOSX-arm64
 	else
 		AFLR_ARCH=MacOSX-x86-64
 	fi
 else
-	AFLR_ARCH=Linux-x86-64
+	if [ "$CARCH" = LINUX_AARCH64 ]; then
+		AFLR_ARCH=Linux-arm64
+	else
+		AFLR_ARCH=Linux-x86-64
+	fi
 fi
 if [ -n "$AFLR" ]; then
 	if [ ! -d $AFLR/$AFLR_ARCH ]; then
@@ -259,6 +278,17 @@ if [ -n "$pyt" ]; then
 		echo "Info: Python exec $pyt found!"
 	else
 		echo "Info: Ignoring Python exec $pyt older than 3.8!"
+	fi
+fi
+if [ "$PYTH" == UNKNOWN ]; then
+	pyt="`which python3`"
+	if [ -n "$pyt" ]; then
+		if python3 -c "import sys; assert sys.version_info >= (3,8)" >& /dev/null; then 
+			PYTH=python3
+			echo "Info: Python exec $pyt found!"
+		else
+			echo "Info: Ignoring Python exec $pyt older than 3.8!"
+		fi
 	fi
 fi
 
@@ -431,6 +461,9 @@ echo
 # done.
 #
 BASE=`pwd | sed -e 'sx/configxx'`
+if [ "$DEVMODE" == ON ]; then
+	BASE=$BASE/$CARCH
+fi
 if [ "$MACOSX" != UNKNOWN ]; then
 	echo "MACOSX   =" $MACOSX
 fi
@@ -453,6 +486,9 @@ fi
 echo "#"                        > ../ESPenv.sh
 echo "export ESP_ARCH="$CARCH  >> ../ESPenv.sh
 echo "export ESP_ROOT="$BASE   >> ../ESPenv.sh
+if [ "$DEVMODE" == ON ]; then
+	echo "export ESP_BLOC="$BASE   >> ../ESPenv.sh
+fi
 echo "export CASROOT="$CASROOT >> ../ESPenv.sh
 echo "export CASARCH="$CASARCH >> ../ESPenv.sh
 echo "export CASREV="$CASREV   >> ../ESPenv.sh
@@ -469,10 +505,12 @@ if [ "$PYTH" != UNKNOWN ]; then
 		echo "#export PYTHONINC=\""$PYTHONINC\"        >> ../ESPenv.sh
 		echo "#export PYTHONLIB=\""$PYTHONLIB\"        >> ../ESPenv.sh
 	fi
-        if [ -z "$PYTHONPATH" ]; then
-		echo "export PYTHONPATH=$BASE/pyESP"           >> ../ESPenv.sh
-	else
-		echo "export PYTHONPATH=$BASE/pyESP":'$PYTHONPATH' >> ../ESPenv.sh
+	if [ "$DEVMODE" == OFF ]; then
+		if [ -z "$PYTHONPATH" ]; then
+			echo "export PYTHONPATH=$BASE/pyESP"           >> ../ESPenv.sh
+		else
+			echo "export PYTHONPATH=$BASE/pyESP":'$PYTHONPATH' >> ../ESPenv.sh
+		fi
 	fi
 fi
 if [ "$EFCOMP" != UNKNOWN ]; then
@@ -487,11 +525,15 @@ if [ "$ARCH" = Darwin ]; then
 	if [ "$MACOSX" != UNKNOWN ]; then
 		echo "export AFLR_ARCH="$AFLR_ARCH >> ../ESPenv.sh
 		echo "export MACOSX="$MACOSX       >> ../ESPenv.sh
-		echo "export UDUNITS2_XML_PATH="$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.sh
+		if [ "$DEVMODE" == OFF ]; then
+			echo "export UDUNITS2_XML_PATH="$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.sh
+		else
+			echo "export UDUNITS2_XML_PATH="$BASE/udunits/udunits2.xml >> ../ESPenv.sh
+		fi
 		echo "export CAPS_GLYPH="$BASE/src/CAPS/aim/pointwise/glyph >> ../ESPenv.sh
 	fi
 else
-	echo "export AFLR_ARCH=Linux-x86-64"            >> ../ESPenv.sh
+	echo "export AFLR_ARCH="$AFLR_ARCH              >> ../ESPenv.sh
 	echo 'if [ -z "$LD_LIBRARY_PATH" ]; then'       >> ../ESPenv.sh
 	echo "    export LD_LIBRARY_PATH=$CASROOT/$CASARCH/lib:$BASE/lib" >> ../ESPenv.sh
 	echo "else"   >> ../ESPenv.sh
@@ -504,7 +546,11 @@ else
 		udu=/usr/include/udunits2/udunits.h
 	fi
 	if [ "$udu" = UNKNOWN ]; then
-		echo "export UDUNITS2_XML_PATH="$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.sh
+		if [ "$DEVMODE" == OFF ]; then
+			echo "export UDUNITS2_XML_PATH="$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.sh
+		else
+			echo "export UDUNITS2_XML_PATH="$BASE/udunits/udunits2.xml >> ../ESPenv.sh
+		fi
 	fi
 	echo "export CAPS_GLYPH="$BASE/src/CAPS/aim/pointwise/glyph >> ../ESPenv.sh
 fi
@@ -528,6 +574,9 @@ fi
 echo "#"                        > ../ESPenv.csh
 echo "setenv ESP_ARCH "$CARCH  >> ../ESPenv.csh
 echo "setenv ESP_ROOT "$BASE   >> ../ESPenv.csh
+if [ "$DEVMODE" == ON ]; then
+	echo "setenv ESP_BLOC "$BASE   >> ../ESPenv.csh
+fi
 echo "setenv CASROOT "$CASROOT >> ../ESPenv.csh
 echo "setenv CASARCH "$CASARCH >> ../ESPenv.csh
 echo "setenv CASREV "$CASREV   >> ../ESPenv.csh
@@ -562,11 +611,15 @@ if [ "$ARCH" = Darwin ]; then
 	if [ "$MACOSX" != UNKNOWN ]; then
 		echo "setenv AFLR_ARCH "$AFLR_ARCH >> ../ESPenv.csh
 		echo "setenv MACOSX "$MACOSX       >> ../ESPenv.csh
-		echo "setenv UDUNITS2_XML_PATH "$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.csh
+		if [ "$DEVMODE" == OFF ]; then
+			echo "setenv UDUNITS2_XML_PATH "$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.csh
+		else
+			echo "setenv UDUNITS2_XML_PATH "$BASE/../udunits/udunits2.xml >> ../ESPenv.csh
+		fi
 		echo "setenv CAPS_GLYPH "$BASE/src/CAPS/aim/pointwise/glyph >> ../ESPenv.csh
 	fi
 else
-	echo "setenv AFLR_ARCH Linux-x86-64"     >> ../ESPenv.csh
+	echo "setenv AFLR_ARCH "$AFLR_ARCH        >> ../ESPenv.csh
 	echo 'if ( $?LD_LIBRARY_PATH == 0 ) then' >> ../ESPenv.csh
 	echo "    setenv LD_LIBRARY_PATH $CASROOT/$CASARCH/lib:$BASE/lib" >> ../ESPenv.csh
 	echo "else" >> ../ESPenv.csh
@@ -583,7 +636,11 @@ else
 		udu=/usr/include/udunits2/udunits.h
 	fi
 	if [ "$udu" = UNKNOWN ]; then
-		echo "setenv UDUNITS2_XML_PATH "$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.csh
+		if [ "$DEVMODE" == OFF ]; then
+			echo "setenv UDUNITS2_XML_PATH "$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.csh
+		else
+			echo "setenv UDUNITS2_XML_PATH "$BASE/../udunits/udunits2.xml >> ../ESPenv.csh
+		fi
 	fi
 	echo "setenv CAPS_GLYPH "$BASE/src/CAPS/aim/pointwise/glyph >> ../ESPenv.csh
 fi

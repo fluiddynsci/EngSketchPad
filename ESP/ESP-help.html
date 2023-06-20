@@ -17,9 +17,9 @@
   </head>
 
   <body>
-    <p><h1 align=center>Engineering Sketch Pad (ESP) Version 1.22</h1>
+    <p><h1 align=center>Engineering Sketch Pad (ESP) Version 1.23</h1>
     <p><h3>Authors: John F. Dannenhoffer, III (Syracuse University) and Bob Haimes (MIT)</h3>
-    <p><h3>Date: December 2022.</h3>
+    <p><h3>Date: June 2023.</h3>
 
     <p><h3 align=center><img src="esp_logo.png" width="400"/></h3>
 
@@ -7197,11 +7197,11 @@ serveESP ../data/legacy/tutorial3 -loadEgads
         </tr>
         <tr><td></td>
           <td><a href="#rule">rule</a></td>
-          <td>reorder=0 periodic=0</td>
+          <td>reorder=0 periodic=0 copyAttr=0</td>
         </tr>
         <tr><td></td>
           <td><a href="#blend">blend</a></td>
-          <td>begList=0 endList=0 reorder=0 oneFace=0 periodic=0</td>
+          <td>begList=0 endList=0 reorder=0 oneFace=0 periodic=0 copyAttr=0</td>
         </tr>
         <tr><td></td>
           <td><a href="#revolve">revolve</a></td>
@@ -7595,7 +7595,7 @@ BEZIER    x y z
       <p><h3 id="blend">blend</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0
+BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0 copyAttr=0
           use:    create a Body by blending through Xsects since Mark
           pops:   Xsect1 ... Mark
           pushes: Body
@@ -7645,14 +7645,17 @@ BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0
                           endList describes inward tangency at end
                   if begList!=0 and endList!=0, there must be at least
                      three interior Xsects
-                  interior Xsects can be repeated once for C1 continuity
-                  interior Xsects can be repeated twice for C0 continuity
+                  blend is be default C2 between Xsects, except:
+                     Xsects repeated once yield C1 continuity
+                     Xsects repeated twice yield C0 continuity
                   if reorder!=0 then Xsects are reordered to minimize Edge
                      lengths in the direction between Xsects
                   first Xsect is unaltered if reorder>0
                   last  Xsect is unaltered if reorder<0
                   if oneFace==1 then do not split at C0 (multiplicity=3)
                   if periodic=1 then connect the first and last Xsects
+                  if copyAttr=1 then user Attributes are copied
+                     from Xsects to new Edges
                   sensitivity computed w.r.t. begList, endList
                   sets up @-parameters
                   the Faces all receive the Branch's Attributes
@@ -7720,6 +7723,15 @@ CATBEG    sigCode
                      $self_intersecting
                      $wrong_types_on_stack
                      $assert_failed
+                     $udp_error1
+                     $udp_error2
+                     $udp_error3
+                     $udp_error4
+                     $udp_error5
+                     $udp_error6
+                     $udp_error7
+                     $udp_error8
+                     $udp_error9
                   if sigCode does not match current signal, skip to matching
                      CATEND
                   Block contains all Branches up to matching CATEND
@@ -7758,7 +7770,7 @@ CFGPMTR   $pmtrName value
       <p><h3 id="chamfer">chamfer</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-CHAMFER   radius edgeList=0 listStyle=0
+CHAMFER   radius edgeList=0
           use:    apply a chamfer to a Body
           pops:   Body
           pushes: Body
@@ -7873,7 +7885,7 @@ CONNECT   faceList1 faceList2 edgeList1=0 edgeList2=0 toler=0
       <p><h3 id="conpmtr">conpmtr</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-CONPMTR   $pmtrName value
+CONPMTR   $pmtrName values
           use:    define a constant Parameter
           pops:   -
           pushes: -
@@ -8161,6 +8173,16 @@ EVALUATE  $type arg1 ...
                      return in @edata:
                         t,
                         xclose,  yclose,  zclose
+                  elseif arguments are: "edgekt ibody iedge"
+                     ibody is Body number (1:nbody)
+                     iedge is Edge number (1:nedge)
+                     return in @edata:
+                        knot1, knot2, ...
+                  elseif arguments are: "edgecp ibody iedge"
+                     ibody is Body number (1:nbody)
+                     iedge is Edge number (1:nedge)
+                     return in @edata:
+                        xcp1 ycp1 zcp1 xcp2 ycp2 ...
                   elseif arguments are: "face ibody iface u v"
                      ibody is Body number (1:nbody)
                      iface is Face number (1:nface)
@@ -8186,6 +8208,21 @@ EVALUATE  $type arg1 ...
                      return in @edata:
                         u,       v,
                         xclose,  yclose,  zclose
+                  elseif arguments are: "faceukt ibody iface"
+                     ibody is Body number (1:nbody)
+                     iface is Face number (1:nface)
+                     return in @edata:
+                        uknot1, uknot2, ...
+                  elseif arguments are: "facevkt ibody iface"
+                     ibody is Body number (1:nbody)
+                     iface is Face number (1:nface)
+                     return in @edata:
+                        vknot1, vknot2,...
+                  elseif arguments are: "facecp ibody iface"
+                     ibody is Body number (1:nbody)
+                     iface is Face number (1:nface)
+                     return in @edata:
+                        xcp1, ycp1, zcp1, xcp2, ycp2, ...
                   cannot be followed by ATTRIBUTE or CSYSTEM
                   signals that may be thrown/caught:
                      $body_not_found
@@ -8909,7 +8946,7 @@ ROTATEZ   angDeg xaxis=0 yaxis=0
       <p><h3 id="rule">rule</h3>
         <!-- extract from OpenCSM.h -->
         <pre>
-RULE      reorder=0 periodic=0
+RULE      reorder=0 periodic=0 copyAttr=0
           use:    create a Body by creating ruled surfaces thru Xsects
                      since Mark
           pops:   Xsect1 ... Mark
@@ -8920,7 +8957,13 @@ RULE      reorder=0 periodic=0
                      lengths
                   first Xsect is unaltered if reorder>0
                   last  Xsect is unaltered if reorder<0
-                  all Xsects must have the same number of Edges
+                  if no Nodes in the Xsects have Attribute .multiNode,
+                      all Xsects must have the same number of Edges
+                  if a Node in a Xsect has Attribute .multiNode, the 
+                      integer value of the Attribute tells the multiplicity
+                  if the first Node has Attribute .multiNode, then a second
+                      integer value tells which replicate (bias-0) should be
+                      considered the beginning of the Xsect
                   Xsects cannot be non-manifold WireBody
                   if all Xsects are NodeBodys
                      a WireBody is created
@@ -8930,6 +8973,8 @@ RULE      reorder=0 periodic=0
                      a SolidBody is created
                   the first and/or last Xsect can be a NodeBody
                   if periodic=1 then connect the first and last Xsects
+                  if copyAttr=1 then user Attributes are copied
+                     from Xsects to new Edges
                   computes Face sensitivities analytically
                   sets up @-parameters
                   the Faces all receive the Branch's Attributes
@@ -9149,6 +9194,8 @@ SELECT    $type arg1 ...
                      make @sellist contain all Edges not in previous @sellist
                   elseif arguments are: "not" and @seltype==0
                      make @sellist contain all Nodes not in previous @sellist
+                  elseif arguments are: "flip"
+                     the order of entities in @sellist are flipped
                   elseif arguments are: "sort $key"
                      sorts @sellist based upon $key which can be: $xmin, $ymin, $zmin,
                         $xmax, $ymax, $zmax, $xcg, $ycg, $zcg, $area, or $length
@@ -9725,7 +9772,7 @@ UNION     toMark=0 trimList=0 maxtol=0
       <pre>
 UDPRIM bezier
        input arguments (specified as name/value pairs):
-           filename   name of bezier file (prepended with '$' or '$$/')
+           $filename  name of bezier file
            debug      =0 for no debug, =1 for debug   [default 0]
        output arguments:
            imax       number of points in i direction
@@ -9739,11 +9786,11 @@ UDPRIM bezier
            endfor
 
            if (jmax==1)
-               generate WIRE Body
+               generate WireBody
            elseif (surface is open)
-               generate SHEET Body
+               generate SheetBody
            else
-               generate SOLID Body
+               generate SolidBody
            endif
        notes:
            vsp files can be converted to this format by vsp2csm
@@ -9773,75 +9820,118 @@ UDPRIM box
                if (2*rad>dx && 2*rad>dy && 2*rad>dz)
                    ERROR
                elseif (rad>0)
-                   generate SOLID Body with rounded edges
+                   generate SolidBody with rounded edges
                else
-                   generate SOLID Body
+                   generate SolidBody
                endif
            elseif (dx==0 && dy>0 && dz>0)
                if (2*rad>dy && 2*rad>dz)
-                   generate SHEET Body in yz-plane with rounded corners
+                   generate SheetBody in yz-plane with rounded corners
                else
-                   generate SHEET Body iy yz-plane
+                   generate SheetBody iy yz-plane
                endif
            elseif (dx>0 && dy==0 && dz>0)
                if (2*rad>dx && 2*rad>dz)
-                   generate SHEET Body in xz-plane with rounded corners
+                   generate SheetBody in xz-plane with rounded corners
                else
-                   generate SHEET Body iy xz-plane
+                   generate SheetBody iy xz-plane
                endif
            elseif (dx>0 && dy>0 && dz==0)
                if (2*rad>dx && 2*rad>dy)
-                   generate SHEET Body in xy-plane with rounded corners
+                   generate SheetBody in xy-plane with rounded corners
                else
-                   generate SHEET Body in xy-plane
+                   generate SheetBody in xy-plane
                endif
            elseif (dx==0 && dy==0 && dz>0)
-               generate WIRE Body along z-axis
+               generate WireBody along z-axis
            elseif (dx>0 && dy==0 && dz==0)
-               generate WIRE Body along x-axis
+               generate WireBody along x-axis
            elseif (dx==0 && dy>0 && dz==0)
-               generate WIRE Body along y-axis
+               generate WireBody along y-axis
            else
                ERROR
            endif
        notes:
            all Bodys are centered at origin
 
-UDPRIM catmull
+UDPRIM bspline
+       input arguments (specified as name/value pairs):
+          bitflag
+          uknots      vector of knots in U direction
+          vknots      vector of knots in V direction
+          cps         vector of contro lpoints
+          weights     vector of weights (if any)
+          udegree     degree in U direction    [default 3]
+          vdegree     degree in V direction    [default 3]
+       output arguments:
+       usage:
+          if vknots is given
+             generates a FaceBody with the given Bspline surface
+          else
+             generates a WireBody with the given Bspline curve
+
+UDPRIM catmull Body
        input arguments (specified as name/value pairs):
           nsubdiv     number of subdivisions  [default 1]
-          progress    level of outpus         [default 0]
+          progress    level of output prints  [default 0]
        output arguments:
+          area        surface area
+          volume      volume
        usage:
           performs Catmull-Clark subdivisions on Body on top of stack
         notes:
           if a Face has a limitFace attribute
              the motion of points are limited in X, Y, and/or Z
 
-UDPRIM createBEM
+UDPRIM compare Body
        input arguments (specified as name/value pairs):
-          filename    name of output file
+          $tessfile   .tess file with points to match
+          $histfile   optional output file containing a histogram
+          $plotfile   optional output file containing points that
+          toler       matching tolerance      [default 1e-6]
+       output arguments:
+       usage:
+          finds the distance of the points in tessfile from the body
+          if histfile is given, a histogram file is generated
+          if plotfile is given, a poltfile of points that exceed
+             toler is produced
+
+UDPRIM createBEM Body
+       input arguments (specified as name/value pairs):
+          $filename   name of output file
           space       nominal spacing         [default 0]
           imin        minimum points on Edge  [default 3]
           imax        maximum points on Edge  [default 5]
+          nocrod      =1 to not produce crods [default 0]
        output arguments:
        usage:
-          creates a NASTRAN-stype BEM file from Body on stack
+          creates a NASTRAN-style BEM file from Body on stack
+             CQUAD4 created for all quadrilaterals
+             CTRIA3 created for all triangles
+             CROD   created for all Edges (if nocrod=0)
+       note:
+          a Face can be skipped if it has an attribute
+             ignoreFace=true
+          an Edge can be skipped if it has an attribute
+             ignoreEdge=true and it is not used by an
+             active Face
+          a Node can be skipped if it has an attribute
+             ignoreNode=true and it is not used by an
+             active Face or Edge
 
-UDPRIM createPoly
+UDPRIM createPoly Body1 Body2
        input arguments (specified as name/value pairs):
-           filename   name of output file
+           $filename  name of output file
            hole       coordinates of "hole"   [default 0;0;0]
        output arguments:
        usage:
-           pops 2 Bodys from stack
            writes a AFLR .poly file between the two Bodys
            pushes the inner Body back onto the stack
 
 UDPRIM csm
        input arguments (specified as name/value pairs):
-           filename   name of .csm file
-           pmtrname   semi-colon-separated list of Design
+           $filename  name of .csm file
+           $pmtrname  semi-colon-separated list of Design
                          Parameters in filename
            pmtrvalue  multi-value list of Design Parameter
                          values
@@ -9851,7 +9941,7 @@ UDPRIM csm
            runs filename in a sub-process and returns
               last Body on the stack
 
-UDPRIM droop
+UDPRIM droop Body
        input arguments (specified as name/value pairs):
           xle        percent x at LE         [default -100]
           thetale    LE droop angle (deg)    [default    0]
@@ -9863,19 +9953,26 @@ UDPRIM droop
        usage:
            droops airfoil on stack forward of xle and rearward of xte
 
+UDPRIM dumpPmtrs Body
+       input arguments (specified as name/value pairs):
+          $filename  name of file to write
+       output arguments:
+       usage:
+           writes file contains all current Parameters
+
 UDPRIM editAttr
        input arguments (specified as name/value pairs):
-          attrname    name of Attribute to edit
-          input       string containing D B N E F characters
-          output      string containing   B N E F characters
+          $attrname   name of Attribute to edit
+          $input      string containing D B N E F characters
+          $output     string containing   B N E F characters
           overwrite   overwrite flag          [default 0]
                       0 do not overwrite
                       1        overwrite
                       2 use smaller value (or first alphabetical)
                       3 use larger  value (or last  alphabetical)
                       4 use sum                (or concatenation)
-          filename    alternative file-base specification
-                      (see wingAttrTest for an example)
+          $filename   alternative file-based specification
+                          (see wingAttrTest for an example)
           verbose     =1 to watch progress
        output arguments:
           nchange     number of changes made
@@ -9913,20 +10010,39 @@ UDPRIM ellipse
        output arguments:
        usage:
            if     (rx==0 && ry>0 && rz>0)
-               generate an elliptical SHEET Body in yz-plane
+               generate an elliptical SheetBody in yz-plane
            elseif (rx>0 && ry==0 && rz>0)
-               generate an elliptical SHEET Body in xz-plane
+               generate an elliptical SheetBody in xz-plane
            elseif (rx>0 && ry>0 && rz==0)
-               generate an elliptical SHEET Body in xy-plane
+               generate an elliptical SheetBody in xy-plane
           else
                ERROR
           endif
        note:
            all Bodys are centered at origin
 
+UDPRIM eqn2body
+       input arguments (specified as name/value pairs):
+           $xeqn      string containing function of u and v
+           $yeqn      string containing function of u and v
+           $zeqn      string containing function of u and v
+           urange[2]  range of u
+           vrange[2]  range of v (or blank to create WireBody)
+           toler      fitting tolerance       [default 1e-5]
+           npnt       number of points infit  [default 101]
+       output arguments:
+       usage:
+           if vrange is specified
+              generates a SheetBody by evaluating (xeqn,yeqn,zeqn)
+              for urange[1]<=u<=urange[2]
+              and vrange[1]<=v<=vrange[2]
+           else
+              generates a WireBody by evaluating (xeqn,yeqn,zeqn)
+              for urange[1]<=u<=urange[2]
+
 UDPRIM fitcurve
        input arguments (specified as name/value pairs):
-           filename   name of file (prepended with '$' or '$$/')
+           $filename  name of file
            ncp        number of control points    [default 0]
            ordered    =0 means points not ordered [default 1]
            periodic   =1 means periodicity at ends[default 0]
@@ -9953,7 +10069,7 @@ UDPRIM fitcurve
               a WireBody is created
            endif
 
-UDPRIM flend
+UDPRIM flend Body1 Body2
        input arguments (specified as name/value pairs):
            slopea     slopea factor for Body A          [default 1]
            slopeb     slopea factor for Body B          [default 1]
@@ -9961,6 +10077,7 @@ UDPRIM flend
            equis      spacing method (see below)        [default 0]
            npnt       number of sample points           [default 33]
            plot       =1 to write flend.plot            [default 0]
+           method     =1 for old method, =2 for new     [default 1]
        output arguments:
        usage:
            pops up to 2 Bodys back to mark from stack
@@ -9972,7 +10089,7 @@ UDPRIM flend
 
 UDPRIM freeform
        input arguments (specified as name/value pairs):
-           filename   name of file (prepended with '$' or '$$/')
+           $filename  name of file
            imax       number of points in i-direction   [default 1]
            jmax       number of points in j-direction   [default 1]
            kmax       number of points in k-direction   [default 1]
@@ -10013,11 +10130,11 @@ UDPRIM freeform
            endif
 
            if     (jmax <= 1)
-               generate WIRE Body
+               generate WireBody
            elseif (kmax <= 1)
-               generate SHEET Body
+               generate SheetBody
            else
-               generate SOLID Body from outer planes of data
+               generate SolidBody from outer planes of data
            endif
 
 UDPRIM ganged Mark, Body1, ...
@@ -10035,7 +10152,7 @@ UDPRIM guide Body1 Body2
        input arguments (specified as name/value pairs):
            nxsect     number of xsections to create [default 5]
            origin     x;y;z in Body1 for beginning of guide curve
-           axis       translation type (see below)
+           $axis      translation type (see below)
        output arguments:
        usage:
            Body1 is profile
@@ -10100,6 +10217,43 @@ UDPRIM kulfan
             leading edge is at (0,0,0)
             airfoil generated in x-y plane
 
+UDPRIM linalg Body1
+       input arguments (specified as name/value pairs);
+           oper       $add for @@ans = M1 + M2
+                      $sub for @@ans = M1 + M2
+                      $mult for @@ans = M1 * M2
+                      $div  for M1 * @@and = M2
+                      $solve for M1 * @@ans = M2
+                      $trans for @@ans = (M1)transpose
+           M1         input matrix 1
+           M2         input matrix 2
+       output arguments:
+           ans        output matrix
+       usage:
+           perform indicated matrix operation
+           Body1 is left on stack
+
+UDPRIM matchBodys Body1 Body2
+       input arguments (specified as name/value pairs):
+           toler      matching tolerance                  [default 1e-6]
+           $attr      attribute to copy from Body1 to Body2
+       output arguments:
+           nnodes     number of matching Nodes
+           nedges     number of matching Edges
+           nfaces     number of matching Faces
+       notes:
+
+UDPRIM mechanism Mark Body1 ...
+       input arguments (specified as name/value pairs):
+           fixed      semi-colon-separated string of Csystems
+                          whose locations are fixed
+       output arguments:
+       usage:
+           copies of all the Bodys on the stack since the Mark
+              are placed on the stack, possibly rotated and/or
+              translated so that their Csystem are aligned
+           motion is only made in the X-Y plane
+       
 UDPRIM naca
        input arguments (specified as name/value pairs):
            series     NACA 4-digit designator             [default 0012]
@@ -10114,9 +10268,9 @@ UDPRIM naca
                extract camber, maxloc, and thickness from series
            endif
            if (thickness==0)
-               generate WIRE Body of camber line in xy-plane
+               generate WireBody of camber line in xy-plane
            else
-               generate SHEET Body in xy-plane
+               generate SheetBody in xy-plane
            endif
        notes:
            leading  edge is at (0,0,0)
@@ -10170,14 +10324,77 @@ UDPRIM naca456
            trailing edge is at (1,0,0)
            airfoil generated in x-y plane
 
+UDPRIM naca6mc Body
+       input arguments (specified as name/value pairs):
+           clt[]      design lift coefficients
+           a[]        extent of constant loadings
+       output arguments:
+       usage:
+           camber line shape is sum of NACA65-series camberlines that
+               are described by clt and a
+           if Body has only one Node
+               generate a WireBody
+           otherwise
+               generate a SheetBody by using the first Edge of Body as
+                   a thickness distribution
+        note:
+           if generating a SheetBody, the first Edge must be of unit
+               length
+          
+UDPRIM nacelle Body
+       input arguments (specified as name/value pairs):
+           f_rad[4]   front super-ellipse radii
+           a_rad[4]   aft   super-ellipse radii
+           f_pow[4]   front super-ellipse powers       [default 2]
+           a_pow[4]   aft   super-ellipse powers       [default 2]
+           length     length of nacells
+           deltah     difference in height between front
+                          and aft super-ellipses       [default 0]
+           rankang    front rake angle (deg)           [default 0]
+       output arguments:
+       usage:
+           the inlet Body is automatically scaled 0<=x<=1
+
 UDPRIM nurbbody
        input arguments (specified as name/value pairs):
-           filename   name of file (prepended with '$' or '$$/')
+           $filename  name of file
        output arguments:
        usage:
            build a SolidBody with untrimmed specified in filename
            for each Nurb, file contains 7-integer head followed
               by the real data as specified in egads.pdf file
+
+UDPRIM nuscale Body
+       input arguments (specified as name/value pairs):
+           xscale     scale factor in X-direction       [default 1]
+           yscale     scale factor in Y-direction       [default 1]
+           zscale     scale factor in Z-direction       [default 1]
+           xcent      center of scaling in X-direction  [default 0]
+           ycent      center of scaling in Y-direction  [default 0]
+           zcent      center of scaling in Z-direction  [default 0]
+       output arguments:
+       usage:
+           converts Body on stack to BSplines
+           pushes modified Body onto stack
+
+UDPRIM offset Body
+       input arguments (specified as name/value pairs):
+           nodelist   (optional) list of Nodes at which dist is specified
+           nodedist   (optional) list of distances
+           edgelist   list of Edges that scribed are generate away from
+           facelist   list of Faces that are scribed
+           dist       offset distance
+       output arguments:
+       usage:
+           if Body is a planar WireBody or SheetBody
+               make a WireBody of SheetBody that is dist
+                   away from Body
+           else
+               scribe Edges on facelist that are dist
+                   away from edgelist
+           nodelist and nodedist must have the same number of entries
+           if nodelist and nodedist are specified, override
+               the offset distance at nodelist[i] with nodedist[i]
 
 UDPRIM parabaloid
        input arguments (specified as name/value pairs):
@@ -10192,19 +10409,6 @@ UDPRIM parabaloid
                build a parabola (SheetBody) in x-z plane
            elseif zradius>0
                build a parabola (SheetBody) in x-y plane
-
-UDPRIM nuscale
-       input arguments (specified as name/value pairs):
-           xscale     scale factor in X-direction       [default 1]
-           yscale     scale factor in Y-direction       [default 1]
-           zscale     scale factor in Z-direction       [default 1]
-           xcent      center of scaling in X-direction  [default 0]
-           ycent      center of scaling in Y-direction  [default 0]
-           zcent      center of scaling in Z-direction  [default 0]
-       output arguments:
-       usage:
-           converts Body on stack to BSplines
-           pushes modified Body onto stack
 
 UDPRIM parsec
        input arguments (specified as name/value pairs):
@@ -10259,19 +10463,19 @@ UDPRIM poly
            npoints=8   hexahedron
            duplicate points allowed
 
-UDPRIM printBbox
+UDPRIM printBbox Body
        input arguments (specified as name/value pairs):
        output arguments:
        usage:
            prints bounding box info for Body on top of stack
 
-UDPRIM printBrep
+UDPRIM printBrep Body
        input arguments (specified as name/value pairs):
        output arguments:
        usage:
            prints BREP info for Body on top of stack
 
-UDPRIM printEgo
+UDPRIM printEgo Body
        input arguments (specified as name/value pairs):
        output arguments:
        usage:
@@ -10325,30 +10529,30 @@ UDPRIM sample
            dx         size in X direction    [default 0]
            dy         size in Y direction    [default 0]
            dz         size in Z direction    [default 0]
-           center     center of Body         [default 0;0;0]
+           center[]   center of Body         [default 0;0;0]
        output arguments:
            area       surface area
            volume     enclosed volume
        usage:
            if center is prescribed, it must contain 3 values
            if all dx, dy, dz are positive
-              make SOLID Body centered at center
+              make SolidBody centered at center
            elseif two of dx, dy, dz are positive
-              make SHEET Body centered at center
+              make SheetBody centered at center
            elseif one of dx, dy, dz is positive
-              make WIRE Body centered at center
+              make WireBody centered at center
            else
               error
            endif
 
 UDPRIM sew
        input arguments (specified as name/value pairs):
-           filename   name of file (prepended with '$' or '$$/')
+           $filename  name of file
            toler      tolerance
        output arguments:
        usage:
            read the .egads or .stp file
-           combines the various bodies into a single SHEET or SOLID Body
+           combines the various bodies into a single SHEET or SolidBody
            if specified toler is smaller than Face tolers, use Face tolers
 
 UDPRIM shadow
@@ -10368,7 +10572,7 @@ UDPRIM shadow
 UDPRIM slices
        input arguments (specified as name/value pairs):
            nslice     number of slices
-           dirn       direction x, X, y, Y, z, or, Z
+           $dirn      direction x, X, y, Y, z, or, Z
        output arguments:
        usage:
            pops one Body off stack
@@ -10389,7 +10593,7 @@ UDPRIM stag
        usage:
            generate a simple turbomachinery airfoil
 
-UDPRIM stiffener
+UDPRIM stiffener Body
        input arguments (specified as name/value pairs):
            beg         either 2 values (u;v) or 3 values (x;y;z) at beg
            end         either 2 values (u;v) or 3 values (x;y;z) at end
@@ -10448,8 +10652,8 @@ UDPRIM supell
 
 UDPRIM tblade
        input arguments (specified as name/value pairs):
-           filename       Tblade input file
-           auxname        name of either spancontrolinputs or
+           $filename      Tblade input file
+           $auxname       name of either spancontrolinputs or
                              controlinputs file (depending on input file)
            ncp             number of control points in fit
            chord           override values
@@ -10486,7 +10690,7 @@ UDPRIM waffle
        input arguments (specified as name/value pairs):
            depth      depth in z-direction   [default 1]
            segments   array of segments
-           filename   name of file
+           $filename  name of file
            progress   turn on progress print [default 0]
            layout     generate WireBodys instead of waffle [default 0]
        output arguments:
@@ -10500,7 +10704,7 @@ UDPRIM waffle
                        ybeg=segments[4*i+1]
                        xend=segments[4*i+2]
                        yend=segments[4(i+3]
-                       generate SHEET Body from (xbeg,ybeg,0) to (xend,yend,depth)
+                       generate SheetBody from (xbeg,ybeg,0) to (xend,yend,depth)
                    endfor
                endif
            elseif (filename is set)
@@ -10643,6 +10847,26 @@ UDPRIM $$/popupz
        usage:
            scribes a counterclockwise quad and pops it up
        notes:
+
+UDPRIM $$/replicate
+       input arguments (specified as name/value pairs):
+           ncopy      number of copies (in 360 deg)
+           xcent      X-center of rotation
+           ycent      Y-center of rotation
+           toler      tolerance for union
+       output arguments:
+           nunion     number of unions performed
+       usage:
+           makes ncopy copies of Body on top of stack and UNIONS them
+               together with the minimum number of operations
+
+UDPRIM $$/splitEdges
+       input arguments (specified as name/value pairs):
+       output arguments:
+       usage:
+           for each Edge that has a mySplits attribute, split
+               the edge at the relative arclengths specified
+               in the value(s) associated with mySplits
 
 UDPRIM $$/spoilerz
        input arguments (specified as name/value pairs):
@@ -14045,13 +14269,13 @@ end
        arguments to the BLEND command no longer need to be
        normalized.
 
-    <p>If the arguments to the SUBTRACT command are a SOLID Body and
-       a SHEET Body, then the SOLID Body is scribed with Edges at the
+    <p>If the arguments to the SUBTRACT command are a SolidBody and
+       a SheetBody, then the SolidBody is scribed with Edges at the
        intersection of the SOLID and SHEET.
 
     <p>An optional argument (wireonly) has been added to the SKEND
        command; if wireonly is set to 1, then a (possibly non-planar)
-       WIRE Body is created instead of a SHEET Body.
+       WireBody is created instead of a SheetBody.
 
     <p>Array elements can be addressed with a single subscript, which
        are numbered across rows.
@@ -14376,7 +14600,7 @@ EGADS_READERR                         -32
 
     <p><h2 id="sec11">11.0: Copyright</h2>
 
-    <p>Copyright (C) 2010/2022 John F. Dannenhoffer, III (Syracuse
+    <p>Copyright (C) 2010/2023 John F. Dannenhoffer, III (Syracuse
        University)
 
     <p>This library is free software; you can redistribute it and/or

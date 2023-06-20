@@ -6822,12 +6822,12 @@ int fea_getLoad(int numLoadTuple,
              * \section jsonStringLoad JSON String Dictionary
              *
              * If "Value" is JSON string dictionary
-             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || ABAQUS)
+             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || ABAQUS || TACS)
              *  (e.g. "Value" = {"groupName": "plate", "loadType": "Pressure", "pressureForce": 2000000.0})
              * \endif
              *  the following keywords ( = default values) may be used:
              *
-             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * \if (MYSTRAN || NASTRAN || ASTROS || TACS)
              * <ul>
              *  <li> <B>loadType = "(no default)"</B> </li> <br>
              *  Type of load. Options: "GridForce", "GridMoment", "Rotational", "Thermal",
@@ -6879,15 +6879,12 @@ int fea_getLoad(int numLoadTuple,
                 return status;
             }
 
-            if (keyValue != NULL) {
-                EG_free(keyValue);
-                keyValue = NULL;
-            }
+            AIM_FREE(keyValue);
 
             // Get load node/element set
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || ABAQUS)
+             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || ABAQUS || TACS)
              * <ul>
              *  <li> <B>groupName = "(no default)"</B> </li> <br>
              *  Single or list of <c>capsLoad</c> names on which to apply the load
@@ -7071,14 +7068,13 @@ int fea_getLoad(int numLoadTuple,
             groupName = NULL;
 
             // Free keyValue (just in case)
-            if (keyValue != NULL) EG_free(keyValue);
-            keyValue = NULL;
+            AIM_FREE(keyValue);
 
             //Fill up load properties
 
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * \if (MYSTRAN || NASTRAN || ASTROS || TACS)
              * <ul>
              *  <li> <B>loadScaleFactor = 1.0 </B> </li> <br>
              *  Scale factor to use when combining loads.
@@ -7099,7 +7095,7 @@ int fea_getLoad(int numLoadTuple,
 
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || HSM || ASTROS)
+             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || TACS)
              * <ul>
              *  <li> <B>forceScaleFactor = 0.0 </B> </li> <br>
              *  Overall scale factor for the force for a "GridForce" load.
@@ -7120,7 +7116,7 @@ int fea_getLoad(int numLoadTuple,
 
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || HSM || ASTROS)
+             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || TACS)
              * <ul>
              *  <li> <B>directionVector = [0.0, 0.0, 0.0] </B> </li> <br>
              *  X-, y-, and z- components of the force vector for a "GridForce", "GridMoment", or "Gravity" load.
@@ -7149,7 +7145,7 @@ int fea_getLoad(int numLoadTuple,
 
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || HSM || ASTROS)
+             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || TACS)
              * <ul>
              *  <li> <B>momentScaleFactor = 0.0 </B> </li> <br>
              *  Overall scale factor for the moment for a "GridMoment" load.
@@ -7171,7 +7167,7 @@ int fea_getLoad(int numLoadTuple,
 
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || ABAQUS)
+             * \if (MYSTRAN || NASTRAN || HSM || ASTROS || ABAQUS || TACS)
              * <ul>
              *  <li> <B>gravityAcceleration = 0.0 </B> </li> <br>
              *  Acceleration value for a "Gravity" load.
@@ -7197,7 +7193,7 @@ int fea_getLoad(int numLoadTuple,
              *  <li> <B>pressureForce = 0.0 </B> </li> <br>
              *  Uniform pressure force for a "Pressure" load (only applicable to 2D elements).
              * </ul>
-             * \elseif (NASTRAN || HSM || ASTROS || ABAQUS)
+             * \elseif (NASTRAN || HSM || ASTROS || ABAQUS || TACS)
              *  <ul>
              *  <li> <B>pressureForce = 0.0 </B> </li> <br>
              *  Uniform pressure force for a "Pressure" load.
@@ -7224,7 +7220,7 @@ int fea_getLoad(int numLoadTuple,
              *  Distributed pressure force for a "PressureDistribute" load (only applicable to 2D elements). The four values
              *  correspond to the 4 (quadrilateral elements) or 3 (triangle elements) node locations.
              * </ul>
-             * \elseif (NASTRAN || HSM || ASTROS)
+             * \elseif (NASTRAN || HSM || ASTROS || TACS)
              * <ul>
              *  <li> <B>pressureDistributeForce = [0.0, 0.0, 0.0, 0.0] </B> </li> <br>
              *  Distributed pressure force for a "PressureDistribute" load. The four values
@@ -7248,7 +7244,7 @@ int fea_getLoad(int numLoadTuple,
 
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * \if (MYSTRAN || NASTRAN || ASTROS || TACS)
              * <ul>
              *  <li> <B>angularVelScaleFactor = 0.0 </B> </li> <br>
              *  An overall scale factor for the angular velocity in revolutions per unit time for a "Rotational" load.
@@ -7274,7 +7270,7 @@ int fea_getLoad(int numLoadTuple,
 
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * \if (MYSTRAN || NASTRAN || ASTROS || TACS)
              * <ul>
              *  <li> <B>angularAccScaleFactor = 0.0 </B> </li> <br>
              *  An overall scale factor for the angular acceleration in revolutions per unit time squared for a "Rotational" load.
@@ -7300,7 +7296,7 @@ int fea_getLoad(int numLoadTuple,
 
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * \if (MYSTRAN || NASTRAN || ASTROS || TACS)
              * <ul>
              *  <li> <B>coordinateSystem = "(no default)" </B> </li> <br>
              *  Name of coordinate system in which defined force components are in reference to. If no value
@@ -7341,7 +7337,7 @@ int fea_getLoad(int numLoadTuple,
 
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * \if (MYSTRAN || NASTRAN || ASTROS || TACS)
              * <ul>
              *  <li> <B>temperature = 0.0 </B> </li> <br>
              *  Temperature at a given node for a "Temperature" load.
@@ -7362,7 +7358,7 @@ int fea_getLoad(int numLoadTuple,
 
             /*! \page feaLoad
              *
-             * \if (MYSTRAN || NASTRAN || ASTROS)
+             * \if (MYSTRAN || NASTRAN || ASTROS || TACS)
              * <ul>
              *  <li> <B>temperatureDefault = 0.0 </B> </li> <br>
              *  Default temperature at a node not explicitly being used for a "Temperature" load.
@@ -8642,6 +8638,7 @@ int fea_getDesignVariable(void *aimInfo,
     char *keyWord = NULL;
 
     int tempInteger = 0;
+    int designVariableID = 0;
 
     char **groupName = NULL;
     int  numGroupName = 0;
@@ -8699,8 +8696,6 @@ int fea_getDesignVariable(void *aimInfo,
         printf("\tDesign_Variable name - %s\n", designVariableTuple[i].name);
 
         AIM_STRDUP(designVariable->name, designVariableTuple[i].name, aimInfo, status);
-
-        designVariable->designVariableID = i + 1;
 
         // Do we have a json string?
         if (json_isDict(designVariableTuple[i].value)) {
@@ -8976,6 +8971,23 @@ int fea_getDesignVariable(void *aimInfo,
 
     AIM_FREE(keyValue);
 
+    // Order the design variable ID's such that Analysis and Geometry ID's are continuous.
+    // This is required by the TACS AIM
+
+    designVariableID = 1;
+    for( i = 0; i < feaProblem->numDesignVariable; i++) {
+
+        // only analysis design variables
+        if (aim_getIndex(aimInfo, feaProblem->feaDesignVariable[i].name, GEOMETRYIN) <= 0)
+          feaProblem->feaDesignVariable[i].designVariableID = designVariableID++;
+    }
+    for( i = 0; i < feaProblem->numDesignVariable; i++) {
+
+        // only geometry design variables
+        if (aim_getIndex(aimInfo, feaProblem->feaDesignVariable[i].name, GEOMETRYIN) > 0)
+          feaProblem->feaDesignVariable[i].designVariableID = designVariableID++;
+    }
+
     // Now that we are done going through all the tuples we need to populate/create the independVaraiableID array
     // if independentVariable was set for any of them.
     for (i = 0; i < feaProblem->numDesignVariable; i++) {
@@ -9111,7 +9123,7 @@ int fea_getDesignVariableRelationEntry(void *aimInfo,
      *
      */
     if (!json_isDict(designVariableInput->value)) {
-        PRINT_ERROR(
+        AIM_ERROR(aimInfo,
             "'Design_Variable_Relation' tuple value must be a JSON dictionary");
         return CAPS_BADVALUE;
     }
@@ -9297,7 +9309,7 @@ int fea_getDesignVariableRelationEntry(void *aimInfo,
         &designVariableRelation->numDesignVariable, &designVariableRelation->designVariableNameSet);
     if (status != CAPS_SUCCESS) {
         // required
-        PRINT_ERROR("No \"%s\" specified for Design_Variable_Relation tuple %s",
+        AIM_ERROR(aimInfo, "No \"%s\" specified for Design_Variable_Relation tuple %s",
                     keyWord, designVariableInput->name);
         goto cleanup;
     }
@@ -9429,7 +9441,7 @@ int fea_getDesignVariableRelationEntry(void *aimInfo,
     }
 
     if (numLinearCoeff != designVariableRelation->numDesignVariable) {
-        PRINT_ERROR("Number of \"linearCoeff\" values (%d) does not match"
+        AIM_ERROR(aimInfo, "Number of \"linearCoeff\" values (%d) does not match"
                     " number of \"variableName\" values (%d)",
                     numLinearCoeff, designVariableRelation->numDesignVariable);
         status = CAPS_BADVALUE;
@@ -10456,7 +10468,8 @@ static int _matchResponseNode(meshNodeStruct *node, void *responseIndex) {
     return (int) false;
 }
 
-int fea_getDesignResponse(int numDesignResponseTuple,
+int fea_getDesignResponse(/*@unused@*/ void *aimInfo,
+                          int numDesignResponseTuple,
                           capsTuple designResponseTuple[],
                           mapAttrToIndexStruct *responseMap,
                           feaProblemStruct *feaProblem) {
@@ -10545,7 +10558,7 @@ int fea_getDesignResponse(int numDesignResponseTuple,
          */
         // make sure design response tuple value is json string
         if (!json_isDict(designResponseTuple[i].value)) {
-            PRINT_ERROR(
+            AIM_ERROR(aimInfo,
                 "'Design_Response' tuple value must be a JSON dictionary");
             return CAPS_BADVALUE;
         }
@@ -10564,7 +10577,7 @@ int fea_getDesignResponse(int numDesignResponseTuple,
         status = json_getString(
             designResponseTuple[i].value, keyword, &response->responseType);
         if (status != CAPS_SUCCESS) {
-            PRINT_ERROR("Missing required entry \"responseType\" "
+            AIM_ERROR(aimInfo, "Missing required entry \"responseType\" "
                         "in 'Design_Response' tuple value");
             return status;
         }
@@ -10629,7 +10642,7 @@ int fea_getDesignResponse(int numDesignResponseTuple,
             if (status != CAPS_SUCCESS) return status;
 
             if (numNode == 0) {
-                PRINT_ERROR("No node found for capsGroup %s", groupName);
+                AIM_ERROR(aimInfo, "No node found for capsGroup %s", groupName);
                 return CAPS_NOTFOUND;
             }
             else if (numNode > 1) { // TODO: would there ever be more than 1 node expected?
@@ -10646,7 +10659,7 @@ int fea_getDesignResponse(int numDesignResponseTuple,
         }
         else {
             // required
-            // PRINT_ERROR("Missing required entry \"groupName\" "
+            // AIM_ERROR(aimInfo, "Missing required entry \"groupName\" "
             //             "in 'Design_Response' tuple value");
             // return status;
         }

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -259,7 +259,7 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program sensCSM                     *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2022         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2023         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************\n");
 
@@ -645,6 +645,9 @@ checkGeomSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
             status = EG_getTessFace(MODL->body[ibody].etess, iface,
                                     &npnt_tess, &xyz, &uv, &ptype, &pindx,
                                     &ntri_tess, &tris, &tric);
+            if (status == EGADS_NODATA) {                   /* can happen if .tParams[0]<0 */
+                continue;
+            }
             CHECK_STATUS(EG_getTessFace);
             if (npnt_tess <= 0) {
                 SPRINT3(0, "ERROR:: EG_getTessFace -> status=%d (%s), npnt_tess=%d",
@@ -747,6 +750,9 @@ checkGeomSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
             status = EG_getTessFace(MODL->body[ibody].etess, iface,
                                     &npnt_tess, &xyz, &uv, &ptype, &pindx,
                                     &ntri_tess, &tris, &tric);
+            if (status == EGADS_NODATA) {                   /* can happen if .tParams[0]<0 */
+                continue;
+            }
             CHECK_STATUS(EG_getTessFace);
 
             MALLOC(face_fdif[iface], double, 3*npnt_tess);
@@ -829,6 +835,10 @@ checkGeomSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
                 status = EG_getTessFace(MODL->body[ibody].etess, iface,
                                         &npnt_tess, &xyz, &uv, &ptype, &pindx,
                                         &ntri_tess, &tris, &tric);
+                if (status == EGADS_NODATA) {               /* can happen if .tParams[0]<0 */
+                    status = EGADS_SUCCESS;
+                    continue;
+                }
                 CHECK_STATUS(EG_getTessFace);
 
                 for (ipnt = 0; ipnt < npnt_tess; ipnt++) {
@@ -877,6 +887,10 @@ checkGeomSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
             status = EG_getTessFace(MODL->body[ibody].etess, iface,
                                     &npnt_tess, &xyz, &uv, &ptype, &pindx,
                                     &ntri_tess, &tris, &tric);
+            if (status == EGADS_NODATA) {                   /* can happen if .tParams[0]<0 */
+                status = EGADS_SUCCESS;
+                continue;
+            }
             CHECK_STATUS(EG_getTessFace);
 
             status = EG_attributeRet(MODL->body[ibody].face[iface].eface, "__sensCheck__",
@@ -1250,6 +1264,10 @@ checkTessSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
             status = EG_getTessFace(MODL->body[ibody].etess, iface,
                                     &npnt_tess, &xyz, &uv, &ptype, &pindx,
                                     &ntri_tess, &tris, &tric);
+            if (status == EGADS_NODATA) {                   /* can happen if .tParams[0]<0 */
+                status = EGADS_SUCCESS;
+                continue;
+            }
             CHECK_STATUS(EG_getTessFace);
             if (npnt_tess <= 0) {
                 SPRINT3(0, "ERROR:: EG_getTessFace -> status=%d (%s), npnt_tess=%d",
@@ -1372,6 +1390,10 @@ checkTessSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
             status = EG_getTessFace(MODL->body[ibody].etess, iface,
                                     &npnt_tess, &xyz, &uv, &ptype, &pindx,
                                     &ntri_tess, &tris, &tric);
+            if (status == EGADS_NODATA) {                   /* can happen if .tParams[0]<0 */
+                status = EGADS_SUCCESS;
+                continue;
+            }
             CHECK_STATUS(EG_getTessFace);
 
             if (npnt_tess <= 0) {
@@ -1397,6 +1419,10 @@ checkTessSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
             status = EG_getTessFace(MODL->body[ibody].etess, iface,
                                     &npnt_tess, &xyz, &uv, &ptype, &pindx,
                                     &ntri_tess, &tris, &tric);
+            if (status == EGADS_NODATA) {                   /* can happen if .tParams[0]<0 */
+                status = EGADS_SUCCESS;
+                continue;
+            }
             CHECK_STATUS(EG_getTessFace);
 
             MALLOC(Dist, double, npnt_tess);

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -88,8 +88,6 @@ static int      printHistogram(FILE *fp, int nhist, double dhist[], int hist[]);
 
 #define  EPS03     1.0e-03
 #define  MAX(A,B)  (((A) < (B)) ? (B) : (A))
-
-static void *realloc_temp=NULL;              /* used by RALLOC macro */
 
 #define TESS_PARAM_0      0.0250
 #define TESS_PARAM_1      0.0075

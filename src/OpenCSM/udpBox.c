@@ -11,7 +11,7 @@
  */
 
 /*
- * Copyright (C) 2013/2022  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -199,8 +199,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         status = EG_getMassProperties(*ebody, data);
         CHECK_STATUS(EG_getMassProperties);
 
-        AREA(0)   = data[1];
-        VOLUME(0) = data[0];
+        AREA(  numUdp)   = data[1];
+        VOLUME(numUdp) = data[0];
 
         /* remember this model (body) */
         udps[numUdp].ebody = *ebody;
@@ -335,8 +335,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         status = EG_getMassProperties(*ebody, data);
         CHECK_STATUS(EG_getMassProperties);
 
-        AREA(0)   = data[1];
-        VOLUME(0) = data[0];
+        AREA(  numUdp)   = data[1];
+        VOLUME(numUdp) = data[0];
 
         /* remember this model (body) */
         udps[numUdp].ebody = *ebody;
@@ -477,8 +477,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         status = EG_getMassProperties(*ebody, data);
         CHECK_STATUS(EG_getMassProperties);
 
-        AREA(0)   = data[1];
-        VOLUME(0) = data[0];
+        AREA(  numUdp)   = data[1];
+        VOLUME(numUdp) = data[0];
 
         /* remember this model (body) */
         udps[numUdp].ebody = *ebody;
@@ -955,8 +955,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
         status = EG_getMassProperties(*ebody, data);
         CHECK_STATUS(EG_getMassProperties);
 
-        AREA(0)   = data[1];
-        VOLUME(0) = data[0];
+        AREA(  numUdp)   = data[1];
+        VOLUME(numUdp) = data[0];
 
         /* remember this model (body) */
         udps[numUdp].ebody = *ebody;
@@ -1009,8 +1009,13 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
     /* --------------------------------------------------------------- */
     
 #ifdef DEBUG
-    printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f)\n",
-           (long long)ebody, npnt, entType, entIndex, uvs[0]);
+    if (uvs != NULL) {
+        printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=%f)\n",
+               (long long)ebody, npnt, entType, entIndex, uvs[0]);
+    } else {
+        printf("udpSensitivity(ebody=%llx, npnt=%d, entType=%d, entIndex=%d, uvs=NULL)\n",
+               (long long)ebody, npnt, entType, entIndex);
+    }
 #endif
 
     /* check that ebody matches one of the ebodys */

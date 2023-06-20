@@ -305,7 +305,8 @@ int tetgen_VolumeMesh(void *aimInfo,
     char temp[120] = "p"; // Tetrahedralize a piecewise linear complex flag
     char q[80];
     const char* tetgenDebugSurface = "tetgenDebugSurface";
-    char aimFile[PATH_MAX];
+    char aimFile[PATH_MAX], volFile[PATH_MAX];
+    FILE *fp = NULL;
 
     int i1=1, i2=0;
     tetgenio tmpMesh[2];
@@ -318,6 +319,15 @@ int tetgen_VolumeMesh(void *aimInfo,
 
     status = copy_regions(aimInfo, &meshInput.tetgenInput.regions, &regions);
     AIM_STATUS(aimInfo, status);
+
+    snprintf(volFile, PATH_MAX, "%s.txt", fileName);
+    fp = fopen(volFile, "w");
+    if (fp == NULL) {
+        AIM_ERROR(aimInfo, "Failed to open '%s'!", volFile);
+        status = CAPS_IOERR;
+        goto cleanup;
+    }
+
 
     // If no input string is provided create a simple one based on exposed parameters
     if (meshInput.tetgenInput.meshInputString == NULL) {
@@ -685,6 +695,8 @@ int tetgen_VolumeMesh(void *aimInfo,
             return CAPS_EXECERR;
         }
 
+        fprintf(fp, "%d\n", out.numberofpoints);
+
         if (numSurfMesh == 1) {
             tmpMesh[i1] = out;
             out.initialize();
@@ -760,6 +772,7 @@ int tetgen_VolumeMesh(void *aimInfo,
     status = CAPS_SUCCESS;
     printf("Done meshing using TetGen!\n");
 cleanup:
+    if (fp != NULL) fclose(fp);
     destroy_regions(&regions);
 
     return status;

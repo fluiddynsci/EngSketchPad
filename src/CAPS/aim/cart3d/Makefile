@@ -32,18 +32,22 @@ ifeq ($(ESP_ARCH),DARWIN64)
 XMLIB = -lxml2
 endif
 
+# Suppress ld: warning: could not create compact unwind
+# Remove this when it's no longer necessary...
+ifeq ($(ESP_ARCH),DARWIN_ARM64)
+XMLIB += -Wl,-no_compact_unwind
+endif
+
+# Cart3D not availble on linux aarch64 yet
+ifeq ($(ESP_ARCH),LINUX_AARCH64)
+XMLIB= 
+endif
 
 ifeq ("$(XMLIB)","")
 default:
 	@echo "XML developer libarary missing. Not compiling cart3dAIM."
 else
 default:	$(LDIR)/cart3dAIM.so $(TDIR)/cart3dTest $(BDIR)/ESPxddm
-endif
-
-# Suppress ld: warning: could not create compact unwind
-# Remove this when it's no longer necessary...
-ifeq ("$(ESP_ARCH)","DARWINM1")
-XMLIB += -Wl,-no_compact_unwind
 endif
 
 

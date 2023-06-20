@@ -35,18 +35,18 @@ myProblem = pyCAPS.Problem(problemName=workDir,
                            outLevel=args.outLevel)
 
 # Load AIMs
-surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
-                                     name= "egads",
+surfMesh = myProblem.analysis.create(aim = "aflr4AIM",
+                                     name= "aflr4",
                                      capsIntent = "Aerodynamic")
 
-mesh = myProblem.analysis.create(aim = "tetgenAIM", 
-                                 name= "tetgen",
+mesh = myProblem.analysis.create(aim = "aflr3AIM",
+                                 name= "aflr3",
                                  capsIntent = "Aerodynamic")
 
 mesh.input["Surface_Mesh"].link(surfMesh.output["Surface_Mesh"])
 
-su2 = myProblem.analysis.create(aim = "su2AIM", 
-                                name = "su2", 
+su2 = myProblem.analysis.create(aim = "su2AIM",
+                                name = "su2",
                                 capsIntent = "Aerodynamic")
 
 su2.input["Mesh"].link(mesh.output["Volume_Mesh"])
@@ -76,12 +76,15 @@ for boundName in boundNames:
     # Close the bound as complete (cannot create more vertex or data sets)
     bound.close()
 
-# Set inputs for egads 
-surfMesh.input.Tess_Params = [.3, 0.01, 20.0]
-surfMesh.input.Edge_Point_Max = 6
 
-# Set inputs for tetgen 
-mesh.input.Preserve_Surf_Mesh = True
+# Farfield growth factor
+surfMesh.input.ff_cdfr = 1.4
+
+# Set maximum and minimum edge lengths relative to capsMeshLength
+surfMesh.input.max_scale = 0.75
+surfMesh.input.min_scale = 0.1
+
+# Set inputs for volume mesh
 mesh.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set inputs for su2

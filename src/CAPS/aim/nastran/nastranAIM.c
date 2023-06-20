@@ -1642,7 +1642,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set design responses
     if (aimInputs[Design_Response-1].nullVal == NotNull) {
-        status = fea_getDesignResponse(aimInputs[Design_Response-1].length,
+        status = fea_getDesignResponse(aimInfo,
+                                       aimInputs[Design_Response-1].length,
                                        aimInputs[Design_Response-1].vals.tuple,
                                        &nastranInstance->responseMap,
                                        &nastranInstance->feaProblem);

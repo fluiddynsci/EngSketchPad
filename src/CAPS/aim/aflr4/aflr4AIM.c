@@ -138,6 +138,15 @@
  * scaled on the face/edge by the value of the scale factor set with
  * AFLR4_Scale_Factor.<br>
  * <br>
+ * - <b> AFLR4_quad_local</b> [Optional FACE attribute: Default 0.0]<br>
+ * Local quad-face combination flag.<br>
+ * If AFLR4_quad_local is set to 0, then do not combine tria-faces to form
+ * quad-faces.<br>
+ * If AFLR4_quad_local is set to 1, then combine tria-faces to form quad-faces.<br>
+ * This option also locally selects advancing-point point placement rather than
+ * the default advancing-front point placement.
+ * Note that if not set then the local quad-face combination flag is set to the
+ * global quad-face combination flag AFLR4_quad.
  */
 
 #ifdef WIN32
@@ -886,25 +895,47 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
     } else if (index == Multiple_Mesh) {
         *ainame               = EG_strdup("Multiple_Mesh");
-        defval->type          = Boolean;
-        defval->vals.integer  = (int) true;
+        defval->type          = String;
+        AIM_STRDUP(defval->vals.string, "SingleDomain", aimInfo, status);
 
         /*! \page aimInputsAFLR4
-         * - <B> Multiple_Mesh = True</B> <br>
-         * If set to True (default) a surface mesh will be generated and output (given "Proj_Name" is set) for each body.
-         * When set to False only a single surface
-         * mesh will be created. Note, this only affects the mesh when writing to a
-         * file.
+         * - <B> Multiple_Mesh = "SingleDomain"</B> <br>
+         * If "SingleDomain": Generate a single surface mesh file is assuming multiple
+         * bodies define a single computational domain (i.e. CFD)<br>
+         * <br>
+         * If "MultiFile": Generate a surface mesh file for each body.<br>
+         * <br>
+         * If "MultiDomain": Generate a single mesh file containing multiple surface meshes for each body.<br>
          */
 
     } else if (index == EGADS_Quad) {
         *ainame              = EG_strdup("EGADS_Quad");
         defval->type         = Boolean;
-        defval->vals.integer  = false;
+        defval->vals.integer = false;
 
         /*! \page aimInputsAFLR4
          * - <B> EGADS_Quad = False </B> <br>
-         * Apply EGADS quadding to the AFLR4 triangulation.
+         * If true, apply EGADS quadding to the AFLR4 triangulation.
+         */
+
+    } else if (index == AFLR4_Quad) {
+        *ainame              = EG_strdup("AFLR4_Quad");
+        defval->type         = Boolean;
+        defval->vals.integer = false;
+
+        /*! \page aimInputsAFLR4
+         * - <B> AFLR4_Quad = False </B> <br>
+         * If true, apply -quad flag for AFLR4 quadding.
+         */
+
+    } else if (index == Skin) {
+        *ainame              = EG_strdup("skin");
+        defval->type         = Boolean;
+        defval->vals.integer = false;
+
+        /*! \page aimInputsAFLR4
+         * - <B> skin = False </B> <br>
+         * If true, apply -skin flag to automatically set the grid BCs for structural cases.
          */
 
     } else {
@@ -963,12 +994,20 @@ int aimUpdateState(void *instStore, void *aimInfo,
     status = destroy_aimStorage(aflr4Instance, (int)true);
     AIM_STATUS(aimInfo, status);
 
+    if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") != 0 &&
+        strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") != 0 &&
+        strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiDomain") != 0) {
+        AIM_ERROR(aimInfo, "Multiple_Mesh = '%s' must be 'SingleDomain', 'MultiFile', or 'MultiDomain'", aimInputs[Multiple_Mesh-1].vals.string);
+        status = CAPS_BADVALUE;
+        goto cleanup;
+    }
+
     if (aflr4Instance->groupMap.numAttribute == 0 ||
         aim_newGeometry(aimInfo) == CAPS_SUCCESS ) {
         // Get capsGroup name and index mapping to make sure all faces have a capsGroup value
         status = create_CAPSGroupAttrToIndexMap(numBody,
                                                 bodies,
-                                                3, // Node level
+                                                -1, // Faces only
                                                 &aflr4Instance->groupMap);
         AIM_STATUS(aimInfo, status);
     }
@@ -977,7 +1016,7 @@ int aimUpdateState(void *instStore, void *aimInfo,
         aim_newGeometry(aimInfo) == CAPS_SUCCESS ) {
         status = create_CAPSMeshAttrToIndexMap(numBody,
                                                bodies,
-                                               3, // Node level
+                                               2, // Body, Face, and Edge
                                                &aflr4Instance->meshMap);
         AIM_STATUS(aimInfo, status);
     }
@@ -1049,6 +1088,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     int status; // Status return
 
     int bodyIndex; // Indexing
+    int MultiMesh = 0;
 
     // Body parameters
     const char *intents;
@@ -1077,12 +1117,40 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
     aflr4Instance = (const aimStorage *) instStore;
 
-    status = aflr4_Surface_Mesh(aimInfo,
-                                aflr4Instance->meshInput.quiet,
-                                numBody, bodies,
-                                aimInputs,
-                                aflr4Instance->meshInput);
-    AIM_STATUS(aimInfo, status, "Problem during AFLR4 surface meshing");
+    if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
+      MultiMesh = 0;
+    } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") == 0) {
+      MultiMesh = 1;
+    } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiDomain") == 0) {
+      MultiMesh = 2;
+    } else {
+      AIM_ERROR(aimInfo, "Developer error! Unkown Multiple_Mesh %s", aimInputs[Multiple_Mesh-1].vals.string);
+      status = CAPS_BADVALUE;
+      goto cleanup;
+    }
+
+    if (MultiMesh == 2) {
+
+        for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++) {
+
+            status = aflr4_Surface_Mesh(aimInfo,
+                                        bodyIndex,
+                                        aflr4Instance->meshInput.quiet,
+                                        1, &bodies[bodyIndex],
+                                        aimInputs,
+                                        aflr4Instance->meshInput);
+            AIM_STATUS(aimInfo, status, "Problem during AFLR4 surface meshing");
+        }
+
+    } else {
+        status = aflr4_Surface_Mesh(aimInfo,
+                                    0,
+                                    aflr4Instance->meshInput.quiet,
+                                    numBody, bodies,
+                                    aimInputs,
+                                    aflr4Instance->meshInput);
+        AIM_STATUS(aimInfo, status, "Problem during AFLR4 surface meshing");
+    }
 
     if (aflr4Instance->meshInput.outputFileName != NULL) {
 
@@ -1195,6 +1263,7 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
 
     int status = CAPS_SUCCESS;
     int bodyIndex;
+    int MultiMesh = 0;
 
     int numNodeTotal=0, numElemTotal=0;
 
@@ -1232,7 +1301,19 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
         AIM_STATUS(aimInfo, status);
     }
 
-    // Run egadsTess for each body
+    if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
+      MultiMesh = 0;
+    } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") == 0) {
+      MultiMesh = 1;
+    } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiDomain") == 0) {
+      MultiMesh = 2;
+    } else {
+      AIM_ERROR(aimInfo, "Developer error! Unkown Multiple_Mesh %s", aimInputs[Multiple_Mesh-1].vals.string);
+      status = CAPS_BADVALUE;
+      goto cleanup;
+    }
+
+    // Read mesh for each body
     for (bodyIndex = 0 ; bodyIndex < numBody; bodyIndex++) {
 
         status = copy_mapAttrToIndexStruct( &aflr4Instance->groupMap,
@@ -1247,7 +1328,7 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
         status = EG_loadTess(bodies[bodyIndex], aimFile, &aflr4Instance->surfaceMesh[bodyIndex].egadsTess);
         AIM_STATUS(aimInfo, status);
 
-        status = mesh_surfaceMeshEGADSTess(aimInfo, &aflr4Instance->surfaceMesh[bodyIndex]);
+        status = mesh_surfaceMeshEGADSTess(aimInfo, &aflr4Instance->surfaceMesh[bodyIndex], (int)false);
         AIM_STATUS(aimInfo, status);
 
         status = aim_newTess(aimInfo, aflr4Instance->surfaceMesh[bodyIndex].egadsTess);
@@ -1302,7 +1383,7 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
         if (aflr4Instance->meshInput.outputFileName != NULL) {
 
             // We need to combine the mesh
-            if (aimInputs[Multiple_Mesh-1].vals.integer == (int) false) {
+            if (MultiMesh == 0 || MultiMesh == 2) {
 
                 status = mesh_combineMeshStruct(aflr4Instance->numSurface,
                                                 aflr4Instance->surfaceMesh,

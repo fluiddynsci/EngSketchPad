@@ -3,7 +3,7 @@
  *
  *             AIM Utility Functions
  *
- *      Copyright 2014-2022, Massachusetts Institute of Technology
+ * *      Copyright 2014-2023, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -118,7 +118,7 @@ aim_fileLink(void *aimStruc, /*@null@*/ char *srcPath)
     return CAPS_DIRERR;
   }
   if (access(aimFile, F_OK) != 0) return CAPS_NOTFOUND;
-  
+
   if (srcPath != NULL) {
     fp = fopen(aimFile, "r");
     if (fp == NULL) {
@@ -168,7 +168,7 @@ aim_file(void *aimStruc, const char *file, char *aimFile)
   if (aInfo == NULL)                   return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
   analysis = (capsAnalysis *) aInfo->analysis;
-  
+
   status = aim_fileLink(aimStruc, srcPath);
   if (status == CAPS_SUCCESS) {
     status = snprintf(aimFile, PATH_MAX, "%s%c%s",
@@ -265,7 +265,7 @@ aim_mkDir(void *aimStruc, const char *path)
   int  status;
   char aimDir[PATH_MAX];
   aimInfo *aInfo;
-  
+
   aInfo = (aimInfo *) aimStruc;
   if (aInfo == NULL)                   return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
@@ -308,7 +308,7 @@ aim_rmDir(void *aimStruc, const char *path)
   char aimDir[PATH_MAX];
   int  wild = (int) false;
   aimInfo *aInfo;
-  
+
   aInfo = (aimInfo *) aimStruc;
   if (aInfo == NULL)                   return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
@@ -366,7 +366,7 @@ aim_rmFile(void *aimStruc, const char *file)
   int  status;
   char aimFile[PATH_MAX];
   aimInfo *aInfo;
-  
+
   aInfo = (aimInfo *) aimStruc;
   if (aInfo == NULL)                   return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
@@ -483,7 +483,7 @@ int aim_relPath(void *aimStruc, const char *src,
     status   = aim_file(aimStruc, ".", aimDst);
   }
   AIM_STATUS(aimStruc, status);
-  
+
   /* get Problem path */
   len = strlen(problem->root);
   for (k = len-1; k > 0; k--)
@@ -497,12 +497,12 @@ int aim_relPath(void *aimStruc, const char *src,
       AIM_ERROR(aimStruc, "Problem path mismatch!");
       return CAPS_IOERR;
     }
-  
+
   if (strcmp(src, aimDst) == 0) {
     relPath[0] = '.';
     return CAPS_SUCCESS;
   }
-  
+
   /* find the level */
   lsrc = strlen(src);
   ldst = strlen(aimDst);
@@ -558,7 +558,7 @@ int aim_symLink(void *aimStruc, const char *src, /*@null@*/ const char *dst)
     AIM_ERROR(aimStruc, "%s Not a File!", src);
     return CAPS_IOERR;
   }
-  
+
   status = aim_fileLink(aimStruc, NULL);
   if (status == CAPS_SUCCESS) {
     AIM_ERROR(aimStruc, "Making a symLink in a CAPS link!");
@@ -624,7 +624,7 @@ aim_fopen(void *aimStruc, const char *path, const char *mode)
   if (aInfo == NULL)                   return NULL;
   if (aInfo->magicnumber != CAPSMAGIC) return NULL;
   analysis = (capsAnalysis *) aInfo->analysis;
-  
+
   if (aInfo->funID == AIM_UPDATESTATE) {
     len = strlen(mode);
     for (i = 0; i < len; i++)
@@ -665,7 +665,7 @@ aim_system(void *aimStruc, /*@null@*/ const char *rpath, const char *command)
   if (aInfo->funID == AIM_UPDATESTATE) return CAPS_STATEERR;
   problem  = aInfo->problem;
   analysis = (capsAnalysis *) aInfo->analysis;
-  
+
   status   = aim_fileLink(aimStruc, NULL);
   if (status == CAPS_SUCCESS) {
     AIM_ERROR(aimStruc, "Running a command in a CAPS link!");
@@ -1140,7 +1140,7 @@ aim_getValue(void *aimStruc, int index, enum capssType subtype,
   capsProblem  *problem;
   capsAnalysis *analysis;
   capsObject   **objs;
-  const char   *objName = "";
+  const char   *objName = NULL;
 
   aInfo = (aimInfo *) aimStruc;
   if ((subtype != GEOMETRYIN) && (subtype != GEOMETRYOUT) &&
@@ -1234,7 +1234,7 @@ aim_copyValue(capsValue *value, capsValue *copy)
   copy->units           = EG_strdup(value->units);
   copy->meshWriter      = value->meshWriter;
   copy->link            = value->link;
-  
+
   if (value->stepSize != NULL) {
     copy->stepSize = (double *) EG_alloc(value->length*sizeof(double));
     if (copy->stepSize == NULL) return EGADS_MALLOC;
@@ -2022,7 +2022,7 @@ aim_setSensitivity(void *aimStruc, const char *GIname, int irow, int icol)
   if (ipmtr == 0)  return CAPS_NOSENSITVTY;
   if (irow > nrow) return CAPS_BADINDEX;
   if (icol > ncol) return CAPS_BADINDEX;
-  
+
   step = problem->DTime;
   if (step < 0.0) {
     i    = aim_getIndex(aimStruc, GIname, GEOMETRYIN);
@@ -2388,7 +2388,7 @@ aim_setStepSize(void *aimStruc, double step)
   if (aInfo == NULL)                   return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
   problem = aInfo->problem;
-  
+
   problem->DTime = step;
   return CAPS_SUCCESS;
 }
@@ -2405,7 +2405,7 @@ aim_getStepSize(void *aimStruc, double *step)
   if (aInfo == NULL)                   return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
   problem = aInfo->problem;
-  
+
   *step = problem->DTime;
   return CAPS_SUCCESS;
 }

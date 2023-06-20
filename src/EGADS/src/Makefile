@@ -140,7 +140,7 @@ $(OBJSOCC): %.o:	OCC/%.cpp
 	$(CXX) -c $(CPPOPT) $(DEFINE) $(XDEF) -IOCC $(INCS) $< -o $(ODIR)/$@
 
 emp.o:		../util/emp.c
-	$(CC) -c $(COPTS) $(DEFINE) -D$(ESP_ARCH) -I../include ../util/emp.c \
+	$(CC) -c $(COPTS) $(DEFINE) -I../include ../util/emp.c \
 		-o $(ODIR)/emp.o
 
 evaluate.o:	../util/evaluate.c
