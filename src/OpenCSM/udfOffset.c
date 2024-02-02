@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -117,10 +117,10 @@ typedef struct {
 } offset_T;
 
 /* prototypes */
-static int makePlanarOffset(ego ebodyIn, ego *ebodyOut);
+static int makePlanarOffset(ego ebodyIn, ego *ebodyOut, int *NumUdp, udp_T *udps);
 static int intersectLines(int npnt1, double xyz1[], int npnt2, double xyz2[], int iplane, double *t1, double *t2);
 
-static int makeSolidOffset(ego ebodyIn, ego *ebodyOut);
+static int makeSolidOffset(ego ebodyIn, ego *ebodyOut, int *NumUdp, udp_T *udps);
 static int makeOffsetCurve(wrep_T *wrep, int iface, int iedge, offset_T *offset);
 static int wrepInit(ego ebody, wrep_T **wrep);
 static int wrepBreakEdge(wrep_T *wrep, int iedge, double t, int *jnode);
@@ -153,6 +153,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     int     oclass, mtype, nchild, *senses;
     double  data[18];
     ego     eref, *ebodys, *echilds;
+    udp_T   *udps = *Udps;
 
 #ifdef DEBUG
     int     i;
@@ -217,12 +218,12 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
 
     /* if planar, make planar offset */
     if (mtype == WIREBODY || mtype == FACEBODY || mtype == SHEETBODY) {
-        status = makePlanarOffset(ebodys[0], ebody);
+        status = makePlanarOffset(ebodys[0], ebody, NumUdp, udps);
         CHECK_STATUS(makePlanarOffset);
 
     /* of a solid, make offsets from specified Edges on specified Faces */
     } else if (mtype == SOLIDBODY) {
-        status = makeSolidOffset(ebodys[0], ebody);
+        status = makeSolidOffset(ebodys[0], ebody, NumUdp, udps);
         CHECK_STATUS(makeSolidOffset);
 
     } else {
@@ -325,7 +326,9 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
 
 static int
 makePlanarOffset(ego    ebodyIn,        /* (in)  input Body */
-                 ego    *ebodyOut)      /* (out) output Body */
+                 ego    *ebodyOut,      /* (out) output Body */
+     /*@unused@*/int    *NumUdp,
+                 udp_T  *udps)
 {
     int     status = EGADS_SUCCESS;
 
@@ -930,7 +933,9 @@ cleanup:
 
 static int
 makeSolidOffset(ego    ebodyIn,
-                ego    *ebodyOut)
+                ego    *ebodyOut,
+    /*@unused@*/int    *NumUdp,
+                udp_T  *udps)
 {
     int     status = EGADS_SUCCESS;
 
@@ -1077,7 +1082,8 @@ makeSolidOffset(ego    ebodyIn,
     /* split any Wedge that is not tagged and which adjoins a
        Wedge that is */
     for (iedge = 1; iedge <= wrep->nedge; iedge++) {
-        if (wrep->edge[iedge].tag != 0) continue;
+        if (wrep->edge[iedge].tag != 0) continue;           // tagged     Wedge
+        if (wrep->edge[iedge].ecurve == NULL) continue;     // degenerate Wedge
 
         /* (possibly) split at beginning */
         if ((wrep->face[wrep->edge[iedge].ileft ].tag == 1 &&
@@ -1681,7 +1687,6 @@ cleanup:
     return status;
 }
 
-
 
 /*
  ************************************************************************
@@ -2077,6 +2082,7 @@ wrepBreakEdge(wrep_T  *wrep,            /* (in)  pointer to a WREP structure */
     int     jedge, kedge, oclass, mtype;
     double  data[18];
     ego     context, enodes[2], topRef, prev, next;
+    void    *realloc_temp = NULL;            /* used by RALLOC macro */
 
     ROUTINE(wrepBreakEdge);
 
@@ -2257,6 +2263,7 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
     int     oclass, mtype, knode, jedge, kedge, jface, kface, used;
     double  data[18], tout[2], uvout[4], xyzout[3];
     ego     ecurve, context, topRef, prev, next, epline, epleft, eprite;
+    void    *realloc_temp = NULL;            /* used by RALLOC macro */
 
     ROUTINE(wrepMakeEdge);
 
@@ -2423,8 +2430,8 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
          */
 
         /* case A */
-        if        (wrep->edge[kedge].ibeg == ibeg && wrep->edge[kedge].ibleft == 0
-                                                  && wrep->edge[kedge].ibrite == 0   ) {
+        if (wrep->edge[kedge].ibeg == ibeg && wrep->edge[kedge].ibleft == 0
+                                           && wrep->edge[kedge].ibrite == 0   ) {
 #ifdef DEBUG
             printf("case A: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2435,10 +2442,11 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
             wrep->edge[kedge].ibrite = jedge;
             wrep->edge[jedge].ibleft = kedge;
             wrep->edge[jedge].ibrite = kedge;
+        }
 
         /* case B */
-        } else if (wrep->edge[kedge].iend == ibeg && wrep->edge[kedge].ieleft == 0
-                                                  && wrep->edge[kedge].ierite == 0   ) {
+        if (wrep->edge[kedge].iend == ibeg && wrep->edge[kedge].ieleft == 0
+                                           && wrep->edge[kedge].ierite == 0   ) {
 #ifdef DEBUG
             printf("case B: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2449,10 +2457,11 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
             wrep->edge[kedge].ierite = jedge;
             wrep->edge[jedge].ibleft = kedge;
             wrep->edge[jedge].ibrite = kedge;
+        }
 
         /* case C */
-        } else if (wrep->edge[kedge].ibeg == iend && wrep->edge[kedge].ibleft == 0
-                                                  && wrep->edge[kedge].ibrite == 0   ) {
+        if (wrep->edge[kedge].ibeg == iend && wrep->edge[kedge].ibleft == 0
+                                           && wrep->edge[kedge].ibrite == 0   ) {
 #ifdef DEBUG
             printf("case C: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2463,10 +2472,11 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
             wrep->edge[kedge].ibrite = jedge;
             wrep->edge[jedge].ieleft = kedge;
             wrep->edge[jedge].ierite = kedge;
+        }
 
         /* case D */
-        } else if (wrep->edge[kedge].iend == iend && wrep->edge[kedge].ieleft == 0
-                                                  && wrep->edge[kedge].ierite == 0   ) {
+        if (wrep->edge[kedge].iend == iend && wrep->edge[kedge].ieleft == 0
+                                           && wrep->edge[kedge].ierite == 0   ) {
 #ifdef DEBUG
             printf("case D: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2477,6 +2487,7 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
             wrep->edge[kedge].ierite = jedge;
             wrep->edge[jedge].ieleft = kedge;
             wrep->edge[jedge].ierite = kedge;
+        }
 
         /* attaching to kedge, which has a Wnode with .nedge>1
 
@@ -2490,7 +2501,7 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
         */
 
         /* case E */
-        } else if (wrep->edge[kedge].ibeg == ibeg && wrep->edge[kedge].irite == wrep->edge[jedge].ileft) {
+        if (wrep->edge[kedge].ibeg == ibeg && wrep->edge[kedge].irite == wrep->edge[jedge].ileft) {
 #ifdef DEBUG
             printf("case E: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2498,9 +2509,10 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
 
             wrep->edge[kedge].ibrite = jedge;
             wrep->edge[jedge].ibleft = kedge;
+        }
 
         /* case F */
-        } else if (wrep->edge[kedge].ibeg == ibeg && wrep->edge[kedge].ileft == wrep->edge[jedge].irite) {
+        if (wrep->edge[kedge].ibeg == ibeg && wrep->edge[kedge].ileft == wrep->edge[jedge].irite) {
 #ifdef DEBUG
             printf("case F: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2508,9 +2520,10 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
 
             wrep->edge[kedge].ibleft = jedge;
             wrep->edge[jedge].ibrite = kedge;
+        }
 
         /* case G */
-        } else if (wrep->edge[kedge].iend == ibeg && wrep->edge[kedge].ileft == wrep->edge[jedge].ileft) {
+        if (wrep->edge[kedge].iend == ibeg && wrep->edge[kedge].ileft == wrep->edge[jedge].ileft) {
 #ifdef DEBUG
             printf("case G: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2518,9 +2531,10 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
 
             wrep->edge[kedge].ieleft = jedge;
             wrep->edge[jedge].ibleft = kedge;
+        }
 
         /* case H */
-        } else if (wrep->edge[kedge].iend == ibeg && wrep->edge[kedge].irite == wrep->edge[jedge].irite) {
+        if (wrep->edge[kedge].iend == ibeg && wrep->edge[kedge].irite == wrep->edge[jedge].irite) {
 #ifdef DEBUG
             printf("case H: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2528,9 +2542,10 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
 
             wrep->edge[kedge].ierite = jedge;
             wrep->edge[jedge].ibrite = kedge;
+        }
 
         /* case I */
-        } else if (wrep->edge[kedge].ibeg == iend && wrep->edge[kedge].ileft == wrep->edge[jedge].ileft) {
+        if (wrep->edge[kedge].ibeg == iend && wrep->edge[kedge].ileft == wrep->edge[jedge].ileft) {
 #ifdef DEBUG
             printf("case I: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2538,9 +2553,10 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
 
             wrep->edge[kedge].ibleft = jedge;
             wrep->edge[jedge].ieleft = kedge;
+        }
 
         /* case J */
-        } else if (wrep->edge[kedge].ibeg == iend && wrep->edge[kedge].irite == wrep->edge[jedge].irite) {
+        if (wrep->edge[kedge].ibeg == iend && wrep->edge[kedge].irite == wrep->edge[jedge].irite) {
 #ifdef DEBUG
             printf("case J: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2548,9 +2564,10 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
 
             wrep->edge[kedge].ibrite = jedge;
             wrep->edge[jedge].ierite = kedge;
+        }
 
         /* case K */
-        } else if (wrep->edge[kedge].iend == iend && wrep->edge[kedge].irite == wrep->edge[jedge].ileft) {
+        if (wrep->edge[kedge].iend == iend && wrep->edge[kedge].irite == wrep->edge[jedge].ileft) {
 #ifdef DEBUG
             printf("case K: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2558,9 +2575,10 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
 
             wrep->edge[kedge].ierite = jedge;
             wrep->edge[jedge].ieleft = kedge;
+        }
 
         /* case L */
-        } else if (wrep->edge[kedge].iend == iend && wrep->edge[kedge].ileft == wrep->edge[jedge].irite) {
+        if (wrep->edge[kedge].iend == iend && wrep->edge[kedge].ileft == wrep->edge[jedge].irite) {
 #ifdef DEBUG
             printf("case L: jedge=%d, kedge=%d\n", jedge, kedge);
 #endif
@@ -2570,12 +2588,16 @@ wrepMakeEdge(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
             wrep->edge[jedge].ierite = kedge;
         }
     }
+
     /* if the number of incident Wedges on both ibeg and iend are greater than
        zero, this means we have closed a loop, so create a new Wface on the right of the new Wedge */
     if (wrep->node[ibeg].nedge > 0 && wrep->node[iend].nedge > 0) {
         RALLOC(wrep->face, wface_T, wrep->nface+2);
 
         jface = wrep->nface + 1;
+#ifdef DEBUG
+        printf("creating Wface %d\n", jface);
+#endif
 
         wrep->face[jface].tag      = 0;
         wrep->face[jface].mtype    = wrep->face[iface].mtype;
@@ -2668,6 +2690,7 @@ wrepMakeNode(wrep_T  *wrep,             /* (in)  pointer to a WREP structure */
     int     jnode;
     double  uv_close[2], xyz_close[3];
     ego     context;
+    void    *realloc_temp = NULL;            /* used by RALLOC macro */
 
     ROUTINE(wrepMakeNode);
 
@@ -2738,7 +2761,7 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
 {
     int     status = EGADS_SUCCESS;     /* (out) return status */
 
-    int     inode, iedge, nedge, iface, nloop, iloop, ibeg, oclass, mtype;
+    int     inode, iedge, nedge, iface, nloop, iloop, jloop, ibeg, oclass, mtype;
     int     *senses=NULL, *iedges=NULL, *iused=NULL;
     double  data[18];
     ego     enodes[2], *eedges=NULL, *eloops=NULL, *efaces=NULL, eshell;
@@ -2759,6 +2782,9 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
 
     /* build the Edges */
     for (iedge = 1; iedge <= wrep.nedge; iedge++) {
+#ifdef DEBUG
+        printf("building Edge %3d\n", iedge);
+#endif
         oldEdge = wrep.edge[iedge].eedge;
 
         /* now make the Edge */
@@ -2768,9 +2794,15 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
         enodes[0] = wrep.node[wrep.edge[iedge].ibeg].enode;
         enodes[1] = wrep.node[wrep.edge[iedge].iend].enode;
 
-        status = EG_makeTopology(context, wrep.edge[iedge].ecurve, EDGE, TWONODE,
-                                 data, 2, enodes, NULL, &(wrep.edge[iedge].eedge));
-        CHECK_STATUS(EG_makeTopology);
+        if (wrep.edge[iedge].ecurve != NULL) {
+            status = EG_makeTopology(context, wrep.edge[iedge].ecurve, EDGE, TWONODE,
+                                     data, 2, enodes, NULL, &(wrep.edge[iedge].eedge));
+            CHECK_STATUS(EG_makeTopology);
+        } else {
+            status = EG_makeTopology(context, NULL, EDGE, DEGENERATE,
+                                     data, 1, enodes, NULL, &(wrep.edge[iedge].eedge));
+            CHECK_STATUS(EG_makeTopology);
+        }
 
         if (oldEdge != NULL) {
             status = EG_attributeDup(oldEdge, wrep.edge[iedge].eedge);
@@ -2788,6 +2820,9 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
 
     /* build the Faces */
     for (iface = 1; iface <= wrep.nface; iface++) {
+#ifdef DEBUG
+        printf("building Face %3d\n", iface);
+#endif
         nloop = 0;
 
         for (iedge = 1; iedge <= wrep.nedge; iedge++) {
@@ -2796,15 +2831,22 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
 
         /* build the Loops in this Face */
         for (iloop = 0; iloop < wrep.nedge; iloop++) {
+#ifdef DEBUG
+            printf("    adding Loop %3d\n", iloop+1);
+#endif
             ibeg      = 0;
             nedge     = 0;
             senses[0] = 0;
 
-            /* find an Edge associated with this Face */
+            /* find a non-degenerate Edge associated with this Face */
             for (iedge = 1; iedge <= wrep.nedge; iedge++) {
                 if (iused[iedge] != 0) continue;
+                if (wrep.edge[iedge].ibeg == wrep.edge[iedge].iend) continue;
 
                 if        (wrep.edge[iedge].ileft == iface) {
+#ifdef DEBUG
+                    printf("        adding Edge %3d\n", iedge);
+#endif
                     iedges[nedge] = iedge;
                     eedges[nedge] = wrep.edge[iedge].eedge;
                     senses[nedge] = SFORWARD;
@@ -2812,10 +2854,13 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
 
                     iused[iedge] = 1;
 
-                    ibeg  = wrep.edge[iedge].ibeg;
+                    ibeg  = iedge;
                     iedge = wrep.edge[iedge].ieleft;
                     break;
                 } else if (wrep.edge[iedge].irite == iface) {
+#ifdef DEBUG
+                    printf("        adding Edge %3d\n", iedge);
+#endif
                     iedges[nedge] = iedge;
                     eedges[nedge] = wrep.edge[iedge].eedge;
                     senses[nedge] = SREVERSE;
@@ -2823,7 +2868,7 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
 
                     iused[iedge] = 1;
 
-                    ibeg  = wrep.edge[iedge].iend;
+                    ibeg  = iedge;
                     iedge = wrep.edge[iedge].ibrite;
                     break;
                 }
@@ -2833,8 +2878,11 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
             if (ibeg      == 0) break;
 
             /* keep adding Edges to this Loop until we get back to the beginning */
-            while (1) {
+            while (iedge != ibeg) {
                 if (wrep.edge[iedge].ileft == iface) {
+#ifdef DEBUG
+                    printf("        adding Edge %3d\n", iedge);
+#endif
                     iedges[nedge] = iedge;
                     eedges[nedge] = wrep.edge[iedge].eedge;
                     senses[nedge] = SFORWARD;
@@ -2842,9 +2890,11 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
 
                     iused[iedge] = 1;
 
-                    if (wrep.edge[iedge].iend == ibeg) break;
                     iedge = wrep.edge[iedge].ieleft;
                 } else if (wrep.edge[iedge].irite == iface) {
+#ifdef DEBUG
+                    printf("        adding Edge %3d\n", iedge);
+#endif
                     iedges[nedge] = iedge;
                     eedges[nedge] = wrep.edge[iedge].eedge;
                     senses[nedge] = SREVERSE;
@@ -2852,7 +2902,6 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
 
                     iused[iedge] = 1;
 
-                    if (wrep.edge[iedge].ibeg == ibeg) break;
                     iedge = wrep.edge[iedge].ibrite;
                 } else {
                     snprintf(message, 1024, "having trouble traversing the Loop");
@@ -2900,6 +2949,21 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
         }
         status = EG_makeTopology(context, wrep.face[iface].esurface, FACE, SFORWARD,
                                  NULL, nloop, eloops, senses, &efaces[iface-1]);
+
+        /* if we got a construction error, it might be because we have the wrong
+           Loop identified as the outer Loop */
+        for (iloop = 1; iloop < nloop; iloop++) {
+            if (status != EGADS_CONSTERR) break;
+
+            prev = eloops[0];
+            for (jloop = 0; jloop < nloop-1; jloop++) {
+                eloops[jloop] = eloops[jloop+1];
+            }
+            eloops[nloop-1] = prev;
+
+            status = EG_makeTopology(context, wrep.face[iface].esurface, FACE, SFORWARD,
+                                     NULL, nloop, eloops, senses, &efaces[iface-1]);
+        }
         CHECK_STATUS(EG_makeTopology);
 
         /* copy the Attributes from the original Faces onto the new Face */
@@ -2916,11 +2980,17 @@ wrep2ego(wrep_T  wrep,                  /* (in)  pointer to a WREP structure */
     }
 
     /* build a Shell */
+#ifdef DEBUG
+    printf("building Shell\n");
+#endif
     status = EG_makeTopology(context, NULL, SHELL, CLOSED,
                              NULL, wrep.nface, efaces, NULL, &eshell);
     CHECK_STATUS(EG_makeTopology);
 
     /* build the new Body */
+#ifdef DEBUG
+    printf("building SolidBody\n");
+#endif
     status = EG_makeTopology(context, NULL, BODY, SOLIDBODY,
                              NULL, 1, &eshell, NULL, ebody);
     CHECK_STATUS(EG_makeTopology);

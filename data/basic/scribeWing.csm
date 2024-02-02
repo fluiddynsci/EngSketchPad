@@ -20,35 +20,35 @@ extrude 0 2 0
 subtract
 
 # verify that correct _edgeIDs are set for scribe
-select    edge  4  3  10  1
+select    edge  4  3  10  3
    assert @xcg  0.750216
    assert @ycg  0.025112
    assert @zcg  2.000000
-select    edge  4  3  10  2
+select    edge  4  3  10  4
    assert @xcg  0.500000
    assert @ycg  0.041926
    assert @zcg  2.500000
-select    edge  4  3  10  3
+select    edge  4  3  10  5
    assert @xcg  0.750175
    assert @ycg  0.022603
    assert @zcg  3.000000
-select    edge  4  4  10  1
+select    edge  4  4  10  3
    assert @xcg  0.750216
    assert @ycg -0.025112
    assert @zcg  2.000000
-select    edge  4  4  10  2
+select    edge  4  4  10  4
    assert @xcg  0.500000
    assert @ycg -0.041926
    assert @zcg  2.500000
-select    edge  4  4  10  3
+select    edge  4  4  10  5
    assert @xcg  0.750175
    assert @ycg -0.022603
    assert @zcg  3.000000
-select    edge  4  5  10  1
+select    edge  4  5  10  3
    assert @xcg  1.000000
    assert @ycg  0.000000
    assert @zcg  2.000000
-select    edge  4  5  10  3
+select    edge  4  5  10  5
    assert @xcg  1.000000
    assert @ycg  0.000000
    assert @zcg  3.000000

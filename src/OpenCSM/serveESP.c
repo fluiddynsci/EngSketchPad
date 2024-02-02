@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2012/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2012/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -68,8 +68,6 @@
 /* macros (including those that go along with common.h)                */
 /*                                                                     */
 /***********************************************************************/
-
-static void *realloc_temp=NULL;            /* used by RALLOC macro */
 
 #define  RED(COLOR)      (float)(COLOR / 0x10000        ) / (float)(255)
 #define  GREEN(COLOR)    (float)(COLOR / 0x00100 % 0x100) / (float)(255)
@@ -371,7 +369,7 @@ main(int       argc,                    /* (in)  number of arguments */
     int       imajor, iminor, status, i, bias, showUsage=0;
     int       builtTo, buildStatus, nwarn=0;
     int       npmtrs, type, nrow, irow, ncol, icol, ii, *ipmtrs=NULL, *irows=NULL, *icols=NULL;
-    int       ipmtr, jpmtr, iundo, nbody;
+    int       ipmtr, jpmtr, iundo, nbody, oldLoadEgads;
     float     fov, zNear, zFar;
     float     eye[3]    = {0.0, 0.0, 7.0};
     float     center[3] = {0.0, 0.0, 0.0};
@@ -650,7 +648,7 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program serveESP                    *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2023         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2024         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************\n");
 
@@ -711,6 +709,9 @@ main(int       argc,                    /* (in)  number of arguments */
 
     /* set OCSMs output level */
     (void) ocsmSetOutLevel(outLevel);
+
+    /* remember if -loadEgads was set so that we can disable ocsmAdjoint testing */
+    oldLoadEgads = loadEgads;
 
     /* allocate nominal response and messages buffers */
     max_resp_len = 4096;
@@ -1029,7 +1030,12 @@ somewhere:
         if (batch == 0) {
 
             /* uncaught signal */
-            if (builtTo < 0) {
+            if (builtTo == -99999) {
+                SPRINT1(0, "build() detected \"%s\" during initialization",
+                        ocsmGetText(buildStatus));
+                pendingError = -builtTo;
+
+            } else if (builtTo < 0) {
                 SPRINT2(0, "build() detected \"%s\" at %s",
                         ocsmGetText(buildStatus), MODL->brch[1-builtTo].name);
                 SPRINT0(0, "Configuration only built up to detected error\a");
@@ -1456,16 +1462,14 @@ somewhere:
     }
 
     /* special test of ocsmAdjoint */
-    if (strcmp(casename, "testAdjoint") == 0) {
-        status = testOcsmAdjoint(MODL);
-        CHECK_STATUS(testOcsmAdjoint);
+    if (strstr(casename, "testAdjoint") != NULL) {
+        if (oldLoadEgads == 0) {
+            status = testOcsmAdjoint(MODL);
+            CHECK_STATUS(testOcsmAdjoint);
+        } else {
+            SPRINT0(0, "WARNING:: ocsmAdjoint not tested because -loadEgads was enabled");
+        }
     }
-
-    cleanupMemory(MODL, 0);
-
-    /* free up stoage associated with GUI */
-    wv_cleanupServers();
-    ESP->cntxt = NULL;
 
     /* free up undo storage */
     for (iundo = nundo-1; iundo >= 0; iundo--) {
@@ -1482,6 +1486,12 @@ somewhere:
     FREE(undo_modl  );
 
     nundo = 0;
+
+    cleanupMemory(MODL, 0);
+
+    /* free up stoage associated with GUI */
+    wv_cleanupServers();
+    ESP->cntxt = NULL;
 
     /* finalize Python (if it was used) */
     tim_lock(1);
@@ -1602,6 +1612,8 @@ addToResponse(char   text[])            /* (in)  text to add */
 {
     int    status=SUCCESS, text_len;
 
+    void   *realloc_temp = NULL;            /* used by RALLOC macro */
+
     ROUTINE(addToResponse);
 
     /* --------------------------------------------------------------- */
@@ -1640,6 +1652,7 @@ addToSgMetaData(char   format[],        /* (in)  format specifier */
 {
     int      status=SUCCESS, newchars;
 
+    void     *realloc_temp = NULL;            /* used by RALLOC macro */
     va_list  args;
 
     ROUTINE(addToSgMetaData);
@@ -1878,6 +1891,7 @@ browserMessage(void    *esp,
 
     int       sendKeyData, ibody, onstack, test;
     char      message2[MAX_LINE_LEN];
+    void      *realloc_temp = NULL;            /* used by RALLOC macro */
 
     esp_T     *ESP   = (esp_T *)esp;
     modl_T    *MODL;
@@ -2677,10 +2691,31 @@ buildSceneGraph(esp_T  *ESP)
 
             /* name and attributes */
             snprintf(gpname, MAX_STRVAL_LEN-1, "%s Face %d", bname, iface);
+
             if (haveDots >= 1 || plotType > 0) {
-                attrs = WV_ON | WV_SHADING;
+                attrs = WV_SHADING;
             } else {
-                attrs = WV_ON | WV_ORIENTATION;
+                attrs = WV_ORIENTATION;
+            }
+
+            status = EG_attributeRet(MODL->body[ibody].face[iface].eface, "_viz",
+                                     &atype, &alen, &tempIlist, &tempRlist, &tempClist);
+            if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "off") == 0) {
+
+            } else {
+                attrs |= WV_ON;
+            }
+
+            status = EG_attributeRet(MODL->body[ibody].face[iface].eface, "_grd",
+                                     &atype, &alen, &tempIlist, &tempRlist, &tempClist);
+            if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "on") == 0) {
+                attrs |= WV_LINES;
+            }
+
+            status = EG_attributeRet(MODL->body[ibody].face[iface].eface, "_trn",
+                                     &atype, &alen, &tempIlist, &tempRlist, &tempClist);
+            if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "on") == 0) {
+                attrs |= WV_TRANSPARENT;
             }
 
             status = EG_getQuads(etess, iface,
@@ -3569,7 +3604,26 @@ buildSceneGraph(esp_T  *ESP)
 
             /* name and attributes */
             snprintf(gpname, MAX_STRVAL_LEN-1, "%s Edge %d", bname, iedge);
-            attrs = WV_ON;
+
+            status = EG_attributeRet(MODL->body[ibody].edge[iedge].eedge, "_viz",
+                                     &atype, &alen, &tempIlist, &tempRlist, &tempClist);
+            if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "off") == 0) {
+                attrs = 0;
+            } else {
+                attrs = WV_ON;
+            }
+
+            status = EG_attributeRet(MODL->body[ibody].edge[iedge].eedge, "_grd",
+                                     &atype, &alen, &tempIlist, &tempRlist, &tempClist);
+            if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "on") == 0) {
+                attrs |= WV_POINTS;
+            }
+
+            status = EG_attributeRet(MODL->body[ibody].edge[iedge].eedge, "_ori",
+                                     &atype, &alen, &tempIlist, &tempRlist, &tempClist);
+            if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "on") == 0) {
+                attrs |= WV_ORIENTATION;
+            }
 
             /* vertices */
             status = wv_setData(WV_REAL64, npnt, (void*)xyz, WV_VERTICES, &(items[nitems]));
@@ -3803,10 +3857,20 @@ buildSceneGraph(esp_T  *ESP)
             snprintf(gpname, MAX_STRVAL_LEN-1, "%s Node %d", bname, inode);
 
             /* default for NodeBodys is to turn the Node on */
+            status = EG_attributeRet(MODL->body[ibody].node[inode].enode, "_viz",
+                                     &atype, &alen, &tempIlist, &tempRlist, &tempClist);
             if (MODL->body[ibody].botype == OCSM_NODE_BODY) {
-                attrs = WV_ON;
+                if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "off") == 0) {
+                    attrs = 0;
+                } else {
+                    attrs = WV_ON;
+                }
             } else {
-                attrs = 0;
+                if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(tempClist, "on") == 0) {
+                    attrs = WV_ON;
+                } else {
+                    attrs = 0;
+                }
             }
 
             SPLINT_CHECK_FOR_NULL(enodes);
@@ -5834,6 +5898,8 @@ mesgCallbackFromOpenCSM(char mesg[])    /* (in)  message */
 {
     int  status=SUCCESS;
 
+    void   *realloc_temp = NULL;            /* used by RALLOC macro */
+
     ROUTINE(mesgCallbackFromOpenCSM);
 
     /* --------------------------------------------------------------- */
@@ -5895,6 +5961,7 @@ processBrowserToServer(esp_T   *ESP,
 #define  MAX_TOKN_LEN  16384
 
     char      *begs=NULL, *vars=NULL, *cons=NULL, *segs=NULL, *vars_out=NULL;
+    void      *realloc_temp = NULL;            /* used by RALLOC macro */
 
     static FILE  *fp=NULL;
 
@@ -7695,7 +7762,7 @@ processBrowserToServer(esp_T   *ESP,
 
         if (getToken(text, 1, '|', arg1)) dim1 = strtol(arg1, &pEnd, 10);
         if (getToken(text, 2, '|', arg2)) dim2 = strtol(arg2, &pEnd, 10);
-        
+
         status = ocsmShowTblOfContents(MODL, dim1, dim2, &bodyinfo);
         CHECK_STATUS(ocsmShowTblOfContents);
 
@@ -8088,6 +8155,15 @@ processBrowserToServer(esp_T   *ESP,
         getToken(text, 1, '|', arg1);
 
         tim_lift(arg1);
+
+        /* update the display */
+        onstack = 0;
+        for (ibody = 1; ibody <= MODL->nbody; ibody++) {
+            onstack += MODL->body[ibody].onstack;
+        }
+
+        snprintf(response, max_resp_len, "build|%d|%d|%d|%s|",
+                 MODL->nbrch, MODL->nbrch, onstack, "");
 
     /* "showErep|" */
     } else if (strncmp(text, "makeErep|", 9) == 0) {
@@ -9018,6 +9094,8 @@ writeSensFile(modl_T *MODL,             /* (in)  pointer to MODL */
 
     /* write Edges to the file */
     for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
+        if (MODL->body[ibody].edge[iedge].itype == DEGENERATE) continue;
+
         status = EG_getTessEdge(MODL->body[ibody].etess, iedge,
                                 &npnt, &xyz, &uv);
         CHECK_STATUS(EG_getTessEdge);
@@ -9070,7 +9148,7 @@ cleanup:
 /*
  ************************************************************************
  *                                                                      *
- *   testOcsmAdjoint - test ocsmAdjoint                                 *
+ *   testOcsmAdjoint - test ocsmAdjoint (volume, area, xcg, ycg, zcg)   *
  *                                                                      *
  ************************************************************************
  */
@@ -9080,8 +9158,8 @@ testOcsmAdjoint(modl_T *MODL)           /* (in)  pointer to MODL */
 {
     int    status = SUCCESS;            /* (out) return status */
 
-    int     stat, iglob, nglob, idp, ndp, iobj, nobj;
-    int     ipmtr[100], irow[100], icol[100], ip, ir, ic;
+    int     stat, iglob, nglob, idp, jdp, ndp, mdp, iobj, nobj;
+    int     *ipmtr=NULL, *irow=NULL, *icol=NULL, ip, ir, ic;
 
     int     ibody, iface, itri, ntri, ipnt, npnt, ip0, ip1, ip2, tottri;
     CINT    *ptype, *pindx, *tris, *tric;
@@ -9092,6 +9170,8 @@ testOcsmAdjoint(modl_T *MODL)           /* (in)  pointer to MODL */
     double  xa,     ya,     za,     xb,     yb,     zb;
     double  xa_bar, ya_bar, za_bar, xb_bar, yb_bar, zb_bar;
     CDOUBLE *xyz, *uv;
+    void    *realloc_temp = NULL;            /* used by RALLOC macro */
+    clock_t old_time, new_time;
 
     double  *dOdX=NULL, *dOdD=NULL, *xyz_bar=NULL;
     ego     ebody;
@@ -9105,6 +9185,13 @@ testOcsmAdjoint(modl_T *MODL)           /* (in)  pointer to MODL */
     /* --------------------------------------------------------------- */
 
     SPRINT0(1, "\ntesting ocsmAdjoint\n");
+    old_time = clock();
+
+    /* storage for DESPMTRs */
+    mdp = 50;
+    MALLOC(ipmtr, int, mdp);
+    MALLOC(irow,  int, mdp);
+    MALLOC(icol,  int, mdp);
 
     /* use last Body created */
     ibody = MODL->nbody;
@@ -9116,14 +9203,17 @@ testOcsmAdjoint(modl_T *MODL)           /* (in)  pointer to MODL */
         if (MODL->pmtr[ip].type == OCSM_DESPMTR) {
             for (ir = 1; ir <= MODL->pmtr[ip].nrow; ir++) {
                 for (ic = 1; ic <= MODL->pmtr[ip].ncol; ic++) {
+                    if (ndp >= mdp) {
+                        mdp += 50;
+                        RALLOC(ipmtr, int, mdp);
+                        RALLOC(irow,  int, mdp);
+                        RALLOC(icol,  int, mdp);
+                    }
+
                     ipmtr[ndp] = ip;
                     irow[ ndp] = ir;
                     icol[ ndp] = ic;
                     ndp++;
-                    if (ndp > 100) {
-                        printf("exceeded ndp=%d\n", ndp);
-                        exit(EXIT_FAILURE);
-                    }
                 }
             }
         }
@@ -9218,11 +9308,11 @@ testOcsmAdjoint(modl_T *MODL)           /* (in)  pointer to MODL */
         zcg_bar  = 0;
 
         if        (iobj == 0) {
-            SPRINT0(1, " (area)");
-            area_bar = 1;
-        } else if (iobj == 1) {
             SPRINT0(1, " (vol)");
             vol_bar  = 1;
+        } else if (iobj == 1) {
+            SPRINT0(1, " (area)");
+            area_bar = 1;
         } else if (iobj == 2) {
             SPRINT0(1, " (xcg)");
             xcg_bar  = 1;
@@ -9405,31 +9495,41 @@ testOcsmAdjoint(modl_T *MODL)           /* (in)  pointer to MODL */
             FREE(xyz_bar);
         }
     }
+    new_time = clock();
+    SPRINT1(1, "computed dOdX (CPU=%.3f)", (double)(new_time-old_time)/(double)(CLOCKS_PER_SEC));
 
     /* find  dO/dD = dO/dX * dX/dD
        where dO/dX comes from the adjoint "flow" solver
              dX/dD comes from the tessellation sensitivities */
+    old_time = clock();
     status = ocsmAdjoint(MODL, MODL->nbody, ndp, ipmtr, irow, icol,
                          nobj, dOdX, dOdD);
     CHECK_STATUS(ocsmAdjoint);
+    new_time = clock();
+    SPRINT1(1, "computed dOdD (CPU=%.3f)", (double)(new_time-old_time)/(double)(CLOCKS_PER_SEC));
 
     /* print out the results */
-    SPRINT0x(1, "dO/dD   ");
-    for (idp = 0; idp < ndp; idp++) {
-        SPRINT3x(1, " %7s[%1d,%1d]", MODL->pmtr[ipmtr[idp]].name, irow[idp], icol[idp]);
-    }
-    SPRINT0(1, " ");
-    for (iobj = 0; iobj < nobj; iobj++) {
-        SPRINT1x(1, "iobj=%2d:", iobj);
-        for (idp = 0; idp < ndp; idp++) {
-            SPRINT1x(1, " %12.6f", dOdD[iobj*ndp+idp]);
+    for (jdp = 0; jdp < ndp; jdp+=12) {
+        SPRINT0x(1, "dO/dD   ");
+        for (idp = jdp; idp < MIN(jdp+12,ndp); idp++) {
+            SPRINT3x(1, " %7s[%1d,%1d]", MODL->pmtr[ipmtr[idp]].name, irow[idp], icol[idp]);
         }
         SPRINT0(1, " ");
+        for (iobj = 0; iobj < nobj; iobj++) {
+            SPRINT1x(1, "iobj=%2d:", iobj);
+            for (idp = jdp; idp < MIN(jdp+12,ndp); idp++) {
+                SPRINT1x(1, " %12.6f", dOdD[iobj*ndp+idp]);
+            }
+            SPRINT0(1, " ");
+        }
     }
 
 cleanup:
-    FREE(dOdX);
-    FREE(dOdD);
+    FREE(ipmtr);
+    FREE(irow );
+    FREE(icol );
+    FREE(dOdX );
+    FREE(dOdD );
 
 #undef DODX
 #undef DODY

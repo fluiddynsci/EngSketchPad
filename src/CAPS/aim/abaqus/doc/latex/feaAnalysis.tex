@@ -1,0 +1,45 @@
+Structure for the analysis tuple = (`Analysis Name', `Value'). \textquotesingle{}Analysis Name\textquotesingle{} defines the reference name for the analysis being specified. The \char`\"{}\+Value\char`\"{} can either be a JSON String dictionary (see Section \mbox{\hyperlink{feaAnalysis_jsonStringAnalysis}{JSON String Dictionary}}) or a single string keyword (see Section \mbox{\hyperlink{feaAnalysis_keyStringAnalysis}{Single Value String}}).\hypertarget{feaAnalysis_jsonStringAnalysis}{}\doxysubsection{JSON String Dictionary}\label{feaAnalysis_jsonStringAnalysis}
+If \char`\"{}\+Value\char`\"{} is JSON string dictionary (e.\+g. \char`\"{}\+Value\char`\"{} = \{\char`\"{}num\+Desired\+Eigenvalue\char`\"{}\+: 10, \char`\"{}eigen\+Normaliztion\char`\"{}\+: \char`\"{}\+MASS\char`\"{}, \char`\"{}num\+Est\+Eigenvalue\char`\"{}\+: 1, \char`\"{}extraction\+Method\char`\"{}\+: \char`\"{}\+GIV\char`\"{}, \char`\"{}frequency\+Range\char`\"{}\+: \mbox{[}0, 10000\mbox{]}\}) the following keywords ( = default values) may be used\+:
+
+
+\begin{DoxyItemize}
+\item {\bfseries{analysis\+Type = \char`\"{}\+Modal\char`\"{}}}  ~\newline
+ Type of load. Options\+: \char`\"{}\+Modal\char`\"{}, \char`\"{}\+Static\char`\"{} 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{analysis\+Load = \char`\"{}(no default)\char`\"{}}}  ~\newline
+ Single or list of \char`\"{}\+Load Name\char`\"{}s defined in \mbox{\hyperlink{feaLoad}{FEA Load}} in which to use for the analysis (e.\+g. \char`\"{}\+Name1\char`\"{} or \mbox{[}\char`\"{}\+Name1\char`\"{},\char`\"{}\+Name2\char`\"{},...\mbox{]}. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{analysis\+Constraint = \char`\"{}(no default)\char`\"{}}}  ~\newline
+ Single or list of \char`\"{}\+Constraint Name\char`\"{}s defined in \mbox{\hyperlink{feaConstraint}{FEA Constraint}} in which to use for the analysis (e.\+g. \char`\"{}\+Name1\char`\"{} or \mbox{[}\char`\"{}\+Name1\char`\"{},\char`\"{}\+Name2\char`\"{},...\mbox{]}. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{extraction\+Method = \char`\"{}(no default)\char`\"{}}}  ~\newline
+ Extraction method for modal analysis. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{frequency\+Range = \mbox{[}0.\+0, 0.\+0\mbox{]} }}  ~\newline
+ Frequency range of interest for modal analysis. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{num\+Desired\+Eigenvalue = 0}}  ~\newline
+ Number of desired eigenvalues for modal analysis. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{eigen\+Normaliztion = \char`\"{}(no default)\char`\"{}}}  ~\newline
+ Method of eigenvector renormalization. Options\+: \char`\"{}\+DISPLACEMENT\char`\"{}, \char`\"{}\+MASS\char`\"{} 
+\end{DoxyItemize}\hypertarget{feaAnalysis_keyStringAnalysis}{}\doxysubsection{Single Value String}\label{feaAnalysis_keyStringAnalysis}
+If \char`\"{}\+Value\char`\"{} is a string, the string value may correspond to an entry in a predefined analysis lookup table. NOT YET IMPLEMENTED!!!! 

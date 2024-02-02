@@ -3,7 +3,7 @@
  *
  *             Tessellation Functions
  *
- *      Copyright 2011-2023, Massachusetts Institute of Technology
+ *      Copyright 2011-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -79,7 +79,7 @@ __PROTO_H_AND_D__ int  EG_getBodyTopos( const egObject *body,
 __PROTO_H_AND_D__ int  EG_indexBodyTopo( const egObject *body,
                                          const egObject *src );
 __PROTO_H_AND_D__ int  EG_sameBodyTopo( const egObject *bod1,
-                                        const egObject *bod2 );
+                                        const egObject *bod2, /*@null@*/ const char *fAttr );
 __PROTO_H_AND_D__ int  EG_getEdgeUV( const egObject *face,
                                      const egObject *edge, int sense, double t,
                                      double *result );
@@ -7794,7 +7794,7 @@ EG_mapTessBody(egObject *tess, egObject *body, egObject **mapTess)
       printf(" EGADS Error: fMap Attribute Not an Int (EG_mapTessBody)!\n");
       return EGADS_ATTRERR;
     }
-    if (alen != btess->nFace) {
+    if (alen != btess->nFace && btess->nFace > 0) {
       printf(" EGADS Error: fLen Mismatch %d %d (EG_mapTessBody)!\n",
              alen, btess->nFace);
       return EGADS_TOPOERR;
@@ -7858,7 +7858,7 @@ EG_mapTessBody(egObject *tess, egObject *body, egObject **mapTess)
         printf(" EGADS Error: Node and/or Egde Map exists (EG_mapTessBody)!\n");
       return EGADS_NODATA;
     }
-    stat = EG_sameBodyTopo(tessb, body);
+    stat = EG_sameBodyTopo(tessb, body, NULL);
     if (stat != EGADS_SUCCESS) {
       if (outLevel > 0)
         printf(" EGADS Error: sameBodyTopo = %d (EG_mapTessBody)!\n", stat);
@@ -8077,7 +8077,7 @@ EG_mapTessBody(egObject *tess, egObject *body, egObject **mapTess)
     }
     mtess->tess1d[k].xyz = (double *) EG_alloc(3*n*sizeof(double));
     mtess->tess1d[k].t   = (double *) EG_alloc(  n*sizeof(double));
-    if ((mtess->tess1d[k].xyz == NULL) || (mtess->tess1d[k].xyz == NULL)) {
+    if ((mtess->tess1d[k].xyz == NULL) || (mtess->tess1d[k].t == NULL)) {
       stat = EGADS_MALLOC;
       goto cleanup;
     }
@@ -8315,9 +8315,9 @@ EG_mapTessBody(egObject *tess, egObject *body, egObject **mapTess)
         tric[3*i  ] = btess->tess2d[j].tric[3*i  ];
         tric[3*i+1] = btess->tess2d[j].tric[3*i+1];
         tric[3*i+2] = btess->tess2d[j].tric[3*i+2];
-        if ((tric[3*i  ] < 0) && (eMap != 0)) tric[3*i  ] = -eMap[-tric[3*i  ]-1];
-        if ((tric[3*i+1] < 0) && (eMap != 0)) tric[3*i+1] = -eMap[-tric[3*i+1]-1];
-        if ((tric[3*i+2] < 0) && (eMap != 0)) tric[3*i+2] = -eMap[-tric[3*i+2]-1];
+        if ((tric[3*i  ] < 0) && (eMap != NULL)) tric[3*i  ] = -eMap[-tric[3*i  ]-1];
+        if ((tric[3*i+1] < 0) && (eMap != NULL)) tric[3*i+1] = -eMap[-tric[3*i+1]-1];
+        if ((tric[3*i+2] < 0) && (eMap != NULL)) tric[3*i+2] = -eMap[-tric[3*i+2]-1];
       }
       mtess->tess2d[k].ptype  = ptype;
       mtess->tess2d[k].pindex = pindex;
@@ -8586,6 +8586,7 @@ EG_mapTessBody(egObject *tess, egObject *body, egObject **mapTess)
   mtess = NULL;
   EG_referenceObject(mapObj, context);
   EG_referenceTopObj(body,   mapObj);
+  EG_attributeDup(tess,      mapObj);
   *mapTess = mapObj;
 
   stat = EGADS_SUCCESS;

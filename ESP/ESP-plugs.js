@@ -1,7 +1,7 @@
 // ESP-plugs.js implements plugs functions for the Engineering Sketch Pad (ESP)
 // written by John Dannenhoffer
 
-// Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
+// Copyright (C) 2010/2024  John F. Dannenhoffer, III (Syracuse University)
 //
 // This library is free software; you can redistribute it and/or
 //    modify it under the terms of the GNU Lesser General Public
@@ -461,6 +461,7 @@ plugs.timMesgCB = function (text) {
         var mesg = "Phase2, pass "+plugs.ipass+" returned unclass="+tokens[3]+", reclass="+tokens[4]+", RMS="+tokens[2];
 
         if        (tokens[5] == 0) {
+            postMessage(mesg);
             postMessage("Phase2 converged");
             plugs.npass = -1;
             button["innerHTML"] =  "ExecutePhase1";

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -190,7 +190,7 @@ tim_load(char       myTimName[],        /* (in)  name of TIM */
     }
 
     /* if not currently "inactive", return an error */
-    if (timState[i] != TIM_INACTIVE) {
+    if (timState[i] != TIM_INACTIVE && timState[i] != TIM_READY) {
         printf("ERROR:: tim_load(%s) is not inactive, state=%d\n", myTimName, timState[i]);
         status = EGADS_SEQUERR;
         goto cleanup;
@@ -522,7 +522,7 @@ tim_bcst(char   myTimName[],            /* (in)  name of TIM */
 
     /* only broadcast if wv is currently running */
     if (ESP->cntxt == NULL) {
-        printf("WARNING:: message \"%s\" not broadcast because wv not started\n", text);
+//$$$        printf("WARNING:: message \"%s\" not broadcast because wv not started\n", text);
         goto cleanup;
     } else if (wv_nClientServer(0) < 1) {
         printf("WARNING:: message \"%s\" not broadcast because no browsers\n", text);

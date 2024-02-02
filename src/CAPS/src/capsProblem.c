@@ -3,7 +3,7 @@
  *
  *             Problem Object Functions
  *
- * *      Copyright 2014-2023, Massachusetts Institute of Technology
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -59,7 +59,6 @@ extern void  caps_rmWild(const char *path, const char *wild);
 extern int   caps_mkDir(const char *path);
 extern int   caps_cpDir(const char *src, const char *dst);
 extern int   caps_rename(const char *src, const char *dst);
-extern int   caps_rmCLink(const char *path);
 extern int   caps_mkCLink(const char *path, const char *srcPhase);
 extern void  caps_getAIMerrs(capsAnalysis *analy, int *nErr, capsErrs **errs);
 extern int   caps_updateState(capsObject *aobject, int *nErr, capsErrs **errors);

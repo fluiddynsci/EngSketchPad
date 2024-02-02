@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2012/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2012/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -67,7 +67,6 @@
 #define STRNCPY(A, B, LEN) strncpy(A, B, LEN); A[LEN-1] = '\0';
 
 #include "OpenCSM.h"
-#include "udp.h"
 #include "egg.h"
 #include "emp.h"
 #include "wsserver.h"
@@ -77,8 +76,6 @@
 /* macros (including those that go along with common.h)                */
 /*                                                                     */
 /***********************************************************************/
-
-static void *realloc_temp=NULL;            /* used by RALLOC macro */
 
 #define  RED(COLOR)      (float)(COLOR / 0x10000        ) / (float)(255)
 #define  GREEN(COLOR)    (float)(COLOR / 0x00100 % 0x100) / (float)(255)
@@ -660,7 +657,7 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program serveCSM                    *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2023         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2024         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************\n");
 
@@ -1897,6 +1894,8 @@ addToResponse(char   text[])            /* (in)  text to add */
 {
     int    status=SUCCESS, text_len;
 
+    void   *realloc_temp = NULL;            /* used by RALLOC macro */
+
     ROUTINE(addToResponse);
 
     /* --------------------------------------------------------------- */
@@ -1935,6 +1934,7 @@ addToSgMetaData(char   format[],        /* (in)  format specifier */
 {
     int      status=SUCCESS, newchars;
 
+    void   *realloc_temp = NULL;            /* used by RALLOC macro */
     va_list  args;
 
     ROUTINE(addToSgMetaData);
@@ -2148,6 +2148,7 @@ browserMessage(
 
     int       sendKeyData, ibody, onstack, test;
     char      message2[MAX_LINE_LEN];
+    void      *realloc_temp = NULL;            /* used by RALLOC macro */
 
     modl_T    *MODL = (modl_T*)modl;
 
@@ -5859,6 +5860,8 @@ mesgCallbackFromOpenCSM(char mesg[])    /* (in)  message */
 {
     int  status=SUCCESS;
 
+    void   *realloc_temp = NULL;            /* used by RALLOC macro */
+
     ROUTINE(mesgCallbackFromOpenCSM);
 
     /* --------------------------------------------------------------- */
@@ -5917,6 +5920,7 @@ processBrowserToServer(char    text[])
 #define  MAX_TOKN_LEN  16384
 
     char      *begs=NULL, *vars=NULL, *cons=NULL, *segs=NULL, *vars_out=NULL;
+    void      *realloc_temp = NULL;            /* used by RALLOC macro */
 
     static FILE  *fp=NULL;
 
@@ -11226,6 +11230,8 @@ writeSensFile(modl_T *MODL,             /* (in)  pointer to MODL */
 
     /* write Edges to the file */
     for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
+        if (MODL->body[ibody].edge[iedge].itype == DEGENERATE) continue;
+
         status = EG_getTessEdge(MODL->body[ibody].etess, iedge,
                                 &npnt, &xyz, &uv);
         CHECK_STATUS(EG_getTessEdge);

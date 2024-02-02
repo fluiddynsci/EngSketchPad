@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -80,8 +80,6 @@ typedef struct {
     int    nline;
     line_T *lines;
 } plotter_T;
-
-static void *realloc_temp=NULL;              /* used by RALLOC macro */
 
 
 /***********************************************************************/
@@ -156,6 +154,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     char   *pEnd;
     int    nresponse=0;
     char   *response=NULL;
+    void   *realloc_temp = NULL;            /* used by RALLOC macro */
 
     plotter_T *plotter = (plotter_T *) (ESP->udata[ESP->nudata-1]);
 

@@ -9720,7 +9720,7 @@
 
 27jan23  update header files to allow use of C++ main program; add
              simpleCSM.cpp and modify Makefile.DARWIN64 for testing
-         
+
 31jan23  allow number of rows and columns to be accessible in UDPs
 
 31jan23  allow at-at-parameters from a UDP/UDF to be vectors or
@@ -9782,7 +9782,7 @@
 
  4mar23  improve marking of Faces with _body and _brch Attributes when
              returned from a UDF
- 
+
  6mar23  add PRINT_MAPPING_INFO define to OpenCSM
 
  7mar23  fix bug that did not account for Node and Edge sensitivities
@@ -9825,7 +9825,7 @@
              and FACECP when a signal is raised
 
  2apr23  change flend fits to be better in some cases
- 
+
  4apr23  track down memory leaks
 
  6apr23  update flend8* test cases and their verification data
@@ -9920,9 +9920,422 @@
 29may23  added ability to double-click on python error to open pyscript
              editor at the correct line
 
+*******  v1.23 release
+
+ 7jun23  uprev to v1.24 (ESP.html, ESP-localhost.html, ESP-help.html,
+             OpenCSM.h, ocsm.rc)
+
+10jun23  add support for BLENDs with .C1side Attributes; add blend23*
+             test cases
+
+12jun23  change serveESP.mak so that it does not error if PYTHONINC is
+             not set
+
+28jun23  change the SUBTRACTion of two co-planar SheetBodys such that if
+             the Loop associated with the second Body does not cut a
+             clean hole in the first Body, revert to the (default)
+             scribing behavior for SheetBodys, that is scribe the
+             first Body with the Edges from the second Body;  update
+             the documentation for SUBTRACT; add scribe11* test cases
+
+30jun23  fix occasional bug associated with analytical sensitivities
+             when DUMPing a .sens file from with .csm script
+
+ 1jul23  fix error in serveESP.mak
+
+ 1jul23  fix debug code for windoze
+
+ 1jul23  initial, very early, preliminary version of udpVspFuse and
+             associated test cases
+
+ 3jul23  start implementing analytic sensitivities for Sketches; add
+             sketch13* test cases
+
+ 5jul23  analytic sensitivities for sketches; update .gsen and .tsen
+             files; move sketch13* test cases to designY*
+
+ 6jul23  temporarily remove vspFuse* test cases
+
+10jul23  add mincp argument to udpNuscale and convertToBSplines
+             functions; add ablate* test cases, including using Plugs
+
+11jul23  extend Plugs to be able to use DIMENSIONed DESPMTRs
+
+13jul23  fix bug in velocityOfEdge for Edges with dots that have
+             changing tranges
+
+16jul23  fix bug that did not retain Edge attributes during an ELEVATE
+             operation
+
+ 1aug23  first version of udpVspComp
+
+10aug23  modify ocsmPrintBrep to show list Edges as degenerate rather
+             than skipping them
+
+10aug23  add SPECIAL printCPs command to print the control points
+             associated with all Nurbs in the Body on the top of the
+             stack
+
+15aug23  add first version of udpVsp3
+
+21aug23  ATTRRECYCLE forces UDPRIM to not be recycled
+
+27aug23  fix printing of SELECT with attrValu a number
+
+27aug23  update udpVsp3 to automatically run vsp
+
+27aug23  add data/vsp3 test cases
+
+27aug23  add propInteg*a test cases
+
+29aug23  use _plugsIgnore on Faces that should be ignored during cloud
+             point reclassifications in Plugs
+
+30aug23  add udpWarp; add ablate0* test cases
+
+ 4sep23  properly rename vsp3 verification test cases
+
+ 4sep23  convert backslashes to forward slashes in filenames in
+             udpVsp3 because anglescipt expects forward slashes
+
+ 7sep23  fix addressing bug in udpWarp
+
+ 8sep23  initial implementation of timVspSetup
+
+ 9sep23  fix valgrind error in timVspSetup.c
+
+ 9sep23  initialization update required by change in EG_mapBody
+
+10sep23  add bentWaffle test case
+
+11sep23  SELECT * xmin xmax ... finds closest entity if xmin=xmax ...
+
+12sep23  remove X57_MAXWELL_CRM_v4.4.1 from svn (too big)
+
+12sep23  make udpWaffle clean up temporary variables if an error
+             occurs while processing a file
+
+12sep23  add fitCurve8 test case
+
+17sep23  return error from vspSetup if .vsp3 file does not exist
+
+20sep23  add pylon/pod to vsp3/OPAM1* test cases
+
+21sep23  add testAdjoint* test cases
+
+24sep23  modify ocsmGetUV so that inverse evalaution starts at closest
+             tessellation point if npnt is negative
+
+25sep23  fix memory leak associated with testAdjoint*
+
+25sep23  fix bug that allowed _hist and __trace__ to contain duplicate
+             entries, which sometimes resulted in an infinite loop
+
+25sep23  add uCRM test case to data/gallery
+
+26sep23  fix bug that made had _edgeID point to scribing Face instead
+             of its _faceID during a scribing operation. BEWARE:
+             backward incompatability for some _edgeID
+
+27sep23  Edges from a sketch should have _edgeID that identifies the
+             Body and Edge number; fix scribeWing test case. BEWARE:
+             backward incompatability for some _edgeID
+
+27sep23  fix _edgeID for Edges that result from SUBTRACTing a
+             SolidBody or planar SheetBody from a SheetBody. BEWARE:
+             backward incompatability for some _edgeID
+
+27sep23  add edgeIDtest* test cases
+
+28sep23  add sleep to udpVsp3 to ensure that .stp file is ready for
+             reading
+
+29sep23  update waffle documentation to include rebuild input argument
+
+29sep23  fix bug that caused a seg fault if last Body on stack had a
+             degenerate Edge and the -dxdd option was used in serveESP
+
+29sep23  add attrSpec test case to show how to apply compound string
+             Attributes via the ATTRIBUTE command, via editAttr, and
+             within the waffle
+
+29sep23  relax restriction on number of SET statements within a
+             waffle; allow PATBREAK in waffle; add waffleC1 test case
+
+ 2oct23  fix sanitize-address error in udpWaffle when progress=1
+
+ 3oct23  add simple.py to demonstrate a pyscript that can be run either
+             from python prompt or from serveESP
+
+ 3oct23  modify OPAM1.udc to pass Jenkins tests
+
+ 7oct23  ensure _faceID and _edgeID sequence numbers are consistent
+             when computing finite difference sensitivities
+
+ 9oct23  allow CSYSTEM name to be an expression; fix bug that did not
+             apply csystems to SELECT BODY command; add csystem7* test
+             cases
+
+10oct23  clean up some debug printing during sensitivity calculations
+
+10oct23  add missing data/vsp3 verification data for 7.6.0
+
+11oct23  remove FILLETs from OPAM1.csm; add OPAM1_fillet test case
+
+11oct23  fix typo in computation of analytic sensitivities for a CONE
+
+12oct23  fix tessellation sensitivities when Node motion is
+             perpendicular to end of Edge; add designZ* test cases
+
+12oct23  update all verification data associated with
+             data/basic/design* to account for the new (better)
+             sensitivities
+
+15oct23  update to use EG_mapBody2 to make sure Edges are mapped
+             properly during sensitivity calculations
+
+15oct23  update sensitivities (again) to improve Edges generated by
+             boolean operations; update selected sensitivity
+             verification data
+
+17oct23  update method for assigning _edgeIDs associated with
+             degenerate Edges
+
+17oct23  slight improvement in tessellation sensitivities for some
+             cases
+
+18oct23  fix sanitize error in velocityOfEdge
+
+18oct23  fix undefined variable warning
+
+18oct23  remove OPAM1_fillet test case (because FILLET works
+             differently on various platforms)
+
+18oct23  add showsize option in udfNuScale
+
+21oct23  fix bug in udfOffset for Bodys with degenerate Edges
+
+21oct23  in udfEditAttr, allow attrValue to be a star in HAS
+             statement, independent of whether the value is a string
+             or a number
+
+27oct23  add LRED, LGREEN, and LBLUE to list of possible colors
+
+ 5nov23  multi-thread ocsmAdjoint; add testAdjoint4 and testAdjoint5
+             test cases
+
+ 5nov23  dynamically allocate arrays in testOcsmAdjoint
+
+ 8nov23  print Edge lengths in ocsmPrintBrep
+ 
+10nov23  change signature of ocsmAdjoint to not automatically compute
+            full Jacobian
+
+11nov23  do not run testOcsmAdjoint if -loadEgads is enabled
+
+11nov23  fix sensitivities bug if there is a UDP/UDF and the
+             -loadEgads flag is set
+         
+12nov23  remove /../ patterns from .udc filenames
+
+12nov23  fix bug in capsMode that did not allow .csm files to have
+             .udc files in subdirectories
+
+13nov23  add ability to put attrName/attrValue on control surfaces in
+            udc/flapz
+
+13nov23  prototype WaveFront .obj file writer
+
+13nov23  fix sensitivity bug that returns zeros when UDPs are used and
+             -loadEgads was enabled
+
+14nov23  add quad output in .obj file writer
+
+16nov23  add $grpName=. optional argument to DUMP command for .obj
+             files
+
+17nov23  fix implicit string defaults in ocsmMakeBrch
+
+19nov23  temporarily disable filename compression
+
+20nov23  fix bug in filename compression
+
+21nov23  fix bug that did not restore the stack properly when a
+             command returned multiple Bodys
+
+22nov23  fix bug that did not clear display when plotter exits
+
+22nov23  make MessageWindow light green to alert user that they need
+             to exit an overlay
+
+22nov23  allow TIM to reload (if state is TIM_READY)
+
+22nov23  do not print warning that message is not broadcast because wv
+             was not started (which can happen due to timing in
+             multiple threads)
+
+22nov23  add areaRule* test cases and python script
+
+23nov23  change verification data for testAdjoint4 and testAdjoint5 to
+             account for inconsistencies in number of spurious Nodes
+             and Edges
+
+23nov23  remove verification data for 7.3.1 and 7.4.1
+
+24nov23  remove BWB.vsp3 test case since bug in OpenVSP sometimes
+             causes OpenVSP to fail
+
+24nov23  add Node tolerance checks when reporting tolerance associated
+             with a Body
+
+25nov23  adding _viz=off Attribute to a Face, Edge, or Node makes them
+             initially not displayed in serveESP (although they can be
+             toggled via the GUI)
+
+25nov23  fix valgrind error associated with not initializing the
+             output Body to EG_mapBody
+
+27nov23  added _grd, _trn, and _ori attributes to change initial
+             settings for Faces and Edges
+
+28nov23  fix RALLOC so that it can be thread-safe
+
+29nov23  fix bug that erroneously identified at-at-nchange as a real
+             in udfEditAttr
+
+29nov23  fixed bug when using a UDP/UDF that returns a value and
+             finite difference sensitivities are being computed
+
+29nov23  fix compiler warning associated with _viz attribute
+
+29nov23  clean up memory at end of ocsmAdjoint
+
+30nov23  make UDP/UDFs thread-safe.  THIS REQUIRED A CHANGE IN ALL
+             UDP/UDFs.  See OpenCSM/src/udp.help for information
+
+ 2dec23  fix bug in the pattern counter when executing PATBREAK
+
+ 5dec23  fix the code that finds the (non-manifold) Edge velocities
+             generated by a Boolean operation on SheetBodys as well as
+             SolidBodys
+
+ 5dec23  update ESP to account for new arguments to DUMP command
+
+ 6dec23  fix bug in copying UDP/UDF data that was identified by
+             memcheck
+
+ 8dec23  fix bug with optional last argument to DUMP
+
+ 8dec23  fix bug associated with copying bodyList in ocsmCopy
+
+ 8dec23  print triangle and quadrilateral count when writing .obj file
+
+15dec23  refactor UDP/UDF global storage
+
+17dec23  update udp.def for Windoze
+
+18dec23  attempt to fix stanalizer errors
+
+18dec23  fix bug in transferring Edge attributes when SUBTRACTing a
+             SheetBody from another SheetBody (due to an OpenCASCADE
+             error)
+
+18dec23  fix bug that (erroneously) evalauted arguments to ELSEIF even
+             when the matching IFTHEN evaluated to true
+
+18dec23  provide udps.ndotchg to tell it any inputs to sensitivities
+             have changed since previous call for sensitivities
+
+18dec23  provide COPYUDPDATA to copy private data in UDP/UDFs
+
+19dec23  try to eliminate duplicate library warnings when linking
+             tile.so
+
+19dec23  fix udp.def for udpPost
+
+19dec23  re-add duplicate libraries for linking tile.so (even though
+             latest linker will issue a warning)
+
+19dec23  fix bug in ocsmCopy that seg faulted when a Branch name
+             exceeded 11 characters
+
+19dec23  update sensitivity calculations in udpParsec
+
+19dec23  add capNacelle*, testAdjoint6, and testAdjoint7 test cases
+
+19dec23  change copyright dates from 2023 to 2024
+
+19dec23  add deprecation warnings to all .csm/.udc/.cpc files that use
+             LOFT, MACBEG, MACEND, and RECALL
+
+19dec23  fix undefined variable associated with degenerate Edges when
+             using udfOffset
+
+21dec23  allow assert_failed signal to be caught
+
+21dec23  check that arguments to COMBINE command are all valid Edge
+             and/or Face numbers
+
+21dec23  fix bug in serveESP that seg faulted when a DESPMTR exceeded
+             its LBOUND or UBOUND in the .csm file
+
+21dec23  fix memory leak associated with private data in UDP/UDFs
+
+21dec23  fix bug in GROUP command when ngroup was positive
+
+22dec23  update group5 test case and its verification data
+
+22dec23  start to modify ESP-help to include examples
+
+25dec23  create test cases for examples
+
+26dec23  add examples to ESP-help
+
+26dec23  add shift-click option in ESP TreeWindow to change Viz, Grd,
+             Trn, or Ori since last change
+
+27dec23  modify example files so that they work on Firefox, Chrome,
+             and Safari
+
+30dec23  fix ESP bug that did not exit pyscript properly
+
+30dec23  update version number in some tutorial files
+
+30dec23  update testScript.txt
+
+31dec23  update ESP-help, testScript, and ESP_QuickGuide
+
+ 1jan23  add ReleaseNotes.txt
+
 &&&&&&
 
+         implement flend2
+         * reasonable distribution of spine points
+         * left and rite points given distance from spine
+           left and rite points projected to adjacent Faces
+           left and rite points beyond the adjacent Faces
+           left and rite points at Nodes not at average normal when 
+              adjacent Edges share a Face
+           left and rite points not on Edge shared by adjacent Faces
+           Brep scribed by left and rite points
+           flend Faces created
+
+         add ztail option to udpNaca456
+
+         create packaging optimization example (sphere in cone)
+
+         update ESP_overview with new images
+
          add ability to prescribe end slopes in udpFitcurve
+
+         integrated FUN3D workflow
+
+         add sensitivities to udpVsp3
+
+         update udfDroop so that it works with a blunt trailing edge
+
+         update udfDroop so that cross-section does not have to be in
+             unit-chord standard position
 
 **       develop generalized transfer technique (1D-2D, 2D-partial 2D)
 
@@ -9934,16 +10347,15 @@
 
          integrate Slugs into ESP
 
+         time-varying geometry
+
+         highly-bent wing (AIAA aeroelastic workshop 3)
+
          add plots to session04/2_*.py and 4_*.py
 
          if a pyscript error is encountered, CAPS is left in a locked
              state
 
-         update udfDroop so that it works with a blunt trailing edge
-
-         update udfDroop so that cross-section does not have to be in
-             unit-chord standard position
-         
          when  DESPMTR is changed, the other user does not see that a
              change was made
 
@@ -9996,6 +10408,8 @@
          . shadow background
          . translate sketch (scroll-bars?)
          . better help when solver fails
+         . parallel constraint
+         . holes in sketch (multiple loops)
 
          analytic sensitivities for sketches
 

@@ -4,6 +4,7 @@
 
 #include "egads.h"
 #include "aimUtil.h"
+#include "aimMesh.h"
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -401,7 +402,7 @@ int mesh_addTess2Dbc(void *aimInfo, meshStruct *surfaceMesh, const mapAttrToInde
               AIM_ERROR(aimInfo ,"Unable to retrieve boundary index from capsGroup %s", groupName);
               goto cleanup;
           }
-
+#if 0
           status = retrieve_CAPSIgnoreAttr(edges[edge-1], &groupName);
           if (status == CAPS_SUCCESS) {
               AIM_ERROR(aimInfo, "Both capsGroup and capsIgnore attribute found for edge - %d!!", edge);
@@ -409,6 +410,7 @@ int mesh_addTess2Dbc(void *aimInfo, meshStruct *surfaceMesh, const mapAttrToInde
               status = CAPS_BADVALUE;
               goto cleanup;
           }
+#endif
         } else {
 
             status = retrieve_CAPSIgnoreAttr(edges[edge-1], &groupName);
@@ -454,7 +456,7 @@ int mesh_addTess2Dbc(void *aimInfo, meshStruct *surfaceMesh, const mapAttrToInde
     }
 
     // fill the quick ref list
-    status = mesh_fillQuickRefList(surfaceMesh);
+    status = mesh_fillQuickRefList(aimInfo, surfaceMesh);
     if (status != CAPS_SUCCESS) goto cleanup;
 
     status = CAPS_SUCCESS;
@@ -664,7 +666,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
 
                 status = get_mapAttrToIndexIndex(attrMap, groupName, &cID);
                 AIM_STATUS(aimInfo, status, "Unable to retrieve boundary index from capsGroup %s", groupName);
-
+#if 0
                 status = retrieve_CAPSIgnoreAttr(faces[face-1], &groupName);
                 if (status == CAPS_SUCCESS) {
                     AIM_ERROR(aimInfo, "Both capsGroup and capsIgnore attribute found for face - %d!!", face);
@@ -672,6 +674,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
                     status = CAPS_BADVALUE;
                     goto cleanup;
                 }
+#endif
             } else {
 
                 status = retrieve_CAPSIgnoreAttr(faces[face-1], &groupName);
@@ -797,7 +800,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
 
             status = get_mapAttrToIndexIndex(attrMap, groupName, &cID);
             AIM_STATUS(aimInfo, status, "Unable to retrieve edge index from capsGroup %s", groupName);
-
+#if 0
             status = retrieve_CAPSIgnoreAttr(edges[edge-1], &groupName);
             if (status == CAPS_SUCCESS) {
                 AIM_ERROR(aimInfo, "Both capsGroup and capsIgnore attribute found for edge - %d!!", edge);
@@ -805,6 +808,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
                 status = CAPS_BADVALUE;
                 goto cleanup;
             }
+#endif
         } else {
             status = retrieve_CAPSIgnoreAttr(edges[edge-1], &groupName);
             if (status == CAPS_SUCCESS) {
@@ -877,7 +881,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
 
             status = get_mapAttrToIndexIndex(attrMap, groupName, &cID);
             AIM_STATUS(aimInfo, status, "Unable to retrieve node index from capsGroup %s", groupName);
-
+#if 0
             status = retrieve_CAPSIgnoreAttr(nodes[node-1], &groupName);
             if (status == CAPS_SUCCESS) {
                 AIM_ERROR(aimInfo, "Both capsGroup and capsIgnore attribute found for node - %d!!", node);
@@ -885,6 +889,7 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
                 status = CAPS_BADVALUE;
                 goto cleanup;
             }
+#endif
         } else {
             status = retrieve_CAPSIgnoreAttr(nodes[node-1], &groupName);
             if (status == CAPS_SUCCESS) {
@@ -946,8 +951,6 @@ int mesh_bodyTessellation(void *aimInfo, ego tess, const mapAttrToIndexStruct *a
 
 cleanup:
     if (status != CAPS_SUCCESS) {
-        printf("Error: Premature exit in mesh_bodyTessellation status = %d\n", status);
-
         AIM_FREE(xyzs);
         AIM_FREE(triConn);
         AIM_FREE(triCompID);
@@ -1015,7 +1018,7 @@ int mesh_surfaceMeshEGADSTess(void *aimInfo, meshStruct *surfMesh, int twoDMesh)
     const double *reals = NULL;
     const char *string = NULL;
 
-    // check if the tessellation has a mixture of quad and tess
+    // check if the tessellation has a mixture of quad and tri
     status = EG_attributeRet(surfMesh->egadsTess, ".mixed",
                              &atype, &alen, &tessFaceQuadMap, &reals, &string);
     AIM_NOTFOUND(aimInfo, status);
@@ -2394,10 +2397,10 @@ static void get_TriangleArea(double p1[3],
 }
 #endif
 
-void get_Surface_Norm(double p1[3],
-                      double p2[3],
-                      double p3[3],
-                      double norm[3])
+void get_Surface_Norm(double p1[],
+                      double p2[],
+                      double p3[],
+                      double norm[])
 {
     double a[3]={0.0,0.0,0.0};
     double b[3]={0.0,0.0,0.0};
@@ -3743,38 +3746,17 @@ int destroy_meshQuickRefStruct(meshQuickRefStruct *quickRef) {
     quickRef->startIndexHexahedral = -1;
 
     // Array of element indexes containing a specific element type
-    if (quickRef->listIndexNode != NULL) EG_free(quickRef->listIndexNode);
-    quickRef->listIndexNode = NULL; // size[numNode]
-
-    if (quickRef->listIndexLine != NULL) EG_free(quickRef->listIndexLine);
-    quickRef->listIndexLine = NULL; // size[numLine]
-
-    if (quickRef->listIndexTriangle != NULL) EG_free(quickRef->listIndexTriangle);
-    quickRef->listIndexTriangle = NULL; // size[numTriangle]
-
-    if (quickRef->listIndexTriangle_6 != NULL) EG_free(quickRef->listIndexTriangle_6);
-    quickRef->listIndexTriangle_6 = NULL; // size[numTriangle_6]
-
-    if (quickRef->listIndexQuadrilateral != NULL) EG_free(quickRef->listIndexQuadrilateral);
-    quickRef->listIndexQuadrilateral = NULL; // size[numQuadrilateral]
-
-    if (quickRef->listIndexQuadrilateral_8 != NULL) EG_free(quickRef->listIndexQuadrilateral_8);
-       quickRef->listIndexQuadrilateral_8 = NULL; // size[numQuadrilateral_8]
-
-    if (quickRef->listIndexTetrahedral != NULL) EG_free(quickRef->listIndexTetrahedral);
-    quickRef->listIndexTetrahedral = NULL; // size[numTetrahedral]
-
-    if (quickRef->listIndexTetrahedral_10 != NULL) EG_free(quickRef->listIndexTetrahedral_10);
-    quickRef->listIndexTetrahedral_10 = NULL; // size[numTetrahedral_10]
-
-    if (quickRef->listIndexPyramid != NULL) EG_free(quickRef->listIndexPyramid);
-    quickRef->listIndexPyramid = NULL; // size[numPyramid]
-
-    if (quickRef->listIndexPrism != NULL) EG_free(quickRef->listIndexPrism);
-    quickRef->listIndexPrism = NULL; // size[numPrism]
-
-    if (quickRef->listIndexHexahedral != NULL) EG_free(quickRef->listIndexHexahedral);
-    quickRef->listIndexHexahedral = NULL; // size[numHexahedral]
+    AIM_FREE(quickRef->listIndexNode);
+    AIM_FREE(quickRef->listIndexLine);
+    AIM_FREE(quickRef->listIndexTriangle);
+    AIM_FREE(quickRef->listIndexTriangle_6);
+    AIM_FREE(quickRef->listIndexQuadrilateral);
+    AIM_FREE(quickRef->listIndexQuadrilateral_8);
+    AIM_FREE(quickRef->listIndexTetrahedral);
+    AIM_FREE(quickRef->listIndexTetrahedral_10);
+    AIM_FREE(quickRef->listIndexPyramid);
+    AIM_FREE(quickRef->listIndexPrism);
+    AIM_FREE(quickRef->listIndexHexahedral);
 
     return CAPS_SUCCESS;
 }
@@ -4018,170 +4000,74 @@ int mesh_retrieveStartIndexMeshElements(int numElement,
     }
 }
 
-// Retrieve list of mesh element of a given type - elementTypeList is freeable
-int mesh_retrieveMeshElements(int numElement,
-                              meshElementStruct element[],
-                              meshElementTypeEnum elementType,
-                              int *numElementType,
-                              int *elementTypeList[]) {
-
-    int i; // Indexing
-
-    int *tempList = NULL;
-
-    if (element == NULL) return CAPS_NULLVALUE;
-
-    if (*elementTypeList != NULL) EG_free(*elementTypeList);
-    *elementTypeList = NULL;
-
-    if (numElement == 0) return CAPS_BADVALUE;
-
-    tempList = (int *) EG_alloc(numElement*sizeof(int));
-    if (tempList == NULL) return EGADS_MALLOC;
-
-    *numElementType = 0;
-    for (i = 0; i < numElement; i++) {
-        tempList[i] = (int) false;
-
-        if (element[i].elementType != elementType) continue;
-
-        tempList[i] = (int) true;
-        *numElementType += 1;
-    }
-
-    if (*numElementType == 0) {
-        EG_free(tempList);
-        return CAPS_NOTFOUND;
-    }
-
-    *elementTypeList = (int *) EG_alloc((*numElementType)*sizeof(int));
-    if (*elementTypeList == NULL) {
-        EG_free(tempList);
-        return EGADS_MALLOC;
-    }
-
-    *numElementType = 0;
-    for (i = 0; i < numElement; i++ ) {
-        if (tempList[i] == (int) true) {
-            (*elementTypeList)[*numElementType] = i;
-            *numElementType += 1;
-        }
-    }
-
-    EG_free(tempList);
-
-    return CAPS_SUCCESS;
-
-}
-
 // Fill out the QuickRef lists for all element types
-int mesh_fillQuickRefList( meshStruct *mesh) {
+int mesh_fillQuickRefList( void *aimInfo, meshStruct *mesh ) {
 
     int status;
+    int i;
 
     status = destroy_meshQuickRefStruct(&mesh->meshQuickRef);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    // Node
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Node,
-                                       &mesh->meshQuickRef.numNode,
-                                       &mesh->meshQuickRef.listIndexNode);
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
+    for (i = 0; i < mesh->numElement; i++) {
+           if (mesh->element[i].elementType == Node           ) mesh->meshQuickRef.numNode++;
+      else if (mesh->element[i].elementType == Line           ) mesh->meshQuickRef.numLine++;
+      else if (mesh->element[i].elementType == Triangle       ) mesh->meshQuickRef.numTriangle++;
+      else if (mesh->element[i].elementType == Triangle_6     ) mesh->meshQuickRef.numTriangle_6++;
+      else if (mesh->element[i].elementType == Quadrilateral  ) mesh->meshQuickRef.numQuadrilateral++;
+      else if (mesh->element[i].elementType == Quadrilateral_8) mesh->meshQuickRef.numQuadrilateral_8++;
+      else if (mesh->element[i].elementType == Tetrahedral    ) mesh->meshQuickRef.numTetrahedral++;
+      else if (mesh->element[i].elementType == Tetrahedral_10 ) mesh->meshQuickRef.numTetrahedral_10++;
+      else if (mesh->element[i].elementType == Pyramid        ) mesh->meshQuickRef.numPyramid++;
+      else if (mesh->element[i].elementType == Prism          ) mesh->meshQuickRef.numPrism++;
+      else if (mesh->element[i].elementType == Hexahedral     ) mesh->meshQuickRef.numHexahedral++;
+    }
 
-    // Line
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Line,
-                                       &mesh->meshQuickRef.numLine,
-                                       &mesh->meshQuickRef.listIndexLine);
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
+    AIM_ALLOC(mesh->meshQuickRef.listIndexNode           , mesh->meshQuickRef.numNode           , int, aimInfo, status);
+    AIM_ALLOC(mesh->meshQuickRef.listIndexLine           , mesh->meshQuickRef.numLine           , int, aimInfo, status);
+    AIM_ALLOC(mesh->meshQuickRef.listIndexTriangle       , mesh->meshQuickRef.numTriangle       , int, aimInfo, status);
+    AIM_ALLOC(mesh->meshQuickRef.listIndexTriangle_6     , mesh->meshQuickRef.numTriangle_6     , int, aimInfo, status);
+    AIM_ALLOC(mesh->meshQuickRef.listIndexQuadrilateral  , mesh->meshQuickRef.numQuadrilateral  , int, aimInfo, status);
+    AIM_ALLOC(mesh->meshQuickRef.listIndexQuadrilateral_8, mesh->meshQuickRef.numQuadrilateral_8, int, aimInfo, status);
+    AIM_ALLOC(mesh->meshQuickRef.listIndexTetrahedral    , mesh->meshQuickRef.numTetrahedral    , int, aimInfo, status);
+    AIM_ALLOC(mesh->meshQuickRef.listIndexTetrahedral_10 , mesh->meshQuickRef.numTetrahedral_10 , int, aimInfo, status);
+    AIM_ALLOC(mesh->meshQuickRef.listIndexPyramid        , mesh->meshQuickRef.numPyramid        , int, aimInfo, status);
+    AIM_ALLOC(mesh->meshQuickRef.listIndexPrism          , mesh->meshQuickRef.numPrism          , int, aimInfo, status);
+    AIM_ALLOC(mesh->meshQuickRef.listIndexHexahedral     , mesh->meshQuickRef.numHexahedral     , int, aimInfo, status);
 
-    // Triangle
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Triangle,
-                                       &mesh->meshQuickRef.numTriangle,
-                                       &mesh->meshQuickRef.listIndexTriangle);
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
+    mesh->meshQuickRef.numNode = 0;
+    mesh->meshQuickRef.numLine = 0;
+    mesh->meshQuickRef.numTriangle = 0;
+    mesh->meshQuickRef.numTriangle_6 = 0;
+    mesh->meshQuickRef.numQuadrilateral = 0;
+    mesh->meshQuickRef.numQuadrilateral_8 = 0;
+    mesh->meshQuickRef.numTetrahedral = 0;
+    mesh->meshQuickRef.numTetrahedral_10 = 0;
+    mesh->meshQuickRef.numPyramid = 0;
+    mesh->meshQuickRef.numPrism = 0;
+    mesh->meshQuickRef.numHexahedral = 0;
 
-    // Triangle - 6
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Triangle_6,
-                                       &mesh->meshQuickRef.numTriangle_6,
-                                       &mesh->meshQuickRef.listIndexTriangle_6);
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
-
-
-    // Quadrilataral
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Quadrilateral,
-                                       &mesh->meshQuickRef.numQuadrilateral,
-                                       &mesh->meshQuickRef.listIndexQuadrilateral);
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
-
-    // Quadrilataral - 8
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Quadrilateral_8,
-                                       &mesh->meshQuickRef.numQuadrilateral_8,
-                                       &mesh->meshQuickRef.listIndexQuadrilateral_8);
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
-
-
-    // Tetrahedral
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Tetrahedral,
-                                       &mesh->meshQuickRef.numTetrahedral,
-                                       &mesh->meshQuickRef.listIndexTetrahedral);
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
-
-    // Tetrahedral - 10
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Tetrahedral_10,
-                                       &mesh->meshQuickRef.numTetrahedral_10,
-                                       &mesh->meshQuickRef.listIndexTetrahedral_10);
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
-
-
-    // Pyramid
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Pyramid,
-                                       &mesh->meshQuickRef.numPyramid,
-                                       &mesh->meshQuickRef.listIndexPyramid );
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
-
-    // Prism
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Prism,
-                                       &mesh->meshQuickRef.numPrism,
-                                       &mesh->meshQuickRef.listIndexPrism );
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
-
-    // Hexahedral
-    status = mesh_retrieveMeshElements(mesh->numElement,
-                                       mesh->element,
-                                       Hexahedral,
-                                       &mesh->meshQuickRef.numHexahedral,
-                                       &mesh->meshQuickRef.listIndexHexahedral);
-    if (status != CAPS_NOTFOUND && status != CAPS_SUCCESS) goto cleanup;
+    for (i = 0; i < mesh->numElement; i++) {
+           if (mesh->element[i].elementType == Node           ) mesh->meshQuickRef.listIndexNode           [mesh->meshQuickRef.numNode++           ] = i;
+      else if (mesh->element[i].elementType == Line           ) mesh->meshQuickRef.listIndexLine           [mesh->meshQuickRef.numLine++           ] = i;
+      else if (mesh->element[i].elementType == Triangle       ) mesh->meshQuickRef.listIndexTriangle       [mesh->meshQuickRef.numTriangle++       ] = i;
+      else if (mesh->element[i].elementType == Triangle_6     ) mesh->meshQuickRef.listIndexTriangle_6     [mesh->meshQuickRef.numTriangle_6++     ] = i;
+      else if (mesh->element[i].elementType == Quadrilateral  ) mesh->meshQuickRef.listIndexQuadrilateral  [mesh->meshQuickRef.numQuadrilateral++  ] = i;
+      else if (mesh->element[i].elementType == Quadrilateral_8) mesh->meshQuickRef.listIndexQuadrilateral_8[mesh->meshQuickRef.numQuadrilateral_8++] = i;
+      else if (mesh->element[i].elementType == Tetrahedral    ) mesh->meshQuickRef.listIndexTetrahedral    [mesh->meshQuickRef.numTetrahedral++    ] = i;
+      else if (mesh->element[i].elementType == Tetrahedral_10 ) mesh->meshQuickRef.listIndexTetrahedral_10 [mesh->meshQuickRef.numTetrahedral_10++ ] = i;
+      else if (mesh->element[i].elementType == Pyramid        ) mesh->meshQuickRef.listIndexPyramid        [mesh->meshQuickRef.numPyramid++        ] = i;
+      else if (mesh->element[i].elementType == Prism          ) mesh->meshQuickRef.listIndexPrism          [mesh->meshQuickRef.numPrism++          ] = i;
+      else if (mesh->element[i].elementType == Hexahedral     ) mesh->meshQuickRef.listIndexHexahedral     [mesh->meshQuickRef.numHexahedral++     ] = i;
+    }
 
     mesh->meshQuickRef.useListIndex = (int) true;
 
     status = CAPS_SUCCESS;
-    goto cleanup;
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in mesh_fillQuickRefList, status %d\n", status);
+cleanup:
 
-        return status;
+    return status;
 }
 
 // Copy the QuickRef structure
@@ -4483,7 +4369,7 @@ int mesh_copyMeshStruct( meshStruct *in, meshStruct *out ) {
 }
 
 // Combine mesh structures
-int mesh_combineMeshStruct(int numMesh, meshStruct mesh[], meshStruct *combineMesh ) {
+int mesh_combineMeshStruct(void *aimInfo, int numMesh, meshStruct mesh[], meshStruct *combineMesh ) {
 
     int status;
     int i, j; //Indexing
@@ -4614,7 +4500,7 @@ int mesh_combineMeshStruct(int numMesh, meshStruct mesh[], meshStruct *combineMe
         elementIndexOffSet += mesh[i].numElement;
     }
 
-    status = mesh_fillQuickRefList( combineMesh );
+    status = mesh_fillQuickRefList( aimInfo, combineMesh );
     if (status != CAPS_SUCCESS) goto cleanup;
 
     status = CAPS_SUCCESS;
@@ -4658,7 +4544,7 @@ int mesh_writeAFLR3(void *aimInfo,
     if (mesh->meshQuickRef.useStartIndex == (int) false &&
         mesh->meshQuickRef.useListIndex  == (int) false) {
 
-        status = mesh_fillQuickRefList( mesh);
+        status = mesh_fillQuickRefList( aimInfo, mesh );
         if (status != CAPS_SUCCESS) goto cleanup;
     }
 
@@ -5691,7 +5577,7 @@ int mesh_writeVTK(void *aimInfo,
     if (mesh->meshQuickRef.useStartIndex == (int) false &&
         mesh->meshQuickRef.useListIndex  == (int) false) {
 
-        status = mesh_fillQuickRefList( mesh);
+        status = mesh_fillQuickRefList( aimInfo, mesh );
         if (status != CAPS_SUCCESS) goto cleanup;
     }
 
@@ -5914,14 +5800,12 @@ int mesh_writeVTK(void *aimInfo,
 
     status = CAPS_SUCCESS;
 
-    goto cleanup;
+cleanup:
+    if (status != CAPS_SUCCESS) printf("\tPremature exit in mesh_writeVTK, status = %d\n", status);
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("\tPremature exit in mesh_writeVTK, status = %d\n", status);
-
-        if (fp != NULL) fclose(fp);
-        if (filename != NULL) EG_free(filename);
-        return status;
+    if (fp != NULL) fclose(fp);
+    if (filename != NULL) EG_free(filename);
+    return status;
 }
 
 // Write a mesh contained in the mesh structure in SU2 format (*.su2)
@@ -5959,7 +5843,7 @@ int mesh_writeSU2(void *aimInfo,
     if (mesh->meshQuickRef.useStartIndex == (int) false &&
         mesh->meshQuickRef.useListIndex  == (int) false) {
 
-        status = mesh_fillQuickRefList( mesh);
+        status = mesh_fillQuickRefList( aimInfo, mesh );
         if (status != CAPS_SUCCESS) goto cleanup;
     }
 
@@ -7023,16 +6907,13 @@ int mesh_writeAstros(void *aimInfo,
 
     status = CAPS_SUCCESS;
 
-    goto cleanup;
+cleanup:
+    if (status != CAPS_SUCCESS) printf("\tPremature exit in mesh_writeAstros, status = %d\n", status);
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("\tPremature exit in mesh_writeAstros, status = %d\n", status);
+    AIM_FREE(filename);
 
-        if (filename != NULL) EG_free(filename);
-
-        if (fp != NULL) fclose(fp);
-        return status;
-
+    if (fp != NULL) fclose(fp);
+    return status;
 }
 
 // Write a mesh contained in the mesh structure in STL format (*.stl)
@@ -7297,15 +7178,15 @@ int mesh_writeSTL(void *aimInfo,
                                  p3,
                                  norm);
 
-                fprintf(fp,"\tfacet normal %f %f %f\n",norm[0],norm[1],norm[2]);
-                fprintf(fp,"\t\touter loop\n");
+                fprintf(fp," facet normal %2.16e %2.16e %2.16e\n",norm[0],norm[1],norm[2]);
+                fprintf(fp,"  touter loop\n");
 
-                fprintf(fp,"\t\t\tvertex %f %f %f\n",p1[0],p1[1],p1[2]);
-                fprintf(fp,"\t\t\tvertex %f %f %f\n",p2[0],p2[1],p2[2]);
-                fprintf(fp,"\t\t\tvertex %f %f %f\n",p3[0],p3[1],p3[2]);
+                fprintf(fp,"   vertex %2.16e %2.16e %2.16e\n",p1[0],p1[1],p1[2]);
+                fprintf(fp,"   vertex %2.16e %2.16e %2.16e\n",p2[0],p2[1],p2[2]);
+                fprintf(fp,"   vertex %2.16e %2.16e %2.16e\n",p3[0],p3[1],p3[2]);
 
-                fprintf(fp,"\t\tendloop\n");
-                fprintf(fp,"\tendfacet\n");
+                fprintf(fp,"  endloop\n");
+                fprintf(fp," endfacet\n");
             }
 
             if (mesh->element[i].elementType == Quadrilateral) {
@@ -7327,15 +7208,15 @@ int mesh_writeSTL(void *aimInfo,
                                  p3,
                                  norm);
 
-                fprintf(fp,"\tfacet normal %f %f %f\n",norm[0],norm[1],norm[2]);
-                fprintf(fp,"\t\touter loop\n");
+                fprintf(fp," facet normal %2.16e %2.16e %2.16e\n",norm[0],norm[1],norm[2]);
+                fprintf(fp,"  outer loop\n");
 
-                fprintf(fp,"\t\t\tvertex %f %f %f\n",p1[0],p1[1],p1[2]);
-                fprintf(fp,"\t\t\tvertex %f %f %f\n",p2[0],p2[1],p2[2]);
-                fprintf(fp,"\t\t\tvertex %f %f %f\n",p3[0],p3[1],p3[2]);
+                fprintf(fp,"   vertex %2.16e %2.16e %2.16e\n",p1[0],p1[1],p1[2]);
+                fprintf(fp,"   vertex %2.16e %2.16e %2.16e\n",p2[0],p2[1],p2[2]);
+                fprintf(fp,"   vertex %2.16e %2.16e %2.16e\n",p3[0],p3[1],p3[2]);
 
-                fprintf(fp,"\t\tendloop\n");
-                fprintf(fp,"\tendfacet\n");
+                fprintf(fp,"  endloop\n");
+                fprintf(fp," endfacet\n");
 
                 // Second triangle
                 p1[0] = mesh->node[mesh->element[i].connectivity[0]-1].xyz[0]*scaleFactor;
@@ -7355,15 +7236,15 @@ int mesh_writeSTL(void *aimInfo,
                                  p3,
                                  norm);
 
-                fprintf(fp,"\tfacet normal %f %f %f\n",norm[0],norm[1],norm[2]);
-                fprintf(fp,"\t\touter loop\n");
+                fprintf(fp," facet normal %2.16e %2.16e %2.16e\n",norm[0],norm[1],norm[2]);
+                fprintf(fp,"  outer loop\n");
 
-                fprintf(fp,"\t\t\tvertex %f %f %f\n",p1[0],p1[1],p1[2]);
-                fprintf(fp,"\t\t\tvertex %f %f %f\n",p2[0],p2[1],p2[2]);
-                fprintf(fp,"\t\t\tvertex %f %f %f\n",p3[0],p3[1],p3[2]);
+                fprintf(fp,"   vertex %2.16e %2.16e %2.16e\n",p1[0],p1[1],p1[2]);
+                fprintf(fp,"   vertex %2.16e %2.16e %2.16e\n",p2[0],p2[1],p2[2]);
+                fprintf(fp,"   vertex %2.16e %2.16e %2.16e\n",p3[0],p3[1],p3[2]);
 
-                fprintf(fp,"\t\tendloop\n");
-                fprintf(fp,"\tendfacet\n");
+                fprintf(fp,"  endloop\n");
+                fprintf(fp," endfacet\n");
 
             }
         }
@@ -7417,7 +7298,7 @@ int mesh_writeTecplot(void *aimInfo,
 
     if (mesh->meshQuickRef.useStartIndex == (int) false &&
         mesh->meshQuickRef.useListIndex  == (int) false) {
-        status = mesh_fillQuickRefList( mesh);
+        status = mesh_fillQuickRefList( aimInfo, mesh );
         if (status != CAPS_SUCCESS) goto cleanup;
     }
 
@@ -7801,7 +7682,7 @@ int mesh_writeFAST(void *aimInfo,
     if (mesh->meshQuickRef.useStartIndex == (int) false &&
         mesh->meshQuickRef.useListIndex  == (int) false) {
 
-        status = mesh_fillQuickRefList(mesh);
+        status = mesh_fillQuickRefList( aimInfo, mesh );
         if (status != CAPS_SUCCESS) goto cleanup;
     }
 
@@ -7882,9 +7763,9 @@ int mesh_writeFAST(void *aimInfo,
 
 // Write a mesh contained in the mesh structure in Abaqus mesh format (*_Mesh.inp)
 int mesh_writeAbaqus(void *aimInfo,
-                     char *fname,
+                     const char *fname,
                      int asciiFlag,
-                     meshStruct *mesh,
+                     const meshStruct *mesh,
                      double scaleFactor) // Scale factor for coordinates
 {
 
@@ -7935,7 +7816,7 @@ int mesh_writeAbaqus(void *aimInfo,
     if (mesh->meshQuickRef.useStartIndex == (int) false &&
         mesh->meshQuickRef.useListIndex  == (int) false) {
 
-        status = mesh_fillQuickRefList(mesh);
+        status = mesh_fillQuickRefList( aimInfo, (meshStruct *)mesh );
         if (status != CAPS_SUCCESS) goto cleanup;
     }
 
@@ -7963,7 +7844,7 @@ int mesh_writeAbaqus(void *aimInfo,
         if ( mesh->element[i].elementType == Line) {
             type = "B21";
         } else if (mesh->element[i].elementType == Triangle) {
-            type = "S3";
+            type = "S3R";
         } else if (mesh->element[i].elementType == Quadrilateral) {
             type = "S4";
         } else if (mesh->element[i].elementType == Tetrahedral) {
@@ -7992,19 +7873,19 @@ int mesh_writeAbaqus(void *aimInfo,
 
     printf("Finished writing Abaqus grid file\n\n");
 
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("Error: Premature exit in mesh_writeAbaqus, status %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS) printf("Error: Premature exit in mesh_writeAbaqus, status %d\n", status);
 
-        if (filename != NULL) EG_free(filename);
-        if (fp != NULL) fclose(fp);
+    if (filename != NULL) EG_free(filename);
+    if (fp != NULL) fclose(fp);
 
-        return status;
+    return status;
 }
 
 
 // Extrude a surface mesh a single unit the length of extrusionLength - return a
 // volume mesh, cell volume and left-handness is not checked
-int extrude_SurfaceMesh(double extrusionLength, int extrusionMarker, meshStruct *surfaceMesh, meshStruct *volumeMesh)
+int extrude_SurfaceMesh(void *aimInfo, double extrusionLength, int extrusionMarker, meshStruct *surfaceMesh, meshStruct *volumeMesh)
 {
 
     int status; // Status return
@@ -8032,7 +7913,7 @@ int extrude_SurfaceMesh(double extrusionLength, int extrusionMarker, meshStruct 
     if (surfaceMesh->meshQuickRef.useStartIndex == (int) false &&
         surfaceMesh->meshQuickRef.useListIndex  == (int) false) {
 
-        status = mesh_fillQuickRefList(surfaceMesh);
+        status = mesh_fillQuickRefList( aimInfo, surfaceMesh );
         if (status != CAPS_SUCCESS) goto bail;
     }
 
@@ -8598,8 +8479,55 @@ cleanup:
     return status;
 }
 
+
+// Constructs a map that maps from elementID to the mesh->element array index
+int mesh_elementID2Array(const meshStruct *mesh,
+                         int **e2a_out)
+{
+    int status; // Function status
+
+    int ielem; // Indexing
+
+    int numElementID = 0;
+    int *e2a = NULL;
+
+    if (mesh    == NULL) { status = CAPS_NULLVALUE; goto cleanup; }
+    if (e2a_out == NULL) { status = CAPS_NULLVALUE; goto cleanup; }
+    *e2a_out = NULL;
+
+    // get the maximum nodeID value from the elements
+    for (ielem = 0; ielem < mesh->numElement; ielem++) {
+        numElementID = MAX(numElementID, mesh->element[ielem].elementID);
+    }
+    numElementID++; // change to a count rather than ID
+
+    // allocate the output array and initialize the map to -1
+    e2a = (int*)EG_alloc(numElementID*sizeof(int));
+    for (ielem = 0; ielem < numElementID; ielem++) {
+        e2a[ielem] = -1;
+    }
+
+    for (ielem = 0; ielem < mesh->numElement; ielem++) {
+        if (mesh->element[ielem].elementID < 1) continue;
+        // map the elementID to the array mesh->element array index
+        e2a[mesh->element[ielem].elementID] = ielem;
+    }
+
+    *e2a_out = e2a;
+    status = CAPS_SUCCESS;
+
+cleanup:
+    if (status != CAPS_SUCCESS) {
+        printf("Error: Premature exit in mesh_nodeID2Array, status %d\n", status);
+        AIM_FREE(e2a);
+    }
+
+    return status;
+}
+
+
 // Create a new mesh with topology tagged with capsIgnore being removed, if capsIgnore isn't found the mesh is simply copied.
-int mesh_createIgnoreMesh(meshStruct *mesh, meshStruct *meshIgnore) {
+int mesh_createIgnoreMesh(void *aimInfo, meshStruct *mesh, meshStruct *meshIgnore) {
     int status;
 
     int i, j; // Indexing
@@ -8793,7 +8721,7 @@ int mesh_createIgnoreMesh(meshStruct *mesh, meshStruct *meshIgnore) {
         status = mesh_removeUnusedNodes( meshIgnore );
         if (status != CAPS_SUCCESS) goto cleanup;
 
-        status = mesh_fillQuickRefList( meshIgnore );
+        status = mesh_fillQuickRefList( aimInfo, meshIgnore );
         if (status != CAPS_SUCCESS) goto cleanup;
 
 
@@ -9116,7 +9044,7 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
     // EGADS function returns
     int plen, tlen, qlen;
     int atype, alen;
-    const int    *ptype, *pindex, *tris, *nei, *ints;
+    const int    *ptype, *pindex, *tris, *nei, *tessFaceQuadMap;
     const double *xyz, *uv, *reals;
 
     // Body Tessellation
@@ -9132,7 +9060,7 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
     int numCAPSGroup = 0, attrIndex = 0, foundAttr = (int) false;
     int *capsGroupList = NULL;
 
-    int numElem, stride, tindex;
+    int numElem, stride, tindex, tq;
 
     // Quading variables
     int quad = (int)false;
@@ -9171,10 +9099,10 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
         AIM_FREE(faceList);
         AIM_ALLOC(faceList, numFace, int, discr->aInfo, status);
 
-        quad = (int)false;
-        status = EG_attributeRet(tess[ibody], ".tessType", &atype, &alen, &ints, &reals, &string);
-        if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(string, "Quad") == 0)
-          quad = (int)true;
+        // check if the tessellation has a mixture of quad and tri
+        status = EG_attributeRet(tess[ibody], ".mixed",
+                                 &atype, &alen, &tessFaceQuadMap, &reals, &string);
+        AIM_NOTFOUND(discr->aInfo, status);
 
         for (iface = 0; iface < numFace; iface++) {
 
@@ -9249,10 +9177,12 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
                 AIM_STATUS(discr->aInfo, status);
 
                 // Sum number of elements
-                if (quad == (int)true)
-                    numQuad += tlen/2;
-                else
+                if (tessFaceQuadMap != NULL) {
+                    numQuad += tessFaceQuadMap[iface];
+                    numTri  += tlen - 2*tessFaceQuadMap[iface];
+                } else {
                     numTri  += tlen;
+                }
             }
         }
         if (numFaceFound == 0) continue;
@@ -9298,11 +9228,6 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
 
             iface = faceList[ifaceFound];
 
-            quad = (int)false;
-            status = EG_attributeRet(tess[ibody], ".tessType", &atype, &alen, &ints, &reals, &string);
-            if (status == EGADS_SUCCESS && atype == ATTRSTRING && strcmp(string, "Quad") == 0)
-              quad = (int)true;
-
             // Get face tessellation
             status = EG_getTessFace(tess[ibody], iface+1, &plen, &xyz, &uv, &ptype, &pindex, &tlen, &tris, &nei);
             if (status != EGADS_SUCCESS) {
@@ -9313,7 +9238,7 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
             /* construct a continuous vertex index */
             for (i = 0; i < plen; i++ ) {
                 status = EG_localToGlobal(tess[ibody], iface+1, i+1, &gID);
-                if (status != EGADS_SUCCESS) goto cleanup;
+                AIM_STATUS(discr->aInfo, status);
 
                 if (localStitchedID[gID-1] != 0) continue;
 
@@ -9390,18 +9315,27 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
 
             } else {
 
-                if (quad == (int)true) {
-                    numElem = tlen/2;
-                    stride = 6;
-                    tindex = 2;
-                } else {
-                    numElem = tlen;
-                    stride = 3;
-                    tindex = 1;
+                tq = 0;
+                stride = 0;
+
+                numElem = tlen;
+                // subtract off the number of quad elements
+                if (tessFaceQuadMap != NULL) {
+                    numElem -= tessFaceQuadMap[iface];
                 }
 
                 // Get triangle/quad connectivity in global sense
                 for (i = 0; i < numElem; i++) {
+
+                    // Do we have split quads?
+                    if (tessFaceQuadMap != NULL &&
+                        i >= tlen-2*tessFaceQuadMap[iface] ) {
+                        quad = (int)true;
+                        tindex = 2;
+                    } else {
+                        quad = (int)false;
+                        tindex = 1;
+                    }
 
                     discBody->elems[numQuad+numTri].tIndex      = tindex;
                     discBody->elems[numQuad+numTri].eIndex      = iface+1;
@@ -9410,41 +9344,45 @@ int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
                     discBody->elems[numQuad+numTri].dIndices    = NULL;
 
                     if (quad == (int)true) {
-                        discBody->elems[numQuad+numTri].eTris.tq[0] = i*2 + 1;
-                        discBody->elems[numQuad+numTri].eTris.tq[1] = i*2 + 2;
+                        discBody->elems[numQuad+numTri].eTris.tq[0] = tq + 1;
+                        discBody->elems[numQuad+numTri].eTris.tq[1] = tq + 2;
+                        tq += 2;
                     } else {
                         discBody->elems[numQuad+numTri].eTris.tq[0] = i + 1;
+                        tq += 1;
                     }
 
-                    status = EG_localToGlobal(tess[ibody], iface+1, tris[stride*i + 0], &gID);
+                    status = EG_localToGlobal(tess[ibody], iface+1, tris[stride + 0], &gID);
                     AIM_STATUS(discr->aInfo, status);
 
                     discBody->elems[numQuad+numTri].gIndices[0] = localStitchedID[gID-1];
-                    discBody->elems[numQuad+numTri].gIndices[1] = tris[stride*i + 0];
+                    discBody->elems[numQuad+numTri].gIndices[1] = tris[stride + 0];
 
-                    status = EG_localToGlobal(tess[ibody], iface+1, tris[stride*i + 1], &gID);
+                    status = EG_localToGlobal(tess[ibody], iface+1, tris[stride + 1], &gID);
                     AIM_STATUS(discr->aInfo, status);
 
                     discBody->elems[numQuad+numTri].gIndices[2] = localStitchedID[gID-1];
-                    discBody->elems[numQuad+numTri].gIndices[3] = tris[stride*i + 1];
+                    discBody->elems[numQuad+numTri].gIndices[3] = tris[stride + 1];
 
-                    status = EG_localToGlobal(tess[ibody], iface+1, tris[stride*i + 2], &gID);
+                    status = EG_localToGlobal(tess[ibody], iface+1, tris[stride + 2], &gID);
                     AIM_STATUS(discr->aInfo, status);
 
                     discBody->elems[numQuad+numTri].gIndices[4] = localStitchedID[gID-1];
-                    discBody->elems[numQuad+numTri].gIndices[5] = tris[stride*i + 2];
+                    discBody->elems[numQuad+numTri].gIndices[5] = tris[stride + 2];
 
                     if (quad == (int)true) {
-                        status = EG_localToGlobal(tess[ibody], iface+1, tris[stride*i + 5], &gID);
+                        status = EG_localToGlobal(tess[ibody], iface+1, tris[stride + 5], &gID);
                         AIM_STATUS(discr->aInfo, status);
 
                         discBody->elems[numQuad+numTri].gIndices[6] = localStitchedID[gID-1];
-                        discBody->elems[numQuad+numTri].gIndices[7] = tris[stride*i + 5];
+                        discBody->elems[numQuad+numTri].gIndices[7] = tris[stride + 5];
                     }
 
                     if (quad == (int)true) {
+                        stride += 6;
                         numQuad += 1;
                     } else {
+                        stride += 3;
                         numTri += 1;
                     }
                 }
@@ -9474,3 +9412,307 @@ cleanup:
     return status;
 }
 
+
+// Computes elemental data averaged to grid points
+int mesh_gridAvg(void *aimInfo, const meshStruct *mesh,
+                 const int numElement, int *elementIDs, int rankData,
+                 double *elemData,
+                 double **gridData)
+{
+  int status = CAPS_SUCCESS;
+  int i, j, k;
+
+  int numGridPoints;
+
+  int *numElemAvg = NULL, *n2a=NULL, *e2a=NULL;
+
+  meshElementStruct *element=NULL;
+
+  if (gridData == NULL) return CAPS_NULLVALUE;
+
+  AIM_FREE(*gridData);
+
+  AIM_ALLOC(numElemAvg, mesh->numNode, int, aimInfo, status);
+  AIM_ALLOC(*gridData, mesh->numNode, double, aimInfo, status);
+
+  for (i = 0; i < mesh->numNode; i++) {
+    numElemAvg[i] = 0;
+    for (k = 0; k < rankData; k++)
+      (*gridData)[rankData*i + k] = 0;
+  }
+
+  status = mesh_nodeID2Array(mesh, &n2a);
+  AIM_STATUS(aimInfo, status);
+  AIM_NOTNULL(n2a, aimInfo, status);
+
+  status = mesh_elementID2Array(mesh, &e2a);
+  AIM_STATUS(aimInfo, status);
+  AIM_NOTNULL(e2a, aimInfo, status);
+
+  for (i = 0; i < numElement; i++) {
+    if (elementIDs[i] <= 0) continue;
+
+    element = &mesh->element[e2a[elementIDs[i]]];
+
+    numGridPoints = mesh_numMeshConnectivity(element->elementType);
+
+    for (j = 0; j < numGridPoints; j++) {
+      for (k = 0; k < rankData; k++)
+        (*gridData)[rankData*n2a[element->connectivity[j]]+k] += elemData[rankData*i+k];
+      numElemAvg[n2a[element->connectivity[j]]] += 1;
+    }
+  }
+
+  for (i = 0; i < mesh->numNode; i++) {
+    if (numElemAvg[i] > 0)
+      for (k = 0; k < rankData; k++)
+        (*gridData)[rankData*i+k] /= numElemAvg[i];
+  }
+
+cleanup:
+  AIM_FREE(numElemAvg);
+  AIM_FREE(n2a);
+  AIM_FREE(e2a);
+
+  if (status != CAPS_SUCCESS) AIM_FREE(*gridData);
+  return status;
+}
+
+
+int
+mesh_surfaceMeshData(void *aimInfo, const mapAttrToIndexStruct *groupMap, aimMesh *mesh)
+{
+  int    status = CAPS_SUCCESS;
+
+  typedef int INT_2[2];
+
+  int i, j, ivert, igroup, nPoint;
+  int nFace, iface;
+  int ptype, pindex, plen, tlen;
+  int nglobal, state, elem[4];
+  int faceID, nElems;
+  int atype, alen, stride;
+  INT_2 *elemGroup = NULL;
+  const double *points, *uv, *reals;
+  const int *ptypes, *pindexs, *tris, *tric, *tessFaceQuadMap=NULL;
+  const char *string = NULL;
+  const char *groupName = NULL;
+  double xyz[3];
+  enum aimMeshElem elementTopo;
+  aimMeshData *meshData = NULL;
+  aimMeshRef *meshRef = NULL;
+  ego body, *faces=NULL;
+
+  if (mesh           == NULL) return CAPS_NULLOBJ;
+  if (mesh->meshRef  == NULL) return CAPS_NULLOBJ;
+  if (mesh->meshRef->fileName  == NULL) return CAPS_NULLOBJ;
+
+  meshRef = mesh->meshRef;
+
+  status = aim_freeMeshData(mesh->meshData);
+  AIM_STATUS(aimInfo, status);
+  AIM_FREE(mesh->meshData);
+
+  AIM_ALLOC(meshData, 1, aimMeshData, aimInfo, status);
+  status = aim_initMeshData(meshData);
+  AIM_STATUS(aimInfo, status);
+
+  meshData->dim = 3;
+
+  for (i = 0; i < meshRef->nmap; i++) {
+    status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &nglobal);
+    AIM_STATUS(aimInfo, status);
+    meshData->nVertex += nglobal;
+  }
+
+  AIM_ALLOC(meshData->verts, meshData->nVertex, aimMeshCoords, aimInfo, status);
+
+  // Get vertex values
+  ivert = 0;
+  for (i = 0; i < meshRef->nmap; i++) {
+    status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &nglobal);
+    AIM_STATUS(aimInfo, status);
+
+    for (j = 0; j < nglobal; j++) {
+      status = EG_getGlobal(meshRef->maps[i].tess, j + 1, &ptype, &pindex, xyz);
+      AIM_STATUS(aimInfo, status);
+
+      meshData->verts[ivert][0] = xyz[0];
+      meshData->verts[ivert][1] = xyz[1];
+      meshData->verts[ivert][2] = xyz[2];
+      ivert++;
+    }
+  }
+
+#if 0
+  // Get line elements on each edge
+  nPoint = 2;
+  elementTopo = aimLine;
+  ivert = edgeOffset = 0;
+  for (i = 0; i < meshRef->nmap; i++) {
+    status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &nglobal);
+    AIM_STATUS(aimInfo, status);
+
+    status = EG_getBodyTopos(body, NULL, EDGE, &nEdge, NULL);
+    AIM_STATUS(aimInfo, status);
+
+    for (iedge = 0; iedge < nEdge; iedge++) {
+      status = EG_getTessEdge(meshRef->maps[i].tess, iedge + 1, &plen, &points, &t);
+      if (status == EGADS_DEGEN) continue;
+      AIM_STATUS(aimInfo, status);
+
+      status = aim_addMeshElemGroup(aimInfo, NULL, iedge+edgeOffset+1, elementTopo, 1, nPoint, meshData);
+      AIM_STATUS(aimInfo, status);
+
+      /* add the element to the group */
+      status = aim_addMeshElem(aimInfo, plen-1, &meshData->elemGroups[iedge+edgeOffset]);
+      AIM_STATUS(aimInfo, status);
+
+      for (j = 0; j < plen-1; j++) {
+        status = EG_localToGlobal(meshRef->maps[i].tess, -(iedge + 1), j + 1, &elem[0]);
+        if (status == EGADS_DEGEN) continue;
+        AIM_STATUS(aimInfo, status);
+
+        status = EG_localToGlobal(meshRef->maps[i].tess, -(iedge + 1), j + 2, &elem[1]);
+        if (status == EGADS_DEGEN) continue;
+        AIM_STATUS(aimInfo, status);
+
+        meshData->elemGroups[iedge+edgeOffset].elements[nPoint*j + 0] = elem[0] + ivert;
+        meshData->elemGroups[iedge+edgeOffset].elements[nPoint*j + 1] = elem[1] + ivert;
+      }
+    }
+
+    edgeOffset += nEdge;
+    ivert += nglobal;
+  }
+#endif
+
+  // Get elements on each face
+
+  AIM_ALLOC(elemGroup, groupMap->numAttribute, INT_2, aimInfo, status);
+  for (i = 0; i < groupMap->numAttribute; i++) elemGroup[i][0] = elemGroup[i][1] = -1;
+
+  ivert = 0;
+  for (i = 0; i < meshRef->nmap; i++) {
+
+    // check if the tessellation has a mixture of quad and tri
+    status = EG_attributeRet(meshRef->maps[i].tess, ".mixed",
+                             &atype, &alen, &tessFaceQuadMap, &reals, &string);
+    AIM_NOTFOUND(aimInfo, status);
+
+    status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &nglobal);
+    AIM_STATUS(aimInfo, status);
+
+    status = EG_getBodyTopos(body, NULL, FACE, &nFace, &faces);
+    AIM_STATUS(aimInfo, status);
+
+    for (iface = 0; iface < nFace; iface++) {
+
+      // Look for component/boundary ID for attribute mapper based on capsGroup
+      status = retrieve_CAPSGroupAttr(faces[iface], &groupName);
+      if (status != CAPS_SUCCESS) {
+        AIM_ERROR(aimInfo, "No capsGroup attribute found on Face %d, unable to assign a index value",
+                  iface+1);
+        print_AllAttr( aimInfo, faces[iface] );
+        goto cleanup;
+      }
+
+      /*@-nullpass@*/
+      status = get_mapAttrToIndexIndex(groupMap, groupName, &faceID);
+      AIM_STATUS(aimInfo, status, "Unable to retrieve index from capsGroup: %s", groupName);
+      /*@+nullpass@*/
+
+      status = EG_getTessFace(meshRef->maps[i].tess, iface + 1, &plen, &points, &uv, &ptypes, &pindexs,
+                              &tlen, &tris, &tric);
+      AIM_STATUS(aimInfo, status);
+
+      if (tessFaceQuadMap != NULL) {
+        tlen -= 2*tessFaceQuadMap[iface];
+      }
+
+      stride = 0;
+
+      if (tlen > 0) {
+
+        nPoint = 3;
+        elementTopo = aimTri;
+        igroup = elemGroup[faceID-1][0];
+
+        if (igroup < 0) {
+          status = aim_addMeshElemGroup(aimInfo, groupName, faceID, elementTopo, 1, nPoint, meshData);
+          AIM_STATUS(aimInfo, status);
+
+          igroup = elemGroup[faceID-1][0] = meshData->nElemGroup-1;
+        }
+
+        /* add the element to the group */
+        nElems = meshData->elemGroups[igroup].nElems;
+        status = aim_addMeshElem(aimInfo, tlen, &meshData->elemGroups[igroup]);
+        AIM_STATUS(aimInfo, status);
+
+        for (j = 0; j < tlen; j++, stride += 3) {
+          status = EG_localToGlobal(meshRef->maps[i].tess, iface + 1, tris[stride + 0], &elem[0]);
+          AIM_STATUS(aimInfo, status);
+          status = EG_localToGlobal(meshRef->maps[i].tess, iface + 1, tris[stride + 1], &elem[1]);
+          AIM_STATUS(aimInfo, status);
+          status = EG_localToGlobal(meshRef->maps[i].tess, iface + 1, tris[stride + 2], &elem[2]);
+          AIM_STATUS(aimInfo, status);
+
+
+          meshData->elemGroups[igroup].elements[nPoint*(nElems + j) + 0] = elem[0] + ivert;
+          meshData->elemGroups[igroup].elements[nPoint*(nElems + j) + 1] = elem[1] + ivert;
+          meshData->elemGroups[igroup].elements[nPoint*(nElems + j) + 2] = elem[2] + ivert;
+        }
+      }
+
+      if (tessFaceQuadMap != NULL && tessFaceQuadMap[iface] > 0) {
+
+        nPoint = 4;
+        elementTopo = aimQuad;
+        igroup = elemGroup[faceID-1][1];
+
+        if (igroup < 0) {
+          status = aim_addMeshElemGroup(aimInfo, groupName, faceID, elementTopo, 1, nPoint, meshData);
+          AIM_STATUS(aimInfo, status);
+          igroup = elemGroup[faceID-1][1] = meshData->nElemGroup-1;
+        }
+
+        /* add the element to the group */
+        nElems = meshData->elemGroups[igroup].nElems;
+        status = aim_addMeshElem(aimInfo, tessFaceQuadMap[iface], &meshData->elemGroups[igroup]);
+        AIM_STATUS(aimInfo, status);
+
+        for (j = 0; j < tessFaceQuadMap[iface]; j++, stride += 6) {
+          status = EG_localToGlobal(meshRef->maps[i].tess, iface + 1, tris[stride + 0], &elem[0]);
+          AIM_STATUS(aimInfo, status);
+          status = EG_localToGlobal(meshRef->maps[i].tess, iface + 1, tris[stride + 1], &elem[1]);
+          AIM_STATUS(aimInfo, status);
+          status = EG_localToGlobal(meshRef->maps[i].tess, iface + 1, tris[stride + 2], &elem[2]);
+          AIM_STATUS(aimInfo, status);
+          status = EG_localToGlobal(meshRef->maps[i].tess, iface + 1, tris[stride + 5], &elem[3]);
+          AIM_STATUS(aimInfo, status);
+
+
+          meshData->elemGroups[igroup].elements[nPoint*(nElems + j) + 0] = elem[0] + ivert;
+          meshData->elemGroups[igroup].elements[nPoint*(nElems + j) + 1] = elem[1] + ivert;
+          meshData->elemGroups[igroup].elements[nPoint*(nElems + j) + 2] = elem[2] + ivert;
+          meshData->elemGroups[igroup].elements[nPoint*(nElems + j) + 3] = elem[3] + ivert;
+        }
+     }
+    }
+
+    AIM_FREE(faces);
+    ivert += nglobal;
+  }
+
+  mesh->meshData = meshData;
+  meshData = NULL;
+
+  status = CAPS_SUCCESS;
+
+cleanup:
+  AIM_FREE(elemGroup);
+  AIM_FREE(faces);
+
+  return status;
+}

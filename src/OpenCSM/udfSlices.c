@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -75,6 +75,8 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     char    *message=NULL;
     CCHAR   *tempClist;
     ego     context, eref, *ebodys, *echilds, esurface, eface, eshell, esheet, emodel2, *eslices=NULL;
+    void    *realloc_temp = NULL;            /* used by RALLOC macro */
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 

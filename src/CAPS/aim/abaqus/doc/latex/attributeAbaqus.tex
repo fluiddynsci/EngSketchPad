@@ -1,0 +1,9 @@
+The following list of attributes are required for the Abaqus AIM inside the geometry input.
+
+
+\begin{DoxyItemize}
+\item {\bfseries{ caps\+Group}} This is a name assigned to any geometric body. This body could be a solid, surface, face, wire, edge or node. Recall that a string in ESP starts with a \$. For example, attribute {\ttfamily caps\+Group \$\+Wing}.
+\item {\bfseries{ caps\+Load}} This is a name assigned to any geometric body where a load is applied. This attribute was separated from the {\ttfamily caps\+Group} attribute to allow the user to define a local area to apply a load on without adding multiple {\ttfamily caps\+Group} attributes. Recall that a string in ESP starts with a \$. For example, attribute {\ttfamily caps\+Load \$force}.
+\item {\bfseries{ caps\+Constraint}} This is a name assigned to any geometric body where a constraint/boundary condition is applied. This attribute was separated from the {\ttfamily caps\+Group} attribute to allow the user to define a local area to apply a boundary condition without adding multiple {\ttfamily caps\+Group} attributes. Recall that a string in ESP starts with a \$. For example, attribute {\ttfamily caps\+Constraint \$fixed}.
+\item {\bfseries{ caps\+Ignore}} It is possible that there is a geometric body (or entity) that you do not want the Astros AIM to pay attention to when creating a finite element model. The caps\+Ignore attribute allows a body (or entity) to be in the geometry and ignored by the AIM. For example, because of limitations in Open\+CASCADE a situation where two edges are overlapping may occur; caps\+Ignore allows the user to only pay attention to one of the overlapping edges. 
+\end{DoxyItemize}

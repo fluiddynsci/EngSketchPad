@@ -5,7 +5,7 @@
  *
  *             General Object Header
  *
- * *      Copyright 2014-2023, Massachusetts Institute of Technology
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -33,8 +33,8 @@
 #endif
 
 #define CAPSMAJOR      1
-#define CAPSMINOR     23
-#define CAPSPROP      CAPSprop: Revision 1.23
+#define CAPSMINOR     24
+#define CAPSPROP      CAPSprop: Revision 1.24
 
 #define CAPSMAGIC     1234321
 #define MAXANAL       64

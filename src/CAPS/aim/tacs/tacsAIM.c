@@ -5,13 +5,17 @@
  *
  *     Written by Dr. Marshall C. Galbraith MIT, and Dr. Ryan Durscher and Dr. Ed Alyanak
  *
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
+ *      Licensed under The GNU Lesser General Public License, version 2.1
+ *      See http://www.opensource.org/licenses/lgpl-2.1.php
+ *
  */
 
 /*! \mainpage Introduction
  *
  * \section overviewTACS TACS AIM Overview
  * A module in the Computational Aircraft Prototype Syntheses (CAPS) has been developed to interact (primarily
- * through input files) with the finite element structural solver TACS \cite TACS.
+ * through input files) with the finite element structural solver <a href="https://github.com/smdogroup/tacs">TACS</a>.
  *
  * An outline of the AIM's inputs, outputs and attributes are provided in \ref aimInputsTACS and
  * \ref aimOutputsTACS and \ref attributeTACS, respectively.
@@ -120,6 +124,7 @@ enum aimInputs
   Support,
   Connect,
   Parameter,
+  Mesh_Morph,
   Mesh,
   NUMINPUT = Mesh              /* Total number of inputs */
 };
@@ -326,35 +331,38 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     if (inst == -1) return CAPS_SUCCESS;
 
     /* specify the field variables this analysis can generate and consume */
-    *nFields = 0;
+    *nFields = 2;
 
     /* specify the name of each field variable */
-//    AIM_ALLOC(strs, *nFields, char *, aimInfo, status);
+    AIM_ALLOC(strs, *nFields, char *, aimInfo, status);
 
 //    strs[0]  = EG_strdup("Displacement");
 //    strs[1]  = EG_strdup("EigenVector");
 //    strs[2]  = EG_strdup("EigenVector_#");
-//    strs[3]  = EG_strdup("Pressure");
-//    for (i = 0; i < *nFields; i++)
-//      if (strs[i] == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    strs[0]  = EG_strdup("Pressure");
+    strs[1]  = EG_strdup("Temperature");
+    for (i = 0; i < *nFields; i++)
+      if (strs[i] == NULL) { status = EGADS_MALLOC; goto cleanup; }
     *fnames  = strs;
 
     /* specify the dimension of each field variable */
-//    AIM_ALLOC(ints, *nFields, int, aimInfo, status);
+    AIM_ALLOC(ints, *nFields, int, aimInfo, status);
 //    ints[0]  = 3;
 //    ints[1]  = 3;
 //    ints[2]  = 3;
-//    ints[3]  = 1;
+    ints[0]  = 1;
+    ints[1]  = 1;
     *franks  = ints;
     ints = NULL;
 
     /* specify if a field is an input field or output field */
-//    AIM_ALLOC(ints, *nFields, int, aimInfo, status);
+    AIM_ALLOC(ints, *nFields, int, aimInfo, status);
 //
 //    ints[0]  = FieldOut;
 //    ints[1]  = FieldOut;
 //    ints[2]  = FieldOut;
-//    ints[3]  = FieldIn;
+    ints[0]  = FieldIn;
+    ints[1]  = FieldIn;
     *fInOut  = ints;
     ints = NULL;
 
@@ -663,15 +671,27 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * requires an integer entry the user must input an integer!
          */
 
+    } else if (index == Mesh_Morph) {
+        *ainame              = EG_strdup("Mesh_Morph");
+        defval->type         = Boolean;
+        defval->lfixed       = Fixed;
+        defval->vals.integer = (int) false;
+        defval->dim          = Scalar;
+        defval->nullVal      = NotNull;
+
+        /*! \page aimInputsTACS
+         * - <B> Mesh_Morph = False</B> <br>
+         * Project previous surface mesh onto new geometry.
+         */
+
     } else if (index == Mesh) {
         *ainame             = AIM_NAME(Mesh);
-        defval->type        = Pointer;
+        defval->type        = PointerMesh;
         defval->dim         = Vector;
         defval->lfixed      = Change;
         defval->sfixed      = Change;
         defval->vals.AIMptr = NULL;
         defval->nullVal     = IsNull;
-        AIM_STRDUP(defval->units, "meshStruct", aimInfo, status);
 
         /*! \page aimInputsTACS
          * - <B>Mesh = NULL</B> <br>
@@ -700,17 +720,18 @@ int aimUpdateState(void *instStore, void *aimInfo,
     tacsInstance = (aimStorage *) instStore;
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
+    if (aimInputs[Mesh-1].nullVal == IsNull &&
+        aimInputs[Mesh_Morph-1].vals.integer == (int) false) {
+        AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to an output 'Surface_Mesh'");
+        status = CAPS_BADVALUE;
+        goto cleanup;
+    }
+
     // Get project name
     tacsInstance->projectName = aimInputs[Proj_Name-1].vals.string;
 
     // Analysis type
     analysisType = aimInputs[Analysis_Type-1].vals.string;
-
-    if (aimInputs[Mesh-1].nullVal == IsNull) {
-        AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to an output 'Surface_Mesh'");
-        status = CAPS_BADVALUE;
-        goto cleanup;
-    }
 
     // Get FEA mesh if we don't already have one
     status = checkAndCreateMesh(aimInfo, tacsInstance);
@@ -755,7 +776,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set constraint properties
     if (aimInputs[Constraint-1].nullVal == NotNull) {
-        status = fea_getConstraint(aimInputs[Constraint-1].length,
+        status = fea_getConstraint(aimInfo,
+                                   aimInputs[Constraint-1].length,
                                    aimInputs[Constraint-1].vals.tuple,
                                    &tacsInstance->constraintMap,
                                    &tacsInstance->feaProblem);
@@ -773,7 +795,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set connection properties
     if (aimInputs[Connect-1].nullVal == NotNull) {
-        status = fea_getConnection(aimInputs[Connect-1].length,
+        status = fea_getConnection(aimInfo,
+                                   aimInputs[Connect-1].length,
                                    aimInputs[Connect-1].vals.tuple,
                                    &tacsInstance->connectMap,
                                    &tacsInstance->feaProblem);
@@ -782,7 +805,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set load properties
     if (aimInputs[Load-1].nullVal == NotNull) {
-        status = fea_getLoad(aimInputs[Load-1].length,
+        status = fea_getLoad(aimInfo,
+                             aimInputs[Load-1].length,
                              aimInputs[Load-1].vals.tuple,
                              &tacsInstance->loadMap,
                              &tacsInstance->feaProblem);
@@ -805,7 +829,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set design constraints
     if (aimInputs[Design_Constraint-1].nullVal == NotNull) {
-        status = fea_getDesignConstraint(aimInputs[Design_Constraint-1].length,
+        status = fea_getDesignConstraint(aimInfo,
+                                         aimInputs[Design_Constraint-1].length,
                                          aimInputs[Design_Constraint-1].vals.tuple,
                                          &tacsInstance->feaProblem);
         AIM_STATUS(aimInfo, status);
@@ -855,13 +880,14 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set analysis settings
     if (aimInputs[Analysix-1].nullVal == NotNull) {
-        status = fea_getAnalysis(aimInputs[Analysix-1].length,
+        status = fea_getAnalysis(aimInfo,
+                                 aimInputs[Analysix-1].length,
                                  aimInputs[Analysix-1].vals.tuple,
                                  &tacsInstance->feaProblem);
         AIM_STATUS(aimInfo, status); // It ok to not have an analysis tuple
     } else {
         printf("Analysis tuple is NULL\n");
-        status = fea_createDefaultAnalysis(&tacsInstance->feaProblem, analysisType);
+        status = fea_createDefaultAnalysis(aimInfo, &tacsInstance->feaProblem, analysisType);
         AIM_STATUS(aimInfo, status);
     }
 
@@ -932,6 +958,13 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     tacsInstance = (const aimStorage *) instStore;
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
+    if ( aimInputs[Mesh_Morph-1].vals.integer == (int) true &&
+         aimInputs[Mesh-1].nullVal == NotNull) { // If we are mighty morphing
+        // store the current mesh for future iterations
+        status = aim_storeMeshRef(aimInfo, (aimMeshRef *) aimInputs[Mesh-1].vals.AIMptr, NULL);
+        AIM_STATUS(aimInfo, status);
+    }
+
     // Analysis type
     analysisType = aimInputs[Analysis_Type-1].vals.string;
 
@@ -949,13 +982,18 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                                                       &tacsInstance->feaProblem.feaMesh,
                                                       &feaLoad[i]);
                 AIM_STATUS(aimInfo, status);
+            } else if (feaLoad[i].loadType == ThermalExternal) {
+
+                // Transfer external temperature from the AIM discrObj
+                status = fea_transferExternalTemperature(aimInfo,
+                                                         &feaLoad[i]);
+                AIM_STATUS(aimInfo, status);
             }
         }
     }
 
     // Write TACS Mesh
-    filename = EG_alloc(MXCHAR +1);
-    if (filename == NULL) { status = EGADS_MALLOC; goto cleanup; }
+    AIM_ALLOC(filename ,MXCHAR+1, char, aimInfo, status);
 
     strcpy(filename, tacsInstance->projectName);
 
@@ -2245,7 +2283,7 @@ void aimCleanup(void *instStore)
     if (status != CAPS_SUCCESS)
         printf("Error: Status %d during clean up of instance\n", status);
 
-    EG_free(tacsInstance);
+    AIM_FREE(tacsInstance);
 }
 
 
@@ -2273,10 +2311,8 @@ int aimDiscr(char *tname, capsDiscr *discr)
         goto cleanup;
     }
 
-    // Get mesh
-    tacsInstance->numMesh = valMesh->length;
-    tacsInstance->feaMesh = (meshStruct *)valMesh->vals.AIMptr;
-    AIM_NOTNULL(tacsInstance->feaMesh, discr->aInfo, status);
+    // Get FEA mesh if we don't already have one
+    status = checkAndCreateMesh(discr->aInfo, tacsInstance);
     AIM_STATUS(discr->aInfo, status);
 
     AIM_ALLOC(tess, tacsInstance->numMesh, ego, discr->aInfo, status);

@@ -5,7 +5,7 @@
  *
  *             AIM Mesh Function Prototypes
  *
- * *      Copyright 2014-2023, Massachusetts Institute of Technology
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -25,13 +25,19 @@ typedef struct {
   int              ID;          /* Group ID */
 } aimMeshBnd;
 
+enum aimMeshType {aimUnknownMeshType,
+                  aimAreaMesh,
+                  aimSurfaceMesh,
+                  aimVolumeMesh};
+
 typedef struct {
-  int             nmap;     /* number of EGADS Tessellation Objects */
-  aimMeshTessMap *maps;     /* the EGADS Tess Object and map to mesh verts */
-  int             nbnd;     /* number of boundary groups */
-  aimMeshBnd     *bnds;     /* boundary group info */
-  char           *fileName; /* full path name (no extension) for grids */
-  int             _delTess; /* internal use only, whether tess/body ego are deleted */
+  enum aimMeshType type;     /* type of mesh referenced */
+  int              nmap;     /* number of EGADS Tessellation Objects */
+  aimMeshTessMap  *maps;     /* the EGADS Tess Object and map to mesh verts */
+  int              nbnd;     /* number of boundary groups */
+  aimMeshBnd      *bnds;     /* boundary group info */
+  char            *fileName; /* full path name (no extension) for grids */
+  int              _delTess; /* internal use only, whether tess/body ego are deleted */
 } aimMeshRef;
 
 typedef int    (*wrDLLFunc) (void);
@@ -94,7 +100,7 @@ __ProtoExt__ int
   aim_initMeshBnd( aimMeshBnd *meshBnd );
 
 __ProtoExt__ int
-  aim_initMeshRef( aimMeshRef *meshRef );
+  aim_initMeshRef( aimMeshRef *meshRef, const enum aimMeshType type );
 
 __ProtoExt__ int
   aim_freeMeshRef( /*@null@*/ aimMeshRef *meshRef );
@@ -123,7 +129,7 @@ __ProtoExt__ int
 
 __ProtoExt__ int
   aim_storeMeshRef( void *aimStruc, const aimMeshRef *meshRef,
-                    const char *meshextension );
+                    /*@null@*/ const char *meshextension );
 
 __ProtoExt__ int
   aim_loadMeshRef( void *aimStruc, aimMeshRef *meshRef );

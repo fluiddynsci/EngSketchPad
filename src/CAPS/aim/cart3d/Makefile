@@ -26,7 +26,9 @@ endif
 ifndef CART3DLIB
 CART3DLIB = $(IDIR)
 endif
-XMLIB = $(shell xml2-config --libs)
+XMLIB0 = $(shell xml2-config --libs)
+XMLIB1 = $(subst -lm,,$(XMLIB0))
+XMLIB  = $(subst -lpthread,,$(XMLIB1))
 # due to MAC problem on Xcode 8 & OSX 10.11
 ifeq ($(ESP_ARCH),DARWIN64)
 XMLIB = -lxml2
@@ -61,8 +63,8 @@ $(BDIR)/ESPxddm:	$(ODIR)/ESPxddm.o $(ODIR)/writeTrix.o $(ODIR)/surfTrix.o $(ODIR
 $(LDIR)/cart3dAIM.so:	$(ODIR)/cart3dAIM.o $(ODIR)/writeTrix.o $(ODIR)/surfTrix.o $(ODIR)/xddm.o \
 			$(ODIR)/bodyTess.o $(LDIR)/libaimUtil.a $(LDIR)/libutils.a
 	$(CC) $(SOFLGS) -o $(LDIR)/cart3dAIM.so $(ODIR)/cart3dAIM.o \
-		$(ODIR)/writeTrix.o $(ODIR)/surfTrix.o $(ODIR)/xddm.o $(ODIR)/bodyTess.o -L$(LDIR) -laimUtil \
-		-locsm -legads -ludunits2 -lutils -L$(CART3DLIB)/$(CART_ARCH) \
+		$(ODIR)/writeTrix.o $(ODIR)/surfTrix.o $(ODIR)/xddm.o $(ODIR)/bodyTess.o -L$(LDIR) -lutils \
+		-laimUtil -locsm -legads -ludunits2 -L$(CART3DLIB)/$(CART_ARCH) \
 		-lc3dio -lCart3D -ldl $(XMLIB) -lm
 
 $(ODIR)/cart3dAIM.o:	cart3dAIM.c $(IDIR)/capsTypes.h

@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -77,6 +77,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     CDOUBLE *tempRlist;
     CCHAR   *tempClist;
     ego     *enode1, *enode2, *eedge1, *eedge2, *eface1, *eface2, eref, *echilds;
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 

@@ -16,8 +16,8 @@ parser.add_argument("-outLevel", default = 1, type=int, choices=[0, 1, 2], help=
 args = parser.parse_args()
 
 # Load CSM file
-geometryScript = os.path.join("..","csmData","cyli_box.csm")
-problem = pyCAPS.Problem(problemName = os.path.join(str(args.workDir[0]), "PlatoCyliBoxTest"),
+geometryScript = os.path.join("..","csmData","cyli_box_shell.csm")
+problem = pyCAPS.Problem(problemName = os.path.join(str(args.workDir[0]), "PlatoTetGenCyliBoxTest"),
                          capsFile=geometryScript,
                          outLevel=args.outLevel)
 

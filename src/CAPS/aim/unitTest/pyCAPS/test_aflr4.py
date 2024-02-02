@@ -349,6 +349,83 @@ class TestAFLR4(unittest.TestCase):
         self.assertGreater(NumberOfNode_1   , NumberOfNode_2   )
         self.assertGreater(NumberOfElement_1, NumberOfElement_2)
 
+#==============================================================================
+    def test_faceMatch(self):
+        
+        file = os.path.join("..","csmData","multiRegions.csm")
+        
+        problemName = self.problemName + "_faceMatch"
+        myProblem = pyCAPS.Problem(problemName, capsFile=file, outLevel=0)
+
+        aflr4 = myProblem.analysis.create(aim = "aflr4AIM",
+                                          name = "aflr4_2",
+                                          capsIntent = ["regions2"])
+        aflr4.input.Mesh_Quiet_Flag = True
+
+        # Just make sure it runs without errors...
+        aflr4.runAnalysis()
+
+        #aflr4.geometry.view()
+
+        aflr4 = myProblem.analysis.create(aim = "aflr4AIM",
+                                          name = "aflr4_3",
+                                          capsIntent = ["regions2", "regions3"])
+        aflr4.input.Mesh_Quiet_Flag = True
+
+        # Just make sure it runs without errors...
+        aflr4.runAnalysis()
+
+        #aflr4.geometry.view()
+
+        aflr4 = myProblem.analysis.create(aim = "aflr4AIM",
+                                          name = "aflr4_4",
+                                          capsIntent = ["regions2", "regions3", "regions4"])
+        aflr4.input.Mesh_Quiet_Flag = True
+
+        # Just make sure it runs without errors...
+        aflr4.runAnalysis()
+
+        #aflr4.geometry.view()
+
+        aflr4 = myProblem.analysis.create(aim = "aflr4AIM",
+                                          name = "aflr4_5",
+                                          capsIntent = ["regions2", "regions3", "regions4", "regions5"])
+        aflr4.input.Mesh_Quiet_Flag = True
+
+        # Just make sure it runs without errors...
+        aflr4.runAnalysis()
+
+        #aflr4.geometry.view()
+
+        aflr4 = myProblem.analysis.create(aim = "aflr4AIM",
+                                          name = "aflr4_6",
+                                          capsIntent = ["regions2", "regions3", "regions4", "regions5", "regions6"])
+        aflr4.input.Mesh_Quiet_Flag = True
+
+        # Just make sure it runs without errors...
+        aflr4.runAnalysis()
+
+        #aflr4.geometry.view()
+
+        aflr4 = myProblem.analysis.create(aim = "aflr4AIM",
+                                          name = "aflr4_7",
+                                          capsIntent = ["regions2", "regions3", "regions4", "regions5", "regions6", "regions7"])
+        aflr4.input.Mesh_Quiet_Flag = True
+
+        # Just make sure it runs without errors...
+        aflr4.runAnalysis()
+
+        #aflr4.geometry.view()
+
+        aflr4 = myProblem.analysis.create(aim = "aflr4AIM",
+                                          name = "aflr4_8",
+                                          capsIntent = ["regions2", "regions3", "regions4", "regions5", "regions6", "regions7", "regions8"])
+        aflr4.input.Mesh_Quiet_Flag = True
+
+        # Just make sure it runs without errors...
+        aflr4.runAnalysis()
+
+        #aflr4.geometry.view()
 
 #==============================================================================
     def run_journal(self, myProblem, line_exit):

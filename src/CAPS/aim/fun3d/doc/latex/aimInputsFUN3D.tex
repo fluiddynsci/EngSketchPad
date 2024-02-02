@@ -1,0 +1,99 @@
+The following list outlines the FUN3D inputs along with their default values available through the AIM interface. One will note most of the FUN3D parameters have a NULL value as their default. This is done since a parameter in the FUN3D input deck (fun3d.\+nml) is only changed if the value has been changed in CAPS (i.\+e. set to something other than NULL).
+
+
+\begin{DoxyItemize}
+\item {\bfseries{ Proj\+\_\+\+Name = \char`\"{}fun3d\+\_\+\+CAPS\char`\"{}}} ~\newline
+ This corresponds to the project\+\_\+rootname variable in the \&project namelist of fun3d.\+nml.
+\item {\bfseries{ Mach = NULL }} ~\newline
+ This corresponds to the mach\+\_\+number variable in the \&reference\+\_\+physical\+\_\+properties namelist of fun3d.\+nml.
+\item {\bfseries{ Re = NULL }} ~\newline
+ This corresponds to the reynolds\+\_\+number variable in the \&reference\+\_\+physical\+\_\+properties namelist of fun3d.\+nml.
+\item {\bfseries{ Temperature = NULL }} ~\newline
+ This corresponds to the temperature variable in the \&reference\+\_\+physical\+\_\+properties namelist of fun3d.\+nml. Note if no temperature units are set, units of Kelvin are assumed (see \mbox{\hyperlink{aimUnitsFUN3D}{AIM Units}})
+\item {\bfseries{ Viscous = NULL }} ~\newline
+ This corresponds to the viscous\+\_\+terms variable in the \&governing\+\_\+equation namelist of fun3d.\+nml.
+\item {\bfseries{ Equation\+\_\+\+Type = NULL }} ~\newline
+ This corresponds to the eqn\+\_\+type variable in the \&governing\+\_\+equation namelist of fun3d.\+nml.
+\item {\bfseries{ Alpha = NULL }} ~\newline
+ This corresponds to the angle\+\_\+of\+\_\+attack variable in the \&reference\+\_\+physical\+\_\+properties namelist of fun3d.\+nml \mbox{[}degree\mbox{]}.
+\item {\bfseries{ Beta = NULL }} ~\newline
+ This corresponds to the angle\+\_\+of\+\_\+yaw variable in the \&reference\+\_\+physical\+\_\+properties namelist of fun3d.\+nml \mbox{[}degree\mbox{]}.
+\item {\bfseries{ Overwrite\+\_\+\+NML = NULL}} ~\newline
+
+\begin{DoxyItemize}
+\item If Python is NOT linked with the FUN3D AIM at compile time or Use\+\_\+\+Python\+\_\+\+NML is set to False this flag gives the AIM permission to overwrite fun3d.\+nml if present. The namelist produced will solely consist of input variables present and set in the AIM.
+\item If Python IS linked with the FUN3D AIM at compile time and Use\+\_\+\+Python\+\_\+\+NML is set to True the namelist file will be overwritten, as opposed to being appended.
+\end{DoxyItemize}
+\item {\bfseries{Mesh\+\_\+\+Format = \char`\"{}\+AFLR3\char`\"{}}} ~\newline
+ Mesh output format. By default, an AFLR3 mesh will be used.
+\item {\bfseries{Mesh\+\_\+\+ASCII\+\_\+\+Flag = True}} ~\newline
+ Output mesh in ASCII format, otherwise write a binary file if applicable.
+\item {\bfseries{Num\+\_\+\+Iter = NULL}} ~\newline
+ This corresponds to the steps variable in the \&code\+\_\+run\+\_\+control namelist of fun3d.\+nml.
+\item {\bfseries{CFL\+\_\+\+Schedule = NULL}} ~\newline
+ This corresponds to the schedule\+\_\+cfl variable in the \&nonlinear\+\_\+solver\+\_\+parameters namelist of fun3d.\+nml.
+\item {\bfseries{CFL\+\_\+\+Schedule\+\_\+\+Inter = NULL}} ~\newline
+ This corresponds to the schedule\+\_\+iteration variable in the \&nonlinear\+\_\+solver\+\_\+parameters namelist of fun3d.\+nml.
+\item {\bfseries{Restart\+\_\+\+Read = NULL}} ~\newline
+ This corresponds to the restart\+\_\+read variable in the \&code\+\_\+run\+\_\+control namelist of fun3d.\+nml.
+\item {\bfseries{Boundary\+\_\+\+Condition = NULL }} ~\newline
+ See \mbox{\hyperlink{cfdBoundaryConditions}{CFD Boundary Conditions}} for additional details.
+\item {\bfseries{Use\+\_\+\+Python\+\_\+\+NML = False }} ~\newline
+ By default, even if Python has been linked to the FUN3D AIM it is not used unless the this value is set to True.
+\item {\bfseries{Pressure\+\_\+\+Scale\+\_\+\+Factor = 1.\+0}} ~\newline
+ Value to scale Cp data when transferring data. Data is scaled based on Pressure = Pressure\+\_\+\+Scale\+\_\+\+Factor$\ast$\+Cp + Pressure\+\_\+\+Scale\+\_\+\+Offset.
+\item {\bfseries{Pressure\+\_\+\+Scale\+\_\+\+Offset = 0.\+0}} ~\newline
+ Value to offset Cp data when transferring data. Data is scaled based on Pressure = Pressure\+\_\+\+Scale\+\_\+\+Factor$\ast$\+Cp + Pressure\+\_\+\+Scale\+\_\+\+Offset.
+\item {\bfseries{Temperature\+\_\+\+Scale\+\_\+\+Factor = 1.\+0}} ~\newline
+ Value to scale Temperature data when transferring data.
+\item {\bfseries{Non\+Inertial\+\_\+\+Rotation\+\_\+\+Rate = NULL \mbox{[}0.\+0, 0.\+0, 0.\+0\mbox{]}}} ~\newline
+ Array values correspond to the rotation\+\_\+rate\+\_\+x, rotation\+\_\+rate\+\_\+y, rotation\+\_\+rate\+\_\+z variables, respectively, in the \&noninertial\+\_\+reference\+\_\+frame namelist of fun3d.\+nml.
+\item {\bfseries{Non\+Inertial\+\_\+\+Rotation\+\_\+\+Center = NULL, \mbox{[}0.\+0, 0.\+0, 0.\+0\mbox{]}}} ~\newline
+ Array values correspond to the rotation\+\_\+center\+\_\+x, rotation\+\_\+center\+\_\+y, rotation\+\_\+center\+\_\+z variables, respectively, in the \&noninertial\+\_\+reference\+\_\+frame namelist of fun3d.\+nml.
+\item {\bfseries{Two\+\_\+\+Dimensional = False}} ~\newline
+ Run FUN3D in 2D mode. If set to True, the body must be a single \char`\"{}sheet\char`\"{} body in the x-\/z plane (a rudimentary node swapping routine is attempted if not in the x-\/z plane). A 3D mesh will be written out, where the body is extruded a length of 1 in the y-\/direction.
+\item {\bfseries{Modal\+\_\+\+Aeroelastic = NULL }} ~\newline
+ See \mbox{\hyperlink{cfdModalAeroelastic}{CFD Modal Aeroelastic}} for additional details.
+\item {\bfseries{Modal\+\_\+\+Ref\+\_\+\+Velocity = NULL }} ~\newline
+ The freestream velocity in structural dynamics equation units; used for scaling during modal aeroelastic simulations. This corresponds to the uinf variable in the \&aeroelastic\+\_\+modal\+\_\+data namelist of movingbody.\+input.
+\item {\bfseries{Modal\+\_\+\+Ref\+\_\+\+Length = 1.\+0 }} ~\newline
+ The scaling factor between CFD and the structural dynamics equation units; used for scaling during modal aeroelastic simulations. This corresponds to the grefl variable in the \&aeroelastic\+\_\+modal\+\_\+data namelist of movingbody.\+input.
+\item {\bfseries{Modal\+\_\+\+Ref\+\_\+\+Dynamic\+\_\+\+Pressure = NULL }} ~\newline
+ The freestream dynamic pressure in structural dynamics equation units; used for scaling during modal aeroelastic simulations. This corresponds to the qinf variable in the \&aeroelastic\+\_\+modal\+\_\+data namelist of movingbody.\+input.
+\item {\bfseries{Time\+\_\+\+Accuracy = NULL }} ~\newline
+ Defines the temporal scheme to use. This corresponds to the time\+\_\+accuracy variable in the \&nonlinear\+\_\+solver\+\_\+parameters namelist of fun3d.\+nml.
+\item {\bfseries{Time\+\_\+\+Step = NULL }} ~\newline
+ Non-\/dimensional time step during time accurate simulations. This corresponds to the time\+\_\+step\+\_\+nondim variable in the \&nonlinear\+\_\+solver\+\_\+parameters namelist of fun3d.\+nml.
+\item {\bfseries{Num\+\_\+\+Subiter = NULL }} ~\newline
+ Number of subiterations used during a time step in a time accurate simulations. This corresponds to the subiterations variable in the \&nonlinear\+\_\+solver\+\_\+parameters namelist of fun3d.\+nml.
+\item {\bfseries{Temporal\+\_\+\+Error = NULL }} ~\newline
+ This sets the tolerance for which subiterations are stopped during time accurate simulations. This corresponds to the temporal\+\_\+err\+\_\+floor variable in the \&nonlinear\+\_\+solver\+\_\+parameters namelist of fun3d.\+nml.
+\item {\bfseries{Reference\+\_\+\+Area = NULL }} ~\newline
+ This sets the reference area for used in force and moment calculations. This corresponds to the area\+\_\+reference variable in the \&force\+\_\+moment\+\_\+integ\+\_\+properties namelist of fun3d.\+nml. Alternatively, the geometry (body) attribute \char`\"{}caps\+Reference\+Area\char`\"{} maybe used to specify this variable (note\+: values set through the AIM input will supersede the attribution value).
+\item {\bfseries{Moment\+\_\+\+Length = NULL, \mbox{[}0.\+0, 0.\+0\mbox{]}}} ~\newline
+ Array values correspond to the x\+\_\+moment\+\_\+length and y\+\_\+moment\+\_\+length variables, respectively, in the \&force\+\_\+moment\+\_\+integ\+\_\+properties namelist of fun3d.\+nml. Alternatively, the geometry (body) attributes \char`\"{}caps\+Reference\+Chord\char`\"{} and \char`\"{}caps\+Reference\+Span\char`\"{} may be used to specify the x-\/ and y-\/ moment lengths, respectively (note\+: values set through the AIM input will supersede the attribution values).
+\item {\bfseries{Moment\+\_\+\+Center = NULL, \mbox{[}0.\+0, 0.\+0, 0.\+0\mbox{]}}} ~\newline
+ Array values correspond to the x\+\_\+moment\+\_\+center, y\+\_\+moment\+\_\+center, and z\+\_\+moment\+\_\+center variables, respectively, in the \&force\+\_\+moment\+\_\+integ\+\_\+properties namelist of fun3d.\+nml. Alternatively, the geometry (body) attributes \char`\"{}caps\+Reference\+X\char`\"{}, \char`\"{}caps\+Reference\+Y\char`\"{}, and \char`\"{}caps\+Reference\+Z\char`\"{} may be used to specify the x-\/, y-\/, and z-\/ moment centers, respectively (note\+: values set through the AIM input will supersede the attribution values).
+\item {\bfseries{FUN3\+D\+\_\+\+Version = 13.\+1 }} ~\newline
+ FUN3D version to generate specific configuration file for; currently only has influence over rubber.\+data (sensitivity file) and aeroelastic modal data namelist in moving\+\_\+body.\+input .
+\item {\bfseries{Motion\+\_\+\+Driver = NULL }} ~\newline
+ Triggers writing moving\+\_\+body.\+input with specified \textquotesingle{}motion\+\_\+driver\textquotesingle{} string.~\newline
+ Mesh\+\_\+\+Movement input must also be set.
+\item {\bfseries{Mesh\+\_\+\+Movement = NULL }} ~\newline
+ Triggers writing moving\+\_\+body.\+input with specified \textquotesingle{}mesh\+\_\+movement\textquotesingle{} string.~\newline
+ Motion\+\_\+\+Driver input must also be set.
+\item {\bfseries{ Design\+\_\+\+Variable = NULL}} ~\newline
+ List of Analysis\+In and/or Geometry\+In variable names used to compute sensitivities of Design\+\_\+\+Functional for optimization, see \mbox{\hyperlink{cfdDesignVariable}{CFD Design Variable}} for additional details.
+\item {\bfseries{ Design\+\_\+\+Functional = NULL}} ~\newline
+ The design functional tuple is used to input functional information for optimization, see \mbox{\hyperlink{cfdDesignFunctional}{CFD Functional}} for additional details. Using this requires Design\+\_\+\+Sens\+File = False.
+\item {\bfseries{ Design\+\_\+\+Sens\+File = False}} ~\newline
+ Read $<$\+Proj\+\_\+\+Name$>$.sens file to compute functional sensitivities w.\+r.\+t Design\+\_\+\+Variable. Using this requires Design\+\_\+\+Functional = NULL.
+\item {\bfseries{ Design\+\_\+\+Sensitivity = False}} ~\newline
+ If True and Design\+\_\+\+Functional is set, create geometric sensitivities Fun3D input files needed to compute Design\+\_\+\+Functional sensitivities w.\+r.\+t Design\+\_\+\+Variable. If True and Design\+\_\+\+Sens\+File = True, read functional sensitivities from $<$\+Proj\+\_\+\+Name$>$.sens and compute sensitivities w.\+r.\+t Design\+\_\+\+Variable. The value of the design functionals become available as Dynamic Output Value Objects using the \char`\"{}name\char`\"{} of the functionals.
+\item {\bfseries{ Mesh\+\_\+\+Morph = False}} ~\newline
+ Project previous surface mesh onto new geometry and write out a \textquotesingle{}Proj\+\_\+\+Name\textquotesingle{}\+\_\+body\#.dat file.
+\item {\bfseries{ Mesh\+\_\+\+Morph\+\_\+\+Combine = True}} ~\newline
+ When using Mesh\+\_\+\+Morph, setting Mesh\+\_\+\+Morph\+\_\+\+Combine = True will write out a single body,\textquotesingle{}Proj\+\_\+\+Name\textquotesingle{}\+\_\+body1.\+dat, file containing all surface meshes. If Mesh\+\_\+\+Morph\+\_\+\+Combine = False, a body file will be written out for each individual surface mesh.
+\item {\bfseries{Mesh = NULL}} ~\newline
+ An Area\+\_\+\+Mesh or Volume\+\_\+\+Mesh link for 2D and 3D calculations respectively. 
+\end{DoxyItemize}

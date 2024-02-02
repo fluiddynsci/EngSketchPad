@@ -67,7 +67,8 @@ EGADS_AFLR4_OBJS = 	\
 			$(ODIR)\egads_eval_xyz_at_uv.obj \
 			$(ODIR)\egads_face_node_map.obj \
 			$(ODIR)\egads_cad_geom_faceMatch.obj \
-			$(ODIR)\egads_data.obj
+			$(ODIR)\egads_data.obj \
+			$(ODIR)\egads_mzone.obj
 
 default: $(ODIR)\aflr4_version.exe $(LDIR)\aflr4AIM.dll $(LDIR)\AFLR.dll
 

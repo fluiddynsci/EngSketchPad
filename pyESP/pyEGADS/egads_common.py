@@ -3,7 +3,7 @@
 # pyEGADS --- Python version of EGADS API                                 #
 #                                                                         #
 #                                                                         #
-#      Copyright 2011-2023, Massachusetts Institute of Technology         #
+#      Copyright 2011-2024, Massachusetts Institute of Technology         #
 #      Licensed under The GNU Lesser General Public License, version 2.1  #
 #      See http://www.opensource.org/licenses/lgpl-2.1.php                #
 #                                                                         #
@@ -509,6 +509,30 @@ class Context:
 #=============================================================================-
     def __ne__(self, obj):
         return not self == obj
+
+#=============================================================================-
+    def contextCopy(self, obj):
+        """
+        Copy an Object to the specified Context
+        
+        This is useful in multithreaded settings when you wish to copy an object that exists in a different
+        Context/thread. Use copyObject when copying from the object's context/thread to the context specified by other.
+        
+        Parameters
+        ----------
+        object:
+            ego to be copied into self
+
+        Returns
+        -------
+        The new object
+        """
+
+        newObj = c_ego()
+        stat = _egads.EG_contextCopy(self._context, obj._obj, ctypes.byref(newObj))
+        if stat < 0: _raiseStatus(stat)
+
+        return ego(newObj, self)
 
 #=============================================================================-
     def setOutLevel(self, outlevel=1):
@@ -3444,7 +3468,7 @@ class ego:
     def mapBody(self, dst, fAttr):
         """
         Checks for topological equivalence between the the BODY self and the BODY dst.
-        If necessary, produces a mapping (indices in src which map to dst) and
+        If necessary, produces a mapping (indices in self which map to dst) and
         places these as attributes on the resultant BODY mapped (named .nMap, .eMap and .fMap).
         Also may modify BSplines associated with FACEs.
 
@@ -3474,6 +3498,39 @@ class ego:
         if not body: return None
 
         return ego(body, self.context, deleteObject=True)
+
+#=============================================================================-
+    def mapBody2(self, fAttr, eAttr, dst):
+        """
+        Checks for topological equivalence between the the BODY self and the BODY dst.
+        If necessary, produces a mapping (indices in self which map to dst) and
+        places these as attributes on dst (named .nMap, .eMap and .fMap).
+        Unlike mapBody, mapBody2 also works on FACEBODYs and WIREBODYs.
+
+        Parameters
+        ----------
+        fAttr:
+            the FACE attribute string used to map FACEs
+
+        eAttr:
+            the EDGE attribute string used to map EDGEs
+
+        dst:
+            destination body object
+
+        Returns
+        -------
+        None
+
+        Note: It is the responsibility of the caller to 
+              have uniquely attributed all Face and Edge Objects 
+              in both src and dst to aid in the mapping.
+        """
+        pfAttr = fAttr.encode() if isinstance(fAttr,str) else fAttr
+        peAttr = eAttr.encode() if isinstance(eAttr,str) else eAttr
+
+        stat = _egads.EG_mapBody2(self._obj, pfAttr, peAttr, dst._obj)
+        if stat: _raiseStatus(stat)
 
 #=============================================================================-
     def getWindingAngle(self, t):

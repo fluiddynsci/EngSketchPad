@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -99,6 +99,11 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     char    *message=NULL, *fixed=NULL, *name=NULL;
     CCHAR   *tempClist, *attrName;
     ego     context, eref, *ebodys, exform, *newBodys=NULL;
+#ifdef DEBUG
+    udp_T   *udps = *Udps;
+#else
+    udp_T   *udps;
+#endif
 
     int     npnt;
     pnt_T   *pnt = NULL;

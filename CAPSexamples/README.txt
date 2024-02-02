@@ -1,5 +1,5 @@
                  CAPS: Computational Aircraft Prototype Syntheses
-                           Rev 1.21 -- January 2022
+                           Rev 1.24 -- January 2024
                                    Examples
                                 
 
@@ -26,6 +26,7 @@
 
     2.1 Low Fidelity CFD
         avlTest                          - Simple execution of avl
+        msesTest                         - Simple execution of MSES
  
     2.2 Mesh Generation
          
@@ -36,6 +37,8 @@
 
     2.4 Structural Analysis
         mystranTest                      - Simple execution of mystran
+        hsm*Test                         - Examples using the HSM structural solver
+        interferenceTest                 - Simple execution of interference AIM
 
     2.5 Aeroelastic data transfer
         aeroelasticSimple_Iterative_SU2_and_MystranTest - Iterative aeroelastic
@@ -43,17 +46,23 @@
 3.  pyCAPS examples
 
     3.1 Low Fidelity CFD
-        avl_*                            - Execution of avl
+        avl_*PyTest                      - Execution of avl
         xfoil_PyTest                     - Execution of xfoil
+        tsfoil_PyTest                    - Execution of tsfoil
+        friction_PyTest                  - Execution of friction
         autoLink_PyTest                  - Example of linking outputs and inputs
-       
+        mses_PyTest                      - Simple execution of mses
+        mses_OpenMDAO_3_PyTest           - Parametric shape optimization using MSES and OpenMDAO
+
     3.2 Mesh Generation
         aflr2_PyTest                     - 2D mesh generation
         delaundo_PyTest                  - 2D mesh generation
-        aflr4_PyTest                     - Surface mesh generation
-        quading_PyTest                   - Surface quad mesh generation
+        aflr4*_PyTest                    - Surface mesh generation with AFLR4
+        egadsTess*_PyTest                - Surface mesh generation (including qads) with EGADS
         aflr3_PyTest                     - 3D mesh generation
+        tetgen*_PyTest                   - 3D mesh generation
         aflr4_and_*_PyTest               - Surface and 3D mesh generation
+        pointwise*_PyTest                - 3D mesh generation with Pointwise
 
     3.3 CFD and Mesh Generation
         su2_and_AFLR2_*_PyTest           - 2D mesh generation and execute SU2
@@ -68,8 +77,13 @@
         fun3d_and_egadsTess_*_PyTest     - 2D mesh generation and execute Fun3D
         fun3d_and_AFLR4_AFLR3_PyTest     - Surface, 3D mesh generation and execute Fun3D
         fun3d_and_Tetgen_*_PyTest        - 3D mesh generation and execute Fun3D
+        fun3d_Morph_PyTest               - Using Fun3D to Morph meshes with shape optimization
+        fun3d_refine_PyTest              - Using Fun3D with refine to generate adapted meshes
 
     3.4 Structural Analysis
+        abaqus_AGARD445_PyTest           - Modal analysis
+        abaqus_SingleLoadCase_PyTest     - Static analysis
+
         astros_ThreeBar*_PyTest          - Beam element analysis
         astros_PyTest                    - Eigen analysis
         astros_Composite_PyTest          - Eigen analysis
@@ -94,6 +108,10 @@
         mystran_AGARD445_PyTest          - Modal analysis
         mystran_SingleLoadCase_PyTest    - Static analysis
         mystran_MultipleLoadCase_PyTest  - Static analysis
+
+        masstran*_PyTest                 - Mass property analysis
+
+        hsm*_PyTest                      - Examples using HSM structural solver
 
     3.5 Aeroelastic data transfer
         aeroelasticSimple_Pressure_*     - Transfer pressure load from CFD to FEA

@@ -162,6 +162,9 @@ typedef struct {
     // Pointer to CAPS input value for offset pressure during data transfer
     capsValue *pressureScaleOffset;
 
+    // Pointer to CAPS input value for scaling temperature during data transfer
+    capsValue *temperatureScaleFactor;
+
     // Boundary/surface properties
     cfdBoundaryConditionStruct bcProps;
 
@@ -172,7 +175,7 @@ typedef struct {
     cfdUnitsStruct units;
 
     // Mesh reference obtained from meshing AIM
-    aimMeshRef *meshRef, meshRefObj;
+    aimMeshRef *meshRefIn, meshRefObj;
 
 } aimStorage;
 
@@ -259,7 +262,7 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *a
     if (inst == -1) return CAPS_SUCCESS;
 
     /* specify the field variables this analysis can generate and consume */
-    *nFields = 7;
+    *nFields = 8;
 
     /* specify the name of each field variable */
     AIM_ALLOC(strs, *nFields, char *, aimInfo, status);
@@ -267,9 +270,10 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *a
     strs[1]  = EG_strdup("P");
     strs[2]  = EG_strdup("Cp");
     strs[3]  = EG_strdup("CoefficientOfPressure");
-    strs[4]  = EG_strdup("Displacement");
-    strs[5]  = EG_strdup("EigenVector");
-    strs[6]  = EG_strdup("EigenVector_#");
+    strs[4]  = EG_strdup("Temperature");
+    strs[5]  = EG_strdup("Displacement");
+    strs[6]  = EG_strdup("EigenVector");
+    strs[7]  = EG_strdup("EigenVector_#");
     for (i = 0; i < *nFields; i++)
       if (strs[i] == NULL) {
         status = EGADS_MALLOC;
@@ -284,9 +288,10 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *a
     ints[1]  = 1;
     ints[2]  = 1;
     ints[3]  = 1;
-    ints[4]  = 3;
+    ints[4]  = 1;
     ints[5]  = 3;
     ints[6]  = 3;
+    ints[7]  = 3;
     *franks   = ints;
     ints = NULL;
 
@@ -297,9 +302,10 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *a
     ints[1]  = FieldOut;
     ints[2]  = FieldOut;
     ints[3]  = FieldOut;
-    ints[4]  = FieldIn;
+    ints[4]  = FieldOut;
     ints[5]  = FieldIn;
     ints[6]  = FieldIn;
+    ints[7]  = FieldIn;
     *fInOut  = ints;
     ints = NULL;
 
@@ -328,8 +334,8 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, void *a
 
     initiate_cfdUnitsStruct(&fun3dInstance->units);
 
-    fun3dInstance->meshRef = NULL;
-    aim_initMeshRef(&fun3dInstance->meshRefObj);
+    fun3dInstance->meshRefIn = NULL;
+    aim_initMeshRef(&fun3dInstance->meshRefObj, aimUnknownMeshType);
 
     /*! \page aimUnitsFUN3D AIM Units
      *  A unit system may be optionally specified during AIM instance initiation. If
@@ -398,13 +404,13 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
      */
 
     int status = CAPS_SUCCESS;
-    aimStorage *fun3dInstance;
-    cfdUnitsStruct *units=NULL;
+    const aimStorage *fun3dInstance;
+    const cfdUnitsStruct *units=NULL;
 
 #ifdef DEBUG
     printf(" fun3dAIM/aimInputs index = %d!\n", index);
 #endif
-    fun3dInstance = (aimStorage *) instStore;
+    fun3dInstance = (const aimStorage *) instStore;
     if (fun3dInstance == NULL) return CAPS_NULLVALUE;
 
     units = &fun3dInstance->units;
@@ -645,8 +651,6 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
         defval->vals.real    = 1.0;
         defval->units           = NULL;
 
-        fun3dInstance->pressureScaleFactor = defval;
-
         /*! \page aimInputsFUN3D
          * - <B>Pressure_Scale_Factor = 1.0</B> <br>
          * Value to scale Cp data when transferring data. Data is scaled based on Pressure = Pressure_Scale_Factor*Cp + Pressure_Scale_Offset.
@@ -657,11 +661,19 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
         defval->vals.real    = 0.0;
         defval->units           = NULL;
 
-        fun3dInstance->pressureScaleOffset = defval;
-
         /*! \page aimInputsFUN3D
          * - <B>Pressure_Scale_Offset = 0.0</B> <br>
          * Value to offset Cp data when transferring data. Data is scaled based on Pressure = Pressure_Scale_Factor*Cp + Pressure_Scale_Offset.
+         */
+    } else if (index == Temperature_Scale_Factor) {
+        *ainame              = EG_strdup("Temperature_Scale_Factor");
+        defval->type         = Double;
+        defval->vals.real    = 1.0;
+        defval->units        = NULL;
+
+        /*! \page aimInputsFUN3D
+         * - <B>Temperature_Scale_Factor = 1.0</B> <br>
+         * Value to scale Temperature data when transferring data.
          */
     } else if (index == NonInertial_Rotation_Rate) {
         *ainame              = EG_strdup("NonInertial_Rotation_Rate");
@@ -907,6 +919,28 @@ int aimInputs(void *instStore, /*@unused@*/ void *aimInfo, int index,
          * FUN3D version to generate specific configuration file for; currently only has influence over
          * rubber.data (sensitivity file) and aeroelastic modal data namelist in moving_body.input .
          */
+    } else if (index == Motion_Driver) {
+        *ainame              = EG_strdup("Motion_Driver");
+        defval->type         = String;
+        defval->nullVal      = IsNull;
+
+        /*! \page aimInputsFUN3D
+         * - <B>Motion_Driver = NULL </B> <br>
+         * Triggers writing moving_body.input with specified 'motion_driver' string.<br>
+         * Mesh_Movement input must also be set.
+         */
+
+    } else if (index == Mesh_Movement) {
+        *ainame              = EG_strdup("Mesh_Movement");
+        defval->type         = String;
+        defval->nullVal      = IsNull;
+
+        /*! \page aimInputsFUN3D
+         * - <B>Mesh_Movement = NULL </B> <br>
+         * Triggers writing moving_body.input with specified 'mesh_movement' string.<br>
+         * Motion_Driver input must also be set.
+         */
+
     } else if (index == Design_Variable) {
         *ainame              = EG_strdup("Design_Variable");
         defval->type         = Tuple;
@@ -1032,6 +1066,13 @@ int aimUpdateState(void *instStore, void *aimInfo,
     AIM_NOTNULL(fun3dInstance, aimInfo, status);
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
+/*@-immediatetrans@*/
+    fun3dInstance->pressureScaleFactor    = &aimInputs[Pressure_Scale_Factor-1];
+    fun3dInstance->pressureScaleOffset    = &aimInputs[Pressure_Scale_Offset-1];
+    fun3dInstance->temperatureScaleFactor = &aimInputs[Temperature_Scale_Factor-1];
+/*@+immediatetrans@*/
+
+
     // Free our meshRef
     (void) aim_freeMeshRef(&fun3dInstance->meshRefObj);
 
@@ -1040,6 +1081,23 @@ int aimUpdateState(void *instStore, void *aimInfo,
         AIM_ERROR(aimInfo, "Cannot set both 'Design_Functional' and 'Design_SensFile'!");
         status = CAPS_BADVALUE;
         goto cleanup;
+    }
+
+    // Check for both Motion_Driver and Mesh_Movement
+    if (aimInputs[Motion_Driver-1].nullVal != aimInputs[Mesh_Movement-1].nullVal) {
+      AIM_ERROR(aimInfo, "Both 'Motion_Driver' and 'Mesh_Movement' must be set or unset!");
+      if (aimInputs[Motion_Driver-1].nullVal == NotNull) {
+        AIM_ADDLINE(aimInfo, "Motion_Driver = %s", aimInputs[Motion_Driver-1].vals.string);
+      } else {
+        AIM_ADDLINE(aimInfo, "Motion_Driver = NULL");
+      }
+      if (aimInputs[Mesh_Movement-1].nullVal == NotNull) {
+        AIM_ADDLINE(aimInfo, "Mesh_Movement = %s", aimInputs[Mesh_Movement-1].vals.string);
+      } else {
+        AIM_ADDLINE(aimInfo, "Mesh_Movement = NULL");
+      }
+      status = CAPS_BADVALUE;
+      goto cleanup;
     }
 
     // Get AIM bodies
@@ -1055,26 +1113,26 @@ int aimUpdateState(void *instStore, void *aimInfo,
     }
 
     // Get mesh
-    fun3dInstance->meshRef = (aimMeshRef *) aimInputs[Mesh-1].vals.AIMptr;
+    fun3dInstance->meshRefIn = (aimMeshRef *) aimInputs[Mesh-1].vals.AIMptr;
 
     if ( aimInputs[Mesh_Morph-1].vals.integer == (int) true &&
-        fun3dInstance->meshRef == NULL) { // If we are mighty morphing
+        fun3dInstance->meshRefIn == NULL) { // If we are mighty morphing
 
         // Lets "load" the meshRef now since it's not linked
         status = aim_loadMeshRef(aimInfo, &fun3dInstance->meshRefObj);
         AIM_STATUS(aimInfo, status);
 
-        // Mightly Morph the mesh
+        // Mighty Morph the mesh
         status = aim_morphMeshUpdate(aimInfo, &fun3dInstance->meshRefObj, numBody, bodies);
         AIM_STATUS(aimInfo, status);
         /*@-immediatetrans@*/
-        fun3dInstance->meshRef = &fun3dInstance->meshRefObj;
+        fun3dInstance->meshRefIn = &fun3dInstance->meshRefObj;
         /*@+immediatetrans@*/
     }
-    AIM_NOTNULL(fun3dInstance->meshRef, aimInfo, status);
+    AIM_NOTNULL(fun3dInstance->meshRefIn, aimInfo, status);
 
     // Get attribute to index mapping
-    status = create_MeshRefToIndexMap(aimInfo, fun3dInstance->meshRef, &fun3dInstance->groupMap);
+    status = create_MeshRefToIndexMap(aimInfo, fun3dInstance->meshRefIn, &fun3dInstance->groupMap);
     AIM_STATUS(aimInfo, status);
 
     if (aimInputs[Boundary_Condition-1].nullVal ==  IsNull) {
@@ -1187,7 +1245,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     bndCondStruct bndConds;
 
     // Mesh reference obtained from meshing AIM
-     aimMeshRef *meshRef = NULL;
+    aimMeshRef *meshRef = NULL;
 
     // Discrete data transfer variables
     char **boundName = NULL;
@@ -1351,7 +1409,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     projectName = aimInputs[Proj_Name-1].vals.string;
 
     // Get mesh
-    meshRef = fun3dInstance->meshRef;
+    meshRef = fun3dInstance->meshRefIn;
     AIM_NOTNULL(meshRef, aimInfo, status);
 
     if ( aimInputs[Mesh_Morph-1].vals.integer == (int) true &&
@@ -1483,7 +1541,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     status = _pathFlowDir(aimInfo, NULL, filename);
     AIM_STATUS(aimInfo,status);
 
-    if (aimInputs[Mesh_Morph -1].vals.integer == (int) true) {
+    if (aimInputs[Mesh_Morph-1].vals.integer == (int) true) {
 
         status = fun3d_writeSurface(aimInfo,
                                     meshRef,
@@ -1696,7 +1754,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
         status = aim_getBounds(aimInfo, &numBoundName, &boundName);
         if (status == CAPS_SUCCESS) {
 
-            if (aimInputs[Modal_Aeroelastic-1].nullVal ==  NotNull) {
+            if (aimInputs[Modal_Aeroelastic-1].nullVal == NotNull) {
                 status = fun3d_dataTransfer(aimInfo,
                                             projectName,
                                             &fun3dInstance->groupMap,
@@ -1704,7 +1762,10 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                                             meshRef,
                                             &modalAeroelastic);
                 if (status == CAPS_SUCCESS) {
-                    status = fun3d_writeMovingBody(aimInfo, fun3dVersion, fun3dInstance->bcProps, &modalAeroelastic);
+                    status = fun3d_writeMovingBody(aimInfo, fun3dVersion, fun3dInstance->bcProps,
+                                                   NULL, NULL,
+                                                   &modalAeroelastic);
+                    AIM_STATUS(aimInfo, status);
                 }
 
             } else{
@@ -1720,7 +1781,18 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
               goto cleanup;
             }
         }
-    } // End if data transfer ok
+    }
+
+    if (status == CAPS_NOTFOUND &&
+        aimInputs[Motion_Driver-1].nullVal == NotNull &&
+        aimInputs[Mesh_Movement-1].nullVal == NotNull) {
+
+        status = fun3d_writeMovingBody(aimInfo, fun3dVersion, fun3dInstance->bcProps,
+                                       aimInputs[Motion_Driver-1].vals.string,
+                                       aimInputs[Mesh_Movement-1].vals.string,
+                                       NULL);
+        AIM_STATUS(aimInfo, status);
+    }
 
     status = CAPS_SUCCESS;
 
@@ -1778,7 +1850,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
     // Get mesh
-    meshRef = fun3dInstance->meshRef;
+    meshRef = fun3dInstance->meshRefIn;
     AIM_NOTNULL(meshRef, aimInfo, status);
 
     if (aimInputs[Design_Functional-1].nullVal == NotNull) {
@@ -2676,7 +2748,7 @@ void aimCleanup(void *instStore)
     destroy_cfdUnitsStruct(&fun3dInstance->units);
 
     aim_freeMeshRef(&fun3dInstance->meshRefObj);
-    fun3dInstance->meshRef = NULL;
+    fun3dInstance->meshRefIn = NULL;
 
     AIM_FREE(fun3dInstance);
 }
@@ -2736,7 +2808,7 @@ int aimDiscr(char *tname, capsDiscr *discr)
     }
 
     // Get mesh
-    meshRef = fun3dInstance->meshRef;
+    meshRef = fun3dInstance->meshRefIn;
     AIM_NOTNULL(meshRef, discr->aInfo, status);
 
     if (meshRef->nmap == 0) {
@@ -2818,6 +2890,15 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
      *  and "Pressure_Scale_Offset" are AIM inputs (\ref aimInputsFUN3D).
      * </ul>
      *
+     * <ul>
+     *  <li> <B>"Temperature"</B> </li> <br>
+     *  Loads the temperature distribution from [project_name]_ddfdrive_bndry[#].dat file(s)
+     *  (as generate from a FUN3D command line option of -\-write_aero_loads_to_file) into the data
+     *  transfer scheme. This distribution may be scaled based on
+     *  Temperature = Temperature_Scale_Factor*Temp, where "Temperature_Scale_Factor"
+     *  is an AIM input (\ref aimInputsFUN3D).
+     * </ul>
+     *
      */ // Rest of this block comes from fun3dUtil.c
 
     int status, status2; // Function return status
@@ -2858,10 +2939,11 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
 
     fun3dInstance = (aimStorage *) discr->instStore;
 
-    if (strcasecmp(dataName, "Pressure") != 0 &&
-        strcasecmp(dataName, "P")        != 0 &&
-        strcasecmp(dataName, "Cp")       != 0 &&
-        strcasecmp(dataName, "CoefficientOfPressure") != 0) {
+    if (strcasecmp(dataName, "Pressure")    != 0 &&
+        strcasecmp(dataName, "P")           != 0 &&
+        strcasecmp(dataName, "Cp")          != 0 &&
+        strcasecmp(dataName, "CoefficientOfPressure") != 0 &&
+        strcasecmp(dataName, "Temperature") != 0) {
 
         printf("Unrecognized data transfer variable - %s\n", dataName);
         return CAPS_NOTFOUND;
@@ -2908,6 +2990,8 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
                                     &dataMatrix);
         // Try body file
         if (status == CAPS_IOERR) {
+
+            aim_removeError(discr->aInfo);
 
             stringLength = strlen(projectName) + strlen("_ddfdrive_body1.dat")+7;
             AIM_REALL(filename, stringLength, char, discr->aInfo, status);
@@ -2967,6 +3051,23 @@ int aimTransfer(capsDiscr *discr, const char *dataName, int numPoint,
 
                 //dataUnits = fun3dInstance->pressureScaleFactor->units;
                 if (strcasecmp("cp", variableName[i]) == 0) {
+                    variableIndex = i;
+                    break;
+                }
+            } else if (strcasecmp(dataName, "Temperature") == 0 ||
+                       strcasecmp(dataName, "T")        == 0) {
+
+                if (dataRank != 1) {
+                    printf("Data transfer rank should be 1 not %d\n", dataRank);
+                    status = CAPS_BADRANK;
+                    goto cleanup;
+                }
+
+                dataScaleFactor = fun3dInstance->temperatureScaleFactor->vals.real;
+                dataScaleOffset = 0;
+
+                //dataUnits = fun3dInstance->pressureScaleFactor->units;
+                if (strcasecmp("temp", variableName[i]) == 0) {
                     variableIndex = i;
                     break;
                 }

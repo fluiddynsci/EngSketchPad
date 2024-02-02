@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -71,8 +71,6 @@
 #endif
 
 /* macros */
-static void *realloc_temp=NULL;              /* used by RALLOC macro */
-
 void executePyscript(void *esp);
 static void tee(void *arg);
 
@@ -150,6 +148,7 @@ timLoad(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     int      len, i, count, nbuffer=1024;
     char     *env, *buffer=NULL, templine[MAX_LINE_LEN], *filename=(char*)data;
     void     *temp;
+    void     *realloc_temp = NULL;            /* used by RALLOC macro */
     FILE     *fp;
 
     ROUTINE(timLoad(pyscript));
@@ -298,6 +297,7 @@ timMesg(esp_T *ESP,                     /* (in)  pointer to ESP structure */
     char     *response=NULL;
     static FILE  *fp=NULL;;
     void     *temp;
+    void     *realloc_temp = NULL;            /* used by RALLOC macro */
 
     ROUTINE(timMesg(pyscript));
 
@@ -635,7 +635,7 @@ timSetCaps(void  *myCaps,               /* (in)  pointer to active CAPS */
 
         /* there is no need to build the configuration since CAPS will
            build it in a lazy manner whenever it is needed */
-        
+
         /* if there are no Bodys but Branches, build and tessellate now */
 //$$$        if (ESP->MODL->nbrch > 0 && ESP->MODL->nbody == 0) {
 //$$$            printf("this is ocsmBuild(4)\n");

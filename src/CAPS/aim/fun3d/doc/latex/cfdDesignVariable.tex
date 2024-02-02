@@ -1,0 +1,17 @@
+Structure for the design variable tuple = (\char`\"{}\+Design\+Variable Name\char`\"{}, \char`\"{}\+Value\char`\"{}). \char`\"{}\+Design\+Variable Name\char`\"{} defines the reference name for the design variable being specified. The \char`\"{}\+Value\char`\"{} may be a JSON String dictionary (see Section \mbox{\hyperlink{cfdDesignVariable_jsonStringDesignVariable}{JSON String Dictionary}}) or just a blank string (see Section \mbox{\hyperlink{cfdDesignVariable_keyStringDesignVariable}{Single Value String}}).
+
+Note that any JSON string inputs are written to the input files as information only. They are only use if the analysis is executed with the analysis specific design framework.\hypertarget{cfdDesignVariable_jsonStringDesignVariable}{}\doxysubsection{JSON String Dictionary}\label{cfdDesignVariable_jsonStringDesignVariable}
+If \char`\"{}\+Value\char`\"{} is JSON string dictionary (eg. \char`\"{}\+Value\char`\"{} = \{\char`\"{}upper\+Bound\char`\"{}\+: 10.\+0\}) the following keywords ( = default values) may be used\+:
+
+
+\begin{DoxyItemize}
+\item {\bfseries{lower\+Bound = 0.\+0 or \mbox{[}0.\+0, 0.\+0,...\mbox{]}}}  ~\newline
+ Lower bound for the design variable. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{upper\+Bound = 0.\+0 or \mbox{[}0.\+0, 0.\+0,...\mbox{]}}}  ~\newline
+ Upper bound for the design variable. 
+\end{DoxyItemize}\hypertarget{cfdDesignVariable_keyStringDesignVariable}{}\doxysubsection{Single Value String}\label{cfdDesignVariable_keyStringDesignVariable}
+If \char`\"{}\+Value\char`\"{} is a string, the string value will be ignored. 

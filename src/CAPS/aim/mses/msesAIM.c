@@ -347,7 +347,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
     /*! \page aimInputsMSES
      * - <B> xTransition_Lower = NULL</B> <br>
-     *  List of forced transition location on the lower surface of each blade element.
+     *  List of forced transition location on the lower surface of each blade element. <br>
      *  Must be equal in length to the number of blade elements.
      */
 
@@ -383,7 +383,11 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
     /*! \page aimInputsMSES
      * - <B> ISMOM = 4</B> <br>
-     *  MSES ISMOM input to select the momentum equation. Valid inputs: [1-4]
+     *  MSES ISMOM input to select the momentum equation. Valid inputs: [1-4] <br>
+     *  1 -> use S-momentum equation <br>
+     *  2 -> use isentropic condition <br>
+     *  3 -> use S-momentum equation, with isentropic condition only near leading edge <br>
+     *  4 -> use isentropic condition, with S-momentum equation only where dissipation is active
      */
 
   } else if (index == inIFFBC) {
@@ -752,7 +756,7 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
       status = vlm_getSectionCoord(aimInfo,
                                    &msesInstance->vlmSections[ibody],
-                                   (int) true, // Normalize by chord (true/false)
+                                   (int) false, // Normalize by chord (true/false)
                                    NUMPOINT,
                                    &msesInstance->xCoord[ibody],
                                    &msesInstance->yCoord[ibody],

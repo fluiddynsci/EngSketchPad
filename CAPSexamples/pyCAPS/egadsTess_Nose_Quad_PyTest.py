@@ -27,7 +27,7 @@ myProblem = pyCAPS.Problem(problemName=workDir,
                            capsFile=geometryScript, 
                            outLevel=args.outLevel)
 
-# Load AFLR4 aim
+# Load egadsTess aim
 myAnalysis = myProblem.analysis.create(aim = "egadsTessAIM")
 
 # Set project name so a mesh file is generated

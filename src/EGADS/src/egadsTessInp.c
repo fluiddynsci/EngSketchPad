@@ -3,7 +3,7 @@
  *
  *             Tessellation Input Functions
  *
- *      Copyright 2011-2023, Massachusetts Institute of Technology
+ *      Copyright 2011-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -2395,15 +2395,20 @@ EG_localToGlobal(const egObject *tess, int index, int local, int *global)
     stat = EG_indexBodyTopo(btess->src, edges[0]);
     if (stat <= EGADS_SUCCESS) {
       printf(" EGADS Error: EG_indexBodyTopo = %d (EG_localToGlobal)!\n", stat);
+      EG_free(edges);
       return stat;
     }
-    EG_free(edges);
     if (btess->tess1d[stat-1].global == NULL) return EGADS_DEGEN;
     if (btess->tess1d[stat-1].nodes[0] == local) {
       *global = btess->tess1d[stat-1].global[0];
-    } else {
+    } else if (btess->tess1d[stat-1].nodes[1] == local) {
       *global = btess->tess1d[stat-1].global[btess->tess1d[stat-1].npts-1];
+    } else {
+      printf(" EGADS Error: Edge %d does not have Node %d (EG_localToGlobal)!\n", stat, local);
+      EG_free(edges);
+      return EGADS_TOPOERR;
     }
+    EG_free(edges);
   }
 
   return EGADS_SUCCESS;

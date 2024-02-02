@@ -1,0 +1,21 @@
+Structure for the constraint tuple = (\char`\"{}\+Constraint Name\char`\"{}, \char`\"{}\+Value\char`\"{}). \char`\"{}\+Constraint Name\char`\"{} defines the reference name for the constraint being specified. The \char`\"{}\+Value\char`\"{} can either be a JSON String dictionary (see Section \mbox{\hyperlink{feaConstraint_jsonStringConstraint}{JSON String Dictionary}}) or a single string keyword (see Section \mbox{\hyperlink{feaConstraint_keyStringConstraint}{Single Value String}}).\hypertarget{feaConstraint_jsonStringConstraint}{}\doxysubsection{JSON String Dictionary}\label{feaConstraint_jsonStringConstraint}
+If \char`\"{}\+Value\char`\"{} is JSON string dictionary (eg. \char`\"{}\+Value\char`\"{} = \{\char`\"{}group\+Name\char`\"{}\+: \char`\"{}plate\+Edge\char`\"{}, \char`\"{}dof\+Constraint\char`\"{}\+: 123456\}) the following keywords ( = default values) may be used\+:
+
+
+\begin{DoxyItemize}
+\item {\bfseries{constraint\+Type = \char`\"{}\+Zero\+Displacement\char`\"{}}}  ~\newline
+ Type of constraint. Options\+: \char`\"{}\+Displacement\char`\"{}, \char`\"{}\+Zero\+Displacement\char`\"{}. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{dof\+Constraint = 0 }}  ~\newline
+ Component numbers / degrees of freedom that will be constrained (123 -\/ zero translation in all three directions). 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{grid\+Displacement = 0.\+0 }}  ~\newline
+ Value of displacement for components defined in \char`\"{}dof\+Constraint\char`\"{}. 
+\end{DoxyItemize}\hypertarget{feaConstraint_keyStringConstraint}{}\doxysubsection{Single Value String}\label{feaConstraint_keyStringConstraint}
+If \char`\"{}\+Value\char`\"{} is a string, the string value may correspond to an entry in a predefined constraint lookup table. NOT YET IMPLEMENTED!!!! 

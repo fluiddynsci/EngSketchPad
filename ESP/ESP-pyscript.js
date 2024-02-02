@@ -1,7 +1,7 @@
 // ESP-pyscript.js implements python functions for the Engineering Sketch Pad (ESP)
 // written by John Dannenhoffer
 
-// Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
+// Copyright (C) 2010/2024  John F. Dannenhoffer, III (Syracuse University)
 //
 // This library is free software; you can redistribute it and/or
 //    modify it under the terms of the GNU Lesser General Public
@@ -558,6 +558,7 @@ pyscript.timQuitCB = function (text) {
     if (text.substring(0,7) != "plotter" &&
         text.substring(0,6) != "viewer"     ) {
         changeMode(0);
+        wv.inPyscript = 0;
     }
 };
 

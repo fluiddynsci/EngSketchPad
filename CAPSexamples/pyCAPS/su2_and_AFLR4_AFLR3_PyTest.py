@@ -85,7 +85,7 @@ su2.input["Mesh"].link(aflr3.output["Volume_Mesh"])
 projectName = "su2AFLRTest"
 
 # Set SU2 Version
-su2.input.SU2_Version = "Blackbird"
+su2.input.SU2_Version = "Harrier"
 
 # Set project name
 su2.input.Proj_Name = projectName

@@ -123,6 +123,7 @@ enum aimInputs
   inQuad_Mesh,
   inProperty,
   inMaterial,
+  inMesh_Morph,
   inSurface_Mesh,
   inDesign_Variable,
   inDesign_Variable_Relation,
@@ -407,7 +408,7 @@ static int checkAndCreateMesh(void *aimInfo, aimStorage *masstranInstance)
     return CAPS_BADVALUE;
   }
 
-  if (QuadMesh != NULL) quadMesh = QuadMesh->vals.integer;
+  if (QuadMesh != NULL) quadMesh = 2*QuadMesh->vals.integer;
 
   status = initiate_mapAttrToIndexStruct(&constraintMap);
   AIM_STATUS(aimInfo, status);
@@ -709,15 +710,27 @@ aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
      * Material tuple used to input material information for the model, see \ref feaMaterial for additional details.
      */
 
+  } else if (index == inMesh_Morph) {
+      *ainame              = EG_strdup("Mesh_Morph");
+      defval->type         = Boolean;
+      defval->lfixed       = Fixed;
+      defval->vals.integer = (int) false;
+      defval->dim          = Scalar;
+      defval->nullVal      = NotNull;
+
+      /*! \page aimInputsMasstran
+       * - <B> Mesh_Morph = False</B> <br>
+       * Project previous surface mesh onto new geometry.
+       */
+
   } else if (index == inSurface_Mesh) {
       *ainame             = EG_strdup("Surface_Mesh");
-      defval->type        = Pointer;
+      defval->type        = PointerMesh;
       defval->dim         = Vector;
       defval->lfixed      = Change;
-      defval->sfixed      = Change;
+      defval->sfixed      = Fixed;
       defval->vals.AIMptr = NULL;
       defval->nullVal     = IsNull;
-      AIM_STRDUP(defval->units, "meshStruct", aimInfo, status);
 
       /*! \page aimInputsMasstran
        * - <B>Surface_Mesh = NULL</B> <br>
@@ -1378,6 +1391,13 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
   masstranInstance = (const aimStorage *) instStore;
   AIM_NOTNULL(aimInputs, aimInfo, status);
+
+  if ( aimInputs[inMesh_Morph-1].vals.integer == (int) true &&
+       aimInputs[inSurface_Mesh-1].nullVal == NotNull) { // If we are mighty morphing
+      // store the current mesh for future iterations
+      status = aim_storeMeshRef(aimInfo, (aimMeshRef *) aimInputs[inSurface_Mesh-1].vals.AIMptr, NULL);
+      AIM_STATUS(aimInfo, status);
+  }
 
   status = getComponents(aimInfo, masstranInstance, &feaProperty, &feaMaterial);
   AIM_STATUS(aimInfo, status);

@@ -43,7 +43,7 @@ $(ODIR)/platoAIM.o:	platoAIM.c $(IDIR)/capsTypes.h \
 		-o $(ODIR)/platoAIM.o
 
 lint:
-	$(LINT) -I../../include -I$(IDIR) -I../utils -I../meshWriter/exodusWriter $(wildcard *.c) -exportlocal -uniondef -nestcomment -boolops
+	$(LINT) -I$(SEACAS)/include -I../../include -I$(IDIR) -I../utils -I../meshWriter/exodusWriter $(wildcard *.c) -exportlocal -uniondef -nestcomment -boolops
 
 clean:
 	-rm -f $(OBJS)

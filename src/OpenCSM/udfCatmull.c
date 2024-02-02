@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -161,9 +161,11 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     CINT    *tempIlist;
     double  data[18];
     CDOUBLE *tempRlist;
+    char    *message=NULL;
     CCHAR   *tempClist;
     ego     context, *ebodys, eref, *echilds, *eloops, rgeom;
     ego     *enodes=NULL, *eedges=NULL, *efaces=NULL;
+    udp_T   *udps = *Udps;
 
     poly_TT poly;
 
@@ -176,11 +178,6 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     printf("nsubdiv  = %d\n", NSUBDIV( 0));
     printf("progress = %d\n", PROGRESS(0));
 #endif
-
-    /* default return values */
-    *ebody  = NULL;
-    *nMesh  = 0;
-    *string = NULL;
 
     /* initialize the poly_TT structure */
     poly.mnode = 0;
@@ -196,6 +193,14 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     poly.faces = NULL;
 
     poly.context = NULL;
+
+    /* default return values */
+    *ebody  = NULL;
+    *nMesh  = 0;
+    *string = NULL;
+
+    MALLOC(message, char, 100);
+    message[0] = '\0';
 
     /* check that Model was input that contains one Body */
     status = EG_getTopology(emodel, &eref, &oclass, &mtype,
@@ -218,6 +223,11 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     poly.context = context;
 
     /* check arguments */
+    if (NSUBDIV(0) < 0) {
+        snprintf(message, 100, "nsubdiv should be non-negative");
+        status = EGADS_RANGERR;
+        goto cleanup;
+    }
 
     /* cache copy of arguments for future use */
     status = cacheUdp(emodel);
@@ -420,6 +430,16 @@ cleanup:
     if (poly.edges != NULL) EG_free(poly.edges);
     if (poly.faces != NULL) EG_free(poly.faces);
 
+    if (strlen(message) > 0) {
+        *string = message;
+        printf("%s\n", message);
+    } else if (status != EGADS_SUCCESS) {
+        FREE(message);
+        *string = udpErrorStr(status);
+    } else {
+        FREE(message);
+    }
+
     return status;
 }
 
@@ -479,8 +499,10 @@ addNode(poly_TT *poly,                  /* (in)  pointer to poly_TT */
 {
     int    status = EGADS_SUCCESS;
 
+    void   *realloc_temp = NULL;            /* used by RALLOC macro */
+
     ROUTINE(addNode);
-    
+
 #ifdef DEBUG
     printf("call addNode(%f, %f, %f) -> %d\n", x, y, z, poly->nnode);
 #endif
@@ -534,6 +556,8 @@ addEdge(poly_TT *poly,                  /* (in)  pointer to poly_TT */
         int     iend)                   /* (in)  end Node (bias-0) */
 {
     int    status = EGADS_SUCCESS;
+
+    void   *realloc_temp = NULL;            /* used by RALLOC macro */
 
     ROUTINE(addEdge);
 
@@ -595,6 +619,8 @@ addFace(poly_TT *poly,                  /* (in)  pointer to poly_TT */
                                         /*       =4 to limit Z */
 {
     int    status = EGADS_SUCCESS;
+
+    void   *realloc_temp = NULL;            /* used by RALLOC macro */
 
     ROUTINE(addFace);
 
@@ -882,7 +908,7 @@ makeBrep(poly_TT *poly,                 /* (in)  pointer to poly_TT */
     ego    eref, *echilds, ecurve, enodes[2], esurf, *eedges=NULL, eloop, *efaces=NULL, eshell;
 
     ROUTINE(makeBrep);
-    
+
     /* make the Nodes */
     for (inode = 0; inode < poly->nnode; inode++) {
         status = EG_makeTopology(poly->context, NULL, NODE, 0,

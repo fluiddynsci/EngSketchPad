@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -76,7 +76,7 @@ static int    solveSparse(double SAv[], int SAi[], double b[], double x[],
 static double L2norm(double f[], int n);
 
 #ifdef GRAFIC
-static int    plotCurve(int npnt, ego ecurve);
+static int    plotCurve(int npnt, ego ecurve, int *NumUdp, udp_T *udps);
 #endif
 
 
@@ -105,6 +105,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     FILE    *fp=NULL;
     ego     ecurve, eloop, eface, enew;
     ego     *enodes=NULL, *eedges=NULL;
+    void    *realloc_temp = NULL;            /* used by RALLOC macro */
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 
@@ -308,7 +310,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
 #ifdef GRAFIC
     /* plot the fit */
-    status = plotCurve(npnt, ecurve);
+    status = plotCurve(npnt, ecurve, NumUdp, udps);
     CHECK_STATUS(plotCurve);
 #endif
 
@@ -1545,7 +1547,9 @@ L2norm(double f[],                      /* (in)  vector */
 #ifdef GRAFIC
 static int
 plotCurve(int    npnt,                  /* (in)  number of points in cloud */
-          ego    ecurve)                /* (in)  Curve */
+          ego    ecurve,                /* (in)  Curve */
+          int    *NumUdp,
+          udp_T  *udps)
 {
     int    status = EGADS_SUCCESS;
 

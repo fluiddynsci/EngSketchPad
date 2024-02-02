@@ -13,6 +13,7 @@ all:
 	(cd egadsTess; make)
 	(cd friction; make)
 	(cd fun3d; make)
+	(cd abaqus; make)
 	(cd mystran; make)
 	(cd masstran; make)
 	(cd nastran; make)
@@ -41,8 +42,11 @@ ifneq ("$(ESP_ARCH)","CYGWIN64")
 endif
 ifdef SEACAS
 	(cd plato; make)
+	(cd sierraSD; make)
+	(cd sierraSM; make)
 endif
 	(cd pointwise; make)
+	(cd refine; make)
 	(cd meshWriter; make)
 	(cd custom; make)
 
@@ -52,6 +56,7 @@ lint:
 	(cd egadsTess; make lint)
 	(cd friction; make lint)
 	(cd fun3d; make lint)
+	(cd abaqus; make lint)
 	(cd mystran; make lint)
 	(cd masstran; make lint)
 	(cd nastran; make lint)
@@ -79,7 +84,10 @@ ifneq ("$(ESP_ARCH)","CYGWIN64")
 	(cd cart3d; make lint)
 endif
 	(cd plato; make lint)
+	(cd sierraSD; make lint)
+	(cd sierraSM; make lint)
 	(cd pointwise; make lint)
+	(cd refine; make lint)
 	(cd meshWriter; make lint)
 	(cd utils; make lint)
 
@@ -90,6 +98,7 @@ clean:
 	(cd egadsTess; make clean)
 	(cd friction; make clean)
 	(cd fun3d; make clean)
+	(cd abaqus; make clean)
 	(cd mystran; make clean)
 	(cd masstran; make clean)
 	(cd nastran; make clean)
@@ -118,8 +127,11 @@ ifneq ("$(ESP_ARCH)","CYGWIN64")
 endif
 ifdef SEACAS
 	(cd plato; make clean)
+	(cd sierraSD; make clean)
+	(cd sierraSM; make clean)
 endif
 	(cd pointwise; make clean)
+	(cd refine; make clean)
 	(cd meshWriter; make clean)
 	(cd custom; make clean)
 
@@ -130,6 +142,7 @@ cleanall:
 	(cd egadsTess; make cleanall)
 	(cd friction; make cleanall)
 	(cd fun3d; make cleanall)
+	(cd abaqus; make cleanall)
 	(cd skeleton; make cleanall)
 	(cd su2; make cleanall)
 	(cd mystran; make cleanall)
@@ -158,8 +171,11 @@ ifneq ("$(ESP_ARCH)","CYGWIN64")
 endif
 ifdef SEACAS
 	(cd plato; make cleanall)
+	(cd sierraSD; make cleanall)
+	(cd sierraSM; make cleanall)
 endif
 	(cd pointwise; make cleanall)
+	(cd refine; make cleanall)
 	(cd meshWriter; make cleanall)
 	(cd custom; make cleanall)
 
@@ -170,6 +186,7 @@ dox:
 	(cd delaundo; make dox)
 	(cd egadsTess; make dox)
 	(cd fun3d; make dox)
+	(cd abaqus; make dox)
 	(cd mystran; make dox)
 	(cd masstran; make dox)
 	(cd nastran; make dox)
@@ -187,7 +204,10 @@ dox:
 	(cd interference; make dox)
 	(cd cart3d; make dox)
 	(cd plato; make dox)
+	#(cd sierraSD; make dox)
+	#(cd sierraSM; make dox)
 	(cd pointwise; make dox)
+	(cd refine; make dox)
 
 doxclean:
 	(cd avl; make doxclean)
@@ -196,6 +216,7 @@ doxclean:
 	(cd delaundo; make doxclean)
 	(cd egadsTess; make doxclean)
 	(cd fun3d; make doxclean)
+	(cd abaqus; make doxclean)
 	(cd mystran; make doxclean)
 	(cd masstran; make doxclean)
 	(cd nastran; make doxclean)
@@ -213,4 +234,7 @@ doxclean:
 	(cd interference; make doxclean)
 	(cd cart3d; make doxclean)
 	(cd plato; make doxclean)
+	(cd sierraSD; make doxclean)
+	(cd sierraSM; make doxclean)
 	(cd pointwise; make doxclean)
+	(cd refine; make doxclean)

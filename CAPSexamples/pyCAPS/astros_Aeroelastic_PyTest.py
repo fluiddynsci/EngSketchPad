@@ -53,7 +53,7 @@ myProblem.analysis["astros"].input.Analysis_Type = "Aeroelastic"
 
 # Set aero reference parameters
 # "referenceNode" specifies the grid point to use for stability derivative calculations
-myProblem.analysis["astros"].input.Aero_Reference = '{"referenceNode": "Rib_Root_Point"}'
+myProblem.analysis["astros"].input.Aero_Reference = {"referenceNode": "Rib_Root_Point"}
 
 # Set analysis
 trim1 = { "analysisType" : "AeroelasticStatic",

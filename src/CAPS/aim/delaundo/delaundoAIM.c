@@ -415,7 +415,7 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     delaundoInstance->egadsTess = NULL;
 
     // Mesh reference passed to solver
-    status = aim_initMeshRef(&delaundoInstance->meshRef);
+    status = aim_initMeshRef(&delaundoInstance->meshRef, aimAreaMesh);
     AIM_STATUS(aimInfo, status);
 
 cleanup:

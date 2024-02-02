@@ -11,7 +11,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -72,6 +72,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     double  xyz[18], range[4], *rdata=NULL;
     char    *message=NULL;
     ego     ecurve, enodes[2], eedge, eloop, esurface, eface, eshell;
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 

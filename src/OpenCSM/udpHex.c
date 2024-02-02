@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -74,6 +74,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     double  *uknots=NULL, *vknots=NULL, *wknots=NULL, *data=NULL;
     double  bounds[4], fraci, fracj, frack;
     ego     esurf, efaces[6], emodel, eref, *echilds;
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 

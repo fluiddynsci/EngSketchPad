@@ -79,7 +79,7 @@ store     OML
     rotatex   90   0   0
     select body   
    	attribute capsIntent $Structure #FEA Analysis (2D elements) 
-   	attribute capsAIM $nastranAIM;astrosAIM;mystranAIM;hsmAIM;egadsTessAIM
+   	attribute capsAIM $nastranAIM;astrosAIM;mystranAIM;hsmAIM;egadsTessAIM;aflr4AIM;tacsAIM
         attribute capsMeshLength croot
 
 

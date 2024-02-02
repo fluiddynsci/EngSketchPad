@@ -54,18 +54,20 @@ typedef struct {
   INT_ Number_of_Vol_Pents_6;
   INT_ Number_of_Vol_Hexs;
 
+  mapAttrToIndexStruct groupMap;
+
 } AFLR_Grid;
 
 
 void initialize_AFLR_Grid(AFLR_Grid *grid);
 void destroy_AFLR_Grid(AFLR_Grid *grid);
 int append_AFLR_Grid(void *aimInfo,
-                     const AFLR_Grid* domain,
+                     AFLR_Grid* domain,
+                     int zone,
                      AFLR_Grid* grid);
 
 int write_AFLR_Grid(void *aimInfo,
                     const char *fileName,
-                    const mapAttrToIndexStruct *groupMap,
                     AFLR_Grid *grid);
 
 int aflr3_to_MeshStruct( const AFLR_Grid *grid,
@@ -86,5 +88,5 @@ int aflr3_Volume_Mesh (void *aimInfo,
                        int numMeshProp,
                        meshSizingStruct *meshProp,
                        int numSurfaceMesh,
-                       meshStruct *surfaceMesh,
+                       ego *surfaceMesh,
                        AFLR_Grid *grid);

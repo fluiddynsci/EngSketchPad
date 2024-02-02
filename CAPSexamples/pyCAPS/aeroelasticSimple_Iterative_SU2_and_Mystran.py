@@ -103,7 +103,7 @@ refVelocity = 100.0 # m/s
 refDensity = 1.2 # kg/m^3
 
 myProblem.analysis["su2"].input.Proj_Name             = projectName
-myProblem.analysis["su2"].input.SU2_Version           = "Blackbird"
+myProblem.analysis["su2"].input.SU2_Version           = "Harrier"
 myProblem.analysis["su2"].input.Mach                  = refVelocity/speedofSound
 myProblem.analysis["su2"].input.Equation_Type         = "compressible"
 myProblem.analysis["su2"].input.Num_Iter              = 3 # Way too few to converge the solver, but this is an example

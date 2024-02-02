@@ -3,7 +3,7 @@
 *              jlEGADS --- Julia version of EGADS API
 *
 *
-*      Copyright 2011-2022, Massachusetts Institute of Technology
+*      Copyright 2011-2024, Massachusetts Institute of Technology
 *      Licensed under The GNU Lesser General Public License, version 2.1
 *      See http://www.opensource.org/licenses/lgpl-2.1.php
 *      Written by: Julia Docampo Sanchez
@@ -13,17 +13,23 @@
 =#
 __precompile__()
 
-# EGADS paths + constants
-try @assert isdir(ENV["ESP_ROOT"])
-catch
-    throw(@error " ESP_ROOT ", ESP_ROOT, " not fund. Please check your ESPenv.sh file ")
+# EGADS env set
+if !haskey(ENV, "ESP_ROOT")
+    throw(@error " ESP_ROOT must be set -- Please fix the environment...\n")
 end
 
-const ESP_ROOT_LIB = joinpath(ENV["ESP_ROOT"], "lib")     |> normpath
-@info " ESP ROOT LIB $ESP_ROOT_LIB"
+# EGADS paths + constants
+ESP_ROOT=ENV["ESP_ROOT"] |> normpath
+try @assert isdir(ESP_ROOT)
+catch
+    throw(@error " ESP_ROOT=$ESP_ROOT is not a directory -- Please fix the environment...\n")
+end
+
+const ESP_ROOT_LIB = joinpath(ESP_ROOT, "lib")     |> normpath
+@info " ESP_ROOT_LIB $ESP_ROOT_LIB"
 try @assert isdir(ESP_ROOT_LIB)
 catch
-    throw(@error " $ESP_ROOT_LIB is not a directory !!!")
+    throw(@error " $ESP_ROOT_LIB is not a directory -- Please fix the environment...\n")
 end
 
 const EGADS_COMMON_PATH = normpath(@__DIR__)

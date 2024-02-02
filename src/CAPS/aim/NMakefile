@@ -23,6 +23,9 @@ all:
 	cd fun3d
 	nmake -f NMakefile
 	cd ..
+	cd abaqus
+	nmake -f NMakefile
+	cd ..
 	cd mystran
 	nmake -f NMakefile
 	cd ..
@@ -114,6 +117,9 @@ clean:
 	cd fun3d
 	nmake -f NMakefile clean
 	cd ..
+	cd abaqus
+	nmake -f NMakefile clean
+	cd ..
 	cd mystran
 	nmake -f NMakefile clean
 	cd ..
@@ -203,6 +209,9 @@ cleanall:
 	nmake -f NMakefile cleanall
 	cd ..
 	cd fun3d
+	nmake -f NMakefile cleanall
+	cd ..
+	cd abaqus
 	nmake -f NMakefile cleanall
 	cd ..
 	cd mystran

@@ -387,13 +387,12 @@ aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, int index,
 
     } else if (index == Surface_Mesh) {
         *ainame             = AIM_NAME(Surface_Mesh);
-        defval->type        = Pointer;
+        defval->type        = PointerMesh;
         defval->dim         = Vector;
         defval->lfixed      = Change;
-        defval->sfixed      = Change;
+        defval->sfixed      = Fixed;
         defval->vals.AIMptr = NULL;
         defval->nullVal     = IsNull;
-        AIM_STRDUP(defval->units, "meshStruct", aimInfo, status);
 
         /*! \page aimInputsTetGen
          * - <B>Surface_Mesh = NULL</B> <br>
@@ -522,6 +521,8 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     int numSurfaceMesh = 0;
     meshStruct *surfaceMesh = NULL;
 
+    aimMeshRef *meshRef = NULL;
+
     // Container for volume mesh
     int numVolumeMesh = 0;
     meshStruct *volumeMesh = NULL;
@@ -576,13 +577,31 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     }
 
     // Get mesh
-    numSurfaceMesh = aimInputs[Surface_Mesh-1].length;
-    surfaceMesh    = (meshStruct *)aimInputs[Surface_Mesh-1].vals.AIMptr;
+    meshRef = (aimMeshRef *)aimInputs[Surface_Mesh-1].vals.AIMptr;
 
-    if (numSurfaceMesh != numBody) {
+    if (meshRef->nmap != numBody) {
         AIM_ANALYSISIN_ERROR(aimInfo, Surface_Mesh, "Number of linked surface meshes (%d) does not match the number of bodies (%d)\n",
-                             numSurfaceMesh, numBody);
+                             meshRef->nmap, numBody);
         return CAPS_SOURCEERR;
+    }
+
+    AIM_ALLOC(surfaceMesh, meshRef->nmap, meshStruct, aimInfo, status);
+    numSurfaceMesh = meshRef->nmap;
+
+    // Initiate surface meshes
+    for (i = 0; i < numBody; i++){
+      status = initiate_meshStruct(&surfaceMesh[i]);
+      AIM_STATUS(aimInfo, status);
+    }
+
+    for (i = 0; i < numBody; i++){
+      status = copy_mapAttrToIndexStruct( &tetgenInstance->groupMap,
+                                          &surfaceMesh[i].groupMap );
+      AIM_STATUS(aimInfo, status);
+
+      surfaceMesh[i].egadsTess = meshRef->maps[i].tess;
+      status = mesh_surfaceMeshEGADSTess(aimInfo, &surfaceMesh[i], (int)false);
+      AIM_STATUS(aimInfo, status);
     }
 
     if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
@@ -662,7 +681,8 @@ aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
         AIM_STATUS(aimInfo, status);
 
         // Combine mesh - temporary store the combined mesh in the volume mesh
-        status = mesh_combineMeshStruct(numSurfaceMesh,
+        status = mesh_combineMeshStruct(aimInfo,
+                                        numSurfaceMesh,
                                         surfaceMesh,
                                         &volumeMesh[0]);
         AIM_STATUS(aimInfo, status);
@@ -930,6 +950,11 @@ cleanup:
         AIM_FREE(volumeMesh);
     }
 
+    for (i = 0; i < numSurfaceMesh; i++){
+        destroy_meshStruct(&surfaceMesh[i]);
+    }
+    AIM_FREE(surfaceMesh);
+
     destroy_mapAttrToIndexStruct(&groupMap);
 
     return status;
@@ -958,8 +983,8 @@ aimPostAnalysis(void *instStore, void *aimInfo,
     int numBody = 0;
 
     // Container for volume mesh
-    int numSurfaceMesh=0;
-    meshStruct *surfaceMesh=NULL;
+    int numSurfaceMesh = 0;
+    aimMeshRef *surfaceMesh=NULL;
 
     int i, j, ibody, nodeOffset;
     int MultiMesh, numVolNode;
@@ -967,6 +992,9 @@ aimPostAnalysis(void *instStore, void *aimInfo,
     char bodyNumberFile[42];
     char aimFile[PATH_MAX];
     FILE *fp = NULL;
+
+    int state, numSurfNode;
+    ego body;
 
     aimStorage *tetgenInstance;
 
@@ -977,9 +1005,9 @@ aimPostAnalysis(void *instStore, void *aimInfo,
     AIM_STATUS(aimInfo, status);
 
     // Get mesh
-    numSurfaceMesh = aimInputs[Surface_Mesh-1].length;
-    surfaceMesh    = (meshStruct *)aimInputs[Surface_Mesh-1].vals.AIMptr;
+    surfaceMesh = (aimMeshRef *)aimInputs[Surface_Mesh-1].vals.AIMptr;
     AIM_NOTNULL(surfaceMesh, aimInfo, status);
+    numSurfaceMesh = surfaceMesh->nmap;
 
     if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
       MultiMesh = 0;
@@ -996,59 +1024,62 @@ aimPostAnalysis(void *instStore, void *aimInfo,
     // Create/setup mesh maps
     if (MultiMesh == 0 || MultiMesh == 2) {
 
-        AIM_ALLOC(tetgenInstance->meshRef, 1, aimMeshRef, aimInfo, status);
-        tetgenInstance->numMeshRef = 1;
-        ibody = 0;
+      AIM_ALLOC(tetgenInstance->meshRef, 1, aimMeshRef, aimInfo, status);
+      tetgenInstance->numMeshRef = 1;
+      ibody = 0;
 
-        status = aim_initMeshRef(tetgenInstance->meshRef);
-        AIM_STATUS(aimInfo, status);
+      status = aim_initMeshRef(tetgenInstance->meshRef, aimVolumeMesh);
+      AIM_STATUS(aimInfo, status);
 
-        if (MultiMesh == 2) {
-            snprintf(bodyNumberFile, 42, "tetgen_%d.txt", ibody);
-            fp = aim_fopen(aimInfo, bodyNumberFile, "r");
-            if (fp == NULL) {
-                AIM_ERROR(aimInfo, "Failed to open '%s'!", bodyNumberFile);
-                status = CAPS_IOERR;
-                goto cleanup;
-            }
+      if (MultiMesh == 2) {
+        snprintf(bodyNumberFile, 42, "tetgen_%d.txt", ibody);
+        fp = aim_fopen(aimInfo, bodyNumberFile, "r");
+        if (fp == NULL) {
+          AIM_ERROR(aimInfo, "Failed to open '%s'!", bodyNumberFile);
+          status = CAPS_IOERR;
+          goto cleanup;
         }
+      }
 
-        // set the filename without extensions where the grid is written for solvers
-        snprintf(bodyNumberFile, 42, "tetgen_%d", ibody);
-        status = aim_file(aimInfo, bodyNumberFile, aimFile);
-        AIM_STATUS(aimInfo, status);
-        AIM_STRDUP(tetgenInstance->meshRef[0].fileName, aimFile, aimInfo, status);
+      // set the filename without extensions where the grid is written for solvers
+      snprintf(bodyNumberFile, 42, "tetgen_%d", ibody);
+      status = aim_file(aimInfo, bodyNumberFile, aimFile);
+      AIM_STATUS(aimInfo, status);
+      AIM_STRDUP(tetgenInstance->meshRef[0].fileName, aimFile, aimInfo, status);
 
-        snprintf(bodyNumberFile, 42, NODATATRANSFER, ibody);
-        if (aim_isFile(aimInfo, bodyNumberFile) == CAPS_SUCCESS) {
-          // data transfer and sensitvities are not available
-          tetgenInstance->meshRef[0].nmap = 0;
-          tetgenInstance->meshRef[0].maps = NULL;
+      snprintf(bodyNumberFile, 42, NODATATRANSFER, ibody);
+      if (aim_isFile(aimInfo, bodyNumberFile) == CAPS_SUCCESS) {
+        // data transfer and sensitvities are not available
+        tetgenInstance->meshRef[0].nmap = 0;
+        tetgenInstance->meshRef[0].maps = NULL;
 
-        } else {
+      } else {
 
-          AIM_ALLOC(tetgenInstance->meshRef[0].maps, numSurfaceMesh, aimMeshTessMap, aimInfo, status);
-          tetgenInstance->meshRef[0].nmap = numSurfaceMesh;
+        AIM_ALLOC(tetgenInstance->meshRef[0].maps, numSurfaceMesh, aimMeshTessMap, aimInfo, status);
+        tetgenInstance->meshRef[0].nmap = numSurfaceMesh;
 
-          nodeOffset = 0;
-          for (ibody = 0; ibody < numSurfaceMesh; ibody++) {
-              tetgenInstance->meshRef[0].maps[ibody].tess = NULL;
-              tetgenInstance->meshRef[0].maps[ibody].map = NULL;
+        nodeOffset = 0;
+        for (ibody = 0; ibody < numSurfaceMesh; ibody++) {
+          tetgenInstance->meshRef[0].maps[ibody].tess = NULL;
+          tetgenInstance->meshRef[0].maps[ibody].map = NULL;
 
-              tetgenInstance->meshRef[0].maps[ibody].tess = surfaceMesh[ibody].egadsTess;
+          tetgenInstance->meshRef[0].maps[ibody].tess = surfaceMesh->maps[ibody].tess;
 
-              AIM_ALLOC(tetgenInstance->meshRef[0].maps[ibody].map, surfaceMesh[ibody].numNode, int, aimInfo, status);
-              for (i = 0; i < surfaceMesh[ibody].numNode; i++)
-                tetgenInstance->meshRef[0].maps[ibody].map[i] = nodeOffset + i+1;
+          status = EG_statusTessBody(surfaceMesh->maps[ibody].tess, &body, &state, &numSurfNode);
+          AIM_STATUS(aimInfo, status);
 
-              if (MultiMesh == 0) {
-                  nodeOffset += surfaceMesh[ibody].numNode;
-              } else {
-                  fscanf(fp, "%d", &numVolNode);
-                  nodeOffset += numVolNode;
-              }
+          AIM_ALLOC(tetgenInstance->meshRef[0].maps[ibody].map, numSurfNode, int, aimInfo, status);
+          for (i = 0; i < numSurfNode; i++)
+            tetgenInstance->meshRef[0].maps[ibody].map[i] = nodeOffset + i+1;
+
+          if (MultiMesh == 0) {
+            nodeOffset += numSurfNode;
+          } else {
+            fscanf(fp, "%d", &numVolNode);
+            nodeOffset += numVolNode;
           }
         }
+      }
 
     } else  if (MultiMesh == 1) {
 
@@ -1056,7 +1087,7 @@ aimPostAnalysis(void *instStore, void *aimInfo,
         tetgenInstance->numMeshRef = numBody;
 
         for (ibody = 0; ibody < numBody; ibody++) {
-          status = aim_initMeshRef(&tetgenInstance->meshRef[ibody]);
+          status = aim_initMeshRef(&tetgenInstance->meshRef[ibody], aimVolumeMesh);
           AIM_STATUS(aimInfo, status);
         }
 
@@ -1075,10 +1106,13 @@ aimPostAnalysis(void *instStore, void *aimInfo,
             snprintf(bodyNumberFile, 42, NODATATRANSFER, ibody);
             if (aim_isFile(aimInfo, bodyNumberFile) == CAPS_SUCCESS) continue;
 
-            tetgenInstance->meshRef[ibody].maps[0].tess = surfaceMesh[ibody].egadsTess;
+            tetgenInstance->meshRef[ibody].maps[0].tess = surfaceMesh->maps[ibody].tess;
 
-            AIM_ALLOC(tetgenInstance->meshRef[ibody].maps[0].map, surfaceMesh[ibody].numNode, int, aimInfo, status);
-            for (i = 0; i < surfaceMesh[ibody].numNode; i++)
+            status = EG_statusTessBody(surfaceMesh->maps[ibody].tess, &body, &state, &numSurfNode);
+            AIM_STATUS(aimInfo, status);
+
+            AIM_ALLOC(tetgenInstance->meshRef[ibody].maps[0].map, numSurfNode, int, aimInfo, status);
+            for (i = 0; i < numSurfNode; i++)
               tetgenInstance->meshRef[ibody].maps[0].map[i] = i+1;
         }
     }

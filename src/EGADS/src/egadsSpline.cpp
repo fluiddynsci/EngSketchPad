@@ -3,7 +3,7 @@
  *
  *             Blend, Rule and Sculpting Functions
  *
- *      Copyright 2011-2023, Massachusetts Institute of Technology
+ *      Copyright 2011-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -12,6 +12,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
+
+#ifdef WIN32
+#define strncasecmp _strnicmp
+#endif
 
 #include "egads.h"
 #include "egads_dot.h"
@@ -2716,6 +2721,10 @@ EG_blendSpline(
   int    nsec, ntip, rite, left, nKnotv, deg, iknotc, *vdata=NULL;
   int    *vdataTE=NULL, *aggC0=NULL;
   double data[18];
+  int    atype, alen;
+  const int    *ints;
+  const double *reals;
+  const char   *str;
   T      *t1, *tN, *vknot=NULL, *vknotC0=NULL, *vknotTE=NULL, max2, mknot;
   T      knotc[2*NTIPTE-1], *snor=NULL, *nnor=NULL, *xyzs=NULL;
   T      dx, dy, dz, dv, dv0, dv1, t, pointL[18], pointU[18], dX[3];
@@ -2908,91 +2917,143 @@ EG_blendSpline(
   /* for all multiplicity 2 knots, determine where the flat spot is */
   for (j = 1; j < nsec-1; j++)
     if ((vdata[j] == -2) && (vdata[j+1] == +2)) {
-      if (j < 2) {
-        /* flat on left */
-        vdata[j+1] = 1;
-      } else if (j > nsec-4) {
-        /* flat on right */
-        vdata[j  ] = 1;
-      } else if ((vknot[j-1] == vknot[j-2]) && (vknot[j+3] == vknot[j+2])) {
-        /* flat on both sides */
-        printf("EG_blend: C1 -- Too few sections on either side of %d and %d\n",
-               j, j+1);
-        stat = EGADS_DEGEN;
-        goto cleanup;
-      } else if (vknot[j-1] == vknot[j-2]) {
-        /* flat on left because of another multiplicity 2 too close */
-#ifdef DEBUG
-        printf("flat on left at %d and %d due to close data\n", j, j+1);
-#endif
-        vdata[j+1] = 1;
-      } else if (vknot[j+3] == vknot[j+2]) {
-        /* flat on right because of another multiplicity 2 too close */
-#ifdef DEBUG
-        printf("flat on right at %d and %d due to close data\n", j, j+1);
-#endif
-        vdata[j  ] = 1;
-      } else {
-        /* find second derivatives on both sides */
-        for (left = rite = i = 0; i < n0; i++) {
-          d2xdt2L = ((xyzs[3*(i+(j  )*n0)  ]-
-                      xyzs[3*(i+(j-1)*n0)  ])/(vknot[j  ]-vknot[j-1])
-                  -  (xyzs[3*(i+(j-1)*n0)  ]-
-                      xyzs[3*(i+(j-2)*n0)  ])/(vknot[j-1]-vknot[j-2]))
-                  / (vknot[j  ]-vknot[j-2]);
-          d2ydt2L = ((xyzs[3*(i+(j  )*n0)+1]-
-                      xyzs[3*(i+(j-1)*n0)+1])/(vknot[j  ]-vknot[j-1])
-                  -  (xyzs[3*(i+(j-1)*n0)+1]-
-                      xyzs[3*(i+(j-2)*n0)+1])/(vknot[j-1]-vknot[j-2]))
-                  / (vknot[j  ]-vknot[j-2]);
-          d2zdt2L = ((xyzs[3*(i+(j  )*n0)+2]-
-                      xyzs[3*(i+(j-1)*n0)+2])/(vknot[j  ]-vknot[j-1])
-                  -  (xyzs[3*(i+(j-1)*n0)+2]-
-                      xyzs[3*(i+(j-2)*n0)+2])/(vknot[j-1]-vknot[j-2]))
-                  / (vknot[j  ]-vknot[j-2]);
 
-          d2xdt2R = ((xyzs[3*(i+(j+3)*n0)  ]-
-                      xyzs[3*(i+(j+2)*n0)  ])/(vknot[j+3]-vknot[j+2])
-                  -  (xyzs[3*(i+(j+2)*n0)  ]-
-                      xyzs[3*(i+(j+1)*n0)  ])/(vknot[j+2]-vknot[j+1]))
-                  / (vknot[j+3]-vknot[j+1]);
-          d2ydt2R = ((xyzs[3*(i+(j+3)*n0)+1]-
-                      xyzs[3*(i+(j+2)*n0)+1])/(vknot[j+3]-vknot[j+2])
-                  -  (xyzs[3*(i+(j+2)*n0)+1]-
-                      xyzs[3*(i+(j+1)*n0)+1])/(vknot[j+2]-vknot[j+1]))
-                  / (vknot[j+3]-vknot[j+1]);
-          d2zdt2R = ((xyzs[3*(i+(j+3)*n0)+2]-
-                      xyzs[3*(i+(j+2)*n0)+2])/(vknot[j+3]-vknot[j+2])
-                  -  (xyzs[3*(i+(j+2)*n0)+2]-
-                      xyzs[3*(i+(j+1)*n0)+2])/(vknot[j+2]-vknot[j+1]))
-                  / (vknot[j+3]-vknot[j+1]);
-
-          d2sdt2L = d2xdt2L*d2xdt2L + d2ydt2L*d2ydt2L + d2zdt2L*d2zdt2L;
-          d2sdt2R = d2xdt2R*d2xdt2R + d2ydt2R*d2ydt2R + d2zdt2R*d2zdt2R;
-          max2    = fabs(d2sdt2L);
-          if (max2 < fabs(d2sdt2R)) max2 = fabs(d2sdt2R);
-          if (max2 == 0.0) {
-            left++;
-          } else if (fabs(d2sdt2L-d2sdt2R)/max2 < 1.e-6) {
-            left++;
-          } else if (d2sdt2L > d2sdt2R) {
-            rite++;
-          } else {
-            left++;
+      rite = left = 0;
+      for (i = 0; i < 2; i++) {
+        stat    = EG_attributeRet(secs[j+i], ".C1side", &atype, &alen,
+                                  &ints, &reals, &str);
+        if (stat == EGADS_SUCCESS) {
+          if (atype != ATTRSTRING) {
+            printf("EG_blend: .C1side -- attribute must be a string\n");
+            stat = EGADS_ATTRERR;
+            goto cleanup;
+          }
+          if (strlen(str) < 3) {
+            printf("EG_blend: .C1side -- attribute must be a string of length 3\n");
+            stat = EGADS_ATTRERR;
+            goto cleanup;
+          }
+               if (strncasecmp(str,"Fwd",3) == 0) rite += 1;
+          else if (strncasecmp(str,"Rev",3) == 0) left += 1;
+          else {
+            printf("EG_blend: .C1side -- attribute must be a string '+' or '-'\n");
+            stat = EGADS_ATTRERR;
+            goto cleanup;
           }
         }
-        if (rite > left) {
-          /* flat on right because left curvature is smaller */
+      }
+      if (left == 1 && rite == 1) {
+        printf("EG_blend: .C1side -- mixed attribute on sections %d an %d\n",
+               j, j+1);
+        stat = EGADS_ATTRERR;
+        goto cleanup;
+      }
+
+      if (rite > 0) {
+
+        /* flat on right specified */
 #ifdef DEBUG
-          printf("flat on right %d %d\n", left, rite);
+        printf("flat on right %d %d\n", left, rite);
+#endif
+        vdata[j  ] = 1;
+      } else if (left > 0) {
+        /* flat on left specified */
+#ifdef DEBUG
+        printf("flat on left %d %d\n", left, rite);
+#endif
+        vdata[j+1] = 1;
+
+      } else {
+
+        if (j < 2) {
+          /* flat on left */
+          vdata[j+1] = 1;
+        } else if (j > nsec-4) {
+          /* flat on right */
+          vdata[j  ] = 1;
+#ifdef OVERRESTRICT
+        } else if ((vknot[j-1] == vknot[j-2]) && (vknot[j+3] == vknot[j+2])) {
+          /* flat on both sides */
+          printf("EG_blend: C1 -- Too few sections on either side of %d and %d\n",
+                 j, j+1);
+          stat = EGADS_DEGEN;
+          goto cleanup;
+#endif
+        } else if (vknot[j-1] == vknot[j-2]) {
+          /* flat on left because of another multiplicity 2 too close */
+#ifdef DEBUG
+          printf("flat on left at %d and %d due to close data\n", j, j+1);
+#endif
+          vdata[j+1] = 1;
+        } else if (vknot[j+3] == vknot[j+2]) {
+          /* flat on right because of another multiplicity 2 too close */
+#ifdef DEBUG
+          printf("flat on right at %d and %d due to close data\n", j, j+1);
 #endif
           vdata[j  ] = 1;
         } else {
-          /* flat on left because right curvture is smaller  */
-#ifdef DEBUG
-          printf("flat on left %d %d\n", left, rite);
-#endif
-          vdata[j+1] = 1;
+
+          /* find second derivatives on both sides */
+          for (rite = left = i = 0; i < n0; i++) {
+            d2xdt2L = ((xyzs[3*(i+(j  )*n0)  ]-
+                        xyzs[3*(i+(j-1)*n0)  ])/(vknot[j  ]-vknot[j-1])
+                    -  (xyzs[3*(i+(j-1)*n0)  ]-
+                        xyzs[3*(i+(j-2)*n0)  ])/(vknot[j-1]-vknot[j-2]))
+                    / (vknot[j  ]-vknot[j-2]);
+            d2ydt2L = ((xyzs[3*(i+(j  )*n0)+1]-
+                        xyzs[3*(i+(j-1)*n0)+1])/(vknot[j  ]-vknot[j-1])
+                    -  (xyzs[3*(i+(j-1)*n0)+1]-
+                        xyzs[3*(i+(j-2)*n0)+1])/(vknot[j-1]-vknot[j-2]))
+                    / (vknot[j  ]-vknot[j-2]);
+            d2zdt2L = ((xyzs[3*(i+(j  )*n0)+2]-
+                        xyzs[3*(i+(j-1)*n0)+2])/(vknot[j  ]-vknot[j-1])
+                    -  (xyzs[3*(i+(j-1)*n0)+2]-
+                        xyzs[3*(i+(j-2)*n0)+2])/(vknot[j-1]-vknot[j-2]))
+                    / (vknot[j  ]-vknot[j-2]);
+
+            d2xdt2R = ((xyzs[3*(i+(j+3)*n0)  ]-
+                        xyzs[3*(i+(j+2)*n0)  ])/(vknot[j+3]-vknot[j+2])
+                    -  (xyzs[3*(i+(j+2)*n0)  ]-
+                        xyzs[3*(i+(j+1)*n0)  ])/(vknot[j+2]-vknot[j+1]))
+                    / (vknot[j+3]-vknot[j+1]);
+            d2ydt2R = ((xyzs[3*(i+(j+3)*n0)+1]-
+                        xyzs[3*(i+(j+2)*n0)+1])/(vknot[j+3]-vknot[j+2])
+                    -  (xyzs[3*(i+(j+2)*n0)+1]-
+                        xyzs[3*(i+(j+1)*n0)+1])/(vknot[j+2]-vknot[j+1]))
+                    / (vknot[j+3]-vknot[j+1]);
+            d2zdt2R = ((xyzs[3*(i+(j+3)*n0)+2]-
+                        xyzs[3*(i+(j+2)*n0)+2])/(vknot[j+3]-vknot[j+2])
+                    -  (xyzs[3*(i+(j+2)*n0)+2]-
+                        xyzs[3*(i+(j+1)*n0)+2])/(vknot[j+2]-vknot[j+1]))
+                    / (vknot[j+3]-vknot[j+1]);
+
+            d2sdt2L = d2xdt2L*d2xdt2L + d2ydt2L*d2ydt2L + d2zdt2L*d2zdt2L;
+            d2sdt2R = d2xdt2R*d2xdt2R + d2ydt2R*d2ydt2R + d2zdt2R*d2zdt2R;
+            max2    = fabs(d2sdt2L);
+            if (max2 < fabs(d2sdt2R)) max2 = fabs(d2sdt2R);
+            if (max2 == 0.0) {
+              left++;
+            } else if (fabs(d2sdt2L-d2sdt2R)/max2 < 1.e-6) {
+              left++;
+            } else if (d2sdt2L > d2sdt2R) {
+              rite++;
+            } else {
+              left++;
+            }
+          }
+          if (rite > left) {
+            /* flat on right because left curvature is smaller */
+  #ifdef DEBUG
+            printf("flat on right %d %d\n", left, rite);
+  #endif
+            vdata[j  ] = 1;
+          } else {
+            /* flat on left because right curvature is smaller  */
+  #ifdef DEBUG
+            printf("flat on left %d %d\n", left, rite);
+  #endif
+            vdata[j+1] = 1;
+          }
         }
       }
       j++;

@@ -1348,6 +1348,15 @@ void string_toUpperCase ( char *sPtr )
     }
 }
 
+// Force a string to lower case
+void string_toLowerCase ( char *sPtr )
+{
+    while ( *sPtr != '\0' ) {
+        *sPtr = tolower ( ( unsigned char ) *sPtr );
+        ++sPtr;
+    }
+}
+
 // Return newly allocated string formatted by `format` and any variadic string args
 // NOTE: sentinel denoting end of variadic args is NULL, if NULL is not provided,
 //       behavior may be undefined
@@ -1885,7 +1894,7 @@ int get_mapAttrToIndexIndex(const mapAttrToIndexStruct *attrMap, const char *key
 }
 
 // Search a mapAttrToIndex structure for a given index and return the corresponding keyword
-int get_mapAttrToIndexKeyword(mapAttrToIndexStruct *attrMap, int index, const char **keyWord) {
+int get_mapAttrToIndexKeyword(const mapAttrToIndexStruct *attrMap, int index, const char **keyWord) {
 
     // If the keyword is not found a CAPS_NOTFOUND is returned
 
@@ -2078,23 +2087,33 @@ int merge_mapAttrToIndexStruct(mapAttrToIndexStruct *attrMap1, mapAttrToIndexStr
     if (attrMap2  == NULL) return CAPS_NULLVALUE;
     if (attrMapOut == NULL) return CAPS_NULLVALUE;
 
-    // Destroy attrMapOut in case it is already allocated - this implies that it must have at least been initiated
-    status =  destroy_mapAttrToIndexStruct(attrMapOut);
-    if (status != CAPS_SUCCESS) return status;
+    // allow attrMap2 == attrMapOut to effectively append the structure
+    if (attrMap2 != attrMapOut) {
 
-    status = copy_mapAttrToIndexStruct(attrMap1, attrMapOut);
-    if (status != CAPS_SUCCESS) goto cleanup;
+      // Destroy attrMapOut in case it is already allocated - this implies that it must have at least been initiated
+      status =  destroy_mapAttrToIndexStruct(attrMapOut);
+      if (status != CAPS_SUCCESS) goto cleanup;
 
-    for (i = 0; i < attrMap2->numAttribute; i++) {
+      status = copy_mapAttrToIndexStruct(attrMap1, attrMapOut);
+      if (status != CAPS_SUCCESS) goto cleanup;
+      
+      for (i = 0; i < attrMap2->numAttribute; i++) {
         status = increment_mapAttrToIndexStruct(attrMapOut, attrMap2->attributeName[i]);
         if (status != CAPS_SUCCESS && status != EGADS_EXISTS) goto cleanup;
+      }
+    } else {
+      
+      for (i = 0; i < attrMap1->numAttribute; i++) {
+        status = increment_mapAttrToIndexStruct(attrMapOut, attrMap1->attributeName[i]);
+        if (status != CAPS_SUCCESS && status != EGADS_EXISTS) goto cleanup;
+      }
     }
 
     status = CAPS_SUCCESS;
-    cleanup:
-        if (status != CAPS_SUCCESS) printf("\tPremature exit in merge_mapAttrToIndexStruct, status = %d\n", status);
+cleanup:
+    if (status != CAPS_SUCCESS) printf("\tPremature exit in merge_mapAttrToIndexStruct, status = %d\n", status);
 
-        return status;
+    return status;
 }
 
 // Retrieve the string following a generic tag (given by attributeKey)
@@ -2511,11 +2530,14 @@ int create_CAPSGroupAttrToIndexMap(int numBody, ego bodies[], int attrLevel, map
     // In:
     //      numBody   = Number of incoming bodies
     //      bodies    = Array of ego bodies
-    //      attrLevel = Level of depth to traverse the body:  0 - search just body attributes
-    //                                                        1 - search the body and all the faces
-    //                                                        2 - search the body, faces, and all the edges
-    //                                                       >2 - search the body, faces, edges, and all the nodes
-    // Out:
+    //      attrLevel = Level of depth to traverse the body:
+    //                              0 - search just body attributes
+    //                              1 - search the body and all the faces
+    //                             -1 - search the only faces
+    //                              2 - search the body, faces, and all the edges
+    //                             -2 - search the only edges
+    //                              3 - search the body, faces, edges, and all the nodes
+    //                             -3 - search the only nodes    // Out:
     //         attrMap = A filled mapAttrToIndex structure
 
     int status; // Function return integer

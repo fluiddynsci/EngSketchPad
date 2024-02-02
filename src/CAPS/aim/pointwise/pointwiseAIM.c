@@ -344,7 +344,7 @@ static int initiate_aimStorage(aimStorage *pointwiseInstance)
   if (status != CAPS_SUCCESS) return status;
 
   // Mesh reference passed to solver
-  status = aim_initMeshRef(&pointwiseInstance->meshRef);
+  status = aim_initMeshRef(&pointwiseInstance->meshRef, aimVolumeMesh);
   if (status != CAPS_SUCCESS) return status;
 
   return CAPS_SUCCESS;
@@ -2794,12 +2794,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     // Scale the reference length
     capsMeshLength *= aimInputs[Mesh_Length_Factor-1].vals.real;
 
-    bodyCopy = (ego *) EG_alloc(numBody*sizeof(ego));
-    if (bodyCopy == NULL) {
-        status = EGADS_MALLOC;
-        goto cleanup;
-    }
-
+    AIM_ALLOC(bodyCopy, numBody, ego, aimInfo, status);
     for (i = 0; i < numBody; i++) bodyCopy[i] = NULL;
 
     // Get context
@@ -2815,7 +2810,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                            &pointwiseInstance->meshMap,
                            numMeshProp, meshProp, capsMeshLength, &quilting);
 /*@+nullpass@*/
-        if (status != EGADS_SUCCESS) goto cleanup;
+        AIM_STATUS(aimInfo, status);
     }
 
     // Auto quilt faces
@@ -2832,11 +2827,8 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     // Create a model from the copied bodies
     status = EG_makeTopology(context, NULL, MODEL, 0, NULL, numBody, bodyCopy,
                              NULL, &model);
-    if (status != EGADS_SUCCESS) goto cleanup;
-    if (model == NULL) {
-      status = CAPS_NULLOBJ;
-      goto cleanup;
-    }
+    AIM_STATUS(aimInfo, status);
+    AIM_NOTNULL(model, aimInfo, status);
 
     printf("Writing global Glyph inputs...\n");
     status = writeGlobalGlyph(aimInfo, aimInputs, capsMeshLength);
@@ -3520,7 +3512,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
     fclose(fp); fp = NULL;
 
     // generate the QuickRefLists now that all surface elements have been added
-    status = mesh_fillQuickRefList(volumeMesh);
+    status = mesh_fillQuickRefList(aimInfo, volumeMesh);
     AIM_STATUS(aimInfo, status);
 
     // construct a map between coincident Solid/Sheet body Edges
@@ -3620,7 +3612,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
 
             // get mtype=SFORWARD or mtype=SREVERSE for the face to get topology normal
             status = EG_getInfo(bodydata[ib].faces[iface], &oclass, &mtype, &ref, &prev, &next);
-            if (status != EGADS_SUCCESS) goto cleanup;
+            AIM_STATUS(aimInfo, status);
             faceNormal[0] *= mtype;
             faceNormal[1] *= mtype;
             faceNormal[2] *= mtype;
@@ -3664,7 +3656,7 @@ aimPostAnalysis(void *instStore, void *aimInfo, /*@unused@*/ int restart,
             AIM_STATUS(aimInfo, status);
             AIM_NOTNULL(tris, aimInfo, status);
 
-            AIM_ALLOC(faceVertID, bodydata[ib].tfaces[iface].npts, int, aimInfo, status);
+            AIM_ALLOC(faceVertID, npts, int, aimInfo, status);
 
             for (i = 0; i < ntri; i++) {
               for (j = 0; j < 3; j++) {

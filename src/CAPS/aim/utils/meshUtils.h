@@ -51,10 +51,10 @@ int write_MAPBC(void *aimInfo,
                 int *bndIds,
                 int *bndVals);
 
-void get_Surface_Norm(double p1[3],
-                      double p2[3],
-                      double p3[3],
-                      double norm[3]);
+void get_Surface_Norm(double p1[],
+                      double p2[],
+                      double p3[],
+                      double norm[]);
 
 // Populate bndCondStruct boundary condition information - Boundary condition values get filled with 99
 int populate_bndCondStruct_from_bcPropsStruct(const cfdBoundaryConditionStruct *bcProps,
@@ -220,7 +220,7 @@ int mesh_retrieveMeshElements(int numElement,
                               int *elementTypeList[]);
 
 // Fill out the QuickRef lists for all element types
-int mesh_fillQuickRefList( meshStruct *mesh);
+int mesh_fillQuickRefList( void *aimInfo, meshStruct *mesh );
 
 // Make a copy of the analysis Data
 int mesh_copyMeshAnalysisData(void *in, meshAnalysisTypeEnum analysisType, void *out);
@@ -235,7 +235,7 @@ int mesh_copyMeshNodeStruct(meshNodeStruct *in, int nodeOffSetIndex, meshNodeStr
 int mesh_copyMeshStruct( meshStruct *in, meshStruct *out );
 
 // Combine mesh structures
-int mesh_combineMeshStruct(int numMesh, meshStruct mesh[], meshStruct *combineMesh );
+int mesh_combineMeshStruct(void *aimInfo, int numMesh, meshStruct mesh[], meshStruct *combineMesh );
 
 // Write a mesh contained in the mesh structure in AFLR3 format (*.ugrid, *.lb8.ugrid, *.b8.ugrid)
 int mesh_writeAFLR3(void *aimInfo,
@@ -317,14 +317,15 @@ int mesh_writeFAST(void *aimInfo,
 
 // Write a mesh contained in the mesh structure in Abaqus mesh format (*_Mesh.inp)
 int mesh_writeAbaqus(void *aimInfo,
-                     char *fname,
+                     const char *fname,
                      int asciiFlag,
-                     meshStruct *mesh,
+                     const meshStruct *mesh,
                      double scaleFactor); // Scale factor for coordinates
 
 // Extrude a surface mesh a single unit the length of extrusionLength - return a
 // volume mesh, cell volume and left-handness is not checked
-int extrude_SurfaceMesh(double extrusionLength,
+int extrude_SurfaceMesh(void *aimInfo,
+                        double extrusionLength,
                         int extrusionMarker,
                         meshStruct *surfaceMesh, meshStruct *volumeMesh);
 
@@ -342,8 +343,13 @@ int mesh_removeUnusedNodes(meshStruct *mesh);
 int mesh_nodeID2Array(const meshStruct *mesh,
                       int **n2a);
 
+// Constructs a map that maps from elementID to the mesh->element array index
+int mesh_elementID2Array(const meshStruct *mesh,
+                         int **e2a);
+
+
 // Create a new mesh with topology tagged with capsIgnore being removed, if capsIgnore isn't found the mesh is simply copied.
-int mesh_createIgnoreMesh(meshStruct *mesh, meshStruct *meshIgnore);
+int mesh_createIgnoreMesh(void *aimInfo, meshStruct *mesh, meshStruct *meshIgnore);
 
 // Changes the analysisType of a mesh
 int mesh_setAnalysisType(meshAnalysisTypeEnum analysisType, meshStruct *mesh);
@@ -382,6 +388,15 @@ int mesh_findGroupElements(meshStruct *mesh,
 // General routine to do fill up a AIM capsDiscr data structure
 int mesh_fillDiscr(char *tname, mapAttrToIndexStruct *groupMap,
                    int numBody, ego *tess, capsDiscr *discr);
+
+// Computes elemental data averaged to grid points
+int mesh_gridAvg(void *aimInfo, const meshStruct *mesh,
+                 const int numElement, int *elementIDs, int rankData,
+                 double *elemData,
+                 double **gridData);
+
+// Generate a surface mesh
+int mesh_surfaceMeshData(void *aimInfo, const mapAttrToIndexStruct *groupMap, aimMesh *mesh);
 
 #ifdef __cplusplus
 }

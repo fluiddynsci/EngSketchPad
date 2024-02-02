@@ -25,7 +25,10 @@ problem = pyCAPS.Problem(problemName = os.path.join(str(args.workDir[0]), "Plato
 aflr2 = problem.analysis.create(aim='aflr2AIM', name='aflr2')
 
 # Set new EGADS body tessellation parameters
-aflr2.input.Tess_Params = [0.5, 0.001, 20.0]
+aflr2.input.Tess_Params = [0.75, 0.001, 20.0]
+
+# Turn on Quad meshing
+aflr2.input.Mesh_Gen_Input_String = "mquad=1 mpp=3"
 
 # Make the plato AIM
 plato = problem.analysis.create(aim='platoAIM', name='plato')

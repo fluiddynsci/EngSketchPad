@@ -6,7 +6,7 @@
 #                                                                 #
 ###################################################################
 
-# Copyright (C) 2022  John F. Dannenhoffer, III (Syracuse University)
+# Copyright (C) 2024  John F. Dannenhoffer, III (Syracuse University)
 #
 # This library is free software; you can redistribute it and/or
 #    modify it under the terms of the GNU Lesser General Public
@@ -1611,10 +1611,10 @@ class Ocsm(object):
             ibody       Body index (1:nbody)
             seltype     ocsm.EDGE or ocsm.FACE
             iselect     iedge or iface
-            npnt        number of points
-            xyz         x[0], y[0], z[0], x[1], ... z[npnt-1]
+            npnt        number of points (if <0, all starting locns)
+            xyz         x[0], y[0], z[0], x[1], ... z[abs(npnt)-1]
         outputs:
-            uv          u[0], v[0], u[1], ... v[npnt-1]
+            uv          u[0], v[0], u[1], ... v[abs(npnt)-1]
         """
         _ocsm.ocsmGetUV.argtypes = [ctypes.c_void_p,
                                     ctypes.c_int,
@@ -1625,16 +1625,16 @@ class Ocsm(object):
                                     ctypes.POINTER(ctypes.c_double)]
         _ocsm.ocsmGetUV.restype  =  ctypes.c_int
 
-        xyz_ = (ctypes.c_double * (3*npnt))(*xyz)
-        uv   = (ctypes.c_double * (2*npnt))()
+        xyz_ = (ctypes.c_double * (3*abs(npnt)))(*xyz)
+        uv   = (ctypes.c_double * (2*abs(npnt)))()
 
         status = _ocsm.ocsmGetUV(self._modl, ibody, seltype, iselect, npnt, xyz_, uv)
         _processStatus(status, "GetUV")
 
         if (seltype == EDGE):
-            return list(uv[0:npnt])
+            return list(uv[0:abs(npnt)])
         else:
-            return list(uv[0:2*npnt])
+            return list(uv[0:2*abs(npnt)])
 
 # ======================================================================
 

@@ -3,7 +3,7 @@
  *
  *             Analysis Object Functions
  *
- * *      Copyright 2014-2023, Massachusetts Institute of Technology
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -57,7 +57,7 @@ extern int   caps_statFile(const char *path);
 extern int   caps_mkDir(const char *path);
 extern int   caps_rmDir(const char *path);
 extern int   caps_rename(const char *src, const char *dst);
-extern int   caps_rmCLink(const char *path);
+extern int   caps_rmCLink(capsProblem *problem, const char *path);
 extern int   caps_isNameOK(const char *name);
 extern int   caps_dumpAnalysis(capsProblem *problem, capsObject *aobject);
 extern int   caps_writeBound(const capsObject *bobject);
@@ -4186,6 +4186,13 @@ caps_preAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors)
     return status;
   }
 
+  /* running preAnalysis means reload is no longer viable */
+  analysis->reload = 0;
+
+  /* remove Clink */
+  stat = caps_rmCLink(problem, analysis->fullPath);
+  if (stat != CAPS_SUCCESS) return stat;
+
   /* update AIM's internal state? */
   status = caps_updateState(aobject, nErr, errors);
   if (status != CAPS_SUCCESS) return status;
@@ -4250,13 +4257,6 @@ caps_preAnalysiX(capsObject *aobject, int *nErr, capsErrs **errors)
 
   /* geometry, AnalysisIn, and DataSets are all clean */
   if (status == 0) return CAPS_CLEAN;
-
-  /* running preAnalysis means reload is no longer viable */
-  analysis->reload = 0;
-
-  /* remove Clink */
-  stat = caps_rmCLink(analysis->fullPath);
-  if (stat != CAPS_SUCCESS) return stat;
 
   /* do it! */
   analysis->info.funID = AIM_PREANALYSIS;

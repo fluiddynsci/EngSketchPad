@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -58,8 +58,6 @@ static void       spec_col(float scalar, float out[]);
 /* macros (including those that go along with common.h)                */
 /*                                                                     */
 /***********************************************************************/
-
-static void *realloc_temp=NULL;            /* used by RALLOC macro */
 
 #define  RED(COLOR)      (float)(COLOR / 0x10000        ) / (float)(255)
 #define  GREEN(COLOR)    (float)(COLOR / 0x00100 % 0x100) / (float)(255)
@@ -2829,6 +2827,7 @@ addToSgMetaData(int   *sgMetaDataUsed,  /* (both)SG data used so far */
 {
     int      status=SUCCESS, newchars;
 
+    void     *realloc_temp = NULL;            /* used by RALLOC macro */
     va_list  args;
 
     ROUTINE(addToSgMetaData);

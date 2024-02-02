@@ -187,7 +187,7 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     AIM_STATUS(aimInfo, status);
 
     // Mesh reference passed to solver
-    status = aim_initMeshRef(&aflr2Instance->meshRef);
+    status = aim_initMeshRef(&aflr2Instance->meshRef, aimAreaMesh);
     AIM_STATUS(aimInfo, status);
 
 cleanup:
@@ -379,10 +379,6 @@ int aimUpdateState(void *instStore, void *aimInfo,
     }
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
-    // remove previous meshes
-    status = aim_deleteMeshes(aimInfo, &aflr2Instance->meshRef);
-    AIM_STATUS(aimInfo, status);
-
     // Cleanup previous aimStorage for the instance in case this is the
     //         second time through aimUpdateState for the same instance
     status = destroy_aimStorage(aflr2Instance, (int)true);
@@ -573,6 +569,10 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
         return CAPS_SOURCEERR;
     }
     AIM_NOTNULL(aimInputs, aimInfo, status);
+
+    // remove previous meshes
+    status = aim_deleteMeshes(aimInfo, &aflr2Instance->meshRef);
+    AIM_STATUS(aimInfo, status);
 
     // Allocate surfaceMesh from number of bodies
     numSurface = numBody;
@@ -792,7 +792,7 @@ int aimPostAnalysis(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
     // Get the global index in the full 2D mesh
     if (localIndex == 0) {
-      status = EG_localToGlobal(tess, localIndex, topoIndex, &iglobal);
+      status = EG_localToGlobal(tess, 0, topoIndex, &iglobal);
       AIM_STATUS(aimInfo, status);
     } else if (topoIndex > 0) {
       status = EG_localToGlobal(tess, -topoIndex, localIndex, &iglobal);

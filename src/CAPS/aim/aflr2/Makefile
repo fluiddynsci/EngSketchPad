@@ -28,7 +28,7 @@ endif
 
 AFLR2_LIB  = -laflr2c -legen
 AFLR2_LIB += -lrec2 -ldftr2 -ldftr3 -ldgeom -lotb -lqtb
-AFLR2_LIB += -lug_io -lug_cpp -lice2 -lug2 -lug3 -lug_gq -lug
+AFLR2_LIB += -lug_io -lug_cpp -lice2 -lug3 -lug2 -lug_gq -lug
 
 ifeq ("$(ESP_ARCH)","LINUX64")
 AFLR2_LIB += -lrt

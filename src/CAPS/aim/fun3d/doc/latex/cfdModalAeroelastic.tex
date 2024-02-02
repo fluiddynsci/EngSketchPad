@@ -1,0 +1,38 @@
+Structure for the modal aeroelastic tuple = (\char`\"{}\+Eigen\+Vector\+\_\+\#\char`\"{}, \char`\"{}\+Value\char`\"{}). The tuple name \char`\"{}\+Eigen\+Vector\+\_\+\#\char`\"{} defines the eigen-\/vector in which the supplied information corresponds to, where \char`\"{}\#\char`\"{} should be replaced by the corresponding mode number for the eigen-\/vector (eg. Eigen\+Vector\+\_\+3 would correspond to the third mode, while Eigen\+Vector\+\_\+6 would be the sixth mode). This notation is the same as found in \mbox{\hyperlink{dataTransferFUN3D}{FUN3D Data Transfer}}. The \char`\"{}\+Value\char`\"{} must be a JSON String dictionary (see Section \mbox{\hyperlink{cfdModalAeroelastic_jsonStringcfdModalAeroelastic}{JSON String Dictionary}}).\hypertarget{cfdModalAeroelastic_jsonStringcfdModalAeroelastic}{}\doxysubsection{JSON String Dictionary}\label{cfdModalAeroelastic_jsonStringcfdModalAeroelastic}
+If \char`\"{}\+Value\char`\"{} is a JSON string dictionary (eg. \char`\"{}\+Value\char`\"{} = \{\char`\"{}general\+Mass\char`\"{}\+: 1.\+0, \char`\"{}frequency\char`\"{}\+: 10.\+7\}) the following keywords ( = default values) may be used\+:
+
+
+\begin{DoxyItemize}
+\item {\bfseries{frequency = 0.\+0}}  ~\newline
+ This is the frequency of specified mode, in rad/sec. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{damping = 0.\+0}}  ~\newline
+ The critical damping ratio of the mode. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{general\+Mass = 0.\+0}}  ~\newline
+ The generalized mass of the mode. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{general\+Displacement = 0.\+0}}  ~\newline
+ The generalized displacement used at the starting time step to perturb the mode and excite a dynamic response. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{general\+Velocity = 0.\+0}}  ~\newline
+ The generalized velocity used at the starting time step to perturb the mode and excite a dynamic response. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{general\+Force = 0.\+0}}  ~\newline
+ The generalized force used at the starting time step to perturb the mode and excite a dynamic response. 
+\end{DoxyItemize}

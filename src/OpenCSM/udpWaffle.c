@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -80,8 +80,8 @@ typedef struct {
 } seg_T;
 
 /* prototype for function defined below */
-static int processSegments(int iudp,                int *npnt, pnt_T *pnt_p[], int *nseg, seg_T *seg_p[]);
-static int processFile(ego context, char message[], int *npnt, pnt_T *pnt_p[], int *nseg, seg_T *seg_p[]);
+static int processSegments(int iudp,                int *npnt, pnt_T *pnt_p[], int *nseg, seg_T *seg_p[], int *NumUdp, udp_T *udps);
+static int processFile(ego context, char message[], int *npnt, pnt_T *pnt_p[], int *nseg, seg_T *seg_p[], int *NumUdp, udp_T *udps);
 static int modifySegments(                          int *npnt, pnt_T *pnt_p[], int *nseg, seg_T *seg_p[], char message[]);
 static int getToken(char *text, int nskip, char sep, int maxtok, char *token);
 
@@ -116,6 +116,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     char    *message=NULL;
     ego     *enodes=NULL, *eedges=NULL, *efaces=NULL, ecurve, echild[4], eloop, eshell;
     ego     *ewires=NULL;
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 
@@ -187,12 +188,12 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* if filename is given, process the file */
     if (STRLEN(FILENAME(numUdp)) > 0) {
-        status = processFile(context, message, &npnt, &pnt, &nseg, &seg);
+        status = processFile(context, message, &npnt, &pnt, &nseg, &seg, NumUdp, udps);
         CHECK_STATUS(processFile);
 
     /* otherwise, process the Segments */
     } else {
-        status = processSegments(0, &npnt, &pnt, &nseg, &seg);
+        status = processSegments(0, &npnt, &pnt, &nseg, &seg, NumUdp, udps);
         CHECK_STATUS(processSegments);
     }
 
@@ -558,7 +559,9 @@ processSegments(int    iudp,            /* (in)  udp index */
                 int    *npnt,           /* (out) number of Points */
                 pnt_T  *pnt_p[],        /* (out) array  of Points */
                 int    *nseg,           /* (both)number of Segments */
-                seg_T  *seg_p[])        /* (out) array  of Segments */
+                seg_T  *seg_p[],        /* (out) array  of Segments */
+    /*@unused@*/int    *NumUdp,
+                udp_T  *udps)
 {
     int     status = EGADS_SUCCESS;
 
@@ -602,6 +605,7 @@ processSegments(int    iudp,            /* (in)  udp index */
             pnt[*npnt].x_dot = SEGMENTS_DOT(iudp,4*iseg  );
             pnt[*npnt].y     = SEGMENTS(    iudp,4*iseg+1);
             pnt[*npnt].y_dot = SEGMENTS_DOT(iudp,4*iseg+1);
+            pnt[*npnt].name[0] = '\0';
             (*npnt)++;
         }
 
@@ -623,6 +627,7 @@ processSegments(int    iudp,            /* (in)  udp index */
             pnt[*npnt].x_dot = SEGMENTS_DOT(iudp,4*iseg+2);
             pnt[*npnt].y     = SEGMENTS(    iudp,4*iseg+3);
             pnt[*npnt].y_dot = SEGMENTS_DOT(iudp,4*iseg+3);
+            pnt[*npnt].name[0] = '\0';
             (*npnt)++;
         }
 
@@ -673,6 +678,8 @@ cleanup:
     CLINE  -------------- same as LINE ---------------- creates construction line ...
     SET    varname expression                           sets varname to expression
     PATBEG varname ncopy                                loops ncopy times with varname=1,...,ncopy
+    PATBREAK val1 op val2                               op is LT LE EQ GE GT or NE
+                                                        breaks if (val1 op val2) > 0
     PATEND
     IFTHEN val1 op val2                                 op is LT LE EQ GE GT or NE
     ENDIF
@@ -684,20 +691,21 @@ processFile(ego    context,             /* (in)  EGADS context */
             int    *npnt,               /* (out) number of Points */
             pnt_T  *pnt_p[],            /* (out) array  of Points */
             int    *nseg,               /* (both)number of Segments */
-            seg_T  *seg_p[])            /* (out) array  of Segments */
+            seg_T  *seg_p[],            /* (out) array  of Segments */
+            int    *NumUdp,
+            udp_T  *udps)
 {
     int    status = EGADS_SUCCESS;      /* (out) default return */
 
-    int    nbrch, npmtr, npmtr_save, ipmtr, nbody, type, nrow, ncol, itoken, ichar;
+    int    nbrch, npmtr, npmtr_save=999999, ipmtr, nbody, type, nrow, ncol, itoken, ichar;
     int    mpnt=0, ipnt, jpnt, mseg=0, iseg, jseg, ibeg, iend, jbeg, jend, itype;
-    int    mline, nline=0, i;
+    int    mline, nline=0, mset=0, nset=0, i, *set_pmtr=NULL;
     int    *begline=NULL, *endline=NULL;
     int    pat_pmtr[ ]={ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     int    pat_value[]={ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     int    pat_end[  ]={-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
     long   pat_seek[ ]={ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    int    set_pmtr[ ]={ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    int    istream, ieof, iskip, ifthen, npat=0, nset=0, outLevel;
+    int    istream, ieof, iskip, ifthen, npat=0, patbreak, outLevel;
     double xloc,     yloc,     xvalue,     yvalue,     value,     val1,     val2;
     double xloc_dot, yloc_dot, xvalue_dot, yvalue_dot, value_dot, val1_dot, val2_dot;
     double frac,     N,     D,     s,     dist,     dx,     dy,     alen;
@@ -706,8 +714,9 @@ processFile(ego    context,             /* (in)  EGADS context */
     seg_T  *seg=NULL;
     char   templine[256], token[256], pname1[256], pname2[256], lname1[256], lname2[256];
     char   *filename, name[MAX_NAME_LEN], str[256];
-    modl_T *MODL;
+    modl_T *MODL=NULL;
     void   *modl;
+    void   *realloc_temp = NULL;            /* used by RALLOC macro */
     FILE   *fp=NULL;
 
     ROUTINE(processFile);
@@ -1489,13 +1498,12 @@ processFile(ego    context,             /* (in)  EGADS context */
         } else if (strcmp(token, "set") == 0 ||
                    strcmp(token, "SET") == 0   ) {
 
-            if (nset < 9) {
-                nset++;
-            } else {
-                snprintf(message, 1024, "can only have 10 SET statements\nwhile processing: %s", templine);
-                status = EGADS_RANGERR;
-                goto cleanup;
+            if (nset >= mset) {
+                mset += 10;
+                RALLOC(set_pmtr, int, mset);
             }
+
+            SPLINT_CHECK_FOR_NULL(set_pmtr);
 
             /* get the expression */
             status = getToken(templine, 2, ' ', 255, token);
@@ -1597,6 +1605,87 @@ processFile(ego    context,             /* (in)  EGADS context */
 
             MODL->pmtr[pat_pmtr[npat]].value[0] = pat_value[npat];
 
+        } else if (strcmp(token, "patbreak") == 0 ||
+                   strcmp(token, "PATBREAK") == 0   ) {
+
+            if (pat_end[npat] < 0) {
+                snprintf(message, 1024, "PATBREAK without PATBEG\nwhile processing: %s", templine);
+                status = EGADS_RANGERR;
+                goto cleanup;
+            }
+
+            if (iskip > 0) {
+                iskip--;
+                continue;
+            }
+
+            /* if the expression is not positive, get the next line */
+            /* get val1, op, and val2 */
+            status = getToken(templine, 1, ' ', 256, token);
+            if (status < SUCCESS) {
+                snprintf(message, 1024, "cannot find first token\nwhile processing: %s", templine);
+                goto cleanup;
+            }
+
+            status = ocsmEvalExpr(MODL, token, &val1, &val1_dot, str);
+            if (status < SUCCESS) {
+                snprintf(message, 1024, "cannot evaluate \"%s\"\nwhile processing: %s", token, templine);
+                goto cleanup;
+            }
+
+            status = getToken(templine, 3, ' ', 256, token);
+            if (status < SUCCESS) {
+                snprintf(message, 1024, "cannot find third token\nwhile processing: %s", templine);
+                goto cleanup;
+            }
+
+            status = ocsmEvalExpr(MODL, token, &val2, &val2_dot, str);
+            if (status < SUCCESS) {
+                snprintf(message, 1024, "cannot evaluate \"%s\"\nwhile processing: %s", token, templine);
+                goto cleanup;
+            }
+
+            status = getToken(templine, 2, ' ', 256, token);
+            if (status < SUCCESS) {
+                snprintf(message, 1024, "cannot find second token\nwhile processing: %s", templine);
+                goto cleanup;
+            }
+
+            patbreak = 0;
+            if (strcmp(token, "lt") == 0 || strcmp(token, "LT") == 0) {
+                if (val1 < val2) {
+                    patbreak = 1;
+                }
+            } else if (strcmp(token, "le") == 0 || strcmp(token, "LE") == 0) {
+                if (val1 <= val2) {
+                    patbreak = 1;
+                }
+            } else if (strcmp(token, "eq") == 0 || strcmp(token, "EQ") == 0) {
+                if (val1 == val2) {
+                    patbreak = 1;
+                }
+            } else if (strcmp(token, "ge") == 0 || strcmp(token, "GE") == 0) {
+                if (val1 >= val2) {
+                    patbreak = 1;
+                }
+            } else if (strcmp(token, "gt") == 0 || strcmp(token, "GT") == 0) {
+                if (val1 > val2) {
+                    patbreak = 1;
+                }
+            } else if (strcmp(token, "ne") == 0 || strcmp(token, "NE") == 0) {
+                if (val1 != val2) {
+                    patbreak = 1;
+                }
+            } else {
+                snprintf(message, 1024, "op must be LT LE EQ GE GT or NE\nwhile processing: %s", templine);
+                status = EGADS_RANGERR;
+                goto cleanup;
+            }
+
+            if (patbreak == 1) {
+                iskip++;
+            }
+
         } else if (strcmp(token, "patend") == 0 ||
                    strcmp(token, "PATEND") == 0   ) {
 
@@ -1638,7 +1727,7 @@ processFile(ego    context,             /* (in)  EGADS context */
         } else if (strcmp(token, "ifthen") == 0 ||
                    strcmp(token, "IFTHEN") == 0   ) {
 
-            /* get val1, op and val2 */
+            /* get val1, op, and val2 */
             status = getToken(templine, 1, ' ', 256, token);
             if (status < SUCCESS) {
                 snprintf(message, 1024, "cannot find first token\nwhile processing: %s", templine);
@@ -1725,19 +1814,21 @@ processFile(ego    context,             /* (in)  EGADS context */
 #endif
     }
 
-    /* delete any Parameters that were added */
-    status = ocsmInfo(MODL, &nbrch, &npmtr, &nbody);
-    CHECK_STATUS(ocsmInfo);
+cleanup:
 
-    for (ipmtr = npmtr; ipmtr > npmtr_save; ipmtr--) {
-        status = ocsmDelPmtr(MODL, ipmtr);
-        CHECK_STATUS(ocsmDelPmtr);
+    /* delete any Parameters that were added */
+    if (MODL != NULL) {
+        (void) ocsmInfo(MODL, &nbrch, &npmtr, &nbody);
+
+        for (ipmtr = npmtr; ipmtr > npmtr_save; ipmtr--) {
+            (void) ocsmDelPmtr(MODL, ipmtr);
+        }
     }
 
-cleanup:
     /*@ignore@*/
     FREE(begline);
     FREE(endline);
+    FREE(set_pmtr);
     /*@end@*/
 
     /* return pointers to freeable memory */
@@ -1774,6 +1865,7 @@ modifySegments(int     *npnt,           /* (both) number of points */
     int     ibeg, iend, jbeg, jend, jpnt, mpnt, mseg, iter, nchange, iattr;
     double  N,     D,     s,     t,     xx,     yy,     frac, dist;
     double  N_dot, D_dot, s_dot,        xx_dot, yy_dot;
+    void    *realloc_temp = NULL;            /* used by RALLOC macro */
 
     ROUTINE(modifySegments);
 
@@ -1869,6 +1961,7 @@ modifySegments(int     *npnt,           /* (both) number of points */
                         (*pnt)[*npnt].x_dot = xx_dot;
                         (*pnt)[*npnt].y     = yy;
                         (*pnt)[*npnt].y_dot = yy_dot;
+                        (*pnt)[*npnt].name[0] = '\0';
                         (*npnt)++;
                     }
 
@@ -2245,14 +2338,14 @@ udpSensitivity(ego    ebody,            /* (in)  Body pointer */
     /* re-process the Segments (to propagate the velocities) */
     if (STRLEN(FILENAME(iudp)) > 0) {
         outLevel_save = ocsmSetOutLevel(0);
-        status = processFile(context, message, &npnt, &pnt, &nseg, &seg);
+        status = processFile(context, message, &npnt, &pnt, &nseg, &seg, NumUdp, udps);
         CHECK_STATUS(processFile);
         (void) ocsmSetOutLevel(outLevel_save);
 
         status = modifySegments(&npnt, &pnt, &nseg, &seg, message);
         CHECK_STATUS(modifySegments);
     } else {
-        status = processSegments(iudp, &npnt, &pnt, &nseg, &seg);
+        status = processSegments(iudp, &npnt, &pnt, &nseg, &seg, NumUdp, udps);
         CHECK_STATUS(processSegments);
 
         status = modifySegments(&npnt, &pnt, &nseg, &seg, message);

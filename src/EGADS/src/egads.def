@@ -24,6 +24,7 @@ EG_setFixedKnots
 EG_setFullAttrs
 EG_getInfo
 EG_copyObject
+EG_contextCopy
 EG_flipObject
 EG_close
 EG_setUserPointer
@@ -116,6 +117,7 @@ EG_sewFaces
 EG_makeNmWireBody
 EG_replaceFaces
 EG_mapBody
+EG_mapBody2
 EG_matchBodyEdges
 EG_matchBodyFaces
 EG_fillTris

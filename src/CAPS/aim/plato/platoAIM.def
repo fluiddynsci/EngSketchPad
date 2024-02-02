@@ -1,4 +1,4 @@
-LIBRARY su2AIM
+LIBRARY platoAIM
 EXPORTS
 aimInitialize
 aimCleanup

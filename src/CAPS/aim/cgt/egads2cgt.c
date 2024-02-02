@@ -6,10 +6,10 @@
  *                with FaceID in Component field
  *         TESS   information about vertex/geometry ownership
  *         PLOT3D structured surface grid file from quadding algorithm
- *         PLOT3D structured surface grid file from direct uv parameters space 
+ *         PLOT3D structured surface grid file from direct uv parameters space
  *                evaluation (untrimmed)
  *
- *      Copyright 2011-2023, Massachusetts Institute of Technology
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -78,7 +78,7 @@ static double ggf    = 1.2;
 static void addSeg(int *nSeg, parmSeg *segs, parmSeg seg)
 {
   parmSeg *link;
-  
+
   if (*nSeg >= MAXSEG) {
     printf(" ERROR: No more room for Segments!\n");
     exit(EXIT_FAILURE);
@@ -108,10 +108,10 @@ static void addFront(parmSeg **frontsx, parmSeg **poolx, double params[2],
                      double alen, double size, /*@null@*/ parmSeg *connect)
 {
   parmSeg *seg, *fronts, *pool, *link;
-  
+
   fronts = *frontsx;
   pool   = *poolx;
-  
+
   /* get a free segment */
   if (pool != NULL) {
     seg  = pool;
@@ -136,7 +136,7 @@ static void addFront(parmSeg **frontsx, parmSeg **poolx, double params[2],
     while (link->next != NULL) link = link->next;
     link->next = seg;
   }
-  
+
   *frontsx = fronts;
   *poolx   = pool;
 }
@@ -146,15 +146,15 @@ static void delFront(parmSeg **frontsx, parmSeg **poolx, parmSeg *front)
 {
   int     hit = 0;
   parmSeg *fronts, *pool, *link, *last;
-  
+
   fronts = *frontsx;
   pool   = *poolx;
-  
+
   if (front == NULL) {
     printf(" ERROR: NULL Front to delete!\n");
     exit(EXIT_FAILURE);
   }
-  
+
   /* delete a segment */
   if (front == fronts) {
     fronts = front->next;
@@ -175,7 +175,7 @@ static void delFront(parmSeg **frontsx, parmSeg **poolx, parmSeg *front)
     printf(" ERROR: Front not found to delete!\n");
     exit(EXIT_FAILURE);
   }
-  
+
   front->next = NULL;
   if (pool == NULL) {
     pool = front;
@@ -184,7 +184,7 @@ static void delFront(parmSeg **frontsx, parmSeg **poolx, parmSeg *front)
     while (link->next != NULL) link = link->next;
     link->next = front;
   }
-  
+
   *frontsx = fronts;
   *poolx   = pool;
 }
@@ -193,7 +193,7 @@ static void delFront(parmSeg **frontsx, parmSeg **poolx, parmSeg *front)
 static void freeFront(/*@null@*/ parmSeg *fronts, /*@null@*/ parmSeg *pool)
 {
   parmSeg *link, *last;
-  
+
   if (fronts != NULL) {
     link = fronts;
     while (link != NULL) {
@@ -202,7 +202,7 @@ static void freeFront(/*@null@*/ parmSeg *fronts, /*@null@*/ parmSeg *pool)
       EG_free(last);
     }
   }
-  
+
   if (pool != NULL) {
     link = pool;
     while (link != NULL) {
@@ -297,7 +297,7 @@ bodyTessellation(ego tess, int nface, int *nvert, double **verts,
             table[2*npts+1] = 0;
             break;
           }
-      
+
       npts++;
     }
 
@@ -420,10 +420,10 @@ static void writeAttr(FILE *fp, ego obj, /*@null@*/ char *filter)
   const int    *ints;
   const double *reals;
   const char   *name, *str;
-  
+
   stat = EG_attributeNum(obj, &nattr);
   if (stat != EGADS_SUCCESS) return;
-  
+
   for (n = i = 0; i < nattr; i++) {
     stat = EG_attributeGet(obj, i+1, &name, &atype, &alen, &ints, &reals, &str);
     if (stat != EGADS_SUCCESS) continue;
@@ -481,16 +481,16 @@ static void getNodeSpacing(ego tess, int nedge, ego *edges, double *spacing)
   double       dist, range[2];
   const double *xyzs, *ts;
   ego          body, geom, *objs;
-  
+
   /* compute the smallest segment spacing touching a Node from the Edge
      tessellations */
-   
+
   status = EG_statusTessBody(tess, &body, &n, &nvert);
   if (status != EGADS_SUCCESS) {
     printf(" EG_statusTessBody = %d (getNodeSpacing)!\n", status);
     return;
   }
-  
+
   for (i = 0; i < nedge; i++) {
     status = EG_getTopology(edges[i], &geom, &oclass, &mtype, range, &n, &objs,
                             &senses);
@@ -499,7 +499,7 @@ static void getNodeSpacing(ego tess, int nedge, ego *edges, double *spacing)
       continue;
     }
     if (mtype == DEGENERATE) continue;
-    
+
     status = EG_getTessEdge(tess, i+1, &m, &xyzs, &ts);
     if (status != EGADS_SUCCESS) {
       printf(" %d: EG_getTessEdge = %d (getNodeSpacing)!\n", i+1, status);
@@ -519,7 +519,7 @@ static void getNodeSpacing(ego tess, int nedge, ego *edges, double *spacing)
     } else {
       if (dist < spacing[j-1]) spacing[j-1] = dist;
     }
-    
+
     if (mtype == TWONODE) j = EG_indexBodyTopo(body, objs[1]);
     if (j <= EGADS_SUCCESS) {
       printf(" %d: EG_indexBodyTopo 1 = %d (getNodeSpacing)!\n", i+1, status);
@@ -540,13 +540,13 @@ static void getNodeSpacing(ego tess, int nedge, ego *edges, double *spacing)
 static void fillIn(double parm, double delta, int *n, double *parms)
 {
   int i, ii, hit;
-  
+
   /* adjust the parameter sequence by inserting Node positions and spacing
      before, after or both */
-  
+
   for (i = 0; i < *n; i++)
     if (parms[i] > parm) break;
-  
+
   ii = i-1;
   if (ii == -1) ii = 0;
   if (i  == *n) i  = *n-1;
@@ -570,7 +570,7 @@ static void fillIn(double parm, double delta, int *n, double *parms)
     printf(" Add @ %d", hit);
 #endif
   }
-  
+
   /* look forward */
   if (hit != *n-1)
     if (parms[hit+1]-parms[hit] > 2.0*delta) {
@@ -582,7 +582,7 @@ static void fillIn(double parm, double delta, int *n, double *parms)
       printf(" Add+");
 #endif
     }
-  
+
   /* look back */
   if (hit != 0)
     if (parms[hit]-parms[hit-1] > 2.0*delta) {
@@ -607,10 +607,10 @@ static void insertNodeSpacing(ego tess, ego face, int iface, double *spacing,
   double       udist, vdist, result[18], *u1, *v1;
   const int    *pindex, *ptype, *tris, *tric;
   const double *xyzs, *uvs;
-  
+
   u1 = &result[3];
   v1 = &result[6];
-  
+
   status = EG_getTessFace(tess, iface, &m, &xyzs, &uvs, &ptype, &pindex,
                           &n, &tris, &tric);
   if (status != EGADS_SUCCESS) {
@@ -650,7 +650,7 @@ static void dumpFront(int nSeg, parmSeg *segs, parmSeg *front)
 {
   int     i;
   parmSeg *link;
-  
+
   link = front;
   while (link != NULL) {
     printf(" F %lx  parms = %lf %lf,  len = %lf\n    size = %lf  connect = %lx\n",
@@ -673,13 +673,13 @@ static void patchSeg(int nSeg, parmSeg *segs, parmSeg **frontx,
 {
   int     i;
   parmSeg *front, *pool, *last, *link;
-  
+
   /* look in our current segments */
   for (i = 0; i < nSeg; i++) {
     if (fabs(fill->parms[0] - segs[i].parms[1]) < FUZZ) fill->prev = &segs[i];
     if (fabs(fill->parms[1] - segs[i].parms[0]) < FUZZ) fill->next = &segs[i];
   }
-  
+
   front = *frontx;
   pool  = *poolx;
 
@@ -695,7 +695,7 @@ static void patchSeg(int nSeg, parmSeg *segs, parmSeg **frontx,
         delFront(&front, &pool, last);
     }
   }
-  
+
   *frontx = front;
   *poolx  = pool;
 }
@@ -707,7 +707,7 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
   double  smals, ave, alen, dist, qi, pi, size, fra, params[2], al[MAXUVS];
   parmSeg segs[MAXSEG], seg, *link, *smallest, *other;
   parmSeg *first = NULL, *front = NULL, *pool = NULL;
-  
+
   n = *np;
   if (n <= 2) return;
   al[0] = 0.0;
@@ -715,7 +715,7 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
     mark[i] = 1;               /* available */
     al[i+1] = al[i] + r[i];    /* compute segment arclength */
   }
-  
+
   /* get the smallest & average segment */
   smals = ave = r[0];
   j     = 0;
@@ -728,7 +728,7 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
   }
   ave /= (n-1);
   if (fabs(smals-ave)/ave < 0.1) return;
-  
+
   /* add the first segment */
   seg.prev     = NULL;
   seg.parms[0] = parms[j];
@@ -769,7 +769,7 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
     params[1] = -1.0;
     addFront(&front, &pool, params, al[n-1], r[n-2], NULL);
   }
-  
+
   do {
     smals *= fact;
     /* first look at available original segments */
@@ -790,7 +790,7 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
     printf(" next = %d  ave = %lf  small = %lf  nSeg = %d\n",
            j, ave, smals, nSeg);
 #endif
-    
+
     if (j != -1) {
       /* add the next segment */
       seg.prev     = NULL;
@@ -817,14 +817,14 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
       continue;
     }
     if (front == NULL) continue;
-      
+
     /* now find the smallest front segment */
     smallest = link = front;
     while (link != NULL) {
       if (smallest->size > link->size) smallest = link;
       link = link->next;
     }
-  
+
     /* look ahead for fronts colliding */
     link  = front;
     ave   = al[n-1];
@@ -868,7 +868,7 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
           smallest = other;
           other    = link;
         }
-        
+
         /* mark original segments */
         alen = smallest->alen;
         for (j = 0; j < n-1; j++)
@@ -907,7 +907,7 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
           }
           mark[i] = 0;
         }
-        
+
         /* make new segments -- scale parameter by arcLength */
         alen = 0.0;
         qi   = smallest->size;
@@ -942,7 +942,7 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
         continue;
       }
     }
-    
+
     /* add a single segment from the front's smallest */
     smals = fact*smallest->size;
     alen  = smallest->parms[1]*smals + smallest->alen;
@@ -978,9 +978,9 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
     addSeg(&nSeg, segs, seg);
     if (seg.parms[0] == parms[0]) first = &segs[nSeg-1];
     addFront(&front, &pool, params, alen, smals, &segs[nSeg-1]);
-    
+
   } while (front != NULL);
-  
+
   /* reset our parameter sequence from the linked list */
   if (first == NULL) {
     printf(" ERROR: No First Segment!\n");
@@ -1002,7 +1002,7 @@ static void smoothParm(int *np, double *parms, double *r, double *q, double fact
     exit(EXIT_FAILURE);
   }
   *np = nSeg+1;
-  
+
   freeFront(front, pool);
 }
 
@@ -1012,11 +1012,11 @@ static void smoothMap(ego face, double factor, UVmap *map)
   int     i, j, stat;
   double  uv[2], *u1, *v1, r[MAXUVS], q[MAXUVS], result[18];
   double  dp[3*MAXUVS], xyzs[3*MAXUVS];
-  
+
   if (factor < 1.0) return;
   u1 = &result[3];
   v1 = &result[6];
-  
+
   /* look in the U direction */
   for (i = 0; i < map->nu; i++) r[i] = q[i] = 0.0;
   for (j = 0; j < map->nv; j++) {
@@ -1092,7 +1092,7 @@ static void smoothMap(ego face, double factor, UVmap *map)
   for (i = 1; i < map->nu; i++)
     printf(" %lf  %lf  %lf   %lf\n", map->us[i], r[i-1], q[i], r[i]/r[i-1]);
 #endif
-  
+
   /* look in the V direction */
   for (j = 0; j < map->nv; j++) r[j] = q[j] = 0.0;
   for (i = 0; i < map->nu; i++) {
@@ -1175,11 +1175,11 @@ static void updateMap(ego face, double mxedg, double sag, double angle, UVmap *m
 {
   int    i, j, max, stat, cnt;
   double d, dist, dot, last, uv[2], xyz[3], *u1, *v1, result[18], xyzs[3*MAXUVS];
-  
+
   dot = cos(PI*angle/180.0);
   u1  = &result[3];
   v1  = &result[6];
-  
+
   /* sag -- look in U direction */
   do {
     max  = -1;
@@ -1224,7 +1224,7 @@ static void updateMap(ego face, double mxedg, double sag, double angle, UVmap *m
       map->nu++;
     }
   } while (max != -1);
-  
+
   /* sag -- look in V direction */
   do {
     max  = -1;
@@ -1269,7 +1269,7 @@ static void updateMap(ego face, double mxedg, double sag, double angle, UVmap *m
       map->nv++;
     }
   } while (max != -1);
-  
+
   /* angle -- look in U direction */
   last = -1.0;
   cnt  = 0;
@@ -1317,7 +1317,7 @@ static void updateMap(ego face, double mxedg, double sag, double angle, UVmap *m
     if (dist >= last) cnt++;
     last = dist;
   } while ((max != -1) && (cnt < 10)) ;
-  
+
   /* angle -- look in V direction */
   last = -1.0;
   cnt  = 0;
@@ -1365,7 +1365,7 @@ static void updateMap(ego face, double mxedg, double sag, double angle, UVmap *m
     if (dist >= last) cnt++;
     last = dist;
   } while ((max != -1) && (cnt < 10)) ;
-  
+
   /* maxedge -- look in U direction */
   do {
     max  = -1;
@@ -1402,7 +1402,7 @@ static void updateMap(ego face, double mxedg, double sag, double angle, UVmap *m
       map->nu++;
     }
   } while (max != -1);
-  
+
   /* sag -- look in V direction */
   do {
     max  = -1;
@@ -1513,11 +1513,11 @@ int main(int argc, char *argv[])
   /* look at EGADS revision */
   EG_revision(&i, &j, &OCCrev);
   printf("\n Using EGADS %2d.%02d %s\n\n", i, j, OCCrev);
-  
+
   /* get arguments */
   status = parse_args(argc, argv, ifile);
   if (status != 0) exit(status);
-  
+
   printf("mxang:    %lf\n", mxang);
   printf("mxedg:    %lf\n", mxedg);
   printf("mxchd:    %lf\n", mxchd);
@@ -1594,7 +1594,7 @@ int main(int argc, char *argv[])
       return 1;
   }
   for (i = 0; i < nbody; i++) tesses[i] = NULL;
-  
+
   /* use AFLR4? */
   if (aflr4 == 1) {
     status = aflr4egads(model, tesses);
@@ -1659,7 +1659,7 @@ int main(int argc, char *argv[])
     } else {
       tess = tesses[i];
     }
-    
+
     status = EG_getBodyTopos(bodies[i], NULL, NODE, &nnode, &nodes);
     if (status != EGADS_SUCCESS) {
       printf(" EG_getBodyTopos N %d = %d\n", i, status);
@@ -1686,7 +1686,7 @@ int main(int argc, char *argv[])
       EG_free(nodes);
       continue;
     }
-    
+
     /* ------------------- Write out tess owner file ----------------------- */
 
     status = EG_statusTessBody(tess, &body, &n, &nvert);
@@ -1730,7 +1730,7 @@ int main(int argc, char *argv[])
       continue;
     }
     printf(" Writing EGADS tess file: %s\n", trifilename);
-    
+
     /* header */
     fprintf(fp, " %6d %6d %6d %6d %6d\n", mtype, nnode, nedge, nloop, nface);
     writeAttr(fp, bodies[i], NULL);
@@ -1742,7 +1742,7 @@ int main(int argc, char *argv[])
     }
     EG_free(comp);
     EG_free(nodes);
-    
+
     /* Edges */
     for (n = 1; n <= nedge; n++) {
       status = EG_getTopology(edges[n-1], &geom, &oclass, &mtype, range, &j,
@@ -1800,7 +1800,7 @@ int main(int argc, char *argv[])
       if ((j-1)%2 != 0) fprintf(fp,"\n");
       writeAttr(fp, edges[n-1], NULL);
     }
-    
+
     /* Loops */
     for (j = 1; j <= nloop; j++) {
       status = EG_getTopology(loops[j-1], &geom, &oclass, &mtype, NULL, &m,
@@ -1816,7 +1816,7 @@ int main(int argc, char *argv[])
       writeAttr(fp, loops[j-1], NULL);
     }
     EG_free(loops);
-    
+
     /* Faces */
     for (j = 1; j <= nface; j++) {
       status = EG_getTopology(faces[j-1], &geom, &oclass, &mtype, NULL, &mm,
@@ -1846,13 +1846,13 @@ int main(int argc, char *argv[])
       writeAttr(fp, faces[j-1], NULL);
     }
     fclose(fp);
-    
+
     /* ---------- Write quads file (plot3d format) for each body ----------- */
 
     if (wrtqud == 1) {
-      
+
       qparams[0] = qparams[1] = qparams[2] = 0.0;
-      
+
       /* First count total number of quad patches to write and write to file */
       npatchtot = 0;
       EG_setOutLevel(context, 0);
@@ -1866,11 +1866,11 @@ int main(int argc, char *argv[])
       }
       EG_setOutLevel(context, 1);
       printf(" Total number of quad patches %d \n", npatchtot);
-      
+
       if (npatchtot > 0) {
         snprintf(p3dfilename, 120, "%s.%3.3d.p3d", rootname, i+1);
         printf(" Writing PLOT3D Quadded file: %s\n", p3dfilename);
-        
+
         nipatch = njpatch = NULL;
         fp      = fopen(p3dfilename, "w");
         if (fp == NULL) {
@@ -1878,7 +1878,7 @@ int main(int argc, char *argv[])
           goto bailQuad;
         }
         fprintf(fp, "%d\n", npatchtot);
-        
+
         /* Now get dimensions of all patches and write to file */
         nipatch = (int *) EG_alloc(npatchtot*sizeof(int));
         njpatch = (int *) EG_alloc(npatchtot*sizeof(int));
@@ -1886,7 +1886,7 @@ int main(int argc, char *argv[])
           printf(" Malloc ERROR on %d Patches!\n", npatchtot);
           goto bailQuad;
         }
-        
+
         EG_setOutLevel(context, 0);
         for (nn = n = 0; n < nface; n++) {
           status = EG_makeQuads(tess, qparams, n+1) ;
@@ -1899,13 +1899,13 @@ int main(int argc, char *argv[])
             }
           }
         }
-        
+
         for (ip = 0; ip < npatchtot; ip++)
           fprintf(fp, "%d %d %d\n", nipatch[ip], njpatch[ip],1);
-        
+
         /* Write x,y,z of each quad patch */
         for (nn = n = 0; n < nface; n++) {
-          
+
           status = EG_makeQuads(tess, qparams, n+1);
           if (status == EGADS_SUCCESS) {
             status = EG_getQuads(tess, n+1, &qnverts, &qxyz, &quv, &qptype,
@@ -1922,7 +1922,7 @@ int main(int argc, char *argv[])
                 }
               }
               fprintf(fp, "\n");
-              
+
               for (count = jj = 0; jj < njpatch[nn]; jj++) {
                 for (ii = 0; ii < nipatch[nn]; ii++) {
                   m = pvindex[jj*nipatch[nn] + ii] - 1;
@@ -1932,7 +1932,7 @@ int main(int argc, char *argv[])
                 }
               }
               fprintf(fp, "\n");
-              
+
               for (count = jj = 0; jj < njpatch[nn]; jj++) {
                 for (ii = 0; ii < nipatch[nn]; ii++) {
                   m = pvindex[jj*nipatch[nn] + ii] - 1;
@@ -1942,7 +1942,7 @@ int main(int argc, char *argv[])
                 }
               }
               fprintf(fp, "\n");
-              
+
             }
           }
         }
@@ -1971,12 +1971,12 @@ int main(int argc, char *argv[])
           printf(" Node %2d: spacing = %lf\n", n+1, ndist[n]);
         snprintf(uvfilename, 120, "%s.%3.3d.uv", rootname, i+1);
         printf(" Writing PLOT3D Untrimmed file: %s\n", uvfilename);
-        
+
         fp = fopen(uvfilename, "w");
         if (fp == NULL) {
           printf(" Error Opening %s!\n", uvfilename);
         } else {
-          
+
           /* write out the uv file a Face at a time */
           for (n = 0; n < nface; n++) {
             status = EG_getRange(faces[n], range, &iper);
@@ -2005,7 +2005,7 @@ int main(int argc, char *argv[])
           fprintf(fp, "%d\n", nface);
           for (n = 0; n < nface; n++)
             fprintf(fp,"%d %d %d \n", map[n].nu, map[n].nv, 1);
-          
+
           for (n = 0; n < nface; n++) {
 
             status = EG_getTopology(faces[n], &geom, &oclass, &mtype, NULL, &mm,
@@ -2014,7 +2014,7 @@ int main(int argc, char *argv[])
                printf(" Body %d: EG_getTopology F %d = %d\n", i+1, n+1, status);
                continue;
             }
-          
+
             for (dim = 0; dim < 3; dim++) {
               for (count = jj = 0; jj < map[n].nv; jj++) {
                 uv[1] = map[n].vs[jj];
@@ -2058,7 +2058,7 @@ int main(int argc, char *argv[])
                 }
                 if (count%15 != 0) fprintf(fp, "\n");
               }
-            
+
           }
           fclose(fp);
         }

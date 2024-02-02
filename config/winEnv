@@ -369,8 +369,8 @@ if [ "$PYTHONINC" != UNKNOWN ] && [ "$PYTHONLIB" != UNKNOWN ]; then
 	echo "set PYTHONLIB=\"$PYTHONLIB\""                >> tmp
 	echo "set PATH="$PYTHONINC/..";%PATH%"             >> tmp
 else
-	echo "rem set PYTHONINC=C:\Python39\include"               >> tmp
-	echo "rem set PYTHONLIB=C:\Python39\Libs\python39.lib"     >> tmp
+	echo "rem set PYTHONINC=C:\Python311\include"              >> tmp
+	echo "rem set PYTHONLIB=C:\Python311\Libs\python311.lib"   >> tmp
 	echo "rem set PATH="$PYTHONINC/..";%PATH%"                 >> tmp
 fi
 echo "set PYTHONPATH="$BASE/lib";"$BASE/pyESP";%PYTHONPATH%"       >> tmp

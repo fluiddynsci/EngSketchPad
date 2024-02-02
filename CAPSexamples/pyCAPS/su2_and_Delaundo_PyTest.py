@@ -66,7 +66,7 @@ su2.input["Mesh"].link(myProblem.analysis["delaundo"].output["Area_Mesh"])
 su2.input.Proj_Name = projectName
 
 # Set SU2 Version
-su2.input.SU2_Version = "Blackbird"
+su2.input.SU2_Version = "Harrier"
 
 # Set Physical problem
 su2.input.Physical_Problem = "Euler"

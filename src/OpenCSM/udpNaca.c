@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -96,6 +96,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     double  dxytol = 1.0e-6;
     char    *message=NULL;
     ego     enodes[4], eedges[3], ecurve, eline, eloop, eface, enew;
+    udp_T   *udps = *Udps;
 
 #ifdef GRAFIC
     float   xplot[1203], yplot[1203];

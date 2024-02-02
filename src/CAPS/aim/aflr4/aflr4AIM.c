@@ -16,7 +16,7 @@
  * unstructured, surface grid generator AFLR4 \cite Marcum1995 \cite Marcum1998.
  *
  * The AFLR4 AIM provides the CAPS users with the ability to generate "unstructured, 3D surface grids" using an
- * "Advancing-Front/Local-Reconnection (AFLR) procedure." Only triangular elements may be generated, with planned future support of quadrilateral elements.
+ * "Advancing-Front/Local-Reconnection (AFLR) procedure." Both triangular and quadrilateral elements are supported.
  *
  * An outline of the AIM's inputs, outputs and attributes are provided in \ref aimInputsAFLR4 and
  * \ref aimOutputsAFLR4 and \ref attributeAFLR4, respectively.
@@ -169,6 +169,8 @@ typedef int         pid_t;
 
 #include "aflr4_Interface.h" // Bring in AFLR4 'interface' functions
 
+#define AFLR4FILE "aflr4_%d"
+
 //#define DEBUG
 
 enum aimOutputs
@@ -184,8 +186,8 @@ enum aimOutputs
 typedef struct {
 
     // Container for surface mesh
-    int numSurface;
-    meshStruct *surfaceMesh;
+    int numMeshRef;
+    aimMeshRef *meshRef;
 
     // Container for mesh input
     meshInputStruct meshInput;
@@ -195,15 +197,15 @@ typedef struct {
 
     mapAttrToIndexStruct meshMap;
 
+    int numElemTotal;
+    int numNodeTotal;
+
 } aimStorage;
 
 
 static int destroy_aimStorage(aimStorage *aflr4Instance, int inUpdate)
 {
-
-    int i; // Indexing
-
-    int status; // Function return status
+    int i, status; // Function return status
 
     // Destroy meshInput
     status = destroy_meshInputStruct(&aflr4Instance->meshInput);
@@ -211,15 +213,16 @@ static int destroy_aimStorage(aimStorage *aflr4Instance, int inUpdate)
         printf("Status = %d, aflr4AIM meshInput cleanup!!!\n", status);
 
     // Destroy surface mesh allocated arrays
-    for (i = 0; i < aflr4Instance->numSurface; i++) {
-
-        status = destroy_meshStruct(&aflr4Instance->surfaceMesh[i]);
-        if (status != CAPS_SUCCESS)
-            printf("Status = %d, aflr4AIM surfaceMesh cleanup!!!\n", status);
-
+    for (i = 0; i < aflr4Instance->numMeshRef; i++) {
+      status = aim_freeMeshRef(&aflr4Instance->meshRef[i]);
+      if (status != CAPS_SUCCESS)
+        printf("Status = %d, aflr4AIM surfaceMesh cleanup!!!\n", status);
     }
-    aflr4Instance->numSurface = 0;
-    AIM_FREE(aflr4Instance->surfaceMesh);
+    AIM_FREE(aflr4Instance->meshRef);
+    aflr4Instance->numMeshRef = 0;
+
+    aflr4Instance->numElemTotal = 0;
+    aflr4Instance->numNodeTotal = 0;
 
     if (inUpdate == (int)true) return status;
 
@@ -408,8 +411,8 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     // Set initial values for aflrInstance
 
     // Container for surface meshes
-    aflr4Instance->surfaceMesh = NULL;
-    aflr4Instance->numSurface = 0;
+    aflr4Instance->numMeshRef = 0;
+    aflr4Instance->meshRef = NULL;
 
     // Container for attribute to index map
     status = initiate_mapAttrToIndexStruct(&aflr4Instance->meshMap);
@@ -421,6 +424,9 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     // Container for mesh input
     status = initiate_meshInputStruct(&aflr4Instance->meshInput);
     AIM_STATUS(aimInfo, status);
+
+    aflr4Instance->numElemTotal = 0;
+    aflr4Instance->numNodeTotal = 0;
 
 cleanup:
     if (status != CAPS_SUCCESS) AIM_FREE(*instStore);
@@ -961,7 +967,7 @@ int aimUpdateState(void *instStore, void *aimInfo,
 {
     int status; // Function return status
 
-    int i, bodyIndex;
+    int i, j, bodyIndex;
 
     // Body parameters
     const char *intents;
@@ -971,6 +977,10 @@ int aimUpdateState(void *instStore, void *aimInfo,
     // Mesh attribute parameters
     int numMeshProp = 0;
     meshSizingStruct *meshProp = NULL;
+
+    int MultiMesh = -1;
+    char bodyNumberFile[42];
+    char aimFile[PATH_MAX];
 
     aimStorage *aflr4Instance;
 
@@ -994,12 +1004,16 @@ int aimUpdateState(void *instStore, void *aimInfo,
     status = destroy_aimStorage(aflr4Instance, (int)true);
     AIM_STATUS(aimInfo, status);
 
-    if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") != 0 &&
-        strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") != 0 &&
-        strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiDomain") != 0) {
-        AIM_ERROR(aimInfo, "Multiple_Mesh = '%s' must be 'SingleDomain', 'MultiFile', or 'MultiDomain'", aimInputs[Multiple_Mesh-1].vals.string);
-        status = CAPS_BADVALUE;
-        goto cleanup;
+    if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
+      MultiMesh = 0;
+    } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiFile") == 0) {
+      MultiMesh = 1;
+    } else if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "MultiDomain") == 0) {
+      MultiMesh = 2;
+    } else {
+      AIM_ERROR(aimInfo, "Multiple_Mesh = '%s' must be 'SingleDomain', 'MultiFile', or 'MultiDomain'", aimInputs[Multiple_Mesh-1].vals.string);
+      status = CAPS_BADVALUE;
+      goto cleanup;
     }
 
     if (aflr4Instance->groupMap.numAttribute == 0 ||
@@ -1067,6 +1081,69 @@ int aimUpdateState(void *instStore, void *aimInfo,
         }
     }
 
+
+    if (MultiMesh == 0 || MultiMesh == 2) {
+
+      AIM_ALLOC(aflr4Instance->meshRef, 1, aimMeshRef, aimInfo, status);
+      aflr4Instance->numMeshRef = 1;
+
+      status = aim_initMeshRef(aflr4Instance->meshRef, aimSurfaceMesh);
+      AIM_STATUS(aimInfo, status);
+
+      AIM_ALLOC(aflr4Instance->meshRef[0].maps, numBody, aimMeshTessMap, aimInfo, status);
+      aflr4Instance->meshRef[0].nmap = numBody;
+
+       for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++) {
+         aflr4Instance->meshRef[0].maps[bodyIndex].tess = NULL;
+         aflr4Instance->meshRef[0].maps[bodyIndex].map = NULL;
+       }
+
+       // set the filename without extensions where the grid is written for solvers
+       bodyIndex = 0;
+       snprintf(bodyNumberFile, 42, AFLR4FILE, bodyIndex);
+       status = aim_file(aimInfo, bodyNumberFile, aimFile);
+       AIM_STATUS(aimInfo, status);
+       AIM_STRDUP(aflr4Instance->meshRef[0].fileName, aimFile, aimInfo, status);
+
+    } else  if (MultiMesh == 1) {
+
+      AIM_ALLOC(aflr4Instance->meshRef, numBody, aimMeshRef, aimInfo, status);
+      aflr4Instance->numMeshRef = numBody;
+
+      for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++) {
+        status = aim_initMeshRef(&aflr4Instance->meshRef[bodyIndex], aimSurfaceMesh);
+        AIM_STATUS(aimInfo, status);
+
+        AIM_ALLOC(aflr4Instance->meshRef[bodyIndex].maps, 1, aimMeshTessMap, aimInfo, status);
+        aflr4Instance->meshRef[bodyIndex].nmap = 1;
+
+        aflr4Instance->meshRef[bodyIndex].maps[0].tess = NULL;
+        aflr4Instance->meshRef[bodyIndex].maps[0].map = NULL;
+      }
+
+      // set the filename without extensions where the grid is written for solvers
+      snprintf(bodyNumberFile, 42, AFLR4FILE, bodyIndex);
+      status = aim_file(aimInfo, bodyNumberFile, aimFile);
+      AIM_STATUS(aimInfo, status);
+      AIM_STRDUP(aflr4Instance->meshRef[bodyIndex].fileName, aimFile, aimInfo, status);
+    }
+
+    for (i = 0; i < aflr4Instance->numMeshRef; i++) {
+
+      AIM_ALLOC(aflr4Instance->meshRef[i].bnds, aflr4Instance->groupMap.numAttribute, aimMeshBnd, aimInfo, status);
+      aflr4Instance->meshRef[i].nbnd = aflr4Instance->groupMap.numAttribute;
+      for (j = 0; j < aflr4Instance->meshRef[i].nbnd; j++) {
+        status = aim_initMeshBnd(aflr4Instance->meshRef[i].bnds + j);
+        AIM_STATUS(aimInfo, status);
+      }
+
+      for (j = 0; j < aflr4Instance->meshRef[i].nbnd; j++) {
+        AIM_STRDUP(aflr4Instance->meshRef[i].bnds[j].groupName, aflr4Instance->groupMap.attributeName[j], aimInfo, status);
+        aflr4Instance->meshRef[i].bnds[j].ID = aflr4Instance->groupMap.attributeIndex[j];
+      }
+    }
+
+
     status = CAPS_SUCCESS;
 cleanup:
 
@@ -1087,7 +1164,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 {
     int status; // Status return
 
-    int bodyIndex; // Indexing
+    int i, bodyIndex; // Indexing
     int MultiMesh = 0;
 
     // Body parameters
@@ -1097,7 +1174,6 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
     // File output
     char *filename = NULL;
-    char bodyNumber[11];
 
     const aimStorage *aflr4Instance;
 
@@ -1116,6 +1192,12 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
     aflr4Instance = (const aimStorage *) instStore;
+
+    // remove previous meshes
+    for (i = 0; i < aflr4Instance->numMeshRef; i++) {
+      status = aim_deleteMeshes(aimInfo, &aflr4Instance->meshRef[i]);
+      AIM_STATUS(aimInfo, status);
+    }
 
     if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
       MultiMesh = 0;
@@ -1152,92 +1234,6 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
         AIM_STATUS(aimInfo, status, "Problem during AFLR4 surface meshing");
     }
 
-    if (aflr4Instance->meshInput.outputFileName != NULL) {
-
-        for (bodyIndex = 0; bodyIndex < aflr4Instance->numSurface; bodyIndex++) {
-
-            if (aflr4Instance->numSurface > 1) {
-                snprintf(bodyNumber, 11, "%d", bodyIndex);
-                filename = (char *) EG_alloc((strlen(aflr4Instance->meshInput.outputFileName) +
-                                              strlen("_Surf_") + 2 +
-                                              strlen(bodyNumber))*sizeof(char));
-            } else {
-                filename = (char *) EG_alloc((strlen(aflr4Instance->meshInput.outputFileName) +
-                                              2)*sizeof(char));
-            }
-
-            if (filename == NULL) {
-                status = EGADS_MALLOC;
-                goto cleanup;
-            }
-
-            strcpy(filename, aflr4Instance->meshInput.outputFileName);
-
-            if (aflr4Instance->numSurface > 1) {
-                strcat(filename,"_Surf_");
-                strcat(filename, bodyNumber);
-            }
-
-            if (strcasecmp(aflr4Instance->meshInput.outputFormat, "AFLR3") == 0) {
-
-                status = mesh_writeAFLR3(aimInfo,
-                                         filename,
-                                         aflr4Instance->meshInput.outputASCIIFlag,
-                                         &aflr4Instance->surfaceMesh[bodyIndex],
-                                         1.0);
-
-            } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "VTK") == 0) {
-
-                status = mesh_writeVTK(aimInfo,
-                                       filename,
-                                       aflr4Instance->meshInput.outputASCIIFlag,
-                                       &aflr4Instance->surfaceMesh[bodyIndex],
-                                       1.0);
-
-            } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "Tecplot") == 0) {
-
-                status = mesh_writeTecplot(aimInfo,
-                                           filename,
-                                           aflr4Instance->meshInput.outputASCIIFlag,
-                                           &aflr4Instance->surfaceMesh[bodyIndex],
-                                           1.0);
-
-            } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "STL") == 0) {
-
-                status = mesh_writeSTL(aimInfo,
-                                       filename,
-                                       aflr4Instance->meshInput.outputASCIIFlag,
-                                       &aflr4Instance->surfaceMesh[bodyIndex],
-                                       1.0);
-
-            } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "FAST") == 0) {
-
-                status = mesh_writeFAST(aimInfo,
-                                        filename,
-                                        aflr4Instance->meshInput.outputASCIIFlag,
-                                        &aflr4Instance->surfaceMesh[bodyIndex],
-                                        1.0);
-
-            } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "ETO") == 0) {
-
-                filename = (char *) EG_reall(filename,(strlen(filename) + 5) *sizeof(char));
-                if (filename == NULL) {
-                    status = EGADS_MALLOC;
-                    goto cleanup;
-                }
-                strcat(filename,".eto");
-
-                status = EG_saveTess(aflr4Instance->surfaceMesh[bodyIndex].egadsTess, filename);
-
-            } else {
-                printf("Unrecognized mesh format, \"%s\", the volume mesh will not be written out\n", aflr4Instance->meshInput.outputFormat);
-            }
-
-            AIM_FREE(filename);
-            AIM_STATUS(aimInfo, status);
-        }
-    }
-
     status = CAPS_SUCCESS;
 
 cleanup:
@@ -1265,10 +1261,11 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
     int bodyIndex;
     int MultiMesh = 0;
 
-    int numNodeTotal=0, numElemTotal=0;
-
     int numBody = 0; // Number of bodies
     ego *bodies = NULL; // EGADS body objects
+
+    int state, nglobal, i, iglobal=1;
+    ego body;
 
     const char *intents;
     char bodyNumber[42];
@@ -1281,6 +1278,9 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
     // Combined mesh
     meshStruct combineMesh;
 
+    int numSurface = 0;
+    meshStruct *surfaceMesh=NULL;
+
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
     status = initiate_meshStruct(&combineMesh);
@@ -1292,13 +1292,13 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
     AIM_NOTNULL(bodies, aimInfo, status);
 
     // Allocate surfaceMesh from number of bodies
-    AIM_ALLOC(aflr4Instance->surfaceMesh, numBody, meshStruct, aimInfo, status);
-    aflr4Instance->numSurface = numBody;
+    AIM_ALLOC(surfaceMesh, numBody, meshStruct, aimInfo, status);
+    numSurface = numBody;
 
     // Initiate surface meshes
     for (bodyIndex = 0; bodyIndex < numBody; bodyIndex++){
-        status = initiate_meshStruct(&aflr4Instance->surfaceMesh[bodyIndex]);
-        AIM_STATUS(aimInfo, status);
+      status = initiate_meshStruct(&surfaceMesh[bodyIndex]);
+      AIM_STATUS(aimInfo, status);
     }
 
     if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
@@ -1316,54 +1316,84 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
     // Read mesh for each body
     for (bodyIndex = 0 ; bodyIndex < numBody; bodyIndex++) {
 
-        status = copy_mapAttrToIndexStruct( &aflr4Instance->groupMap,
-                                            &aflr4Instance->surfaceMesh[bodyIndex].groupMap );
+      status = copy_mapAttrToIndexStruct( &aflr4Instance->groupMap,
+                                          &surfaceMesh[bodyIndex].groupMap );
+      AIM_STATUS(aimInfo, status);
+
+      // set the file name to read the egads file
+      snprintf(bodyNumber, 42, AFLR4TESSFILE, bodyIndex);
+      status = aim_file(aimInfo, bodyNumber, aimFile);
+      AIM_STATUS(aimInfo, status);
+
+      if (MultiMesh == 0 || MultiMesh == 2) {
+
+        status = EG_loadTess(bodies[bodyIndex], aimFile, &aflr4Instance->meshRef[0].maps[bodyIndex].tess);
         AIM_STATUS(aimInfo, status);
 
-        // set the file name to read the egads file
-        snprintf(bodyNumber, 42, AFLR4TESSFILE, bodyIndex);
-        status = aim_file(aimInfo, bodyNumber, aimFile);
+        surfaceMesh[bodyIndex].egadsTess = aflr4Instance->meshRef[0].maps[bodyIndex].tess;
+        status = mesh_surfaceMeshEGADSTess(aimInfo, &surfaceMesh[bodyIndex], (int)false);
         AIM_STATUS(aimInfo, status);
 
-        status = EG_loadTess(bodies[bodyIndex], aimFile, &aflr4Instance->surfaceMesh[bodyIndex].egadsTess);
+        status = aim_newTess(aimInfo, aflr4Instance->meshRef[0].maps[bodyIndex].tess);
         AIM_STATUS(aimInfo, status);
 
-        status = mesh_surfaceMeshEGADSTess(aimInfo, &aflr4Instance->surfaceMesh[bodyIndex], (int)false);
+        status = EG_statusTessBody(aflr4Instance->meshRef[0].maps[bodyIndex].tess, &body, &state, &nglobal);
         AIM_STATUS(aimInfo, status);
 
-        status = aim_newTess(aimInfo, aflr4Instance->surfaceMesh[bodyIndex].egadsTess);
+        AIM_ALLOC(aflr4Instance->meshRef[0].maps[bodyIndex].map, nglobal, int, aimInfo, status);
+        for (i = 0; i < nglobal; i++) aflr4Instance->meshRef[0].maps[bodyIndex].map[i] = iglobal++;
+
+      } else if (MultiMesh == 1) {
+        status = EG_loadTess(bodies[bodyIndex], aimFile, &aflr4Instance->meshRef[bodyIndex].maps[0].tess);
         AIM_STATUS(aimInfo, status);
 
-        if (restart == 0 &&
-            aimInputs[Mesh_Quiet_Flag-1].vals.integer == (int)false) {
-            printf("Body %d (of %d)\n", bodyIndex+1, numBody);
+        surfaceMesh[bodyIndex].egadsTess = aflr4Instance->meshRef[bodyIndex].maps[0].tess;
+        status = mesh_surfaceMeshEGADSTess(aimInfo, &surfaceMesh[bodyIndex], (int)false);
+        AIM_STATUS(aimInfo, status);
 
-            printf("Number of nodes    = %d\n", aflr4Instance->surfaceMesh[bodyIndex].numNode);
-            printf("Number of elements = %d\n", aflr4Instance->surfaceMesh[bodyIndex].numElement);
+        status = aim_newTess(aimInfo, aflr4Instance->meshRef[bodyIndex].maps[0].tess);
+        AIM_STATUS(aimInfo, status);
 
-            if (aflr4Instance->surfaceMesh[bodyIndex].meshQuickRef.useStartIndex == (int) true ||
-                aflr4Instance->surfaceMesh[bodyIndex].meshQuickRef.useListIndex  == (int) true) {
+        status = EG_statusTessBody(aflr4Instance->meshRef[0].maps[bodyIndex].tess, &body, &state, &nglobal);
+        AIM_STATUS(aimInfo, status);
 
-                printf("Number of node elements          = %d\n",
-                       aflr4Instance->surfaceMesh[bodyIndex].meshQuickRef.numNode);
-                printf("Number of line elements          = %d\n",
-                       aflr4Instance->surfaceMesh[bodyIndex].meshQuickRef.numLine);
-                printf("Number of triangle elements      = %d\n",
-                       aflr4Instance->surfaceMesh[bodyIndex].meshQuickRef.numTriangle);
-                printf("Number of quadrilateral elements = %d\n",
-                       aflr4Instance->surfaceMesh[bodyIndex].meshQuickRef.numQuadrilateral);
-            }
+        AIM_ALLOC(aflr4Instance->meshRef[bodyIndex].maps[0].map, nglobal, int, aimInfo, status);
+        for (i = 0; i < nglobal; i++) aflr4Instance->meshRef[bodyIndex].maps[0].map[i] = iglobal++;
+      }
+    }
 
-            numNodeTotal += aflr4Instance->surfaceMesh[bodyIndex].numNode;
-            numElemTotal += aflr4Instance->surfaceMesh[bodyIndex].numElement;
+    for (bodyIndex = 0 ; bodyIndex < numBody; bodyIndex++) {
+      if (restart == 0 &&
+          aimInputs[Mesh_Quiet_Flag-1].vals.integer == (int)false) {
+
+        printf("Body %d (of %d)\n", bodyIndex+1, numBody);
+
+        printf("Number of nodes    = %d\n", surfaceMesh[bodyIndex].numNode);
+        printf("Number of elements = %d\n", surfaceMesh[bodyIndex].numElement);
+
+        if (surfaceMesh[bodyIndex].meshQuickRef.useStartIndex == (int) true ||
+            surfaceMesh[bodyIndex].meshQuickRef.useListIndex  == (int) true) {
+
+          printf("Number of node elements          = %d\n",
+                 surfaceMesh[bodyIndex].meshQuickRef.numNode);
+          printf("Number of line elements          = %d\n",
+                 surfaceMesh[bodyIndex].meshQuickRef.numLine);
+          printf("Number of triangle elements      = %d\n",
+                 surfaceMesh[bodyIndex].meshQuickRef.numTriangle);
+          printf("Number of quadrilateral elements = %d\n",
+                 surfaceMesh[bodyIndex].meshQuickRef.numQuadrilateral);
         }
+      }
+
+      aflr4Instance->numNodeTotal += surfaceMesh[bodyIndex].numNode;
+      aflr4Instance->numElemTotal += surfaceMesh[bodyIndex].numElement;
     }
 
     if (restart == 0 &&
         aimInputs[Mesh_Quiet_Flag-1].vals.integer == (int)false) {
         printf("----------------------------\n");
-        printf("Total number of nodes    = %d\n", numNodeTotal);
-        printf("Total number of elements = %d\n", numElemTotal);
+        printf("Total number of nodes    = %d\n", aflr4Instance->numNodeTotal);
+        printf("Total number of elements = %d\n", aflr4Instance->numElemTotal);
     }
 
     if (restart == 0) {
@@ -1385,16 +1415,14 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
             // We need to combine the mesh
             if (MultiMesh == 0 || MultiMesh == 2) {
 
-                status = mesh_combineMeshStruct(aflr4Instance->numSurface,
-                                                aflr4Instance->surfaceMesh,
+                status = mesh_combineMeshStruct(aimInfo,
+                                                numSurface,
+                                                surfaceMesh,
                                                 &combineMesh);
 
                 AIM_STATUS(aimInfo, status);
 
-                filename = (char *) EG_alloc((strlen(aflr4Instance->meshInput.outputFileName) +
-                                              2)*sizeof(char));
-
-                if (filename == NULL) goto cleanup;
+                AIM_ALLOC(filename, (strlen(aflr4Instance->meshInput.outputFileName) + 2), char, aimInfo, status);
 
                 strcpy(filename, aflr4Instance->meshInput.outputFileName);
 
@@ -1457,23 +1485,20 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
 
             } else {
 
-                for (bodyIndex = 0; bodyIndex < aflr4Instance->numSurface; bodyIndex++) {
+                for (bodyIndex = 0; bodyIndex < numSurface; bodyIndex++) {
 
-                    if (aflr4Instance->numSurface > 1) {
+                    if (numSurface > 1) {
                         snprintf(bodyNumber, 42, "%d", bodyIndex);
-                        filename = (char *) EG_alloc((strlen(aflr4Instance->meshInput.outputFileName)  +
-                                                      2 + strlen("_Surf_") + strlen(bodyNumber))*sizeof(char));
+                        AIM_ALLOC(filename, (strlen(aflr4Instance->meshInput.outputFileName)  +
+                                             2 + strlen("_Surf_") + strlen(bodyNumber)), char, aimInfo, status);
                     } else {
-                        filename = (char *) EG_alloc((strlen(aflr4Instance->meshInput.outputFileName) +
-                                                      2)*sizeof(char));
+                        AIM_ALLOC(filename, (strlen(aflr4Instance->meshInput.outputFileName) +
+                                             2), char, aimInfo, status);
 
                     }
-
-                    if (filename == NULL) goto cleanup;
-
                     strcpy(filename, aflr4Instance->meshInput.outputFileName);
 
-                    if (aflr4Instance->numSurface > 1) {
+                    if (numSurface > 1) {
                         strcat(filename,"_Surf_");
                         strcat(filename, bodyNumber);
                     }
@@ -1482,62 +1507,58 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
 
                         status = mesh_writeAFLR3(aimInfo, filename,
                                                  aflr4Instance->meshInput.outputASCIIFlag,
-                                                 &aflr4Instance->surfaceMesh[bodyIndex],
+                                                 &surfaceMesh[bodyIndex],
                                                  1.0);
 
                     } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "VTK") == 0) {
 
                         status = mesh_writeVTK(aimInfo, filename,
                                                 aflr4Instance->meshInput.outputASCIIFlag,
-                                                &aflr4Instance->surfaceMesh[bodyIndex],
+                                                &surfaceMesh[bodyIndex],
                                                 1.0);
 
                     } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "Tecplot") == 0) {
 
                         status = mesh_writeTecplot(aimInfo, filename,
                                                    aflr4Instance->meshInput.outputASCIIFlag,
-                                                   &aflr4Instance->surfaceMesh[bodyIndex],
+                                                   &surfaceMesh[bodyIndex],
                                                    1.0);
 
                     } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "STL") == 0) {
 
                         status = mesh_writeSTL(aimInfo, filename,
                                                aflr4Instance->meshInput.outputASCIIFlag,
-                                               &aflr4Instance->surfaceMesh[bodyIndex],
+                                               &surfaceMesh[bodyIndex],
                                                1.0);
 
                     } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "Airfoil") == 0) {
 
                         status = mesh_writeAirfoil(aimInfo, filename,
                                                    aflr4Instance->meshInput.outputASCIIFlag,
-                                                   &aflr4Instance->surfaceMesh[bodyIndex],
+                                                   &surfaceMesh[bodyIndex],
                                                    1.0);
 
                     } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "FAST") == 0) {
 
                         status = mesh_writeFAST(aimInfo, filename,
                                                 aflr4Instance->meshInput.outputASCIIFlag,
-                                                &aflr4Instance->surfaceMesh[bodyIndex],
+                                                &surfaceMesh[bodyIndex],
                                                 1.0);
 
                     } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "Nastran") == 0) {
 
                         status = mesh_writeNASTRAN(aimInfo, filename,
                                                    aflr4Instance->meshInput.outputASCIIFlag,
-                                                   &aflr4Instance->surfaceMesh[bodyIndex],
+                                                   &surfaceMesh[bodyIndex],
                                                    FreeField,
                                                    1.0);
 
                     } else if (strcasecmp(aflr4Instance->meshInput.outputFormat, "ETO") == 0) {
 
-                        filename = (char *) EG_reall(filename,(strlen(filename) + 5) *sizeof(char));
-                        if (filename == NULL) {
-                            status = EGADS_MALLOC;
-                            goto cleanup;
-                        }
+                        AIM_REALL(filename, strlen(filename) + 5, char, aimInfo, status);
                         strcat(filename,".eto");
 
-                        status = EG_saveTess(aflr4Instance->surfaceMesh[bodyIndex].egadsTess, filename);
+                        status = EG_saveTess(surfaceMesh[bodyIndex].egadsTess, filename);
 
                     } else {
                         printf("Unrecognized mesh format, \"%s\", the mesh will not be written out\n",
@@ -1554,6 +1575,11 @@ int aimPostAnalysis( void *aimStore, void *aimInfo,
     status = CAPS_SUCCESS;
 
 cleanup:
+
+    for (bodyIndex = 0; bodyIndex < numSurface; bodyIndex++){
+        destroy_meshStruct(&surfaceMesh[bodyIndex]);
+    }
+    AIM_FREE(surfaceMesh);
 
     (void) destroy_meshStruct(&combineMesh);
     AIM_FREE(filename);
@@ -1608,13 +1634,12 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
 
     } else if (index == Surface_Mesh) {
         *aoname           = AIM_NAME(Surface_Mesh);
-        form->type        = Pointer;
+        form->type        = PointerMesh;
         form->dim         = Vector;
         form->lfixed      = Change;
-        form->sfixed      = Change;
+        form->sfixed      = Fixed;
         form->vals.AIMptr = NULL;
         form->nullVal     = IsNull;
-        AIM_STRDUP(form->units, "meshStruct", aimStruc, status);
 
         /*! \page aimOutputsAFLR4
          * - <B> Surface_Mesh </B> <br>
@@ -1638,10 +1663,9 @@ cleanup:
 int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                   capsValue *val)
 {
-    int status = CAPS_SUCCESS;
-    int surf; // Indexing
-    int numElement, numNodes, nElem;
+    int i, status = CAPS_SUCCESS;
     aimStorage *aflr4Instance;
+    aimMesh    mesh;
 
 #ifdef DEBUG
     printf(" aflr4AIM/aimCalcOutput  index = %d!\n", index);
@@ -1650,66 +1674,51 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
 
     if (Done == index) {
 
+      if (aflr4Instance->numNodeTotal > 0 && aflr4Instance->numElemTotal > 0)
+        val->vals.integer = (int) true;
+      else
         val->vals.integer = (int) false;
-
-        // Check to see if surface meshes was generated
-        for (surf = 0; surf < aflr4Instance->numSurface; surf++ ) {
-
-            if (aflr4Instance->surfaceMesh[surf].numElement != 0) {
-
-                val->vals.integer = (int) true;
-
-            } else {
-
-                val->vals.integer = (int) false;
-                printf("No surface Tris and/or Quads were generated for surface - %d\n", surf);
-                return CAPS_SUCCESS;
-            }
-        }
 
     } else if (NumberOfElement == index) {
 
-        // Count the total number of surface elements
-        numElement = 0;
-        for (surf = 0; surf < aflr4Instance->numSurface; surf++ ) {
-
-            status = mesh_retrieveNumMeshElements(aflr4Instance->surfaceMesh[surf].numElement,
-                                                  aflr4Instance->surfaceMesh[surf].element,
-                                                  Triangle,
-                                                  &nElem);
-            AIM_STATUS(aimInfo, status);
-            numElement += nElem;
-
-            status = mesh_retrieveNumMeshElements(aflr4Instance->surfaceMesh[surf].numElement,
-                                                  aflr4Instance->surfaceMesh[surf].element,
-                                                  Quadrilateral,
-                                                  &nElem);
-            AIM_STATUS(aimInfo, status);
-            numElement += nElem;
-        }
-
-        val->vals.integer = numElement;
+      val->vals.integer = aflr4Instance->numElemTotal;
 
     } else if (NumberOfNode == index) {
 
-        // Count the total number of surface vertices
-        numNodes = 0;
-        for (surf = 0; surf < aflr4Instance->numSurface; surf++ ) {
-            numNodes += aflr4Instance->surfaceMesh[surf].numNode;
-        }
-
-        val->vals.integer = numNodes;
+      val->vals.integer = aflr4Instance->numNodeTotal;
 
     } else if (Surface_Mesh == index) {
 
-        // Return the surface meshes
-        val->nrow        = aflr4Instance->numSurface;
-        val->vals.AIMptr = aflr4Instance->surfaceMesh;
+      for (i = 0; i < aflr4Instance->numMeshRef; i++) {
+        status = aim_queryMeshes( aimInfo, Surface_Mesh, &aflr4Instance->meshRef[i] );
+        if (status > 0) {
+/*@-immediatetrans@*/
+          mesh.meshData = NULL;
+          mesh.meshRef = &aflr4Instance->meshRef[i];
+/*@+immediatetrans@*/
+
+          status = mesh_surfaceMeshData(aimInfo, &aflr4Instance->groupMap, &mesh);
+          AIM_STATUS(aimInfo, status);
+
+          status = aim_writeMeshes(aimInfo, Surface_Mesh, &mesh);
+          AIM_STATUS(aimInfo, status);
+
+          status = aim_freeMeshData(mesh.meshData);
+          AIM_STATUS(aimInfo, status);
+          AIM_FREE(mesh.meshData);
+        }
+        else
+          AIM_STATUS(aimInfo, status);
+      }
+
+      // Return the surface meshes
+      val->nrow        = aflr4Instance->numMeshRef;
+      val->vals.AIMptr = aflr4Instance->meshRef;
 
     } else {
 
-        status = CAPS_BADINDEX;
-        AIM_STATUS(aimInfo, status, "Unknown output index %d!", index);
+      status = CAPS_BADINDEX;
+      AIM_STATUS(aimInfo, status, "Unknown output index %d!", index);
 
     }
 

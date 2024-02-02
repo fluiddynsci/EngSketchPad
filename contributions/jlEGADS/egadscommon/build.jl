@@ -1,3 +1,6 @@
+# Check Julia version
+@static if VERSION < v"1.7" error(" jlEGADS requires Julia >= v1.7! Current Julia is ", string(VERSION), "...\n") end
+
 # EGADS paths 
 const ESP_ROOT        = ENV["ESP_ROOT"]               |> normpath
 const ESP_ROOT_INC    = joinpath(ESP_ROOT, "include") |> normpath

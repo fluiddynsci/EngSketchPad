@@ -17,6 +17,8 @@ RESTORE   .
 TRANSLATE 0  0  2
 RESTORE   .
 TRANSLATE 0  0  2
+# note: LOFT has been deprecated and is included here for backward-compatability testing
+#       new .csm files should use RULE or BLEND instead
 LOFT      0
 
 # LOFT shuld have thrown an error

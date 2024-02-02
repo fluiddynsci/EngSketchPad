@@ -1,0 +1,33 @@
+Structure for the load tuple = (\char`\"{}\+Load Name\char`\"{}, \char`\"{}\+Value\char`\"{}). \char`\"{}\+Load Name\char`\"{} defines the reference name for the load being specified. The \char`\"{}\+Value\char`\"{} can either be a JSON String dictionary (see Section \mbox{\hyperlink{feaLoad_jsonStringLoad}{JSON String Dictionary}}) or a single string keyword (see Section \mbox{\hyperlink{feaLoad_keyStringLoad}{Single Value String}}).\hypertarget{feaLoad_jsonStringLoad}{}\doxysubsection{JSON String Dictionary}\label{feaLoad_jsonStringLoad}
+If \char`\"{}\+Value\char`\"{} is JSON string dictionary (e.\+g. \char`\"{}\+Value\char`\"{} = \{\char`\"{}group\+Name\char`\"{}\+: \char`\"{}plate\char`\"{}, \char`\"{}load\+Type\char`\"{}\+: \char`\"{}\+Pressure\char`\"{}, \char`\"{}pressure\+Force\char`\"{}\+: 2000000.\+0\}) the following keywords ( = default values) may be used\+:
+
+
+\begin{DoxyItemize}
+\item {\bfseries{load\+Type = \char`\"{}(no default)\char`\"{}}}  ~\newline
+ Type of load. Options\+: \char`\"{}\+Pressure\char`\"{}, \char`\"{}\+Gravity\char`\"{}. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{group\+Name = \char`\"{}(no default)\char`\"{}}}  ~\newline
+ Single or list of {\ttfamily caps\+Load} names on which to apply the load (e.\+g. \char`\"{}\+Name1\char`\"{} or \mbox{[}\char`\"{}\+Name1\char`\"{},\char`\"{}\+Name2\char`\"{},...\mbox{]}. If not provided, the load tuple name will be used. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{direction\+Vector = \mbox{[}0.\+0, 0.\+0, 0.\+0\mbox{]} }}  ~\newline
+ X-\/, y-\/, and z-\/ components of the force vector for a \char`\"{}\+Gravity\char`\"{} load. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{gravity\+Acceleration = 0.\+0 }}  ~\newline
+ Acceleration value for a \char`\"{}\+Gravity\char`\"{} load. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{pressure\+Force = 0.\+0 }}  ~\newline
+ Uniform pressure force for a \char`\"{}\+Pressure\char`\"{} load. 
+\end{DoxyItemize}\hypertarget{feaLoad_keyStringLoad}{}\doxysubsection{Single Value String}\label{feaLoad_keyStringLoad}
+If \char`\"{}\+Value\char`\"{} is a string, the string value may correspond to an entry in a predefined load lookup table. NOT YET IMPLEMENTED!!!! 

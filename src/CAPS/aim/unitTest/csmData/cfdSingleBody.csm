@@ -15,7 +15,7 @@ despmtr   dihedral[1,1]     1.00000
 # Specify Euler equations
 ## [capsIntent]
 attribute capsIntent $CFD #CFD Analysis
-attribute capsAIM $fun3dAIM;su2AIM;egadsTessAIM;aflr4AIM;pointwiseAIM;tetgenAIM;aflr3AIM #CFD Analysis
+attribute capsAIM $fun3dAIM;su2AIM;egadsTessAIM;aflr4AIM;pointwiseAIM;tetgenAIM;aflr3AIM;refineAIM #CFD Analysis
 ## [capsIntent]
 
 ## [local]

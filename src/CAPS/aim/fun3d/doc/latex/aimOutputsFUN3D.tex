@@ -1,0 +1,38 @@
+The following list outlines the FUN3D outputs available through the AIM interface. All variables currently correspond to values for all boundaries (total) found in the $\ast$.forces file
+
+Net Forces -\/ Pressure + Viscous\+:
+\begin{DoxyItemize}
+\item {\bfseries{CLtot}} = The lift coefficient.
+\item {\bfseries{CDtot}} = The drag coefficient.
+\item {\bfseries{CMXtot}} = The moment coefficient about the x-\/axis.
+\item {\bfseries{CMYtot}} = The moment coefficient about the y-\/axis.
+\item {\bfseries{CMZtot}} = The moment coefficient about the z-\/axis.
+\item {\bfseries{CXtot}} = The force coefficient about the x-\/axis.
+\item {\bfseries{CYtot}} = The force coefficient about the y-\/axis.
+\item {\bfseries{CZtot}} = The force coefficient about the z-\/axis.
+\end{DoxyItemize}Pressure Forces\+:
+\begin{DoxyItemize}
+\item {\bfseries{CLtot\+\_\+p}} = The lift coefficient -\/ pressure contribution only.
+\item {\bfseries{CDtot\+\_\+p}} = The drag coefficient -\/ pressure contribution only.
+\item {\bfseries{CMXtot\+\_\+p}} = The moment coefficient about the x-\/axis -\/ pressure contribution only.
+\item {\bfseries{CMYtot\+\_\+p}} = The moment coefficient about the y-\/axis -\/ pressure contribution only.
+\item {\bfseries{CMZtot\+\_\+p}} = The moment coefficient about the z-\/axis -\/ pressure contribution only.
+\item {\bfseries{CXtot\+\_\+p}} = The force coefficient about the x-\/axis -\/ pressure contribution only.
+\item {\bfseries{CYtot\+\_\+p}} = The force coefficient about the y-\/axis -\/ pressure contribution only.
+\item {\bfseries{CZtot\+\_\+p}} = The force coefficient about the z-\/axis -\/ pressure contribution only.
+\end{DoxyItemize}Viscous Forces\+:
+\begin{DoxyItemize}
+\item {\bfseries{CLtot\+\_\+v}} = The lift coefficient -\/ viscous contribution only.
+\item {\bfseries{CDtot\+\_\+v}} = The drag coefficient -\/ viscous contribution only.
+\item {\bfseries{CMXtot\+\_\+v}} = The moment coefficient about the x-\/axis -\/ viscous contribution only.
+\item {\bfseries{CMYtot\+\_\+v}} = The moment coefficient about the y-\/axis -\/ viscous contribution only.
+\item {\bfseries{CMZtot\+\_\+v}} = The moment coefficient about the z-\/axis -\/ viscous contribution only.
+\item {\bfseries{CXtot\+\_\+v}} = The force coefficient about the x-\/axis -\/ viscous contribution only.
+\item {\bfseries{CYtot\+\_\+v}} = The force coefficient about the y-\/axis -\/ viscous contribution only.
+\item {\bfseries{CZtot\+\_\+v}} = The force coefficient about the z-\/axis -\/ viscous contribution only.
+\end{DoxyItemize}
+
+Force components\+:
+\begin{DoxyItemize}
+\item {\bfseries{Forces}} = Returns a tuple array of JSON string dictionaries of forces and moments for each boundary (combined forces also included). The structure for the Forces tuple = (\char`\"{}\+Boundary Name\char`\"{}, \char`\"{}\+Value\char`\"{}). \char`\"{}\+Boundary Name\char`\"{} defines the boundary/component name (or \char`\"{}\+Total\char`\"{}) and the \char`\"{}\+Value\char`\"{} is a JSON string dictionary. Entries in the dictionary are the same as the other output variables without \char`\"{}tot\char`\"{} in the name (e.\+g. CL, CD, CMX, CL\+\_\+p, CMX\+\_\+v, etc.). 
+\end{DoxyItemize}

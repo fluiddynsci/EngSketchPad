@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -83,6 +83,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     ego     *enodes=NULL, *eedges=NULL, *efaces=NULL;
     void    *save_modl;
     modl_T  *MODL;
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 

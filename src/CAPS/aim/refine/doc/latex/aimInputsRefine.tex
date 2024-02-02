@@ -1,0 +1,26 @@
+The following list outlines the refine inputs along with their default value available through the AIM interface.
+
+
+\begin{DoxyItemize}
+\item {\bfseries{ref = \char`\"{}ref\char`\"{}}} ~\newline
+ refine executable
+\item {\bfseries{ Passes = 30}} ~\newline
+ Number of refine internal adaptation iterations
+\item {\bfseries{ Fun3D = false}} ~\newline
+ Use refine \char`\"{}loop\char`\"{} operation, i.\+e. in conjunction with Fun3D solver
+\item {\bfseries{Mesh = NULL}} ~\newline
+ An Area\+\_\+\+Mesh or Volume\+\_\+\+Mesh link for mesh adaptation
+\item {\bfseries{ Complexity = NULL}} ~\newline
+ Must be specified in combination with a Scalar\+Field\+File or Hessian\+Field\+File. ~\newline
+ Cannot be specified in combination with Metric\+Field\+File. ~\newline
+ Complexity is approximately half the target number of vertices.
+\item {\bfseries{ Scalar\+Field\+File = NULL}} ~\newline
+ Scalar field file for constructing the multi-\/scale metric. ~\newline
+ Only one of Scalar\+Field\+File, Hessian\+Field\+File, or Metric\+Field\+File may be specified
+\item {\bfseries{ Hessian\+Field\+File = NULL}} ~\newline
+ Hessian field file for constructing the multi-\/scale metric. ~\newline
+ Only one of Scalar\+Field\+File, Hessian\+Field\+File, or Metric\+Field\+File may be specified
+\item {\bfseries{ Metric\+Field\+File = NULL}} ~\newline
+ Metric field file. ~\newline
+ Only one of Scalar\+Field\+File, Hessian\+Field\+File, or Metric\+Field\+File may be specified 
+\end{DoxyItemize}

@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <ctype.h>
 
+#include "aimUtil.h"
 #include "miscUtils.h"
 #include "cardUtils.h"
 
@@ -265,9 +266,7 @@ static int _addFieldSmall(cardStruct *card, const char *fieldValue, int fieldSpa
 
     status = _addFormattedField(card, fieldFormatted, CARD_SMALLWIDTH, fieldSpan);
 
-    if (fieldFormatted != NULL) {
-        EG_free(fieldFormatted);
-    }
+    AIM_FREE (fieldFormatted);
 
     return status;
 }
@@ -356,7 +355,7 @@ static void _removeTrailingDecimalZeros(char *doubleString) {
     decPoint = strchr(doubleString, '.'); // find decimal point
     exp = strchr(doubleString, 'E');
 
-    // if has decimal point 
+    // if has decimal point
     if (decPoint != NULL) {
 
         // if no exponent
@@ -378,7 +377,7 @@ static void _removeTrailingDecimalZeros(char *doubleString) {
             // count trail zeros between decPoint and exp
             count = 0;
             for (c = exp-1; c != decPoint; c--) {
-                
+
                 if (*c == '0') {
                     count++;
                 }
@@ -717,7 +716,7 @@ int card_addIntegerArray(cardStruct *card, int numFieldValues, const int fieldVa
 }
 
 int card_addIntegerOrBlank(cardStruct *card, /*@null@*/ const int *fieldValue) {
-    
+
     if (fieldValue == NULL) {
         return card_addBlank(card);
     }
@@ -750,7 +749,7 @@ int card_addDoubleArray(cardStruct *card, int numFieldValues, const double field
 }
 
 int card_addDoubleOrBlank(cardStruct *card, /*@null@*/ const double *fieldValue) {
-    
+
     if (fieldValue == NULL) {
         return card_addBlank(card);
     }

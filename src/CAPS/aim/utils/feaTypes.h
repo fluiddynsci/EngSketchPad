@@ -7,6 +7,7 @@
 
 #include "meshTypes.h" // Bring in mesh structures
 #include "vlmTypes.h"  // Bring in vortex lattice methods structures
+#include "aimMesh.h"
 
                   // Linear ----------------------------------- Linear
 typedef enum {UnknownMaterial, Isotropic, Anisothotropic, Orthotropic, Anisotropic} materialTypeEnum;
@@ -15,7 +16,7 @@ typedef enum {UnknownProperty, ConcentratedMass, Rod, Bar, Beam, Shear, Shell, C
 
 typedef enum {UnknownConstraint, Displacement, ZeroDisplacement} constraintTypeEnum;
 
-typedef enum {UnknownLoad, GridForce, GridMoment, LineForce, LineMoment, Gravity, Pressure, PressureDistribute, Rotational, Thermal, PressureExternal} loadTypeEnum;
+typedef enum {UnknownLoad, GridForce, GridMoment, LineForce, LineMoment, Gravity, Pressure, PressureDistribute, Rotational, Thermal, PressureExternal, ThermalExternal} loadTypeEnum;
 
 typedef enum {UnknownAnalysis, Modal, Static, Optimization, AeroelasticTrim, AeroelasticFlutter} analysisTypeEnum;
 
@@ -223,7 +224,7 @@ typedef struct {
     // Flutter Constraint members
     char *velocityType; // Nature of the velocity, TRUE or EQUIV
     double scalingFactor; // Constraint scaling factor
-    
+
     int numVelocity;
     double *velocity; // Velocity values
 
@@ -234,14 +235,14 @@ typedef struct {
 
 // Structure to hold optimization control information
 typedef struct {
-  
+
     int fullyStressedDesign;   // ASTROS specific - ?
     int mathProgramming; // Maximum number of optimization iterations
     int maxIter; // Maximum number of optimization iterations
     double constraintRetention; // Maximum number of optimization iterations
     double eps; // Maximum number of optimization iterations
     double moveLimit; // Maximum number of optimization iterations
-    
+
 } feaOptimizationControlStruct;
 
 typedef struct {
@@ -433,6 +434,41 @@ typedef struct {
     double thermalExpCoeffLateral; // Lateral Coefficient of thermal expansion
     int allowType; // 0 for stress, 1 for strain
 
+    double kappa;        // Thermal conductivity for an isotropic solid
+    double specificHeat; // Specific heat constant pressure (per unit mass) for an isotropic solid
+
+    double K[6];         // Thermal conductivity for an anisotropic solid (KXX, KXY, KXZ, KYY, KYZ, KZZ)
+
+    double honeycombCellSize;     // (CS) Honeycomb sandwich core cell size. Required if material defines the core of a honeycomb sandwich and dimpling stability index is desired (LAM = HCS on the PCOMP entry).
+    double honeycombYoungModulus; // (EC) Honeycomb sandwich core Young's modulus used for stability index analysis.
+    double honeycombShearModulus; // (GC) Honeycomb sandwich core shear modulus used for stability index analysis.
+
+    double fractureAngle; // (ALPHA0) Fracture angle for uniaxial transverse compression in degrees. Used in the NASA LaRC02 failure theory only (see LARC02 in PCOMP entry).
+
+    double interlaminarShearAllow; // (SB) Allowable inter-laminar shear stress of the composite laminate bonding material
+
+    double fiberYoungModulus; // (EF1) Modulus of elasticity of fiber
+    double fiberPoissonRatio; // (NUF12) Poisson's ratio of fiber
+    double meanStressFactor;  // (MSMF) Mean stress magnification factor
+
+    double transTensionSlope;     // (PNPT) Failure envelop slope parameter for transverse tension
+    double transCompressionSlope; // (PNPC) Failure envelop slope parameter for transverse compression
+
+    char *compositeFailureTheory; // (FT) Composite failure theory
+
+    double interlaminarNormalStressAllow; // (NB) Allowable inter-laminar normal stress of the composite laminate bonding material (allowable interlaminar normal stress).
+
+    double youngModulusThick; // (E3) Modulus of elasticity in thickness direction, also defined as the matrix direction or 3-direction.
+    double poissonRatio23; // (NU23) Poisson's ratio ( for uniaxial loading in 2-direction).
+    double poissonRatio31; // (NU31) Poisson's ratio ( for uniaxial loading in 3-direction).
+
+    double youngModulusFactor;        // (E1RSF) Longitudinal modulus of elasticity reduction scale factor for nonlinear composite Progressive Ply Failure Analysis (PPFA)
+    double youngModulusLateralFactor; // (E2RSF) Lateral modulus of elasticity reduction scale factor for nonlinear composite Progressive Ply Failure Analysis (PPFA)
+
+    double shearModulusFactor; // (G12RSF) In-plane shear modulus reduction scale factor for nonlinear composite Progressive Ply Failure Analysis (PPFA)
+    double shearModulusTrans1ZFactor; // (G1ZRSF) Transverse shear modulus reduction scale factor in 1-Z plane for nonlinear composite Progressive Ply Failure Analysis (PPFA)
+    double shearModulusTrans2ZFactor; // (G1ZRSF) Transverse shear modulus reduction scale factor in 2-Z plane for nonlinear composite Progressive Ply Failure Analysis (PPFA)
+
 } feaMaterialStruct;
 
 // Structure to hold FEA unit system
@@ -531,9 +567,13 @@ typedef struct {
     double angularVelScaleFactor; // Overall scale factor for the angular velocity
     double angularAccScaleFactor; // Overall scale factor for the angular acceleration
 
-    // Thermal load - currently the temperature at a grid point - use gridIDSet
+    // Thermal load - the temperature at a grid point - use gridIDSet
     double temperature; // Temperature value at given grid point
     double temperatureDefault; // Default temperature of grid point explicitly not used
+
+    double *temperatureMultiDistribute; // Unique temperature load at a specified grid location for
+                                        // each grid point in gridIDSet size = [numGridID] - used in type TermalExternal
+                                        // where the temperature load is being provided by an external source (i.e. data transfer)
 
 } feaLoadStruct;
 
@@ -695,6 +735,9 @@ typedef struct {
     feaAeroStruct *feaAero; // size = [numAero]
 
     feaAeroRefStruct feaAeroRef;
+
+    // Mesh reference obtained from meshing AIM
+    aimMeshRef *meshRefIn, meshRefObj;
 
 } feaProblemStruct;
 

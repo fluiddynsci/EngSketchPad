@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -66,9 +66,6 @@
 /* macros (including those that go along with common.h)                */
 /*                                                                     */
 /***********************************************************************/
-
-                                               /* used by RALLOC macro */
-//static void *realloc_temp=NULL;
 
 #define  RED(COLOR)      (float)(COLOR / 0x10000        ) / (float)(255)
 #define  GREEN(COLOR)    (float)(COLOR / 0x00100 % 0x100) / (float)(255)
@@ -259,7 +256,7 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program sensCSM                     *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2023         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2024         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************\n");
 
@@ -1095,7 +1092,7 @@ checkTessSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
     double    **face_ptrb=NULL, **edge_ptrb=NULL, **node_ptrb=NULL;
     CDOUBLE   *tempRlist, *xyz, *uv, *t, *dxyz;
     CCHAR     *tempClist;
-    ego       eref, *echilds, eNewBody=NULL;
+    ego       eref, *echilds;
     clock_t   old_time, new_time;
     FILE      *fp_badtri=NULL, *fp_logdist=NULL;
     void      *ptrb;
@@ -1156,6 +1153,7 @@ checkTessSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
     PTRB = (modl_T *)ptrb;
 
     PTRB->tessAtEnd = 0;
+    PTRB->matchSeq  = MODL;
 
     /* perturb the configuration */
     status = ocsmGetValu(PTRB, ipmtr, irow, icol, &old_value, &old_dot);
@@ -1221,37 +1219,31 @@ checkTessSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
         CHECK_STATUS(ocsmSetDtime);
 
         /* determine if there is a mapping between the MODL and the PTRB */
+        nMap = NULL;
+        eMap = NULL;
+        fMap = NULL;
+
         if (MODL->body[ibody].nface > 0) {
-            status = EG_mapBody(MODL->body[ibody].ebody, PTRB->body[ibody].ebody, "_faceID", &eNewBody);
-            CHECK_STATUS(EG_mapBody);
+            status = EG_mapBody2(MODL->body[ibody].ebody, "_faceID", "_edgeID", PTRB->body[ibody].ebody);
+            CHECK_STATUS(EG_mapBody2);
 
-            if (eNewBody == NULL) {
+            status = EG_attributeRet(PTRB->body[ibody].ebody, ".nMap",
+                                     &atype, &alen, &nMap, &tempRlist, &tempClist);
+            if (status != EGADS_SUCCESS) {
                 nMap = NULL;
-                eMap = NULL;
-                fMap = NULL;
-            } else {
-                status = EG_attributeRet(eNewBody, ".nMap",
-                                         &atype, &alen, &nMap, &tempRlist, &tempClist);
-                if (status != EGADS_SUCCESS) {
-                    nMap = NULL;
-                }
-
-                status = EG_attributeRet(eNewBody, ".eMap",
-                                         &atype, &alen, &eMap, &tempRlist, &tempClist);
-                if (status != EGADS_SUCCESS) {
-                    eMap = NULL;
-                }
-
-                status = EG_attributeRet(eNewBody, ".fMap",
-                                     &atype, &alen, &fMap, &tempRlist, &tempClist);
-                if (status != EGADS_SUCCESS) {
-                    fMap = NULL;
-                }
             }
-        } else {
-            nMap = NULL;
-            eMap = NULL;
-            fMap = NULL;
+
+            status = EG_attributeRet(PTRB->body[ibody].ebody, ".eMap",
+                                     &atype, &alen, &eMap, &tempRlist, &tempClist);
+            if (status != EGADS_SUCCESS) {
+                eMap = NULL;
+            }
+
+            status = EG_attributeRet(PTRB->body[ibody].ebody, ".fMap",
+                                     &atype, &alen, &fMap, &tempRlist, &tempClist);
+            if (status != EGADS_SUCCESS) {
+                fMap = NULL;
+            }
         }
 
         /* save perturbed points (which are the base plus their sensitivities) for each Face */
@@ -1489,6 +1481,7 @@ checkTessSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
         /* check how far each perturbed Edge point is from the perturbed configuration */
         nerror = 0;
         for (iedge = 1; iedge <= MODL->body[ibody].nedge; iedge++) {
+            if (MODL->body[ibody].edge[iedge].itype == DEGENERATE) continue;
 
             /* find the equivalent Edge in PTRB */
             if (eMap == NULL) {
@@ -1579,11 +1572,6 @@ checkTessSens(int    ipmtr,             /* (in)  Parameter index (bias-1) */
         FREE(face_ptrb);
         FREE(edge_ptrb);
         FREE(node_ptrb);
-
-        if (eNewBody != NULL) {
-            status = EG_deleteObject(eNewBody);
-            CHECK_STATUS(EG_deleteObject);
-        }
     }
 
 cleanup:

@@ -3,7 +3,7 @@
  *
  *             AIM Volume Mesh Functions
  *
- * *      Copyright 2014-2023, Massachusetts Institute of Technology
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -286,6 +286,10 @@ aim_deleteMeshes(void *aimStruc, const aimMeshRef *meshRef)
   aInfo = (aimInfo *) aimStruc;
   if (aInfo == NULL)                    return CAPS_NULLOBJ;
   if (aInfo->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
+  if (aInfo->funID != AIM_PREANALYSIS) {
+    AIM_ERROR(aimStruc, "Developer Error: aim_deleteMeshes may only be called from aimPreAnalysis!");
+    return CAPS_STATEERR;
+  }
   cntxt = aInfo->wCntxt;
 
   for (i = 0; i < cntxt.aimWriterNum; i++) {
@@ -307,7 +311,7 @@ aim_deleteMeshes(void *aimStruc, const aimMeshRef *meshRef)
 int
 aim_queryMeshes(void *aimStruc, int index, aimMeshRef *meshRef)
 {
-  int          i, j, k, ret, nWrite = 0;
+  int          i, j, k, ret, nWrite = 0, found = (int) false;
   char         *writerName[MAXWRITER];
 #ifdef WIN32
   char         file[MAX_PATH];
@@ -354,9 +358,10 @@ aim_queryMeshes(void *aimStruc, int index, aimMeshRef *meshRef)
       } while (value->link != NULL);
       if (last != vobject) continue;
       /* we hit our object from a AnalysisIn link */
+      found = (int) true;
       value = (capsValue *) another->analysisIn[j]->blind;
       if (value->meshWriter == NULL) {
-        printf(" CAPS Warning: Link found but NULL writer!\n");
+        /* printf(" CAPS Warning: Link found but NULL writer!\n"); */
         continue;
       }
       for (k = 0; k < nWrite; k++)
@@ -366,6 +371,7 @@ aim_queryMeshes(void *aimStruc, int index, aimMeshRef *meshRef)
       nWrite++;
     }
   }
+  if (found == (int) true && nWrite == 0) return CAPS_SUCCESS;
   if (nWrite == 0) return CAPS_NOTFOUND;
 
   /* look at the extensions for our files -- do they exist? */
@@ -389,6 +395,7 @@ int
 aim_writeMeshes(void *aimStruc, int index, aimMesh *mesh)
 {
   int          i, j, k, stat, nWrite = 0;
+  int          igroup, nPoint, found = (int) false;
   char         *writerName[MAXWRITER];
 #ifdef WIN32
   char         file[MAX_PATH];
@@ -401,6 +408,8 @@ aim_writeMeshes(void *aimStruc, int index, aimMesh *mesh)
   capsProblem  *problem;
   capsAnalysis *analysis, *another;
   capsValue    *value;
+
+  if (mesh == NULL) return CAPS_NULLVALUE;
 
   aInfo    = (aimInfo *) aimStruc;
   if (aInfo == NULL)                    return CAPS_NULLOBJ;
@@ -439,9 +448,10 @@ aim_writeMeshes(void *aimStruc, int index, aimMesh *mesh)
 #ifdef DEBUG
       printf(" *** Found Writer = %s ***\n", value->meshWriter);
 #endif
+      found = (int) true;
       if (value->meshWriter == NULL) {
-        printf(" CAPS Error: Link found but NULL writer!\n");
-        return CAPS_NOTFOUND;
+        //printf(" CAPS Error: Link found but NULL writer!\n");
+        continue;
       }
       for (k = 0; k < nWrite; k++)
         if (strcmp(writerName[k], value->meshWriter) == 0) break;
@@ -450,7 +460,26 @@ aim_writeMeshes(void *aimStruc, int index, aimMesh *mesh)
       nWrite++;
     }
   }
+  if (found == (int) true && nWrite == 0) return CAPS_SUCCESS;
   if (nWrite == 0) return CAPS_NOTFOUND;
+
+  /* check that all indexes are within range */
+  if (mesh->meshData != NULL) {
+    for (igroup = 0; igroup < mesh->meshData->nElemGroup; igroup++) {
+      for (i = 0; i < mesh->meshData->elemGroups[igroup].nElems; i++) {
+        nPoint = mesh->meshData->elemGroups[igroup].nPoint;
+        for (j = 0; j < nPoint; j++) {
+          if (mesh->meshData->elemGroups[igroup].elements[nPoint*i + j] < 1 ||
+              mesh->meshData->elemGroups[igroup].elements[nPoint*i + j] > mesh->meshData->nVertex) {
+            AIM_ERROR(aimStruc, "Element %d point %d in group %d out of range: %d [1, %d]!",
+                      mesh->meshData->elemGroups[igroup].nElems+1, j+1, igroup+1,
+                      mesh->meshData->elemGroups[igroup].elements[nPoint*i + j], mesh->meshData->nVertex);
+            return CAPS_IOERR;
+          }
+        }
+      }
+    }
+  }
 
   /* write the files */
   for (i = 0; i < nWrite; i++) {
@@ -490,10 +519,11 @@ aim_initMeshBnd(aimMeshBnd *meshBnd)
 
 
 int
-aim_initMeshRef(aimMeshRef *meshRef)
+aim_initMeshRef(aimMeshRef *meshRef, const enum aimMeshType type)
 {
   if (meshRef == NULL) return CAPS_NULLOBJ;
 
+  meshRef->type     = type;
   meshRef->nmap     = 0;
   meshRef->maps     = NULL;
   meshRef->nbnd     = 0;
@@ -535,7 +565,7 @@ aim_freeMeshRef(/*@null@*/ aimMeshRef *meshRef)
   AIM_FREE(meshRef->bnds);
   AIM_FREE(meshRef->fileName);
 
-  aim_initMeshRef(meshRef);
+  aim_initMeshRef(meshRef, aimUnknownMeshType);
 
   return CAPS_SUCCESS;
 }
@@ -681,20 +711,29 @@ cleanup:
 }
 
 
+typedef struct
+{
+  char *name;
+  int ID;
+} NameID;
+
+
 static int
-aim_readBinaryUgridElements(void *aimStruc, FILE *fp, /*@null@*/ FILE *fpMV, /*@null@*/ char **volName,
+aim_readBinaryUgridElements(void *aimStruc, FILE *fp, /*@null@*/ FILE *fpMV,
+                            int nName, /*@null@*/ NameID *names,
                             int nPoint, enum aimMeshElem elementTopo, int nElems,
                             int *elementIndex, aimMeshData *meshData)
 {
   int status = CAPS_SUCCESS;
   int i, j, ID, igroup;
   int nMapGroupID = 0;
-  int *mapGroupID = NULL;
+  int *mapGroupID = NULL, *IDs = NULL;
+  char *name = NULL;
 
   if (nElems > 0) {
 
     if (fpMV != NULL) {
-      AIM_NOTNULL(volName, aimStruc, status);
+      AIM_ALLOC(IDs, nElems, int, aimStruc, status);
 
       for (i = 0; i < nElems; i++) {
 
@@ -702,7 +741,7 @@ aim_readBinaryUgridElements(void *aimStruc, FILE *fp, /*@null@*/ FILE *fpMV, /*@
         status = fread(&ID, sizeof(int), 1, fpMV);
         if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
         if (ID <= 0) {
-          AIM_ERROR(aimStruc, "Volume ID must be a positive number: %d!", ID);
+          AIM_ERROR(aimStruc, "ID must be a positive number: %d!", ID);
           status = CAPS_IOERR;
           goto cleanup;
         }
@@ -714,25 +753,54 @@ aim_readBinaryUgridElements(void *aimStruc, FILE *fp, /*@null@*/ FILE *fpMV, /*@
           nMapGroupID = ID;
         }
         if (mapGroupID[ID-1] == -1) {
-          status = aim_addMeshElemGroup(aimStruc, volName[ID-1], ID, elementTopo, 1, nPoint, meshData);
+          if (names != NULL) {
+            j = 0;
+            while (names[j].ID != ID) {
+              j++;
+              if (nName == j) {
+                AIM_ERROR(aimStruc, "Failed to find 'name' for ID %d!", ID);
+                status = CAPS_IOERR;
+                goto cleanup;
+              }
+            }
+            name = names[j].name;
+          }
+          status = aim_addMeshElemGroup(aimStruc, name, ID, elementTopo, 1, nPoint, meshData);
           AIM_STATUS(aimStruc, status);
           mapGroupID[ID-1] = meshData->nElemGroup-1;
         }
 
         igroup = mapGroupID[ID-1];
 
+        IDs[i] = ID;
+
         /* add the element to the group */
-        status = aim_addMeshElem(aimStruc, 1, &meshData->elemGroups[igroup]);
-        AIM_STATUS(aimStruc, status);
+        meshData->elemGroups[igroup].nElems++;
+      }
+
+      for (ID = 0; ID < nMapGroupID; ID++) {
+        igroup = mapGroupID[ID];
+        if (igroup == -1) continue;
+
+        /* resize the element group */
+        AIM_REALL(meshData->elemGroups[igroup].elements, meshData->elemGroups[igroup].nPoint*(meshData->elemGroups[igroup].nElems), int, aimStruc, status);
+        meshData->elemGroups[igroup].nElems = 0;
+      }
+
+      for (i = 0; i < nElems; i++) {
+
+        /* get the volume group */
+        igroup = mapGroupID[IDs[i]-1];
 
         /* read the element connectivity */
-        status = fread(&meshData->elemGroups[igroup].elements[nPoint*(meshData->elemGroups[igroup].nElems-1)],
+        status = fread(&meshData->elemGroups[igroup].elements[nPoint*(meshData->elemGroups[igroup].nElems)],
                        sizeof(int), nPoint, fp);
         if (status != nPoint) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
 
         meshData->elemMap[*elementIndex][0] = igroup;
-        meshData->elemMap[*elementIndex][1] = meshData->elemGroups[igroup].nElems-1;
+        meshData->elemMap[*elementIndex][1] = meshData->elemGroups[igroup].nElems;
 
+        meshData->elemGroups[igroup].nElems += 1;
         *elementIndex += 1;
       }
 
@@ -765,6 +833,7 @@ aim_readBinaryUgridElements(void *aimStruc, FILE *fp, /*@null@*/ FILE *fpMV, /*@
 cleanup:
 
   AIM_FREE(mapGroupID);
+  AIM_FREE(IDs);
 
   return status;
 }
@@ -778,10 +847,13 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
   int    nLine, nTri, nQuad;
   int    nTet, nPyramid, nPrism, nHex;
   int    i, j, elementIndex, nPoint, nElems, ID, igroup;
-  int    line[2], *mapGroupID=NULL, nMapGroupID=0;
-  int    nRegion = 0, nVolName=0, nmap=0, nID;
+  int    line[2];
+  int    nRegion = 0, nVolName=0, nBCName=0;
+  int    nMapGroupID = 0, *mapGroupID = NULL;
   enum aimMeshElem elementTopo;
-  char filename[PATH_MAX], groupName[PATH_MAX], **volName=NULL;
+  char filename[PATH_MAX], groupName[PATH_MAX];
+  char *name = NULL;
+  NameID *volName=NULL, *bcName=NULL;
   size_t len;
   FILE *fp = NULL, *fpID = NULL, *fpMV=NULL;
   aimMeshData *meshData = NULL;
@@ -797,6 +869,44 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
   AIM_ALLOC(meshData, 1, aimMeshData, aimStruc, status);
   status = aim_initMeshData(meshData);
   AIM_STATUS(aimStruc, status);
+
+  /* read in the groupName from mapbc file */
+  snprintf(filename, PATH_MAX, "%s%s", mesh->meshRef->fileName, ".mapbc");
+
+  if (access(filename, F_OK) == 0) {
+    // Correct the groupID's to be consistent with groupMap
+    fpID = fopen(filename, "r");
+    if (fpID == NULL) {
+      AIM_ERROR(aimStruc, "Failed to open %s", filename);
+      status = CAPS_IOERR;
+      goto cleanup;
+    }
+    status = fscanf(fpID, "%d", &nBCName);
+    if (status != 1) {
+      AIM_ERROR(aimStruc, "Failed to read %s", filename);
+      status = CAPS_IOERR;
+      goto cleanup;
+    }
+
+    AIM_ALLOC(bcName, nBCName, NameID, aimStruc, status);
+    for (i = 0; i < nBCName; i++) { bcName[i].name = NULL; bcName[i].ID = 0; }
+
+    for (i = 0; i < nBCName; i++) {
+      status = fscanf(fpID, "%d %d %s", &bcName[i].ID, &j, groupName);
+      if (status != 3) {
+        AIM_ERROR(aimStruc, "Failed to read %s", filename);
+        status = CAPS_IOERR;
+        goto cleanup;
+      }
+
+      AIM_STRDUP(bcName[i].name, groupName, aimStruc, status);
+    }
+
+    /*@-dependenttrans@*/
+    fclose(fpID); fpID = NULL;
+    /*@+dependenttrans@*/
+  }
+
 
   snprintf(filename, PATH_MAX, "%s%s", mesh->meshRef->fileName, ".lb8.ugrid");
 
@@ -854,24 +964,24 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
     if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
 
     if (nRegion+nVolName == 0) {
-      AIM_ERROR(aimStruc, "Ivnalid mapvol file with zero nRegion and nVolName!");
+      AIM_ERROR(aimStruc, "Invalid mapvol file with zero nRegion and nVolName!");
       status = CAPS_IOERR;
       goto cleanup;
     }
 
-    AIM_ALLOC(volName, nVolName, char*, aimStruc, status);
-    for (i = 0; i < nVolName; i++) volName[i] = NULL;
+    AIM_ALLOC(volName, nVolName, NameID, aimStruc, status);
+    for (i = 0; i < nVolName; i++) { volName[i].name = NULL; volName[i].ID = 0; }
 
     for (i = 0; i < nRegion; i++) {
-      status = fread(&ID, sizeof(int), 1, fpMV);
+      status = fread(&volName[i].ID, sizeof(int), 1, fpMV);
       if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
 
       status = fread(&len, sizeof(size_t), 1, fpMV);
       if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
 
-      AIM_ALLOC(volName[ID-1], len, char, aimStruc, status);
+      AIM_ALLOC(volName[i].name, len, char, aimStruc, status);
 
-      status = fread(volName[ID-1], sizeof(char), len, fpMV);
+      status = fread(volName[i].name, sizeof(char), len, fpMV);
       if (status != len) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
     }
 
@@ -884,7 +994,6 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
       goto cleanup;
     }
   }
-
 
   AIM_ALLOC(meshData->verts, meshData->nVertex, aimMeshCoords, aimStruc, status);
 
@@ -930,88 +1039,24 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
   /* Elements triangles */
   nPoint = 3;
   elementTopo = aimTri;
-  for (i = 0; i < nTri; i++) {
+  nElems = nTri;
 
-    /* read the BC ID */
-    status = fread(&ID, sizeof(int), 1, fpID);
-    if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
-    if (ID <= 0) {
-      AIM_ERROR(aimStruc, "BC ID must be a positive number: %d!", ID);
-      status = CAPS_IOERR;
-      goto cleanup;
-    }
-
-    /* add the BC group if necessary */
-    if (ID > nMapGroupID) {
-      AIM_REALL(mapGroupID, ID, int, aimStruc, status);
-      for (j = nMapGroupID; j < ID; j++) mapGroupID[j] = -1;
-      nMapGroupID = ID;
-    }
-    if (mapGroupID[ID-1] == -1) {
-      status = aim_addMeshElemGroup(aimStruc, NULL, ID, elementTopo, 1, nPoint, meshData);
-      AIM_STATUS(aimStruc, status);
-      mapGroupID[ID-1] = meshData->nElemGroup-1;
-    }
-
-    igroup = mapGroupID[ID-1];
-
-    /* add the element to the group */
-    status = aim_addMeshElem(aimStruc, 1, &meshData->elemGroups[igroup]);
-    AIM_STATUS(aimStruc, status);
-
-    /* read the element connectivity */
-    status = fread(&meshData->elemGroups[igroup].elements[nPoint*(meshData->elemGroups[igroup].nElems-1)],
-                   sizeof(int), nPoint, fp);
-    if (status != nPoint) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
-
-    meshData->elemMap[elementIndex][0] = igroup;
-    meshData->elemMap[elementIndex][1] = meshData->elemGroups[igroup].nElems-1;
-
-    elementIndex += 1;
-  }
+  status = aim_readBinaryUgridElements(aimStruc, fp, fpID,
+                                       nBCName, nTet+nPyramid+nPrism+nHex == 0 ? NULL : bcName,
+                                       nPoint, elementTopo, nElems,
+                                       &elementIndex, meshData);
+  AIM_STATUS(aimStruc, status);
 
   /* Elements quadrilateral */
   nPoint = 4;
   elementTopo = aimQuad;
-  for (i = 0; i < nQuad; i++) {
+  nElems = nQuad;
 
-    /* read the BC ID */
-    status = fread(&ID, sizeof(int), 1, fpID);
-    if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
-    if (ID <= 0) {
-      AIM_ERROR(aimStruc, "BC ID must be a positive number: %d!", ID);
-      status = CAPS_IOERR;
-      goto cleanup;
-    }
-
-    /* add the BC group if necessary */
-    if (ID > nMapGroupID) {
-      AIM_REALL(mapGroupID, ID, int, aimStruc, status);
-      for (j = nMapGroupID; j < ID; j++) mapGroupID[j] = -1;
-      nMapGroupID = ID;
-    }
-    if (mapGroupID[ID-1] == -1) {
-      status = aim_addMeshElemGroup(aimStruc, NULL, ID, elementTopo, 1, nPoint, meshData);
-      AIM_STATUS(aimStruc, status);
-      mapGroupID[ID-1] = meshData->nElemGroup-1;
-    }
-
-    igroup = mapGroupID[ID-1];
-
-    /* add the element to the group */
-    status = aim_addMeshElem(aimStruc, 1, &meshData->elemGroups[igroup]);
-    AIM_STATUS(aimStruc, status);
-
-    /* read the element connectivity */
-    status = fread(&meshData->elemGroups[igroup].elements[nPoint*(meshData->elemGroups[igroup].nElems-1)],
-                   sizeof(int), nPoint, fp);
-    if (status != nPoint) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
-
-    meshData->elemMap[elementIndex][0] = igroup;
-    meshData->elemMap[elementIndex][1] = meshData->elemGroups[igroup].nElems-1;
-
-    elementIndex += 1;
-  }
+  status = aim_readBinaryUgridElements(aimStruc, fp, fpID,
+                                       nBCName, nTet+nPyramid+nPrism+nHex == 0 ? NULL : bcName,
+                                       nPoint, elementTopo, nElems,
+                                       &elementIndex, meshData);
+  AIM_STATUS(aimStruc, status);
 
   /*@-dependenttrans@*/
   fclose(fpID); fpID = NULL;
@@ -1026,7 +1071,8 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
   elementTopo = aimTet;
   nElems = nTet;
 
-  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
+  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV,
+                                       nVolName, volName,
                                        nPoint, elementTopo, nElems,
                                        &elementIndex, meshData);
   AIM_STATUS(aimStruc, status);
@@ -1036,7 +1082,8 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
   elementTopo = aimPyramid;
   nElems = nPyramid;
 
-  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
+  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV,
+                                       nVolName, volName,
                                        nPoint, elementTopo, nElems,
                                        &elementIndex, meshData);
   AIM_STATUS(aimStruc, status);
@@ -1046,7 +1093,8 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
   elementTopo = aimPrism;
   nElems = nPrism;
 
-  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
+  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV,
+                                       nVolName, volName,
                                        nPoint, elementTopo, nElems,
                                        &elementIndex, meshData);
   AIM_STATUS(aimStruc, status);
@@ -1056,7 +1104,8 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
   elementTopo = aimHex;
   nElems = nHex;
 
-  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV, volName,
+  status = aim_readBinaryUgridElements(aimStruc, fp, fpMV,
+                                       nVolName, volName,
                                        nPoint, elementTopo, nElems,
                                        &elementIndex, meshData);
   AIM_STATUS(aimStruc, status);
@@ -1064,8 +1113,6 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
   // 2D grid
   if (nTet+nPyramid+nPrism+nHex == 0) {
     meshData->dim = 2;
-    AIM_FREE(mapGroupID);
-    nMapGroupID = 0;
 
     status = fread(&nLine, sizeof(int), 1, fp);
     if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
@@ -1097,7 +1144,19 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
         nMapGroupID = ID;
       }
       if (mapGroupID[ID-1] == -1) {
-        status = aim_addMeshElemGroup(aimStruc, NULL, ID, elementTopo, 1, nPoint, meshData);
+        j = 0;
+        if (bcName != NULL) {
+          while (bcName[j].ID != ID) {
+            j++;
+            if (nBCName == j) {
+              AIM_ERROR(aimStruc, "Failed to find 'name' for ID %d!", ID);
+              status = CAPS_IOERR;
+              goto cleanup;
+            }
+          }
+          name = bcName[j].name;
+        }
+        status = aim_addMeshElemGroup(aimStruc, name, ID, elementTopo, 1, nPoint, meshData);
         AIM_STATUS(aimStruc, status);
         mapGroupID[ID-1] = meshData->nElemGroup-1;
       }
@@ -1121,63 +1180,6 @@ aim_readBinaryUgrid(void *aimStruc, aimMesh *mesh)
     meshData->dim = 3;
   }
 
-  /* read in the groupName from mapbc file */
-  snprintf(filename, PATH_MAX, "%s%s", mesh->meshRef->fileName, ".mapbc");
-
-  if (access(filename, F_OK) == 0) {
-    // Correct the groupID's to be consistent with groupMap
-    fpID = fopen(filename, "r");
-    if (fpID == NULL) {
-      AIM_ERROR(aimStruc, "Failed to open %s", filename);
-      status = CAPS_IOERR;
-      goto cleanup;
-    }
-    status = fscanf(fpID, "%d", &nmap);
-    if (status != 1) {
-      AIM_ERROR(aimStruc, "Failed to read %s", filename);
-      status = CAPS_IOERR;
-      goto cleanup;
-    }
-
-    nID = 0;
-    for (i = 0; i < nMapGroupID; i++)
-      if (mapGroupID[i] != -1) nID++;
-
-    if (nmap != nID) {
-      AIM_ERROR(aimStruc, "Number of maps in %s (%d) should be %d",
-                filename, nmap, nID);
-      status = CAPS_IOERR;
-      goto cleanup;
-    }
-
-    for (i = 0; i < nmap; i++) {
-      status = fscanf(fpID, "%d %d %s", &ID, &j, groupName);
-      if (status != 3) {
-        AIM_ERROR(aimStruc, "Failed to read %s", filename);
-        status = CAPS_IOERR;
-        goto cleanup;
-      }
-
-      if (ID <= 0 || nMapGroupID < ID) {
-        AIM_ERROR(aimStruc, "ID (%d) in %s out of bounds [1,%d]", ID, filename, nMapGroupID);
-        status = CAPS_IOERR;
-        goto cleanup;
-      }
-
-      if (mapGroupID[ID-1] == -1) {
-        AIM_ERROR(aimStruc, "Unknown BC ID (%d) in %s", ID, filename);
-        status = CAPS_IOERR;
-        goto cleanup;
-      }
-
-      AIM_STRDUP(meshData->elemGroups[mapGroupID[ID-1]].groupName, groupName, aimStruc, status);
-    }
-    
-    /*@-dependenttrans@*/
-    fclose(fpID); fpID = NULL;
-    /*@+dependenttrans@*/
-  }
-
   mesh->meshData = meshData;
   meshData = NULL;
 
@@ -1192,8 +1194,14 @@ cleanup:
 
   if (volName != NULL) {
     for (i = 0; i < nVolName; i++)
-      AIM_FREE(volName[i]);
+      AIM_FREE(volName[i].name);
     AIM_FREE(volName);
+  }
+
+  if (bcName != NULL) {
+    for (i = 0; i < nBCName; i++)
+      AIM_FREE(bcName[i].name);
+    AIM_FREE(bcName);
   }
 
 /*@-dependenttrans@*/
@@ -1221,7 +1229,7 @@ aim_storeMeshRef(void *aimStruc, const aimMeshRef *meshRef,
   const char  *meshRefegads = "meshRef.egads";
   FILE        *fp = NULL;
   aimInfo     *aInfo;
-  size_t      len, strLen;
+  size_t      len, strLen = 0;
   ego         model, body, *bodies = NULL;
 
   aInfo = (aimInfo *) aimStruc;
@@ -1229,22 +1237,23 @@ aim_storeMeshRef(void *aimStruc, const aimMeshRef *meshRef,
   if (aInfo->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
 
   if (meshRef == NULL)           return CAPS_NULLOBJ;
-  if (meshRef->fileName == NULL) return CAPS_NULLOBJ;
 
-  if (meshextension == NULL)     return CAPS_NULLOBJ;
+  if (meshextension != NULL) {
+    if (meshRef->fileName == NULL) return CAPS_NULLOBJ;
 
-  // create the full filename to the mesh in the meshing AIM directory
-  snprintf(filename_src, PATH_MAX, "%s%s", meshRef->fileName, meshextension);
+    // create the full filename to the mesh in the meshing AIM directory
+    snprintf(filename_src, PATH_MAX, "%s%s", meshRef->fileName, meshextension);
 
-  // get the mesh filename without the directory
-  i = strlen(filename_src);
-  while(i > 0 && filename_src[i] != SLASH) { i--; }
-  if (i < 0) { status = CAPS_IOERR; goto cleanup; }
-  strcpy(filename_dst, filename_src+i+1);
+    // get the mesh filename without the directory
+    i = strlen(filename_src);
+    while(i > 0 && filename_src[i] != SLASH) { i--; }
+    if (i < 0) { status = CAPS_IOERR; goto cleanup; }
+    strcpy(filename_dst, filename_src+i+1);
 
-  // copy the mesh from the meshing AIM directory to the current AIM directory
-  status = aim_cpFile(aimStruc, filename_src, filename_dst);
-  AIM_STATUS(aimStruc, status);
+    // copy the mesh from the meshing AIM directory to the current AIM directory
+    status = aim_cpFile(aimStruc, filename_src, filename_dst);
+    AIM_STATUS(aimStruc, status);
+  }
 
   // open the file to store the meshRef structure
   status = aim_file(aimStruc, meshRefFile, aimFile);
@@ -1256,6 +1265,9 @@ aim_storeMeshRef(void *aimStruc, const aimMeshRef *meshRef,
     status = CAPS_IOERR;
     goto cleanup;
   }
+
+  len = fwrite(&meshRef->type, sizeof(int), 1, fp);
+  if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
 
   len = fwrite(&meshRef->nmap, sizeof(int), 1, fp);
   if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
@@ -1317,12 +1329,17 @@ aim_storeMeshRef(void *aimStruc, const aimMeshRef *meshRef,
   }
 
   // write meshRef->filename (i.e. filename_dst without the extension)
-  strLen = strlen(filename_dst);
-  filename_dst[strLen - strlen(meshextension)] = '\0';
-  status = aim_file(aimStruc, filename_dst, aimFile);
-  AIM_STATUS(aimStruc, status);
+  if (meshextension != NULL) {
+    strLen = strlen(filename_dst);
+    filename_dst[strLen - strlen(meshextension)] = '\0';
+    status = aim_file(aimStruc, filename_dst, aimFile);
+    AIM_STATUS(aimStruc, status);
 
-  strLen = strlen(aimFile)+1;
+    strLen = strlen(aimFile)+1;
+  } else {
+    strLen = 0;
+    aimFile[0] = '\0';
+  }
 
   len = fwrite(&strLen, sizeof(size_t), 1, fp);
   if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
@@ -1360,19 +1377,14 @@ aim_loadMeshRef(void *aimStruc, aimMeshRef *meshRef)
   ego         geom, model, body, tessbody, *bodies;
 
   aInfo = (aimInfo *) aimStruc;
-  if (aInfo == NULL)                    return CAPS_NULLOBJ;
-  if (aInfo->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
+  if (aInfo == NULL)                   return CAPS_NULLOBJ;
+  if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
 
-  if (meshRef == NULL)           return CAPS_NULLOBJ;
-  if (meshRef->nmap != 0 ||
-      meshRef->maps != NULL ||
-      meshRef->nbnd != 0 ||
-      meshRef->bnds != NULL ||
-      meshRef->fileName != NULL ) {
-    AIM_ERROR(aimStruc, "meshRef members not initialized to NULL values!");
-    status = CAPS_NULLOBJ;
-    goto cleanup;
-  }
+  if (meshRef == NULL)                 return CAPS_NULLOBJ;
+
+  // delete the old mesh reference if necessary
+  status = aim_freeMeshRef(meshRef);
+  AIM_STATUS(aimStruc, status);
 
   // open the file to read the meshRef structure
   status = aim_file(aimStruc, meshRefFile, aimFile);
@@ -1384,6 +1396,9 @@ aim_loadMeshRef(void *aimStruc, aimMeshRef *meshRef)
     status = CAPS_IOERR;
     goto cleanup;
   }
+
+  len = fread(&meshRef->type, sizeof(int), 1, fp);
+  if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
 
   len = fread(&meshRef->nmap, sizeof(int), 1, fp);
   if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
@@ -1403,7 +1418,7 @@ aim_loadMeshRef(void *aimStruc, aimMeshRef *meshRef)
   status = EG_getTopology(model, &geom, &oclass, &mtype, limits,
                           &nbody, &bodies, &senses);
   AIM_STATUS(aimStruc, status);
-  
+
   if (nbody != meshRef->nmap) {
     AIM_ERROR(aimStruc, "Missmatch between %s and %s!", meshRefFile, meshRefegads);
     status = CAPS_IOERR;
@@ -1479,10 +1494,12 @@ aim_loadMeshRef(void *aimStruc, aimMeshRef *meshRef)
   len = fread(&strLen, sizeof(size_t), 1, fp);
   if (len != 1) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
 
-  AIM_ALLOC(meshRef->fileName, strLen, char, aimStruc, status);
+  if (strLen > 0) {
+    AIM_ALLOC(meshRef->fileName, strLen, char, aimStruc, status);
 
-  len = fread(meshRef->fileName, sizeof(char), strLen, fp);
-  if (len != strLen) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+    len = fread(meshRef->fileName, sizeof(char), strLen, fp);
+    if (len != strLen) { status = CAPS_IOERR; AIM_STATUS(aimStruc, status); }
+  }
 
   // indicate that the tessellation and body should be deleted
   meshRef->_delTess = (int)true;
@@ -1500,9 +1517,9 @@ cleanup:
 int aim_morphMeshUpdate(void *aimInfo,  aimMeshRef *meshRef, int numBody, ego *bodies)
 {
     int status = CAPS_SUCCESS;
-    int i=0;
-    int state, numVert;
-    ego bodyMapping;
+    int i=0,j, localIndex, topoIndex, iglobal_old, iglobal_new, nFace=0;
+    int state, numVert, aType, alen, *map_old=NULL;
+    const int *nMap=NULL, *eMap=NULL, *fMap=NULL;
     ego body, tessbody;
     ego tess;
 
@@ -1519,16 +1536,15 @@ int aim_morphMeshUpdate(void *aimInfo,  aimMeshRef *meshRef, int numBody, ego *b
         status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &numVert);
         AIM_STATUS(aimInfo, status);
 
-        status = EG_mapBody(body, bodies[i], "_faceID",  &bodyMapping); // "_faceID" - same as in OpenCSM
-        if (status != EGADS_SUCCESS || bodyMapping != NULL) {
+        status = EG_getBodyTopos(body, NULL, FACE, &nFace, NULL);
+        AIM_STATUS(aimInfo, status);
 
+        if (nFace > 1)
+          status = EG_mapBody(body, bodies[i], "_faceID",  &bodies[i]); // "_faceID" - same as in OpenCSM
+        else
+          status = EG_mapBody2(body, "_faceID", "_edgeID", bodies[i]); // "_*ID" - same as in OpenCSM
+        if (status != EGADS_SUCCESS) {
             AIM_ERROR(aimInfo, "New and old body %d (of %d) do not appear to be topologically equivalent!", i+1, meshRef->nmap);
-
-            if (bodyMapping != NULL) {
-                AIM_ADDLINE(aimInfo, "Body mapping isn't NULL!");
-            }
-
-            status = CAPS_MISMATCH;
             goto cleanup;
         }
     }
@@ -1549,6 +1565,51 @@ int aim_morphMeshUpdate(void *aimInfo,  aimMeshRef *meshRef, int numBody, ego *b
                                 &tess);
         AIM_STATUS(aimInfo, status);
 
+        status = EG_attributeRet(bodies[i], ".fMap", &aType, &alen, &fMap, NULL, NULL);
+        if (status == EGADS_SUCCESS) {
+          status = EG_attributeRet(bodies[i], ".eMap", &aType, &alen, &eMap, NULL, NULL);
+          AIM_STATUS(aimInfo, status);
+          status = EG_attributeRet(bodies[i], ".nMap", &aType, &alen, &nMap, NULL, NULL);
+          AIM_STATUS(aimInfo, status);
+        }
+
+        // update the surface to volume mapping
+        if (fMap != NULL) {
+          AIM_NOTNULL(eMap, aimInfo, status);
+          AIM_NOTNULL(nMap, aimInfo, status);
+
+          // update the mapping into the volume
+          map_old = meshRef->maps[i].map;
+          meshRef->maps[i].map = NULL;
+
+          AIM_ALLOC(meshRef->maps[i].map, numVert, int, aimInfo, status);
+
+          // Find the boundary mesh in the global tessellation
+          for (j = 0; j < numVert; j++) {
+
+            iglobal_old = j+1;
+            // Get the local indexes
+            status = EG_getGlobal(meshRef->maps[i].tess, iglobal_old,
+                                  &localIndex, &topoIndex, NULL);
+            AIM_STATUS(aimInfo, status);
+
+            // Get the global index in the new tess
+            if (localIndex == 0) {
+              status = EG_localToGlobal(tess, localIndex, nMap[topoIndex-1], &iglobal_new);
+              AIM_STATUS(aimInfo, status, "ptype = %d, pindex = %d", nMap[topoIndex-1], localIndex);
+            } else if (localIndex > 0) {
+              status = EG_localToGlobal(tess, -eMap[topoIndex-1], localIndex, &iglobal_new);
+              AIM_STATUS(aimInfo, status, "ptype = %d, pindex = %d", eMap[topoIndex-1], localIndex);
+            } else {
+              status = EG_localToGlobal(tess, fMap[topoIndex-1], -localIndex, &iglobal_new);
+              AIM_STATUS(aimInfo, status, "ptype = %d, pindex = %d", fMap[topoIndex-1], -localIndex);
+            }
+
+            meshRef->maps[i].map[iglobal_new-1] = map_old[iglobal_old-1];
+          }
+        }
+
+        // store the new tessellation
         if (meshRef->_delTess == (int)true) {
             EG_deleteObject(meshRef->maps[i].tess);
             EG_deleteObject(tessbody);
@@ -1556,10 +1617,13 @@ int aim_morphMeshUpdate(void *aimInfo,  aimMeshRef *meshRef, int numBody, ego *b
         meshRef->maps[i].tess = tess;
         status = aim_newTess(aimInfo, tess);
         AIM_STATUS(aimInfo, status);
+
+        AIM_FREE(map_old);
     }
 
     meshRef->_delTess = (int)false;
 
-    cleanup:
-        return status;
+cleanup:
+    AIM_FREE(map_old);
+    return status;
 }

@@ -74,7 +74,7 @@ myAnalysis.input["Mesh"].link(myMesh.output["Volume_Mesh"])
 projectName = "x43a_Test"
 
 # Set SU2 Version
-myAnalysis.input.SU2_Version = "Blackbird"
+myAnalysis.input.SU2_Version = "Harrier"
 
 # Set project name
 myAnalysis.input.Proj_Name = projectName

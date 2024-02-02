@@ -27,7 +27,7 @@ ODIR  = .
 endif
 
 AFLR4_LIB  = -laflr4 -laflr2c
-AFLR4_LIB += -lsurf_auto -lsurf_auto_cpp -laflr4 -laflr3
+AFLR4_LIB += -lsurf_auto -lsurf_auto_cpp -laflr3
 AFLR4_LIB += -legen -lrec2 -lrec3 -ldftr3 -ldftr2 -ldgeom -lotb -lqtb
 AFLR4_LIB += -lice2 -lice3 -lug3 -lug2 -lug -lug_mp
 
@@ -85,7 +85,8 @@ egads_eval_xyz_at_u.c             \
 egads_eval_xyz_at_uv.c            \
 egads_face_node_map.c             \
 egads_cad_geom_faceMatch.c        \
-egads_data.c
+egads_data.c                      \
+egads_mzone.c
 
 EGADS_AFLR4_OBJS  = $(addprefix $(ODIR)/,$(EGADS_AFLR4_FILES:.c=.o))
 

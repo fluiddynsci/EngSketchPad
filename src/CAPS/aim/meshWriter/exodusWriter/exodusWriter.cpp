@@ -9,6 +9,8 @@
  *
  */
 
+// https://sandialabs.github.io/seacas-docs/html/index.html
+
 #include <string.h>
 #include "aimUtil.h"
 #include "aimMesh.h"
@@ -31,28 +33,15 @@ const char *meshExtension()
 /*@+observertrans@*/
 }
 
-static int getFaceIndex(const int *tElemConn, std::array<int,2> &aFaceConn)
+template<int N>
+static int getFaceIndex(const int *tElemConn,
+                        const int nFace, const std::array<int,N> *tExodusFaceMap,
+                        std::array<int,N> &aFaceConn)
 {
-  int tExodusFaceMap[3][2] = {{0,1},{1,2},{2,0}};
-  for(int i = 0; i < 3; i++)
+  for(int i = 0; i < nFace; i++)
   {
-    std::array<int,2> tCurFaceConn;
-    for(int j = 0; j < 2; j++)
-      tCurFaceConn[j] = tElemConn[tExodusFaceMap[i][j]];
-    std::sort(tCurFaceConn.begin(), tCurFaceConn.end());
-    if (tCurFaceConn == aFaceConn)
-      return i+1;
-  }
-  return -1;
-}
-
-static int getFaceIndex(const int *tElemConn, std::array<int,3> &aFaceConn)
-{
-  int tExodusFaceMap[4][3] = {{0,1,3},{1,2,3},{2,0,3},{0,2,1}};
-  for(int i = 0; i < 4; i++)
-  {
-    std::array<int,3> tCurFaceConn;
-    for(int j = 0; j < 3; j++)
+    std::array<int,N> tCurFaceConn;
+    for(int j = 0; j < N; j++)
       tCurFaceConn[j] = tElemConn[tExodusFaceMap[i][j]];
     std::sort(tCurFaceConn.begin(), tCurFaceConn.end());
     if (tCurFaceConn == aFaceConn)
@@ -90,7 +79,7 @@ static int getNodesetTopos(void *aimInfo,
     AIM_STATUS(aimInfo, status);
 
     if (atype != ATTRSTRING) {
-        AIM_ERROR(aimInfo, "Attribute %s should be followed by a single string\n", attributeKey);
+        AIM_ERROR(aimInfo, "Attribute '%s' should be a single string", attributeKey);
         status = EGADS_ATTRERR;
         goto cleanup;
     }
@@ -142,6 +131,54 @@ cleanup:
 }
 
 
+static int getSidesetBounds(void *aimInfo,
+                            aimMeshRef *meshRef,
+                            std::vector<std::map<std::string, std::vector<int>>> &sidesetBounds)
+{
+  int status = CAPS_SUCCESS;
+  int imap, iface;
+  int atype, alen, state, np;
+  const int *ints;
+  const double *reals;
+  const char *string;
+  int numFace;
+  ego *faces, body;
+
+  const char *attributeKey = "capsBound";
+
+  sidesetBounds.resize(meshRef->nmap);
+
+  for (imap = 0; imap < meshRef->nmap; imap++) {
+    status = EG_statusTessBody(meshRef->maps[imap].tess, &body, &state, &np);
+    AIM_STATUS(aimInfo, status);
+
+    status = EG_getBodyTopos(body, NULL, FACE, &numFace, &faces);
+    AIM_STATUS(aimInfo, status);
+
+    for (iface = 0; iface < numFace; iface++) {
+
+      status = EG_attributeRet(faces[iface], attributeKey, &atype, &alen, &ints, &reals, &string);
+      if (status == EGADS_NOTFOUND) continue;
+      AIM_STATUS(aimInfo, status);
+
+      if (atype != ATTRSTRING) {
+        AIM_ERROR(aimInfo, "Attribute '%s' should be a single string", attributeKey);
+        status = EGADS_ATTRERR;
+        goto cleanup;
+      }
+
+      sidesetBounds[imap][std::string(string)].push_back(iface);
+    }
+
+    AIM_FREE(faces);
+  }
+
+  status = CAPS_SUCCESS;
+cleanup:
+  return status;
+}
+
+
 int meshWrite(void *aimInfo, aimMesh *mesh)
 {
   int  status; // Function return status
@@ -155,7 +192,8 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
   ego *bodies = NULL;
   int numBody = 0;
 
-  int i, j, d, igroup, nPoint, nElems, nBnds=0, nCellElem=0, nCellGroup=0, elemID = 0;
+  int i, j, k, d, iface, igroup;
+  int nPoint, nElems, nBnds=0, nCellElem=0, nCellGroup=0, ID = 0;
   int blk, bnd, cellID = 1;
 
   ex_init_params par;
@@ -172,10 +210,17 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
   int state, np;
   int imap;
 
-  int atype, len;
-  const int *ints = NULL;
+  int atype, alen;
+  const int *ints = NULL, *tessFaceQuadMap=NULL;
   const double *reals = NULL;
   const char *str = NULL;
+
+  int plen, tlen;
+  const double *points, *uv;
+  const int *ptype, *pindex, *tris, *tric;
+
+
+  int xMeshConstant = (int)true, yMeshConstant = (int)true, zMeshConstant = (int)true;
 
   int numTopo;
   ego *topos = NULL;
@@ -185,15 +230,24 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
   aimMeshRef *meshRef = NULL;
 
   std::array<int,2> tLineNodes;
-  std::array<int,3> tFaceNodes;
-  int tSortedTriFaceMap[3][2] = {{0,1},{1,2},{0,2}};
-  int tSortedTetFaceMap[4][3] = {{0,1,2},{1,2,3},{0,1,3},{0,2,3}};
+  std::array<int,3> tTriNodes;
+  std::array<int,4> tQuadNodes;
+
+  std::array<int,2> tExodusTriFaceMap[3] = {{0,1},{1,2},{2,0}};
+  std::array<int,2> tExodusQuadFaceMap[4] = {{0,1},{1,2},{2,3},{3,0}};
+  std::array<int,3> tExodusTetFaceMap[4] = {{0,1,3},{1,2,3},{2,0,3},{0,2,1}};
+
   std::map<std::array<int,2>, std::pair<int,const int*> > mLineToTriMap;
+  std::map<std::array<int,2>, std::pair<int,const int*> > mLineToQuadMap;
+  std::map<std::array<int,3>, std::pair<int,const int*> > mFaceToTriMap;
+  std::map<std::array<int,4>, std::pair<int,const int*> > mFaceToQuadMap;
   std::map<std::array<int,3>, std::pair<int,const int*> > mFaceToTetMap;
   std::map<std::string, std::vector<int> > sidesetGroups;
+  std::vector<std::map<std::string, std::vector<int>>> sidesetBounds;
   std::map<std::string, std::set<int> > nodesetGroups;
-  typedef std::map<std::string, std::vector<int> >::const_iterator sidesetGroups_iterator;
-  typedef std::map<std::string, std::set<int> >::const_iterator nodesetGroups_iterator;
+  typedef std::map<std::array<int,2>, std::pair<int,const int*> >::const_iterator sidesetLine_iterator;
+  typedef std::map<std::string, std::vector<int>>::const_iterator sideset_iterator;
+  typedef std::map<std::string, std::set<int> >::const_iterator nodeset_iterator;
 
   printf("\nWriting exodus file ....\n");
 
@@ -230,11 +284,12 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
     }
 
     // count the number of trace element groups
-    if (meshData->dim == 2) {
+    if (meshData->dim == 2 || meshRef->type == aimSurfaceMesh) {
 
       if (meshData->elemGroups[igroup].elementTopo != aimLine &&
-          meshData->elemGroups[igroup].elementTopo != aimTri) {
-        AIM_ERROR(aimInfo, "CAPS 2D Exodus writer only supports triangle meshes at the moment",
+          meshData->elemGroups[igroup].elementTopo != aimTri &&
+          meshData->elemGroups[igroup].elementTopo != aimQuad) {
+        AIM_ERROR(aimInfo, "CAPS 2D/Surface Exodus writer only supports triangle/quad meshes at the moment",
                   igroup, meshData->elemGroups[igroup].order);
         status = CAPS_IOERR;
         goto cleanup;
@@ -250,7 +305,7 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
 
       if (meshData->elemGroups[igroup].elementTopo != aimTri &&
           meshData->elemGroups[igroup].elementTopo != aimTet) {
-        AIM_ERROR(aimInfo, "CAPS 3D Exodus writer only supports tetrahedeal meshes at the moment",
+        AIM_ERROR(aimInfo, "CAPS 3D Exodus writer only supports tetrahedral meshes at the moment",
                   igroup, meshData->elemGroups[igroup].order);
         status = CAPS_IOERR;
         goto cleanup;
@@ -295,7 +350,11 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
     bnd++;
   }
 
-  /* agglomerate node set groups based on semi-colon separated groupName */
+  /* get sidesets for capsBound attributes */
+  status = getSidesetBounds(aimInfo, meshRef, sidesetBounds);
+  AIM_STATUS(aimInfo, status);
+
+  /* agglomerate node set groups based on semi-colon separated exNodeset */
   for (imap = 0; imap < meshRef->nmap; imap++) {
     status = EG_statusTessBody(meshRef->maps[imap].tess, &body, &state, &np);
     AIM_STATUS(aimInfo, status);
@@ -314,6 +373,8 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
   }
 
   nBnds = sidesetGroups.size();
+  for (std::size_t i = 0; i < sidesetBounds.size(); i++)
+    nBnds += sidesetBounds[i].size();
 
   par.num_dim       = meshData->dim;
   par.num_nodes     = meshData->nVertex;
@@ -343,12 +404,66 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
   if (meshData->dim == 3)
     AIM_ALLOC(z, meshData->nVertex, double, aimInfo, status);
 
-  for (i = 0; i < meshData->nVertex; i++)
-  {
-    x[i] = meshData->verts[i][0];
-    y[i] = meshData->verts[i][1];
-    if (meshData->dim == 3)
+
+  if (meshData->dim == 2) {
+
+    for (i = 0; i < meshData->nVertex; i++) {
+      // Constant x?
+      if ((meshData->verts[i][0] - meshData->verts[0][0]) > 1E-7) {
+        xMeshConstant = (int) false;
+      }
+
+      // Constant y?
+      if ((meshData->verts[i][1] - meshData->verts[0][1] ) > 1E-7) {
+        yMeshConstant = (int) false;
+      }
+
+      // Constant z?
+      if ((meshData->verts[i][2] - meshData->verts[0][2]) > 1E-7) {
+        zMeshConstant = (int) false;
+      }
+    }
+
+    if (zMeshConstant == (int) false) {
+      printf("Exodus expects 2D meshes be in the x-y plane... attempting to rotate mesh!\n");
+
+      if (xMeshConstant == (int) true && yMeshConstant == (int) false) {
+        printf("Swapping z and x coordinates!\n");
+        for (i = 0; i < meshData->nVertex; i++) {
+          x[i] = meshData->verts[i][2];
+          y[i] = meshData->verts[i][1];
+        }
+
+      } else if(xMeshConstant == (int) false && yMeshConstant == (int) true) {
+
+        printf("Swapping z and y coordinates!\n");
+        for (i = 0; i < meshData->nVertex; i++) {
+          x[i] = meshData->verts[i][0];
+          y[i] = meshData->verts[i][2];
+        }
+
+      } else {
+        AIM_ERROR(aimInfo, "Unable to rotate mesh!\n");
+        status = CAPS_NOTFOUND;
+        goto cleanup;
+      }
+
+    } else { // zMeshConstant == true
+      // Write nodal coordinates as is
+      for (i = 0; i < meshData->nVertex; i++) {
+        x[i] = meshData->verts[i][0];
+        y[i] = meshData->verts[i][1];
+      }
+    }
+
+  } else {
+
+    for (i = 0; i < meshData->nVertex; i++)
+    {
+      x[i] = meshData->verts[i][0];
+      y[i] = meshData->verts[i][1];
       z[i] = meshData->verts[i][2];
+    }
   }
 
   /* write all of the vertices */
@@ -386,14 +501,14 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
   // if there is only one body then look for the "_name" to indicate the block_name
   status = aim_getBodies(aimInfo, &intents, &numBody, &bodies);
   AIM_STATUS(aimInfo, status);
-  if (numBody == 1) {
+  if (numBody == 1 && meshRef->type == aimVolumeMesh) {
     AIM_NOTNULL(bodies, aimInfo, status);
-    EG_attributeRet(bodies[0], "_name", &atype, &len, &ints, &reals, &str);
+    EG_attributeRet(bodies[0], "_name", &atype, &alen, &ints, &reals, &str);
   }
 
   for (blk = 0, igroup = 0; igroup < meshData->nElemGroup; igroup++)
   {
-    if (meshData->dim == 2) {
+    if (meshData->dim == 2 || meshRef->type == aimSurfaceMesh) {
       if (meshData->elemGroups[igroup].elementTopo == aimLine)
         continue;
     } else {
@@ -402,14 +517,23 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
         continue;
     }
 
+         if (meshData->elemGroups[igroup].elementTopo == aimTri    ) name = "tri";
+    else if (meshData->elemGroups[igroup].elementTopo == aimQuad   )
+      if (meshData->dim == 2) name = "quad";
+      else                    name = "shell";
+    else if (meshData->elemGroups[igroup].elementTopo == aimTet    ) name = "tet";
+    else if (meshData->elemGroups[igroup].elementTopo == aimPyramid) name = "pyramid";
+    else if (meshData->elemGroups[igroup].elementTopo == aimPrism  ) name = "prism";
+    else if (meshData->elemGroups[igroup].elementTopo == aimHex    ) name = "hex";
+
     AIM_ALLOC(block_names[blk], MAX_STR_LENGTH+1, char, aimInfo, status);
 
     if (meshData->elemGroups[igroup].groupName != NULL)
-      snprintf(block_names[blk], MAX_STR_LENGTH,"%s", meshData->elemGroups[igroup].groupName);
+      snprintf(block_names[blk], MAX_STR_LENGTH,"%s_%s", meshData->elemGroups[igroup].groupName, name);
     else if (str != NULL)
-      snprintf(block_names[blk], MAX_STR_LENGTH,"%s",str);
+      snprintf(block_names[blk], MAX_STR_LENGTH,"%s_%s",str, name);
     else
-      snprintf(block_names[blk], MAX_STR_LENGTH,"Block%d",blk);
+      snprintf(block_names[blk], MAX_STR_LENGTH,"Block%d",blk+1);
 
     blk++;
   }
@@ -425,14 +549,24 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
     side_set_names[bnd] = NULL;
 
   bnd = 0;
-  for (sidesetGroups_iterator sideset = sidesetGroups.begin(); sideset != sidesetGroups.end(); ++sideset) {
+  for (sideset_iterator sideset = sidesetGroups.begin(); sideset != sidesetGroups.end(); ++sideset) {
     AIM_ALLOC(side_set_names[bnd], MAX_STR_LENGTH+1, char, aimInfo, status);
     snprintf(side_set_names[bnd], MAX_STR_LENGTH, "%s", sideset->first.c_str());
     bnd++;
   }
+  
+  for (std::size_t imap = 0; imap < sidesetBounds.size(); imap++) {
+    for (sideset_iterator sideset = sidesetBounds[imap].begin(); sideset != sidesetBounds[imap].end(); ++sideset) {
+      AIM_ALLOC(side_set_names[bnd], MAX_STR_LENGTH+1, char, aimInfo, status);
+      snprintf(side_set_names[bnd], MAX_STR_LENGTH, "%s", sideset->first.c_str());
+      bnd++;
+    }
+  }
 
-  status = ex_put_names(exoid, EX_SIDE_SET, side_set_names);
-  AIM_STATUS(aimInfo, status);
+  if (!sidesetGroups.empty() || !sidesetBounds.empty()) {
+    status = ex_put_names(exoid, EX_SIDE_SET, side_set_names);
+    AIM_STATUS(aimInfo, status);
+  }
 
   /* write the nodeset names */
   if (!nodesetGroups.empty()) {
@@ -441,7 +575,7 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
       node_set_names[i] = NULL;
 
     i = 0;
-    for (nodesetGroups_iterator nodeset = nodesetGroups.begin(); nodeset != nodesetGroups.end(); ++nodeset) {
+    for (nodeset_iterator nodeset = nodesetGroups.begin(); nodeset != nodesetGroups.end(); ++nodeset) {
       AIM_ALLOC(node_set_names[i], MAX_STR_LENGTH+1, char, aimInfo, status);
       snprintf(node_set_names[i], MAX_STR_LENGTH, "%s", nodeset->first.c_str());
       i++;
@@ -457,7 +591,7 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
   blk = 0;
   for (igroup = 0; igroup < meshData->nElemGroup; igroup++) {
 
-    if (meshData->dim == 2) {
+    if (meshData->dim == 2 || meshRef->type == aimSurfaceMesh) {
       if (meshData->elemGroups[igroup].elementTopo == aimLine)
         continue;
     } else {
@@ -468,54 +602,78 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
 
     nPoint = meshData->elemGroups[igroup].nPoint;
     nElems = meshData->elemGroups[igroup].nElems;
-    elemID = meshData->elemGroups[igroup].ID;
 
          if (meshData->elemGroups[igroup].elementTopo == aimTri    ) name = "tri";
-    else if (meshData->elemGroups[igroup].elementTopo == aimQuad   ) name = "quad";
+    else if (meshData->elemGroups[igroup].elementTopo == aimQuad   )
+      if (meshData->dim == 2) name = "quad";
+      else                    name = "shell";
     else if (meshData->elemGroups[igroup].elementTopo == aimTet    ) name = "tet";
     else if (meshData->elemGroups[igroup].elementTopo == aimPyramid) name = "pyramid";
     else if (meshData->elemGroups[igroup].elementTopo == aimPrism  ) name = "prism";
     else if (meshData->elemGroups[igroup].elementTopo == aimHex    ) name = "hex";
 
-    printf("\tBlock: '%s', blk_id %d, num_entries %d\n", block_names[blk++], elemID, nElems);
+    printf("\tBlock: '%s', blk_id %d, num_entries %d\n", block_names[blk], blk+1, nElems);
 
     /* write the block info */
-    status = ex_put_block(exoid, EX_ELEM_BLOCK, elemID, name, nElems, nPoint, 0, 0, num_attr);
+    status = ex_put_block(exoid, EX_ELEM_BLOCK, blk+1, name, nElems, nPoint, 0, 0, num_attr);
     AIM_STATUS(aimInfo, status);
 
     /* write the element connectivity */
-    status = ex_put_conn(exoid, EX_ELEM_BLOCK, elemID, meshData->elemGroups[igroup].elements, NULL, NULL);
+    status = ex_put_conn(exoid, EX_ELEM_BLOCK, blk+1, meshData->elemGroups[igroup].elements, NULL, NULL);
     AIM_STATUS(aimInfo, status);
+    blk++;
 
     /* construct the trace to cellID map */
     for(i = 0; i < nElems; i++, cellID++)
     {
       const int *tElemConn = meshData->elemGroups[igroup].elements + nPoint*i;
       if (meshData->dim == 2) {
-        for(j = 0; j < 3; j++) // assuming 3 faces on a tri
-        {
-          tLineNodes[0] = tElemConn[tSortedTriFaceMap[j][0]];
-          tLineNodes[1] = tElemConn[tSortedTriFaceMap[j][1]];
-          std::sort(tLineNodes.begin(), tLineNodes.end());
-          mLineToTriMap[tLineNodes] = std::pair<int,const int*>(cellID, tElemConn);
+        if (meshData->elemGroups[igroup].elementTopo == aimTri) {
+          for(j = 0; j < 3; j++) // 3 faces on a tri
+          {
+            tLineNodes[0] = tElemConn[tExodusTriFaceMap[j][0]];
+            tLineNodes[1] = tElemConn[tExodusTriFaceMap[j][1]];
+            std::sort(tLineNodes.begin(), tLineNodes.end());
+            mLineToTriMap[tLineNodes] = std::pair<int,const int*>(cellID, tElemConn);
+          }
+        } else {
+          for(j = 0; j < 4; j++) // 4 faces on a quad
+          {
+            tLineNodes[0] = tElemConn[tExodusQuadFaceMap[j][0]];
+            tLineNodes[1] = tElemConn[tExodusQuadFaceMap[j][1]];
+            std::sort(tLineNodes.begin(), tLineNodes.end());
+            mLineToQuadMap[tLineNodes] = std::pair<int,const int*>(cellID, tElemConn);
+          }
+        }
+      } else if (meshRef->type == aimSurfaceMesh) {
+        if (meshData->elemGroups[igroup].elementTopo == aimTri) {
+          for(j = 0; j < 3; j++) // 3 faces on a tri
+            tTriNodes[j] = tElemConn[j];
+          std::sort(tTriNodes.begin(), tTriNodes.end());
+          mFaceToTriMap[tTriNodes] = std::pair<int,const int*>(cellID, tElemConn);
+        } else {
+          for(j = 0; j < 4; j++) // 4 faces on a quad
+            tQuadNodes[j] = tElemConn[j];
+          std::sort(tQuadNodes.begin(), tQuadNodes.end());
+          mFaceToQuadMap[tQuadNodes] = std::pair<int,const int*>(cellID, tElemConn);
         }
       } else {
-        for(j = 0; j < 4; j++) // assuming 4 faces on a tet
+        for(j = 0; j < 4; j++) // 4 faces on a tet
         {
-          tFaceNodes[0] = tElemConn[tSortedTetFaceMap[j][0]];
-          tFaceNodes[1] = tElemConn[tSortedTetFaceMap[j][1]];
-          tFaceNodes[2] = tElemConn[tSortedTetFaceMap[j][2]];
-          std::sort(tFaceNodes.begin(), tFaceNodes.end());
-          mFaceToTetMap[tFaceNodes] = std::pair<int,const int*>(cellID, tElemConn);
+          tTriNodes[0] = tElemConn[tExodusTetFaceMap[j][0]];
+          tTriNodes[1] = tElemConn[tExodusTetFaceMap[j][1]];
+          tTriNodes[2] = tElemConn[tExodusTetFaceMap[j][2]];
+          std::sort(tTriNodes.begin(), tTriNodes.end());
+          mFaceToTetMap[tTriNodes] = std::pair<int,const int*>(cellID, tElemConn);
         }
       }
     }
   }
 
   /* write side sets */
-  elemID = 1;
+  ID = 1;
   bnd = 0;
-  for (sidesetGroups_iterator sideset = sidesetGroups.begin(); sideset != sidesetGroups.end(); ++sideset) {
+  for (sideset_iterator sideset = sidesetGroups.begin(); sideset != sidesetGroups.end(); ++sideset) {
 
     nElems = 0;
     for (i = 0; i < (int)sideset->second.size(); i++) {
@@ -526,10 +684,10 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
     std::vector<int> elem_list(nElems,-1);
     std::vector<int> side_list(nElems,-1);
 
-    printf("\tSideset: '%s', set_id %d, num_entries %d\n", side_set_names[bnd++], elemID, nElems);
+    printf("\tSideset: '%s', set_id %d, num_entries %d\n", side_set_names[bnd++], ID, nElems);
 
     /* write the side set info */
-    status = ex_put_set_param(exoid, EX_SIDE_SET, elemID, nElems, 0);
+    status = ex_put_set_param(exoid, EX_SIDE_SET, ID, nElems, 0);
     AIM_STATUS(aimInfo, status);
 
     int ielem = 0;
@@ -547,52 +705,206 @@ int meshWrite(void *aimInfo, aimMesh *mesh)
           tLineNodes[1] = tElemConn[1];
 
           std::sort(tLineNodes.begin(), tLineNodes.end());
-          tAttachedElem = mLineToTriMap.at(tLineNodes);
+
+          sidesetLine_iterator it = mLineToTriMap.find(tLineNodes);
+          if (it != mLineToTriMap.end()) {
+            tAttachedElem = it->second;
+            elem_list[ielem] = tAttachedElem.first;
+            side_list[ielem] = getFaceIndex<2>(tAttachedElem.second, 3, tExodusTriFaceMap, tLineNodes);
+            continue;
+          }
+
+          it = mLineToQuadMap.find(tLineNodes);
+          if (it != mLineToQuadMap.end()) {
+            tAttachedElem = it->second;
+            elem_list[ielem] = tAttachedElem.first;
+            side_list[ielem] = getFaceIndex<2>(tAttachedElem.second, 4, tExodusQuadFaceMap, tLineNodes);
+            continue;
+          }
+
+          AIM_ERROR(aimInfo, "Failed to located block element for segment %d %d", tLineNodes[0], tLineNodes[1]);
+          status = CAPS_BADVALUE;
+          goto cleanup;
+        } else if (meshRef->type == aimSurfaceMesh) {
+
+          if (meshData->elemGroups[igroup].elementTopo == aimTri) {
+            for(k = 0; k < 3; k++) // 3 faces on a tri
+              tTriNodes[k] = tElemConn[k];
+            std::sort(tTriNodes.begin(), tTriNodes.end());
+
+            tAttachedElem = mFaceToTriMap.at(tTriNodes);
+          } else {
+            for(k = 0; k < 4; k++) // 4 faces on a quad
+              tQuadNodes[k] = tElemConn[k];
+            std::sort(tQuadNodes.begin(), tQuadNodes.end());
+
+            tAttachedElem = mFaceToQuadMap.at(tQuadNodes);
+          }
 
           elem_list[ielem] = tAttachedElem.first;
-          side_list[ielem] = getFaceIndex(tAttachedElem.second, tLineNodes);
+          side_list[ielem] = 1;
         } else {
-          tFaceNodes[0] = tElemConn[0];
-          tFaceNodes[1] = tElemConn[1];
-          tFaceNodes[2] = tElemConn[2];
+          tTriNodes[0] = tElemConn[0];
+          tTriNodes[1] = tElemConn[1];
+          tTriNodes[2] = tElemConn[2];
 
-          std::sort(tFaceNodes.begin(), tFaceNodes.end());
-          tAttachedElem = mFaceToTetMap.at(tFaceNodes);
+          std::sort(tTriNodes.begin(), tTriNodes.end());
+          tAttachedElem = mFaceToTetMap.at(tTriNodes);
 
           elem_list[ielem] = tAttachedElem.first;
-          side_list[ielem] = getFaceIndex(tAttachedElem.second, tFaceNodes);
+          side_list[ielem] = getFaceIndex<3>(tAttachedElem.second, 4, tExodusTetFaceMap, tTriNodes);
         }
       }
     }
 
     /* write the side set elem and side lists */
-    status = ex_put_set(exoid, EX_SIDE_SET, elemID, elem_list.data(), side_list.data());
+    status = ex_put_set(exoid, EX_SIDE_SET, ID, elem_list.data(), side_list.data());
     AIM_STATUS(aimInfo, status);
     
-    elemID++;
+    ID++;
   }
 
+  for (std::size_t imap = 0; imap < sidesetBounds.size(); imap++) {
+
+    // check if the tessellation has a mixture of quad and tri
+    status = EG_attributeRet(meshRef->maps[imap].tess, ".mixed",
+                             &atype, &alen, &tessFaceQuadMap, &reals, &str);
+    AIM_NOTFOUND(aimInfo, status);
+
+
+    for (sideset_iterator sideset = sidesetBounds[imap].begin(); sideset != sidesetBounds[imap].end(); ++sideset) {
+
+      nElems = 0;
+      for (i = 0; i < (int)sideset->second.size(); i++) {
+
+        iface = sideset->second[i];
+
+        /* get the Face indexing and store it away */
+        status = EG_getTessFace(meshRef->maps[imap].tess, iface+1, &plen, &points, &uv, &ptype, &pindex,
+                                &tlen, &tris, &tric);
+        AIM_STATUS(aimInfo, status);
+
+        if (tessFaceQuadMap != NULL) {
+          tlen -= 2*tessFaceQuadMap[iface];
+          nElems += tessFaceQuadMap[iface];
+          }
+        nElems += tlen;
+      }
+
+      std::vector<int> elem_list(nElems,-1);
+      std::vector<int> side_list(nElems,-1);
+
+      printf("\tSideset: '%s', set_id %d, num_entries %d\n", side_set_names[bnd++], ID, nElems);
+
+      /* write the side set info */
+      status = ex_put_set_param(exoid, EX_SIDE_SET, ID, nElems, 0);
+      AIM_STATUS(aimInfo, status);
+
+      int ielem = 0;
+      for (i = 0; i < (int)sideset->second.size(); i++) {
+        iface = sideset->second[i];
+
+        /* get the Face indexing and store it away */
+        status = EG_getTessFace(meshRef->maps[imap].tess, iface+1, &plen, &points, &uv, &ptype, &pindex,
+                                &tlen, &tris, &tric);
+        AIM_STATUS(aimInfo, status);
+
+        if (tessFaceQuadMap != NULL) {
+          tlen -= 2*tessFaceQuadMap[iface];
+        }
+
+        int stride = 0;
+        for(j = 0; j < tlen; j++, stride += 3, ielem++) {
+          std::pair<int,const int*> tAttachedElem;
+
+          status = EG_localToGlobal(meshRef->maps[imap].tess, iface + 1, tris[stride + 0], &tTriNodes[0]);
+          AIM_STATUS(aimInfo, status);
+          status = EG_localToGlobal(meshRef->maps[imap].tess, iface + 1, tris[stride + 1], &tTriNodes[1]);
+          AIM_STATUS(aimInfo, status);
+          status = EG_localToGlobal(meshRef->maps[imap].tess, iface + 1, tris[stride + 2], &tTriNodes[2]);
+          AIM_STATUS(aimInfo, status);
+
+          std::sort(tTriNodes.begin(), tTriNodes.end());
+
+          if (meshRef->type == aimSurfaceMesh) {
+            tAttachedElem = mFaceToTriMap.at(tTriNodes);
+
+            elem_list[ielem] = tAttachedElem.first;
+            side_list[ielem] = 1;
+
+          } else {
+            tAttachedElem = mFaceToTetMap.at(tTriNodes);
+
+            elem_list[ielem] = tAttachedElem.first;
+            side_list[ielem] = getFaceIndex<3>(tAttachedElem.second, 4, tExodusTetFaceMap, tTriNodes);
+          }
+        }
+
+        if (tessFaceQuadMap != NULL && tessFaceQuadMap[iface] > 0) {
+          for(j = 0; j < tessFaceQuadMap[iface]; j++, stride += 6, ielem++) {
+            std::pair<int,const int*> tAttachedElem;
+
+            status = EG_localToGlobal(meshRef->maps[imap].tess, iface + 1, tris[stride + 0], &tQuadNodes[0]);
+            AIM_STATUS(aimInfo, status);
+            status = EG_localToGlobal(meshRef->maps[imap].tess, iface + 1, tris[stride + 1], &tQuadNodes[1]);
+            AIM_STATUS(aimInfo, status);
+            status = EG_localToGlobal(meshRef->maps[imap].tess, iface + 1, tris[stride + 2], &tQuadNodes[2]);
+            AIM_STATUS(aimInfo, status);
+            status = EG_localToGlobal(meshRef->maps[imap].tess, iface + 1, tris[stride + 5], &tQuadNodes[3]);
+            AIM_STATUS(aimInfo, status);
+
+            std::sort(tQuadNodes.begin(), tQuadNodes.end());
+
+            if (meshRef->type == aimSurfaceMesh) {
+              tAttachedElem = mFaceToQuadMap.at(tQuadNodes);
+
+              elem_list[ielem] = tAttachedElem.first;
+              side_list[ielem] = 1;
+
+            } else {
+              AIM_ERROR(aimInfo, "Quad side-set for Hex elements not yet supported!");
+              status = CAPS_NOTIMPLEMENT;
+              goto cleanup;
+
+//              tAttachedElem = mFaceToTetMap.at(tTriNodes);
+//
+//              elem_list[ielem] = tAttachedElem.first;
+//              side_list[ielem] = getFaceIndex<3>(tAttachedElem.second, 4, tExodusTetFaceMap, tTriNodes);
+            }
+          }
+        }
+      }
+
+      /* write the side set elem and side lists */
+      status = ex_put_set(exoid, EX_SIDE_SET, ID, elem_list.data(), side_list.data());
+      AIM_STATUS(aimInfo, status);
+
+      ID++;
+    }
+  }
+
+
   /* write node sets */
-  elemID = 1;
+  ID = 1;
   bnd = 0;
-  for (nodesetGroups_iterator nodeset = nodesetGroups.begin(); nodeset != nodesetGroups.end(); ++nodeset) {
+  for (nodeset_iterator nodeset = nodesetGroups.begin(); nodeset != nodesetGroups.end(); ++nodeset) {
 
     std::vector<int> node_list(nodeset->second.begin(),nodeset->second.end());
     nElems = node_list.size();
 
     AIM_NOTNULL(node_set_names, aimInfo, status);
     AIM_NOTNULL(node_set_names[bnd], aimInfo, status);
-    printf("\tNodeset: '%s', set_id %d, num_entries %d\n", node_set_names[bnd++], elemID, nElems);
+    printf("\tNodeset: '%s', set_id %d, num_entries %d\n", node_set_names[bnd++], ID, nElems);
 
     /* write the side set info */
-    status = ex_put_set_param(exoid, EX_NODE_SET, elemID, nElems, 0);
+    status = ex_put_set_param(exoid, EX_NODE_SET, ID, nElems, 0);
     AIM_STATUS(aimInfo, status);
 
     /* write the side set elem and side lists */
-    status = ex_put_set(exoid, EX_NODE_SET, elemID, node_list.data(), NULL);
+    status = ex_put_set(exoid, EX_NODE_SET, ID, node_list.data(), NULL);
     AIM_STATUS(aimInfo, status);
 
-    elemID++;
+    ID++;
   }
 
   printf("Finished writing Exodus file\n\n");

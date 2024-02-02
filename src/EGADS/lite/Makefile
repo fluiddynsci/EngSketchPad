@@ -49,7 +49,7 @@ $(LDIR)/libegadslite.dylib:	$(OBJS) liteTess.o liteTris.o liteQuads.o \
                 $(OBJS) liteTess.o liteTris.o liteQuads.o liteTessInp.o \
 		egadsRobust.o emp.o evaLite.o ratLite.o liteRegQuads.o \
 		liteEffect.o liteUVmap.o \
-		-undefined error -install_name '@rpath/libegadslite.dylib' \
+		-install_name '@rpath/libegadslite.dylib' \
                 -current_version $(EGREV) )
 
 $(LDIR)/libegadslitestatic.a:	$(OBJS) liteTess.o liteTris.o liteQuads.o \

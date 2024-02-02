@@ -3,7 +3,7 @@
 # pyEGADS --- Python version of EGADS API                                 #
 #                                                                         #
 #                                                                         #
-#      Copyright 2011-2023, Massachusetts Institute of Technology         #
+#      Copyright 2011-2024, Massachusetts Institute of Technology         #
 #      Licensed under The GNU Lesser General Public License, version 2.1  #
 #      See http://www.opensource.org/licenses/lgpl-2.1.php                #
 #                                                                         #
@@ -88,6 +88,9 @@ _egads.EG_getInfo.restype = c_int
 
 _egads.EG_copyObject.argtypes = [c_ego, POINTER(None), POINTER(c_ego)]
 _egads.EG_copyObject.restype = c_int
+
+_egads.EG_contextCopy.argtypes = [c_ego, c_ego, POINTER(c_ego)]
+_egads.EG_contextCopy.restype = c_int
 
 _egads.EG_flipObject.argtypes = [c_ego, POINTER(c_ego)]
 _egads.EG_flipObject.restype = c_int

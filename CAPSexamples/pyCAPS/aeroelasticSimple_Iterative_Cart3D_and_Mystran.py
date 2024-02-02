@@ -46,7 +46,7 @@ myProblem.analysis.create(aim = "cart3dAIM",
 myProblem.analysis.create(aim = "mystranAIM",
                           name = "mystran",
                           capsIntent = "Structure",
-                          autoExec = True)
+                          autoExec = False)
 
 # Create the data transfer connections
 boundNames = ["Skin_Top", "Skin_Bottom", "Skin_Tip"]
@@ -133,6 +133,22 @@ myProblem.analysis["mystran"].input.Constraint = {"edgeConstraint": constraint}
 # Aeroelastic iteration loop
 for iter in range(numTransferIteration):
 
+    if iter > 0:
+        for boundName in boundNames:
+            # Create the bound
+            bound = myProblem.bound[boundName]
+            
+            # Get the vertex sets on the bound for cart3d analysis
+            cart3dVset  = bound.vertexSet["cart3d"]
+            mystranVset = bound.vertexSet["mystran"]
+            
+            # Get data sets
+            cart3d_Displacement  = cart3dVset.dataSet["Displacement"]
+            mystran_Displacement = mystranVset.dataSet["Displacement"]
+            
+            cart3d_Displacement.writeVTK(os.path.join(myProblem.analysis["mystran"].analysisDir,str(iter) + "_cart3d_Displacement"+boundName))
+            mystran_Displacement.writeVTK(os.path.join(myProblem.analysis["mystran"].analysisDir,str(iter) + "_mystran_Displacement"+boundName))
+
     myProblem.analysis["cart3d"].runAnalysis()
     
     # Get Lift and Drag coefficients
@@ -142,3 +158,21 @@ for iter in range(numTransferIteration):
     # Print lift and drag
     print("Cl = ", Cl)
     print("Cd = ", Cd)
+    
+    for boundName in boundNames:
+        # Create the bound
+        bound = myProblem.bound[boundName]
+        
+        # Get the vertex sets on the bound for cart3d analysis
+        cart3dVset  = bound.vertexSet["cart3d"]
+        mystranVset = bound.vertexSet["mystran"]
+        
+        # Get data sets
+        cart3d_Pressure  = cart3dVset.dataSet["Pressure"]
+        mystran_Pressure = mystranVset.dataSet["Pressure"]
+        
+        cart3d_Pressure.writeVTK(os.path.join(myProblem.analysis["cart3d"].analysisDir,str(iter) + "_cart3d_Pressure_"+boundName))
+        mystran_Pressure.writeVTK(os.path.join(myProblem.analysis["cart3d"].analysisDir,str(iter) + "_mystran_Pressure"+boundName))
+
+    myProblem.analysis["mystran"].runAnalysis()
+

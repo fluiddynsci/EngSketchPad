@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -193,6 +193,8 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     FILE    *fp=NULL;
     ego                ecurvs[12], esurfs[6];
     ego     enodes[8], eedges[12], efaces[6], etemp[8], eloop, eshell;
+    void    *realloc_temp = NULL;            /* used by RALLOC macro */
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 
@@ -215,6 +217,19 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     message[0] = '\0';
 
     /* check arguments */
+    if        (IMAX(0) <= 0) {
+        snprintf(message, 100, "\"imax\" should be positive");
+        status = EGADS_RANGERR;
+        goto cleanup;
+    } else if (JMAX(0) <= 0) {
+        snprintf(message, 100, "\"jmax\" should be positive");
+        status = EGADS_RANGERR;
+        goto cleanup;
+    } else if (KMAX(0) <= 0) {
+        snprintf(message, 100, "\"kmax\" should be positive");
+        status = EGADS_RANGERR;
+        goto cleanup;
+    }
 
     /* get the outLevel from OpenCSM */
     outLevel = ocsmSetOutLevel(-1);

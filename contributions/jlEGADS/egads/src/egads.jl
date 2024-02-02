@@ -3,7 +3,7 @@
 *              jlEGADS --- Julia version of EGADS API
 *
 *
-*      Copyright 2011-2022, Massachusetts Institute of Technology
+*      Copyright 2011-2024, Massachusetts Institute of Technology
 *      Licensed under The GNU Lesser General Public License, version 2.1
 *      See http://www.opensource.org/licenses/lgpl-2.1.php
 *      Written by: Julia Docampo Sanchez
@@ -153,6 +153,32 @@ end
 
 
 """
+Copy an Object to the specified Context
+        
+This is useful in multithreaded settings when you wish to copy an object that exists in a different
+Context/thread. Use copyObject when copying from the object's context/thread to the context specified by other.
+
+Parameters
+----------
+context:
+    the context to copy the Object into
+
+object:
+    the Object to copy
+
+Returns
+-------
+newObject: the resultant new ego
+"""
+function contextCopy(context::Context; object::Ego)
+    ptr   = Ref{ego}()
+    raiseStatus(ccall((:EG_contextCopy, C_egadslib), Cint, (ego, ego, Ptr{ego}),
+            context._ego, object._ego, ptr))
+    return Ego(ptr[], ctxt = context, delObj = true)
+end
+
+
+"""
 Create a stream of data serializing the objects in the Model.
 
 Returns
@@ -164,7 +190,7 @@ function exportModel(model::Ego)
     nbyte  = Ref{Cint}(0)
     stream = Ref{Ptr{UInt8}}()
     raiseStatus(ccall((:EG_exportModel, C_egadslib), Cint,(ego, Ptr{Cint}, Ptr{Ptr{UInt8}}),
-                model._ego , nbyte,stream))
+                model._ego, nbyte, stream))
     return str = [unsafe_load(stream[], j) for j = 1:nbyte[]]
 end
 
@@ -1185,15 +1211,46 @@ end
 
 
 """
-Checks for topological equivalence between the the BODY self and the BODY dst.
+Checks for topological equivalence between the the BODY src and the BODY dst.
 If necessary, produces a mapping (indices in src which map to dst) and
 places these as attributes on the resultant BODY mapped (named .nMap, .eMap and .fMap).
-Also may modify BSplines associated with FACEs.
+Unlike mapBody, mapBody2 also works on FACEBODYs and WIREBODYs.
 
 Parameters
 ----------
 src:
     the source Body Object (not a WIREBODY)
+
+fAttr:
+    the FACE attribute string used to map FACEs
+
+eAttr:
+    the EDGE attribute string used to map EDGEs
+
+dst:
+    destination Body Object
+
+Returns
+-------
+Note: It is the responsibility of the caller to have
+      uniquely attributed all FACEs in both src and dst
+      to aid in the mapping.
+"""
+function mapBody2(src::Ego, fAttr::str, eAttr::str, dst::Ego)
+    raiseStatus(ccall((:EG_mapBody2, C_egadslib), Cint, (ego, Cstring, Cstring, ego),
+                src._ego, fAttr, eAttr, dst._ego))
+end
+
+
+"""
+Checks for topological equivalence between the the BODY src and the BODY dst.
+If necessary, produces a mapping (indices in src which map to dst) and
+places these as attributes on dst (named .nMap, .eMap and .fMap).
+
+Parameters
+----------
+src:
+    the source Body Object
 
 dst:
     destination body object

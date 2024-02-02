@@ -12,8 +12,14 @@ ODIR  = .
 
 TIMLIST =	$(LDIR)\capsMode.dll \
 		$(LDIR)\flowchart.dll \
+		$(LDIR)\viewer.dll
+
+!IFDEF PYTHONINC
+TIMLIST =	$(LDIR)\capsMode.dll \
+		$(LDIR)\flowchart.dll \
 		$(LDIR)\pyscript.dll \
 		$(LDIR)\viewer.dll
+!ENDIF
 
 default:	$(TIMLIST)
 

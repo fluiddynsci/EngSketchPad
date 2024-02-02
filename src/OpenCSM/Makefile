@@ -68,14 +68,17 @@ LIBLIST =	$(LDIR)/$(OSHLIB) \
 		$(LDIR)/supell.so \
 		$(LDIR)/tester1.so \
 		$(LDIR)/tester2.so \
+		$(LDIR)/vsp3.so \
 		$(LDIR)/waffle.so \
+		$(LDIR)/warp.so \
 		$(LDIR)/PDT2.so
 LIBFLIST =	$(LDIR)/naca456.so
 TIMLIST  =	$(LDIR)/ereped.so \
 		$(LDIR)/mitten.so \
 		$(LDIR)/plotter.so \
 		$(LDIR)/plugs.so \
-		$(LDIR)/slugs.so
+		$(LDIR)/slugs.so \
+		$(LDIR)/vspSetup.so
 INCLIST =	$(IDIR)/OpenCSM.h \
 		$(IDIR)/common.h \
 		$(IDIR)/udp.h \
@@ -123,7 +126,7 @@ $(LDIR)/libocsm.so:	$(ODIR)/OpenCSM.o $(ODIR)/udp.o $(ODIR)/tim.o
 $(LDIR)/libocsm.dylib:	$(ODIR)/OpenCSM.o $(ODIR)/udp.o $(ODIR)/tim.o
 	touch $(LDIR)/libocsm.dylib
 	rm $(LDIR)/libocsm.dylib
-	$(CC) -dynamiclib -o $(LDIR)/libocsm.dylib $(ODIR)/OpenCSM.o $(ODIR)/udp.o $(ODIR)/tim.o -L$(LDIR) -legads -lwsserver -ldl $(RPATH) -undefined error -install_name '@rpath/libocsm.dylib' -compatibility_version $(EGREV) -current_version $(EGREV)
+	$(CC) -dynamiclib -o $(LDIR)/libocsm.dylib $(ODIR)/OpenCSM.o $(ODIR)/udp.o $(ODIR)/tim.o -L$(LDIR) -legads -lwsserver -ldl $(RPATH) -install_name '@rpath/libocsm.dylib' -compatibility_version $(EGREV) -current_version $(EGREV)
 
 # CYGWIN
 $(LDIR)/libocsm.dll:	$(ODIR)/OpenCSM.o $(ODIR)/udp.o $(ODIR)/tim.o
@@ -609,6 +612,14 @@ $(LDIR)/tester2.so:	$(ODIR)/udpTester2.o $(LDIR)/$(OSHLIB)
 $(ODIR)/udpTester2.o:	udpTester2.c udpUtilities.c udpUtilities.h OpenCSM.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. udpTester2.c -o $(ODIR)/udpTester2.o
 
+$(LDIR)/vsp3.so:	$(ODIR)/udpVsp3.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/vsp3.so
+	rm $(LDIR)/vsp3.so
+	$(CC) $(SOFLGS) -o $(LDIR)/vsp3.so $(ODIR)/udpVsp3.o -L$(LDIR) -locsm -legads -lm
+
+$(ODIR)/udpVsp3.o:	udpVsp3.c udpUtilities.c udpUtilities.h OpenCSM.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. udpVsp3.c -o $(ODIR)/udpVsp3.o
+
 $(LDIR)/waffle.so:	$(ODIR)/udpWaffle.o $(LDIR)/$(OSHLIB)
 	touch $(LDIR)/waffle.so
 	rm $(LDIR)/waffle.so
@@ -616,6 +627,14 @@ $(LDIR)/waffle.so:	$(ODIR)/udpWaffle.o $(LDIR)/$(OSHLIB)
 
 $(ODIR)/udpWaffle.o:	udpWaffle.c udpUtilities.c udpUtilities.h OpenCSM.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. udpWaffle.c -o $(ODIR)/udpWaffle.o
+
+$(LDIR)/warp.so:	$(ODIR)/udpWarp.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/warp.so
+	rm $(LDIR)/warp.so
+	$(CC) $(SOFLGS) -o $(LDIR)/warp.so $(ODIR)/udpWarp.o -L$(LDIR) -locsm -legads -lm
+
+$(ODIR)/udpWarp.o:	udpWarp.c udpUtilities.c udpUtilities.h OpenCSM.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. udpWarp.c -o $(ODIR)/udpWarp.o
 
 #
 #	external grid generators (EGGs)
@@ -675,6 +694,14 @@ $(LDIR)/slugs.so:	$(ODIR)/timSlugs.o $(LDIR)/$(OSHLIB)
 
 $(ODIR)/timSlugs.o:	timSlugs.c OpenCSM.h tim.h
 	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. timSlugs.c -o $(ODIR)/timSlugs.o
+
+$(LDIR)/vspSetup.so:	$(ODIR)/timVspSetup.o $(LDIR)/$(OSHLIB)
+	touch $(LDIR)/vspSetup.so
+	rm $(LDIR)/vspSetup.so
+	$(CXX) $(SOFLGS) -o $(LDIR)/vspSetup.so $(ODIR)/timVspSetup.o -L$(LDIR) -locsm -lwsserver -legads -ldl -lm
+
+$(ODIR)/timVspSetup.o:	timVspSetup.c OpenCSM.h tim.h
+	$(CC) -c $(COPTS) $(DEFINE) -I$(IDIR) -I. timVspSetup.c -o $(ODIR)/timVspSetup.o
 
 #
 #	include files
@@ -892,8 +919,14 @@ lint:
 	@echo "Checking tester2.so..."
 	$(LINT) -I$(IDIR) udpTester2.c
 	@echo " "
+	@echo "Checking vsp3.so..."
+	$(LINT) -I$(IDIR) udpVsp3.c
+	@echo " "
 	@echo "Checking waffle.so..."
 	$(LINT) -I$(IDIR) udpWaffle.c
+	@echo " "
+	@echo "Checking warp.so..."
+	$(LINT) -I$(IDIR) udpWarp.c
 	@echo " "
 	@echo "Checking PDT2.so..."
 	$(LINT) -I$(IDIR) eggPDT2.c
@@ -913,9 +946,12 @@ lint:
 	@echo "Checking slugs.so..."
 	$(LINT) -I$(IDIR) timSlugs.c
 	@echo " "
+	@echo "Checking vspSetup.so..."
+	$(LINT) -I$(IDIR) timVspSetup.c
+	@echo " "
 
 clean:
-	(cd $(ODIR); rm -f udpFitcurve.o udpFreeform.o udfTester1.o udpTester2.o udpWaffle.o udpCsm.o \
+	(cd $(ODIR); rm -f udpFitcurve.o udpFreeform.o udfTester1.o udpTester2.o udpVsp3.o udpWaffle.o udpWarp.o udpCsm.o \
 		udpEllipse.o udpEqn2body.o udpNaca.o udpHex.o udpImport.o serveCSM.o serveESP.o \
 		OpenCSM.o udp.o tim.o udpBezier.o udpBox.o udpBspline.o udpNurbbody.o udpParabaloid.o udpParsec.o \
 		udpSample.o udpSew.o udpRadwaf.o udpNaca456.o naca456.o \
@@ -924,7 +960,7 @@ clean:
 		udpPod.o udpPoly.o udpProp.o udfEditAttr.o udfPrintBbox.o udfPrintBrep.o \
 		udfPrintEgo.o udfShadow.o udfFlend.o udfGanged.o udfGuide.o \
 		udfLinalg.o udfMatchBodys.o udfMechanism.o udfNacelle.o udfNaca6mc.o udfNuscale.o udfOffset.o timEreped.o timMitten.o \
-		timPlotter.o timPlugs.o timSlugs.o eggPDT2.o sensCSM.o )
+		timPlotter.o timPlugs.o timSlugs.o timVspSetup.o eggPDT2.o sensCSM.o )
 
 cleanall:	clean
 	rm -f  $(BINLIST) $(LIBLIST) $(LIBFLIST) $(TIMLIST) $(INCLIST)

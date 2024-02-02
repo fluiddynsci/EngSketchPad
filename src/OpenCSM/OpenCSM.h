@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,7 @@
 #define _OPENCSM_H_
 
 #define OCSM_MAJOR_VERSION  1
-#define OCSM_MINOR_VERSION 23
+#define OCSM_MINOR_VERSION 24
 
 #define MAX_NAME_LEN       64           /* maximum chars in name */
 #define MAX_EXPR_LEN      512           /* maximum chars in expression */
@@ -375,8 +375,19 @@ BLEND     begList=0 endList=0 reorder=0 oneFace=0 periodic=0 copyAttr=0
                           endList describes inward tangency at end
                   if begList!=0 and endList!=0, there must be at least
                      three interior Xsects
-                  blend is be default C2 between Xsects, except:
-                     Xsects repeated once yield C1 continuity
+                  blend is by default C2 at Xsects, except:
+                     Xsects repeated once yields C1 continuity
+                        if     either Xsects has attribute .C1side=fwd
+                           the slopes at the C1 comes from the next Xsect
+                        elseif either Xsects has attribute .C1side=rev
+                           the slopes at the C1 comes from the prior Xsect
+                        elseif there is only one Xsect before the repeat
+                           the slopes at the C1 comes from the prior Xsect
+                        elseif there is only one Xsect after the repeat
+                           the slopes at the C1 comes from the next Xsect
+                        else
+                           the slopes at the C1 comes from the prior Xsect
+                       note: the .C1side at the repeated Xsects cannot differ
                      Xsects repeated twice yield C0 continuity
                   if reorder!=0 then Xsects are reordered to minimize Edge
                      lengths in the direction between Xsects
@@ -693,7 +704,7 @@ DIMENSION $pmtrName nrow ncol
                   old values are not overwritten
                   cannot be followed by ATTRIBUTE or CSYSTEM
 
-DUMP      $filename remove=0 toMark=0 withTess=0
+DUMP      $filename remove=0 toMark=0 withTess=0 $grpName=.
           use:    write a file that contains the Body
           pops:   Body1 (if remove=1)
           pushes: -
@@ -715,6 +726,7 @@ DUMP      $filename remove=0 toMark=0 withTess=0
                      .egg    .EGG    --> EGG restart output
                      .iges   .IGES   --> IGES        output
                      .igs    .IGS    --> IGES        output
+                     .obj            --> WaveFront   output
                      .plot   .PLOT   --> ASCII plot  output
                      .sens   .SENS   --> ASCII sens  output
                      .step   .STEP   --> STEP        output
@@ -724,6 +736,7 @@ DUMP      $filename remove=0 toMark=0 withTess=0
                      .ugrid  .UGRID  --> ASCII AFRL3 output
                   if .bstl, use _stlColor from Face, Body, or 0 for color
                   if .egads, set _despmtr_* and _outpmtr_ Attributes on Model
+                  if .obj, Faces are grouped based upon grpName attribute
                   signals that may be thrown/caught:
                      $file_not_found
                      $insufficient_bodys_on_stack
@@ -1525,7 +1538,7 @@ RULE      reorder=0 periodic=0 copyAttr=0
                   if no Nodes in the Xsects have Attribute .multiNode,
                       all Xsects must have the same number of Edges
                   if a Node in a Xsect has Attribute .multiNode, the
-                      integer value of the Attribute tells the multiplicity
+                      integer value of the Attribute tells the multiplicity-1
                   if the first Node has Attribute .multiNode, then a second
                       integer value tells which replicate (bias-0) should be
                       considered the beginning of the Xsect
@@ -1609,7 +1622,10 @@ SELECT    $type arg1 ...
                   elseif arguments are: "face xmin xmax ymin ymax zmin zmax"
                      sets @seltype to 2
                      uses @selbody
-                     sets @sellist to Faces whose bboxs are completely in given range
+                     if xmin=xmax and ymin=ymax and zmin=zmax
+                        sets @sellist to Face whose center is closest to xmin,ymin,zmin
+                     else
+                        sets @sellist to Faces whose bboxs are completely in given range
                   elseif arguments are: "face -1 ibody1"
                      sets @seltype to 2
                      uses @selbody
@@ -1659,7 +1675,10 @@ SELECT    $type arg1 ...
                   elseif arguments are: "edge xmin xmax ymin ymax zmin zmax"
                      sets @seltype to 1
                      uses @selbody
-                     sets @sellist to Edges whose bboxs are completely in given range
+                     if xmin=xmax and ymin=ymax and zmin=zmax
+                        sets @sellist to Edge whose center is closest to xmin,ymin,zmin
+                     else
+                        sets @sellist to Edges whose bboxs are completely in given range
                   elseif arguments are: "edge attrName1    attrValue1
                                               attrName2=$* attrValue2=$*
                                               attrName3=$* attrValue3=$*"
@@ -1697,7 +1716,10 @@ SELECT    $type arg1 ...
                   elseif arguments are: "node xmin xmax ymin ymax zmin zmax"
                      sets @seltype to 0
                      uses @selbody
-                     sets @sellist to Nodes that are in given range
+                     if xmin=xmax and ymin=ymax and zmin=zmax
+                        sets @sellist to Node that is closest to xmin,ymin,zmin
+                     else
+                        sets @sellist to Nodes that are in given range
                   elseif arguments are: "node attrName1    attrValue1
                                               attrName2=$* attrValue2=$*
                                               attrName3=$* attrValue3=$*"
@@ -2019,9 +2041,9 @@ SUBTRACT  $order=none index=1 maxtol=0
                      create SheetBody that is part of Body1 that is
                         outside Body2
                      if index=-1, then all Bodys are returned
-                  elseif Body1=SheetBody and Body2=SheetBody
+                  elseif Body1=SheetBody and Body2=SheetBody (see special rule below)
                      create SheetBody that is Body1 scribed with Edges at
-                        intersection with Body2
+                         intersection with Body2
                   elseif Body1=WireBody and Body2=SolidBody
                      create WireBody that is part of Body1 that is outside Body2
                      CURRENTLY NOT IMPLEMENTED
@@ -2032,6 +2054,13 @@ SUBTRACT  $order=none index=1 maxtol=0
                   elseif Body2=NodeBody
                      split Edges in Body1 at Body2
                   endif
+                  special rule for SUBTRACTing two SheetBodys:
+                     if     Body1 and Body2 both contain one Face
+                     and if Body1 and Body2 are co-planar
+                     and if Body2 has only one Loop
+                     and if the Loop from Body2 could be a hole in Body1
+                     then a new SheetBody is created that is Body1 with an
+                         extra hole as prescribed by the Loop of Body2
                   if subtraction does not produce at least index Bodys,
                      an error is returned
                   order may be one of:
@@ -2707,12 +2736,18 @@ Special User-defined Attributes for Faces:
 
     _color      color of front of Face in ESP
                 either R,G,B in three 0-1 reals
-                or $red, $green, $blue, $yellow, $magenta,
-                $cyan, $white, or $black
+                or $red, $lred, $green, $lgreen, $blue, $lblue,
+                $yellow, $magenta, $cyan, $white, or $black
 
     _bcolor     color of back of Face in ESP (see _color)
 
     _gcolor     color of grid of Face in ESP (see _color)
+
+    _viz        if set to $off, then Face is initially not shown
+
+    _grd        if set to $on,  the grid on Face is initially shown
+
+    _trn        if set to $on,  then Face is initially shown transparent
 
     _makeQuads  to make old-style quads for this Face.  This is only
                 available if there is no _makeQuads Attribute on the Body.
@@ -2730,10 +2765,10 @@ Attributes assigned to Edges:
                 (or -3 if non-manifold)
 
     _edgeID     unique 5-tuple that is assigned automatically
-          [0]   _faceID[0] of Face 1 (or 0 if non-manifold)
-          [1]   _faceID[1] of Face 1 (or 0 if non-manifold)
-          [2]   _faceID[0] of Face 2 (or 0 if non-manifold)
-          [3]   _faceID[1] of Face 2 (or 0 if non-manifold)
+          [0]   _faceID[0] of Face 1 (or -9 if degenerate)
+          [1]   _faceID[1] of Face 1 (or -9 if degenerate)
+          [2]   _faceID[0] of Face 2
+          [3]   _faceID[1] of Face 2
           [4]   sequence number
 
                 _edgeID[0]/[1] swapped with edge[2]/[3]
@@ -2754,10 +2789,16 @@ Special User-defined Attributes for Edges:
 
     _color      color of front of Edge in ESP
                 either R,G,B in three 0-1 reals
-                or $red, $green, $blue, $yellow, $magenta,
-                $cyan, $white, or $black
+                or $red, $lred, $green, $lgreen, $blue, $lblue,
+                $yellow, $magenta, $cyan, $white, or $black
 
     _gcolor     color of grid of Edge in ESP (see _color)
+
+    _viz        if set to $off, then Edge is initially not shown
+
+    _grd        if set to $on,  then grid on Edge is initially shown
+
+    _ori        if set to $on,  then orientation is initially shown for Edge
 
 Attributes assigned to Nodes:
 
@@ -2771,8 +2812,10 @@ Special User-defined Attributes for Nodes:
 
     _color      color of Node in ESP
                 either R,G,B in three 0-1 reals
-                or $red, $green, $blue, $yellow, $magenta,
-                $cyan, $white, or $black
+                or $red, $lred, $green, $lgreen, $blue, $lblue,
+                $yellow, $magenta, $cyan, $white, or $black
+
+    _viz        if set to $on, then Node is initially shown
 */
 
 /*
@@ -2957,6 +3000,27 @@ typedef struct {
     ego           *ebody;               /* array  of EGADS Bodys stored */
 } stor_T;
 
+/* definition of the udp structures */
+#define MAXPRIM   32          // maximum different type of primitives
+typedef struct {
+    int       type;           /* type of argument */
+    void      *val;           /* values (across rows) */
+    double    *dot;           /* velocities */
+
+    int       size;           /* total size (nrow*ncol) */
+    int       nrow;           /* number of rows */
+    int       ncol;           /* number of columns */
+} udparg_T;
+
+typedef struct {
+    ego       ebody;          /* Body (or Model) output from UDP/UDF */
+    int       narg;           /* number of arguments */
+    udparg_T  *arg;           /* array  of arguments */
+    int       ndotchg;        /* number of dot   changes since udpSensitivity */
+    int       *bodyList;      /* list of Bodys used (0 terminated) */
+    void      *data;          /* private data */
+} udp_T;
+
 /* "Prof" is profile data */
 typedef struct {
     int           ncall;                /* number of calls */
@@ -2988,7 +3052,7 @@ typedef struct modl_T {
     int           verify;               /* =1 if verification ASSERTs are checked */
     int           cleanup;              /* number of Branches before context is cleaned up */
     int           dumpEgads;            /* =1 if Bodys are dumped during build */
-    int           loadEgads;            /* =1 if Bodys are loaded during build */
+    int           loadEgads;            /* =1 if Bodys are loaded during build, =-1 if error encountered */
     int           hasMPs;               /* =1 if mass properties have been calculated */
     int           printStack;           /* =1 to print stack after every command */
     int           tessAtEnd;            /* =1 to tessellate Bodys on stack at end of ocsmBuild */
@@ -3027,11 +3091,12 @@ typedef struct modl_T {
     int           mbody;                /* maximum   Bodys */
     body_T        *body;                /* array  of Bodys */
 
-    double        forceFDs;             /* !=0 to fircs FDs with given step */
+    double        forceFDs;             /* !=0 to forcs FDs with given step */
     int           needFDs;              /* =1 if finite differences are needed */
     int           numdots;              /* number of non-zero dots associated with DESPMTRS */
     struct modl_T *perturb;             /* model of perturbed body for sensitivty */
     struct modl_T *basemodl;            /* base MODL while creating perturbation */
+    struct modl_T *matchSeq;            /* MODL from which to derive sequence in _faceID and _edgeID */
     double        dtime;                /* time step in sensitivity */
                                         /*  0.001 = initial value */
                                         /* -2     = problem with previous attempt to create perturb */
@@ -3041,6 +3106,7 @@ typedef struct modl_T {
     mesgCB_H      mesgCB;               /* handle of message function (or NULL) */
     mesgCB_H      bcstCB;               /* handle of broadcast function (or NULL) */
     sizeCB_H      sizeCB;               /* handle of size change function (or NULL) */
+
     char          eggname[256];         /* name of external grid generator (or NULL) */
     eggGenerate_H eggGenerate;          /* handle of egg_generate function */
     eggMorph_H    eggMorph;             /* handle of egg_morph function */
@@ -3048,6 +3114,9 @@ typedef struct modl_T {
     eggDump_H     eggDump;              /* handle of egg_dump function */
     eggLoad_H     eggLoad;              /* handle of egg_load function */
     eggFree_H     eggFree;              /* handle of egg_free function */
+
+    int           NumUdp[MAXPRIM];      /* number of instances for each type of UDP/UDF */
+    udp_T         *Udps[ MAXPRIM];      /* array  of instances for each type of UDP/UDF */
 
     int           nwarn;                /* number of warnings */
     int           sigCode;              /* current signal code */
@@ -3554,9 +3623,10 @@ int ocsmGetUV(void   *modl,             /* (in)  pointer to MODL */
               int    ibody,             /* (in)  Body index (1:nbody) */
               int    seltype,           /* (in)  OCSM_EDGE, or OCSM_FACE */
               int    iselect,           /* (in)  Edge or Face index (1:nent) */
-              int    npnt,              /* (in)  number of points */
-    /*@null@*/double xyz[],             /* (in)  coordinates (NULL or 3*npnt in length) */
-              double uv[]);             /* (out) para coords (1*npnt or 2*npnt in length) */
+              int    npnt,              /* (in)  >0  number of points */
+                                        /*       <0 -number of points (but all starting locns) */
+    /*@null@*/double xyz[],             /* (in)  coordinates (NULL or 3*abs(npnt) in length) */
+              double uv[]);             /* (out) para coords (1*abs(npnt) or 2*abs(npnt) in length) */
 
 /* get the coordinates on a Node, Edge, or Face */
 __ProtoExt__
@@ -3622,9 +3692,9 @@ int ocsmAdjoint(void   *modl,           /* (in)  pointer to MODL */
                 int    ipmtr[],         /* (in)  array  of selected DESPMTR indices (1:npmtr) */
                 int    irow[],          /* (in)  array  of selected DESPMTR row    numbers */
                 int    icol[],          /* (in)  array  of selected DESPMTR column numbers */
-                int    nobj,            /* (in)  number of objectives/constraints (or 0 for full Jacobian) */
-      /*@null@*/double dOdX[],          /* (in)  array of d(obj)/d(xyz)   nobj*3*nglob (or NULL if nobj=0) */
-                double dOdD[]);         /* (out) array of d(obj)/d(dp)    nobj*ndp  (or 3*nglobID*ndp) */
+                int    nobj,            /* (in)  number of objectives/constraints */
+                double dOdX[],          /* (in)  array of d(obj)/d(xyz)   nobj*3*nglob */
+                double dOdD[]);         /* (out) array of d(obj)/d(dp)    nobj*ndp     */
 
 /* trace definition and uses of all Storage */
 __ProtoExt__

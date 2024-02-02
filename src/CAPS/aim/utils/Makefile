@@ -17,7 +17,7 @@ endif
 # Directory to install header files
 UTILDIR=$(IDIR)/aim/utils
 
-VPATH = $(ODIR)
+VPATH = $(ODIR):cython
 
 #OBJS  =	attrUtils.o meshUtils.o cfdUtils.o miscUtils.o feaUtils.o vlmUtils.o nastranUtils.o tecplotUtils.o arrayUtils.o deprecateUtils.o cardUtils.o nastranCards.o tempUtils.o jsonUtils.o pyscriptUtils.o
 OBJS  =	attrUtils.o meshUtils.o cfdUtils.o miscUtils.o feaUtils.o vlmUtils.o nastranUtils.o tecplotUtils.o arrayUtils.o deprecateUtils.o cardUtils.o nastranCards.o jsonUtils.o
@@ -39,7 +39,7 @@ $(LDIR)/libutils.a:	$(OBJS) $(OBJSPython) $(OBJSP)
 	(cd $(ODIR); ar -rs $(LDIR)/libutils.a $(OBJS) $(OBJSPython) $(OBJSP) )
 
 $(OBJS) $(OBJSPython): %.o: %.c %.h
-	$(CC) -c $(COPTS) $(DEFINE) -I../include -I$(IDIR) -I. $(PYINC) $< -o $(ODIR)/$@
+	$(CC) -c $(COPTS) $(DEFINE) -I../include -I$(IDIR) -I. $(PYINC) -Icython $< -o $(ODIR)/$@
 	
 $(OBJSP): %.o: %.cpp %.h
 	$(CXX) -c $(CPPOPT) $(DEFINE) -I../include -I$(IDIR) -I. $< -o $(ODIR)/$@
@@ -61,6 +61,6 @@ clean:
 cleanall:	clean
 	-rm -f $(LDIR)/libutils.a
 
+.PHONY: cython
 cython:
-	(cython -Wextra -2 nastranOP2Reader.pyx -I../../pyCAPS/src/ --capi-reexport-cincludes) 
-
+	make -C cython

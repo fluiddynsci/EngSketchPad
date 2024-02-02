@@ -133,9 +133,12 @@ int fun3d_readAeroLoad(void *aimInfo, char *filename, int *numVariable, char **v
 
     } else {
 
-        printf("No data values extracted from file - %s",filename);
+        AIM_ERROR(aimInfo, "No data values extracted from file - %s",filename);
         status = CAPS_BADVALUE;
+        goto cleanup;
     }
+
+    status = CAPS_SUCCESS;
 
 cleanup:
     if (fp != NULL) fclose(fp);
@@ -552,7 +555,7 @@ int fun3d_2DMesh(void *aimInfo,
         }
     }
 
-    status = extrude_SurfaceMesh(extrusion, extrusionBCIndex, &surfaceMesh, &volumeMesh);
+    status = extrude_SurfaceMesh(aimInfo, extrusion, extrusionBCIndex, &surfaceMesh, &volumeMesh);
     AIM_STATUS(aimInfo, status);
 
     strcpy(filename, projectName);
@@ -854,7 +857,7 @@ int fun3d_dataTransfer(void *aimInfo,
         dataOutMatrix[6][i] = 0;
       }
 
-      // check if the tessellation has a mixture of quad and tess
+      // check if the tessellation has a mixture of quad and tri
       status = EG_attributeRet(meshRef->maps[i].tess, ".mixed",
                                &atype, &alen, &nquad, &reals, &string);
       if (status != EGADS_SUCCESS &&
@@ -1300,11 +1303,15 @@ int fun3d_writeNML(void *aimInfo, capsValue *aimInputs, cfdBoundaryConditionStru
     fprintf(fnml,"&governing_equations\n");
 
     if (aimInputs[Viscoux-1].nullVal != IsNull) {
-        fprintf(fnml," viscous_terms = \"%s\"\n", aimInputs[Viscoux-1].vals.string);
+        strcpy(filename, aimInputs[Viscoux-1].vals.string);
+        string_toLowerCase(filename);
+        fprintf(fnml," viscous_terms = \"%s\"\n", filename);
     }
 
     if (aimInputs[Equation_Type-1].nullVal != IsNull) {
-        fprintf(fnml," eqn_type = \"%s\"\n", aimInputs[Equation_Type-1].vals.string);
+        strcpy(filename, aimInputs[Equation_Type-1].vals.string);
+        string_toLowerCase(filename);
+        fprintf(fnml," eqn_type = \"%s\"\n", filename);
     }
 
     fprintf(fnml,"/\n\n");
@@ -1508,6 +1515,8 @@ cleanup:
 
 // Write FUN3D movingbody.input file
 int fun3d_writeMovingBody(void *aimInfo, double fun3dVersion, cfdBoundaryConditionStruct bcProps,
+                          const char *motion_driver,
+                          const char *mesh_movement,
                           cfdModalAeroelasticStruct *modalAeroelastic)
 {
 
@@ -1522,7 +1531,7 @@ int fun3d_writeMovingBody(void *aimInfo, double fun3dVersion, cfdBoundaryConditi
     int bodyIndex = 1;
     int stringLength;
 
-    printf("Writing moving_body.input");
+    printf("Writing moving_body.input\n");
 
     stringLength = strlen(fileExt) + 1;
 
@@ -1547,7 +1556,7 @@ int fun3d_writeMovingBody(void *aimInfo, double fun3dVersion, cfdBoundaryConditi
     for (i = 0; i < bcProps.numSurfaceProp; i++) {
 
         if (bcProps.surfaceProp[i].surfaceType == Viscous ||
-                bcProps.surfaceProp[i].surfaceType == Inviscid) {
+            bcProps.surfaceProp[i].surfaceType == Inviscid) {
 
             fprintf(fp," defining_bndry(%d,%d) = %d\n", counter+1,
                     bodyIndex,
@@ -1562,11 +1571,17 @@ int fun3d_writeMovingBody(void *aimInfo, double fun3dVersion, cfdBoundaryConditi
     fprintf(fp," motion_driver(%d) = ", bodyIndex);
     if (modalAeroelastic != NULL) {
         fprintf(fp,"\"aeroelastic\"\n");
+    } else {
+        AIM_NOTNULL(motion_driver, aimInfo, status);
+        fprintf(fp,"\"%s\"\n", motion_driver);
     }
 
     fprintf(fp," mesh_movement(%d) = ", bodyIndex);
     if (modalAeroelastic != NULL) {
         fprintf(fp,"\"deform\"\n");
+    } else {
+        AIM_NOTNULL(mesh_movement, aimInfo, status);
+        fprintf(fp,"\"%s\"\n", mesh_movement);
     }
 
     fprintf(fp,"/\n\n");
@@ -1616,10 +1631,6 @@ int fun3d_writeMovingBody(void *aimInfo, double fun3dVersion, cfdBoundaryConditi
     status = CAPS_SUCCESS;
 
 cleanup:
-    if (status != CAPS_SUCCESS)
-        printf("Error: Premature exit in fun3d_writeMovingBody status = %d\n",
-               status);
-
     if (fp != NULL) fclose(fp);
 
     if (filename != NULL) EG_free(filename);
@@ -1845,7 +1856,7 @@ int  fun3d_writeParameterization(void *aimInfo,
       status = EG_statusTessBody(meshRef->maps[i].tess, &body, &state, &numOutDataPoint);
       AIM_STATUS(aimInfo, status);
 
-      // check if the tessellation has a mixture of quad and tess
+      // check if the tessellation has a mixture of quad and tri
       status = EG_attributeRet(meshRef->maps[i].tess, ".mixed",
                                &atype, &alen, &nquad, &reals, &string);
       if (status != EGADS_SUCCESS &&
@@ -2095,7 +2106,7 @@ int  fun3d_writeSurface(void *aimInfo,
             // Get connectivity
             //
 
-            // check if the tessellation has a mixture of quad and tess
+            // check if the tessellation has a mixture of quad and tri
             status = EG_attributeRet(meshRef->maps[i].tess, ".mixed", &atype, &alen, &nquad, &reals, &string);
             if (status != EGADS_SUCCESS &&
                 status != EGADS_NOTFOUND) AIM_STATUS(aimInfo, status);
@@ -2281,7 +2292,7 @@ static int _writeFunctinoalComponent(void *aimInfo, FILE *fp, cfdDesignFunctiona
                           };
 
     int i, found = (int)false;
-    char *function=NULL, *c=NULL;
+    char *function=NULL;
 
     for (i = 0; i < sizeof(names)/sizeof(char*); i++)
         if ( strcasecmp(names[i], comp->name) == 0 ) {
@@ -2300,7 +2311,7 @@ static int _writeFunctinoalComponent(void *aimInfo, FILE *fp, cfdDesignFunctiona
 
     // make the name lower case
     AIM_STRDUP(function, comp->name, aimInfo, status);
-    for (c = function; *c != '\0'; ++c) *c = tolower(*c);
+    string_toLowerCase(function);
 
     // fprintf(fp, "Components of function   1: boundary id (0=all)/name/value/weight/target/power\n");
     fprintf(fp, " %d %s          %f %f %f %f\n", comp->bcID,

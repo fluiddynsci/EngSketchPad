@@ -3,7 +3,7 @@
 #                         unit testing for jlEGADS                        #
 #                                                                         #
 #                                                                         #
-#      Copyright 2011-2022, Massachusetts Institute of Technology         #
+#      Copyright 2011-2024, Massachusetts Institute of Technology         #
 #      Licensed under The GNU Lesser General Public License, version 2.1  #
 #      See http://www.opensource.org/licenses/lgpl-2.1.php                #
 #                                                                         #
@@ -388,8 +388,7 @@ function test_attribution(context)
 
   egads.attributeAdd!(faces1[2], "faceMap", 2)
   egads.attributeAdd!(faces2[1], "faceMap", 1)
-  mapB    = egads.mapBody(box1,box2, "faceMap")
-
+ 
   attrVal = egads.attributeRet(faces1[2], "faceMap")
   nAttr   = egads.attributeNum(faces1[2])
 
@@ -973,8 +972,10 @@ function test_mapBody(context)
   faces1 = egads.getBodyTopos(box1, egads.FACE)
   faces2 = egads.getBodyTopos(box2, egads.FACE)
 
-  egads.attributeAdd!(faces1[2], "faceMap", [1])
-  egads.attributeAdd!(faces2[1], "faceMap", [1])
+  for i=1:length(faces1)
+    egads.attributeAdd!(faces1[i], "faceMap", [i])
+    egads.attributeAdd!(faces2[i], "faceMap", [i])
+  end
 
   mapB  = egads.mapBody(box1,box2, "faceMap")
   tess1 = egads.makeTessBody(box1,[0.1, 0.1, 15.])

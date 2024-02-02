@@ -3,7 +3,7 @@
  *
  *             AIM Utility Functions
  *
- * *      Copyright 2014-2023, Massachusetts Institute of Technology
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -1384,7 +1384,10 @@ aim_makeDynamicOutput(void *aimStruc, const char *dynObjName, capsValue *value)
   if (aInfo->magicnumber != CAPSMAGIC)  return CAPS_BADOBJECT;
   if (dynObjName == NULL)               return CAPS_NULLNAME;
   if (value      == NULL)               return CAPS_NULLVALUE;
-  if (aInfo->funID != AIM_POSTANALYSIS) return CAPS_STATEERR;
+  if (aInfo->funID != AIM_POSTANALYSIS) {
+    AIM_ERROR(aimStruc, "Developer Error: aim_makeDynamicOutput may only be called from aimPostAnalysis!");
+    return CAPS_STATEERR;
+  }
   problem  = aInfo->problem;
   pobject  = problem->mySelf;
   analysis = (capsAnalysis *) aInfo->analysis;
@@ -1528,6 +1531,67 @@ aim_getGeomInType(void *aimStruc, int index)
 }
 
 
+static int
+aim_deleteTess(void *aimStruc, ego tess)
+{
+  int           i, j, k, n;
+  aimInfo       *aInfo;
+  capsProblem   *problem;
+  capsBound     *bound;
+  capsVertexSet *vertexset;
+  capsObject    *dobject;
+  capsDataSet   *dataset;
+
+  aInfo = (aimInfo *) aimStruc;
+  if (aInfo == NULL)                   return CAPS_NULLOBJ;
+  if (aInfo->magicnumber != CAPSMAGIC) return CAPS_BADOBJECT;
+  if (tess == NULL)                    return EGADS_NULLOBJ;
+  if (tess->magicnumber  != MAGIC)     return EGADS_NOTOBJ;
+  problem  = aInfo->problem;
+
+  /* find bound with same name */
+  for (i = 0; i < problem->nBound; i++) {
+    if (problem->bounds[i]       == NULL) continue;
+    if (problem->bounds[i]->name == NULL) continue;
+    /* find our analysis in the Bound */
+    bound = (capsBound *) problem->bounds[i]->blind;
+    if (bound == NULL) return CAPS_NULLOBJ;
+    for (j = 0; j < bound->nVertexSet; j++) {
+      if (bound->vertexSet[j]              == NULL)      continue;
+      if (bound->vertexSet[j]->magicnumber != CAPSMAGIC) continue;
+      if (bound->vertexSet[j]->type        != VERTEXSET) continue;
+      if (bound->vertexSet[j]->blind       == NULL)      continue;
+      vertexset = (capsVertexSet *) bound->vertexSet[j]->blind;
+      if (vertexset        == NULL) continue;
+      if (vertexset->discr == NULL) continue;
+      for (k = 0; k < vertexset->discr->nBodys; k++) {
+        if (vertexset->discr->bodys[k].tess == tess) {
+          // indicate the discretization needs to be re-filled
+          vertexset->discr->bodys[k].tess = NULL;
+
+          if (vertexset->dataSets == NULL) continue;
+          for (n = 0; n < vertexset->nDataSets; n++) {
+            if (vertexset->dataSets[n] == NULL) continue;
+            dobject = vertexset->dataSets[n];
+            dataset = (capsDataSet *) dobject->blind;
+            if (dataset == NULL) continue;
+            if ((dataset->ftype == User) &&
+                (strcmp(dobject->name, "xyz") == 0)) continue;
+            EG_free(dataset->data);
+            dataset->npts = 0;
+            dataset->data = NULL;
+          }
+        }
+      }
+    }
+  }
+
+  EG_deleteObject(tess);
+
+  return CAPS_SUCCESS;
+}
+
+
 int
 aim_newTess(void *aimStruc, ego tess)
 {
@@ -1559,7 +1623,8 @@ aim_newTess(void *aimStruc, ego tess)
   for (i = 0; i < analysis->nBody; i++) {
     if (body != analysis->bodies[i]) continue;
     if (analysis->tess[i] != NULL) {
-      EG_deleteObject(analysis->tess[i]);
+      stat = aim_deleteTess(aimStruc, analysis->tess[i]);
+      if (stat != EGADS_SUCCESS) return stat;
     }
     analysis->tess[i] = tess;
     return CAPS_SUCCESS;
@@ -1572,7 +1637,8 @@ aim_newTess(void *aimStruc, ego tess)
     if (stat == EGADS_OUTSIDE) return CAPS_SOURCEERR;
     if (tbody != body) continue;
     if (analysis->tess[i] != NULL) {
-      EG_deleteObject(analysis->tess[i]);
+      stat = aim_deleteTess(aimStruc, analysis->tess[i]);
+      if (stat != EGADS_SUCCESS) return stat;
     }
     analysis->tess[i] = tess;
     return CAPS_SUCCESS;

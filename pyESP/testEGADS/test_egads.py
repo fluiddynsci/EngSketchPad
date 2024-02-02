@@ -2011,8 +2011,9 @@ class TestEGADS(unittest.TestCase):
         faces0 = box0.getBodyTopos(egads.FACE)
         faces1 = box1.getBodyTopos(egads.FACE)
 
-        faces0[1].attributeAdd("faceMap", [1])
-        faces1[0].attributeAdd("faceMap", [1])
+        for i in range(len(faces0)):
+            faces0[i].attributeAdd("faceMap", [i])
+            faces1[i].attributeAdd("faceMap", [i])
 
         map = box0.mapBody(box1, "faceMap")
 

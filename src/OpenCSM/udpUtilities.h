@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2010/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -45,26 +45,11 @@
 #define CDOUBLE const double
 #define CCHAR   const char
 
-/* definition of the udp structures */
-typedef struct {
-    void      *val;           /* values (across rows) */
-    double    *dot;           /* velocities */
-
-    int       size;           /* total size (nrow*ncol) */
-    int       nrow;           /* number of rows */
-    int       ncol;           /* number of columns */
-} udparg_T;
-
-typedef struct {
-    ego        ebody;
-    udparg_T   arg[NUMUDPARGS];
-    int        *bodyList;
-    void       *data;         /* private data */
-} udp_T;
-
-/* storage for UDPs */
-static int    numUdp = 0;     /* number of UDPs */
-static udp_T  *udps  = NULL;  /* array  of UDPs */
+#define  udpExecute(A,B,C,D)         UdpExecute(    A, B, C, D,       int *NumUdp, udp_T **Udps)
+#define  udpSensitivity(A,B,C,D,E,F) UdpSensitivity(A, B, C, D, E, F, int *NumUdp, udp_T  *udps)
+#define  udpMesh(A,B,C,D,E,F)        UdpMesh(       A, B, C, D, E, F, int *NumUdp, udp_T  *udps)
+#define  cacheUdp(A)                 CacheUdp(      A,                     NumUdp, Udps); udps = *Udps
+#define  numUdp  (*NumUdp)
 
 #endif  /* _UDPUTILITIES_H_ */
 

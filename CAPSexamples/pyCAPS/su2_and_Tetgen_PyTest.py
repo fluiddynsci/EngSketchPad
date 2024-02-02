@@ -86,7 +86,7 @@ myAnalysis = myProblem.analysis.create(aim = "su2AIM", name = "su2")
 myAnalysis.input["Mesh"].link(myMesh.output["Volume_Mesh"])
 
 # Set SU2 Version
-myAnalysis.input.SU2_Version = "Blackbird"
+myAnalysis.input.SU2_Version = "Harrier"
 
 # Set project name
 myAnalysis.input.Proj_Name = "pyCAPS_SU2_Tetgen"

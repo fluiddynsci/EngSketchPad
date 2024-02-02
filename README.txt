@@ -1,5 +1,7 @@
                         ESP: The Engineering Sketch Pad
-                             Rev 1.23 -- May 2023
+                             Rev 1.24 -- January 2024
+
+                          https://acdl.mit.edu/ESP/
 
   ******************************************************************
   * THESE DIRECTIONS ARE ONLY REQUIRED IF YOU WILL BE BUILDING ESP *
@@ -20,8 +22,7 @@
 
     It is advisable to unblock browser tabs on the web browser in use.
 
-    The training material is no longer part of this distribution. The last
-    training was given for Rev 1.22 and can be found at the ESP website at
+    Training material can be found at the ESP website at 
     http://acdl.mit.edu/ESP/Training, which is in 2 parts. The first is on
     ESP geometry construction, labeled with ESP, and the second on analysis, 
     labeled with CAPS. 
@@ -31,13 +32,12 @@
         on how to get ESP see MACdownloads.txt on the web site.
     (2) You must have XQuartz at a minimum release of 2.8.1 for some supplied
         executables to function.
-    (3) Big Sur and Monterey are now fully tested. 
-    (4) Apple arm64 (M1/M2) computers are natively supported but require Rosetta2 
+    (3) Apple arm64 (M#) computers are natively supported but require Rosetta2 
         for the running of some legacy CAPS apps. Rosetta2 can be installed by 
         executing the following command: "softwareupdate --install-rosetta".
-    (5) Apple arm64 (M1/M2) builds must be done in a "native" shell. 
+    (4) Apple arm64 (M#) builds must be done in a "native" shell. 
         That is, typing "arch" must return "arm64".
-    (6) If Safari blocks a pop-up (for example, the flowchart in ESP),
+    (5) If Safari blocks a pop-up (for example, the flowchart in ESP),
         you can press the rectangular button in the Smart Search field
         and allow the file to be seen.
 
@@ -94,6 +94,12 @@
 
     The significant updates made to EGADS from Rev 1.23 are:
 
+    * Blend sections may have .C1side attribute to specify which side to make C1
+    * Improved STEP/IGES read peformace.
+    * Read Name attribute on all entities from STEP/IGES files.
+    * EG_imprintBody accepts FACE/LOOP pairs consistent with documentation
+    * Added EG_mapBody2 for completely general mapping/
+    * Add EG_contextCopy to threading support
     * General bug fixes
 
 1.2.2 OpenCSM
@@ -105,12 +111,14 @@
 
 1.2.3 CAPS
 
-    * Comment on F\_UFMTENDIAN environment variable if msesAIM fails to read mses sensx file
-    * Fully support 2D meshes for plato and exodus mesher writer
-    * Update AFLR4/AFLR3 to work for MultiDomain
-    * AFLR2 supports multiple faces
-    * Upgraded to AFLR 11.4.5
-    * Upgraded to SU2-7.5.1
+    * Added refine AIM for mesh adaptation
+    * Added abaqus AIM for structural analysis
+    * Improvements to Mesh_Morph capabilities
+    * Fix bug where aflr3 BL_Thickness and BL_Initial_Spacing were not scaled by capsMeshLength
+    * Bug fixes to allow mixed tri/quad data transfer
+    * Fill out all MAT8 entries for structural analysis
+    * Upgrade SU2 AIM for Harrier 8.0.0
+    * Add temperature data transfer to various AIMs
 
 1.2.4 ESP
 
@@ -118,9 +126,10 @@
     * A complete "Integrated Design Environment" now exists in ESP. In the
       help look at Tutorial #6 to get a flavor of what you can now do.
 
-1.2.5 Known issues in v1.23:
+1.2.5 Known issues in v1.24:
 
     * data/fighter4 does not functoin with Intel macOS 13.3 and gerater
+    * AFLR2 does not always generate valid quads
 
 
 2. Building the Software
@@ -153,7 +162,9 @@
     ESPenv.csh.  These are the environments for both sh (bash/zsh) and csh 
     (tcsh) respectively.  The appropriate file can be "source"d or included 
     in the user's startup scripts. This must be done before either building 
-    and/or running the software. For example, if using the csh or tcsh:
+    and/or running the software. 
+    
+    For example, if using the csh or tcsh:
 
         % cd $ESP_ROOT
         % source ESPenv.csh
@@ -398,7 +409,7 @@
 4.1 The AFLR suite
 
     Building the AFLR AIMs (AFLR2, AFLR3 and AFLR4) requires AFLR_LIB at
-    11.4.5 or higher. Note that built versions of the so/DLLs are now provided
+    11.5.9 or higher. Note that built versions of the so/DLLs are now provided
     with the ESP source. There is no longer need to copy them from the PreBuilt.
 
 4.2 Athena Vortex Lattice
@@ -417,7 +428,7 @@
 
 4.4 Cart3D
 
-    The interfaces to Cart3D will only work with V1.5.5 and V1.5.7.
+    The interfaces to Cart3D will only work with V1.5.9.
 
 4.5 Fun3D
 
@@ -449,10 +460,16 @@
 
 4.9 SU2
 
-    Supported versions are: 4.1.1 (Cardinal), 5.0.0 (Raven), 6.2.0 (Falcon) 
-    and 7.5.1 (Blackbird). SU2 version 6.0 will work except for the use of 
+    Supported versions are: 
+        4.1.1 (Cardinal)
+        5.0.0 (Raven)
+        6.2.0 (Falcon)
+        7.5.1 (Blackbird)
+        8.0.0 (Harrier)
+
+    SU2 version 6.0 will work except for the use of 
     displacements in a Fluid/Structure Interaction setting.
-    
+
 4.10 xfoil
 
     The interface to xfoil is designed for V6.99, and the xfoil executable

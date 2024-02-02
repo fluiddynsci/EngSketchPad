@@ -11,10 +11,10 @@ DESPMTR   fact   2
 BOX       0  0  0  xsize  ysize  0
 
 # cutting plane
-BOX       0 -1 -1  0  2  3
-BOX       0  1 -1  0  2  3
+BOX       xcut -1 -1  0  2  3
+BOX       xcut  1 -1  0  2  3
 JOIN
-TRANSLATE xcut  0  0
+#TRANSLATE xcut  0  0
 
 # scribe
 SUBTRACT

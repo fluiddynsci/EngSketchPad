@@ -264,7 +264,7 @@ class TestPointwise(unittest.TestCase):
         # Just make sure it runs without errors...
         self.run_pointwise(pointwise)
 
-        #pointwise.view()
+        #pointwise.geometry.view()
 
     def off_test_boxhole(self):
 
@@ -317,7 +317,7 @@ class TestPointwise(unittest.TestCase):
         # Just make sure it runs without errors...
         self.run_pointwise(pointwise)
 
-        #pointwise.view()
+        #pointwise.geometry.view()
 
 if __name__ == '__main__':
     unittest.main()

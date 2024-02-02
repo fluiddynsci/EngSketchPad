@@ -1,44 +1,37 @@
 /*
  *      CAPS: Computational Aircraft Prototype Syntheses
  *
- *             SU2 AIM
+ *             Plato AIM
  *
- *     Modified from code written by Dr. Ryan Durscher AFRL/RQVC
+ *     Written by Dr. Marshall Galbraith MIT
  *
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
+ *      Licensed under The GNU Lesser General Public License, version 2.1
+ *      See http://www.opensource.org/licenses/lgpl-2.1.php
  */
 
 
 /*!\mainpage Introduction
  *
  * \section overviewPLATO Plato AIM Overview
- * This module can be used to interface with the open-source CFD code, SU2 \cite Palacios2013 \cite Palacios2014
- *  with geometry in the CAPS system. For SU2 capabilities and related documentation, please refer to
- * https://github.com/platoengine. SU2 expects a volume mesh file and a corresponding
+ * This module can be used to interface with the open-source Plato code developed at Sandia National Laboratories
+ *  with geometry in the CAPS system. For Plato capabilities and related documentation, please refer to
+ * https://github.com/platoengine. Plato expects a volume, surface, or area mesh and a corresponding
  * configuration file to perform the analysis.
  *
- * An outline of the AIM's inputs and outputs are provided in \ref aimInputsSU2 and \ref aimOutputsSU2, respectively.
+ * An outline of the AIM's inputs and outputs are provided in \ref aimInputsPLATO and \ref aimOutputsPLATO, respectively.
  *
- * Details on the use of units are outlined in \ref aimUnitsSU2.
+ * Details of the AIM's automated data transfer capabilities are outlined in \ref dataTransferPLATO
  *
- * Details of the AIM's automated data transfer capabilities are outlined in \ref dataTransferSU2
- *
- * \subsection meshPLATO Automatic generation of SU2 Mesh file
- * The volume mesh file from SU2 AIM is written in native SU2
- * format ("filename.su2"). The description of the native SU2 mesh can be
- * found SU2 website. For the automatic generation of mesh file, SU2 AIM
+ * \subsection meshPLATO Automatic generation of Plato Exodus Mesh file
+ * The mesh file from Plato AIM is written in native Exodus
+ * format ("filename.exo"). The description of the native Exodus mesh can be
+ * found Exodus website (https://sandialabs.github.io/seacas-docs/html/index.html).
+ * For the automatic generation of mesh file, Plato AIM
  * depends on Mesh AIMs, for example, TetGen or AFLR4/3 AIM.
  *
- * \subsection configPLATO Automatic generation of SU2 Configuration file
- * The configuration file ("filename.cfg") from SU2 AIM is automatically
- * created by using the flow features and boundary conditions that were set in
- * the driver program as a user input. For the rest of the configuration
- * variables, default set of values are provided for a general execution.
- * If desired, a user has freedom to manually (a) change these variables based
- * on  personal preference, or (b) override the configuration file with unique
- * configuration variables.
- *
  * \section examplesPLATO Plato Examples
- *  Here is an example that illustrated use of SU2 AIM \ref su2Example. Note
+ *  Here is an example that illustrated use of Plato AIM \ref platoExample. Note
  *  this AIM uses TetGen AIM for volume mesh generation.
  *
  */
@@ -157,7 +150,7 @@ int aimInitialize(int inst, /*@null@*/ /*@unused@*/ const char *unitSys, /*@unus
     // Set initial values for platoInstance
 
     platoInstance->meshRef = NULL;
-    aim_initMeshRef(&platoInstance->meshRefObj);
+    aim_initMeshRef(&platoInstance->meshRefObj, aimUnknownMeshType);
 
 cleanup:
     if (status != CAPS_SUCCESS) {
@@ -187,7 +180,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo, int inde
 
     *ainame = NULL;
 
-    // SU2 Inputs
+    // Plato Inputs
     /*! \page aimInputsPLATO AIM Inputs
      */
 
@@ -364,6 +357,7 @@ int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo, capsValue 
       AIM_STATUS(aimInfo, status);
 
     } else {
+
       snprintf(meshfilename, PATH_MAX, "%s%s", meshRef->fileName, MESHEXTENSION);
 
       exoid = ex_open(meshfilename, EX_READ | EX_NETCDF4 | EX_NOCLASSIC,
@@ -385,12 +379,14 @@ int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo, capsValue 
         AIM_ALLOC(z, nVertex, double, aimInfo, status);
 
       /* get all of the vertices */
+/*@-nullpass@*/
       status = ex_get_coord(exoid, x, y, z);
       AIM_STATUS(aimInfo, status);
+/*@+nullpass@*/
 
       ex_close(exoid);
       exoid = 0;
-      
+
       for (imap = 0; imap < meshRef->nmap; imap++) {
         status = EG_statusTessBody(meshRef->maps[imap].tess, &body, &state, &nGlobal);
         AIM_STATUS(aimInfo, status);
@@ -404,21 +400,24 @@ int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo, capsValue 
 
           x[j] = xyz[0];
           y[j] = xyz[1];
-          if (dim == 3)
+          if (z != NULL)
             z[j] = xyz[2];
         }
       }
-      
+
       exoid = ex_open(meshfilename, EX_WRITE | EX_CLOBBER | EX_NETCDF4 | EX_NOCLASSIC,
                       &CPU_word_size, &IO_word_size, &version);
       if (exoid <= 0) {
         AIM_ERROR(aimInfo, "Cannot open file: %s\n", meshfilename);
-        return CAPS_IOERR;
+        status = CAPS_IOERR;
+        goto cleanup;
       }
-      
+
       /* set all of the vertices */
+/*@-nullpass@*/
       status = ex_put_coord(exoid, x, y, z);
       AIM_STATUS(aimInfo, status);
+/*@+nullpass@*/
 
       AIM_FREE(x);
       AIM_FREE(y);
@@ -427,13 +426,13 @@ int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo, capsValue 
       ex_close(exoid);
       exoid = 0;
     }
-  } else {
-    /* create a symbolic link to the file name*/
-    snprintf(meshfilename, PATH_MAX, "%s%s", meshRef->fileName, MESHEXTENSION);
-    snprintf(filepath, PATH_MAX, "%s%s", aimInputs[Proj_Name-1].vals.string, MESHEXTENSION);
-    status = aim_symLink(aimInfo, meshfilename, filepath);
-    AIM_STATUS(aimInfo, status);
   }
+
+  /* create a symbolic link to the file name*/
+  snprintf(meshfilename, PATH_MAX, "%s%s", meshRef->fileName, MESHEXTENSION);
+  snprintf(filepath, PATH_MAX, "%s%s", aimInputs[Proj_Name-1].vals.string, MESHEXTENSION);
+  status = aim_symLink(aimInfo, meshfilename, filepath);
+  AIM_STATUS(aimInfo, status);
 
   fp = aim_fopen(aimInfo, "sensMap.txt", "w");
   if (fp == NULL) {

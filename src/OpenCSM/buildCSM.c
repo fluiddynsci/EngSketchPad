@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -57,9 +57,6 @@
 /***********************************************************************/
 
 static int outLevel = 1;
-
-                                               /* used by RALLOC macro */
-//static void *realloc_temp=NULL;
 
 #define  RED(COLOR)      (float)(COLOR / 0x10000        ) / (float)(255)
 #define  GREEN(COLOR)    (float)(COLOR / 0x00100 % 0x100) / (float)(255)
@@ -273,7 +270,7 @@ main(int       argc,                    /* (in)  number of arguments */
     SPRINT0(1, "*                    Program buildCSM                    *");
     SPRINT2(1, "*                     version %2d.%02d                      *", imajor, iminor);
     SPRINT0(1, "*                                                        *");
-    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2023         *");
+    SPRINT0(1, "*        written by John Dannenhoffer, 2010/2024         *");
     SPRINT0(1, "*                                                        *");
     SPRINT0(1, "**********************************************************");
 

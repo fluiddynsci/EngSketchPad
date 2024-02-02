@@ -390,14 +390,18 @@ int aflr4_Surface_Mesh(void *aimInfo,
     // these calls are in aflr4_main_register - if that changes then these
     // need to change these
     aflr4_register_auto_cad_geom_setup (egads_auto_cad_geom_setup);
+    aflr4_register_cad_geom_create_tess (egads_aflr4_create_tess);
     aflr4_register_cad_geom_data_cleanup (egads_cad_geom_data_cleanup);
     aflr4_register_cad_geom_file_read (egads_cad_geom_file_read);
     aflr4_register_cad_geom_file_write (egads_cad_geom_file_write);
-    aflr4_register_cad_geom_create_tess (egads_aflr4_create_tess);
     aflr4_register_cad_geom_reset_attr (egads_cad_geom_reset_attr);
     aflr4_register_cad_geom_setup (egads_cad_geom_setup);
     aflr4_register_cad_tess_to_dgeom (egads_aflr4_tess_to_dgeom);
+    aflr4_register_get_mzone_bedge_data (egads_get_mzone_bedge_data);
+    aflr4_register_merge_mzone_data (egads_merge_mzone_data);
     aflr4_register_set_ext_cad_data (egads_set_ext_cad_data);
+    aflr4_register_set_mzone_data (egads_set_mzone_data);
+    aflr4_register_set_mzone_edge_data (egads_set_mzone_edge_data);
 
     dgeom_register_cad_eval_curv_at_uv (egads_eval_curv_at_uv);
     dgeom_register_cad_eval_edge_arclen (egads_eval_edge_arclen);
@@ -426,7 +430,7 @@ int aflr4_Surface_Mesh(void *aimInfo,
                                 &AFLR4_Param_Struct_Ptr);
 /*@+nullpass@*/
     AIM_STATUS(aimInfo, status, "aflr4_setup_param failed!");
-  
+
     // Allocate AFLR4-EGADS data structure, initialize, and link body data.
 
     AIM_ALLOC(copy_bodies, numBody, ego, aimInfo, status);
@@ -458,17 +462,14 @@ int aflr4_Surface_Mesh(void *aimInfo,
     status = aflr4_setup_and_grid_gen (1, AFLR4_Param_Struct_Ptr);
 /*@+nullpass@*/
     if (status != 0) {
-        status = aim_file(aimInfo, aflr4_debug, aimFile);
-        AIM_STATUS(aimInfo, status);
-
         AIM_ERROR  (aimInfo, "AFLR4 mesh generation failed...");
         AIM_ADDLINE(aimInfo, "An EGADS file with all AFLR4 parameters");
-        AIM_ADDLINE(aimInfo, "has been written to '%s'", aimFile);
+        AIM_ADDLINE(aimInfo, "has been written to '%s'", aflr4_debug);
 
-        remove(aimFile);
-/*@-nullpass@*/
-        (void) EG_saveModel(model, aimFile);
-/*@+nullpass@*/
+        remove(aflr4_debug);
+/*@-mustfreefresh@*/
+        (void) EG_saveModel(egads_get_model (0), aflr4_debug);
+/*@+mustfreefresh@*/
         status = CAPS_EXECERR;
         goto cleanup;
     }
@@ -496,7 +497,7 @@ int aflr4_Surface_Mesh(void *aimInfo,
 
       // Get output id index (glue-only composite)
       dgeom_def_get_idef (0, &glueId);
- 
+
       FILE *fp = aim_fopen(aimInfo, "aflr4_debug.tec", "w");
       fprintf(fp, "VARIABLES = X, Y, Z, u, v\n");
 

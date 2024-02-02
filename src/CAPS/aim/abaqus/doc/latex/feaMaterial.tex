@@ -1,0 +1,189 @@
+Structure for the material tuple = (\char`\"{}\+Material Name\char`\"{}, \char`\"{}\+Value\char`\"{}). \char`\"{}\+Material Name\char`\"{} defines the reference name for the material being specified. The \char`\"{}\+Value\char`\"{} can either be a JSON String dictionary (see Section \mbox{\hyperlink{feaMaterial_jsonStringMaterial}{JSON String Dictionary}}) or a single string keyword (see Section \mbox{\hyperlink{feaMaterial_keyStringMaterial}{Single Value String}}).\hypertarget{feaMaterial_jsonStringMaterial}{}\doxysubsection{JSON String Dictionary}\label{feaMaterial_jsonStringMaterial}
+If \char`\"{}\+Value\char`\"{} is JSON string dictionary (e.\+g. \char`\"{}\+Value\char`\"{} = \{\char`\"{}density\char`\"{}\+: 7850, \char`\"{}young\+Modulus\char`\"{}\+: 120000.\+0, \char`\"{}poisson\+Ratio\char`\"{}\+: 0.\+5, \char`\"{}material\+Type\char`\"{}\+: \char`\"{}isotropic\char`\"{}\}) the following keywords ( = default values) may be used\+:
+
+
+\begin{DoxyItemize}
+\item {\bfseries{material\+Type = \char`\"{}\+Isotropic\char`\"{}}}  ~\newline
+ Material property type. Options\+: Isotropic, Anisothotropic, Orthotropic, or Anisotropic. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{young\+Modulus = 0.\+0}}  ~\newline
+ Also known as the elastic modulus, defines the relationship between stress and strain. Default if `shear\+Modulus' and `poisson\+Ratio' != 0, young\+Modulus = 2$\ast$(1+poisson\+Ratio)$\ast$shear\+Modulus 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{shear\+Modulus = 0.\+0}}  ~\newline
+ Also known as the modulus of rigidity, is defined as the ratio of shear stress to the shear strain. Default if `young\+Modulus' and `poisson\+Ratio' != 0, shear\+Modulus = young\+Modulus/(2$\ast$(1+poisson\+Ratio)) 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{poisson\+Ratio = 0.\+0}}  ~\newline
+ The fraction of expansion divided by the fraction of compression. Default if `young\+Modulus' and `shear\+Modulus' != 0, poisson\+Ratio = (2$\ast$young\+Modulus/shear\+Modulus) -\/ 1 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{density = 0.\+0}}  ~\newline
+ Density of the material. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{young\+Modulus\+Lateral = 0.\+0}}  ~\newline
+ Elastic modulus in lateral direction for an orthotropic material 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{shear\+Modulus\+Trans1Z = 0.\+0}}  ~\newline
+ Transverse shear modulus in the 1-\/Z plane for an orthotropic material 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{shear\+Modulus\+Trans2Z = 0.\+0}}  ~\newline
+ Transverse shear modulus in the 2-\/Z plane for an orthotropic material 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{kappa = 0.\+0}}  ~\newline
+ Thermal conductivity for an isotropic solid 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{K = \mbox{[}0.\+0, 0.\+0, 0.\+0, 0.\+0, 0.\+0, 0.\+0\mbox{]}}}  ~\newline
+ Thermal conductivity for an anisotropic solid (KXX, KXY, KXZ, KYY, KYZ, KZZ) 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{specific\+Heat = 0.\+0}}  ~\newline
+ Specific heat constant pressure (per unit mass) for an isotropic solid 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{honeycomb\+Cell\+Size = NULL}}  ~\newline
+ Honeycomb sandwich core cell size. Required if material defines the core of a honeycomb sandwich and dimpling stability index is desired 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{honeycomb\+Young\+Modulus = NULL}}  ~\newline
+ Honeycomb sandwich core Young\textquotesingle{}s modulus used for stability index analysis 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{honeycomb\+Shear\+Modulus = NULL}}  ~\newline
+ Honeycomb sandwich core shear modulus used for stability index analysis 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{fracture\+Angle = NULL}}  ~\newline
+ Fracture angle for uniaxial transverse compression in degrees. Used in the NASA La\+RC02 failure theory only 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{interlaminar\+Shear\+Allow = NULL}}  ~\newline
+ Allowable inter-\/laminar shear stress of the composite laminate bonding material 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{fiber\+Young\+Modulus = NULL}}  ~\newline
+ Modulus of elasticity of fiber 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{fiber\+Poisson\+Ratio = NULL}}  ~\newline
+ Poisson\textquotesingle{}s ratio of fiber 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{mean\+Stress\+Factor = NULL}}  ~\newline
+ Mean stress magnification factor 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{trans\+Tension\+Slope = NULL}}  ~\newline
+ Failure envelop slope parameter for transverse tension 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{trans\+Compression\+Slope = NULL}}  ~\newline
+ Failure envelop slope parameter for transverse compression 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{composite\+Failure\+Theory = NULL}}  ~\newline
+ Composite failure theory (string value) 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{interlaminar\+Normal\+Stress\+Allow = NULL}}  ~\newline
+ Allowable inter-\/laminar normal stress of the composite laminate bonding material (allowable interlaminar normal stress) 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{young\+Modulus\+Thick = NULL}}  ~\newline
+ Modulus of elasticity in thickness direction, also defined as the matrix direction or 3-\/direction 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{poisson\+Ratio23 = 0.\+0}}  ~\newline
+ Poisson\textquotesingle{}s ratio ( for uniaxial loading in 2-\/direction) 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{poisson\+Ratio31 = 0.\+0}}  ~\newline
+ Poisson\textquotesingle{}s ratio ( for uniaxial loading in 3-\/direction) 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{young\+Modulus\+Factor = NULL}}  ~\newline
+ Longitudinal modulus of elasticity reduction scale factor for nonlinear composite Progressive Ply Failure Analysis (PPFA) 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{young\+Modulus\+Lateral\+Factor = NULL}}  ~\newline
+ Lateral modulus of elasticity reduction scale factor for nonlinear composite Progressive Ply Failure Analysis (PPFA) 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{shear\+Modulus\+Factor = NULL}}  ~\newline
+ In-\/plane shear modulus reduction scale factor for nonlinear composite Progressive Ply Failure Analysis (PPFA) 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{shear\+Modulus\+Trans1\+ZFactor = NULL}}  ~\newline
+ Transverse shear modulus reduction scale factor in 1-\/Z plane for nonlinear composite Progressive Ply Failure Analysis (PPFA) 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{shear\+Modulus\+Trans2\+ZFactor = NULL}}  ~\newline
+ Transverse shear modulus reduction scale factor in 2-\/Z plane for nonlinear composite Progressive Ply Failure Analysis (PPFA) 
+\end{DoxyItemize}\hypertarget{feaMaterial_keyStringMaterial}{}\doxysubsection{Single Value String}\label{feaMaterial_keyStringMaterial}
+If \char`\"{}\+Value\char`\"{} is a string, the string value may correspond to an entry in a predefined material lookup table. NOT YET IMPLEMENTED!!!! 

@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -83,6 +83,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     CDOUBLE *xyz, *uv;
     ego     context, eref, *ebodys, etess=NULL;
     char    *gp=NULL, *message=NULL;
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 

@@ -1,0 +1,23 @@
+The FUN3D AIM has the ability to transfer surface data (e.\+g. pressure distributions) to and from the AIM using the conservative and interpolative data transfer schemes in CAPS. Currently these transfers may only take place on triangular meshes.\hypertarget{dataTransferFUN3D_dataFromFUN3D}{}\doxysubsection{Data transfer from FUN3\+D (\+Field\+Out)}\label{dataTransferFUN3D_dataFromFUN3D}
+
+\begin{DoxyItemize}
+\item {\bfseries{\char`\"{}\+Pressure\char`\"{}, \char`\"{}\+P\char`\"{}, \char`\"{}\+Cp\char`\"{}, or \char`\"{}\+Coefficient\+Of\+Pressure\char`\"{}}}  ~\newline
+ Loads the coefficient of pressure distribution from \mbox{[}project\+\_\+name\mbox{]}\+\_\+ddfdrive\+\_\+bndry\mbox{[}\#\mbox{]}.dat file(s) (as generate from a FUN3D command line option of -\/-\/write\+\_\+aero\+\_\+loads\+\_\+to\+\_\+file) into the data transfer scheme. This distribution may be scaled based on Pressure = Pressure\+\_\+\+Scale\+\_\+\+Factor$\ast$\+Cp + Pressure\+\_\+\+Scale\+\_\+\+Offset, where \char`\"{}\+Pressure\+\_\+\+Scale\+\_\+\+Factor\char`\"{} and \char`\"{}\+Pressure\+\_\+\+Scale\+\_\+\+Offset\char`\"{} are AIM inputs (\mbox{\hyperlink{aimInputsFUN3D}{AIM Inputs}}). 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{\char`\"{}\+Temperature\char`\"{}}}  ~\newline
+ Loads the temperature distribution from \mbox{[}project\+\_\+name\mbox{]}\+\_\+ddfdrive\+\_\+bndry\mbox{[}\#\mbox{]}.dat file(s) (as generate from a FUN3D command line option of -\/-\/write\+\_\+aero\+\_\+loads\+\_\+to\+\_\+file) into the data transfer scheme. This distribution may be scaled based on Temperature = Temperature\+\_\+\+Scale\+\_\+\+Factor$\ast$\+Temp, where \char`\"{}\+Temperature\+\_\+\+Scale\+\_\+\+Factor\char`\"{} is an AIM input (\mbox{\hyperlink{aimInputsFUN3D}{AIM Inputs}}). 
+\end{DoxyItemize}\hypertarget{dataTransferFUN3D_dataToFUN3D}{}\doxysubsection{Data transfer to FUN3\+D (\+Field\+In)}\label{dataTransferFUN3D_dataToFUN3D}
+
+\begin{DoxyItemize}
+\item {\bfseries{\char`\"{}\+Displacement\char`\"{}}}  ~\newline
+ Retrieves nodal displacements (as from a structural solver) and updates FUN3D\textquotesingle{}s surface mesh; a new \mbox{[}project\+\_\+name\mbox{]}\+\_\+body1.\+dat file is written out which may be loaded into FUN3D to update the surface mesh/move the volume mesh using the FUN3D command line option -\/-\/read\+\_\+surface\+\_\+from\+\_\+file 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{\char`\"{}\+Eigen\+Vector\+\_\+\#\char`\"{}}}  ~\newline
+ Retrieves modal eigen-\/vectors from a structural solver, where \char`\"{}\#\char`\"{} should be replaced by the corresponding mode number for the eigen-\/vector (eg. Eigen\+Vector\+\_\+3 would correspond to the third mode, while Eigen\+Vector\+\_\+6 would be the sixth mode) . A \mbox{[}project\+\_\+name\mbox{]}\+\_\+body1\+\_\+mode\#.dat file is written out for each mode. 
+\end{DoxyItemize}

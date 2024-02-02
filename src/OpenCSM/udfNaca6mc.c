@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -33,8 +33,8 @@
 #include "udpUtilities.h"
 
 /* shorthands for accessing argument values and velocities */
-#define CLT(          IUDP,I)  ((double *) (udps[IUDP].arg[0].val))[I]
-#define A(            IUDP,I)  ((double *) (udps[IUDP].arg[1].val))[I]
+#define CLT(IUDP,I)  ((double *) (udps[IUDP].arg[0].val))[I]
+#define A(  IUDP,I)  ((double *) (udps[IUDP].arg[1].val))[I]
 
 /* data about possible arguments */
 static char*  argNames[NUMUDPARGS] = {"clt",    "a",      };
@@ -92,6 +92,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     char    *message=NULL;
     ego     context, *ebodys, eref, enodes[4], eedges[3], ecurve, eline, eloop, eface, enew;
     ego     *echilds=NULL;
+    udp_T   *udps = *Udps;
 
 #ifdef GRAFIC
     float   xplot[5000], yplot[5000];
@@ -196,6 +197,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
             xc = (double)(j) / (double)(npnt-1);
             yc = 0;
 
+#ifndef __clang_analyzer__
             for (i = 0; i < udps[0].arg[0].size; i++) {
                 a   = A(  numUdp,i);
                 clt = CLT(numUdp,i);
@@ -219,6 +221,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
                 }
                 yc += clt/(TWOPI*(a+1)) * (1/(1-a) * (term1 - term3 + term4 - term2) - xc*log(xc) + g - h*xc);
             }
+#endif
 
             pnt[3*j  ] = xc;
             pnt[3*j+1] = yc;
@@ -348,6 +351,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
             /* create the camberline */
             yc  = 0;
             ycp = 0;
+#ifndef __clang_analyzer__
             for (i = 0; i < udps[0].arg[0].size; i++) {
                 a   = A(  numUdp,i);
                 clt = CLT(numUdp,i);
@@ -385,6 +389,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
                 yc  += clt/(TWOPI*(a+1)) * ((term1  - term3  + term4  - term2 ) / (1-a) - s *log(MAX(s, EPS12))     + g - h*s);
                 ycp += clt/(TWOPI*(a+1)) * ((term1p - term3p + term4p - term2p) / (1-a) -    log(MAX(s, EPS12)) - 1     - h  );
             }
+#endif
             theta = atan(ycp);
 
 #ifdef DEBUG

@@ -3,7 +3,7 @@
  *
  *             Base Object Functions
  *
- * *      Copyright 2014-2023, Massachusetts Institute of Technology
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -328,10 +328,11 @@ int caps_rename(const char *src, const char *dst)
 }
 
 
-int caps_rmCLink(const char *path)
+int caps_rmCLink(capsProblem *problem, const char *path)
 {
   int  i, status, len;
   char back[PATH_MAX], lnkFile[PATH_MAX];
+  FILE *fp=NULL;
 
   if (path == NULL) return CAPS_NULLNAME;
   
@@ -350,18 +351,31 @@ int caps_rmCLink(const char *path)
     return CAPS_DIRERR;
   }
   if (access(lnkFile, F_OK) != 0) return CAPS_SUCCESS;
-  
+
+  strcpy(back, problem->root);
+
+  fp = fopen(lnkFile, "r");
+  fscanf(fp, "%s", back+strlen(back)-strlen(problem->phName));
+  fclose(fp); fp = NULL;
+
   status = caps_rmFile(lnkFile);
   if (status != CAPS_SUCCESS) {
     printf(" CAPS Error: Cannot delete %s (caps_rmCLink)!\n", lnkFile);
     return status;
   }
+
+  status = caps_cpDir(back, path);
+  if (status != CAPS_SUCCESS) {
+    printf(" CAPS Error: Cannot copy directory '%s' to '%s' (caps_rmCLink)!\n", back, path);
+    return status;
+  }
+/*
   status = caps_mkDir(path);
   if (status != CAPS_SUCCESS) {
     printf(" CAPS Error: Cannot make directory %s (caps_rmCLink)!\n", path);
     return status;
   }
-
+*/
   return CAPS_SUCCESS;
 }
 

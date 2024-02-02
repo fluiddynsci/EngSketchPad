@@ -11,7 +11,7 @@
 #define UDP    1
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -126,6 +126,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     int     iedge, sense[2];
     double  L, H, R, nodeLE[3], nodeTE[3], circ[10], trange[2], data[18];
     ego     enodes[3], ecurves[2], eedges[2], eloop, eface;
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 

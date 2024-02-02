@@ -368,13 +368,12 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
 
     } else if (index == Surface_Mesh) {
         *ainame             = AIM_NAME(Surface_Mesh);
-        defval->type        = Pointer;
+        defval->type        = PointerMesh;
         defval->dim         = Vector;
         defval->lfixed      = Change;
-        defval->sfixed      = Change;
+        defval->sfixed      = Fixed;
         defval->vals.AIMptr = NULL;
         defval->nullVal     = IsNull;
-        AIM_STRDUP(defval->units, "meshStruct", aimInfo, status);
 
         /*! \page aimInputsAFLR3
          * - <B>Surface_Mesh = NULL</B> <br>
@@ -437,7 +436,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
     }
 
     // Get surface mesh
-    if (aimInputs[Surface_Mesh-1].nullVal == IsNull) {
+    if (aimInputs[Surface_Mesh-1].nullVal == IsNull ||
+        ((aimMeshRef *)aimInputs[Surface_Mesh-1].vals.AIMptr)->type != aimSurfaceMesh) {
         AIM_ANALYSISIN_ERROR(aimInfo, Surface_Mesh, "'Surface_Mesh' input must be linked to an output 'Surface_Mesh'");
         status = CAPS_BADVALUE;
         goto cleanup;
@@ -541,8 +541,8 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     mapAttrToIndexStruct groupMap;
     int lastAttr = 0;
 
-    int numSurfaceMesh;
-    meshStruct *surfaceMesh;
+    aimMeshRef *surfaceMesh;
+    ego *etess = NULL;
 
     // Bounding box variables
     int boundingBoxIndex = CAPSMAGIC;
@@ -594,12 +594,11 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     }
 
     // Get mesh
-    numSurfaceMesh = aimInputs[Surface_Mesh-1].length;
-    surfaceMesh    = (meshStruct *)aimInputs[Surface_Mesh-1].vals.AIMptr;
+    surfaceMesh = (aimMeshRef *)aimInputs[Surface_Mesh-1].vals.AIMptr;
 
-    if (numSurfaceMesh != numBody) {
+    if (surfaceMesh->nmap != numBody) {
         AIM_ANALYSISIN_ERROR(aimInfo, Surface_Mesh, "Number of linked surface meshes (%d) does not match the number of bodies (%d)\n",
-                             numSurfaceMesh, numBody);
+                             surfaceMesh->nmap, numBody);
         return CAPS_SOURCEERR;
     }
 
@@ -629,7 +628,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     }
 
     // Loop through surface meshes to set boundary layer parameters
-    for (ibody = 0; ibody < numSurfaceMesh && createBL == (int) false; ibody++) {
+    for (ibody = 0; ibody < surfaceMesh->nmap && createBL == (int) false; ibody++) {
 
         // Loop through meshing properties and see if boundaryLayerThickness and boundaryLayerSpacing have been specified
         for (propIndex = 0; propIndex < aflr3Instance->numMeshProp && createBL == (int) false; propIndex++) {
@@ -719,6 +718,8 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
             }
         }
 
+        AIM_ALLOC(etess, surfaceMesh->nmap, ego, aimInfo, status);
+        for (i = 0; i < surfaceMesh->nmap; i++) etess[i] = surfaceMesh->maps[i].tess;
 
         status = aflr3_Volume_Mesh(aimInfo, aimInputs,
                                    0,
@@ -732,10 +733,11 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                                    &aflr3Instance->meshMap,
                                    aflr3Instance->numMeshProp,
                                    aflr3Instance->meshProp,
-                                   numSurfaceMesh,
-                                   surfaceMesh,
+                                   surfaceMesh->nmap,
+                                   etess,
                                    &aflr_grid);
         AIM_STATUS(aimInfo, status, "Problem during volume meshing");
+        AIM_FREE(etess);
 
         snprintf(bodyNumberFile, 42, AFLR3FILE, 0);
         status = aim_file(aimInfo, bodyNumberFile, aimFile);
@@ -743,7 +745,6 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
         status = write_AFLR_Grid(aimInfo,
                                  aimFile,
-                                 &aflr3Instance->groupMap,
                                  &aflr_grid);
         AIM_STATUS(aimInfo, status);
 
@@ -755,6 +756,61 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
         status = aflr3_to_MeshStruct(&aflr_grid, volumeMesh);
         AIM_STATUS(aimInfo, status);
+
+        if (aflr_grid.Vol_ID_Flag != NULL) {
+          /* write out element groups */
+          snprintf(filename, PATH_MAX, "%s.mapvol", aimFile);
+
+          fp = fopen(filename, "wb");
+          if (fp == NULL) {
+            AIM_ERROR(aimInfo, "Cannot open file: %s", filename);
+            status = CAPS_IOERR;
+            goto cleanup;
+          }
+
+          /* write the number of groups */
+          status = fwrite(&numBody, sizeof(int), 1, fp);
+          if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+          /* write maximum ID value */
+          status = fwrite(&numBody, sizeof(int), 1, fp);
+          if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+          for (i = 1; i <= numBody; i++) {
+            /* write the group IDs */
+            status = fwrite(&i, sizeof(int), 1, fp);
+            if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+            /* write the group name */
+            EG_attributeRet(bodies[i-1], "_name", &atype, &len, &ints, &reals, &str);
+            if (str == NULL) {
+              snprintf(filename, PATH_MAX, "Volume_%d", i);
+              str = filename;
+            }
+            slen = strlen(str)+1;
+            status = fwrite(&slen, sizeof(size_t), 1, fp);
+            if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+            status = fwrite(str, sizeof(char), slen, fp);
+            if (status != (int)slen) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+          }
+
+          Number_of_Vol = aflr_grid.Number_of_Vol_Hexs +
+                          aflr_grid.Number_of_Vol_Pents_5 +
+                          aflr_grid.Number_of_Vol_Pents_6 +
+                          aflr_grid.Number_of_Vol_Tets;
+
+          status = fwrite(&Number_of_Vol, sizeof(int), 1, fp);
+          if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+          /* write the ID flag */
+          status = fwrite(aflr_grid.Vol_ID_Flag+1, sizeof(int), Number_of_Vol, fp);
+          if (status != Number_of_Vol) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
+
+          /*@-dependenttrans@*/
+          fclose(fp); fp = NULL;
+          /*@+dependenttrans@*/
+        }
 
         destroy_AFLR_Grid(&aflr_grid);
 
@@ -807,7 +863,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                                        aflr3Instance->numMeshProp,
                                        aflr3Instance->meshProp,
                                        1,
-                                       &surfaceMesh[ibody],
+                                       &surfaceMesh->maps[ibody].tess,
                                        &aflr_grid);
             AIM_STATUS(aimInfo, status, "Problem during volume meshing of bodyIndex %d\n", i+1);
 
@@ -817,7 +873,6 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
             status = write_AFLR_Grid(aimInfo,
                                      aimFile,
-                                     &aflr3Instance->groupMap,
                                      &aflr_grid);
             AIM_STATUS(aimInfo, status);
 
@@ -845,10 +900,10 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
     } else if (MultiMesh == 2) {
 
-      AIM_ALLOC(Domain_NumVol, numSurfaceMesh, INT_, aimInfo, status);
-      AIM_ALLOC(Domain_NumNode, numSurfaceMesh, INT_, aimInfo, status);
+      AIM_ALLOC(Domain_NumVol, surfaceMesh->nmap, INT_, aimInfo, status);
+      AIM_ALLOC(Domain_NumNode, surfaceMesh->nmap, INT_, aimInfo, status);
 
-      for (ibody = 0; ibody < numSurfaceMesh; ibody++) {
+      for (ibody = 0; ibody < surfaceMesh->nmap; ibody++) {
 
           // Call AFLR3 volume mesh interface for each body
           printf("Getting volume mesh for body %d (of %d)\n", ibody+1, numBody);
@@ -866,12 +921,9 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                                      aflr3Instance->numMeshProp,
                                      aflr3Instance->meshProp,
                                      1,
-                                     &surfaceMesh[ibody],
+                                     &surfaceMesh->maps[ibody].tess,
                                      &aflr_domain);
           AIM_STATUS(aimInfo, status, "Problem during volume meshing of bodyIndex %d\n", ibody+1);
-
-          status = append_AFLR_Grid(aimInfo, &aflr_domain, &aflr_grid);
-          AIM_STATUS(aimInfo, status);
 
           Domain_NumNode[ibody] = aflr_domain.Number_of_Nodes;
 
@@ -880,7 +932,8 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                                  aflr_domain.Number_of_Vol_Pents_6 +
                                  aflr_domain.Number_of_Vol_Tets;
 
-          destroy_AFLR_Grid(&aflr_domain);
+          status = append_AFLR_Grid(aimInfo, &aflr_domain, ibody, &aflr_grid);
+          AIM_STATUS(aimInfo, status);
       }
 
       snprintf(bodyNumberFile, 42, AFLR3FILE, 0);
@@ -889,7 +942,6 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
       status = write_AFLR_Grid(aimInfo,
                                aimFile,
-                               &aflr3Instance->groupMap,
                                &aflr_grid);
       AIM_STATUS(aimInfo, status);
 
@@ -904,14 +956,14 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
       }
 
       /* write the number of groups */
-      status = fwrite(&numSurfaceMesh, sizeof(int), 1, fp);
+      status = fwrite(&surfaceMesh->nmap, sizeof(int), 1, fp);
       if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
 
       /* write maximum ID value */
-      status = fwrite(&numSurfaceMesh, sizeof(int), 1, fp);
+      status = fwrite(&surfaceMesh->nmap, sizeof(int), 1, fp);
       if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
 
-      for (i = 1; i <= numSurfaceMesh; i++) {
+      for (i = 1; i <= surfaceMesh->nmap; i++) {
         /* write the group IDs */
         status = fwrite(&i, sizeof(int), 1, fp);
         if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
@@ -938,9 +990,9 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
       status = fwrite(&Number_of_Vol, sizeof(int), 1, fp);
       if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
 
-      /* write the tetrahedral attributes */
+      /* write the ID flag */
       ID = 1;
-      for (ibody = 0; ibody < numSurfaceMesh; ibody++) {
+      for (ibody = 0; ibody < surfaceMesh->nmap; ibody++) {
           for (i = 0; i < Domain_NumVol[ibody]; i++) {
               status = fwrite(&ID, sizeof(int), 1, fp);
               if (status != 1) { status = CAPS_IOERR; AIM_STATUS(aimInfo, status); }
@@ -960,7 +1012,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
         goto cleanup;
       }
 
-      for (ibody = 0; ibody < numSurfaceMesh; ibody++) {
+      for (ibody = 0; ibody < surfaceMesh->nmap; ibody++) {
           fprintf(fp, "%d\n", Domain_NumNode[ibody]);
       }
 
@@ -1074,7 +1126,10 @@ cleanup:
         }
     }
     AIM_FREE(volumeMesh);
+    destroy_AFLR_Grid(&aflr_domain);
+    destroy_AFLR_Grid(&aflr_grid);
 
+    AIM_FREE(etess);
     AIM_FREE(Domain_NumNode);
     AIM_FREE(Domain_NumVol);
 
@@ -1103,8 +1158,8 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
     ego body = NULL;
 
     // Container for volume mesh
-    int numSurfaceMesh=0, state, np;
-    meshStruct *surfaceMesh=NULL;
+    int state, np;
+    aimMeshRef *surfaceMesh=NULL;
 
     int i, j, ibody, iglobal, nglobal, imap, noDataTransfer=(int)false;
     int iface, nface, nnode_face;
@@ -1127,8 +1182,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
     // Get mesh
-    numSurfaceMesh = aimInputs[Surface_Mesh-1].length;
-    surfaceMesh    = (meshStruct *)aimInputs[Surface_Mesh-1].vals.AIMptr;
+    surfaceMesh = (aimMeshRef *)aimInputs[Surface_Mesh-1].vals.AIMptr;
 
     if (strcasecmp(aimInputs[Multiple_Mesh-1].vals.string, "SingleDomain") == 0) {
       MultiMesh = 0;
@@ -1145,15 +1199,15 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
     // Create/setup volume meshes
     if (MultiMesh == 1) {
 
-        AIM_ALLOC(aflr3Instance->meshRef, numSurfaceMesh, aimMeshRef, aimInfo, status);
-        aflr3Instance->numMeshRef = numSurfaceMesh;
+        AIM_ALLOC(aflr3Instance->meshRef, surfaceMesh->nmap, aimMeshRef, aimInfo, status);
+        aflr3Instance->numMeshRef = surfaceMesh->nmap;
 
-        for (ibody = 0; ibody < numSurfaceMesh; ibody++) {
-          status = aim_initMeshRef(&aflr3Instance->meshRef[ibody]);
+        for (ibody = 0; ibody < surfaceMesh->nmap; ibody++) {
+          status = aim_initMeshRef(&aflr3Instance->meshRef[ibody], aimVolumeMesh);
           AIM_STATUS(aimInfo, status);
         }
 
-        for (ibody = 0; ibody < numSurfaceMesh; ibody++) {
+        for (ibody = 0; ibody < surfaceMesh->nmap; ibody++) {
             snprintf(bodyNumberFile, 42, AFLR3FILE, ibody);
             status = aim_file(aimInfo, bodyNumberFile, aimFile);
             AIM_STATUS(aimInfo, status);
@@ -1174,7 +1228,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
             AIM_STATUS(aimInfo, status);
 
             // get the body from the input tessellation
-            status = EG_statusTessBody(surfaceMesh[ibody].egadsTess, &body, &state, &np);
+            status = EG_statusTessBody(surfaceMesh->maps[ibody].tess, &body, &state, &np);
             AIM_STATUS(aimInfo, status);
             AIM_NOTNULL(body, aimInfo, status);
 
@@ -1225,7 +1279,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
         AIM_ALLOC(aflr3Instance->meshRef, 1, aimMeshRef, aimInfo, status);
         aflr3Instance->numMeshRef = 1;
 
-        status = aim_initMeshRef(aflr3Instance->meshRef);
+        status = aim_initMeshRef(aflr3Instance->meshRef, aimVolumeMesh);
         AIM_STATUS(aimInfo, status);
 
         // set the filename without extensions where the grid is written for solvers
@@ -1245,7 +1299,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
             }
         }
 
-        for (ibody = 0; ibody < numSurfaceMesh; ibody++) {
+        for (ibody = 0; ibody < surfaceMesh->nmap; ibody++) {
 
             // set the file name to read the egads file
             snprintf(bodyNumberFile, 42, AFLR3TESSFILE, ibody);
@@ -1263,7 +1317,7 @@ int aimPostAnalysis(void *instStore, void *aimInfo,
             AIM_STATUS(aimInfo, status);
 
             // get the body from the input tessellation
-            status = EG_statusTessBody(surfaceMesh[ibody].egadsTess, &body, &state, &np);
+            status = EG_statusTessBody(surfaceMesh->maps[ibody].tess, &body, &state, &np);
             AIM_STATUS(aimInfo, status);
             AIM_NOTNULL(body, aimInfo, status);
 

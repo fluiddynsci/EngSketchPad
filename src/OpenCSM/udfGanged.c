@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -77,6 +77,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     double   data[18];
     ego      eref, *ebodysB=NULL, etools, eresult, *echilds;
     void     *modl;
+    udp_T    *udps = *Udps;
 
 #ifdef PRINT_TIMES
     struct rusage  beg_rusage, end_rusage;

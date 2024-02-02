@@ -143,7 +143,7 @@ su2 = myProblem.analysis.create(aim = "su2AIM",
 su2.input["Mesh"].link(myProblem.analysis["aflr2"].output["Area_Mesh"])
 
 # Set SU2 Version
-su2.input.SU2_Version = "Blackbird"
+su2.input.SU2_Version = "Harrier"
 
 # Set project name
 su2.input.Proj_Name = projectName

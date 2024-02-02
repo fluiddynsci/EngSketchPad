@@ -1,4 +1,9 @@
 ifneq (, $(shell which julia))
+#
+ifndef ESP_ROOT
+$(error ESP_ROOT must be set -- Please fix the environment...)
+endif
+#
 .PHONY: dev
 dev: ../egadscommon/egads_types_ctts.jl
 ifneq ($(shell julia --eval 'using egads' 2> /dev/null; echo $$?), 0)

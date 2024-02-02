@@ -26,17 +26,17 @@ else
 ODIR  = .
 endif
 
-AFLR3_LIB  = -laflr3 -lsurf_auto_cpp -lsurf_auto -laflr4 -lrec3
-AFLR3_LIB += -lug3 -lug -lug_mp -lanbl3 -laflr2c -lrec2 -lbl1
-AFLR3_LIB += -ldgeom -lotb -legen -lug2 -lice2 -lice3  -ldftr2 -ldftr3
-AFLR3_LIB += -lug_io -lug_gq -lug_cpp -lcgns -lqtb
+AFLR3_LIB  = -laflr3 -laflr43 -laflr4 -lsurf_auto_cpp -lsurf_auto -lrec3
+AFLR3_LIB += -lug_mp -lanbl3 -laflr2c -lrec2 -lbl1
+AFLR3_LIB += -lotb -legen -lice2 -lice3  -ldftr2 -ldftr3 -ldgeom
+AFLR3_LIB += -lug_io -lug_gq -lug_cpp -lcgns -lqtb -lug3 -lug -lug2
 
 ifeq ("$(ESP_ARCH)","LINUX64")
 AFLR3_LIB += -lrt
 endif
 
 # CAPS compiles egads_aflr4 library to use the latest egads.h file
-VPATH             = $(AFLR)/src/egads_aflr4:$(AFLR)/src/aflr43
+VPATH             = $(AFLR)/src/egads_aflr4
 EGADS_INC_FILES   = $(wildcard $(IDIR)/egads*.h)
 # EGADS_AFLR4_FILES = $(wildcard $(AFLR)/src/egads_aflr4/*.c)
 # EGADS_AFLR4_OBJS  = $(subst $(AFLR)/src/egads_aflr4,$(ODIR),$(EGADS_AFLR4_FILES:.c=.o))
@@ -86,8 +86,7 @@ egads_eval_xyz_at_uv.c            \
 egads_face_node_map.c             \
 egads_cad_geom_faceMatch.c        \
 egads_data.c                      \
-aflr43_bc_mod.c                   \
-aflr43_bc_reset.c
+egads_mzone.c
 
 EGADS_AFLR4_OBJS  = $(addprefix $(ODIR)/,$(EGADS_AFLR4_FILES:.c=.o))
 
@@ -102,6 +101,7 @@ OBJS=$(EGADS_AFLR4_OBJS)
 #UG_FILES=$(wildcard $(AFLR)/src/ug/*.c)
 #UG_OBJS=$(patsubst %.c,%.o,$(UG_FILES))
 
+#VPATH      += $(AFLR)/src/ug3
 #UG3_FILES=$(wildcard $(AFLR)/src/ug3/*.c)
 #UG3_OBJS=$(patsubst %.c,%.o,$(UG3_FILES))
 
@@ -121,11 +121,15 @@ OBJS=$(EGADS_AFLR4_OBJS)
 #AFLR4_FILES = $(wildcard $(AFLR)/src/aflr4/*.c)
 #AFLR4_OBJS  = $(subst $(AFLR)/src/aflr4,$(ODIR),$(AFLR4_FILES:.c=.o))
 
+#VPATH       += $(AFLR)/src/aflr43
+#AFLR43_FILES = $(wildcard $(AFLR)/src/aflr43/*.c)
+#AFLR43_OBJS  = $(subst $(AFLR)/src/aflr43,$(ODIR),$(AFLR43_FILES:.c=.o))
+
 #VPATH      += $(AFLR)/src/anbl3
 #ANBL3_FILES = $(wildcard $(AFLR)/src/anbl3/*.c)
 #ANBL3_OBJS  = $(subst $(AFLR)/src/anbl3,$(ODIR),$(ANBL3_FILES:.c=.o))
 
-OBJS+=$(AFLR3_OBJS) $(UG_OBJS) $(UG3_OBJS) $(UG_IO_OBJS) $(AFLR4_OBJS) $(DGEOM_OBJS) $(OTB_OBJS) $(ANBL3_OBJS)
+OBJS+=$(AFLR3_OBJS) $(UG_OBJS) $(UG3_OBJS) $(UG_IO_OBJS) $(AFLR4_OBJS) $(AFLR43_OBJS) $(DGEOM_OBJS) $(OTB_OBJS) $(ANBL3_OBJS)
 ###############################################################################
 
 $(LDIR)/aflr3AIM.so:	$(ODIR)/aflr3AIM.o $(ODIR)/aflr3_Interface.o \
@@ -134,7 +138,7 @@ $(LDIR)/aflr3AIM.so:	$(ODIR)/aflr3AIM.o $(ODIR)/aflr3_Interface.o \
 	rm $(LDIR)/aflr3AIM.so
 	$(CC) $(SOFLGS) -o $(LDIR)/aflr3AIM.so $(ODIR)/aflr3AIM.o \
 		$(ODIR)/aflr3_Interface.o $(OBJS) -L$(AFLR)/$(AFLR_ARCH)/lib \
-		$(AFLR3_LIB) $(AFLR3_LIB) $(AFLR3_LIB) -L$(LDIR) -lutils \
+		$(AFLR3_LIB) -L$(LDIR) -lutils \
 		-laimUtil -locsm -legads -ludunits2 -ldl $(RPATH) $(CPPSLB) -lm
 
 $(ODIR)/aflr3AIM.o:	$(ODIR)/aflr3_version aflr3AIM.c aflr3_Interface.h $(IDIR)/capsTypes.h \

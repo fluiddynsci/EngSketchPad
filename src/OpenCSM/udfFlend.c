@@ -9,7 +9,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -57,7 +57,7 @@ static double argDdefs[NUMUDPARGS] = {1.00,      1.00,      1.0e-6,   0.,      0
 static int exposedLoops(ego ebody, int *nloop, ego eloops[]);
 static int fillPointsFromEdge(ego eedgeA, int senseA,
                               ego eedgeB, int senseB,
-                              int npnt, double tA[], double pntA[], double tB[], double pntB[]);
+                              int npnt, double tA[], double pntA[], double tB[], double pntB[], int *NumUdp, udp_T *udps);
 static int fillSlopesFromEdge(ego eedge, int sense, ego eface,
                               int npnt, double t[], double slp[]);
 static int reorderLoop(ego eloopA, ego *eloopB);
@@ -121,6 +121,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
     ego     ebodyB, eloopsB[2], *eedgesB, *efacesB=NULL, *efacesB2=NULL;
     ego     eref, esurf, *etemps, *echilds, *eloops, emodel2, *efacelist=NULL;
     void    *modl;
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 
@@ -430,7 +431,7 @@ udpExecute(ego  emodel,                 /* (in)  input model */
         status = fillPointsFromEdge(eedgesA[iedge], sensesA[iedge],
                                     eedgesB[iedge], sensesB[iedge], npnt,
                                     &tA[npnt*iedge], &pntA[3*npnt*iedge],
-                                    &tB[npnt*iedge], &pntB[3*npnt*iedge]);
+                                    &tB[npnt*iedge], &pntB[3*npnt*iedge], NumUdp, udps);
         CHECK_STATUS(fillPointsFromEdge);
 
         /* get the (initial) slopes from the Loops */
@@ -1601,7 +1602,9 @@ fillPointsFromEdge(ego    eedgeA,       /* (in)  Edge in BodyA */
                    double tA[],         /* (out) t for Points along EdgeA */
                    double pntA[],       /* (out) Points along EdgeA */
                    double tB[],         /* (out) t for Points along EdgeB */
-                   double pntB[])       /* (out) Points along EdgeB */
+                   double pntB[],       /* (out) Points along EdgeB */
+       /*@unused@*/int    *NumUdp,
+                   udp_T  *udps)
 {
     int     status = EGADS_SUCCESS;     /* (out) return status */
 

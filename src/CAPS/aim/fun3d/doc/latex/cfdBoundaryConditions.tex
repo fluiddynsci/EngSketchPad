@@ -1,0 +1,71 @@
+Structure for the boundary condition tuple = (\char`\"{}\+CAPS Group Name\char`\"{}, \char`\"{}\+Value\char`\"{}). \char`\"{}\+CAPS Group Name\char`\"{} defines the caps\+Group on which the boundary condition should be applied. The \char`\"{}\+Value\char`\"{} can either be a JSON String dictionary (see Section \mbox{\hyperlink{cfdBoundaryConditions_jsonStringCFDBoundary}{JSON String Dictionary}}) or a single string keyword string (see Section \mbox{\hyperlink{cfdBoundaryConditions_keyStringCFDBoundary}{Single Value String}})\hypertarget{cfdBoundaryConditions_jsonStringCFDBoundary}{}\doxysubsection{JSON String Dictionary}\label{cfdBoundaryConditions_jsonStringCFDBoundary}
+If \char`\"{}\+Value\char`\"{} is a JSON string dictionary (eg. \char`\"{}\+Value\char`\"{} = \{\char`\"{}bc\+Type\char`\"{}\+: \char`\"{}\+Viscous\char`\"{}, \char`\"{}wall\+Temperature\char`\"{}\+: 1.\+1\}) the following keywords ( = default values) may be used\+:
+
+
+\begin{DoxyItemize}
+\item {\bfseries{bc\+Type = \char`\"{}\+Inviscid\char`\"{}}}  ~\newline
+ Boundary condition type. Options\+:
+
+
+\begin{DoxyItemize}
+\item Inviscid
+\item Viscous
+\item Farfield
+\item Extrapolate
+\item Freestream
+\item Back\+Pressure
+\item Subsonic\+Inflow
+\item Subsonic\+Outflow
+\item Massflow\+In
+\item Massflow\+Out
+\item Mach\+Outflow
+\end{DoxyItemize}
+
+
+\end{DoxyItemize}\hypertarget{cfdBoundaryConditions_cfdBoundaryWallProp}{}\doxysubsubsection{Wall Properties}\label{cfdBoundaryConditions_cfdBoundaryWallProp}
+
+\begin{DoxyItemize}
+\item {\bfseries{wall\+Temperature = 0.\+0}}  ~\newline
+ The ratio of wall temperature to reference temperature for inviscid and viscous surfaces. Adiabatic wall = -\/1 
+\end{DoxyItemize}\hypertarget{cfdBoundaryConditions_cfdBoundaryStagProp}{}\doxysubsubsection{Stagnation Properties}\label{cfdBoundaryConditions_cfdBoundaryStagProp}
+
+\begin{DoxyItemize}
+\item {\bfseries{total\+Pressure = 0.\+0}}  ~\newline
+ Ratio of total pressure to reference pressure on a boundary surface.
+
+
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{total\+Temperature = 0.\+0}}  ~\newline
+ Ratio of total temperature to reference temperature on a boundary surface. 
+\end{DoxyItemize}\hypertarget{cfdBoundaryConditions_cfdBoundaryStaticProp}{}\doxysubsubsection{Static Properties}\label{cfdBoundaryConditions_cfdBoundaryStaticProp}
+
+\begin{DoxyItemize}
+\item {\bfseries{static\+Pressure = 0.\+0}}  ~\newline
+ Ratio of static pressure to reference pressure on a boundary surface. 
+\end{DoxyItemize}\hypertarget{cfdBoundaryConditions_cfdBoundaryVelocity}{}\doxysubsubsection{Velocity Components}\label{cfdBoundaryConditions_cfdBoundaryVelocity}
+
+\begin{DoxyItemize}
+\item {\bfseries{mach\+Number = 0.\+0}}  ~\newline
+ Mach number on boundary. 
+\end{DoxyItemize}\hypertarget{cfdBoundaryConditions_cfdBoundaryMassflow}{}\doxysubsubsection{Massflow Properties}\label{cfdBoundaryConditions_cfdBoundaryMassflow}
+
+\begin{DoxyItemize}
+\item {\bfseries{massflow = 0.\+0}}  ~\newline
+ Massflow through the boundary in units of grid units squared. 
+\end{DoxyItemize}\hypertarget{cfdBoundaryConditions_keyStringCFDBoundary}{}\doxysubsection{Single Value String}\label{cfdBoundaryConditions_keyStringCFDBoundary}
+If \char`\"{}\+Value\char`\"{} is a single string the following options maybe used\+:
+
+
+\begin{DoxyItemize}
+\item \char`\"{}\+Inviscid\char`\"{} (default)
+\item \char`\"{}\+Viscous\char`\"{}
+\item \char`\"{}\+Farfield\char`\"{}
+\item \char`\"{}\+Extrapolate\char`\"{}
+\item \char`\"{}\+Freestream\char`\"{}
+\item \char`\"{}\+Symmetry\+X\char`\"{}
+\item \char`\"{}\+Symmetry\+Y\char`\"{}
+\item \char`\"{}\+Symmetry\+Z\char`\"{} 
+\end{DoxyItemize}

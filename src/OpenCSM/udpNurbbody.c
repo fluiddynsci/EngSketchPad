@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -108,6 +108,12 @@ udpExecute(ego  context_in,             /* (in)  Egads context (or model) */
     char    *message=NULL, *filename, *token;
     FILE    *fp=NULL, *fp_output;
     ego     eref, esurf, *ebodys, *efaces, *echilds, context, emodel, emodel2, *efaces2=NULL;
+    void    *realloc_temp = NULL;            /* used by RALLOC macro */
+#ifdef DEBUG
+    udp_T   *udps = *Udps;
+#else
+    udp_T   *udps;
+#endif
 
     ROUTINE(udpExecute);
 

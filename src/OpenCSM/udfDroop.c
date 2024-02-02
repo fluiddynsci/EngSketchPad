@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -90,6 +90,7 @@ udpExecute(ego  emodel,                 /* (in)  Model containing Body */
     ego     context, eref, *ebodys, *echilds, eplane;
     ego     *enodes, *eedges, *eloops=NULL, *efaces=NULL;
     ego     *ebsplines=NULL, *newnodes=NULL, *newedges=NULL, eloop, eface;
+    udp_T   *udps = *Udps;
 
 #ifdef GRAFIC
     float   xplot[1000], yplot[1000];

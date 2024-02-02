@@ -85,7 +85,6 @@ $(LDIR)/libcaps.dylib:	$(OBJS)
 	rm $(LDIR)/libcaps.dylib
 	(cd $(ODIR); $(CC) -dynamiclib -o $(LDIR)/libcaps.dylib $(OBJS) \
 			$(RPATH) -L$(LDIR) -ludunits2 -locsm -legads -ldl \
-			-undefined error \
 			-install_name '@rpath/libcaps.dylib' \
 			-compatibility_version $(EGREV) \
 			-current_version $(EGREV) )

@@ -3,7 +3,7 @@
  *
  *             Load & Save Functions
  *
- *      Copyright 2011-2023, Massachusetts Institute of Technology
+ *      Copyright 2011-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -22,6 +22,7 @@
 #include <IGESControl_Controller.hxx>
 #include <IGESData_IGESModel.hxx>
 #include <IGESBasic_Name.hxx>
+#include <TransferBRep_ShapeMapper.hxx>
 #ifdef STEPASSATTRS
 #include <StepBasic_Product.hxx>
 #include <StepBasic_ProductDefinition.hxx>
@@ -42,19 +43,14 @@
 #include <Interface_EntityIterator.hxx>
 #include <XSControl_WorkSession.hxx>
 #include <XSControl_TransferReader.hxx>
+#include <XSControl_Utils.hxx>
+#include <Transfer_ResultFromModel.hxx>
+#include <Transfer_TransientProcess.hxx>
+#include <Transfer_ResultFromTransient.hxx>
+#include <TransferBRep.hxx>
+#include <MoniTool_Macros.hxx>
 #include <APIHeaderSection_MakeHeader.hxx>
 #include <Interface_Static.hxx>
-
-
-class egadsLabel
-{
-public:
-  egadsLabel(const char* shapeName) : shapeName(EG_strdup(shapeName)) {}
-  egadsLabel(const egadsLabel& label) : shapeName(EG_strdup(label.shapeName)) {}
-  ~egadsLabel() { EG_free(shapeName); }
-
-  char  *shapeName;
-};
 
 
 #ifdef WIN32
@@ -62,7 +58,7 @@ public:
 #endif
 
 
-#define INTERIM
+//#define INTERIM
 
 #define UVTOL    1.e-4
 
@@ -124,8 +120,8 @@ public:
   extern "C" int  EG_writeEBody( const egObject *EBody, FILE *fp );
   extern "C" int  EG_readEBody( FILE *fp, egObject *body, egObject **EBody );
 
-  extern     void EG_splitPeriodics( egadsBody *body );
-  extern     void EG_splitMultiplicity( egadsBody *body, int outLevel );
+  extern     void EG_splitPeriodics( egadsBody *body, egadsShapeLabel &labels );
+  extern     void EG_splitMultiplicity( egadsBody *body, egadsShapeLabel &labels, int outLevel );
   extern     int  EG_traverseBody( egObject *context, int i, egObject *bobj, 
                                    egObject *topObj, egadsBody *body,
                                    int *nerr );
@@ -148,6 +144,173 @@ EG_revision(int *major, int *minor, char **OCCrev)
   *major  = EGADSMAJOR;
   *minor  = EGADSMINOR;
   *OCCrev = OCCrevStr;
+}
+
+
+TopoDS_Shape
+egadsShapeLabel::Update(const TopoDS_Shape& oldShape, const TopoDS_Shape& newShape)
+{
+  if (labels.Extent() == 0) return newShape;
+
+  int ilbl = labels.FindIndex(oldShape);
+  if (ilbl > 0) {
+    Label label = labels(ilbl);
+    //labels.RemoveKey(oldShape);
+    labels.Add(newShape, label);
+  }
+
+  TopTools_IndexedMapOfShape oldMap;
+  TopExp::MapShapes(oldShape, oldMap);
+
+  TopTools_IndexedMapOfShape newMap;
+  TopExp::MapShapes(newShape, newMap);
+
+  if (oldMap.Extent() != newMap.Extent()) return newShape;
+
+  for (int j = 1; j <= oldMap.Extent(); j++) {
+    TopoDS_Shape shape = oldMap(j);
+    if (shape == newMap(j)) continue;
+    ilbl = labels.FindIndex(shape);
+    if (ilbl == 0) continue;
+    Label label = labels(ilbl);
+    //labels.RemoveKey(shape);
+    labels.Add(newMap(j), label);
+  }
+
+  return newShape;
+}
+
+
+TopoDS_Shape
+egadsShapeLabel::Update(const TopoDS_Shape& oldShape, BRepBuilderAPI_ModifyShape& xForm)
+{
+  TopoDS_Shape newShape = xForm.ModifiedShape(oldShape);
+
+  if (labels.Extent() == 0) return newShape;
+
+  int ilbl = labels.FindIndex(oldShape);
+  if (ilbl > 0) {
+    Label label = labels(ilbl);
+    //labels.RemoveKey(oldShape);
+    labels.Add(newShape, label);
+  }
+
+  TopTools_IndexedMapOfShape oldMap;
+  TopExp::MapShapes(oldShape, oldMap);
+
+  for (int j = 1; j <= oldMap.Extent(); j++) {
+
+    TopoDS_Shape shape = oldMap(j);
+
+    const TopTools_ListOfShape& mods = xForm.Modified(shape);
+
+    if (mods.Extent() == 0) continue;
+    ilbl = labels.FindIndex(shape);
+    if (ilbl == 0) continue;
+    Label label = labels(ilbl);
+    //labels.RemoveKey(shape);
+
+    TopTools_ListIteratorOfListOfShape it(mods);
+    for (; it.More(); it.Next()) {
+      labels.Add(it.Value(), label);
+    }
+  }
+
+  return newShape;
+}
+
+
+TopoDS_Shape
+egadsShapeLabel::Update(const TopoDS_Shape& oldShape, const Handle(BRepTools_ReShape)& reShape)
+{
+  TopoDS_Shape newShape = reShape->Apply(oldShape);
+
+  if (labels.Extent() == 0) return newShape;
+
+  int ilbl = labels.FindIndex(oldShape);
+  if (ilbl > 0) {
+    Label label = labels(ilbl);
+    //labels.RemoveKey(oldShape);
+    labels.Add(newShape, label);
+  }
+
+  TopTools_IndexedMapOfShape oldMap;
+  TopExp::MapShapes(oldShape, oldMap);
+
+  for (int j = 1; j <= oldMap.Extent(); j++) {
+
+    TopoDS_Shape shape = oldMap(j);
+
+    TopoDS_Shape modShape = reShape->Value(shape);
+
+    if (modShape.IsNull()) continue;
+    if (modShape == shape) continue;
+    ilbl = labels.FindIndex(shape);
+    if (ilbl == 0) continue;
+    Label label = labels(ilbl);
+    //labels.RemoveKey(shape);
+    if (shape.ShapeType() !=  modShape.ShapeType()) {
+      TopTools_IndexedMapOfShape map;
+      TopExp::MapShapes(modShape, shape.ShapeType(), map);
+      for (int i = 1; i <= map.Extent(); i++) {
+        labels.Add(map(i), label);
+      }
+    }
+  }
+
+  return newShape;
+}
+
+
+TopoDS_Shape
+egadsShapeLabel::Update(const TopoDS_Shape& oldShape, const TopoDS_Shape& newShape, const Handle(BRepTools_History)& history)
+{
+  if (labels.Extent() == 0) return newShape;
+
+  int ilbl = labels.FindIndex(oldShape);
+  if (ilbl > 0) {
+    Label label = labels(ilbl);
+    //labels.RemoveKey(oldShape);
+    labels.Add(newShape, label);
+  }
+
+  TopTools_IndexedMapOfShape oldMap;
+  TopExp::MapShapes(oldShape, oldMap);
+
+  for (int j = 1; j <= oldMap.Extent(); j++) {
+
+    TopoDS_Shape shape = oldMap(j);
+
+    const TopTools_ListOfShape& mods = history->Modified(shape);
+
+    if (mods.Extent() > 0) {
+      ilbl = labels.FindIndex(shape);
+      if (ilbl == 0) continue;
+      Label label = labels(ilbl);
+      //labels.RemoveKey(shape);
+
+      TopTools_ListIteratorOfListOfShape it(mods);
+      for (; it.More(); it.Next()) {
+        labels.Add(it.Value(), label);
+      }
+    }
+
+    const TopTools_ListOfShape& gens = history->Generated(shape);
+
+    if (gens.Extent() > 0) {
+      ilbl = labels.FindIndex(shape);
+      if (ilbl == 0) continue;
+      Label label = labels(ilbl);
+      //labels.RemoveKey(shape);
+
+      TopTools_ListIteratorOfListOfShape it(gens);
+      for (; it.More(); it.Next()) {
+        labels.Add(it.Value(), label);
+      }
+    }
+  }
+
+  return newShape;
 }
 
 
@@ -750,7 +913,13 @@ EG_readTess(FILE *fp, egObject *body, egObject **tess)
   for (i = 0; i < nface; i++) {
     len = ntri = 0;
     fscanf(fp, "%d %d", &len, &ntri);
-    if ((len == 0) || (ntri == 0)) continue;
+    if ((len == 0) || (ntri == 0)) {
+      egTessel *btess = (egTessel *) (*tess)->blind;
+      btess->nFace = 0;
+      EG_free(btess->tess2d);
+      btess->tess2d = NULL;
+      continue;
+    }
     xyz    = (double *) malloc(3*len*sizeof(double));
     param  = (double *) malloc(2*len*sizeof(double));
     ptype  = (int *)    malloc(  len* sizeof(int));
@@ -850,6 +1019,105 @@ EG_readTess(FILE *fp, egObject *body, egObject **tess)
 }
 
 
+// Taken from
+// XSControl_TransferReader::EntityFromShapeResult
+// XSControl_TransferReader::EntitiesFromShapeList
+static void
+LablesFromTransferReader
+       (const TopoDS_Shape& aShape,
+        const Handle(XSControl_TransferReader)& TR,
+        egadsShapeLabel& labels)
+{
+  const Handle(Transfer_TransientProcess)& TP = TR->TransientProcess();
+  const Handle(Interface_InterfaceModel)& Model = TR->Model();
+
+  TopTools_IndexedMapOfShape shapes;
+  TopExp::MapShapes(aShape, shapes);
+
+  Standard_Integer i, j, nb;
+
+  XSControl_Utils xu;
+  if (!TP.IsNull()) {
+    nb = TP->NbMapped();
+    for (j = 1; j <= nb; j ++) {
+      Handle(Standard_Transient) ent = TP->Mapped(j);
+      TopoDS_Shape sh = TransferBRep::ShapeResult (TP,ent);
+      if (sh.IsNull()) continue;
+
+      // find the IsSame or IsPartner shape if necessary
+      if (!shapes.Contains(sh)) {
+        for (i = 1; i <= shapes.Extent(); i++) {
+          TopoDS_Shape shape = shapes(i);
+          if (sh.IsSame(shape) || sh.IsPartner(shape)) {
+            sh = shape;
+            break;
+          }
+        }
+      }
+
+      const char *name = NULL;
+
+      // First try STEP file
+      Handle(StepRepr_RepresentationItem) aReprItem;
+      aReprItem = Handle(StepRepr_RepresentationItem)::DownCast(ent);
+      if (!aReprItem.IsNull())
+        name = aReprItem->Name()->ToCString();
+      else {
+        // Try IGES file
+        const Handle(IGESData_IGESEntity)& shapeEntity =
+              Handle(IGESData_IGESEntity)::DownCast(ent);
+        if (!shapeEntity.IsNull() && shapeEntity->HasName())
+          name = shapeEntity->NameValue()->ToCString();
+      }
+      if (name == NULL)       continue;
+      if (strlen(name) == 0)  continue;
+      labels.Add(sh, name);
+      /* printf(" Name found: %s\n",
+              TopAbs::ShapeTypeToString(sh.ShapeType()), name ); */
+    }
+  }
+
+  if (Model.IsNull()) return;
+
+  nb = Model->NbEntities();
+  for (i = 1; i <= nb; i ++) {
+    Handle(Transfer_ResultFromModel) rec = TR->ResultFromNumber (i);
+    if (rec.IsNull()) continue;
+
+    Handle(TColStd_HSequenceOfTransient) list = rec->Results (2);
+    Standard_Integer ir,nr = list->Length();
+    for (ir = 1; ir <= nr; ir ++) {
+      DeclareAndCast(Transfer_ResultFromTransient,rft,list->Value(ir));
+      if (rft.IsNull()) continue;
+      TopoDS_Shape sh = xu.BinderShape (rft->Binder());
+      if (sh.IsNull()) continue;
+      Handle(Standard_Transient) ent = rft->Start();
+      if (ent.IsNull()) continue;
+
+      const char *name = NULL;
+
+      // First try STEP file
+      Handle(StepRepr_RepresentationItem) aReprItem;
+      aReprItem = Handle(StepRepr_RepresentationItem)::DownCast(ent);
+      if (!aReprItem.IsNull())
+        name = aReprItem->Name()->ToCString();
+      else {
+        // Try IGES file
+        const Handle(IGESData_IGESEntity)& shapeEntity =
+              Handle(IGESData_IGESEntity)::DownCast(ent);
+        if (!shapeEntity.IsNull() && shapeEntity->HasName())
+          name = shapeEntity->NameValue()->ToCString();
+      }
+      if (name == NULL)       continue;
+      if (strlen(name) == 0)  continue;
+      labels.Add(sh, name);
+      /* printf(" Name found: %s\n",
+              TopAbs::ShapeTypeToString(sh.ShapeType()), name ); */
+    }
+  }
+}
+
+
 static void
 EG_importScale(const char *reader, const char *units, double *scale,
                const char **wunits)
@@ -900,11 +1168,11 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
   int          i, j, stat, outLevel, len, nattr, nerr, hite, hitf, egads = 0;
   int          oclass, ibody, *invalid = NULL, nbs = 0;
   double       scale  = 1.0;
-  char         *units = NULL;
   egObject     *omodel, *aobj;
   TopoDS_Shape source;
   egadsModel   *mshape = NULL;
-  NCollection_IndexedDataMap<TopoDS_Shape, egadsLabel> labels;
+  egadsShapeLabel labels;
+  Handle(TCollection_HAsciiString) units;
   FILE         *fp;
   
   *model = NULL;
@@ -966,8 +1234,8 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
       if (unitLength.Length() >= 1) {
         if (unitLength.Length() > 1)
           printf(" EGADS Info: # unitLengths = %d\n", unitLength.Length());
-        units = EG_strdup(unitLength(1).ToCString());
-        EG_importScale("STEP Reader", units, &scale, NULL);
+        units = new TCollection_HAsciiString(unitLength(1).ToCString());
+        EG_importScale("STEP Reader", units->ToCString(), &scale, NULL);
       }
     }
 
@@ -998,13 +1266,19 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
                                        StepRepr_NextAssemblyUsageOccurrence);
     Handle(Standard_Type) tPD   = STANDARD_TYPE(StepBasic_ProductDefinition);
 #endif
+
+    // Get all the labels from the STEP file
+    LablesFromTransferReader(aReader.OneShape(), TR, labels);
+
     TopoDS_Compound compound;
     BRep_Builder    builder3D;
     builder3D.MakeCompound(compound);
     for (i = 1; i <= nbs; i++) {
       TopoDS_Shape aShape = aReader.Shape(i);
+#ifdef OLD_AND_SLOW_LABEL_FINDER
       TopTools_IndexedMapOfShape MapAll;
       TopExp::MapShapes(aShape, MapAll);
+
       for (int j = 1; j <= MapAll.Extent(); j++) {
         TopoDS_Shape aShape = MapAll(j);
         Handle(Standard_Transient) ent = TR->EntityFromShapeResult(aShape, 1);
@@ -1017,10 +1291,12 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         const char *STEPname = aReprItem->Name()->ToCString();
         if (STEPname == NULL)      continue;
         if (strlen(STEPname) == 0) continue;
-        labels.Add(aShape, egadsLabel(STEPname));
-       /* printf(" %d/%d %s -> Name found: %s\n", j, MapAll.Extent(),
-               TopAbs::ShapeTypeToString(aShape.ShapeType()), STEPname); */
+        labels.Add(aShape, STEPname);
+        /* printf(" %d/%d %s -> Name found: %s\n", j, MapAll.Extent(),
+               TopAbs::ShapeTypeToString(aShape.ShapeType()), STEPname ); */
       }
+#endif
+
 #ifdef STEPASSATTRS
       Handle(Standard_Transient) ent = TR->EntityFromShapeResult(aShape, 3);
       if (!ent.IsNull()) {
@@ -1067,7 +1343,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
 //      uShape.SetLinearTolerance(100.0*Precision::Confusion());
 //      uShape.SetAngularTolerance(10.0*Precision::Angular());
         uShape.Build();
-        aShape = uShape.Shape();
+        aShape = labels.Update(aShape, uShape.Shape(), uShape.History());
       }
       if (scale != 1.0) {
         gp_Trsf form = gp_Trsf();
@@ -1078,20 +1354,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         if (!xForm.IsDone()) {
           printf(" EGADS Warning: Can't scale Body %d (EG_loadModel)!\n", i);
         } else {
-          TopTools_IndexedMapOfShape bMap;
-          TopExp::MapShapes(aShape, bMap);
-
-          aShape = xForm.ModifiedShape(aShape);
-
-          TopTools_IndexedMapOfShape aMap;
-          TopExp::MapShapes(aShape, aMap);
-          for (int j = 1; j <= bMap.Extent(); j++) {
-            TopoDS_Shape bShape = bMap(j);
-            if (!labels.Contains(bShape)) continue;
-            egadsLabel label = labels.FindFromKey(bShape);
-            labels.RemoveKey(bShape);
-            labels.Add(aMap(j), label);
-          }
+          aShape = labels.Update(aShape, xForm);
         }
       }
 
@@ -1145,10 +1408,8 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
       Handle(IGESData_IGESModel) aModel =
                          Handle(IGESData_IGESModel)::DownCast(iReader.Model());
       if(!aModel.IsNull()) {
-        Handle(TCollection_HAsciiString) aUnitName =
-                                            aModel->GlobalSection().UnitName();
-        units = EG_strdup(aUnitName->ToCString());
-        EG_importScale("IGES Reader", units, &scale, NULL);
+        units = aModel->GlobalSection().UnitName();
+        EG_importScale("IGES Reader", units->ToCString(), &scale, NULL);
       }
     }
     iReader.TransferRoots();
@@ -1168,18 +1429,23 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
     const Handle(XSControl_TransferReader)& transferReader =
           workSession->TransferReader();
 
+    // Get all the labels from the IGES file
+    LablesFromTransferReader(iReader.OneShape(), transferReader, labels);
+
     TopoDS_Compound compound;
     BRep_Builder    builder3D;
     builder3D.MakeCompound(compound);
     for (i = 1; i <= nbs; i++) {
       TopoDS_Shape aShape = iReader.Shape(i);
-      
+
+#ifdef OLD_AND_SLOW_LABEL_FINDER
       const Handle(IGESData_IGESEntity)& shapeEntity =
             Handle(IGESData_IGESEntity)::DownCast(
                   transferReader->EntityFromShapeResult(aShape, -1));
       if (shapeEntity->HasName())
-        labels.Add(aShape, egadsLabel(shapeEntity->NameValue()->ToCString()));
-      
+        labels.Add(aShape, shapeEntity->NameValue()->ToCString());
+#endif
+
       if ((bflg&8) != 0) {
         ShapeUpgrade_UnifySameDomain uShape(aShape);
         uShape.Build();
@@ -1194,20 +1460,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
         if (!xForm.IsDone()) {
           printf(" EGADS Warning: Can't scale Body %d (EG_loadModel)!\n", i);
         } else {
-          TopTools_IndexedMapOfShape bMap;
-          TopExp::MapShapes(aShape, bMap);
-
-          aShape = xForm.ModifiedShape(aShape);
-
-          TopTools_IndexedMapOfShape aMap;
-          TopExp::MapShapes(aShape, aMap);
-          for (int j = 1; j <= bMap.Extent(); j++) {
-            TopoDS_Shape bShape = bMap(j);
-            if (!labels.Contains(bShape)) continue;
-            egadsLabel label = labels.FindFromKey(bShape);
-            labels.RemoveKey(bShape);
-            labels.Add(aMap(j), label);
-          }
+          aShape = labels.Update(aShape, xForm.ModifiedShape(aShape));
         }
       }
       builder3D.Add(compound, aShape);
@@ -1482,7 +1735,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
                      i);
             if (invalid != NULL) invalid[i-1] = 1;
           } else {
-            pbody->shape = fixedShape;
+            pbody->shape = labels.Update(pbody->shape, fixedShape);
           }
         }
       }
@@ -1511,7 +1764,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
                      i);
             if (invalid != NULL) invalid[i-1] = 1;
           } else {
-            pbody->shape = fixedShape;
+            pbody->shape = labels.Update(pbody->shape, fixedShape);
           }
         }
       }
@@ -1546,7 +1799,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
                        i);
               if (invalid != NULL) invalid[i-1] = 1;
             } else {
-              pbody->shape = fixedShape;
+              pbody->shape = labels.Update(pbody->shape, fixedShape);
             }
           }
         }
@@ -1583,7 +1836,7 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
                        i);
               if (invalid != NULL) invalid[i-1] = 1;
             } else {
-              pbody->shape = fixedShape;
+              pbody->shape = labels.Update(pbody->shape, fixedShape);
             }
           }
         }
@@ -1608,13 +1861,13 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
   omodel->oclass = MODEL;
   omodel->blind  = mshape;
   EG_referenceObject(omodel, context);
-  
+
   for (j = i = 0; i < nBody; i++) {
     egObject  *pobj  = mshape->bodies[i];
     egadsBody *pbody = (egadsBody *) pobj->blind;
     pobj->topObj     = omodel;
-    if (((bflg&1) == 0) && (egads == 0)) EG_splitPeriodics(pbody);
-    if (((bflg&2) != 0) && (egads == 0)) EG_splitMultiplicity(pbody, outLevel);
+    if (((bflg&1) == 0) && (egads == 0)) EG_splitPeriodics(pbody, labels);
+    if (((bflg&2) != 0) && (egads == 0)) EG_splitMultiplicity(pbody, labels, outLevel);
     stat = EG_traverseBody(context, i, pobj, omodel, pbody, &nerr);
     if (stat != EGADS_SUCCESS) {
       if (egads == 1) {
@@ -1646,21 +1899,20 @@ EG_loadModel(egObject *context, int bflg, const char *name, egObject **model)
   *model = omodel;
   
   /* possibly assign units when doing an IGES/STEP read */
-  if (units != NULL) {
+  if (!units.IsNull()) {
     for (int ibody = 0; ibody < mshape->nbody; ibody++) {
       egObject *pobj = mshape->bodies[ibody];
-      EG_attributeAdd(pobj, ".lengthUnits", ATTRSTRING, 1, NULL, NULL, units);
+      EG_attributeAdd(pobj, ".lengthUnits", ATTRSTRING, 1, NULL, NULL, units->ToCString());
     }
-    EG_free(units);
   }
-  
+
   /* possibly assign attributes from IGES/STEP read */
   if (labels.Extent() > 0) {
     for (i = 1; i <= labels.Extent(); i++) {
       const char *value = labels(i).shapeName;
       if (value == NULL) continue;
       TopoDS_Shape aShape = labels.FindKey(i);
-/*    printf(" Shape %2d: %s\n", i+1, value);  */
+      /* printf(" Shape %2d: %s\n", i, value); */
       for (int ibody = 0; ibody < mshape->nbody; ibody++) {
         egObject  *pobj   = mshape->bodies[ibody];
         egadsBody *pbody  = (egadsBody *) pobj->blind;
@@ -2188,6 +2440,152 @@ EG_setSTEPname(const Handle(XSControl_WorkSession) &WS, int nbody,
 
 
 static void
+EG_setIGESname(int nbody, const egObject **bodies,
+               IGESControl_Writer &iWrite)
+{
+  int          i, j, stat, aType, aLen, nshell, nface, nloop, nedge, nnode;
+  const int    *ints;
+  const double *reals;
+  const char   *str;
+  Handle(IGESData_IGESEntity) r;
+  const Handle(Transfer_FinderProcess) &FP = iWrite.TransferProcess();
+
+  for (j = 0; j < nbody; j++) {
+    egadsBody *pbody = (egadsBody *) bodies[j]->blind;
+    nnode  = pbody->nodes.map.Extent();
+    nedge  = pbody->edges.map.Extent();
+    nloop  = pbody->loops.map.Extent();
+    nface  = pbody->faces.map.Extent();
+    nshell = pbody->shells.map.Extent();
+
+    stat   = EG_attributeRet(bodies[j], "Name", &aType, &aLen, &ints, &reals,
+                             &str);
+    if (stat == EGADS_SUCCESS)
+      if (aType == ATTRSTRING) {
+
+        Handle(TransferBRep_ShapeMapper) mapper = TransferBRep::ShapeMapper(FP, pbody->shape);
+        if (FP->FindTypedTransient (mapper, STANDARD_TYPE(IGESData_IGESEntity), r)) {
+          // Set short name (max 8 chars)
+          // r->SetLabel(new TCollection_HAsciiString("SHRTNAME"));
+
+          //Add long name
+          Handle(IGESBasic_Name) nameEntity = new IGESBasic_Name();
+          nameEntity->Init(1, new TCollection_HAsciiString(str));
+          r->AddProperty(nameEntity);
+          iWrite.Model()->AddEntity(nameEntity);
+        }
+      }
+
+    for (i = 0; i < nshell; i++) {
+      egObject   *aobj   = pbody->shells.objs[i];
+      if (aobj   == NULL) continue;
+      egadsShell *pshell = (egadsShell *) aobj->blind;
+      if (pshell == NULL) continue;
+      stat = EG_attributeRet(aobj, "Name", &aType, &aLen, &ints, &reals, &str);
+      if (stat  != EGADS_SUCCESS) continue;
+      if (aType != ATTRSTRING)    continue;
+
+      Handle(TransferBRep_ShapeMapper) mapper = TransferBRep::ShapeMapper(FP, pshell->shell);
+      if (FP->FindTypedTransient (mapper, STANDARD_TYPE(IGESData_IGESEntity), r)) {
+        // Set short name (max 8 chars)
+        // r->SetLabel(new TCollection_HAsciiString("SHRTNAME"));
+
+        //Add long name
+        Handle(IGESBasic_Name) nameEntity = new IGESBasic_Name();
+        nameEntity->Init(1, new TCollection_HAsciiString(str));
+        r->AddProperty(nameEntity);
+        iWrite.Model()->AddEntity(nameEntity);
+      }
+    }
+
+    for (i = 0; i < nface; i++) {
+      egObject  *aobj  = pbody->faces.objs[i];
+      if (aobj  == NULL) continue;
+      egadsFace *pface = (egadsFace *) aobj->blind;
+      if (pface == NULL) continue;
+      stat = EG_attributeRet(aobj, "Name", &aType, &aLen, &ints, &reals, &str);
+      if (stat  != EGADS_SUCCESS) continue;
+      if (aType != ATTRSTRING)    continue;
+      Handle(TransferBRep_ShapeMapper) mapper = TransferBRep::ShapeMapper(FP, pface->face);
+      if (FP->FindTypedTransient (mapper, STANDARD_TYPE(IGESData_IGESEntity), r)) {
+        // Set short name (max 8 chars)
+        // r->SetLabel(new TCollection_HAsciiString("SHRTNAME"));
+
+        //Add long name
+        Handle(IGESBasic_Name) nameEntity = new IGESBasic_Name();
+        nameEntity->Init(1, new TCollection_HAsciiString(str));
+        r->AddProperty(nameEntity);
+        iWrite.Model()->AddEntity(nameEntity);
+      }
+    }
+
+    for (i = 0; i < nloop; i++) {
+      egObject *aobj   = pbody->loops.objs[i];
+      if (aobj  == NULL) continue;
+      egadsLoop *ploop = (egadsLoop *) aobj->blind;
+      if (ploop == NULL) continue;
+      stat = EG_attributeRet(aobj, "Name", &aType, &aLen, &ints, &reals, &str);
+      if (stat  != EGADS_SUCCESS) continue;
+      if (aType != ATTRSTRING)    continue;
+      Handle(TransferBRep_ShapeMapper) mapper = TransferBRep::ShapeMapper(FP, ploop->loop);
+      if (FP->FindTypedTransient (mapper, STANDARD_TYPE(IGESData_IGESEntity), r)) {
+        // Set short name (max 8 chars)
+        // r->SetLabel(new TCollection_HAsciiString("SHRTNAME"));
+
+        //Add long name
+        Handle(IGESBasic_Name) nameEntity = new IGESBasic_Name();
+        nameEntity->Init(1, new TCollection_HAsciiString(str));
+        r->AddProperty(nameEntity);
+        iWrite.Model()->AddEntity(nameEntity);
+      }
+    }
+
+    for (i = 0; i < nedge; i++) {
+      egObject  *aobj  = pbody->edges.objs[i];
+      if (aobj  == NULL) continue;
+      egadsEdge *pedge = (egadsEdge *) aobj->blind;
+      if (pedge == NULL) continue;
+      stat = EG_attributeRet(aobj, "Name", &aType, &aLen, &ints, &reals, &str);
+      if (stat  != EGADS_SUCCESS) continue;
+      if (aType != ATTRSTRING)    continue;
+      Handle(TransferBRep_ShapeMapper) mapper = TransferBRep::ShapeMapper(FP, pedge->edge);
+      if (FP->FindTypedTransient (mapper, STANDARD_TYPE(IGESData_IGESEntity), r)) {
+        // Set short name (max 8 chars)
+        // r->SetLabel(new TCollection_HAsciiString("SHRTNAME"));
+
+        //Add long name
+        Handle(IGESBasic_Name) nameEntity = new IGESBasic_Name();
+        nameEntity->Init(1, new TCollection_HAsciiString(str));
+        r->AddProperty(nameEntity);
+        iWrite.Model()->AddEntity(nameEntity);
+      }
+    }
+
+    for (int i = 0; i < nnode; i++) {
+      egObject  *aobj  = pbody->nodes.objs[i];
+      if (aobj  == NULL) continue;
+      egadsNode *pnode = (egadsNode *) aobj->blind;
+      if (pnode == NULL) continue;
+      stat = EG_attributeRet(aobj, "Name", &aType, &aLen, &ints, &reals, &str);
+      if (stat  != EGADS_SUCCESS) continue;
+      if (aType != ATTRSTRING)    continue;
+      Handle(TransferBRep_ShapeMapper) mapper = TransferBRep::ShapeMapper(FP, pnode->node);
+      if (FP->FindTypedTransient (mapper, STANDARD_TYPE(IGESData_IGESEntity), r)) {
+        // Set short name (max 8 chars)
+        // r->SetLabel(new TCollection_HAsciiString("SHRTNAME"));
+
+        //Add long name
+        Handle(IGESBasic_Name) nameEntity = new IGESBasic_Name();
+        nameEntity->Init(1, new TCollection_HAsciiString(str));
+        r->AddProperty(nameEntity);
+        iWrite.Model()->AddEntity(nameEntity);
+      }
+    }
+  }
+}
+
+
+static void
 EG_getBodyUnits(const egObject *model, int nBody, const egObject **bodies,
                 const char **units)
 {
@@ -2364,15 +2762,18 @@ EG_saveModel(const egObject *model, const char *name)
       for (Exp.Init(wshape, TopAbs_SOLID);
            Exp.More(); Exp.Next()) iWrite.AddShape(Exp.Current());
 
+      // transfer Name attributes to IGESBasic_Name
+      EG_setIGESname(nbody, objs, iWrite);
+
       iWrite.ComputeModel();
       if (!iWrite.Write(name)) {
-        printf(" EGADS Warning: IGES Write Error (EG_saveModel)!\n");
+        printf(" EGADS Error: IGES Write Error (EG_saveModel)!\n");
         return EGADS_WRITERR;
       }
     }
     catch (...)
     {
-      printf(" EGADS Warning: Internal IGES Write Error (EG_saveModel)!\n");
+      printf(" EGADS Error: Internal IGES Write Error (EG_saveModel)!\n");
       return EGADS_WRITERR;
     }
 

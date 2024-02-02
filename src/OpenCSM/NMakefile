@@ -64,22 +64,17 @@ LIBLIST =	$(LDIR)\ocsm.dll \
 		$(LDIR)\supell.dll \
 		$(LDIR)\tester1.dll \
 		$(LDIR)\tester2.dll \
+		$(LDIR)\vsp3.dll \
 		$(LDIR)\waffle.dll \
+		$(LDIR)\warp.dll \
 		$(LDIR)\PDT2.dll
 LIBFLIST = 	$(LDIR)\naca456.dll
-!ifdef PYTHONINC
 TIMLIST  =      $(LDIR)\ereped.dll \
                 $(LDIR)\mitten.dll \
                 $(LDIR)\plotter.dll \
                 $(LDIR)\plugs.dll \
-                $(LDIR)\slugs.dll
-!else
-TIMLIST  =      $(LDIR)\ereped.dll \
-                $(LDIR)\mitten.dll \
-                $(LDIR)\plotter.dll \
-                $(LDIR)\plugs.dll \
-                $(LDIR)\slugs.dll
-!endif
+                $(LDIR)\slugs.dll \
+                $(LDIR)\vspSetup.dll
 INCLIST = 	$(IDIR)\OpenCSM.h \
 		$(IDIR)\common.h \
 		$(IDIR)\udp.h \
@@ -603,6 +598,14 @@ $(LDIR)\tester2.dll:	$(ODIR)\udpTester2.obj $(LDIR)\ocsm.dll
 $(ODIR)\udpTester2.obj:	udpTester2.c udpUtilities.c udpUtilities.h OpenCSM.h
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udpTester2.c /Fo$(ODIR)\udpTester2.obj
 
+$(LDIR)\vsp3.dll:	$(ODIR)\udpVsp3.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\vsp3.dll $(LDIR)\vsp3.lib $(LDIR)\vsp3.exp
+	link /out:$(LDIR)\vsp3.dll /dll /def:udp.def $(ODIR)\udpVsp3.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
+	$(MCOMP) /manifest $(LDIR)\vsp3.dll.manifest /outputresource:$(LDIR)\vsp3.dll;2
+
+$(ODIR)\udpVsp3.obj:	udpVsp3.c udpUtilities.c udpUtilities.h OpenCSM.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udpVsp3.c /Fo$(ODIR)\udpVsp3.obj
+
 $(LDIR)\waffle.dll:	$(ODIR)\udpWaffle.obj $(LDIR)\ocsm.dll
 	-del $(LDIR)\waffle.dll $(LDIR)\waffle.lib $(LDIR)\waffle.exp
 	link /out:$(LDIR)\waffle.dll /dll /def:udp.def $(ODIR)\udpWaffle.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
@@ -610,6 +613,14 @@ $(LDIR)\waffle.dll:	$(ODIR)\udpWaffle.obj $(LDIR)\ocsm.dll
 
 $(ODIR)\udpWaffle.obj:	udpWaffle.c udpUtilities.c udpUtilities.h OpenCSM.h
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udpWaffle.c /Fo$(ODIR)\udpWaffle.obj
+
+$(LDIR)\warp.dll:	$(ODIR)\udpWarp.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\warp.dll $(LDIR)\warp.lib $(LDIR)\warp.exp
+	link /out:$(LDIR)\warp.dll /dll /def:udp.def $(ODIR)\udpWarp.obj $(LDIR)\ocsm.lib $(LDIR)\egads.lib
+	$(MCOMP) /manifest $(LDIR)\warp.dll.manifest /outputresource:$(LDIR)\warp.dll;2
+
+$(ODIR)\udpWarp.obj:	udpWarp.c udpUtilities.c udpUtilities.h OpenCSM.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) udpWarp.c /Fo$(ODIR)\udpWarp.obj
 
 #
 #	external grid generators (EGGs)
@@ -669,6 +680,14 @@ $(LDIR)\slugs.dll:	$(ODIR)\timSlugs.obj $(LDIR)\ocsm.dll
 
 $(ODIR)\timSlugs.obj:	timSlugs.c OpenCSM.h tim.h
 	cl /c $(COPTS) $(DEFINE) /I$(IDIR) timSlugs.c /Fo$(ODIR)\timSlugs.obj
+
+$(LDIR)\vspSetup.dll:	$(ODIR)\timVspSetup.obj $(LDIR)\ocsm.dll
+	-del $(LDIR)\vspSetup.dll $(LDIR)\vspSetup.lib $(LDIR)\vspSetup.exp
+	link /out:$(LDIR)\vspSetup.dll /dll /def:tim.def $(ODIR)\timVspSetup.obj $(LDIR)\ocsm.lib $(LDIR)\wsserver.lib $(LDIR)\egads.lib
+	$(MCOMP) /manifest $(LDIR)\vspSetup.dll.manifest /outputresource:$(LDIR)\vspSetup.dll;2
+
+$(ODIR)\timVspSetup.obj:	timVspSetup.c OpenCSM.h tim.h
+	cl /c $(COPTS) $(DEFINE) /I$(IDIR) timVspSetup.c /Fo$(ODIR)\timVspSetup.obj
 
 #
 #	include files
@@ -766,13 +785,16 @@ clean:
 	-del $(ODIR)\udpSupell.obj
 	-del $(ODIR)\udfTester1.obj
 	-del $(ODIR)\udpTester2.obj
+	-del $(ODIR)\udpVsp3.obj
 	-del $(ODIR)\udpWaffle.obj
+	-del $(ODIR)\udpWarp.obj
 	-del $(ODIR)\eggPDT2.obj
 	-del $(ODIR)\timEreped.obj
 	-del $(ODIR)\timMitten.obj
 	-del $(ODIR)\timPlotter.obj
 	-del $(ODIR)\timPlugs.obj
 	-del $(ODIR)\timSlugs.obj
+	-del $(ODIR)\timVspSetup.obj
 
 cleanall:	clean
 	-del $(BDIR)\serveCSM.exe
@@ -830,13 +852,16 @@ cleanall:	clean
 	-del $(LDIR)\supell.dll     $(LDIR)\supell.lib     $(LDIR)\supell.exp
 	-del $(LDIR)\tester1.dll    $(LDIR)\tester1.lib    $(LDIR)\tester1.exp
 	-del $(LDIR)\tester2.dll    $(LDIR)\tester2.lib    $(LDIR)\tester2.exp
+	-del $(LDIR)\vsp3.dll       $(LDIR)\vsp3.lib       $(LDIR)\vsp3.exp
 	-del $(LDIR)\waffle.dll     $(LDIR)\waffle.lib     $(LDIR)\waffle.exp
+	-del $(LDIR)\warp.dll       $(LDIR)\warp.lib       $(LDIR)\warp.exp
 	-del $(LDIR)\PDT2.dll       $(LDIR)\PDT2.lib       $(LDIR)\PDT2.exp
 	-del $(LDIR)\ereped.dll     $(LDIR)\ereped.lib     $(LDIR)\ereped.exp
 	-del $(LDIR)\mitten.dll     $(LDIR)\mitten.lib     $(LDIR)\mitten.exp
 	-del $(LDIR)\plotter.dll    $(LDIR)\plotter.lib    $(LDIR)\plotter.exp
 	-del $(LDIR)\plugs.dll      $(LDIR)\plugs.lib      $(LDIR)\plugs.exp
 	-del $(LDIR)\slugs.dll      $(LDIR)\slugs.lib      $(LDIR)\slugs.exp
+	-del $(LDIR)\vspSetup.dll   $(LDIR)\vspSetup.lib   $(LDIR)\vspSetup.exp
 	-del $(IDIR)\OpenCSM.h      $(IDIR)\common.h       $(IDIR)\udp.h
 	-del $(IDIR)\esp.h          $(IDIR)\tim.h
 	-del $(IDIR)\udpUtilities.h $(IDIR)\udpUtilities.c $(IDIR)\egg.h

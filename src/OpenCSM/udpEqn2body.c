@@ -10,7 +10,7 @@
  */
 
 /*
- * Copyright (C) 2011/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2011/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -52,8 +52,8 @@ static double argDdefs[NUMUDPARGS] = {1.,         0.,         0.,         0.,   
 #include "udpUtilities.c"
 
 /* prototype for function defined below */
-static int  makeWireBody(ego context, int iudp, char message[], ego *ebody);
-static int  makeSheetBody(ego context, int iudp, char message[], ego *ebody);
+static int  makeWireBody(ego context, int iudp, char message[], ego *ebody, int *NumUdp, udp_T *udps);
+static int  makeSheetBody(ego context, int iudp, char message[], ego *ebody, int *NumUdp, udp_T *udps);
 
 
 /*
@@ -76,6 +76,7 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     int     i;
 #endif
     char    *message=NULL;
+    udp_T   *udps = *Udps;
 
     ROUTINE(udpExecute);
 
@@ -166,10 +167,10 @@ udpExecute(ego  context,                /* (in)  EGADS context */
 
     /* determine if a WireBody or SheetBody is to be made */
     if (udps[0].arg[4].size == 1) {
-        status = makeWireBody(context, 0, message, ebody);
+        status = makeWireBody(context, 0, message, ebody, NumUdp, udps);
         CHECK_STATUS(makeWireBody);
     } else {
-        status = makeSheetBody(context, 0, message, ebody);
+        status = makeSheetBody(context, 0, message, ebody, NumUdp, udps);
         CHECK_STATUS(makeSheetBody);
     }
 
@@ -209,7 +210,9 @@ static int
 makeWireBody(ego     context,           /* (in)  EGADS context */
              int     iudp,              /* (in)  udp index */
              char    message[],         /* (out) error message */
-             ego     *ebody)            /* (out) created WireBody */
+             ego     *ebody,            /* (out) created WireBody */
+ /*@unused@*/int     *NumUdp,
+             udp_T   *udps)
 {
     int      status = EGADS_SUCCESS;    /* (out) return status */
 
@@ -356,7 +359,9 @@ static int
 makeSheetBody(ego     context,          /* (in)  EGADS context */
               int     iudp,              /* (in)  udp index */
               char    message[],         /* (out) error message */
-              ego     *ebody)            /* (out) created SheetBody */
+              ego     *ebody,            /* (out) created SheetBody */
+  /*@unused@*/int     *NumUdp,
+              udp_T   *udps)
 {
     int      status = EGADS_SUCCESS;    /* (out) return status */
 

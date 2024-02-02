@@ -4211,6 +4211,109 @@ class DataSet(object):
         if file == None:
             fp.close()
 
+    ## Write data set to a VTK compatible data file. A triagulation of the data set will be used
+    # for the connectivity.
+    # \param filename Write VTK file with the specified name.
+    def writeVTK(self, filename):
+
+        if filename == None:
+            raise caps.CAPSError(caps.CAPS_BADVALUE, msg = "while writing VTK file for data set - " + str(self.dataSetName)
+                                                         + "\nNo file name provided" )
+
+        if ".vtk" not in filename:
+            filename += ".vtk"
+
+        try:
+            fp = open(filename, "w")
+        except:
+            self.capsProblem.status = caps.CAPS_IOERR
+            raise caps.CAPSError(msg = "while open file for writing Tecplot file for data set - "
+                                         + str(self.dataSetName))
+
+        data = self.data()
+        if not data: # Do we have empty data
+            raise caps.CAPSError(caps.CAPS_BADVALUE, msg = "the data set is empty for - "
+                                                         + str(self.name))
+        else:
+            if not isinstance(data[0], tuple): # Only returns a list if rank 1
+                temp = []
+                for d in data:
+                    temp.append([d])
+                data = temp
+
+        xyz = self.xyz()
+
+        connectivity, Gsegs, dconnectivity, Dsegs = self.connectivity()
+
+        #TODO: dconnectivity does not appear to indicate a cell centered data set?
+        if dconnectivity:
+            raise caps.CAPSError(caps.CAPS_BADVALUE, msg = "writeTecplot does NOT currently support dconnectivity based data sets!")
+
+        if not ((len(data) == len(xyz)) or (len(data) == len(connectivity))):
+            raise caps.CAPSError(caps.CAPS_MISMATCH, msg = "writeVTK only supports node-centered or cell-centered data!")
+
+        vertexSetName, otype, stype, link, parent, last = self._vertexSetObj.info()
+
+        numNode = len(xyz)
+        numElem = len(connectivity)
+
+        # Write grid coordinates if 
+        fp.write("# vtk DataFile Version 2.0\n")
+        fp.write("Unstructured Grid\n")
+        fp.write("ASCII\n")
+        fp.write("DATASET UNSTRUCTURED_GRID\n")
+        fp.write("POINTS %d double\n" % (numNode))
+
+        # Write grid coordinates
+        for i in xyz:
+            fp.write(str(i[0]) +" "+ str(i[1]) +" "+ str(i[2]) + "\n")
+
+        # Write connectivity
+        fp.write("CELLS %d %d\n" % (numElem, numElem+3*numElem))
+        for i in connectivity:
+            fp.write("3 " + str(i[0]-1) +" "+ str(i[1]-1) +" "+ str(i[2]-1) + "\n")
+
+        # Write cell types
+        fp.write("CELL_TYPES %d\n" % (numElem))
+        for i in range(numElem):
+            fp.write("5\n") # Triangle Type ID
+
+        # Write required CELL_DATA
+        fp.write("CELL_DATA %d\n" % (numElem))
+        fp.write("SCALARS CellID int 1\n")
+        fp.write("LOOKUP_TABLE default\n")
+        for i in range(numElem):
+            fp.write("1\n")
+
+        if len(data) == len(xyz): # Node centered data set
+            
+            fp.write("POINT_DATA %d\n" % (numNode))
+            fp.write("SCALARS %s double %d\n" % (vertexSetName + "_" + self.name, len(data[0])))
+            fp.write("LOOKUP_TABLE default\n")
+
+            # Write coordinates + data values
+            for i in data:
+                dataString = ""
+                for j in i: dataString += " " + str(j)
+
+                fp.write(dataString + "\n")
+
+        elif len(data) == len(connectivity): # Cell centered data set
+
+            fp.write("CELL_DATA %d\n" % (numElem))
+            fp.write("SCALARS %s double %d\n" % (vertexSetName + "_" + self.name, len(data[0])))
+            fp.write("LOOKUP_TABLE default\n")
+
+            # Write coordinates + data values
+            for i in data:
+
+                dataString = ""
+                for j in i: dataString += " " + str(j)
+
+                fp.write(dataString + "\n")
+
+        fp.close()
+
 #==============================================================================
 ## Defines a Sequence of CAPS DataSet Objects
 class DataSetSequence(Sequence):
@@ -4285,4 +4388,4 @@ class DataSetSequence(Sequence):
 
     ## Returns a list of the fields in the Analysis Object associated with this DataSet
     def fields(self):
-        return list(self._fieldRank.keys())
+        return list(self._fieldInRank.keys()) + list(self._fieldOutRank.keys())

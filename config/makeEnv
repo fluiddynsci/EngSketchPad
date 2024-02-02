@@ -48,7 +48,6 @@ else
 fi
 
 ARCH=UNKNOWN
-MACOSX=UNKNOWN
 
 if [ -n "$EFCOMP" ]; then
 	if [ "$EFCOMP" != ifort ] && [ "$EFCOMP" != gfortran ]; then
@@ -92,31 +91,33 @@ fi
 #
 # determine the version of OSX
 #
-if [ "$ARCH" = Darwin ]; then
-	case "$rl" in
-	14.*)   MACOSX=10.10 ;;
-	15.*)   MACOSX=10.11 ;;
-	16.*)   MACOSX=10.12 ;;
-	17.*)   MACOSX=10.13 ;;
-	18.*)   MACOSX=10.14 ;;
-	19.*)   MACOSX=10.15 ;;
-	20.1.*) MACOSX=11.0 ;;
-	20.2.*) MACOSX=11.1 ;;
-	20.3.*) MACOSX=11.2 ;;
-	20.4.*) MACOSX=11.3 ;;
-	20.5.*) MACOSX=11.4 ;;
-	20.6.*) MACOSX=11.5 ;;
-	21.0.*) MACOSX=12.0 ;;
-	21.1.*) MACOSX=12.0 ;;
-	21.2.*) MACOSX=12.1 ;;
-	21.3.*) MACOSX=12.2 ;;
-	21.4.*) MACOSX=12.3 ;;
-	21.5.*) MACOSX=12.4 ;;
-	21.6.*) MACOSX=12.5 ;;
-	21.*)   MACOSX=12.x ;;
-	22.*)   MACOSX=13.x ;;
-	esac
-fi
+# MACOSX=UNKNOWN
+# if [ "$ARCH" = Darwin ]; then
+# 	case "$rl" in
+# 	14.*)   MACOSX=10.10 ;;
+# 	15.*)   MACOSX=10.11 ;;
+# 	16.*)   MACOSX=10.12 ;;
+# 	17.*)   MACOSX=10.13 ;;
+# 	18.*)   MACOSX=10.14 ;;
+# 	19.*)   MACOSX=10.15 ;;
+# 	20.1.*) MACOSX=11.0 ;;
+# 	20.2.*) MACOSX=11.1 ;;
+# 	20.3.*) MACOSX=11.2 ;;
+# 	20.4.*) MACOSX=11.3 ;;
+# 	20.5.*) MACOSX=11.4 ;;
+# 	20.6.*) MACOSX=11.5 ;;
+# 	21.0.*) MACOSX=12.0 ;;
+# 	21.1.*) MACOSX=12.0 ;;
+# 	21.2.*) MACOSX=12.1 ;;
+# 	21.3.*) MACOSX=12.2 ;;
+# 	21.4.*) MACOSX=12.3 ;;
+# 	21.5.*) MACOSX=12.4 ;;
+# 	21.6.*) MACOSX=12.5 ;;
+# 	21.*)   MACOSX=12.x ;;
+# 	22.*)   MACOSX=13.x ;;
+# 	23.*)   MACOSX=14.x ;;
+# 	esac
+# fi
 
 #
 # determine CASARCH (if not aleardy set)
@@ -226,7 +227,7 @@ fi
 #
 # do we have AFLR?
 #
-if [ "$ARCH" = Darwin ] && [ "$MACOSX" != UNKNOWN ]; then
+if [ "$ARCH" = Darwin ]; then
 	if [ "$CARCH" = DARWIN_ARM64 ]; then
 		AFLR_ARCH=MacOSX-arm64
 	else
@@ -295,7 +296,7 @@ fi
 if [ "$PYTH" != UNKNOWN ]; then
 	if [ "$PYTHONINC" == UNKNOWN ]; then
 		pscr="\"from __future__ import print_function; import distutils.sysconfig as sysconfig; print(sysconfig.get_config_var('INCLUDEPY'))\""
-		pcmd="python -c $pscr"
+		pcmd="$PYTH -c $pscr"
 		eval PYTHINC=\`$pcmd\`
 
 		if [ -f "$PYTHINC/Python.h" ]; then
@@ -306,7 +307,7 @@ if [ "$PYTH" != UNKNOWN ]; then
 
 	if [ "$PYTHONINC" == UNKNOWN ]; then
 		pscr="\"from __future__ import print_function; import sysconfig; print(sysconfig.get_path('platinclude'))\""
-		pcmd="python -c $pscr"
+		pcmd="$PYTH -c $pscr"
 		eval PYTHONINC=\`$pcmd\`
 		if [ -f "$PYTHONINC/Python.h" ]; then
 			PYTHONINC=$PYTHINC
@@ -321,7 +322,7 @@ if [ "$PYTH" != UNKNOWN ]; then
 	fi
 
 	pscr="\"from __future__ import print_function; import distutils.sysconfig as sysconfig; print(sysconfig.get_config_var('LIBRARY'))\""
-	pcmd="python -c $pscr"
+	pcmd="$PYTH -c $pscr"
 	eval plb=\`$pcmd\`
 	pso=`echo $plb|sed -e 'sx.axx'`.so
 	pdy=`echo $plb|sed -e 'sx.axx'`.dylib
@@ -330,7 +331,7 @@ if [ "$PYTH" != UNKNOWN ]; then
 
 	if [ "$PYTHONLIB" == UNKNOWN ] && [ "$ARCH" = Darwin ]; then
 		pscr="\"from __future__ import print_function; import sys, os; print(os.path.exists(os.path.join(sys.prefix, 'conda-meta')))\""
-		pcmd="python -c $pscr"
+		pcmd="$PYTH -c $pscr"
 		eval conda=\`$pcmd\`
 
 		if [ "$conda" == True ]; then
@@ -341,7 +342,7 @@ if [ "$PYTH" != UNKNOWN ]; then
 
 	if [ "$PYTHONLIB" == UNKNOWN ]; then
 		pscr="\"from __future__ import print_function; import distutils.sysconfig as sysconfig; print(sysconfig.get_config_var('LIBPL'))\""
-		pcmd="python -c $pscr"
+		pcmd="$PYTH -c $pscr"
 		eval plp=\`$pcmd\`
 
 		if [ -f "$plp/$pso" ]; then
@@ -358,7 +359,7 @@ if [ "$PYTH" != UNKNOWN ]; then
 
 	if [ "$PYTHONLIB" == UNKNOWN ]; then
 		pscr="\"from __future__ import print_function; import distutils.sysconfig as sysconfig; print(sysconfig.get_config_var('LIBDIR'))\""
-		pcmd="python -c $pscr"
+		pcmd="$PYTH -c $pscr"
 		eval plp=\`$pcmd\`
 
 		if [ -f "$plp/$pso" ]; then
@@ -375,7 +376,7 @@ if [ "$PYTH" != UNKNOWN ]; then
 
 	if [ "$PYTHONLIB" == UNKNOWN ]; then
 		pscr="\"from __future__ import print_function; import sysconfig; print(sysconfig.get_path('platstdlib'))\""
-		pcmd="python -c $pscr"
+		pcmd="$PYTH -c $pscr"
 		eval plp=\`$pcmd\`
 		if [ -f "$plp/$pso" ]; then
 			PYTHONLIB="-L$plp -l$pllb"
@@ -391,7 +392,7 @@ if [ "$PYTH" != UNKNOWN ]; then
 
 	if [ "$PYTHONLIB" == UNKNOWN ]; then
 		pscr="\"from __future__ import print_function; import sys; import os; print(os.path.join(sys.exec_prefix, 'lib'))\""
-		pcmd="python -c $pscr"
+		pcmd="$PYTH -c $pscr"
 		eval plp=\`$pcmd\`
 		if [ -f "$plp/$pso" ]; then
 			PYTHONLIB="-L$plp -l$pllb"
@@ -407,7 +408,7 @@ if [ "$PYTH" != UNKNOWN ]; then
 
 	if [ "$PYTHONLIB" == UNKNOWN ]; then
 		pscr="\"from __future__ import print_function; import sys; import os; print(os.path.join(os.path.dirname(os.path.dirname(sys.executable)), 'lib'))\""
-		pcmd="python -c $pscr"
+		pcmd="$PYTH -c $pscr"
 		eval plp=\`$pcmd\`
 		if [ -f "$plp/$pso" ]; then
 			PYTHONLIB="-L$plp -l$pllb"
@@ -423,7 +424,7 @@ if [ "$PYTH" != UNKNOWN ]; then
 
 	if [ "$PYTHONLIB" == UNKNOWN ]; then
 		pscr="\"from __future__ import print_function; import sysconfig; print(sysconfig.get_config_var('PYTHONFRAMEWORKPREFIX'))\""
-		pcmd="python -c $pscr"
+		pcmd="$PYTH -c $pscr"
 		eval plp=\`$pcmd\`
 		if [ -f "$plp/$pso" ]; then
 			PYTHONLIB="-L$plp -l$pllb"
@@ -440,7 +441,7 @@ if [ "$PYTH" != UNKNOWN ]; then
 	# Alternatively we could have just this one check that should work on all platforms
 	# https://github.com/JuliaPy/PyCall.jl/blob/master/deps/find_libpython.py
 	#if [ "$PYTHONLIB" == UNKNOWN ]; then
-		#plp=`python find_libpython.py`
+		#plp=`$PYTH find_libpython.py`
 		#if [ -f "$plp" ]; then
 			#PYTHONLIB=$plp
 			#echo "Info: Python library $plp found!"
@@ -463,9 +464,6 @@ echo
 BASE=`pwd | sed -e 'sx/configxx'`
 if [ "$DEVMODE" == ON ]; then
 	BASE=$BASE/$CARCH
-fi
-if [ "$MACOSX" != UNKNOWN ]; then
-	echo "MACOSX   =" $MACOSX
 fi
 echo "ESP_ARCH =" $CARCH
 echo "ESP_ROOT =" $BASE
@@ -522,15 +520,11 @@ else
 	echo "#export AFLR=$HOME/Projects/AFLR"  >> ../ESPenv.sh
 fi
 if [ "$ARCH" = Darwin ]; then
-	if [ "$MACOSX" != UNKNOWN ]; then
-		echo "export AFLR_ARCH="$AFLR_ARCH >> ../ESPenv.sh
-		echo "export MACOSX="$MACOSX       >> ../ESPenv.sh
-		if [ "$DEVMODE" == OFF ]; then
-			echo "export UDUNITS2_XML_PATH="$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.sh
-		else
-			echo "export UDUNITS2_XML_PATH="$BASE/udunits/udunits2.xml >> ../ESPenv.sh
-		fi
-		echo "export CAPS_GLYPH="$BASE/src/CAPS/aim/pointwise/glyph >> ../ESPenv.sh
+	echo "export AFLR_ARCH="$AFLR_ARCH >> ../ESPenv.sh
+	if [ "$DEVMODE" == OFF ]; then
+		echo "export UDUNITS2_XML_PATH="$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.sh
+	else
+		echo "export UDUNITS2_XML_PATH="$BASE/../udunits/udunits2.xml >> ../ESPenv.sh
 	fi
 else
 	echo "export AFLR_ARCH="$AFLR_ARCH              >> ../ESPenv.sh
@@ -549,10 +543,16 @@ else
 		if [ "$DEVMODE" == OFF ]; then
 			echo "export UDUNITS2_XML_PATH="$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.sh
 		else
-			echo "export UDUNITS2_XML_PATH="$BASE/udunits/udunits2.xml >> ../ESPenv.sh
+			echo "export UDUNITS2_XML_PATH="$BASE/../udunits/udunits2.xml >> ../ESPenv.sh
 		fi
 	fi
+fi
+if [ -d $CAPS_GLYPH ]; then
+	echo "export CAPS_GLYPH="$CAPS_GLYPH >> ../ESPenv.sh	
+elif [ "$DEVMODE" == OFF ]; then
 	echo "export CAPS_GLYPH="$BASE/src/CAPS/aim/pointwise/glyph >> ../ESPenv.sh
+else
+	echo "#export CAPS_GLYPH="$HOME/Projects/CAPS/aim/pointwise/glyph >> ../ESPenv.sh
 fi
 if [ "$TETGEN" != UNKNOWN ]; then
 	echo "export TETGEN=$TETGEN" >> ../ESPenv.sh
@@ -593,10 +593,12 @@ if [ "$PYTH" != UNKNOWN ]; then
 		echo "#setenv PYTHONINC \""$PYTHONINC\"        >> ../ESPenv.csh
 		echo "#setenv PYTHONLIB \""$PYTHONLIB\"        >> ../ESPenv.csh
 	fi
-	if [ -z "$PYTHONPATH" ]; then
-		echo "setenv PYTHONPATH $BASE/pyESP"           >> ../ESPenv.csh
-	else
-		echo "setenv PYTHONPATH $BASE/pyESP":'$PYTHONPATH' >> ../ESPenv.csh
+	if [ "$DEVMODE" == OFF ]; then
+		if [ -z "$PYTHONPATH" ]; then
+			echo "setenv PYTHONPATH $BASE/pyESP"           >> ../ESPenv.csh
+		else
+			echo "setenv PYTHONPATH $BASE/pyESP":'$PYTHONPATH' >> ../ESPenv.csh
+		fi
 	fi
 fi
 if [ "$EFCOMP" != UNKNOWN ]; then
@@ -608,15 +610,11 @@ else
 	echo "#setenv AFLR $HOME/Projects/AFLR"  >> ../ESPenv.csh
 fi
 if [ "$ARCH" = Darwin ]; then
-	if [ "$MACOSX" != UNKNOWN ]; then
-		echo "setenv AFLR_ARCH "$AFLR_ARCH >> ../ESPenv.csh
-		echo "setenv MACOSX "$MACOSX       >> ../ESPenv.csh
-		if [ "$DEVMODE" == OFF ]; then
-			echo "setenv UDUNITS2_XML_PATH "$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.csh
-		else
-			echo "setenv UDUNITS2_XML_PATH "$BASE/../udunits/udunits2.xml >> ../ESPenv.csh
-		fi
-		echo "setenv CAPS_GLYPH "$BASE/src/CAPS/aim/pointwise/glyph >> ../ESPenv.csh
+	echo "setenv AFLR_ARCH "$AFLR_ARCH >> ../ESPenv.csh
+	if [ "$DEVMODE" == OFF ]; then
+		echo "setenv UDUNITS2_XML_PATH "$BASE/src/CAPS/udunits/udunits2.xml >> ../ESPenv.csh
+	else
+		echo "setenv UDUNITS2_XML_PATH "$BASE/../udunits/udunits2.xml >> ../ESPenv.csh
 	fi
 else
 	echo "setenv AFLR_ARCH "$AFLR_ARCH        >> ../ESPenv.csh
@@ -642,7 +640,13 @@ else
 			echo "setenv UDUNITS2_XML_PATH "$BASE/../udunits/udunits2.xml >> ../ESPenv.csh
 		fi
 	fi
-	echo "setenv CAPS_GLYPH "$BASE/src/CAPS/aim/pointwise/glyph >> ../ESPenv.csh
+fi
+if [ -d $CAPS_GLYPH ]; then
+	echo "setenv CAPS_GLYPH $CAPS_GLYPH" >> ../ESPenv.csh	
+elif [ "$DEVMODE" == OFF ]; then
+	echo "setenv CAPS_GLYPH $BASE/src/CAPS/aim/pointwise/glyph" >> ../ESPenv.csh
+else
+	echo "#setenv CAPS_GLYPH $HOME/Projects/CAPS/aim/pointwise/glyph" >> ../ESPenv.csh
 fi
 if [ "$TETGEN" != UNKNOWN ]; then
 	echo "setenv TETGEN $TETGEN" >> ../ESPenv.csh

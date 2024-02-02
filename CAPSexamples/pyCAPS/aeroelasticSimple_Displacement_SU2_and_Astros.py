@@ -108,7 +108,7 @@ su2.input.Mach = refVelocity/speedofSound
 su2.input.Equation_Type = "compressible"
 su2.input.Num_Iter = 3
 su2.input.Output_Format = "Tecplot"
-su2.input.SU2_Version = "Blackbird"
+su2.input.SU2_Version = "Harrier"
 su2.input.Pressure_Scale_Factor = 0.5*refDensity*refVelocity**2
 su2.input.Surface_Monitor = ["Skin"]
 

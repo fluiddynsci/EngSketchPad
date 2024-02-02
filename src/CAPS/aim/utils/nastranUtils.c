@@ -46,8 +46,8 @@ static int nastranOP2Reader_Initialized = (int)false;
 
 
 static int _getDesignVariableIDSet(const feaProblemStruct *feaProblem,
-                                   int numDesignVariableNames, 
-                                   char **designVariableNames, 
+                                   int numDesignVariableNames,
+                                   char **designVariableNames,
                                    int *numDesignVariableID,
                                    int **designVariableIDSet) {
     int i, status;
@@ -93,8 +93,8 @@ static int _getDesignVariableIDSet(const feaProblemStruct *feaProblem,
 }
 
 static int _getDesignResponseIDSet(const feaProblemStruct *feaProblem,
-                                   int numDesignResponseNames, 
-                                   char **designResponseNames, 
+                                   int numDesignResponseNames,
+                                   char **designResponseNames,
                                    int *numDesignResponseID,
                                    int **designResponseIDSet) {
     int i, status;
@@ -756,10 +756,10 @@ static int _getControlSurfaceBoxIDs(int boxBeginID, int numChordDivs,
 }
 
 
-static int _writeAesurfCard(FILE *fp, 
+static int _writeAesurfCard(FILE *fp,
                             const feaAeroStruct *feaAero,
-                            vlmSectionStruct *rootSection, 
-                            vlmSectionStruct *tipSection, 
+                            vlmSectionStruct *rootSection,
+                            vlmSectionStruct *tipSection,
                             const feaFileFormatStruct *feaFileFormat) {
 
     int i, j, status;
@@ -1161,10 +1161,23 @@ int nastran_writeSupportCard(FILE *fp, const feaSupportStruct *feaSupport, const
 int nastran_writeMaterialCard(FILE *fp, const feaMaterialStruct *feaMaterial, const feaFileFormatStruct *feaFileFormat) {
 
     double strainAllowable = 1.0;
+    int status = 0;
 
     const double *g1z = NULL, *g2z = NULL, *xt = NULL, *xc = NULL;
     const double *yt = NULL, *yc = NULL, *s = NULL, *strn = NULL;
     const double *g = NULL, *a = NULL, *tref = NULL, *ge = NULL;
+
+    const double *cs=NULL, *ec=NULL, *gc=NULL;
+    const double *alpha0=NULL, *sb=NULL, *ef1=NULL;
+    const double *nuf12=NULL, *msmf=NULL;
+    const double *pnpt=NULL, *pnpc=NULL;
+    const char   *ft=NULL;
+    const double *nb=NULL, *e3=NULL;
+    const double *nu23=NULL, *nu31=NULL;
+    const double *e1rsf=NULL, *e2rsf=NULL;
+    const double *g12rsf=NULL, *g1zrsf=NULL, *g2zrsf=NULL;
+    const int    *te1rsf=NULL, *te2rsf=NULL;
+    const int    *tg12rsf=NULL, *tg1zrsf=NULL, *tg2zrsf=NULL;
 
     if (fp == NULL) return CAPS_IOERR;
     if (feaMaterial == NULL) return CAPS_NULLVALUE;
@@ -1183,7 +1196,7 @@ int nastran_writeMaterialCard(FILE *fp, const feaMaterialStruct *feaMaterial, co
     // Isotropic
     if (feaMaterial->materialType == Isotropic) {
 
-        return nastranCard_mat1(
+        status = nastranCard_mat1(
             fp,
             &feaMaterial->materialID, // mid
             &feaMaterial->youngModulus, // e
@@ -1199,10 +1212,42 @@ int nastran_writeMaterialCard(FILE *fp, const feaMaterialStruct *feaMaterial, co
             NULL, // mcsid
             feaFileFormat->fileType
         );
+        if (status != CAPS_SUCCESS) return status;
+
+        // thermal properties
+        if (feaMaterial->kappa != 0.0) {
+            status = nastranCard_mat4(fp,
+                &feaMaterial->materialID, // mid, shifted for pyTACS to read
+                &feaMaterial->kappa, // k
+                &feaMaterial->specificHeat, // cp
+                &feaMaterial->density, // rho
+                NULL, // H
+                NULL, // HGEN
+                feaFileFormat->fileType);
+            if (status != CAPS_SUCCESS) return status;
+        }
+
     }
 
     // Orthotropic
     if (feaMaterial->materialType == Orthotropic) {
+
+        // thermal properties
+        if (feaMaterial->K[0] != 0.0 ||
+            feaMaterial->K[1] != 0.0 ||
+            feaMaterial->K[2] != 0.0 ||
+            feaMaterial->K[3] != 0.0 ||
+            feaMaterial->K[4] != 0.0 ||
+            feaMaterial->K[5] != 0.0) {
+            status = nastranCard_mat5(fp,
+                &feaMaterial->materialID,
+                feaMaterial->K, // K
+                &feaMaterial->specificHeat, // cp
+                &feaMaterial->density, // rho
+                NULL, // HGEN
+                feaFileFormat->fileType);
+            if (status != CAPS_SUCCESS) return status;
+        }
 
         if (feaMaterial->shearModulusTrans1Z != 0)
             g1z = &feaMaterial->shearModulusTrans1Z;
@@ -1228,12 +1273,72 @@ int nastran_writeMaterialCard(FILE *fp, const feaMaterialStruct *feaMaterial, co
         if (feaMaterial->allowType != 0)
             strn = &strainAllowable;
 
+        if (feaMaterial->honeycombCellSize >= 0)
+            cs = &feaMaterial->honeycombCellSize;
+
+        if (feaMaterial->honeycombYoungModulus >= 0)
+            ec = &feaMaterial->honeycombYoungModulus;
+
+        if (feaMaterial->honeycombShearModulus >= 0)
+            gc = &feaMaterial->honeycombShearModulus;
+
+        if (feaMaterial->fractureAngle > 0)
+            alpha0 = &feaMaterial->fractureAngle;
+
+        if (feaMaterial->interlaminarShearAllow >= 0)
+            sb = &feaMaterial->interlaminarShearAllow;
+
+        if (feaMaterial->fiberYoungModulus > 0)
+            ef1 = &feaMaterial->fiberYoungModulus;
+
+        if (feaMaterial->fiberPoissonRatio >= 0)
+            nuf12 = &feaMaterial->fiberPoissonRatio;
+
+        if (feaMaterial->meanStressFactor >= 0)
+            msmf = &feaMaterial->meanStressFactor;
+
+        if (feaMaterial->transTensionSlope >= 0)
+            pnpt = &feaMaterial->transTensionSlope;
+
+        if (feaMaterial->transCompressionSlope >= 0)
+            pnpc = &feaMaterial->transCompressionSlope;
+
+        if (feaMaterial->compositeFailureTheory != NULL)
+            ft = feaMaterial->compositeFailureTheory;
+
+        if (feaMaterial->interlaminarNormalStressAllow >= 0)
+            nb = &feaMaterial->interlaminarNormalStressAllow;
+
+        if (feaMaterial->youngModulusThick >= 0)
+            e3 = &feaMaterial->youngModulusThick;
+
+        if (feaMaterial->poissonRatio23 != 0)
+            nu23 = &feaMaterial->poissonRatio23;
+
+        if (feaMaterial->poissonRatio31 != 0)
+            nu31 = &feaMaterial->poissonRatio31;
+
+        if (feaMaterial->youngModulusFactor >= 0)
+            e1rsf = &feaMaterial->youngModulusFactor;
+
+        if (feaMaterial->youngModulusLateralFactor >= 0)
+            e2rsf = &feaMaterial->youngModulusLateralFactor;
+
+        if (feaMaterial->shearModulusFactor >= 0)
+            g12rsf = &feaMaterial->shearModulusFactor;
+
+        if (feaMaterial->shearModulusTrans1ZFactor >= 0)
+            g1zrsf = &feaMaterial->shearModulusTrans1ZFactor;
+
+        if (feaMaterial->shearModulusTrans2ZFactor >= 0)
+            g2zrsf = &feaMaterial->shearModulusTrans2ZFactor;
+
         return nastranCard_mat8(
             fp,
             &feaMaterial->materialID, // mid
             &feaMaterial->youngModulus, // e1
             &feaMaterial->youngModulusLateral, // e2
-            &feaMaterial->poissonRatio, // nu
+            &feaMaterial->poissonRatio, // nu12
             &feaMaterial->shearModulus, // g12
             g1z, // g1z
             g2z, // g2z
@@ -1249,6 +1354,17 @@ int nastran_writeMaterialCard(FILE *fp, const feaMaterialStruct *feaMaterial, co
             &feaMaterial->dampingCoeff, // ge
             NULL, // f12
             strn, // strn
+            cs, ec, gc,
+            alpha0, sb, ef1,
+            nuf12, msmf,
+            pnpt, pnpc,
+            ft,
+            nb, e3,
+            nu23, nu31,
+            e1rsf, e2rsf,
+            g12rsf, g1zrsf, g2zrsf,
+            te1rsf, te2rsf,
+            tg12rsf, tg1zrsf, tg2zrsf,
             feaFileFormat->fileType
         );
     }
@@ -1609,8 +1725,10 @@ int nastran_writeLoadCard(FILE *fp, const feaLoadStruct *feaLoad, const feaFileF
             if (status != CAPS_SUCCESS) return status;
         }
     }
-    // Thermal load at a grid point
-    if (feaLoad->loadType ==  Thermal) {
+
+    // Default Thermal load at all unspecified grid point
+    if (feaLoad->loadType == Thermal ||
+        feaLoad->loadType == ThermalExternal) {
 
         status = nastranCard_tempd(
             fp,
@@ -1619,6 +1737,10 @@ int nastran_writeLoadCard(FILE *fp, const feaLoadStruct *feaLoad, const feaFileF
             feaFileFormat->fileType
         );
         if (status != CAPS_SUCCESS) return status;
+    }
+
+    // Thermal load at a grid point
+    if (feaLoad->loadType == Thermal) {
 
         for (i = 0; i < feaLoad->numGridID; i++) {
 
@@ -1631,6 +1753,19 @@ int nastran_writeLoadCard(FILE *fp, const feaLoadStruct *feaLoad, const feaFileF
             );
             if (status != CAPS_SUCCESS) return status;
         }
+    }
+
+    // Thermal load distributed at grid coordinates
+    if (feaLoad->loadType == ThermalExternal) {
+
+        status = nastranCard_temp(
+            fp,
+            &feaLoad->loadID, // sid
+            feaLoad->numGridID, feaLoad->gridIDSet, // g
+            feaLoad->temperatureMultiDistribute, // t
+            feaFileFormat->fileType
+        );
+        if (status != CAPS_SUCCESS) return status;
     }
 
     return CAPS_SUCCESS;
@@ -2501,7 +2636,7 @@ static int _getNextEquationLine(char **equationLines, const int lineIndex,
 
 
 static int _getEquationLines(const feaDesignEquationStruct *feaEquation,
-                             int *numEquationLines, 
+                             int *numEquationLines,
                              char ***equationLines) {
 
     int i;
@@ -3246,7 +3381,7 @@ int nastran_readOP2Objective(/*@unused@*/char *filename, int *numData,  double *
             // Initialize python
             if (Py_IsInitialized() == 0) {
                 printf("\tInitializing Python within AIM\n\n");
-                Py_Initialize();
+                Py_InitializeEx(0);
                 initPy = (int) true;
             } else {
                 initPy = (int) false;
@@ -3287,8 +3422,6 @@ int nastran_readOP2Objective(/*@unused@*/char *filename, int *numData,  double *
                 status = CAPS_BADOBJECT;
                 goto cleanup;
             }
-
-            Py_XDECREF(mobj);
 
             status = nastran_getObjective((const char *) filename, numData, dataMatrix);
             if (status == -1) {

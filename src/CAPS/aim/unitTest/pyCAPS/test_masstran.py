@@ -70,7 +70,7 @@ class TestMasstran(unittest.TestCase):
                 shutil.rmtree(dir)
 
 #==============================================================================
-    def check_derivs(self):
+    def check_derivs(self, Itol = 5):
 
         self.masstran.input.Design_Variable = {"L":{}, "W":{}, "H":{}, 
                                                "x0":{"initialValue":0.0}, 
@@ -171,14 +171,14 @@ class TestMasstran(unittest.TestCase):
             for i in range(len(CGP)):
                 self.assertAlmostEqual((CGP[i]-CGM[i])/(2*eps), CG_pmtr[pmtr][i], 6)
             for i in range(len(IP)):
-                self.assertAlmostEqual((IP[i]-IM[i])/(2*eps), I_pmtr[pmtr][i], 5)
+                self.assertAlmostEqual((IP[i]-IM[i])/(2*eps), I_pmtr[pmtr][i], Itol)
             for i in range(len(IUP)):
-                self.assertAlmostEqual((IUP[i]-IUM[i])/(2*eps), IU_pmtr[pmtr][i], 5)
+                self.assertAlmostEqual((IUP[i]-IUM[i])/(2*eps), IU_pmtr[pmtr][i], Itol)
             for i in range(len(ILP)):
-                self.assertAlmostEqual((ILP[i]-ILM[i])/(2*eps), IL_pmtr[pmtr][i], 5)
+                self.assertAlmostEqual((ILP[i]-ILM[i])/(2*eps), IL_pmtr[pmtr][i], Itol)
             for i in range(3):
                 for j in range(3):
-                    self.assertAlmostEqual((IIP[i][j]-IIM[i][j])/(2*eps), II_pmtr[pmtr][3*i+j], 5)
+                    self.assertAlmostEqual((IIP[i][j]-IIM[i][j])/(2*eps), II_pmtr[pmtr][3*i+j], Itol)
 
 
         for pmtr in ["x0", "x1", "m0", "m1"]:
@@ -609,6 +609,16 @@ class TestMasstran(unittest.TestCase):
 #==============================================================================
     def test_box2(self):
  
+ 
+        egadsTess = self.myProblem.analysis.create(aim = "egadsTessAIM",
+                                                   name = "egadsTess")
+
+        egadsTess.input.Mesh_Quiet_Flag = True
+        egadsTess.input.Tess_Params = [0.05, 0.01, 15.0]
+
+        self.masstran.input["Surface_Mesh"].link(egadsTess.output["Surface_Mesh"])
+        self.masstran.input.Mesh_Morph = True
+
         # set the propery for this analysis
         self.masstran.input.Property = {"box1" : self.shell1}
 
@@ -640,7 +650,7 @@ class TestMasstran(unittest.TestCase):
         Ixx = I[0]; Iyy = I[1]; Izz = I[2]
         Ixy = I[3]; Ixz = I[4]; Iyz = I[5]
 
-        nFace = 5
+        nFace = 6
         areaTrue = 1
         m = 2*10 # Mass of one face of the box
         massTrue = m*nFace
@@ -658,14 +668,25 @@ class TestMasstran(unittest.TestCase):
         IxxTrue = 0
         IyyTrue = 0
         IzzTrue = 0
-        for i in range(1,6):
+        IxyTrue = 0
+        IxzTrue = 0
+        IyzTrue = 0
+        for i in range(6-nFace,6):
             IxxTrue += m*(fCG[i][1]**2 + fCG[i][2]**2) + 1/12.*m*(fLen[i][1]**2 + fLen[i][2]**2)
             IyyTrue += m*(fCG[i][0]**2 + fCG[i][2]**2) + 1/12.*m*(fLen[i][0]**2 + fLen[i][2]**2)
             IzzTrue += m*(fCG[i][0]**2 + fCG[i][1]**2) + 1/12.*m*(fLen[i][0]**2 + fLen[i][1]**2)
 
+            IxyTrue += m*(fCG[i][0]*fCG[i][1])
+            IxzTrue += m*(fCG[i][0]*fCG[i][2])
+            IyzTrue += m*(fCG[i][1]*fCG[i][2])
+
         IxxTrue -= massTrue*(CG[1]**2 + CG[2]**2)
         IyyTrue -= massTrue*(CG[0]**2 + CG[2]**2)
         IzzTrue -= massTrue*(CG[0]**2 + CG[1]**2)
+
+        IxyTrue -= massTrue*(CG[0]*CG[1])
+        IxzTrue -= massTrue*(CG[0]*CG[2])
+        IyzTrue -= massTrue*(CG[1]*CG[2])
         
         self.assertAlmostEqual(nFace*areaTrue, Area, 9)
         self.assertAlmostEqual(massTrue, Mass, 9)
@@ -685,9 +706,9 @@ class TestMasstran(unittest.TestCase):
         self.assertAlmostEqual(Iyy/IyyTrue, 1.0, 2)
         self.assertAlmostEqual(Izz/IzzTrue, 1.0, 2)
 
-        self.assertAlmostEqual(0.0, Ixy, 4)
-        self.assertAlmostEqual(0.0, Ixz, 4)
-        self.assertAlmostEqual(0.0, Iyz, 4)
+        self.assertAlmostEqual(IxyTrue, Ixy, 2)
+        self.assertAlmostEqual(IxzTrue, Ixz, 2)
+        self.assertAlmostEqual(IyzTrue, Iyz, 2)
 
         self.assertAlmostEqual(Ixx, self.masstran.output.Ixx, 9)
         self.assertAlmostEqual(Iyy, self.masstran.output.Iyy, 9)
@@ -731,8 +752,9 @@ class TestMasstran(unittest.TestCase):
         #self.assertAlmostEqual(Ixz, MassProp["massInertia"][4], 9)
         #self.assertAlmostEqual(Iyz, MassProp["massInertia"][5], 9)
 
-        # The triangular meshing messes with the finite difference
-        #self.check_derivs()
+        self.masstran.input["Surface_Mesh"].unlink()
+        self.check_derivs(Itol=2)
+        self.masstran.input.Mesh_Morph = False
 
 #==============================================================================
     def test_box3(self):
@@ -768,7 +790,7 @@ class TestMasstran(unittest.TestCase):
         nFace = 6
         areaTrue = 1
         
-        # Mass of one face of the box
+        # Mass of faces of the box
         m = {0:2*10, 1:3*20,
              2:2*10, 3:3*20,
              4:2*10, 5:3*20}

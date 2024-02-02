@@ -57,39 +57,39 @@ int search_jsonDictionary(const char *stringToSearch, const char *keyWord,
 int string_toProgArgs(char *meshInputString, int *prog_argc, char ***prog_argv);
 
 // Convert a string to double
-int string_toDouble(const char *string, double *number);
+int string_toDouble(/*@null@*/ const char *string, double *number);
 
 // Convert a string tuple of double with data-units to double in units
-int string_toDoubleUnits(void *aimInfo, const char *string, const char *units, double *number);
+int string_toDoubleUnits(void *aimInfo, /*@null@*/ const char *string, const char *units, double *number);
 
 // Convert a string to double array
-int string_toDoubleArray(char *string, int arraySize, double numberArray[]);
+int string_toDoubleArray(/*@null@*/ char *string, int arraySize, double numberArray[]);
 
 // Convert a string tuple of array double with data-units to array double in units
-int string_toDoubleArrayUnits(void *aimInfo, const char *string,
+int string_toDoubleArrayUnits(void *aimInfo, /*@null@*/const char *string,
                               const char *units, int arraySize, double *numberArray);
 
 // Convert a string to an array of doubles
-int string_toDoubleDynamicArray(char *stringToSearch, int *arraySize,
+int string_toDoubleDynamicArray(/*@null@*/ char *stringToSearch, int *arraySize,
                                 double *numberArray[]);
 
 // Convert a string tuple of array double with data-units to array double in units
-int string_toDoubleDynamicArrayUnits(void *aimInfo, const char *string,
+int string_toDoubleDynamicArrayUnits(void *aimInfo, /*@null@*/ const char *string,
                                      const char *units, int *arraySize, double **numberArray);
 
 // Convert a string to an array of strings
-int string_toStringArray(char *stringToSearch, int arraySize,
+int string_toStringArray(/*@null@*/ char *stringToSearch, int arraySize,
                          char *stringArray[]);
 
 // Convert a string to an array of strings
-int string_toStringDynamicArray(char *stringToSearch, int *arraySize,
+int string_toStringDynamicArray(/*@null@*/ char *stringToSearch, int *arraySize,
                                 char **stringArray[]);
 
 // Convert a string to boolean
-int string_toBoolean(char *string, int *number);
+int string_toBoolean(/*@null@*/ char *string, int *number);
 
 // Convert a string to integer
-int string_toInteger(const char *string, int *number);
+int string_toInteger(/*@null@*/ const char *string, int *number);
 
 // Convert a string to integer array
 int string_toIntegerArray(char *stringToSearch, int arraySize,
@@ -108,6 +108,9 @@ char * string_removeQuotation(/*@null@*/ const char *string);
 
 // Force a string to upper case
 void string_toUpperCase ( char *sPtr );
+
+// Force a string to lower case
+void string_toLowerCase ( char *sPtr );
 
 // Create formatted string from format string and variadic string args
 // NUmber of variadic args determined by NULL sentinel or number of "%s" specifiers in format string
@@ -187,7 +190,7 @@ int get_mapAttrToIndexIndex(const mapAttrToIndexStruct *attrMap, const char *key
                             int *index);
 
 // Search a mapAttrToIndex structure for a given index and return the corresponding keyword
-int get_mapAttrToIndexKeyword(mapAttrToIndexStruct *attrMap, int index,
+int get_mapAttrToIndexKeyword(const mapAttrToIndexStruct *attrMap, int index,
                               const char **keyWord);
 
 // Set the index of a given keyword in a mapAttrToIndex structure

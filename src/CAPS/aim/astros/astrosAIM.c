@@ -137,6 +137,7 @@ enum aimInputs
   Support,
   Connect,
   Parameter,
+  Mesh_Morph,
   Mesh,
   NUMINPUT = Mesh              /* Total number of inputs */
 };
@@ -185,7 +186,7 @@ typedef struct {
 
     // Attribute to reference map
     mapAttrToIndexStruct referenceMap;
-    
+
     // Mesh holders
     int numMesh;
     meshStruct *feaMesh;
@@ -385,7 +386,7 @@ static int checkAndCreateMesh(aimStorage *aimInfo, aimStorage *astrosInstance)
     return CAPS_BADVALUE;
   }
 
-  if (QuadMesh != NULL) quadMesh = QuadMesh->vals.integer;
+  if (QuadMesh != NULL) quadMesh = 2*QuadMesh->vals.integer;
 
   status = fea_createMesh(aimInfo,
                           tessParam,
@@ -531,7 +532,12 @@ static int _combineVLM(char *type, int numfeaAero, feaAeroStruct feaAero[],
                 }
             }
 
-            if (skip == (int) true) continue;
+            if (skip == (int) true) {
+                // Make sure to preserve Nspan while combining sections
+                if (feaAero[i].vlmSurface.vlmSection[j].Nspan > combine->vlmSurface.vlmSection[k].Nspan)
+                  combine->vlmSurface.vlmSection[k].Nspan = feaAero[i].vlmSurface.vlmSection[j].Nspan;
+                continue;
+            }
 
             combine->vlmSurface.numSection += 1;
 
@@ -680,7 +686,7 @@ static int createVLMMesh(void *instStore, void *aimInfo, capsValue *aimInputs)
 
         if (status != CAPS_SUCCESS) goto cleanup;
     }
-    
+
     printf("\nGetting FEA vortex lattice mesh\n");
 
     status = vlm_getSections(aimInfo,
@@ -798,7 +804,7 @@ static int createVLMMesh(void *instStore, void *aimInfo, capsValue *aimInputs)
                 // Reset the sectionIndex that is keeping track of the section order.
                 astrosInstance->feaProblem.feaAero[surfaceIndex].vlmSurface.vlmSection[k].sectionIndex = k;
             }
-            
+
             if (numVLMControl > 0) {
                 AIM_NOTNULL(vlmControl, aimInfo, status);
                 // transfer control surface data to sections
@@ -874,7 +880,7 @@ static int createVLMMesh(void *instStore, void *aimInfo, capsValue *aimInputs)
              *           |   - - -     (section 1     -
              *           p    LE(a)----------B------->TE(b)
              */
-                
+
             // Vector between section 2 and 1
             a = astrosInstance->feaProblem.feaAero[i].vlmSurface.vlmSection[0].xyzLE;
             b = astrosInstance->feaProblem.feaAero[i].vlmSurface.vlmSection[0].xyzTE;
@@ -1175,7 +1181,7 @@ cleanup:
 
     if (vlmSurface != NULL) EG_free(vlmSurface);
     numVLMSurface = 0;
-    
+
     // Destroy vlmControl
    	if (vlmControl != NULL) {
 		for (i = 0; i < numVLMControl; i++) {
@@ -1211,7 +1217,7 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     if (inst == -1) return CAPS_SUCCESS;
 
     /* specify the field variables this analysis can generate and consume */
-    *nFields = 4;
+    *nFields = 5;
 
     /* specify the name of each field variable */
     AIM_ALLOC(strs, *nFields, char *, aimInfo, status);
@@ -1220,6 +1226,7 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     strs[1]  = EG_strdup("EigenVector");
     strs[2]  = EG_strdup("EigenVector_#");
     strs[3]  = EG_strdup("Pressure");
+    strs[4]  = EG_strdup("Temperature");
     for (i = 0; i < *nFields; i++)
       if (strs[i] == NULL) { status = EGADS_MALLOC; goto cleanup; }
     *fnames  = strs;
@@ -1230,6 +1237,7 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     ints[1]  = 3;
     ints[2]  = 3;
     ints[3]  = 1;
+    ints[4]  = 1;
     *franks  = ints;
     ints = NULL;
 
@@ -1240,6 +1248,7 @@ int aimInitialize(int inst, /*@unused@*/ const char *unitSys, void *aimInfo,
     ints[1]  = FieldOut;
     ints[2]  = FieldOut;
     ints[3]  = FieldIn;
+    ints[4]  = FieldIn;
     *fInOut  = ints;
     ints = NULL;
 
@@ -1543,7 +1552,7 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
         * - <B> Optimization_Control = NULL</B> <br>
         * Optimization case control (see Astros manual).
         */
-        
+
     } else if (index == VLM_Surface) {
         *ainame              = EG_strdup("VLM_Surface");
         defval->type         = Tuple;
@@ -1616,28 +1625,41 @@ int aimInputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
          * The input is in Tuple form ("DATACARD", "DATAVALUE"). All inputs are strings.  Example: ("CONVERT","MASS,  0.00254").
          * Note:  Inputs assume a "," delimited entry.  Notice the "," after MASS in the Example.
          */
-         
+
     } else if (index == Aero_Reference) {
         *ainame              = EG_strdup("Aero_Reference");
-        defval->type         = String;
+        defval->type         = Tuple;
         defval->nullVal      = IsNull;
-        defval->vals.string  = NULL;
         defval->lfixed       = Change;
+        defval->vals.tuple   = NULL;
+        defval->dim          = Vector;
 
         /*! \page aimInputsAstros
          * - <B> Aero_Reference = NULL</B> <br>
-         * A JSON dictionary used to define aerodynamic reference parameters. see \ref feaAeroReference for additional details
+         * Parameter tuple to define aerodynamic reference parameters. see \ref feaAeroReference for additional details
+         */
+
+    } else if (index == Mesh_Morph) {
+        *ainame              = EG_strdup("Mesh_Morph");
+        defval->type         = Boolean;
+        defval->lfixed       = Fixed;
+        defval->vals.integer = (int) false;
+        defval->dim          = Scalar;
+        defval->nullVal      = NotNull;
+
+        /*! \page aimInputsAstros
+         * - <B> Mesh_Morph = False</B> <br>
+         * Project previous surface mesh onto new geometry.
          */
 
     } else if (index == Mesh) {
         *ainame             = AIM_NAME(Mesh);
-        defval->type        = Pointer;
+        defval->type        = PointerMesh;
         defval->dim         = Vector;
         defval->lfixed      = Change;
-        defval->sfixed      = Change;
+        defval->sfixed      = Fixed;
         defval->vals.AIMptr = NULL;
         defval->nullVal     = IsNull;
-        AIM_STRDUP(defval->units, "meshStruct", aimInfo, status);
 
         /*! \page aimInputsAstros
          * - <B>Mesh = NULL</B> <br>
@@ -1674,11 +1696,20 @@ int aimUpdateState(void *instStore, void *aimInfo,
 //    capsValue *geomInVal;
 
     aimStorage *astrosInstance;
-    
+
     //feaDesignConstraintStruct *flutterConstraint = NULL;
 
     astrosInstance = (aimStorage *) instStore;
     AIM_NOTNULL(aimInputs, aimInfo, status);
+
+/* Enable when we require a mesh link
+    if (aimInputs[Mesh-1].nullVal == IsNull &&
+        aimInputs[Mesh_Morph-1].vals.integer == (int) false) {
+        AIM_ANALYSISIN_ERROR(aimInfo, Mesh, "'Mesh' input must be linked to an output 'Surface_Mesh'");
+        status = CAPS_BADVALUE;
+        goto cleanup;
+    }
+*/
 
     // Get project name
     astrosInstance->projectName = aimInputs[Proj_Name-1].vals.string;
@@ -1688,27 +1719,25 @@ int aimUpdateState(void *instStore, void *aimInfo,
     AIM_NOTNULL(analysisType, aimInfo, status);
 
     // Get FEA mesh if we don't already have one
-    if (astrosInstance->feaProblem.feaMesh.numNode == 0 ||
-        aim_newGeometry(aimInfo) == CAPS_SUCCESS) {
+    status = checkAndCreateMesh(aimInfo, astrosInstance);
+    AIM_STATUS(aimInfo, status);
 
-        status = checkAndCreateMesh(aimInfo, astrosInstance);
+    // Get Aeroelastic mesh
+    // if( strcasecmp(analysisType, "Aeroelastic") == 0 ||
+    //     strcasecmp(analysisType, "AeroelasticTrim") == 0 ||
+    //     strcasecmp(analysisType, "AeroelasticTrimOpt") == 0 ||
+    //     strcasecmp(analysisType, "AeroelasticFlutter") == 0) {
+    if (strstr(analysisType, "Aeroelastic")) {
+
+        status = createVLMMesh(instStore, aimInfo, aimInputs);
         AIM_STATUS(aimInfo, status);
-
-        // Get Aeroelastic mesh
-        // if( strcasecmp(analysisType, "Aeroelastic") == 0 ||
-        //     strcasecmp(analysisType, "AeroelasticTrim") == 0 ||
-        //     strcasecmp(analysisType, "AeroelasticTrimOpt") == 0 ||
-        //     strcasecmp(analysisType, "AeroelasticFlutter") == 0) {
-        if (strstr(analysisType, "Aeroelastic")) {
-
-            status = createVLMMesh(instStore, aimInfo, aimInputs);
-            AIM_STATUS(aimInfo, status);
-        }
     }
 
     // Set aero reference parameters
     if (aimInputs[Aero_Reference-1].nullVal == NotNull) {
-        status = fea_getAeroReference(aimInputs[Aero_Reference-1].vals.string,
+        status = fea_getAeroReference(aimInfo,
+                                      aimInputs[Aero_Reference-1].length,
+                                      aimInputs[Aero_Reference-1].vals.tuple,
                                       &astrosInstance->referenceMap,
                                       &astrosInstance->feaProblem);
         if (status != CAPS_SUCCESS) return status;
@@ -1752,7 +1781,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set constraint properties
     if (aimInputs[Constraint-1].nullVal == NotNull) {
-        status = fea_getConstraint(aimInputs[Constraint-1].length,
+        status = fea_getConstraint(aimInfo,
+                                   aimInputs[Constraint-1].length,
                                    aimInputs[Constraint-1].vals.tuple,
                                    &astrosInstance->constraintMap,
                                    &astrosInstance->feaProblem);
@@ -1770,7 +1800,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set connection properties
     if (aimInputs[Connect-1].nullVal == NotNull) {
-        status = fea_getConnection(aimInputs[Connect-1].length,
+        status = fea_getConnection(aimInfo,
+                                   aimInputs[Connect-1].length,
                                    aimInputs[Connect-1].vals.tuple,
                                    &astrosInstance->connectMap,
                                    &astrosInstance->feaProblem);
@@ -1791,13 +1822,14 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set load properties
     if (aimInputs[Load-1].nullVal == NotNull) {
-        status = fea_getLoad(aimInputs[Load-1].length,
+        status = fea_getLoad(aimInfo,
+                             aimInputs[Load-1].length,
                              aimInputs[Load-1].vals.tuple,
                              &astrosInstance->loadMap,
                              &astrosInstance->feaProblem);
         AIM_STATUS(aimInfo, status);
     } else printf("Load tuple is NULL - No loads applied\n");
-    
+
     // Set optimization control
     if (aimInputs[Optimization_Control -1].nullVal == IsNull) {
       printf("Optimization Control tuple is NULL - Default optimization control is used\n");
@@ -1821,7 +1853,8 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set design constraints
     if (aimInputs[Design_Constraint-1].nullVal == NotNull) {
-        status = fea_getDesignConstraint(aimInputs[Design_Constraint-1].length,
+        status = fea_getDesignConstraint(aimInfo,
+                                         aimInputs[Design_Constraint-1].length,
                                          aimInputs[Design_Constraint-1].vals.tuple,
                                          &astrosInstance->feaProblem);
         AIM_STATUS(aimInfo, status);
@@ -1829,14 +1862,15 @@ int aimUpdateState(void *instStore, void *aimInfo,
 
     // Set analysis settings
     if (aimInputs[Analysix-1].nullVal == NotNull) {
-        status = fea_getAnalysis(aimInputs[Analysix-1].length,
+        status = fea_getAnalysis(aimInfo,
+                                 aimInputs[Analysix-1].length,
                                  aimInputs[Analysix-1].vals.tuple,
                                  &astrosInstance->feaProblem);
         AIM_STATUS(aimInfo, status);
     } else {
         printf("Analysis tuple is NULL\n"); // Its ok to not have an analysis tuple we will just create one
 
-        status = fea_createDefaultAnalysis(&astrosInstance->feaProblem, analysisType);
+        status = fea_createDefaultAnalysis(aimInfo, &astrosInstance->feaProblem, analysisType);
         AIM_STATUS(aimInfo, status);
     }
 
@@ -1922,6 +1956,13 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     astrosInstance = (const aimStorage *) instStore;
     AIM_NOTNULL(aimInputs, aimInfo, status);
 
+    if ( aimInputs[Mesh_Morph-1].vals.integer == (int) true &&
+         aimInputs[Mesh-1].nullVal == NotNull) { // If we are mighty morphing
+        // store the current mesh for future iterations
+        status = aim_storeMeshRef(aimInfo, (aimMeshRef *) aimInputs[Mesh-1].vals.AIMptr, NULL);
+        AIM_STATUS(aimInfo, status);
+    }
+
     if (astrosInstance->feaProblem.numLoad > 0) {
         AIM_ALLOC(feaLoad, astrosInstance->feaProblem.numLoad, feaLoadStruct, aimInfo, status);
         for (i = 0; i < astrosInstance->feaProblem.numLoad; i++) initiate_feaLoadStruct(&feaLoad[i]);
@@ -1935,6 +1976,12 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
                 status = fea_transferExternalPressure(aimInfo,
                                                       &astrosInstance->feaProblem.feaMesh,
                                                       &feaLoad[i]);
+                AIM_STATUS(aimInfo, status);
+            } else if (feaLoad[i].loadType == ThermalExternal) {
+
+                // Transfer external temperature from the AIM discrObj
+                status = fea_transferExternalTemperature(aimInfo,
+                                                         &feaLoad[i]);
                 AIM_STATUS(aimInfo, status);
             }
         }
@@ -2048,8 +2095,8 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
     else if(strcasecmp(analysisType, "StaticOpt")          == 0 ||
             // strcasecmp(analysisType, "Optimization")       == 0 ||
             strstr(analysisType, "Optimization")                ||
-            strcasecmp(analysisType, "AeroelasticTrimOpt") == 0) {       
-              
+            strcasecmp(analysisType, "AeroelasticTrimOpt") == 0) {
+
         fprintf(fp, "OPTIMIZE STRATEGY=((FSD,%d), (MP,%d)), MAXITER=%d, NRFAC=%2.2f,\n", astrosInstance->feaProblem.feaOptimizationControl.fullyStressedDesign,
                                                                                          astrosInstance->feaProblem.feaOptimizationControl.mathProgramming,
                                                                                          astrosInstance->feaProblem.feaOptimizationControl.maxIter,
@@ -2248,7 +2295,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
             fprintf(fp, "    MODES\n");
             fprintf(fp, "    FLUTTER (FLCOND = %d", astrosInstance->feaProblem.feaAnalysis[i].analysisID);
             // specify flutter constraint if exists
-            fea_findDesignConstraintByType(&astrosInstance->feaProblem, 
+            fea_findDesignConstraintByType(&astrosInstance->feaProblem,
             							   FlutterDesignCon, &flutterConstraint);
             if (flutterConstraint != NULL) {
                 // For some reason the design constraint ID is offset by total num design constraints
@@ -2847,7 +2894,7 @@ int aimPreAnalysis(const void *instStore, void *aimInfo, capsValue *aimInputs)
 
         printf("\tWriting unsteady aeroelastic cards\n");
         for (i = 0; i < astrosInstance->feaProblem.numAero; i++){
-            
+
             status = astros_writeUnsteadyCAeroCard(fp,
                                             &astrosInstance->feaProblem.feaAero[i],
                                             &astrosInstance->feaProblem.feaFileFormat);
@@ -3090,16 +3137,16 @@ cleanup:
 
 
 // Set Astros output variables
-int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
+int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimInfo,
                int index, char **aoname, capsValue *form)
 {
     /*! \page aimOutputsAstros AIM Outputs
      * The following list outlines the Astros outputs available through the AIM interface.
      */
-
-    #ifdef DEBUG
-        printf(" astrosAIM/aimOutputs instance = %d  index = %d!\n", iIndex, index);
-    #endif
+    int status = CAPS_SUCCESS;
+#ifdef DEBUG
+    printf(" astrosAIM/aimOutputs instance = %d  index = %d!\n", iIndex, index);
+#endif
 
     /*! \page aimOutputsAstros AIM Outputs
      * - <B>EigenValue</B> = List of Eigen-Values (\f$ \lambda\f$) after a modal solve.
@@ -3107,59 +3154,65 @@ int aimOutputs(/*@unused@*/ void *instStore, /*@unused@*/ void *aimStruc,
      * - <B>EigenFrequency</B> = List of Eigen-Values in terms of frequencies (\f$ f = \frac{\omega}{2\pi}\f$) after a modal solve.
      * - <B>EigenGeneralMass</B> = List of generalized masses for the Eigen-Values.
      * - <B>EigenGeneralStiffness</B> = List of generalized stiffness for the Eigen-Values.
-     * .
+     * - <B>Tmax</B> = Maximum displacement.
+     * - <B>T1max</B> = Maximum x-coordinate displacement.
+     * - <B>T2max</B> = Maximum y-coordinate displacement.
+     * - <B>T3max</B> = Maximum z-coordinate displacement.
      */
 
     //printf("***** index=%d *****", index);
 
-    if (index == 1) {
-        *aoname = EG_strdup("EigenValue");
+    if (index == EigenValue) {
+      *aoname = EG_strdup("EigenValue");
 
-    } else if (index == 2) {
-        *aoname = EG_strdup("EigenRadian");
+    } else if (index == EigenRadian) {
+      *aoname = EG_strdup("EigenRadian");
 
-    } else if (index == 3) {
-        *aoname = EG_strdup("EigenFrequency");
+    } else if (index == EigenFrequency) {
+      *aoname = EG_strdup("EigenFrequency");
 
-    } else if (index == 4) {
-        *aoname = EG_strdup("EigenGeneralMass");
+    } else if (index == EigenGeneralMass) {
+      *aoname = EG_strdup("EigenGeneralMass");
 
-    } else if (index == 5) {
-        *aoname = EG_strdup("EigenGeneralStiffness");
+    } else if (index == EigenGeneralStiffness) {
+      *aoname = EG_strdup("EigenGeneralStiffness");
 
-    } else if (index == 6) {
-        *aoname = EG_strdup("Tmax");
+    } else if (index == Tmax) {
+      *aoname = EG_strdup("Tmax");
 
-    } else if (index == 7) {
-        *aoname = EG_strdup("T1max");
+    } else if (index == T1max) {
+      *aoname = EG_strdup("T1max");
 
-    } else if (index == 8) {
-        *aoname = EG_strdup("T2max");
+    } else if (index == T2max) {
+      *aoname = EG_strdup("T2max");
 
-    } else if (index == 9) {
-        *aoname = EG_strdup("T3max");
+    } else if (index == T3max) {
+      *aoname = EG_strdup("T3max");
+    } else {
+      AIM_ERROR(aimInfo, "Unknown output index %d", index);
+      status = CAPS_NOTIMPLEMENT;
     }
 
     //printf(" %s\n", *aoname);
 
-    if (index <= 5) {
-        form->type          = Double;
-        form->units         = NULL;
-        form->lfixed        = Change;
-        form->sfixed        = Change;
-        form->vals.reals = NULL;
-        form->vals.real = 0;
-    } else {
-        form->type = Double;
-        form->dim  = Vector;
-        form->nrow  = 1;
-        form->ncol  = 1;
-        form->units  = NULL;
-        form->vals.reals = NULL;
-        form->vals.real = 0;
+    if (index >= EigenValue && index <= EigenGeneralStiffness) {
+      form->type   = Double;
+      form->dim    = Vector;
+      form->lfixed = Change;
+      form->sfixed = Change;
+    } else if (index >= Tmax && index <= T3max) {
+      form->type   = Double;
+      form->dim    = Scalar;
+      form->nrow   = 1;
+      form->ncol   = 1;
+      form->lfixed = Fixed;
+      form->sfixed = Fixed;
+   } else {
+      AIM_ERROR(aimInfo, "Unknown output index %d", index);
+      status = CAPS_NOTIMPLEMENT;
     }
 
-    return CAPS_SUCCESS;
+    return status;
 }
 
 
@@ -3198,7 +3251,7 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
         return CAPS_IOERR;
     }
 
-    if (index <= 5) {
+    if (index >= EigenValue && index <= EigenGeneralStiffness) {
 
         status = astros_readOUTEigenValue(fp, &numEigenVector, &dataMatrix);
         if ((status == CAPS_SUCCESS) && (dataMatrix != NULL)) {
@@ -3226,13 +3279,13 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
 
         if (dataMatrix != NULL) {
             for (i = 0; i < numEigenVector; i++) {
-                if (dataMatrix[i] != NULL) EG_free(dataMatrix[i]);
+              AIM_FREE(dataMatrix[i]);
             }
-            EG_free(dataMatrix);
+            AIM_FREE(dataMatrix);
         }
 
-    } else if (index <= 9) {
-        double T1max=0, T2max=0, T3max=0, Tmax=0, TT;
+    } else if (index >= Tmax && index <= T3max) {
+        double T1max_=0, T2max_=0, T3max_=0, Tmax_=0, TT;
         int ipnt, numGridPoint;
 
         status = astros_readOUTDisplacement(fp, -1, &numGridPoint, &dataMatrix);
@@ -3247,29 +3300,32 @@ int aimCalcOutput(void *instStore, /*@unused@*/ void *aimInfo, int index,
                         + pow(dataMatrix[ipnt][3], 2)
                         + pow(dataMatrix[ipnt][4], 2));
 
-                if (fabs(dataMatrix[ipnt][2]) > T1max) T1max = fabs(dataMatrix[ipnt][2]);
-                if (fabs(dataMatrix[ipnt][3]) > T2max) T2max = fabs(dataMatrix[ipnt][3]);
-                if (fabs(dataMatrix[ipnt][4]) > T3max) T3max = fabs(dataMatrix[ipnt][4]);
-                if (TT                        > Tmax ) Tmax  = TT;
+                if (fabs(dataMatrix[ipnt][2]) > T1max_) T1max_ = fabs(dataMatrix[ipnt][2]);
+                if (fabs(dataMatrix[ipnt][3]) > T2max_) T2max_ = fabs(dataMatrix[ipnt][3]);
+                if (fabs(dataMatrix[ipnt][4]) > T3max_) T3max_ = fabs(dataMatrix[ipnt][4]);
+                if (TT                        > Tmax_ ) Tmax_  = TT;
             }
 
-            if        (index == 6) {
-                val->vals.real = Tmax;
-            } else if (index == 7) {
-                val->vals.real = T1max;
-            } else if (index == 8) {
-                val->vals.real = T2max;
-            } else {
-                val->vals.real = T3max;
+            if        (index == Tmax) {
+                val->vals.real = Tmax_;
+            } else if (index == T1max) {
+                val->vals.real = T1max_;
+            } else if (index == T2max) {
+                val->vals.real = T2max_;
+            } else if (index == T3max) {
+                val->vals.real = T3max_;
             }
         }
 
         if (dataMatrix != NULL) {
             for (i = 0; i < numGridPoint; i++) {
-                if (dataMatrix[i] != NULL) EG_free(dataMatrix[i]);
+              AIM_FREE(dataMatrix[i]);
             }
-            EG_free(dataMatrix);
+            AIM_FREE(dataMatrix);
         }
+    } else {
+      AIM_ERROR(aimInfo, "Unknown output index %d", index);
+      status = CAPS_NOTIMPLEMENT;
     }
 
 cleanup:

@@ -11,7 +11,7 @@
  */
 
 /*
- * Copyright (C) 2013/2023  John F. Dannenhoffer, III (Syracuse University)
+ * Copyright (C) 2013/2024  John F. Dannenhoffer, III (Syracuse University)
  *
  * This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,9 @@
  *    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
  *     MA  02110-1301  USA
  */
+
+/*@-nullpass@*/
+/*@-paramuse@*/
 
 #define NUMUDPARGS 9
 #include "udpUtilities.h"
@@ -94,7 +97,7 @@ main(/*@unused@*/ int  argc,                    /* (in)  number of arguments */
     if (status < 0) exit(EXIT_FAILURE);
 
     /* call the execute routine */
-    status = udpExecute(context, &ebody, &nMesh, &string);
+    status = UdpExecute(context, &ebody, &nMesh, &string, 0, NULL);
     printf("udpExecute -> status=%d\n", status);
     if (status < 0) exit(EXIT_FAILURE);
 
@@ -184,6 +187,9 @@ udpExecute(ego  context,                /* (in)  EGADS context */
     ego     enodes[8], ecurve[16], eedges[16], eloop, efaces[8], eshell;
     ego     esurface[4], epcurve[4], ebody1, ebody2, ebody3, ebody4;
     ego     elist[20], emodel, *echilds2, source, *echilds, eref;
+#ifdef UDP
+    udp_T   *udps = *Udps;
+#endif
 
 #ifndef UDP
     double  myVolume;

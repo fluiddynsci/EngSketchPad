@@ -3,7 +3,7 @@
  *
  *             SU2, tetgen, mystran AIM tester
  *
- * *      Copyright 2014-2023, Massachusetts Institute of Technology
+ *      Copyright 2014-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -458,6 +458,16 @@ int main(int argc, char *argv[])
 
     /* --------------------------------------------------------------- */
 
+    // Surface mesh parameters
+    tessParams[0] = 1.0;
+    tessParams[1] = 0.5;
+    tessParams[2] = 15;
+    status = setValueByName_Double(surfMeshObj, ANALYSISIN, "Tess_Params", 3, 1,
+                                   tessParams);
+    if (status != CAPS_SUCCESS) goto cleanup;
+
+    /* --------------------------------------------------------------- */
+
     // Set parameters for SU2
     status = setValueByName_String(su2Obj, ANALYSISIN, "Proj_Name", 1, 1,
                                    projectName);
@@ -554,9 +564,9 @@ int main(int argc, char *argv[])
                                     &intVal);
     if (status != CAPS_SUCCESS) goto cleanup;
 
-    tessParams[0] = 1.5;
-    tessParams[1] = 0.1;
-    tessParams[2] = 0.15;
+    tessParams[0] = 1.0;
+    tessParams[1] = 0.5;
+    tessParams[2] = 15;
     status = setValueByName_Double(mystranObj, ANALYSISIN, "Tess_Params", 3, 1,
                                    tessParams);
     if (status != CAPS_SUCCESS) goto cleanup;

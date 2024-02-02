@@ -1,0 +1,23 @@
+The following list outlines the Abaqus inputs along with their default value available through the AIM interface. Unless noted these values will be not be linked to any parent AIMs with variables of the same name.
+
+
+\begin{DoxyItemize}
+\item {\bfseries{ Proj\+\_\+\+Name = \char`\"{}\+Abaqus\+\_\+\+CAPS\char`\"{}}} ~\newline
+ This corresponds to the project name used for file naming.
+\item {\bfseries{ Property = NULL}} ~\newline
+ Property tuple used to input property information for the model, see \mbox{\hyperlink{feaProperty}{FEA Property}} for additional details.
+\item {\bfseries{ Material = NULL}} ~\newline
+ Material tuple used to input material information for the model, see \mbox{\hyperlink{feaMaterial}{FEA Material}} for additional details.
+\item {\bfseries{ Constraint = NULL}} ~\newline
+ Constraint tuple used to input constraint information for the model, see \mbox{\hyperlink{feaConstraint}{FEA Constraint}} for additional details.
+\item {\bfseries{ Load = NULL}} ~\newline
+ Load tuple used to input load information for the model, see \mbox{\hyperlink{feaLoad}{FEA Load}} for additional details.
+\item {\bfseries{ Analysis = NULL}} ~\newline
+ Analysis tuple used to input analysis/case information for the model, see \mbox{\hyperlink{feaAnalysis}{FEA Analysis}} for additional details.
+\item {\bfseries{ Analysis\+\_\+\+Type = \char`\"{}\+Modal\char`\"{}}} ~\newline
+ Type of analysis to generate files for, options include \char`\"{}\+Modal\char`\"{}, \char`\"{}\+Static\char`\"{}.
+\item {\bfseries{ Mesh\+\_\+\+Morph = False}} ~\newline
+ Project previous surface mesh onto new geometry.
+\item {\bfseries{Mesh = NULL}} ~\newline
+ A Mesh link. 
+\end{DoxyItemize}

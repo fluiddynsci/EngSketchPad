@@ -177,8 +177,7 @@ inflow = {"bcType" : "SubsonicInflow",
 myProblem.analysis["fun3d"].input.Boundary_Condition = {"Airfoil"   : wallBC,
                                                         "TunnelWall": wallBC,
                                                         "InFlow"    : inflow,
-                                                        "OutFlow"   : backPressureBC,
-                                                        "2DSlice"   : "SymmetryY"}
+                                                        "OutFlow"   : backPressureBC}
 
 # Run AIM pre-analysis
 myProblem.analysis["fun3d"].preAnalysis()

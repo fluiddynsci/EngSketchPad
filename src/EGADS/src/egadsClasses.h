@@ -5,7 +5,7 @@
  *
  *             C++/OpenCASCADE Object Header
  *
- *      Copyright 2011-2023, Massachusetts Institute of Technology
+ *      Copyright 2011-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -163,5 +163,40 @@ public:
   egObject     **bodies;                // vector of pointers to egObjects
   egadsBox     bbox;
 };
+
+
+// Used to track labels from STEP/IGES readers
+class egadsShapeLabel
+{
+  class Label
+  {
+  public:
+    Label(const char* shapeName) : shapeName(EG_strdup(shapeName)) {}
+    Label(const Label& label) : shapeName(EG_strdup(label.shapeName)) {}
+    ~Label() { EG_free(shapeName); }
+
+    char  *shapeName;
+  };
+  typedef NCollection_IndexedDataMap<TopoDS_Shape, Label> Label_IndexedDataMap;
+public:
+
+  egadsShapeLabel() {}
+
+  void Add(const TopoDS_Shape& shape, const char* shapeName) { labels.Add(shape, Label(shapeName)); }
+
+  Standard_Integer Extent() const { return labels.Extent(); }
+  Standard_Integer FindIndex(const TopoDS_Shape& shape) const { return labels.FindIndex(shape); }
+  const TopoDS_Shape& FindKey(Standard_Integer i) const { return labels.FindKey(i); }
+  const Label& operator()(Standard_Integer i) const { return labels(i); }
+
+  TopoDS_Shape Update(const TopoDS_Shape& oldShape, const TopoDS_Shape& newShape);
+  TopoDS_Shape Update(const TopoDS_Shape& oldShape, BRepBuilderAPI_ModifyShape& xForm);
+  TopoDS_Shape Update(const TopoDS_Shape& oldShape, const Handle(BRepTools_ReShape)& reShape);
+  TopoDS_Shape Update(const TopoDS_Shape& oldShape, const TopoDS_Shape& newShape, const Handle(BRepTools_History)& history);
+
+protected:
+  Label_IndexedDataMap labels;
+};
+
 
 #endif

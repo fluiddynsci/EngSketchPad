@@ -1,7 +1,7 @@
 // ESP.js implements functions for the Engineering Sketch Pad (ESP)
 // written by John Dannenhoffer and Bob Haimes
 
-// Copyright (C) 2010/2023  John F. Dannenhoffer, III (Syracuse University)
+// Copyright (C) 2010/2024  John F. Dannenhoffer, III (Syracuse University)
 //
 // This library is free software; you can redistribute it and/or
 //    modify it under the terms of the GNU Lesser General Public
@@ -525,6 +525,10 @@ var wvInitUI = function () {
     wv.startY    = -1;
     wv.button    = -1;             // button pressed
     wv.modifier  =  0;             // modifier (shift,alt,cntl) bitflag
+    wv.lastViz   =  1;             // TreeWindow where Viz was last pressed
+    wv.lastGrd   =  1;             // TreeWindow where Viz was last pressed
+    wv.lastTrn   =  1;             // TreeWindow where Viz was last pressed
+    wv.lastOri   =  1;             // TreeWindow where Viz was last pressed
     wv.flying    =  1;             // flying multiplier (do not set to 0)
     wv.offTop    =  0;             // offset to upper-left corner of the canvas
     wv.offLeft   =  0;
@@ -563,7 +567,7 @@ var wvInitUI = function () {
     wv.userNames = "";             // bar-separatede list of userNames
     wv.myName    = "*host*";       // my username
     wv.lastXform = null;           // last xfrom received while not sync'd
-    wv.plotType  =  0;             // =0 mono, =1 ubar, =2 vbar, =3 cmin, =4 cmax, =5 gc, =6 normals, =7 x-comp, =8 y-comp, =9 z-comp, =10 erep, =11 plugs, =12 pyscript, =13 mitten
+    wv.plotType  =  0;             // =0 mono, =1 ubar, =2 vbar, =3 cmin, =4 cmax, =5 gc, =6 normals, =7 x-comp, =8 y-comp, =9 z-comp, =10 erep, =11 plugs, =12 pyscript, =13 mitten, =16 vspSetup
     wv.loLimit   = -1;             // lower limit in key
     wv.upLimit   = +1;             // upper limit in key
     wv.nchanges  = 0;              // number of Branch or Parameter changes by browser
@@ -594,7 +598,9 @@ var wvInitUI = function () {
                                    // 13 show WebViewer in canvas and run mitten
                                    // 14 show sketcherForm and run plotter
                                    // 15 show WebViewer in canvas and run capsMode
+                                   // 16 show WebViewer in canvas and run vspSetup
     wv.curTool   = main;           // current tool
+    wv.inPyscript = 0;             // =1 if in pyscript
     wv.timName   = "";             // name of TIM being held
     wv.overlay   = undefined;      // name of process that overlays the current mode
     wv.usingMain =  1;             // =1 if using 3D graphics window
@@ -2147,6 +2153,8 @@ var wvServerMessage = function (text) {
             wv.overlay.timMesgCB(text.substring(8));
         } else if (wv.curTool.timMesgCB !== undefined) {
             wv.curTool.timMesgCB(text.substring(8));
+        } else if (wv.inPyscript == 1) {
+            pyscript.timMesgCB(text.substring(8));
         } else {
             postMessage(text);
         }
@@ -2160,7 +2168,7 @@ var wvServerMessage = function (text) {
 
         cmdOverlayBeg(text.substring(11));
 
-    // if it starts with "overlayEnd}" do nothing
+    // if it starts with "overlayEnd|" do nothing
     } else if (text.substring(0,11) == "overlayEnd|") {
 
     // if it starts with "postMessage|", post the message
@@ -3409,6 +3417,13 @@ var cmdTool = function () {
         button.onclick = pyscript.launch;
         menu.appendChild(button);
 
+        button = document.createElement("input");
+        button.type    = "button";
+        button.title   = "Launch Vsp setup";
+        button.value   = "VspSetup";
+        button.onclick = vspSetup.launch;
+        menu.appendChild(button);
+
 //        button = document.createElement("input");
 //        button.type    = "button";
 //        button.title   = "Launch Mitten";
@@ -3800,6 +3815,9 @@ var cmdOverlayBeg = function (text) {
         button.hidden = false;
         button["innerHTML"] = "Exit " + textList[1];
         button.style.backgroundColor = "#3FFF3F";           // greenish
+
+        var botm = document.getElementById("brframe");
+        botm.style.backgroundColor = "#DFFFDF";             // light green
     }
 };
 
@@ -3815,7 +3833,6 @@ var cmdOverlayEnd = function () {
     } else if (checkIfWithBall() === false) {
 
     } else {
-
         // send the unlock message
         browserToServer("overlayEnd|"+wv.timName+"|");
 
@@ -3829,6 +3846,10 @@ var cmdOverlayEnd = function () {
         // we no longer have an overlay
         wv.overlay = undefined;
         wv.timName = "";
+
+        // turn the background of the message window back to original color
+        var botm = document.getElementById("brframe");
+        botm.style.backgroundColor = "#F7F7F7";         // grey
     }
 };
 
@@ -6603,7 +6624,7 @@ main.cmdSolve = function () {
     var button  = document.getElementById("solveButton");
     var buttext = button["innerHTML"];
 
-    if (buttext == "Up to date") {
+    if (buttext == "Up to date" || buttext == "Fix before re-build") {
         if (confirm("The configuration is up to date.\n" +
                     "Do you want to force a rebuild?") === true) {
             postMessage("Forced re-building...");
@@ -6831,6 +6852,63 @@ var toggleViz = function (e) {
     var inode = e["target"].id.substring(4);
     inode     = inode.substring(0,inode.length-4);
     inode     = Number(inode);
+    var jnode = wv.lastViz;
+    var knode = 0;
+
+    wv.lastViz = inode;
+    wv.lastGrd = 1;
+    wv.lastTrn = 1;
+    wv.lastOri = 1;
+    
+    // special treatment to change viz on all entities since last toggleViz()
+    if (e.shiftKey) {
+        if (myTree.parent[inode] == myTree.parent[jnode]) {
+            if (myTree.gprim[inode] != "" && myTree.gprim[wv.jnode] != "") {
+
+                // if inode=off and jnode=on, make all intervening nodes on
+                if        ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.ON) == 0 &&
+                           (wv.sceneGraph[myTree.gprim[jnode]].attrs & wv.plotAttrs.ON) != 0   ) {
+                    if (jnode < inode) {
+                        for (knode = jnode+1; knode <= inode; knode++) {
+                            changeProp(knode, 1, "on");
+                        }
+                    } else if (jnode > inode) {
+                        for (knode = jnode-1; knode >= inode; knode--) {
+                            changeProp(knode, 1, "on");
+                        }
+                    } else {
+                        changeProp(inode, 1, "on");
+                    }
+
+                // if inode=on and jnode=off, make all intervening nodes off
+                } else if ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.ON) != 0 &&
+                           (wv.sceneGraph[myTree.gprim[jnode]].attrs & wv.plotAttrs.ON) == 0   ) {
+                    if (jnode < inode) {
+                        for (knode = jnode+1; knode <= inode; knode++) {
+                            changeProp(knode, 1, "off");
+                        }
+                    } else if (jnode > inode) {
+                        for (knode = jnode-1; knode >= inode; knode--) {
+                            changeProp(knode, 1, "off");
+                        }
+                    } else {
+                        changeProp(inode, 1, "off");
+                    }
+
+                // if inode and jnode are both off, turn inode on
+                } else if ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.ON) == 0) {
+                    changeProp(inode, 1, "on");
+                    
+                // if inode and jnode are both on, turn inode off
+                } else {
+                    changeProp(inode, 1, "off");
+                }
+
+                myTree.update();
+                return;
+            }
+        }
+    }
 
     // toggle the Viz property
     if (myTree.gprim[inode] != "") {
@@ -6871,6 +6949,63 @@ var toggleGrd = function (e) {
     var inode = e["target"].id.substring(4);
     inode     = inode.substring(0,inode.length-4);
     inode     = Number(inode);
+    var jnode = wv.lastGrd;
+    var knode;
+
+    wv.lastViz = 1;
+    wv.lastGrd = inode;
+    wv.lastTrn = 1;
+    wv.lastOri = 1;
+
+    // special treatment to change grd on all entities since last toggleGrd()
+    if (e.shiftKey) {
+        if (myTree.parent[inode] == myTree.parent[jnode]) {
+            if (myTree.gprim[inode] != "" && myTree.gprim[wv.jnode] != "") {
+
+                // if inode=off and jnode=on, make all intervening nodes on
+                if        ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.LINES) == 0 &&
+                           (wv.sceneGraph[myTree.gprim[jnode]].attrs & wv.plotAttrs.LINES) != 0   ) {
+                    if (jnode < inode) {
+                        for (knode = jnode+1; knode <= inode; knode++) {
+                            changeProp(knode, 2, "on");
+                        }
+                    } else if (jnode > inode) {
+                        for (knode = jnode-1; knode >= inode; knode--) {
+                            changeProp(knode, 2, "on");
+                        }
+                    } else {
+                        changeProp(inode, 2, "on");
+                    }
+
+                // if inode=on and jnode=off, make all intervening nodes off
+                } else if ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.LINES) != 0 &&
+                           (wv.sceneGraph[myTree.gprim[jnode]].attrs & wv.plotAttrs.LINES) == 0   ) {
+                    if (jnode < inode) {
+                        for (knode = jnode+1; knode <= inode; knode++) {
+                            changeProp(knode, 2, "off");
+                        }
+                    } else if (jnode > inode) {
+                        for (knode = jnode-1; knode >= inode; knode--) {
+                            changeProp(knode, 2, "off");
+                        }
+                    } else {
+                        changeProp(inode, 2, "off");
+                    }
+
+                // if inode and jnode are both off, turn inode on
+                } else if ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.LINES) == 0) {
+                    changeProp(inode, 2, "on");
+                    
+                // if inode and jnode are both on, turn inode off
+                } else {
+                    changeProp(inode, 2, "off");
+                }
+
+                myTree.update();
+                return;
+            }
+        }
+    }
 
     // toggle the Grd property
     if (myTree.gprim[inode] != "") {
@@ -6911,6 +7046,63 @@ var toggleTrn = function (e) {
     var inode = e["target"].id.substring(4);
     inode     = inode.substring(0,inode.length-4);
     inode     = Number(inode);
+    var jnode = wv.lastTrn;
+    var knode = 0;
+
+    wv.lastViz = 1;
+    wv.lastGrd = 1;
+    wv.lastTrn = inode;
+    wv.lastOri = 1;
+    
+    // special treatment to change trn on all entities since last toggleTrn()
+    if (e.shiftKey) {
+        if (myTree.parent[inode] == myTree.parent[jnode]) {
+            if (myTree.gprim[inode] != "" && myTree.gprim[wv.jnode] != "") {
+
+                // if inode=off and jnode=on, make all intervening nodes on
+                if        ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.TRANSPARENT) == 0 &&
+                           (wv.sceneGraph[myTree.gprim[jnode]].attrs & wv.plotAttrs.TRANSPARENT) != 0   ) {
+                    if (jnode < inode) {
+                        for (knode = jnode+1; knode <= inode; knode++) {
+                            changeProp(knode, 3, "on");
+                        }
+                    } else if (jnode > inode) {
+                        for (knode = jnode-1; knode >= inode; knode--) {
+                            changeProp(knode, 3, "on");
+                        }
+                    } else {
+                        changeProp(inode, 3, "on");
+                    }
+
+                // if inode=on and jnode=off, make all intervening nodes off
+                } else if ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.TRANSPARENT) != 0 &&
+                           (wv.sceneGraph[myTree.gprim[jnode]].attrs & wv.plotAttrs.TRANSPARENT) == 0   ) {
+                    if (jnode < inode) {
+                        for (knode = jnode+1; knode <= inode; knode++) {
+                            changeProp(knode, 3, "off");
+                        }
+                    } else if (jnode > inode) {
+                        for (knode = jnode-1; knode >= inode; knode--) {
+                            changeProp(knode, 3, "off");
+                        }
+                    } else {
+                        changeProp(inode, 3, "off");
+                    }
+
+                // if inode and jnode are both off, turn inode on
+                } else if ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.TRANSPARENT) == 0) {
+                    changeProp(inode, 3, "on");
+                    
+                // if inode and jnode are both on, turn inode off
+                } else {
+                    changeProp(inode, 3, "off");
+                }
+
+                myTree.update();
+                return;
+            }
+        }
+    }
 
     // toggle the Trn property (on a Face)
     if (myTree.gprim[inode] != "") {
@@ -6955,6 +7147,64 @@ var toggleOri = function (e) {
     var inode = e["target"].id.substring(4);
     inode     = inode.substring(0,inode.length-4);
     inode     = Number(inode);
+    var jnode = wv.lastOri;
+    var knode = 0;
+
+    wv.lastViz = 1;
+    wv.lastGrd = 1;
+    wv.lastTrn = 1;
+    wv.lastOri = inode;
+    
+    // special treatment to change ori on all entities since last toggleOri()
+    if (e.shiftKey) {
+        if (myTree.parent[inode] == myTree.parent[jnode]) {
+            if (myTree.gprim[inode] != "" && myTree.gprim[wv.jnode] != "") {
+
+                // if inode=off and jnode=on, make all intervening nodes on
+                if        ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.ORIENTATION) == 0 &&
+                           (wv.sceneGraph[myTree.gprim[jnode]].attrs & wv.plotAttrs.ORIENTATION) != 0   ) {
+                    if (jnode < inode) {
+                        for (knode = jnode+1; knode <= inode; knode++) {
+                            changeProp(knode, 3, "on");
+                        }
+                    } else if (jnode > inode) {
+                        for (knode = jnode-1; knode >= inode; knode--) {
+                            changeProp(knode, 3, "on");
+                        }
+                    } else {
+                        changeProp(inode, 3, "on");
+                    }
+
+                // if inode=on and jnode=off, make all intervening nodes off
+                } else if ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.ORIENTATION) != 0 &&
+                           (wv.sceneGraph[myTree.gprim[jnode]].attrs & wv.plotAttrs.ORIENTATION) == 0   ) {
+                    if (jnode < inode) {
+                        for (knode = jnode+1; knode <= inode; knode++) {
+                            changeProp(knode, 3, "off");
+                        }
+                    } else if (jnode > inode) {
+                        for (knode = jnode-1; knode >= inode; knode--) {
+                            changeProp(knode, 3, "off");
+                        }
+                    } else {
+                        changeProp(inode, 3, "off");
+                    }
+
+                // if inode and jnode are both off, turn inode on
+                } else if ((wv.sceneGraph[myTree.gprim[inode]].attrs & wv.plotAttrs.ORIENTATION) == 0) {
+                    changeProp(inode, 3, "on");
+                    
+                // if inode and jnode are both on, turn inode off
+                } else {
+                    changeProp(inode, 3, "off");
+                }
+
+                myTree.update();
+                return;
+            }
+        }
+    }
+
 
     // toggle the Ori property (on an Edge)
     if (myTree.gprim[inode] != "") {
@@ -8522,7 +8772,8 @@ var changeMode = function (newMode) {
         ESPlogo.hidden          = true;
 
         wv.curTool = pyscript;
-        wv.curMode = 12;
+        wv.curMode    = 12;
+        wv.inPyscript = 1;
     } else if (newMode == 13) {
         wv.usingMain = 1;
 
@@ -8582,6 +8833,24 @@ var changeMode = function (newMode) {
         wv.afterBrch = -1;
         wv.menuEvent = undefined;
         wv.keyPress  = -1;
+    } else if (newMode == 16) {
+        wv.usingMain = 1;
+
+        webViewer.hidden        = false;
+        addBrchForm.hidden      = true;
+        editBrchForm.hidden     = true;
+        editValuForm.hidden     = true;
+        showOutpmtrsForm.hidden = true;
+        editorForm.hidden       = true;
+        sketcherForm.hidden     = true;
+        glovesText.hidden       = true;
+        wvKey.hidden            = true;
+        sketcherStatus.hidden   = true;
+        timStatus.hidden        = false;
+        ESPlogo.hidden          = true;
+
+        wv.curTool = vspSetup;
+        wv.curMode = 16;
     } else {
         alert("Bad new mode = "+newMode);
     }
@@ -8612,7 +8881,7 @@ var rebuildTreeWindow = function (x) {
         wv.buildTree = 1;
     }
 
-    // if there was a previous Tree, keep track of whether or not
+    // if there wXas a previous Tree, keep track of whether or not
     //    the Parameters, Branches, and Display was open
     var cvalsOpen = 0;
     var pmtr1Open = 0;
@@ -9269,8 +9538,8 @@ var setupEditBrchForm = function () {
         argList  = ["$pmtrName", "nrow", "ncol"];
         defValue = ["",          "",     ""    ];
     } else if (type == "dump") {
-        argList  = ["$filename", "remove", "tomark"];
-        defValue = ["",          "0",      "0"     ];
+        argList  = ["$filename", "remove", "tomark", "withTess", "grpName"];
+        defValue = ["",          "0",      "0",      "0",        "."      ];
     } else if (type == "elevate") {
         argList  = ["toler"];
         defValue = ["0"    ];
@@ -10416,7 +10685,7 @@ var cmdEditHint = function () {
     } else if (curLine.match(/^\s*dimension/i) !== null) {
         hintText =        "hint:: DIMENSION $pmtrName nrow ncol despmtr=0";
     } else if (curLine.match(/^\s*dump/i) !== null) {
-        hintText =        "hint:: DUMP      $filename remove=0 toMark=0 withTess=0";
+        hintText =        "hint:: DUMP      $filename remove=0 toMark=0 withTess=0 $grpName=.";
     } else if (curLine.match(/^\s*elevate/i) !== null) {
         hintText =        "hint:: ELEVATE toler=0";
     } else if (curLine.match(/^\s*elseif/i) !== null) {

@@ -108,4 +108,5 @@ natrualFreq = mystranAIM.output.EigenFrequency
 
 for mode, i in enumerate(natrualFreq):
     print ("Natural freq ( Mode", mode, ") = ", i, "(Hz)")
+
 ## [results]

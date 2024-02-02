@@ -32,12 +32,12 @@ myProblem = pyCAPS.Problem(problemName=workDir,
                            outLevel=args.outLevel)
 
 # Load AIMs
-surfMesh = myProblem.analysis.create(aim = "egadsTessAIM", 
-                                     name= "egads",
+surfMesh = myProblem.analysis.create(aim = "aflr4AIM",
+                                     name= "aflr4",
                                      capsIntent = "Aerodynamic")
 
-mesh = myProblem.analysis.create(aim = "tetgenAIM", 
-                                 name= "tetgen",
+mesh = myProblem.analysis.create(aim = "aflr3AIM",
+                                 name= "aflr3",
                                  capsIntent = "Aerodynamic")
 
 mesh.input["Surface_Mesh"].link(surfMesh.output["Surface_Mesh"])
@@ -73,11 +73,15 @@ for boundName in boundNames:
     # Close the bound as complete (cannot create more vertex or data sets)
     bound.close()
 
-# Set inputs for egads 
-surfMesh.input.Tess_Params = [.05, 0.01, 20.0]
 
-# Set inputs for tetgen 
-mesh.input.Preserve_Surf_Mesh = True
+# Farfield growth factor
+surfMesh.input.ff_cdfr = 1.4
+
+# Set maximum and minimum edge lengths relative to capsMeshLength
+surfMesh.input.max_scale = 0.75
+surfMesh.input.min_scale = 0.1
+
+# Set inputs for volume mesh
 mesh.input.Mesh_Quiet_Flag = True if args.outLevel == 0 else False
 
 # Set inputs for fun3d
@@ -103,8 +107,8 @@ fun3d.input.Boundary_Condition = {"Skin"     : inviscid,
 
 # Set inputs for mystran
 mystran.input.Proj_Name = projectName
-mystran.input.Edge_Point_Max = 3
-mystran.input.Edge_Point_Min = 3
+mystran.input.Edge_Point_Max = 10
+mystran.input.Edge_Point_Min = 10
 
 mystran.input.Quad_Mesh = True
 mystran.input.Tess_Params = [.5, .1, 15]
@@ -135,10 +139,13 @@ constraint = {"groupName" : "Rib_Root",
               "dofConstraint" : 123456}
 mystran.input.Constraint = {"edgeConstraint": constraint}
 
-
-####### Run fun3d ####################
 # Set scaling factor for pressure
 fun3d.input.Pressure_Scale_Factor = 0.5*refDensity*refVelocity**2
+
+####### Run fun3d ####################
+# Re-run the preAnalysis
+print ("\nRunning PreAnalysis ......", "fun3d")
+fun3d.preAnalysis()
 
 print ("\n\nRunning FUN3D......")
 cmdLineOpt = "--write_aero_loads_to_file --animation_freq -1"

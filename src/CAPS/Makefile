@@ -57,6 +57,12 @@ $(LDIR)/libCart3D.a:	Cart3D/X86_64_GCC/libCart3D.a
 	/bin/cp Cart3D/X86_64_GCC/libCart3D.a $(LDIR)/libCart3D.a
 endif
 
+ifeq ($(ESP_ARCH),LINUX_AARCH64)
+$(LDIR)/libc3dio.a:
+
+$(LDIR)/libCart3D.a:
+endif
+
 ifeq ($(UDUNITS),NOTFOUND)
 $(IDIR)/udunits2.h:	udunits/include/udunits2.h
 	/bin/cp udunits/include/*.h $(IDIR)

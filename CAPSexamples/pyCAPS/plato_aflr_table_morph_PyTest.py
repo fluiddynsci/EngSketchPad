@@ -17,7 +17,7 @@ args = parser.parse_args()
 
 # Load CSM file
 geometryScript = os.path.join("..","csmData","table.csm")
-problem = pyCAPS.Problem(problemName = os.path.join(str(args.workDir[0]), "PlatAFLRMorphMultiDomainTest"),
+problem = pyCAPS.Problem(problemName = os.path.join(str(args.workDir[0]), "PlatoAFLRMorphMultiDomainTest"),
                          capsFile=geometryScript,
                          outLevel=args.outLevel)
 

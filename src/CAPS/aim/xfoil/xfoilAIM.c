@@ -367,7 +367,7 @@ int aimPreAnalysis(/*@unused@*/ const void *instStore, void *aimInfo,
         status = vlm_writeSection(aimInfo,
                                   fp,
                                   &vlmSection,
-                                  (int) false, // Normalize by chord (true/false)
+                                  (int) true, // Normalize by chord (true/false)
                                   (int) NUMPOINT);
         AIM_STATUS(aimInfo, status);
 

@@ -33,7 +33,9 @@ int fun3d_writeNML(void *aimInfo, capsValue *aimInputs,
 // Write FUN3D movingbody.input file
 int fun3d_writeMovingBody(void *aimInfo, double fun3dVersion,
                           cfdBoundaryConditionStruct bcProps,
-                          cfdModalAeroelasticStruct *modalAeroelastic);
+               /*@null@*/ const char *motion_driver,
+               /*@null@*/ const char *mesh_movement,
+               /*@null@*/ cfdModalAeroelasticStruct *modalAeroelastic);
 
 // Write FUN3D parametrization/sensitivity file
 // Will not calculate shape sensitivities if there are no geometry design variable; will

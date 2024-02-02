@@ -46,7 +46,7 @@ $(LDIR)/libwsserver.dylib: $(OBJS) map.o
 	touch $(LDIR)/libwsserver.dylib
 	rm $(LDIR)/libwsserver.dylib
 	(cd $(ODIR); $(CXX) -dynamiclib -o $(LDIR)/libwsserver.dylib \
-		$(OBJS) map.o -lz -undefined error \
+		$(OBJS) map.o -lz \
 		-install_name '@rpath/libwsserver.dylib' \
 		-compatibility_version $(CASREV) \
 		-current_version $(EGREV) )

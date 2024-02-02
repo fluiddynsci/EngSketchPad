@@ -1,0 +1,79 @@
+Structure for the design functional tuple = \{\char`\"{}\+Functional Name\char`\"{}\+: \char`\"{}\+Expression\char`\"{}\}. \char`\"{}\+Functional Name\char`\"{} defines the functional returned as a dynamic output. The \char`\"{}\+Value\char`\"{} must be a JSON String dictionary (see Section \mbox{\hyperlink{cfdDesignFunctional_jsonStringcfdDesignFunctional}{JSON String Dictionary}}).
+
+For FUN3D, a functional in which the adjoint will be taken with respect to can be build up using\+:
+
+\tabulinesep=1mm
+\begin{longtabu}spread 0pt [c]{*{2}{|X[-1]}|}
+\hline
+\cellcolor{\tableheadbgcolor}\textbf{ Function Names   }&\cellcolor{\tableheadbgcolor}\textbf{ Description    }\\\cline{1-2}
+\endfirsthead
+\hline
+\endfoot
+\hline
+\cellcolor{\tableheadbgcolor}\textbf{ Function Names   }&\cellcolor{\tableheadbgcolor}\textbf{ Description    }\\\cline{1-2}
+\endhead
+\char`\"{}cl\char`\"{}, \char`\"{}cd\char`\"{}   &Lift, drag coefficients    \\\cline{1-2}
+\char`\"{}clp\char`\"{}, \char`\"{}cdp\char`\"{}   &Lift, drag coefficients\+: pressure contributions    \\\cline{1-2}
+\char`\"{}clv\char`\"{}, \char`\"{}cdv\char`\"{}   &Lift, drag coefficients\+: shear contributions    \\\cline{1-2}
+\char`\"{}cmx\char`\"{}, \char`\"{}cmy\char`\"{}, \char`\"{}cmz\char`\"{}   &x/y/z-\/axis moment coefficients    \\\cline{1-2}
+\char`\"{}cmxp\char`\"{}, \char`\"{}cmyp\char`\"{}, \char`\"{}cmzp\char`\"{}   &x/y/z-\/axis moment coefficients\+: pressure contributions    \\\cline{1-2}
+\char`\"{}cmxv\char`\"{}, \char`\"{}cmyv\char`\"{}, \char`\"{}cmzv\char`\"{}   &x/y/z-\/axis moment coefficients\+: shear contributions    \\\cline{1-2}
+\char`\"{}cx\char`\"{}, \char`\"{}cy\char`\"{}, \char`\"{}cz\char`\"{}   &x/y/z-\/axis force coefficients    \\\cline{1-2}
+\char`\"{}cxp\char`\"{}, \char`\"{}cyp\char`\"{}, \char`\"{}czp\char`\"{}   &x/y/z-\/axis force coefficients\+: pressure contributions    \\\cline{1-2}
+\char`\"{}cxv\char`\"{}, \char`\"{}cyv\char`\"{}, \char`\"{}czv\char`\"{}   &x/y/z-\/axis force coefficients\+: shear contributions    \\\cline{1-2}
+\char`\"{}powerx\char`\"{}, \char`\"{}powery\char`\"{}, \char`\"{}powerz\char`\"{}   &x/y/z-\/axis power coefficients    \\\cline{1-2}
+\char`\"{}clcd\char`\"{}   &Lift-\/to-\/drag ratio    \\\cline{1-2}
+\char`\"{}fom\char`\"{}   &Rotorcraft figure of merit    \\\cline{1-2}
+\char`\"{}propeff\char`\"{}   &Rotorcraft propulsive efficiency    \\\cline{1-2}
+\char`\"{}rtr\char`\"{}   &thrust Rotorcraft thrust function    \\\cline{1-2}
+\char`\"{}pstag\char`\"{}   &RMS of stagnation pressure in cutting plane disk    \\\cline{1-2}
+\char`\"{}distort\char`\"{}   &Engine inflow distortion    \\\cline{1-2}
+\char`\"{}boom\char`\"{}   &Near-\/field $p/p_\infty $ pressure target    \\\cline{1-2}
+\char`\"{}sboom\char`\"{}   &Coupled s\+BOOM ground-\/based noise metrics    \\\cline{1-2}
+\char`\"{}ae\char`\"{}   &Supersonic equivalent area target distribution    \\\cline{1-2}
+\char`\"{}press\char`\"{}   &box RMS of pressure in user-\/defined box, also pointwise $dp/dt,\; d\rho/dt $    \\\cline{1-2}
+\char`\"{}cpstar\char`\"{}   &Target pressure distributions   \\\cline{1-2}
+\end{longtabu}
+
+
+FUN3D calculates a functional using the following form\+: $ f = \sum_i (w_i *(C_i - C_i^*) ^ {p_i}) $ ~\newline
+ Where\+: ~\newline
+ $f$ \+: Functional ~\newline
+ $w_i$ \+: Weighting of function ~\newline
+ $C_i$ \+: Function type (cl, cd, etc.) ~\newline
+ $C_i^*$ \+: Function target ~\newline
+ $p_i$ \+: Exponential factor of function ~\newline
+\hypertarget{cfdDesignFunctional_jsonStringcfdDesignFunctional}{}\doxysubsection{JSON String Dictionary}\label{cfdDesignFunctional_jsonStringcfdDesignFunctional}
+If \char`\"{}\+Value\char`\"{} is a JSON string dictionary (eg. \char`\"{}\+Value\char`\"{} = \char`\"{}\+Composite\char`\"{}\+:\mbox{[}\{\char`\"{}function\char`\"{}\+: \char`\"{}cl\char`\"{}, \char`\"{}weight\char`\"{}\+: 3.\+0, \char`\"{}target\char`\"{}\+: 10.\+7\}, \{\char`\"{}function\char`\"{}\+: \char`\"{}cd\char`\"{}, \char`\"{}weight\char`\"{}\+: 2.\+0, \char`\"{}power\char`\"{}\+: 2.\+0\}\mbox{]})~\newline
+ which represents the composite functional\+: $Composite = 3 (c_l-10.7) + 2 c_d^2$~\newline
+ The following keywords ( = default values) may be used\+:
+
+
+\begin{DoxyItemize}
+\item {\bfseries{caps\+Group = \char`\"{}\+Group\+Name\char`\"{}}}  ~\newline
+ Name of boundary to apply for the function $C_i$. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{function = NULL}}  ~\newline
+ The name of the function $C_i$, e.\+g. \char`\"{}cl\char`\"{}, \char`\"{}cd\char`\"{}, etc. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{weight = 1.\+0}}  ~\newline
+ This weighting $w_i$ of the function. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{target = 0.\+0}}  ~\newline
+ This is the target value $C_i^*$ of the function. 
+\end{DoxyItemize}
+
+
+\begin{DoxyItemize}
+\item {\bfseries{power = 1.\+0}}  ~\newline
+ This is the user defined power operator $p_i$ for the function. 
+\end{DoxyItemize}

@@ -3,7 +3,7 @@
  *
  *             Topology Functions
  *
- *      Copyright 2011-2023, Massachusetts Institute of Technology
+ *      Copyright 2011-2024, Massachusetts Institute of Technology
  *      Licensed under The GNU Lesser General Public License, version 2.1
  *      See http://www.opensource.org/licenses/lgpl-2.1.php
  *
@@ -136,7 +136,8 @@ public:
   extern "C" int  EG_indexBodyTopo( const egObject *body, const egObject *src );
   extern "C" int  EG_objectBodyTopo( const egObject *body, int oclass, int index,
                                      egObject **obj );
-  extern "C" int  EG_sameBodyTopo( const egObject *bod1, const egObject *bod2 );
+  extern "C" int  EG_sameBodyTopo( const egObject *bod1, const egObject *bod2,
+                                   /*@null@*/ const char *fAttr );
   extern "C" int  EG_makeSolidBody( egObject *context, int stype,
                                     const double *rvec, egObject **body );
   extern "C" int  EG_makeSolidBody_dot( egObject *body, int stype,
@@ -178,6 +179,8 @@ public:
                                          egObject **objs, egObject **result );
   extern "C" int  EG_mapBody( const egObject *sBody, const egObject *dBody,
                               const char *fAttr, egObject **mBody );
+  extern "C" int  EG_mapBody2(const egObject *sBody,
+                              const char *fAttr, const char *eAttr, egObject *dBody);
   extern "C" int  EG_copyGeometry_dot( const egObject *obj,
                                        /*@null@*/ const double *xform,
                                        /*@null@*/ const double *xform_dot,
@@ -230,6 +233,7 @@ public:
                                       /*@null@*/ const int *ivec,
                                       const double *rvec,
                                       const double *rvec_dot );
+  extern "C" int  EG_saveModel( const egObject *model, const char *name );
 
 
 static void
@@ -483,7 +487,7 @@ EG_destroyTopology(egObject *topo)
 
 
 void
-EG_splitPeriodics(egadsBody *body)
+EG_splitPeriodics(egadsBody *body, egadsShapeLabel &labels)
 {
   int          hit    = 0;
   TopoDS_Shape bshape = body->shape;
@@ -516,7 +520,7 @@ EG_splitPeriodics(egadsBody *body)
     aShape.SetNbSplitPoints(1);
     aShape.SetContext(reShape);
     if (aShape.Perform(Standard_False)) {
-      solid = reShape->Apply(bshape);
+      solid = labels.Update(bshape, reShape);
       if (solid.IsNull()) {
         printf(" EGADS Warning: Can't Split Periodics!\n");
         solid = bshape;
@@ -535,7 +539,7 @@ EG_splitPeriodics(egadsBody *body)
               printf(" EGADS Warning: Periodic Split is InValid!\n");
               solid = bshape;
             } else {
-              solid = fixedSolid;
+              solid = labels.Update(solid, fixedSolid);
             }
           }
         }
@@ -551,15 +555,15 @@ EG_splitPeriodics(egadsBody *body)
     printf(" EGADS Info: General Error (EG_splitPeriodics)!\n");
     return;
   }
-  
+
   // copy it just in case...
   BRepBuilderAPI_Transform xForm(solid, gp_Trsf(), Standard_True);
   if (!xForm.IsDone()) {
     printf(" EGADS Error: Can't copy Shape (EG_splitPeriodics)!\n");
     return;
   }
-  body->shape = xForm.ModifiedShape(solid);
-  
+  body->shape = labels.Update(solid, xForm);
+
   // simplify curves
   BRep_Builder               Builder;
   TopTools_IndexedMapOfShape edgeMap;
@@ -593,12 +597,21 @@ EG_splitPeriodics(egadsBody *body)
     }
   }
 
-  body->shape = solid;
+  // update the labels
+  body->shape = labels.Update(body->shape, solid);
 }
 
 
 void
-EG_splitMultiplicity(egadsBody *body, int outLevel)
+EG_splitPeriodics(egadsBody *body)
+{
+  egadsShapeLabel labels;
+  EG_splitPeriodics(body, labels);
+}
+
+
+void
+EG_splitMultiplicity(egadsBody *body, egadsShapeLabel &labels, int outLevel)
 {
   TopoDS_Shape bshape = body->shape;
 
@@ -674,6 +687,7 @@ EG_splitMultiplicity(egadsBody *body, int outLevel)
       printf(" EGADS Warning: Can't Do Continuity Split!\n");
       shape = bshape;
     } else {
+      shape = labels.Update(bshape, aShape.GetContext());
       BRepCheck_Analyzer fCheck(shape);
       if (!fCheck.IsValid()) {
         Handle_ShapeFix_Shape sfs = new ShapeFix_Shape(shape);
@@ -688,7 +702,7 @@ EG_splitMultiplicity(egadsBody *body, int outLevel)
             printf(" EGADS Warning: Continuity Split is InValid!\n");
             shape = bshape;
           } else {
-            shape = fixedShape;
+            shape = labels.Update(shape, fixedShape);
           }
         }
       }
@@ -699,6 +713,14 @@ EG_splitMultiplicity(egadsBody *body, int outLevel)
   }
 
   body->shape = shape;
+}
+
+
+void
+EG_splitMultiplicity(egadsBody *body, int outLevel)
+{
+  egadsShapeLabel labels;
+  EG_splitMultiplicity(body, labels, outLevel);
 }
 
 
@@ -1219,7 +1241,7 @@ EG_traverseBody(egObject *context, int i, egObject *bobj, egObject *topObj,
   }
   delete [] nCnt;
 #endif
-  
+
   int nNode  = body->nodes.map.Extent();
   int nEdge  = body->edges.map.Extent();
   int nLoop  = body->loops.map.Extent();
@@ -3775,7 +3797,7 @@ EG_makeTopology(egObject *context, /*@null@*/ egObject *geom,
       egadsFace *pface = (egadsFace *) children[i]->blind;
       builder3D.Add(shell, pface->face);
     }
-    BRepLib::SameParameter(shell);
+    //BRepLib::SameParameter(shell); <-- This is a bad idea...
     BRepCheck_Analyzer shCheck(shell);
     if (!shCheck.IsValid()) {
       // try to fix the fault
@@ -6026,10 +6048,39 @@ EG_objectBodyTopo(const egObject *body, int oclass, int index, egObject **obj)
 }
 
 
-int
-EG_sameBodyTopo(const egObject *bod1, const egObject *bod2)
+static int
+EG_sameAttrs(int aTypes, int lens, const int *ints, const double *reals,
+             const char *strs, int aTyped, int lend, const int *intd,
+             const double *reald, const char *strd)
 {
-  int      i, j, outLevel, ind1, ind2, nc, err = 0;
+  int i;
+
+  if (aTypes != aTyped) return EGADS_OUTSIDE;
+
+  if (aTypes == ATTRINT) {
+    if (lens != lend) return EGADS_OUTSIDE;
+    for (i = 0; i < lens; i++)
+      if (ints[i] != intd[i]) return EGADS_OUTSIDE;
+  } else if ((aTypes == ATTRREAL) || (aTypes == ATTRCSYS)) {
+    if (lens != lend) return EGADS_OUTSIDE;
+    for (i = 0; i < lens; i++)
+      if (reals[i] != reald[i]) return EGADS_OUTSIDE;
+  } else if (aTypes == ATTRSTRING) {
+    if (strcmp(strs,strd) != 0) return EGADS_OUTSIDE;
+  }
+
+  return EGADS_SUCCESS;
+}
+
+
+int
+EG_sameBodyTopo(const egObject *bod1, const egObject *bod2, const char *fAttr)
+{
+  int          stat, i, j, outLevel, ind1, ind2, nc, err = 0;
+  int          aTypes, aTyped, lens, lend;
+  const int    *ints,  *intd;
+  const char   *strs,  *strd;
+  const double *reals, *reald;
   egObject *obj1, *obj2;
 
   if (bod1 == NULL)               return EGADS_NULLOBJ;
@@ -6216,6 +6267,32 @@ EG_sameBodyTopo(const egObject *bod1, const egObject *bod2)
           printf(" EGADS Warning: Shell %d - fIndices = %d %d (EG_sameBodyTopo)!\n",
                  i+1, ind1, ind2);
         err++;
+      }
+
+      if (fAttr != NULL) {
+        stat = EG_attributeRet(fac1, fAttr, &aTypes, &lens,
+                               &ints, &reals, &strs);
+        if (stat == EGADS_NOTFOUND) {
+          if (outLevel > 0)
+            printf(" EGADS Error:  Attr '%s' Not in sBody Face %d (EG_mapBody)!\n",
+                   fAttr, i+1);
+          return EGADS_ATTRERR;
+        }
+        stat = EG_attributeRet(fac2, fAttr, &aTyped, &lend,
+                               &intd, &reald, &strd);
+        if (stat == EGADS_NOTFOUND) {
+          if (outLevel > 0)
+            printf(" EGADS Error: Attr '%s' Not in dBody Face %d (EG_mapBody)!\n",
+                   fAttr, i+1);
+          return EGADS_ATTRERR;
+        }
+        if (EG_sameAttrs(aTypes, lens, ints, reals, strs,
+                         aTyped, lend, intd, reald, strd) != EGADS_SUCCESS) {
+          if (outLevel > 1)
+            printf(" EGADS Warning: Shell %d - fIndices = %d %d, Face Attr missmatch (EG_sameBodyTopo)!\n",
+                   i+1, ind1, ind2);
+          err++;
+        }
       }
     }
   }
@@ -6756,7 +6833,7 @@ EG_massProperties(int nTopo, egObject **topos, double *data)
   data[11] = Inert.Value(3,1);
   data[12] = Inert.Value(3,2);
   data[13] = Inert.Value(3,3);
-  
+
   if ((topo->oclass == BODY) && (nTopo == 1)) {
     egadsBody *pbody = (egadsBody *) topo->blind;
     for (i = 0; i < 14; i++) pbody->massProp[i] = data[i];
@@ -6878,7 +6955,7 @@ EG_getMassProperties(const egObject *topo, /*@null@*/ double *data)
   data[11] = Inert.Value(3,1);
   data[12] = Inert.Value(3,2);
   data[13] = Inert.Value(3,3);
-  
+
   if (topo->oclass == BODY) {
     egadsBody *pbody = (egadsBody *) topo->blind;
     for (i = 0; i < 14; i++) pbody->massProp[i] = data[i];
@@ -6979,7 +7056,7 @@ EG_isEquivalent(const egObject *topo1, const egObject *topo2)
     if (EG_isSame(pedge1->nodes[1], pedge2->nodes[0]) == EGADS_SUCCESS) n++;
     if (EG_isSame(pedge1->nodes[1], pedge2->nodes[1]) == EGADS_SUCCESS) n++;
     if (n != 2) return EGADS_OUTSIDE;
-    
+
     t    = 0.5*(pedge1->trange[0] + pedge1->trange[1]);
     stat = EG_evaluate(pedge1->curve, &t, result1);
     if (stat != EGADS_SUCCESS) return stat;
@@ -7257,7 +7334,7 @@ EG_getEdgeUVX(const egObject *face, const egObject *topo, int sense, double t,
   if (sense == 0)
     if (found > 1) {
       if (outLevel > 1)
-        printf(" EGADS Warning: Edge in Face twice & sense=0 (EG_getEdgeUV)!\n");
+        printf(" EGADS Error: Edge in Face twice & sense=0 (EG_getEdgeUV)!\n");
       return EGADS_TOPOERR;
     }
 
@@ -8143,11 +8220,11 @@ EG_getBody(const egObject *obj, egObject **body)
     }
     return EGADS_SUCCESS;
   }
-  
+
   egObject *topObj = obj->topObj;
   if (topObj == NULL)               return EGADS_NULLOBJ;
   if (topObj->magicnumber != MAGIC) return EGADS_NOTOBJ;
-  
+
   if ((topObj->oclass == BODY) || (topObj->oclass == EBODY)) {
     *body = topObj;
   } else if (topObj->oclass == MODEL) {
@@ -8303,7 +8380,7 @@ EG_inFace(const egObject *face, const double *uv)
   if (face->magicnumber != MAGIC) return EGADS_NOTOBJ;
   if (face->blind == NULL)        return EGADS_NODATA;
   if (face->oclass == EFACE)      return EG_inEFace(face, uv);
-  
+
   return EG_inFaceX(face, uv, NULL, NULL);
 }
 
@@ -8495,7 +8572,7 @@ EG_getRecurFrag(egObject *object, int oclass, int *ntopo, egObject ***topos)
   int      stat, i, oc, mt, nobj, *sens;
   double   limits[4];
   egObject *geom, **objs, **tmp;
-  
+
   /* save away our objects */
   if (object->oclass == oclass) {
     tmp = *topos;
@@ -8513,7 +8590,7 @@ EG_getRecurFrag(egObject *object, int oclass, int *ntopo, egObject ***topos)
     *topos      = tmp;
     return EGADS_SUCCESS;
   }
-  
+
   /* examine the children */
   stat = EG_getTopology(object, &geom, &oc, &mt, limits, &nobj, &objs, &sens);
   if (stat != EGADS_SUCCESS) return stat;
@@ -8522,7 +8599,7 @@ EG_getRecurFrag(egObject *object, int oclass, int *ntopo, egObject ***topos)
     stat = EG_getRecurFrag(objs[i], oclass, ntopo, topos);
     if (stat != EGADS_SUCCESS) return stat;
   }
-  
+
   return EGADS_SUCCESS;
 }
 
@@ -8540,7 +8617,7 @@ EG_getTopoFrags(const egObject *object, int oclass,
   if  (object->blind == NULL)        return EGADS_NODATA;
   if ((oclass != NODE) &&
       (oclass != EDGE))              return EGADS_INDEXERR;
-  
+
   return EG_getRecurFrag((egObject *) object, oclass, ntopo, topos);
 }
 
@@ -8950,7 +9027,7 @@ EG_sewFaces(int nobj, const egObject **objs, double toler, int opt,
     }
     EG_free(amap);
   }
-  
+
   /* deal with extended attribution */
   if (fullAttr == 1) {
 
@@ -8992,7 +9069,7 @@ EG_sewFaces(int nobj, const egObject **objs, double toler, int opt,
       }
       EG_free(obs);
     }
-    
+
     for (i = 0; i < nobj; i++) {
       if (objs[i]->oclass == BODY) {
         stat = EG_getBodyTopos(objs[i], NULL, NODE, &no, &obs);
@@ -9014,7 +9091,7 @@ EG_sewFaces(int nobj, const egObject **objs, double toler, int opt,
       }
       EG_free(obs);
     }
-    
+
   }
 
   *result = omodel;
@@ -9076,7 +9153,7 @@ EG_makeNmWireBody(int nobj, const egObject **objs, double toler,
       return EGADS_DEGEN;
     }
   }
-  
+
   edges = new tmpEdge[nobj];
   for (i = 0; i < nobj; i++) {
     egadsEdge *pedge  = (egadsEdge *) objs[i]->blind;
@@ -9170,7 +9247,7 @@ EG_makeNmWireBody(int nobj, const egObject **objs, double toler,
       if (index != cnt) nmap[index-1]++;
     }
   }
-  
+
   /* does every Edge have at least 2 connections? */
   for (i = 0; i < nobj; i++) {
     index = map.FindIndex(edges[i].nodes[0]);
@@ -9186,7 +9263,7 @@ EG_makeNmWireBody(int nobj, const egObject **objs, double toler,
     }
   }
   delete [] nmap;
-  
+
   /* make the nonmanifold wire */
   BRepBuilderAPI_MakeWire MW;
   for (i = 0; i < nobj; i++) {
@@ -9222,7 +9299,7 @@ EG_makeNmWireBody(int nobj, const egObject **objs, double toler,
   }
   TopoDS_Wire wire = MW.Wire();
   delete [] edges;
-  
+
   /* parse it */
   stat = EG_makeObject(context, &obj);
   if (stat != EGADS_SUCCESS) {
@@ -9248,7 +9325,7 @@ EG_makeNmWireBody(int nobj, const egObject **objs, double toler,
     EG_deleteObject(obj);
     return stat;
   }
-  
+
   /* transfer of Node & Edge attributes -- Edges in the same order */
   for (i = 0; i < nobj; i++) {
     EG_attributeDup(objs[i], pbody->edges.objs[i]);
@@ -9258,10 +9335,10 @@ EG_makeNmWireBody(int nobj, const egObject **objs, double toler,
     EG_attributeDup(pedgs->nodes[0], pedgd->nodes[0]);
     EG_attributeDup(pedgs->nodes[1], pedgd->nodes[1]);
   }
-  
+
   EG_referenceObject(obj, context);
   *result = obj;
-  
+
   return EGADS_SUCCESS;
 }
 
@@ -9449,7 +9526,7 @@ EG_replaceFaces(const egObject *body, int nobj, egObject **objs,
       mtype    = SOLIDBODY;
     }
   }
-  
+
   // promote to a solid?
   if ((body->mtype == SOLIDBODY) && (newShape.ShapeType() == TopAbs_SHELL) &&
       (nNull == 0)) {
@@ -9562,7 +9639,7 @@ EG_replaceFaces(const egObject *body, int nobj, egObject **objs,
       }
       EG_free(obs);
     }
-    
+
     for (i = 0; i < nobj; i++) {
       if (objs[2*i+1] == NULL) continue;
       stat = EG_getTopoFrags(objs[2*i+1], NODE, &no, &obs);
@@ -9577,7 +9654,7 @@ EG_replaceFaces(const egObject *body, int nobj, egObject **objs,
             EG_attributeDup(obs[k], pbodn->nodes.objs[j]);
       EG_free(obs);
     }
-    
+
   }
 
   EG_referenceObject(obj, context);
@@ -9857,31 +9934,6 @@ EG_getEdgeIDs(egadsBody *pbody, const char *fAttr, edgeID **IDs)
 
 
 static int
-EG_sameAttrs(int aTypes, int lens, const int *ints, const double *reals,
-             const char *strs, int aTyped, int lend, const int *intd,
-             const double *reald, const char *strd)
-{
-  int i;
-
-  if (aTypes != aTyped) return EGADS_OUTSIDE;
-
-  if (aTypes == ATTRINT) {
-    if (lens != lend) return EGADS_OUTSIDE;
-    for (i = 0; i < lens; i++)
-      if (ints[i] != intd[i]) return EGADS_OUTSIDE;
-  } else if ((aTypes == ATTRREAL) || (aTypes == ATTRCSYS)) {
-    if (lens != lend) return EGADS_OUTSIDE;
-    for (i = 0; i < lens; i++)
-      if (reals[i] != reald[i]) return EGADS_OUTSIDE;
-  } else if (aTypes == ATTRSTRING) {
-    if (strcmp(strs,strd) != 0) return EGADS_OUTSIDE;
-  }
-
-  return EGADS_SUCCESS;
-}
-
-
-static int
 EG_bodyMapping(const egObject  *sBody, const egObject *dBody, const char *fAttr,
                int **pnMap, int **peMap, int **pfMap)
 {
@@ -9893,7 +9945,7 @@ EG_bodyMapping(const egObject  *sBody, const egObject *dBody, const char *fAttr,
   const int    *ints,  *intd;
   const char   *strs,  *strd;
   const double *reals, *reald;
-  
+
   egadsBody *pbods = (egadsBody *) sBody->blind;
   egadsBody *pbodd = (egadsBody *) dBody->blind;
   outLevel = EG_outLevel(sBody);
@@ -10232,9 +10284,8 @@ int
 EG_mapBody(const egObject  *sBody, const egObject *dBody, const char *fAttr,
                  egObject **mBody)
 {
-  int outLevel, stat, *nMap = NULL, *eMap = NULL, *fMap = NULL, exacTopo = 0;
+  int outLevel, stat, *nMap = NULL, *eMap = NULL, *fMap = NULL, exacTopo = 0, del = 0;
 
-  *mBody = NULL;
   if  (sBody == NULL)                return EGADS_NULLOBJ;
   if  (sBody->magicnumber != MAGIC)  return EGADS_NOTOBJ;
   if  (sBody->oclass != BODY)        return EGADS_NOTBODY;
@@ -10249,10 +10300,22 @@ EG_mapBody(const egObject  *sBody, const egObject *dBody, const char *fAttr,
   if  (dBody->blind == NULL)         return EGADS_NODATA;
   if  (dBody->mtype != sBody->mtype) return EGADS_TOPOERR;
   if  (EG_sameThread(dBody))         return EGADS_CNTXTHRD;
+  if  (mBody == NULL)                return EGADS_NULLOBJ;
   egadsBody *pbodd = (egadsBody *) dBody->blind;
   outLevel = EG_outLevel(sBody);
 
-  stat = EG_sameBodyTopo(sBody, dBody);
+  if (dBody != *mBody) *mBody = NULL;
+
+#ifdef WRITE_MAPBODY_MODEL
+  remove("tmp.egads");
+  egObject *model;
+  const egObject *bodies[2] = {sBody, dBody};
+  EG_makeTopology(EG_context(sBody), NULL, MODEL, 0, NULL, 2,
+                           (egObject **)bodies, NULL, &model);
+  EG_saveModel(model, "tmp.egads");
+#endif
+
+  stat = EG_sameBodyTopo(sBody, dBody, fAttr);
   if (stat == EGADS_TOPOCNT) return stat;
   if (stat == EGADS_SUCCESS) exacTopo = 1;
   if (sBody->mtype == FACEBODY) {
@@ -10275,6 +10338,7 @@ fixBSplSur:
 
   // make a new body if not already done
   if (*mBody == NULL) {
+    del = 1;
     stat = EG_copyObject(dBody, NULL, mBody);
     if (stat != EGADS_SUCCESS) {
       if (nMap != NULL) EG_free(nMap);
@@ -10293,8 +10357,10 @@ fixBSplSur:
                            nMap, NULL, NULL);
     EG_free(nMap);
     if (stat != EGADS_SUCCESS) {
-      EG_deleteObject(*mBody);
-      *mBody = NULL;
+      if (del == 1) {
+        EG_deleteObject(*mBody);
+        *mBody = NULL;
+      }
       if (outLevel > 0)
         printf(" EGADS Warning: Attribute Node Mapping is %d (EG_mapBody)!\n",
                stat);
@@ -10311,8 +10377,10 @@ fixBSplSur:
                            eMap, NULL, NULL);
     EG_free(eMap);
     if (stat != EGADS_SUCCESS) {
-      EG_deleteObject(*mBody);
-      *mBody = NULL;
+      if (del == 1) {
+        EG_deleteObject(*mBody);
+        *mBody = NULL;
+      }
       if (outLevel > 0)
         printf(" EGADS Warning: Attribute Edge Mapping is %d (EG_mapBody)!\n",
                stat);
@@ -10328,8 +10396,10 @@ fixBSplSur:
                            fMap, NULL, NULL);
     EG_free(fMap);
     if (stat != EGADS_SUCCESS) {
-      EG_deleteObject(*mBody);
-      *mBody = NULL;
+      if (del == 1) {
+        EG_deleteObject(*mBody);
+        *mBody = NULL;
+      }
       if (outLevel > 0)
         printf(" EGADS Warning: Attribute Face Mapping is %d (EG_mapBody)!\n",
                stat);
@@ -10338,4 +10408,408 @@ fixBSplSur:
   }
 
   return EGADS_SUCCESS;
+}
+
+
+static int
+EG_topoMapping(const egObject  *sBody, const egObject *dBody,
+               int topo, const char *Attr, int **pMap)
+{
+  int          i, j, outLevel, stat;
+  int          aTypes, aTyped, lens, lend;
+  int          *map = NULL;
+  const char   *topoName;
+  int          ntopos, ntopod;
+  egObject     **objs, **objd;
+  const int    *ints,  *intd;
+  const char   *strs,  *strd;
+  const double *reals, *reald;
+
+  outLevel = EG_outLevel(sBody);
+
+  if (topo == FACE)
+    topoName = "Face";
+  else if (topo == EDGE)
+    topoName = "Edge";
+  else if (topo == NODE)
+    topoName = "Node";
+  else {
+    if (outLevel > 0)
+      printf(" EGADS Error: %d is not FACE, EDGE, or NODE (EG_mapBody2)!\n", topo);
+    return EGADS_NONAME;
+  }
+
+  if (Attr == NULL) {
+    if (outLevel > 0)
+      printf(" EGADS Error: NULL %s Attribute (EG_mapBody2)!\n", topoName);
+    return EGADS_NONAME;
+  }
+
+  stat = EG_getBodyTopos(sBody, NULL, topo, &ntopos, &objs);
+  if (stat != EGADS_SUCCESS) return stat;
+
+  stat = EG_getBodyTopos(dBody, NULL, topo, &ntopod, &objd);
+  if (stat != EGADS_SUCCESS) return stat;
+
+  if (ntopos != ntopod) {
+    stat = EGADS_TOPOCNT;
+    goto cleanup;
+  }
+
+  // Faces first
+  map = (int *) EG_alloc(ntopos*sizeof(int));
+  if (map == NULL) return EGADS_MALLOC;
+  for (i = 0; i < ntopos; i++) map[i] = 0;
+  for (i = 0; i < ntopos; i++) {
+    if (topo == EDGE && objs[i]->mtype == DEGENERATE) continue;
+    stat = EG_attributeRet(objs[i], Attr, &aTypes, &lens,
+                           &ints, &reals, &strs);
+    if (stat == EGADS_NOTFOUND) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Attr '%s' Not in sBody %s %d (EG_mapBody2)!\n",
+               Attr, topoName, i+1);
+      goto cleanup;
+    }
+    for (j = 0; j < ntopod; j++) {
+      stat = EG_attributeRet(objd[j], Attr, &aTyped, &lend,
+                             &intd, &reald, &strd);
+      if (stat == EGADS_NOTFOUND) {
+        if (outLevel > 0)
+          printf(" EGADS Error: Attr '%s' Not in dBody %s %d (EG_mapBody2)!\n",
+                 Attr, topoName, i+1);
+        goto cleanup;
+      }
+      if (EG_sameAttrs(aTypes, lens, ints, reals, strs,
+                       aTyped, lend, intd, reald, strd) == EGADS_SUCCESS) {
+
+        if (objs[i]->mtype != objd[j]->mtype) {
+          if (outLevel > 0)
+            printf(" EGADS Error: %s Type Mismatch %d %d (EG_mapBody2)!\n",
+                   topoName, i+1, j+1);
+          stat = EGADS_TOPOERR;
+          goto cleanup;
+        }
+
+        if (map[i] == 0) {
+          map[i] = j+1;
+          /*
+          if (i+1 != j+1)
+            printf("%s %d map %d\n", topoName, i+1, j+1);
+          */
+        } else {
+          if (outLevel > 0)
+            printf(" EGADS Error: %s Attr '%s' Multip in %d (EG_mapBody2)!\n",
+                   topoName, Attr, i+1);
+          stat = EGADS_ATTRERR;
+          goto cleanup;
+        }
+      }
+    }
+
+    if (map[i] == 0) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Not matching sBody %s %d Attr '%s' in dBody (EG_mapBody2)!\n",
+               topoName, i+1, Attr);
+      stat = EGADS_ATTRERR;
+      goto cleanup;
+    }
+  }
+
+  stat = EGADS_SUCCESS;
+  *pMap = map;
+
+cleanup:
+
+  EG_free(objs);
+  EG_free(objd);
+  if (stat != EGADS_SUCCESS)
+    EG_free(map);
+
+  return stat;
+}
+
+
+static int
+EG_nodeMapping(const egObject  *sBody, const egObject *dBody, int *eMap,
+               int **pnMap)
+{
+  int          i, j, in0, in1, jn0, jn1, outLevel, stat;
+  int          *nMap = NULL;
+  double       sum, evals[9], evald[9];
+
+  egadsBody *pbods = (egadsBody *) sBody->blind;
+  egadsBody *pbodd = (egadsBody *) dBody->blind;
+  outLevel = EG_outLevel(sBody);
+
+  nMap = (int *) EG_alloc(pbods->nodes.map.Extent()*sizeof(int));
+  if (nMap == NULL) {
+    return EGADS_MALLOC;
+  }
+  for (i = 0; i < pbods->nodes.map.Extent(); i++) nMap[i] = 0;
+
+  for (i = 0; i < pbods->edges.map.Extent(); i++) {
+    if (pbods->edges.objs[i]->mtype == DEGENERATE) continue;
+    egadsEdge     *pedge = (egadsEdge *) pbods->edges.objs[i]->blind;
+    egadsNode     *pnode = (egadsNode *) pedge->nodes[0]->blind;
+    TopoDS_Vertex vert   = TopoDS::Vertex(pnode->node);
+    in0 = in1            = pbods->nodes.map.FindIndex(vert);
+    if (in0 <= 0) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Cannot find N0 in Edge %d (EG_mapBody2)!\n",
+               i+1);
+      stat = EGADS_TOPOERR;
+      goto cleanup;
+    }
+    if (pbods->edges.objs[i]->mtype == TWONODE) {
+      pnode = (egadsNode *) pedge->nodes[1]->blind;
+      vert  = TopoDS::Vertex(pnode->node);
+      in1   = pbods->nodes.map.FindIndex(vert);
+      if (in1 <= 0) {
+        if (outLevel > 0)
+          printf(" EGADS Error: Cannot find N1 in Edge %d (EG_mapBody2)!\n",
+                 i+1);
+        stat = EGADS_TOPOERR;
+        goto cleanup;
+      }
+    }
+
+    // get the Edge index on the destination body
+    j = eMap[i]-1;
+
+    pedge     = (egadsEdge *) pbodd->edges.objs[j]->blind;
+    pnode     = (egadsNode *) pedge->nodes[0]->blind;
+    vert      = TopoDS::Vertex(pnode->node);
+    jn0 = jn1 = pbodd->nodes.map.FindIndex(vert);
+    if (jn0 <= 0) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Cannot find N0 dstE %d (EG_mapBody2)!\n",
+               j+1);
+      stat = EGADS_TOPOERR;
+      goto cleanup;
+    }
+    if (pbodd->edges.objs[j]->mtype == TWONODE) {
+      pnode = (egadsNode *) pedge->nodes[1]->blind;
+      vert  = TopoDS::Vertex(pnode->node);
+      jn1   = pbodd->nodes.map.FindIndex(vert);
+      if (jn1 <= 0) {
+        if (outLevel > 0)
+          printf(" EGADS Error: Cannot find N1 dstE %d (EG_mapBody2)!\n",
+                 j+1);
+        stat = EGADS_TOPOERR;
+        goto cleanup;
+      }
+    }
+    /* reversed? */
+    if ((in0 == jn1) && (in1 == jn0)) {
+      egadsEdge *pedgs = (egadsEdge *) pbods->edges.objs[i]->blind;
+      egadsEdge *pedgd = (egadsEdge *) pbodd->edges.objs[j]->blind;
+      stat = EG_evaluate(pbods->edges.objs[i], &pedgs->trange[0], evals);
+      if (stat == EGADS_SUCCESS) {
+        sum = sqrt(evals[3]*evals[3] + evals[4]*evals[4] +
+                   evals[5]*evals[5]);
+        if (sum != 0.0) {
+          evals[3] /= sum;
+          evals[4] /= sum;
+          evals[5] /= sum;
+        }
+        stat = EG_evaluate(pbodd->edges.objs[j], &pedgd->trange[0], evald);
+        if (stat == EGADS_SUCCESS) {
+          sum = sqrt(evald[3]*evald[3] + evald[4]*evald[4] +
+                     evald[5]*evald[5]);
+          if (sum != 0.0) {
+            evald[3] /= sum;
+            evald[4] /= sum;
+            evald[5] /= sum;
+          }
+          sum = evals[3]*evald[3] + evals[4]*evald[4] + evals[5]*evald[5];
+          if (sum < 0.0) {
+            printf(" EGADS Info: Reversal -- Edges: src = %d  dst = %d",
+                   i+1, j+1);
+            printf("  dot = %lf (EG_mapBody2)\n", sum);
+            jn0 = in0;
+            jn1 = in1;
+          }
+        }
+      }
+    }
+    if (nMap[in0-1] == 0) {
+      nMap[in0-1] = jn0;
+    } else if (nMap[in0-1] != jn0) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Node %d Attr Multip mapping: %d %d (EG_mapBody2)!\n",
+               in0, nMap[in0-1], jn0);
+      stat = EGADS_ATTRERR;
+      goto cleanup;
+    }
+    if (nMap[in1-1] == 0) {
+      nMap[in1-1] = jn1;
+    } else if (nMap[in1-1] != jn1) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Node %d Attr Multip mapping: %d %d (EG_mapBody2)!\n",
+               in1, nMap[in1-1], jn1);
+      stat = EGADS_ATTRERR;
+      goto cleanup;
+    }
+  }
+
+/*
+  for (i = 0; i < pbods->nodes.map.Extent(); i++)
+    printf("  nMap %d: %d\n", i+1, nMap[i]);
+ */
+  for (i = 0; i < pbods->nodes.map.Extent(); i++)
+    if (nMap[i] == 0) {
+      if (outLevel > 0)
+        printf(" EGADS Error: No Mapping for src Node %d (EG_mapBody2)!\n",
+               i+1);
+      stat = EGADS_ATTRERR;
+      goto cleanup;
+    }
+
+  // fix degenerate Edge mapping
+  for (i = 0; i < pbods->edges.map.Extent(); i++) {
+    if (pbods->edges.objs[i]->mtype != DEGENERATE) continue;
+
+    egadsEdge     *pedge = (egadsEdge *) pbods->edges.objs[i]->blind;
+    egadsNode     *pnode = (egadsNode *) pedge->nodes[0]->blind;
+    TopoDS_Vertex vert   = TopoDS::Vertex(pnode->node);
+    in0                  = pbods->nodes.map.FindIndex(vert);
+
+    for (j = 0; j < pbodd->edges.map.Extent(); j++) {
+      if (pbodd->edges.objs[j]->mtype != DEGENERATE) continue;
+
+      pedge = (egadsEdge *) pbodd->edges.objs[j]->blind;
+      pnode = (egadsNode *) pedge->nodes[0]->blind;
+      vert  = TopoDS::Vertex(pnode->node);
+      jn0   = pbodd->nodes.map.FindIndex(vert);
+
+      if (nMap[in0-1] == jn0) {
+        eMap[i] = j+1;
+        break;
+      }
+    }
+
+    if (eMap[i] == 0) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Failed to map sBody Degenerate Edge %d to dBody (EG_mapBody2)!\n",
+               i+1);
+      stat = EGADS_ATTRERR;
+      goto cleanup;
+    }
+  }
+
+  *pnMap = nMap;
+
+  stat = EGADS_SUCCESS;
+
+cleanup:
+  if (stat != EGADS_SUCCESS)
+    EG_free(nMap);
+
+  return stat;
+}
+
+
+int
+EG_mapBody2(const egObject  *sBody,
+            const char *fAttr, const char *eAttr,
+            egObject *dBody)
+{
+  int i;
+  int outLevel, stat, *nMap = NULL, *eMap = NULL, *fMap = NULL;
+  bool identity = true;
+
+  if  (sBody == NULL)                return EGADS_NULLOBJ;
+  if  (sBody->magicnumber != MAGIC)  return EGADS_NOTOBJ;
+  if  (sBody->oclass != BODY)        return EGADS_NOTBODY;
+  if  (sBody->blind == NULL)         return EGADS_NODATA;
+  if ((sBody->mtype != FACEBODY)  &&
+      (sBody->mtype != SHEETBODY) &&
+      (sBody->mtype != SOLIDBODY))   return EGADS_TOPOERR;
+  if  (EG_sameThread(sBody))         return EGADS_CNTXTHRD;
+  if  (dBody == NULL)                return EGADS_NULLOBJ;
+  if  (dBody->magicnumber != MAGIC)  return EGADS_NOTOBJ;
+  if  (dBody->oclass != BODY)        return EGADS_NOTBODY;
+  if  (dBody->blind == NULL)         return EGADS_NODATA;
+  if  (dBody->mtype != sBody->mtype) return EGADS_TOPOERR;
+  if  (EG_sameThread(dBody))         return EGADS_CNTXTHRD;
+
+  egadsBody *pbodd = (egadsBody *) dBody->blind;
+  outLevel = EG_outLevel(sBody);
+
+  /* get Face, Edge, and Node mappings */
+  stat = EG_topoMapping(sBody, dBody, FACE, fAttr, &fMap);
+  if (stat != EGADS_SUCCESS) return stat;
+  stat = EG_topoMapping(sBody, dBody, EDGE, eAttr, &eMap);
+  if (stat != EGADS_SUCCESS) return stat;
+  stat = EG_nodeMapping(sBody, dBody, eMap, &nMap);
+  if (stat != EGADS_SUCCESS) return stat;
+
+  for (i = 0; i < pbodd->faces.map.Extent() && identity; i++)
+    if (fMap[i] != i+1)
+      identity = false;
+
+  for (i = 0; i < pbodd->edges.map.Extent() && identity; i++)
+    if (eMap[i] != i+1)
+      identity = false;
+
+  for (i = 0; i < pbodd->nodes.map.Extent() && identity; i++)
+    if (nMap[i] != i+1)
+      identity = false;
+
+  /* no map necessary for identity */
+  if (identity) {
+    EG_free(fMap);
+    EG_free(eMap);
+    EG_free(nMap);
+    return EGADS_SUCCESS;
+  }
+
+  // put the mapping attributes on the body
+  if (nMap != NULL) {
+    if (EG_fullAttrs(dBody) == 1) {
+      (void) EG_attributeDel(dBody, ".nMap");
+    }
+    stat = EG_attributeAdd(dBody, ".nMap", ATTRINT, pbodd->nodes.map.Extent(),
+                           nMap, NULL, NULL);
+    if (stat != EGADS_SUCCESS) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Attribute Node Mapping is %d (EG_mapBody2)!\n",
+               stat);
+      goto cleanup;
+    }
+  }
+  if (eMap != NULL) {
+    if (EG_fullAttrs(dBody) == 1) {
+      (void) EG_attributeDel(dBody, ".eMap");
+    }
+    stat = EG_attributeAdd(dBody, ".eMap", ATTRINT, pbodd->edges.map.Extent(),
+                           eMap, NULL, NULL);
+    if (stat != EGADS_SUCCESS) {
+      if (outLevel > 0)
+        printf(" EGADS Error: Attribute Edge Mapping is %d (EG_mapBody2)!\n",
+               stat);
+      goto cleanup;
+    }
+  }
+  if (fMap != NULL) {
+    if (EG_fullAttrs(dBody) == 1) {
+      (void) EG_attributeDel(dBody, ".fMap");
+    }
+    stat = EG_attributeAdd(dBody, ".fMap", ATTRINT, pbodd->faces.map.Extent(),
+                           fMap, NULL, NULL);
+    if (stat != EGADS_SUCCESS) {
+      if (outLevel > 0)
+        printf(" EGADS Warning: Attribute Face Mapping is %d (EG_mapBody2)!\n",
+               stat);
+      goto cleanup;
+    }
+  }
+
+  stat = EGADS_SUCCESS;
+cleanup:
+
+  EG_free(nMap);
+  EG_free(eMap);
+  EG_free(fMap);
+  return stat;
 }

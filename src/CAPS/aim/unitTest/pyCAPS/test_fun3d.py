@@ -165,6 +165,29 @@ class TestFUN3D(unittest.TestCase):
         del self.fun3d
 
 #==============================================================================
+    def test_moving_body(self):
+
+        # Create a new instance
+        self.fun3d = self.myProblem.analysis.create(aim = "fun3dAIM")
+
+        self.fun3d.input["Mesh"].link(self.myProblem.analysis["tetgen"].output["Volume_Mesh"])
+
+        self.fun3d.input.Boundary_Condition = {"Wing1": {"bcType" : "Viscous"},
+                                               "Wing2": {"bcType" : "Inviscid"},
+                                               "Farfield":"farfield"}
+
+        self.fun3d.input.Overwrite_NML = True
+        self.fun3d.input.Motion_Driver = "aeroelastic"
+        self.fun3d.input.Mesh_Movement = "deform"
+
+        self.fun3d.preAnalysis()
+
+        self.assertEqual(os.path.isfile(os.path.join(self.fun3d.analysisDir, self.configFile)), True)
+        self.assertEqual(os.path.isfile(os.path.join(self.fun3d.analysisDir, "moving_body.input")), True)
+
+        del self.fun3d
+
+#==============================================================================
     # Create sensitvities
     def test_Design_Sensitivity(self):
 

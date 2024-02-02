@@ -68,6 +68,7 @@ EGADS_AFLR4_OBJS = 	\
 			$(ODIR)\egads_face_node_map.obj \
 			$(ODIR)\egads_cad_geom_faceMatch.obj \
 			$(ODIR)\egads_data.obj \
+			$(ODIR)\egads_mzone.obj \
 			$(ODIR)\aflr43_bc_mod.obj \
 			$(ODIR)\aflr43_bc_reset.obj
 

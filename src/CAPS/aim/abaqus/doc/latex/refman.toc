@@ -1,0 +1,48 @@
+\@ifundefined {etoctocstyle}{\let \etoc@startlocaltoc \@gobble \let \etoc@settocdepth \@gobble \let \etoc@depthtag \@gobble \let \etoc@setlocaltop \@gobble }{}
+\contentsline {section}{\numberline {0.1}Introduction}{1}{section.0.1}%
+\contentsline {subsection}{\numberline {0.1.1}Abaqus AIM Overview}{1}{subsection.0.1.1}%
+\contentsline {section}{\numberline {0.2}Abaqus AIM attributes}{1}{section.0.2}%
+\contentsline {section}{\numberline {0.3}AIM Inputs}{2}{section.0.3}%
+\contentsline {section}{\numberline {0.4}AIM Outputs}{2}{section.0.4}%
+\contentsline {section}{\numberline {0.5}Abaqus Data Transfer}{2}{section.0.5}%
+\contentsline {subsection}{\numberline {0.5.1}Data transfer from Abaqus}{3}{subsection.0.5.1}%
+\contentsline {subsection}{\numberline {0.5.2}Data transfer from Abaqus}{3}{subsection.0.5.2}%
+\contentsline {section}{\numberline {0.6}FEA Material}{3}{section.0.6}%
+\contentsline {subsection}{\numberline {0.6.1}JSON String Dictionary}{3}{subsection.0.6.1}%
+\contentsline {subsection}{\numberline {0.6.2}Single Value String}{5}{subsection.0.6.2}%
+\contentsline {section}{\numberline {0.7}FEA Property}{5}{section.0.7}%
+\contentsline {subsection}{\numberline {0.7.1}JSON String Dictionary}{6}{subsection.0.7.1}%
+\contentsline {subsection}{\numberline {0.7.2}Single Value String}{6}{subsection.0.7.2}%
+\contentsline {section}{\numberline {0.8}FEA Constraint}{6}{section.0.8}%
+\contentsline {subsection}{\numberline {0.8.1}JSON String Dictionary}{6}{subsection.0.8.1}%
+\contentsline {subsection}{\numberline {0.8.2}Single Value String}{6}{subsection.0.8.2}%
+\contentsline {section}{\numberline {0.9}FEA Support}{7}{section.0.9}%
+\contentsline {subsection}{\numberline {0.9.1}JSON String Dictionary}{7}{subsection.0.9.1}%
+\contentsline {subsection}{\numberline {0.9.2}Single Value String}{7}{subsection.0.9.2}%
+\contentsline {section}{\numberline {0.10}FEA Connection}{7}{section.0.10}%
+\contentsline {subsection}{\numberline {0.10.1}JSON String Dictionary}{7}{subsection.0.10.1}%
+\contentsline {subsection}{\numberline {0.10.2}Single Value String}{7}{subsection.0.10.2}%
+\contentsline {section}{\numberline {0.11}FEA Load}{7}{section.0.11}%
+\contentsline {subsection}{\numberline {0.11.1}JSON String Dictionary}{8}{subsection.0.11.1}%
+\contentsline {subsection}{\numberline {0.11.2}Single Value String}{8}{subsection.0.11.2}%
+\contentsline {section}{\numberline {0.12}FEA Analysis}{8}{section.0.12}%
+\contentsline {subsection}{\numberline {0.12.1}JSON String Dictionary}{8}{subsection.0.12.1}%
+\contentsline {subsection}{\numberline {0.12.2}Single Value String}{9}{subsection.0.12.2}%
+\contentsline {section}{\numberline {0.13}FEA Design Variables}{9}{section.0.13}%
+\contentsline {subsection}{\numberline {0.13.1}JSON String Dictionary}{9}{subsection.0.13.1}%
+\contentsline {section}{\numberline {0.14}FEA Design\discretionary {\mbox {\scriptsize $\hookleftarrow $}}{}{}Variable\discretionary {\mbox {\scriptsize $\hookleftarrow $}}{}{}Relation}{9}{section.0.14}%
+\contentsline {subsection}{\numberline {0.14.1}JSON String Dictionary}{9}{subsection.0.14.1}%
+\contentsline {section}{\numberline {0.15}FEA Design Constraints}{10}{section.0.15}%
+\contentsline {subsection}{\numberline {0.15.1}JSON String Dictionary}{10}{subsection.0.15.1}%
+\contentsline {section}{\numberline {0.16}FEA Optimization Control}{10}{section.0.16}%
+\contentsline {section}{\numberline {0.17}FEA Design Equations}{10}{section.0.17}%
+\contentsline {subsection}{\numberline {0.17.1}List of equation strings}{10}{subsection.0.17.1}%
+\contentsline {section}{\numberline {0.18}FEA Table Constants}{10}{section.0.18}%
+\contentsline {section}{\numberline {0.19}FEA Design Responses}{10}{section.0.19}%
+\contentsline {subsection}{\numberline {0.19.1}JSON String Dictionary}{10}{subsection.0.19.1}%
+\contentsline {section}{\numberline {0.20}FEA Design Equation Responses}{11}{section.0.20}%
+\contentsline {subsection}{\numberline {0.20.1}JSON String Dictionary}{11}{subsection.0.20.1}%
+\contentsline {section}{\numberline {0.21}FEA Design Optimization Parameters}{11}{section.0.21}%
+\contentsline {section}{\numberline {0.22}FEA Aerodynamic References}{11}{section.0.22}%
+\contentsline {subsection}{\numberline {0.22.1}JSON String Dictionary}{11}{subsection.0.22.1}%
+\contentsline {section}{Bibliography}{13}{chapter*.2}%

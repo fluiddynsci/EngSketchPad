@@ -2252,7 +2252,7 @@ curvatureArcLenSeg(void *aimInfo, const ego geom, double t1, double t2, double *
     status = EG_evaluate(geom, &t, result);
     AIM_STATUS(aimInfo, status);
 
-    // tangtent magnitude
+    // tangent magnitude
     s = sqrt(result[3]*result[3] + result[4]*result[4] + result[5]*result[5]);
 
     // curvature k
@@ -2404,7 +2404,7 @@ int vlm_secEdgePoints(void *aimInfo,
         totLen += edgeSegs[i][numEdgeSegs[i]-1].u;
     }
 
-    numPointTot = 1; // One because the arifoil coordinates are an open loop
+    numPointTot = 1; // One because the airfoil coordinates are an open loop
     for (i = 0; i < numEdge; i++) {
 
         if ( teObj == edges[i] ) continue; // don't count the trailing edge
@@ -2818,7 +2818,7 @@ int vlm_getSectionCoord(void *aimInfo,
 
     ego teObj = NULL, body, tess=NULL;
 
-    double *xyzLE, *xyzTE;
+    double xyzLE[3], xyzTE[3];
     int n;
     const double *xyz, *ts;
     double *xyzS=NULL, *tS=NULL;
@@ -2832,8 +2832,12 @@ int vlm_getSectionCoord(void *aimInfo,
     body = vlmSection->ebody;
     chord = vlmSection->chord;
     secnorm = vlmSection->normal;
-    xyzLE = vlmSection->xyzLE;
-    xyzTE = vlmSection->xyzTE;
+    xyzLE[0] = vlmSection->xyzLE[0];
+    xyzLE[1] = vlmSection->xyzLE[1];
+    xyzLE[2] = vlmSection->xyzLE[2];
+    xyzTE[0] = vlmSection->xyzTE[0];
+    xyzTE[1] = vlmSection->xyzTE[1];
+    xyzTE[2] = vlmSection->xyzTE[2];
     teObj = vlmSection->teObj;
 
 //#define DUMP_EGADS_SECTIONS
@@ -2949,20 +2953,35 @@ int vlm_getSectionCoord(void *aimInfo,
         AIM_STATUS(aimInfo, status);
     }
 
+    if (normalize == (int) true) {
 
-    // vector from LE to TE normalized
-    xdot[0]  =  xyzTE[0] - xyzLE[0];
-    xdot[1]  =  xyzTE[1] - xyzLE[1];
-    xdot[2]  =  xyzTE[2] - xyzLE[2];
+      // vector from LE to TE normalized
+      xdot[0]  =  xyzTE[0] - xyzLE[0];
+      xdot[1]  =  xyzTE[1] - xyzLE[1];
+      xdot[2]  =  xyzTE[2] - xyzLE[2];
 
-    if (normalize == (int) false) chord = 1;
+      xdot[0] /= chord;
+      xdot[1] /= chord;
+      xdot[2] /= chord;
 
-    xdot[0] /=  chord;
-    xdot[1] /=  chord;
-    xdot[2] /=  chord;
+      // cross with section PLANE normal to get perpendicular vector in the PLANE
+      cross_DoubleVal(secnorm, xdot, ydot);
 
-    // cross with section PLANE normal to get perpendicular vector in the PLANE
-    cross_DoubleVal(secnorm, xdot, ydot);
+    } else {
+      chord = 1;
+
+      xyzLE[0] = 0.0;
+      xyzLE[1] = 0.0;
+      xyzLE[2] = 0.0;
+
+      xdot[0] = 1.0;
+      xdot[1] = 0.0;
+      xdot[2] = 0.0;
+
+      ydot[0] = 0.0;
+      ydot[1] = 1.0;
+      ydot[2] = 0.0;
+    }
 
     // close the tessellation. Use 0 length to prevent face points
     params[0] = 0;
